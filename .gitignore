@@ -1,6 +1,9 @@
-.vercel
-.env*.local
-*.csv
-*.dat
-__pycache__/
 node_modules/
+venv/
+.next/
+.env
+.vercel/
+*.dat
+*.csv
+__pycache__/
+.DS_Store

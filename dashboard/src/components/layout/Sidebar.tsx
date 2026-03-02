@@ -14,7 +14,7 @@ export default function Sidebar() {
         { name: "Matches", href: "/matches", icon: Zap },
         { name: "Contractors", href: "/contractors", icon: Users },
         { name: "Pipeline", href: "/pipeline", icon: Briefcase },
-        { name: "Intelligence", href: "/intelligence", icon: Activity },
+        { name: "Intelligence", href: "/agency-intelligence", icon: Activity },
     ];
 
     return (

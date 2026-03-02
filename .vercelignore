@@ -9,4 +9,8 @@ architecture/
 backend_venv/
 progress.md
 SAM-Gov-B2G-Agency-Masterguide (1).md
-!dashboard/
+.next
+.env
+venv/
+.env.local
+.git

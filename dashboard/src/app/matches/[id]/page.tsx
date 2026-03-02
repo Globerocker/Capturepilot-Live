@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { useParams } from "next/navigation";
-import { Loader2, ArrowLeft, ArrowRight, Send, Sparkles, Building, Briefcase, FileText } from "lucide-react";
+import { Loader2, ArrowLeft, ArrowRight, Send, Sparkles, Building, Briefcase, FileText, MapPin, Globe, Phone, Users, ExternalLink, Target } from "lucide-react";
 import Link from "next/link";
 import clsx from "clsx";
 
@@ -15,6 +15,7 @@ const supabase = createClient(
 export default function MatchDetailPage() {
     const { id } = useParams();
     const [match, setMatch] = useState<any>(null);
+    const [alternatives, setAlternatives] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
     // AI Email UI State
@@ -28,12 +29,27 @@ export default function MatchDetailPage() {
                 .select(`
           id, score, classification, score_breakdown, opportunity_id, contractor_id,
           opportunities (title, agency, notice_id, response_deadline, naics_code, set_aside_code, notice_type),
-          contractors (company_name, uei, naics_codes, certifications)
+          contractors (company_name, uei, naics_codes, certifications, website, phone, city, state, company_size_bracket, data_quality_flag)
         `)
                 .eq("id", id)
                 .single();
 
             setMatch(data);
+
+            if (data?.opportunity_id) {
+                const { data: altData } = await supabase
+                    .from("matches")
+                    .select(`
+                        id, score, contractor_id,
+                        contractors (company_name, uei, city, state, data_quality_flag)
+                    `)
+                    .eq("opportunity_id", data.opportunity_id)
+                    .neq("contractor_id", data.contractor_id)
+                    .order("score", { ascending: false })
+                    .limit(10);
+                if (altData) setAlternatives(altData);
+            }
+
             setLoading(false);
         }
         if (id) fetchData();
@@ -99,12 +115,35 @@ export default function MatchDetailPage() {
                         <div className="space-y-4 text-sm">
                             <div>
                                 <p className="text-stone-500 font-typewriter text-xs uppercase mb-1">Company</p>
-                                <Link href={`/contractors/${match.contractor_id}`} className="font-bold hover:underline">
-                                    {match.contractors.company_name} (UEI: {match.contractors.uei})
+                                <Link href={`/contractors/${match.contractor_id}`} className="font-bold hover:underline flex items-center">
+                                    {match.contractors.company_name} <ExternalLink className="w-3 h-3 ml-1 text-stone-400" />
                                 </Link>
+                                <p className="text-stone-400 text-xs mt-0.5">UEI: {match.contractors.uei}</p>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <p className="text-stone-500 font-typewriter text-xs uppercase mb-1 flex items-center"><MapPin className="w-3 h-3 mr-1" /> Location</p>
+                                    <p className="font-medium text-stone-800">{match.contractors.city || 'Unknown'}, {match.contractors.state || 'N/A'}</p>
+                                </div>
+                                <div>
+                                    <p className="text-stone-500 font-typewriter text-xs uppercase mb-1 flex items-center"><Globe className="w-3 h-3 mr-1" /> Website</p>
+                                    <p className="font-medium text-stone-800">
+                                        {match.contractors.website ? (
+                                            <a href={match.contractors.website.startsWith('http') ? match.contractors.website : `https://${match.contractors.website}`} target="_blank" rel="noopener noreferrer" className="hover:underline text-blue-600 block truncate" title={match.contractors.website}>{match.contractors.website.replace(/^https?:\/\//, '')}</a>
+                                        ) : "N/A"}
+                                    </p>
+                                </div>
+                                <div>
+                                    <p className="text-stone-500 font-typewriter text-xs uppercase mb-1 flex items-center"><Phone className="w-3 h-3 mr-1" /> Phone</p>
+                                    <p className="font-medium text-stone-800">{match.contractors.phone || 'N/A'}</p>
+                                </div>
+                                <div>
+                                    <p className="text-stone-500 font-typewriter text-xs uppercase mb-1 flex items-center"><Users className="w-3 h-3 mr-1" /> Size Bracket</p>
+                                    <p className="font-medium text-stone-800">{match.contractors.company_size_bracket || 'Unknown'}</p>
+                                </div>
                             </div>
                             <div>
-                                <p className="text-stone-500 font-typewriter text-xs uppercase mb-1">NAICS Codes</p>
+                                <p className="text-stone-500 font-typewriter text-xs uppercase mb-1 mt-2">NAICS Codes</p>
                                 <p className="font-mono bg-stone-100 p-2 rounded-lg text-xs break-all leading-relaxed border border-stone-200">{match.contractors.naics_codes?.join(", ")}</p>
                             </div>
                             <div>
@@ -169,7 +208,7 @@ export default function MatchDetailPage() {
                             {drafts.map((draft, i) => (
                                 <div key={i} className="bg-white text-black p-5 rounded-2xl shadow-inner relative group">
                                     <p className="font-mono text-xs whitespace-pre-wrap">{draft}</p>
-                                    <button className="absolute top-4 right-4 bg-stone-100 p-2 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-stone-200">
+                                    <button aria-label="Send Draft" title="Send Draft" className="absolute top-4 right-4 bg-stone-100 p-2 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-stone-200">
                                         <Send className="w-4 h-4 text-stone-600" />
                                     </button>
                                 </div>
@@ -192,6 +231,32 @@ export default function MatchDetailPage() {
                 </div>
 
             </div>
+
+            {/* Alternative Contractors Section */}
+            {alternatives.length > 0 && (
+                <div className="mt-12 bg-white rounded-[32px] border border-stone-200 shadow-sm p-8">
+                    <h3 className="font-typewriter font-bold text-xl mb-6 flex items-center text-black">
+                        <Target className="w-6 h-6 mr-3 text-stone-400" /> Top {alternatives.length} Alternative Contractors
+                        <span className="ml-3 text-sm font-normal text-stone-500">Also matched to this opportunity</span>
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {alternatives.map((alt) => (
+                            <Link key={alt.id} href={`/matches/${alt.id}`} className="block border border-stone-100 rounded-2xl p-5 hover:border-black hover:shadow-md transition-all group bg-stone-50 hover:bg-white">
+                                <div className="flex justify-between items-start mb-2">
+                                    <h4 className="font-bold text-stone-800 group-hover:text-black line-clamp-1 pr-4">{alt.contractors.company_name}</h4>
+                                    <span className="font-typewriter text-xs font-bold text-stone-500 whitespace-nowrap">Score: {alt.score.toFixed(3)}</span>
+                                </div>
+                                <div className="flex items-center text-xs text-stone-500 font-mono space-x-4">
+                                    <span>UEI: {alt.contractors.uei}</span>
+                                    {(alt.contractors.city || alt.contractors.state) && (
+                                        <span className="flex items-center"><MapPin className="w-3 h-3 mr-1" /> {alt.contractors.city}, {alt.contractors.state}</span>
+                                    )}
+                                </div>
+                            </Link>
+                        ))}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
