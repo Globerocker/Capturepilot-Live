@@ -130,10 +130,10 @@ export default function ContractorsPage() {
     const totalPages = Math.ceil(totalCount / pageSize);
 
     return (
-        <div className="flex h-full gap-6 max-w-[1600px] mx-auto pb-12 overflow-hidden">
+        <div className="flex gap-6 max-w-[1600px] mx-auto pb-12 items-start">
             {/* Main Content Area */}
-            <div className={clsx("transition-all duration-500 ease-in-out flex-1 flex flex-col h-full", selectedContractor ? "hidden lg:flex lg:w-1/2 xl:w-2/3" : "w-full")}>
-                <div className="animate-in fade-in duration-500 h-full flex flex-col">
+            <div className={clsx("transition-all duration-500 ease-in-out flex-1 flex flex-col", selectedContractor ? "hidden lg:flex lg:w-1/2 xl:w-2/3" : "w-full")}>
+                <div className="animate-in fade-in duration-500 flex flex-col">
                     <header className="flex items-end justify-between mb-8 flex-shrink-0">
                         <div>
                             <h2 className="text-3xl font-bold font-typewriter tracking-tighter text-black flex items-center">
@@ -222,7 +222,7 @@ export default function ContractorsPage() {
                             <Loader2 className="w-8 h-8 animate-spin text-stone-400" />
                         </div>
                     ) : (
-                        <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar flex flex-col pb-4">
+                        <div className="flex-1 pr-2 flex flex-col pb-4">
                             {contractors.length === 0 ? (
                                 <div className="bg-stone-50 border border-stone-200 border-dashed rounded-[32px] p-12 text-center mt-auto mb-auto">
                                     <p className="font-typewriter text-stone-500">No contractors found matching criteria.</p>

@@ -80,9 +80,16 @@ def ingest_contractors(filepath: str):
         if batch:
             try:
                 values = list(batch.values())
-                res = supabase.table("contractors").upsert(values, on_conflict="uei").execute()
-                total_inserted += len(values)
-                print(f"    ✅ Upserted {len(values)} active entities. Total: {total_inserted}")
+                ueis = [v["uei"] for v in values]
+                res_edited = supabase.table("contractors").select("uei").in_("uei", ueis).eq("is_manually_edited", True).execute()
+                edited_ueis = {row["uei"] for row in (res_edited.data or [])}
+                
+                safe_values = [v for v in values if v["uei"] not in edited_ueis]
+                
+                if safe_values:
+                    res = supabase.table("contractors").upsert(safe_values, on_conflict="uei").execute()
+                    total_inserted += len(safe_values)
+                    print(f"    ✅ Upserted {len(safe_values)} active entities. Ignored {len(values) - len(safe_values)} manual. Total: {total_inserted}")
             except Exception as e:
                 print(f"    ❌ Error upserting batch: {e}")
             batch.clear()

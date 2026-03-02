@@ -281,9 +281,17 @@ def sync_contractors(days_back=1):
                 
             if db_payload:
                 try:
-                    supabase.table("contractors").upsert(db_payload, on_conflict="uei").execute()
-                    total_upserted += len(db_payload)
-                    print(f"     ✅ Upserted batch of {len(db_payload)} entities.")
+                    # Protect manually edited records
+                    ueis = [p["uei"] for p in db_payload]
+                    res_edited = supabase.table("contractors").select("uei").in_("uei", ueis).eq("is_manually_edited", True).execute()
+                    edited_ueis = {row["uei"] for row in (res_edited.data or [])}
+                    
+                    safe_payload = [p for p in db_payload if p["uei"] not in edited_ueis]
+                    
+                    if safe_payload:
+                        supabase.table("contractors").upsert(safe_payload, on_conflict="uei").execute()
+                        total_upserted += len(safe_payload)
+                        print(f"     ✅ Upserted batch of {len(safe_payload)} entities. Skipped {len(db_payload) - len(safe_payload)} manual.")
                 except Exception as db_err:
                     print(f"     ❌ DB upsert error: {db_err}")
             
