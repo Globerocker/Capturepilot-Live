@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 import { Loader2, ArrowRight, X, Building, CheckCircle2, PenTool, LayoutGrid, List, Briefcase, Sparkles, AlertCircle, ChevronDown, ChevronUp, Send } from "lucide-react";
 import clsx from "clsx";
@@ -40,6 +41,7 @@ const supabase = createClient(
 );
 
 export default function MatchesPage() {
+    const router = useRouter();
     const [matches, setMatches] = useState<MatchExt[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -162,6 +164,7 @@ export default function MatchesPage() {
                                         <tr
                                             key={m.id}
                                             onClick={() => setSelectedMatch(m)}
+                                            onDoubleClick={() => router.push(`/matches/${m.id}`)}
                                             className={clsx(
                                                 "transition-colors group cursor-pointer",
                                                 selectedMatch?.id === m.id ? "bg-stone-50" : "hover:bg-stone-50"

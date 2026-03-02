@@ -77,7 +77,7 @@ export default function OpportunitiesPage() {
 
             if (quickFilter === "HIGH_PROB") {
                 // High Win Probability: Low competition and set-asides
-                query = query.lt('historical_bidders', 8).not('set_aside_code', 'is', null);
+                query = query.lt('historical_bidders', 8).not('set_aside_id', 'is', null);
             }
 
             if (filterAgency) {
@@ -85,7 +85,7 @@ export default function OpportunitiesPage() {
             }
 
             if (filterType) {
-                query = query.eq("notice_type", filterType);
+                query = query.eq("opportunity_type_id", filterType);
             }
 
             if (filterNaics) {
