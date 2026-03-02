@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, KeyboardEvent } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 import { Search, Filter, Loader2, LayoutGrid, List, Download, ArrowRight, X, Building, Target, FileText, Calendar, Link as LinkIcon, Sparkles, ChevronLeft, ChevronRight } from "lucide-react";
 import clsx from "clsx";
@@ -29,6 +30,7 @@ interface Opportunity {
 }
 
 export default function OpportunitiesPage() {
+    const router = useRouter();
     const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
     const [totalCount, setTotalCount] = useState(0);
     const [loading, setLoading] = useState(true);
@@ -69,13 +71,13 @@ export default function OpportunitiesPage() {
             query = query.eq("is_archived", false);
 
             if (quickFilter === "EASY_WIN") {
-                // Example "Easy Win": recent deadline or small business
-                query = query.not('title', 'is', null);
+                // Easy Win: Sources Sought or less than 5 historical bidders
+                query = query.lt('historical_bidders', 5);
             }
 
             if (quickFilter === "HIGH_PROB") {
-                // High Win Probability: Low competition
-                query = query.lt('historical_bidders', 8);
+                // High Win Probability: Low competition and set-asides
+                query = query.lt('historical_bidders', 8).not('set_aside_code', 'is', null);
             }
 
             if (filterAgency) {
@@ -309,6 +311,7 @@ export default function OpportunitiesPage() {
                                             <button
                                                 key={op.id}
                                                 onClick={() => setSelectedOpportunity(op)}
+                                                onDoubleClick={() => router.push(`/opportunities/${op.id}`)}
                                                 className={clsx(
                                                     "block group text-left h-full transition-all outline-none",
                                                     selectedOpportunity?.id === op.id ? "ring-2 ring-black rounded-[32px]" : ""
@@ -364,7 +367,7 @@ export default function OpportunitiesPage() {
                                                 const typeName = op.notice_type || "UNKNOWN";
                                                 const agencyName = op.agency || "No Agency Info";
                                                 return (
-                                                    <tr key={op.id} onClick={() => setSelectedOpportunity(op)} className={clsx("transition-colors group cursor-pointer", selectedOpportunity?.id === op.id ? "bg-stone-100" : "hover:bg-stone-50")}>
+                                                    <tr key={op.id} onClick={() => setSelectedOpportunity(op)} onDoubleClick={() => router.push(`/opportunities/${op.id}`)} className={clsx("transition-colors group cursor-pointer", selectedOpportunity?.id === op.id ? "bg-stone-100" : "hover:bg-stone-50")}>
                                                         <td className="py-4 px-6 font-mono font-semibold text-xs">{op.notice_id}</td>
                                                         <td className="py-4 px-6">
                                                             <p className="font-bold text-black line-clamp-1 max-w-[200px] xl:max-w-md group-hover:text-stone-600">{op.title}</p>

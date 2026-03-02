@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, KeyboardEvent } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 import { Loader2, Users, Building, ShieldCheck, X, MapPin, Mail, DollarSign, Award, Target, Phone, Link as LinkIcon, Search, ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
 import clsx from "clsx";
@@ -42,6 +43,7 @@ interface Contractor {
 }
 
 export default function ContractorsPage() {
+    const router = useRouter();
     const [contractors, setContractors] = useState<Contractor[]>([]);
     const [totalCount, setTotalCount] = useState(0);
     const [loading, setLoading] = useState(true);
@@ -230,6 +232,7 @@ export default function ContractorsPage() {
                                     {contractors.map((company) => (
                                         <button
                                             onClick={() => setSelectedContractor(company)}
+                                            onDoubleClick={() => router.push(`/contractors/${company.id}`)}
                                             key={company.id}
                                             className={clsx(
                                                 "block group text-left h-full transition-all outline-none",

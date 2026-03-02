@@ -1,6 +1,8 @@
 import { Activity, Target, AlertCircle, RefreshCw, Zap, TrendingUp, Play, Calendar, Filter } from "lucide-react";
 import clsx from "clsx";
+import Link from "next/link";
 import { createClient } from "@supabase/supabase-js";
+import DashboardActions from "@/components/DashboardActions";
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic';
@@ -54,30 +56,8 @@ export default async function AgencyDashboard() {
             Live Intelligence Overview
           </p>
         </div>
-        <div className="flex space-x-3">
-          <form action="/api/engine/ingest" method="POST" target="blank_iframe">
-            <button type="submit" className="flex items-center space-x-2 bg-white text-stone-700 px-4 py-2.5 rounded-full border border-stone-200 hover:border-black hover:text-black hover:shadow-md transition-all text-sm font-medium">
-              <RefreshCw className="w-4 h-4" />
-              <span className="font-typewriter">Backfill 90D</span>
-            </button>
-          </form>
-          <form action="/api/engine/score" method="POST" target="blank_iframe">
-            <button type="submit" className="flex items-center space-x-2 bg-stone-100 text-black px-4 py-2.5 rounded-full border border-stone-300 hover:bg-stone-200 transition-all text-sm font-bold">
-              <Zap className="w-4 h-4" />
-              <span className="font-typewriter">Score Matches</span>
-            </button>
-          </form>
-          <form action="/api/engine/drafts" method="POST" target="blank_iframe">
-            <button type="submit" className="flex items-center space-x-2 bg-black text-white px-5 py-2.5 rounded-full shadow-lg shadow-stone-300 hover:bg-stone-800 transition-all text-sm font-bold">
-              <Play className="w-4 h-4" />
-              <span className="font-typewriter">Run Gen AI Engine</span>
-            </button>
-          </form>
-        </div>
+        <DashboardActions />
       </header>
-
-      {/* Hidden iframe to prevent page reload on script trigger */}
-      <iframe name="blank_iframe" id="blank_iframe" style={{ display: 'none' }}></iframe>
 
       {/* Live Active Filters Bar */}
       <section className="bg-stone-50 border border-stone-200 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4">
@@ -106,9 +86,9 @@ export default async function AgencyDashboard() {
             </div>
           </div>
         </div>
-        <button className="text-xs font-typewriter font-bold bg-white border border-stone-200 px-4 py-2 rounded-full hover:bg-stone-100 transition-colors flex items-center shadow-sm">
+        <Link href="/opportunities" className="text-xs font-typewriter font-bold bg-white border border-stone-200 px-4 py-2 rounded-full hover:bg-stone-100 transition-colors flex items-center shadow-sm">
           <Filter className="w-3 h-3 mr-2" /> Adjust Scope Control
-        </button>
+        </Link>
       </section>
 
       {/* KPI Cards */}
