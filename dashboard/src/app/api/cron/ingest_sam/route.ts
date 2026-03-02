@@ -75,6 +75,7 @@ export async function GET(req: NextRequest) {
                 place_of_performance_zip: o.placeOfPerformance?.zip || null,
                 solicitation_number: o.solicitationNumber || null,
                 estimated_value: null,
+                link_url: o.uiLink || (o.noticeId ? `https://sam.gov/opp/${o.noticeId}/view` : null),
                 priority_flag: false,
                 is_archived: false,
                 raw_json: o
