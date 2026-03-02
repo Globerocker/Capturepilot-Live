@@ -186,6 +186,57 @@ export default async function ContractorDetailPage({ params }: { params: Promise
                         </div>
                     </div>
                 </div>
+                <div className="p-8 border-t border-stone-100">
+                    <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-4 flex items-center">
+                        <Target className="w-3 h-3 mr-1" /> Deep Intelligence (Raw Entity Data)
+                    </p>
+                    {contractor.raw_json ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <div className="bg-stone-50 border border-stone-200 rounded-2xl p-4">
+                                <p className="text-xs text-stone-500 mb-1">Registration Status</p>
+                                <p className="font-bold text-sm">
+                                    {contractor.raw_json?.entityRegistration?.registrationStatus || "Unknown"}
+                                </p>
+                            </div>
+                            <div className="bg-stone-50 border border-stone-200 rounded-2xl p-4">
+                                <p className="text-xs text-stone-500 mb-1">Activation Date</p>
+                                <p className="font-bold text-sm font-mono">
+                                    {contractor.raw_json?.entityRegistration?.activationDate || "Unknown"}
+                                </p>
+                            </div>
+                            <div className="bg-stone-50 border border-stone-200 rounded-2xl p-4">
+                                <p className="text-xs text-stone-500 mb-1">Expiration Date</p>
+                                <p className="font-bold text-sm font-mono">
+                                    {contractor.raw_json?.entityRegistration?.expirationDate || "Unknown"}
+                                </p>
+                            </div>
+                            <div className="bg-stone-50 border border-stone-200 rounded-2xl p-4">
+                                <p className="text-xs text-stone-500 mb-1">Purpose of Registration</p>
+                                <p className="font-bold text-sm">
+                                    {contractor.raw_json?.entityRegistration?.purposeOfRegistrationDesc || "Unknown"}
+                                </p>
+                            </div>
+                            <div className="bg-stone-50 border border-stone-200 rounded-2xl p-4">
+                                <p className="text-xs text-stone-500 mb-1">Organization Type</p>
+                                <p className="font-bold text-sm">
+                                    {contractor.raw_json?.coreData?.organizationTypeDesc || "Unknown"}
+                                </p>
+                            </div>
+                            <div className="bg-stone-50 border border-stone-200 rounded-2xl p-4">
+                                <p className="text-xs text-stone-500 mb-1">State of Incorporation</p>
+                                <p className="font-bold text-sm">
+                                    {contractor.raw_json?.coreData?.stateOfIncorporationCode || "Unknown"}
+                                </p>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="bg-stone-50 border border-stone-200 rounded-2xl p-5 text-center">
+                            <p className="text-sm text-stone-500 py-4 font-sans italic">
+                                Deep intelligence sync is pending. Raw JSON entity data has not been fetched yet.
+                            </p>
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
     );
