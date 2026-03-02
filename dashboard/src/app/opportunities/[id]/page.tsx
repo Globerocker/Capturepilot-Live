@@ -6,7 +6,7 @@ import { notFound } from "next/navigation";
 // Force dynamic rendering
 export const dynamic = 'force-dynamic';
 
-export default async function OpportunityDetailPage({ params }: { params: { id: string } }) {
+export default async function OpportunityDetailPage({ params }: { params: Promise<{ id: string }> }) {
     const supabase = createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.SUPABASE_SERVICE_KEY!
@@ -14,8 +14,8 @@ export default async function OpportunityDetailPage({ params }: { params: { id: 
 
     const { data: opp, error } = await supabase
         .from("opportunities")
-        .select("*")
-        .eq("id", params.id)
+        .select("*, agencies(department, sub_tier), opportunity_types(name), set_asides(code)")
+        .eq("id", (await params).id)
         .single();
 
     if (error || !opp) {
@@ -31,7 +31,7 @@ export default async function OpportunityDetailPage({ params }: { params: { id: 
                 </Link>
                 <div className="flex flex-wrap items-center gap-3 mb-4">
                     <span className="bg-stone-100 text-stone-600 font-typewriter text-xs px-3 py-1.5 rounded-md border border-stone-200 uppercase tracking-wider">
-                        {opp.notice_type || "UNKNOWN"}
+                        {opp.opportunity_types?.name || "UNKNOWN"}
                     </span>
                     <span className="font-mono text-stone-500 text-sm">{opp.notice_id}</span>
                 </div>
@@ -48,7 +48,7 @@ export default async function OpportunityDetailPage({ params }: { params: { id: 
                         </div>
                         <div>
                             <p className="text-xs font-typewriter text-stone-400 uppercase tracking-widest mb-1">Soliciting Agency</p>
-                            <h2 className="text-xl font-bold">{opp.agency || "Agency Not Specified"}</h2>
+                            <h2 className="text-xl font-bold">{opp.agencies?.sub_tier || opp.agencies?.department || "Agency Not Specified"}</h2>
                         </div>
                     </div>
                     {opp.link_url && (
@@ -78,7 +78,7 @@ export default async function OpportunityDetailPage({ params }: { params: { id: 
                                 <div className="bg-stone-50 border border-stone-200 p-4 rounded-2xl flex justify-between items-center">
                                     <p className="text-xs text-stone-500">Set-Aside Status</p>
                                     <span className="font-typewriter text-[10px] font-bold bg-black text-white px-2 py-1 rounded uppercase tracking-wider">
-                                        {opp.set_aside_code || "NONE / UNRESTRICTED"}
+                                        {opp.set_asides?.code || "NONE / UNRESTRICTED"}
                                     </span>
                                 </div>
                                 <div className="bg-stone-50 border border-stone-200 p-4 rounded-2xl flex justify-between items-center">

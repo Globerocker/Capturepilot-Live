@@ -27,6 +27,9 @@ interface Opportunity {
     is_archived?: boolean;
     historical_bidders?: number;
     award_amount?: number;
+    agencies?: { department: string; sub_tier?: string };
+    opportunity_types?: { name: string };
+    set_asides?: { code: string };
 }
 
 export default function OpportunitiesPage() {
@@ -60,7 +63,7 @@ export default function OpportunitiesPage() {
         try {
             let query = supabase
                 .from("opportunities")
-                .select("*", { count: 'exact' });
+                .select("*, agencies(department, sub_tier), opportunity_types(name), set_asides(code)", { count: 'exact' });
 
             if (activeSearch) {
                 // ILIKE on title or notice_id
@@ -305,8 +308,8 @@ export default function OpportunitiesPage() {
                             {viewMode === "grid" && (
                                 <div className={clsx("grid gap-6 transition-all mb-6", selectedOpportunity ? "grid-cols-1 xl:grid-cols-2" : "grid-cols-1 md:grid-cols-2 xl:grid-cols-3")}>
                                     {opportunities.map((op) => {
-                                        const typeName = op.notice_type || "UNKNOWN";
-                                        const agencyName = op.agency || "No Agency Info";
+                                        const typeName = op.opportunity_types?.name || "UNKNOWN";
+                                        const agencyName = op.agencies?.sub_tier || op.agencies?.department || "No Agency Info";
                                         return (
                                             <button
                                                 key={op.id}
@@ -364,8 +367,8 @@ export default function OpportunitiesPage() {
                                         </thead>
                                         <tbody className="divide-y divide-stone-100 text-sm">
                                             {opportunities.map((op) => {
-                                                const typeName = op.notice_type || "UNKNOWN";
-                                                const agencyName = op.agency || "No Agency Info";
+                                                const typeName = op.opportunity_types?.name || "UNKNOWN";
+                                                const agencyName = op.agencies?.sub_tier || op.agencies?.department || "No Agency Info";
                                                 return (
                                                     <tr key={op.id} onClick={() => setSelectedOpportunity(op)} onDoubleClick={() => router.push(`/opportunities/${op.id}`)} className={clsx("transition-colors group cursor-pointer", selectedOpportunity?.id === op.id ? "bg-stone-100" : "hover:bg-stone-50")}>
                                                         <td className="py-4 px-6 font-mono font-semibold text-xs">{op.notice_id}</td>
@@ -464,10 +467,10 @@ export default function OpportunitiesPage() {
                                 </div>
                                 <div>
                                     <p className="font-bold text-stone-800 text-sm leading-tight">
-                                        {selectedOpportunity.agency || "Unknown Agency"}
+                                        {selectedOpportunity.agencies?.department || "Unknown Department"}
                                     </p>
                                     <p className="text-xs text-stone-400">
-                                        {selectedOpportunity.organization_code || "Unknown Org Code"}
+                                        {selectedOpportunity.agencies?.sub_tier || "Unknown Sub-tier"}
                                     </p>
                                 </div>
                             </div>
@@ -484,15 +487,15 @@ export default function OpportunitiesPage() {
                             <div className="space-y-3 mb-5">
                                 <div className="flex justify-between items-center bg-black/40 px-4 py-2 rounded-xl text-sm border border-stone-700/50">
                                     <span className="text-stone-400">Intent</span>
-                                    <span className="font-bold text-right pl-4">{selectedOpportunity.notice_type || "Solicitation"}</span>
+                                    <span className="font-bold text-right pl-4">{selectedOpportunity.opportunity_types?.name || "Solicitation"}</span>
                                 </div>
                                 <div className="flex justify-between items-center bg-black/40 px-4 py-2 rounded-xl text-sm border border-stone-700/50">
-                                    <span className="text-stone-400">Competition Density</span>
-                                    <span className="font-bold">{selectedOpportunity.historical_bidders ? `${selectedOpportunity.historical_bidders} Est. Bidders` : "Unknown"}</span>
+                                    <span className="text-stone-400">Set-Aside Target</span>
+                                    <span className="font-bold">{selectedOpportunity.set_asides?.code || "Unrestricted"}</span>
                                 </div>
                             </div>
                             <p className="text-sm text-stone-300 font-sans leading-relaxed">
-                                Our semantic engine indicates {selectedOpportunity.agency || "the agency"} is actively scouting for qualified vendors under NAICS {selectedOpportunity.naics_code}. Priority status favors entities matching the classification.
+                                Our semantic engine indicates {selectedOpportunity.agencies?.sub_tier || "the agency"} is actively scouting for qualified vendors under NAICS {selectedOpportunity.naics_code}. Priority status favors entities matching the {selectedOpportunity.set_asides?.code || 'Unrestricted'} classification.
                             </p>
                         </div>
 
@@ -503,9 +506,9 @@ export default function OpportunitiesPage() {
                                 <p className="font-mono font-bold text-base">{selectedOpportunity.naics_code || "---"}</p>
                             </div>
                             <div className="bg-stone-50 border border-stone-200 p-4 rounded-2xl">
-                                <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1">Estimated Value</p>
-                                <p className="font-typewriter font-bold text-xs uppercase pt-1 line-clamp-1" title={selectedOpportunity.award_amount ? `$${selectedOpportunity.award_amount.toLocaleString()}` : "TBD"}>
-                                    {selectedOpportunity.award_amount ? `$${selectedOpportunity.award_amount.toLocaleString()}` : "TBD"}
+                                <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1">Set-Aside</p>
+                                <p className="font-typewriter font-bold text-xs uppercase pt-1 line-clamp-1" title={selectedOpportunity.set_asides?.code || "NONE"}>
+                                    {selectedOpportunity.set_asides?.code || "NONE"}
                                 </p>
                             </div>
                             <div className="bg-stone-50 border border-stone-200 p-4 rounded-2xl">

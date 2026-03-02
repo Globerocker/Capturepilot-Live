@@ -23,7 +23,7 @@ export default async function AgencyDashboard() {
   // Fetch High Priority HOT Matches
   const { data: hotMatches } = await supabase
     .from("matches")
-    .select("score, classification, opportunity_id, contractor_id, opportunities(title, agency, notice_id, response_deadline), contractors(company_name)")
+    .select("score, classification, opportunity_id, contractor_id, opportunities(title, notice_id, response_deadline, agencies(department, sub_tier)), contractors(company_name)")
     .eq("classification", "HOT")
     .order("score", { ascending: false })
     .limit(5);
@@ -36,7 +36,7 @@ export default async function AgencyDashboard() {
     },
     high_maturity_opportunities: ((hotMatches as any[]) || []).map((match: any) => ({
       notice_id: match.opportunities?.notice_id || "UNK",
-      agency: match.opportunities?.agency || match.opportunities?.title || "Unknown",
+      agency: match.opportunities?.agencies?.sub_tier || match.opportunities?.agencies?.department || "Unknown",
       maturity_score: match.score,
       deadline: match.opportunities?.response_deadline || new Date().toISOString(),
       contractor: match.contractors?.company_name || "Unknown"

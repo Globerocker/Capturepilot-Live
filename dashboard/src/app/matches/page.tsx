@@ -19,8 +19,11 @@ interface MatchExt {
         notice_id: string;
         response_deadline: string;
         naics_code: string;
-        agency: string;
-        notice_type: string;
+        agency?: string;
+        notice_type?: string;
+        agencies?: { department?: string, sub_tier?: string };
+        opportunity_types?: { name?: string };
+        set_asides?: { code?: string };
     };
     contractors: {
         company_name: string;
@@ -57,7 +60,7 @@ export default function MatchesPage() {
                 .from("matches")
                 .select(`
           id, score, classification, created_at, score_breakdown, opportunity_id, contractor_id,
-          opportunities (title, notice_id, response_deadline, naics_code),
+          opportunities (title, notice_id, response_deadline, naics_code, agencies(department, sub_tier), opportunity_types(name), set_asides(code)),
           contractors (company_name, uei, naics_codes, certifications)
         `)
                 .order("score", { ascending: false });
@@ -89,11 +92,11 @@ export default function MatchesPage() {
             },
             {
                 type: "LinkedIn / SMS",
-                content: `Hi [Name], saw ${con.company_name} is a high-probability fit for the ${opp.agency} "${opp.title}" contract (NAICS ${opp.naics_code}). We have a capture strategy ready. Open to a quick chat?`
+                content: `Hi [Name], saw ${con.company_name} is a high-probability fit for the ${opp.agencies?.sub_tier || opp.agencies?.department || 'agency'} "${opp.title}" contract (NAICS ${opp.naics_code}). We have a capture strategy ready. Open to a quick chat?`
             },
             {
                 type: "Concise Email",
-                content: `Subject: Teaming Opportunity: ${opp.notice_id} - ${opp.title}\n\nHi [Name],\n\nWe identified a high-probability match for ${con.company_name} on the recent ${opp.agency} Sources Sought.\n\nWhy you: Perfect NAICS alignment (${opp.naics_code}) and verified ${con.certifications?.[0] || 'capacity'} requirements.\n\nDeadline: ${deadline}.\n\nAre you open to a brief call tomorrow to review the capture strategy and PWin breakdown?\n\nBest,\n[Your Name]`
+                content: `Subject: Teaming Opportunity: ${opp.notice_id} - ${opp.title}\n\nHi [Name],\n\nWe identified a high-probability match for ${con.company_name} on the recent ${opp.agencies?.sub_tier || opp.agencies?.department || 'agency'} Sources Sought.\n\nWhy you: Perfect NAICS alignment (${opp.naics_code}) and verified ${con.certifications?.[0] || 'capacity'} requirements.\n\nDeadline: ${deadline}.\n\nAre you open to a brief call tomorrow to review the capture strategy and PWin breakdown?\n\nBest,\n[Your Name]`
             }
         ]);
         setDrafting(false);
@@ -200,7 +203,7 @@ export default function MatchesPage() {
                                             <td className="p-6 align-top">
                                                 <div>
                                                     <p className="font-bold text-stone-800 line-clamp-1 mb-1">{m.opportunities?.title}</p>
-                                                    <p className="text-stone-500 text-xs mb-2 truncate max-w-[250px]">{m.opportunities?.agency}</p>
+                                                    <p className="text-stone-500 text-xs mb-2 truncate max-w-[250px]">{m.opportunities?.agencies?.sub_tier || m.opportunities?.agencies?.department || "No Agency Info"}</p>
                                                     <div className="flex space-x-2">
                                                         <span className="text-[10px] font-mono bg-stone-100 text-stone-600 px-2 py-0.5 rounded border border-stone-200">
                                                             {m.opportunities?.notice_id}
@@ -276,7 +279,7 @@ export default function MatchesPage() {
                                 <Briefcase className="w-4 h-4 mr-2" /> Federal Opportunity
                             </h3>
                             <p className="font-bold text-black line-clamp-2">{selectedMatch.opportunities.title}</p>
-                            <p className="text-stone-500 text-sm mt-1">{selectedMatch.opportunities.agency}</p>
+                            <p className="text-stone-500 text-sm mt-1">{selectedMatch.opportunities?.agencies?.sub_tier || selectedMatch.opportunities?.agencies?.department || "No Agency Info"}</p>
 
                             <div className="grid grid-cols-2 gap-4 mt-4 border-t border-stone-100 pt-4">
                                 <div>

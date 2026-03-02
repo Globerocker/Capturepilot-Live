@@ -28,7 +28,7 @@ export default function MatchDetailPage() {
                 .from("matches")
                 .select(`
           id, score, classification, score_breakdown, opportunity_id, contractor_id,
-          opportunities (title, agency, notice_id, response_deadline, naics_code, set_aside_code, notice_type),
+          opportunities (title, notice_id, response_deadline, naics_code, agencies(department, sub_tier), opportunity_types(name), set_asides(code)),
           contractors (company_name, uei, naics_codes, certifications, website, phone, city, state, company_size_bracket, data_quality_flag)
         `)
                 .eq("id", id)
@@ -68,7 +68,7 @@ export default function MatchDetailPage() {
         setDrafts([
             `Subject: Strategic Alignment: ${opp.title}\n\nHi Team at ${con.company_name},\n\nWe identified a strong deterministic match with your profile. The Defense Logistics Agency released "${opp.title}" under NAICS ${opp.naics_code}, directly overlapping your active codes. \n\nYour match score is exceptionally high due to a perfect NAICS alignment and your ${con.certifications?.[0] || 'Small Business'} certification matching the Set-Aside requirements. \n\nPlease review your capabilities against this Sources Sought. Response deadline is firmly set for ${deadline}. Let us know if you need capture support.\n\nBest,\nCapture OS Intelligence`,
 
-            `Subject: Leveraging your Certifications for ${opp.notice_id}\n\nHello ${con.company_name},\n\nYour ${con.certifications?.join(", ")} status gives you a significant advantage in the newly posted ${opp.notice_type} by ${opp.agency}.\n\nUnder NAICS ${opp.naics_code}, the competition will be restricted. Our algorithm matched you because your certifications and exact NAICS code mathematically align with the agency's requirements. \n\nThe deadline is ${deadline}. I strongly recommend we prepare a capabilities brief focusing heavily on your past performance in this specific socio-economic category.\n\nRegards,\nCapture OS Intelligence`
+            `Subject: Leveraging your Certifications for ${opp.notice_id}\n\nHello ${con.company_name},\n\nYour ${con.certifications?.join(", ")} status gives you a significant advantage in the newly posted ${opp.opportunity_types?.name || 'solicitation'} by ${opp.agencies?.sub_tier || opp.agencies?.department || 'the agency'}.\n\nUnder NAICS ${opp.naics_code}, the competition will be restricted. Our algorithm matched you because your certifications and exact NAICS code mathematically align with the agency's requirements. \n\nThe deadline is ${deadline}. I strongly recommend we prepare a capabilities brief focusing heavily on your past performance in this specific socio-economic category.\n\nRegards,\nCapture OS Intelligence`
         ]);
         setDrafting(false);
     };
@@ -163,7 +163,7 @@ export default function MatchDetailPage() {
                             <div>
                                 <p className="text-stone-500 font-typewriter text-xs uppercase mb-1">Agency & Title</p>
                                 <Link href={`/opportunities/${match.opportunity_id}`} className="block hover:opacity-70 transition-opacity">
-                                    <p className="font-bold">{match.opportunities.agency}</p>
+                                    <p className="font-bold">{match.opportunities.agencies?.sub_tier || match.opportunities.agencies?.department || "No Agency Info"}</p>
                                     <p className="text-stone-600 italic mt-1">{match.opportunities.title}</p>
                                 </Link>
                             </div>

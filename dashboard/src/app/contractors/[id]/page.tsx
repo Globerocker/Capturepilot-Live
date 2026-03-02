@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 
 export const dynamic = 'force-dynamic';
 
-export default async function ContractorDetailPage({ params }: { params: { id: string } }) {
+export default async function ContractorDetailPage({ params }: { params: Promise<{ id: string }> }) {
     const supabase = createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.SUPABASE_SERVICE_KEY!
@@ -14,7 +14,7 @@ export default async function ContractorDetailPage({ params }: { params: { id: s
     const { data: contractor, error } = await supabase
         .from("contractors")
         .select("*")
-        .eq("id", params.id)
+        .eq("id", (await params).id)
         .single();
 
     if (error || !contractor) {
