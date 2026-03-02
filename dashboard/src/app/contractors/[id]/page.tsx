@@ -1,7 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
-import { ArrowLeft, Building, Target, Link as LinkIcon, MapPin, Phone, Mail, Award, ShieldCheck, DollarSign } from "lucide-react";
+import { ArrowLeft, Building, Target, Link as LinkIcon, MapPin, Phone, Award, ShieldCheck, DollarSign, Users, Truck, Briefcase, Activity, ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import clsx from "clsx";
 
 export const dynamic = 'force-dynamic';
 
@@ -21,223 +22,249 @@ export default async function ContractorDetailPage({ params }: { params: Promise
         notFound();
     }
 
+    const capacity = contractor.capacity_signals || {};
+    const owner = contractor.ownership || {};
+
+    const formattedRevenue = contractor.revenue
+        ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumSignificantDigits: 3 }).format(contractor.revenue)
+        : "Not Disclosed";
+
+    const formattedVolume = contractor.total_award_volume
+        ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumSignificantDigits: 3 }).format(contractor.total_award_volume)
+        : "$0";
+
     return (
-        <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-500 pb-12">
-            <header className="mb-6">
+        <div className="max-w-5xl mx-auto space-y-10 animate-in fade-in duration-500 pb-16">
+            {/* Header section */}
+            <header className="mb-8">
                 <Link href="/contractors" className="inline-flex items-center text-sm font-typewriter text-stone-500 hover:text-black mb-6 transition-colors">
                     <ArrowLeft className="w-4 h-4 mr-2" />
                     Back to Contractors
                 </Link>
                 <div className="flex flex-wrap items-center gap-3 mb-4">
-                    {contractor.sam_registered ? (
-                        <span className="bg-emerald-100 text-emerald-900 font-typewriter text-xs px-3 py-1.5 rounded-md border border-emerald-200 uppercase tracking-wider">
-                            SAM.gov Verified
+                    {contractor.sam_registered === "Yes" || contractor.sam_registered === true ? (
+                        <span className="bg-emerald-100 text-emerald-900 font-typewriter text-xs px-3 py-1.5 rounded-md border border-emerald-200 uppercase tracking-wider flex items-center">
+                            <ShieldCheck className="w-3 h-3 mr-1" /> SAM.gov Verified
                         </span>
                     ) : (
                         <span className="bg-stone-100 text-stone-600 font-typewriter text-xs px-3 py-1.5 rounded-md border border-stone-200 uppercase tracking-wider">
-                            External Record
+                            Non-SAM Entity
                         </span>
                     )}
                     <span className="font-mono text-stone-500 text-sm">UEI: {contractor.uei || "N/A"}</span>
+                    <span className="font-mono text-stone-500 text-sm">CAGE: {contractor.cage_code || "N/A"}</span>
                 </div>
-                <h1 className="text-3xl md:text-4xl font-bold font-typewriter tracking-tighter text-black leading-tight">
+                <h1 className="text-3xl md:text-5xl font-bold font-typewriter tracking-tighter text-black leading-tight">
                     {contractor.company_name}
                 </h1>
                 {contractor.dba_name && (
-                    <p className="text-stone-500 font-medium mt-2">DBA: {contractor.dba_name}</p>
+                    <p className="text-stone-500 font-medium mt-2">Doing Business As: {contractor.dba_name}</p>
                 )}
             </header>
 
-            <div className="bg-white rounded-[40px] border border-stone-200 shadow-sm overflow-hidden">
-                <div className="p-8 border-b border-stone-100 flex flex-wrap gap-4 items-center justify-between">
-                    <div className="flex items-center space-x-4">
-                        <div className="w-12 h-12 rounded-full bg-stone-100 flex items-center justify-center">
-                            <Building className="w-6 h-6 text-stone-600" />
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+
+                {/* Left Column */}
+                <div className="lg:col-span-2 space-y-8">
+
+                    {/* General Company Overview */}
+                    <div className="bg-white rounded-[32px] border border-stone-200 shadow-sm p-8">
+                        <div className="flex items-center justify-between mb-6">
+                            <h2 className="font-typewriter text-lg font-bold flex items-center">
+                                <Building className="w-5 h-5 mr-3 text-stone-400" /> Company Overview
+                            </h2>
+                            {contractor.website && (
+                                <a href={contractor.website.startsWith('http') ? contractor.website : `https://${contractor.website}`} target="_blank" rel="noopener noreferrer" className="text-stone-500 hover:text-black flex items-center text-xs font-bold font-typewriter transition-colors">
+                                    <LinkIcon className="w-3 h-3 mr-1" /> Visit Site
+                                </a>
+                            )}
                         </div>
-                        <div>
-                            <p className="text-xs font-typewriter text-stone-400 uppercase tracking-widest mb-1">CAGE Code</p>
-                            <h2 className="text-xl font-bold font-mono">{contractor.cage_code || "N/A"}</h2>
+
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div className="bg-stone-50 border border-stone-100 p-4 rounded-2xl">
+                                <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1 flex items-center"><MapPin className="w-3 h-3 mr-1" /> HQ Details</p>
+                                <p className="font-bold text-sm">{[contractor.city, contractor.state].filter(Boolean).join(", ") || "Unknown"}</p>
+                                <p className="text-xs text-stone-500 mt-1">{contractor.hq_address}</p>
+                            </div>
+                            <div className="bg-stone-50 border border-stone-100 p-4 rounded-2xl">
+                                <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1 flex items-center"><Users className="w-3 h-3 mr-1" /> Workforce</p>
+                                <p className="font-bold text-sm">{contractor.employee_count?.toLocaleString() || "Not Disclosed"}</p>
+                            </div>
+                            <div className="bg-stone-50 border border-stone-100 p-4 rounded-2xl">
+                                <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1 flex items-center"><DollarSign className="w-3 h-3 mr-1" /> Revenue</p>
+                                <p className="font-bold text-sm text-emerald-700">{formattedRevenue}</p>
+                            </div>
+                            <div className="bg-stone-50 border border-stone-100 p-4 rounded-2xl">
+                                <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1 flex items-center"><Briefcase className="w-3 h-3 mr-1" /> Age</p>
+                                <p className="font-bold text-sm">{contractor.years_in_business ? `${contractor.years_in_business} Years` : "Unknown"}</p>
+                            </div>
                         </div>
                     </div>
-                    {contractor.business_url && (
-                        <a
-                            href={contractor.business_url.startsWith('http') ? contractor.business_url : `https://${contractor.business_url}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center space-x-2 text-sm font-bold font-typewriter bg-stone-100 px-4 py-2 rounded-full hover:bg-stone-200 transition-colors"
-                        >
-                            <LinkIcon className="w-4 h-4" />
-                            <span>Visit Website</span>
-                        </a>
-                    )}
+
+                    {/* Capacity Signals */}
+                    <div className="bg-white rounded-[32px] border border-stone-200 shadow-sm p-8">
+                        <h2 className="font-typewriter text-lg font-bold mb-6 flex items-center">
+                            <Activity className="w-5 h-5 mr-3 text-stone-400" /> Operational Capacity
+                        </h2>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="flex justify-between items-center border-b border-stone-100 pb-3">
+                                <span className="text-xs font-typewriter text-stone-500 uppercase tracking-widest">Bonding Stated</span>
+                                <span className="font-bold text-sm">{capacity.bonded || "Unknown"}</span>
+                            </div>
+                            <div className="flex justify-between items-center border-b border-stone-100 pb-3">
+                                <span className="text-xs font-typewriter text-stone-500 uppercase tracking-widest">Municipal Exp</span>
+                                <span className="font-bold text-sm">{capacity.municipal_exp ? "Yes" : "Unknown"}</span>
+                            </div>
+                            <div className="flex justify-between items-center border-b border-stone-100 pb-3">
+                                <span className="text-xs font-typewriter text-stone-500 uppercase tracking-widest">Active Fleet</span>
+                                <span className="font-bold text-sm flex items-center">
+                                    {capacity.fleet ? <><Truck className="w-4 h-4 mr-1" /> Yes</> : "Unknown"}
+                                </span>
+                            </div>
+                            <div className="flex justify-between items-center border-b border-stone-100 pb-3">
+                                <span className="text-xs font-typewriter text-stone-500 uppercase tracking-widest">Service Radius</span>
+                                <span className="font-bold text-sm">{contractor.service_radius_miles || 50} Miles</span>
+                            </div>
+                        </div>
+
+                        {capacity.equipment && (
+                            <div className="mt-4 bg-stone-50 p-4 rounded-xl border border-stone-100">
+                                <span className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest block mb-1">Equipment Assets</span>
+                                <p className="text-sm font-bold text-stone-700">{capacity.equipment}</p>
+                            </div>
+                        )}
+                        {capacity.usp_differentiator && (
+                            <div className="mt-4 bg-emerald-50 p-4 rounded-xl border border-emerald-100">
+                                <span className="text-[10px] font-typewriter text-emerald-600 uppercase tracking-widest block mb-1">Key Differentiator</span>
+                                <p className="text-sm font-bold text-emerald-900">{capacity.usp_differentiator}</p>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Federal Profile */}
+                    <div className="bg-stone-900 text-white rounded-[32px] p-8 shadow-xl relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-64 h-64 bg-stone-700/30 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none"></div>
+
+                        <h2 className="font-typewriter text-lg font-bold mb-6 flex items-center relative z-10">
+                            <Award className="w-5 h-5 mr-3 text-stone-400" /> Federal Profile & Health
+                        </h2>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10">
+                            <div className="bg-black/40 border border-stone-700 p-5 rounded-2xl">
+                                <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1">Total Federal Awards</p>
+                                <p className="font-mono text-3xl font-bold">{contractor.total_federal_awards || 0}</p>
+                            </div>
+                            <div className="bg-black/40 border border-stone-700 p-5 rounded-2xl">
+                                <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1">Total Award Volume</p>
+                                <p className="font-bold text-emerald-400 text-xl tracking-tight mt-1">{formattedVolume}</p>
+                            </div>
+                            <div className="bg-black/40 border border-stone-700 p-5 rounded-2xl">
+                                <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1">Last Award Date</p>
+                                <p className="font-bold text-sm mt-2">{contractor.last_award_date ? new Date(contractor.last_award_date).toLocaleDateString() : "Never"}</p>
+                            </div>
+                        </div>
+
+                        <div className="mt-6 flex items-center justify-between border-t border-stone-700 pt-6 relative z-10">
+                            <div>
+                                <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1">Federal Activity Status</p>
+                                <span className={clsx(
+                                    "font-bold font-typewriter text-sm px-3 py-1 rounded-full uppercase tracking-widest inline-block border",
+                                    contractor.federal_activity_status === "Never Awarded" ? "text-amber-400 border-amber-400/30 bg-amber-400/10" :
+                                        contractor.federal_activity_status?.includes("Inactive") ? "text-stone-300 border-stone-500/30 bg-stone-500/10" :
+                                            "text-emerald-400 border-emerald-400/30 bg-emerald-400/10"
+                                )}>
+                                    {contractor.federal_activity_status || "Unknown Status"}
+                                </span>
+                            </div>
+                            <div className="text-right">
+                                <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1">Registered Since</p>
+                                <p className="font-bold text-sm tracking-widest">
+                                    {contractor.sam_registration_date ? new Date(contractor.sam_registration_date).toLocaleDateString() : "---"}
+                                </p>
+                            </div>
+                        </div>
+
+                    </div>
                 </div>
 
-                <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-8 bg-stone-50/50">
-                    <div className="space-y-6">
-                        <div>
-                            <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-3 flex items-center">
-                                <MapPin className="w-3 h-3 mr-1" /> General Information
-                            </p>
-                            <div className="space-y-3">
-                                <div className="flex justify-between items-center bg-white border border-stone-200 p-3 rounded-xl">
-                                    <span className="text-sm text-stone-500">Location</span>
-                                    <span className="font-medium text-sm">
-                                        {[contractor.city, contractor.state].filter(Boolean).join(", ") || "Unknown"}
-                                    </span>
-                                </div>
-                                <div className="flex justify-between items-center bg-white border border-stone-200 p-3 rounded-xl">
-                                    <span className="text-sm text-stone-500">Employees</span>
-                                    <span className="font-medium text-sm">{contractor.employee_count?.toLocaleString() || "Not Disclosed"}</span>
-                                </div>
-                                <div className="flex justify-between items-center bg-white border border-stone-200 p-3 rounded-xl">
-                                    <span className="text-sm text-stone-500">Est. Revenue</span>
-                                    <span className="font-medium text-sm text-emerald-700">
-                                        {contractor.revenue ? `$${(contractor.revenue / 1000000).toFixed(1)}M` : "Not Disclosed"}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
+                {/* Right Column */}
+                <div className="space-y-8">
 
-                        <div>
-                            <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-3 flex items-center">
-                                <Target className="w-3 h-3 mr-1" /> Primary Capabilities
-                            </p>
-                            <div className="bg-white border border-stone-200 p-4 rounded-2xl">
-                                <div className="flex flex-wrap gap-2">
-                                    {(contractor.naics_codes || []).length > 0 ? (
-                                        contractor.naics_codes.map((n: string) => (
-                                            <span key={n} className="bg-stone-100 text-stone-600 border border-stone-200 px-2 py-1 rounded font-mono text-xs">
-                                                {n}
-                                            </span>
-                                        ))
-                                    ) : (
-                                        <p className="text-sm text-stone-400 italic">No NAICS codes detected.</p>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                    {/* Ownership & POC */}
+                    <div className="bg-white rounded-[32px] border border-stone-200 shadow-sm p-8">
+                        <p className="font-typewriter text-lg font-bold mb-6 flex items-center">
+                            <Phone className="w-5 h-5 mr-3 text-stone-400" /> Sales Contact Data
+                        </p>
 
-                    <div className="space-y-6">
-                        <div>
-                            <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-3 flex items-center">
-                                <Award className="w-3 h-3 mr-1" /> Govt Profile
-                            </p>
-                            <div className="space-y-3">
-                                <div className="flex justify-between items-center bg-white border border-stone-200 p-3 rounded-xl">
-                                    <span className="text-sm text-stone-500">Federal Awards</span>
-                                    <span className="font-medium text-sm font-mono">{contractor.federal_awards_count || 0}</span>
-                                </div>
-                                <div className="flex justify-between items-center bg-white border border-stone-200 p-3 rounded-xl">
-                                    <span className="text-sm text-stone-500">Last Award</span>
-                                    <span className="font-medium text-sm font-mono">{contractor.last_award_date || "Never"}</span>
-                                </div>
-                            </div>
-                        </div>
+                        <div className="space-y-6">
+                            <div>
+                                <p className="text-xs text-stone-500 font-typewriter uppercase tracking-widest mb-2">Key Executive</p>
+                                <p className="font-bold text-lg">{owner.owner_name || contractor.primary_poc_name || "Unknown Execute"}</p>
+                                <p className="text-sm text-stone-500">{owner.owner_title || "Principal"}</p>
 
-                        <div>
-                            <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-3 flex items-center">
-                                <ShieldCheck className="w-3 h-3 mr-1" /> Certifications
-                            </p>
-                            <div className="bg-white border border-stone-200 p-4 rounded-2xl">
-                                <div className="flex flex-wrap gap-2">
-                                    {((contractor.sba_certifications || []).concat(contractor.certifications || [])).length > 0 ? (
-                                        [...new Set([...(contractor.sba_certifications || []), ...(contractor.certifications || [])])].map((c) => (
-                                            <span key={c as string} className="bg-black text-white px-2 py-1 rounded font-typewriter tracking-widest text-[10px] uppercase">
-                                                {c as string}
-                                            </span>
-                                        ))
-                                    ) : (
-                                        <p className="text-sm text-stone-400 italic">No certifications registered.</p>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="p-8 border-t border-stone-100">
-                    <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-4 flex items-center">
-                        <Phone className="w-3 h-3 mr-1" /> Points of Contact
-                    </p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="bg-stone-50 border border-stone-200 rounded-2xl p-4 flex flex-col justify-between">
-                            <p className="font-bold text-stone-700">{contractor.primary_poc_name || "Primary POC Unlisted"}</p>
-                            <div className="mt-4 flex gap-2">
-                                {contractor.phone ? (
-                                    <a href={`tel:${contractor.phone}`} className="flex-1 bg-white border border-stone-200 hover:border-black text-stone-600 hover:text-black py-2 rounded-xl text-xs font-bold font-typewriter transition-colors flex items-center justify-center">
-                                        <Phone className="w-3 h-3 mr-2" /> Call Target
+                                {owner.owner_linkedin && (
+                                    <a href={owner.owner_linkedin} target="_blank" rel="noopener noreferrer" className="inline-flex items-center text-xs text-blue-600 font-bold mt-2 hover:underline">
+                                        <ExternalLink className="w-3 h-3 mr-1" /> View LinkedIn Profile
                                     </a>
-                                ) : (
-                                    <button disabled className="flex-1 bg-stone-100 border border-stone-200 text-stone-400 py-2 rounded-xl text-xs font-bold font-typewriter cursor-not-allowed flex items-center justify-center">
-                                        <Phone className="w-3 h-3 mr-2" /> No Phone
-                                    </button>
                                 )}
-                                {contractor.email ? (
-                                    <a href={`mailto:${contractor.email}`} className="flex-1 bg-white border border-stone-200 hover:border-black text-stone-600 hover:text-black py-2 rounded-xl text-xs font-bold font-typewriter transition-colors flex items-center justify-center">
-                                        <Mail className="w-3 h-3 mr-2" /> Send Email
+                            </div>
+
+                            <div className="border-t border-stone-100 pt-6 space-y-4">
+                                <div>
+                                    <p className="text-[10px] text-stone-400 font-typewriter uppercase tracking-widest mb-1">Direct Phone</p>
+                                    <p className="font-bold font-mono text-sm">{contractor.direct_phone || contractor.phone || "---"}</p>
+                                </div>
+                                <div>
+                                    <p className="text-[10px] text-stone-400 font-typewriter uppercase tracking-widest mb-1">Main Line</p>
+                                    <p className="font-bold font-mono text-sm">{contractor.main_phone || "---"}</p>
+                                </div>
+                                <div>
+                                    <p className="text-[10px] text-stone-400 font-typewriter uppercase tracking-widest mb-1">Email</p>
+                                    <a href={`mailto:${contractor.email}`} className="font-bold text-sm text-stone-700 hover:text-black">
+                                        {contractor.email || "---"}
                                     </a>
-                                ) : (
-                                    <button disabled className="flex-1 bg-stone-100 border border-stone-200 text-stone-400 py-2 rounded-xl text-xs font-bold font-typewriter cursor-not-allowed flex items-center justify-center">
-                                        <Mail className="w-3 h-3 mr-2" /> No Email
-                                    </button>
-                                )}
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
-                <div className="p-8 border-t border-stone-100">
-                    <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-4 flex items-center">
-                        <Target className="w-3 h-3 mr-1" /> Deep Intelligence (Raw Entity Data)
-                    </p>
-                    {contractor.raw_json ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            <div className="bg-stone-50 border border-stone-200 rounded-2xl p-4">
-                                <p className="text-xs text-stone-500 mb-1">Registration Status</p>
-                                <p className="font-bold text-sm">
-                                    {contractor.raw_json?.entityRegistration?.registrationStatus || "Unknown"}
-                                </p>
-                            </div>
-                            <div className="bg-stone-50 border border-stone-200 rounded-2xl p-4">
-                                <p className="text-xs text-stone-500 mb-1">Activation Date</p>
-                                <p className="font-bold text-sm font-mono">
-                                    {contractor.raw_json?.entityRegistration?.activationDate || "Unknown"}
-                                </p>
-                            </div>
-                            <div className="bg-stone-50 border border-stone-200 rounded-2xl p-4">
-                                <p className="text-xs text-stone-500 mb-1">Expiration Date</p>
-                                <p className="font-bold text-sm font-mono">
-                                    {contractor.raw_json?.entityRegistration?.expirationDate || "Unknown"}
-                                </p>
-                            </div>
-                            <div className="bg-stone-50 border border-stone-200 rounded-2xl p-4">
-                                <p className="text-xs text-stone-500 mb-1">Purpose of Registration</p>
-                                <p className="font-bold text-sm">
-                                    {contractor.raw_json?.entityRegistration?.purposeOfRegistrationDesc || "Unknown"}
-                                </p>
-                            </div>
-                            <div className="bg-stone-50 border border-stone-200 rounded-2xl p-4">
-                                <p className="text-xs text-stone-500 mb-1">Organization Type</p>
-                                <p className="font-bold text-sm">
-                                    {contractor.raw_json?.coreData?.organizationTypeDesc || "Unknown"}
-                                </p>
-                            </div>
-                            <div className="bg-stone-50 border border-stone-200 rounded-2xl p-4">
-                                <p className="text-xs text-stone-500 mb-1">State of Incorporation</p>
-                                <p className="font-bold text-sm">
-                                    {contractor.raw_json?.coreData?.stateOfIncorporationCode || "Unknown"}
-                                </p>
-                            </div>
+
+                    {/* NAICS & Certs */}
+                    <div className="bg-white rounded-[32px] border border-stone-200 shadow-sm p-8">
+                        <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-4 flex items-center">
+                            <Target className="w-3 h-3 mr-1" /> NAICS Capabilities
+                        </p>
+                        <div className="flex flex-wrap gap-2 mb-8">
+                            {(contractor.naics_codes || []).length > 0 ? (
+                                contractor.naics_codes.map((n: string) => (
+                                    <span key={n} className="bg-stone-50 text-stone-600 border border-stone-200 px-2 py-1 rounded font-mono text-xs shadow-sm">
+                                        {n}
+                                    </span>
+                                ))
+                            ) : (
+                                <p className="text-sm text-stone-400 italic">No NAICS codes detected.</p>
+                            )}
                         </div>
-                    ) : (
-                        <div className="bg-stone-50 border border-stone-200 rounded-2xl p-5 text-center">
-                            <p className="text-sm text-stone-500 py-4 font-sans italic">
-                                Deep intelligence sync is pending. Raw JSON entity data has not been fetched yet.
-                            </p>
+
+                        <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-4 flex items-center">
+                            <ShieldCheck className="w-3 h-3 mr-1" /> Certifications
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                            {((contractor.sba_certifications || []).concat(contractor.certifications || [])).length > 0 ? (
+                                [...new Set([...(contractor.sba_certifications || []), ...(contractor.certifications || [])])].map((c) => (
+                                    <span key={c as string} className="bg-black text-white px-2 py-1 rounded font-typewriter tracking-widest text-[10px] uppercase shadow-md">
+                                        {c as string}
+                                    </span>
+                                ))
+                            ) : (
+                                <p className="text-sm text-stone-400 italic">No set-aside certs registered.</p>
+                            )}
                         </div>
-                    )}
+                    </div>
+
                 </div>
             </div>
+
         </div>
     );
 }

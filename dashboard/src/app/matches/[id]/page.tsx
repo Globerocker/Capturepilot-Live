@@ -98,7 +98,7 @@ export default function MatchDetailPage() {
                         )}>
                             {match.classification} MATCH
                         </span>
-                        <span className="font-typewriter text-stone-400 text-sm">Score: {match.score.toFixed(3)}</span>
+                        <span className="font-typewriter text-stone-400 text-sm">Score: {match.score}/100</span>
                     </div>
                     <h2 className="text-3xl font-bold font-typewriter tracking-tighter text-black flex items-center">
                         {match.contractors.company_name} <ArrowRight className="mx-3 text-stone-300 w-6 h-6" /> {match.opportunities.notice_id}
@@ -195,11 +195,15 @@ export default function MatchDetailPage() {
                     </p>
 
                     <div className="bg-black/50 border border-stone-700 p-5 rounded-2xl mb-8">
-                        <p className="font-typewriter text-xs text-stone-500 uppercase mb-3 text-center">Deterministic Match Math</p>
-                        <div className="flex justify-between items-center text-sm font-mono text-stone-300 px-4">
-                            <span>NAICS: {match.score_breakdown?.naics_match}</span>
-                            <span>Set-Aside: {match.score_breakdown?.setaside_match}</span>
-                            <span>Geo: {match.score_breakdown?.geo_match}</span>
+                        <p className="font-typewriter text-xs text-stone-500 uppercase mb-3 text-center">100-Point Match Math</p>
+                        <div className="grid grid-cols-2 gap-4 text-sm font-mono text-stone-300 px-4">
+                            <span className="flex justify-between"><span>NAICS:</span> <span>{match.score_breakdown?.naics_fit || 0}/30</span></span>
+                            <span className="flex justify-between"><span>Geo:</span> <span>{match.score_breakdown?.geo_fit || 0}/15</span></span>
+                            <span className="flex justify-between"><span>Capacity:</span> <span>{match.score_breakdown?.capacity || 0}/20</span></span>
+                            <span className="flex justify-between"><span>Inactivity:</span> <span>{match.score_breakdown?.federal_inactivity || 0}/20</span></span>
+                            <span className="flex justify-between items-center col-span-2 border-t border-stone-700 pt-2 mt-2">
+                                <span>Competition Tuning:</span> <span>{match.score_breakdown?.competition_adjustment || 0}/15</span>
+                            </span>
                         </div>
                     </div>
 
@@ -244,7 +248,7 @@ export default function MatchDetailPage() {
                             <Link key={alt.id} href={`/matches/${alt.id}`} className="block border border-stone-100 rounded-2xl p-5 hover:border-black hover:shadow-md transition-all group bg-stone-50 hover:bg-white">
                                 <div className="flex justify-between items-start mb-2">
                                     <h4 className="font-bold text-stone-800 group-hover:text-black line-clamp-1 pr-4">{alt.contractors.company_name}</h4>
-                                    <span className="font-typewriter text-xs font-bold text-stone-500 whitespace-nowrap">Score: {alt.score.toFixed(3)}</span>
+                                    <span className="font-typewriter text-xs font-bold text-stone-500 whitespace-nowrap">Score: {alt.score}/100</span>
                                 </div>
                                 <div className="flex items-center text-xs text-stone-500 font-mono space-x-4">
                                     <span>UEI: {alt.contractors.uei}</span>
