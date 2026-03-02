@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-// Ensure this uses Edge runtime for optimal Cron performance and duration
-export const runtime = "edge";
 // Allows cron jobs to run longer
 export const maxDuration = 300;
 
