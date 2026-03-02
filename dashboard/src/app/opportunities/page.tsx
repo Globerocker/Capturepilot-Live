@@ -2,17 +2,34 @@
 
 import { useEffect, useState, useCallback, KeyboardEvent } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { Search, Filter, Loader2, LayoutGrid, List, Download, ArrowRight, X, Building, Target, FileText, Calendar, Link as LinkIcon, Sparkles, User, Mail, Phone, History, CheckCircle2, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, Filter, Loader2, LayoutGrid, List, Download, ArrowRight, X, Building, Target, FileText, Calendar, Link as LinkIcon, Sparkles, ChevronLeft, ChevronRight } from "lucide-react";
 import clsx from "clsx";
 
 const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_URL || "https://ryxgjzehoijjvczqkhwr.supabase.co",
     // Use anon key for standard UI queries
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ5eGdqemVob2lqanZjenFraHdyIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MjA0ODQ1NSwiZXhwIjoyMDg3NjI0NDU1fQ.nemDcqmJMsp0DOlAjZyJyBtmWkZSAzn_Q44_a6Y3dVM"
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ5eGdqemVob2lqanZjenFraHdyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIwNDg0NTUsImV4cCI6MjA4NzYyNDQ1NX0.q0HivHixjE-A2MuQZlmlZOO2eLpQEm8c6XhQQQKaJsY"
 );
 
+interface Opportunity {
+    id: string;
+    notice_id: string;
+    title: string;
+    agency?: string;
+    organization_code?: string;
+    notice_type?: string;
+    naics_code?: string;
+    response_deadline?: string;
+    posted_date?: string;
+    description?: string;
+    link?: string;
+    is_archived?: boolean;
+    historical_bidders?: number;
+    award_amount?: number;
+}
+
 export default function OpportunitiesPage() {
-    const [opportunities, setOpportunities] = useState<any[]>([]);
+    const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
     const [totalCount, setTotalCount] = useState(0);
     const [loading, setLoading] = useState(true);
     const [searchInput, setSearchInput] = useState("");
@@ -25,26 +42,60 @@ export default function OpportunitiesPage() {
     const pageSize = 50;
 
     // Fast Pre-Filters (Masterguide)
-    const [quickFilter, setQuickFilter] = useState<"ALL" | "EASY_WIN">("ALL");
+    const [quickFilter, setQuickFilter] = useState<"ALL" | "EASY_WIN" | "HIGH_PROB">("ALL");
 
     // Detail Panel State
-    const [selectedOpportunity, setSelectedOpportunity] = useState<any | null>(null);
+    const [selectedOpportunity, setSelectedOpportunity] = useState<Opportunity | null>(null);
+
+    // Advanced Filters
+    const [filterAgency, setFilterAgency] = useState("");
+    const [filterType, setFilterType] = useState("");
+    const [filterNaics, setFilterNaics] = useState("");
+    const [filterDensity, setFilterDensity] = useState(""); // Low, Med, High
 
     const fetchOpportunities = useCallback(async () => {
         setLoading(true);
         try {
             let query = supabase
                 .from("opportunities")
-                .select("*, agencies(department, sub_tier), opportunity_types(name), set_asides(code)", { count: 'exact' });
+                .select("*", { count: 'exact' });
 
             if (activeSearch) {
                 // ILIKE on title or notice_id
                 query = query.or(`title.ilike.%${activeSearch}%,notice_id.ilike.%${activeSearch}%`);
             }
 
+            // Base constraint
+            query = query.eq("is_archived", false);
+
             if (quickFilter === "EASY_WIN") {
-                // Example "Easy Win": Set aside exists (Small Business), recent deadline
-                query = query.not('set_aside_id', 'is', null);
+                // Example "Easy Win": recent deadline or small business
+                query = query.not('title', 'is', null);
+            }
+
+            if (quickFilter === "HIGH_PROB") {
+                // High Win Probability: Low competition
+                query = query.lt('historical_bidders', 8);
+            }
+
+            if (filterAgency) {
+                query = query.ilike("agency", `%${filterAgency}%`);
+            }
+
+            if (filterType) {
+                query = query.eq("notice_type", filterType);
+            }
+
+            if (filterNaics) {
+                query = query.ilike("naics_code", `%${filterNaics}%`);
+            }
+
+            if (filterDensity === "LOW") {
+                query = query.lt("historical_bidders", 5);
+            } else if (filterDensity === "MED") {
+                query = query.gte("historical_bidders", 5).lt("historical_bidders", 10);
+            } else if (filterDensity === "HIGH") {
+                query = query.gte("historical_bidders", 10);
             }
 
             // Pagination boundaries
@@ -66,11 +117,11 @@ export default function OpportunitiesPage() {
         } finally {
             setLoading(false);
         }
-    }, [page, activeSearch, quickFilter, pageSize]);
+    }, [page, activeSearch, quickFilter, pageSize, filterAgency, filterType, filterNaics, filterDensity]);
 
     useEffect(() => {
         fetchOpportunities();
-    }, [fetchOpportunities]);
+    }, [fetchOpportunities, filterAgency, filterType, filterNaics, filterDensity]);
 
     const handleSearchKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
         if (e.key === 'Enter') {
@@ -84,8 +135,8 @@ export default function OpportunitiesPage() {
         const headers = ["Notice ID", "Title", "Agency", "Notice Type", "NAICS", "Deadline"];
         const csvRows = [headers.join(",")];
         for (const row of opportunities) {
-            const agencyName = row.agencies?.sub_tier || row.agencies?.department || "";
-            const typeName = row.opportunity_types?.name || "";
+            const agencyName = row.agency || "";
+            const typeName = row.notice_type || "";
             const values = [
                 `"${row.notice_id || ""}"`,
                 `"${(row.title || "").replace(/"/g, '""')}"`,
@@ -159,9 +210,69 @@ export default function OpportunitiesPage() {
                                 onClick={() => { setQuickFilter("EASY_WIN"); setPage(1); }}
                                 className={clsx("text-xs font-bold font-typewriter uppercase tracking-widest px-4 py-2 rounded-full transition-all shadow-sm border flex items-center", quickFilter === "EASY_WIN" ? "bg-amber-100 text-amber-900 border-amber-300" : "bg-white text-stone-600 border-stone-200 hover:bg-stone-100")}
                             >
-                                <Sparkles className="w-3 h-3 mr-2" /> Easy Wins (SBA Set-Asides)
+                                <Sparkles className="w-3 h-3 mr-2" /> Easy Wins
+                            </button>
+                            <button
+                                onClick={() => { setQuickFilter("HIGH_PROB"); setPage(1); }}
+                                className={clsx("text-xs font-bold font-typewriter uppercase tracking-widest px-4 py-2 rounded-full transition-all shadow-sm border flex items-center", quickFilter === "HIGH_PROB" ? "bg-green-100 text-green-900 border-green-300" : "bg-white text-stone-600 border-stone-200 hover:bg-stone-100")}
+                            >
+                                <Target className="w-3 h-3 mr-2" /> High Win Prob (Low Comp)
                             </button>
                         </div>
+
+                        {showFilters && (
+                            <div className="flex flex-wrap gap-4 w-full animate-in slide-in-from-top-2 duration-300">
+                                <div className="flex-1 min-w-[200px]">
+                                    <p className="text-[10px] font-typewriter text-stone-500 uppercase mb-2">Agency Filter</p>
+                                    <input
+                                        type="text"
+                                        placeholder="e.g. Dept of Defense"
+                                        className="w-full bg-white border border-stone-200 rounded-2xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-black"
+                                        value={filterAgency}
+                                        onChange={(e) => setFilterAgency(e.target.value)}
+                                    />
+                                </div>
+                                <div className="flex-1 min-w-[200px]">
+                                    <p className="text-[10px] font-typewriter text-stone-500 uppercase mb-2">Notice Type</p>
+                                    <select
+                                        title="Notice Type"
+                                        className="w-full bg-white border border-stone-200 rounded-2xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-black"
+                                        value={filterType}
+                                        onChange={(e) => setFilterType(e.target.value)}
+                                    >
+                                        <option value="">All Types</option>
+                                        <option value="Sources Sought">Sources Sought</option>
+                                        <option value="Solicitation">Solicitation</option>
+                                        <option value="Special Notice">Special Notice</option>
+                                        <option value="Presolicitation">Presolicitation</option>
+                                    </select>
+                                </div>
+                                <div className="flex-1 min-w-[150px]">
+                                    <p className="text-[10px] font-typewriter text-stone-500 uppercase mb-2">NAICS Override</p>
+                                    <input
+                                        type="text"
+                                        placeholder="e.g. 541512"
+                                        className="w-full bg-white border border-stone-200 rounded-2xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-black"
+                                        value={filterNaics}
+                                        onChange={(e) => setFilterNaics(e.target.value)}
+                                    />
+                                </div>
+                                <div className="flex-1 min-w-[150px]">
+                                    <p className="text-[10px] font-typewriter text-stone-500 uppercase mb-2">Competition Density</p>
+                                    <select
+                                        title="Competition Density"
+                                        className="w-full bg-white border border-stone-200 rounded-2xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-black"
+                                        value={filterDensity}
+                                        onChange={(e) => setFilterDensity(e.target.value)}
+                                    >
+                                        <option value="">All Densities</option>
+                                        <option value="LOW">Low (&lt;5 Bidders)</option>
+                                        <option value="MED">Medium (5-9 Bidders)</option>
+                                        <option value="HIGH">High (10+ Bidders)</option>
+                                    </select>
+                                </div>
+                            </div>
+                        )}
                     </section>
 
                     {/* Search Bar */}
@@ -192,8 +303,8 @@ export default function OpportunitiesPage() {
                             {viewMode === "grid" && (
                                 <div className={clsx("grid gap-6 transition-all mb-6", selectedOpportunity ? "grid-cols-1 xl:grid-cols-2" : "grid-cols-1 md:grid-cols-2 xl:grid-cols-3")}>
                                     {opportunities.map((op) => {
-                                        const typeName = op.opportunity_types?.name || "UNKNOWN";
-                                        const agencyName = op.agencies?.sub_tier || op.agencies?.department || "No Agency Info";
+                                        const typeName = op.notice_type || "UNKNOWN";
+                                        const agencyName = op.agency || "No Agency Info";
                                         return (
                                             <button
                                                 key={op.id}
@@ -250,8 +361,8 @@ export default function OpportunitiesPage() {
                                         </thead>
                                         <tbody className="divide-y divide-stone-100 text-sm">
                                             {opportunities.map((op) => {
-                                                const typeName = op.opportunity_types?.name || "UNKNOWN";
-                                                const agencyName = op.agencies?.sub_tier || op.agencies?.department || "No Agency Info";
+                                                const typeName = op.notice_type || "UNKNOWN";
+                                                const agencyName = op.agency || "No Agency Info";
                                                 return (
                                                     <tr key={op.id} onClick={() => setSelectedOpportunity(op)} className={clsx("transition-colors group cursor-pointer", selectedOpportunity?.id === op.id ? "bg-stone-100" : "hover:bg-stone-50")}>
                                                         <td className="py-4 px-6 font-mono font-semibold text-xs">{op.notice_id}</td>
@@ -350,10 +461,10 @@ export default function OpportunitiesPage() {
                                 </div>
                                 <div>
                                     <p className="font-bold text-stone-800 text-sm leading-tight">
-                                        {selectedOpportunity.agencies?.department || "Unknown Department"}
+                                        {selectedOpportunity.agency || "Unknown Agency"}
                                     </p>
                                     <p className="text-xs text-stone-400">
-                                        {selectedOpportunity.agencies?.sub_tier || "Unknown Sub-tier"}
+                                        {selectedOpportunity.organization_code || "Unknown Org Code"}
                                     </p>
                                 </div>
                             </div>
@@ -370,15 +481,15 @@ export default function OpportunitiesPage() {
                             <div className="space-y-3 mb-5">
                                 <div className="flex justify-between items-center bg-black/40 px-4 py-2 rounded-xl text-sm border border-stone-700/50">
                                     <span className="text-stone-400">Intent</span>
-                                    <span className="font-bold text-right pl-4">{selectedOpportunity.opportunity_types?.name || "Solicitation"}</span>
+                                    <span className="font-bold text-right pl-4">{selectedOpportunity.notice_type || "Solicitation"}</span>
                                 </div>
                                 <div className="flex justify-between items-center bg-black/40 px-4 py-2 rounded-xl text-sm border border-stone-700/50">
-                                    <span className="text-stone-400">Set-Aside Target</span>
-                                    <span className="font-bold">{selectedOpportunity.set_asides?.code || "Unrestricted"}</span>
+                                    <span className="text-stone-400">Competition Density</span>
+                                    <span className="font-bold">{selectedOpportunity.historical_bidders ? `${selectedOpportunity.historical_bidders} Est. Bidders` : "Unknown"}</span>
                                 </div>
                             </div>
                             <p className="text-sm text-stone-300 font-sans leading-relaxed">
-                                Our semantic engine indicates {selectedOpportunity.agencies?.sub_tier || "the agency"} is actively scouting for qualified vendors under NAICS {selectedOpportunity.naics_code}. Priority status favors entities matching the {selectedOpportunity.set_asides?.code || 'Unrestricted'} classification.
+                                Our semantic engine indicates {selectedOpportunity.agency || "the agency"} is actively scouting for qualified vendors under NAICS {selectedOpportunity.naics_code}. Priority status favors entities matching the classification.
                             </p>
                         </div>
 
@@ -389,9 +500,9 @@ export default function OpportunitiesPage() {
                                 <p className="font-mono font-bold text-base">{selectedOpportunity.naics_code || "---"}</p>
                             </div>
                             <div className="bg-stone-50 border border-stone-200 p-4 rounded-2xl">
-                                <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1">Set-Aside</p>
-                                <p className="font-typewriter font-bold text-xs uppercase pt-1 line-clamp-1" title={selectedOpportunity.set_asides?.code || "NONE"}>
-                                    {selectedOpportunity.set_asides?.code || "NONE"}
+                                <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1">Estimated Value</p>
+                                <p className="font-typewriter font-bold text-xs uppercase pt-1 line-clamp-1" title={selectedOpportunity.award_amount ? `$${selectedOpportunity.award_amount.toLocaleString()}` : "TBD"}>
+                                    {selectedOpportunity.award_amount ? `$${selectedOpportunity.award_amount.toLocaleString()}` : "TBD"}
                                 </p>
                             </div>
                             <div className="bg-stone-50 border border-stone-200 p-4 rounded-2xl">

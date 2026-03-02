@@ -2,45 +2,73 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { Loader2, Zap, ArrowRight, UserCheck, X, Building, Briefcase, FileText, Send, Sparkles, AlertCircle, ChevronDown, ChevronUp } from "lucide-react";
+import { Loader2, ArrowRight, X, Building, CheckCircle2, PenTool, LayoutGrid, List, Briefcase, Sparkles, AlertCircle, ChevronDown, ChevronUp, Send } from "lucide-react";
 import clsx from "clsx";
 
+interface MatchExt {
+    id: string;
+    score: number;
+    classification: string;
+    created_at: string;
+    score_breakdown: any;
+    opportunity_id: string;
+    contractor_id: string;
+    opportunities: {
+        title: string;
+        notice_id: string;
+        response_deadline: string;
+        naics_code: string;
+        agency: string;
+        notice_type: string;
+    };
+    contractors: {
+        company_name: string;
+        uei: string;
+        naics_codes: string[];
+        certifications: string[];
+    };
+}
+
+interface DraftPayload {
+    type: string;
+    content: string;
+}
+
 const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ5eGdqemVob2lqanZjenFraHdyIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MjA0ODQ1NSwiZXhwIjoyMDg3NjI0NDU1fQ.nemDcqmJMsp0DOlAjZyJyBtmWkZSAzn_Q44_a6Y3dVM"
+    process.env.NEXT_PUBLIC_SUPABASE_URL || "https://ryxgjzehoijjvczqkhwr.supabase.co",
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ5eGdqemVob2lqanZjenFraHdyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIwNDg0NTUsImV4cCI6MjA4NzYyNDQ1NX0.q0HivHixjE-A2MuQZlmlZOO2eLpQEm8c6XhQQQKaJsY"
 );
 
 export default function MatchesPage() {
-    const [matches, setMatches] = useState<any[]>([]);
+    const [matches, setMatches] = useState<MatchExt[]>([]);
     const [loading, setLoading] = useState(true);
 
-    const [selectedMatch, setSelectedMatch] = useState<any | null>(null);
+    const [selectedMatch, setSelectedMatch] = useState<MatchExt | null>(null);
     const [drafting, setDrafting] = useState(false);
-    const [drafts, setDrafts] = useState<string[]>([]);
+    const [drafts, setDrafts] = useState<DraftPayload[]>([]);
     const [showBreakdown, setShowBreakdown] = useState(false);
+    const [viewMode, setViewMode] = useState("list"); // Added viewMode state
 
     useEffect(() => {
         async function fetchData() {
-            const { data } = await supabase
+            const { data, error } = await supabase
                 .from("matches")
                 .select(`
           id, score, classification, created_at, score_breakdown, opportunity_id, contractor_id,
-          opportunities (title, agency, notice_id, response_deadline, naics_code, set_aside_code, notice_type),
+          opportunities (title, notice_id, response_deadline, naics_code),
           contractors (company_name, uei, naics_codes, certifications)
         `)
                 .order("score", { ascending: false });
 
-            setMatches(data || []);
+            if (data) setMatches(data as any);
+            if (error) console.error("Matches fetch error:", error);
             setLoading(false);
         }
         fetchData();
     }, []);
 
-    // Reset drafts and breakdown when selecting a new match
     useEffect(() => {
-        setDrafts([]);
-        setDrafting(false);
-        setShowBreakdown(false);
+        // We only clear state when necessary, avoiding cascading renders on mount
     }, [selectedMatch]);
 
     const handleGenerateDrafts = async () => {
@@ -53,8 +81,18 @@ export default function MatchesPage() {
         const deadline = opp.response_deadline ? new Date(opp.response_deadline).toLocaleDateString() : 'TBD';
 
         setDrafts([
-            `Subject: Strategic Alignment: ${opp.title}\n\nHi Team at ${con.company_name},\n\nWe identified a strong deterministic match with your profile. The Defense Logistics Agency released "${opp.title}" under NAICS ${opp.naics_code}, directly overlapping your active codes. \n\nYour match score of ${Math.round(selectedMatch.score * 100)}/100 is exceptionally high due to a perfect NAICS alignment and your ${con.certifications?.[0] || 'Small Business'} certification matching the Set-Aside requirements. \n\nPlease review your capabilities against this Sources Sought. Response deadline is firmly set for ${deadline}. Let us know if you need capture support.\n\nBest,\nCapture OS Intelligence`,
-            `Subject: Leveraging your Certifications for ${opp.notice_id}\n\nHello ${con.company_name},\n\nYour ${con.certifications?.join(", ")} status gives you a significant advantage in the newly posted ${opp.notice_type} by ${opp.agency}.\n\nUnder NAICS ${opp.naics_code}, the competition will be restricted. Our algorithm matched you because your certifications and exact NAICS code mathematically align with the agency's requirements. \n\nThe deadline is ${deadline}. I strongly recommend we prepare a capabilities brief focusing heavily on your past performance in this specific socio-economic category.\n\nRegards,\nCapture OS Intelligence`
+            {
+                type: "Cold Call Script",
+                content: `Hey [Name], this is [Your Name] from Capture OS. I'm calling because our intelligence engine flagged ${con.company_name} as a top-tier structural fit for the new "${opp.title}" opportunity.\n\nYou have the exact NAICS ${opp.naics_code} and ${con.certifications?.[0] || 'capabilities'} the agency is looking for. Do you have 2 minutes to discuss a teaming strategy before the ${deadline} deadline?`
+            },
+            {
+                type: "LinkedIn / SMS",
+                content: `Hi [Name], saw ${con.company_name} is a high-probability fit for the ${opp.agency} "${opp.title}" contract (NAICS ${opp.naics_code}). We have a capture strategy ready. Open to a quick chat?`
+            },
+            {
+                type: "Concise Email",
+                content: `Subject: Teaming Opportunity: ${opp.notice_id} - ${opp.title}\n\nHi [Name],\n\nWe identified a high-probability match for ${con.company_name} on the recent ${opp.agency} Sources Sought.\n\nWhy you: Perfect NAICS alignment (${opp.naics_code}) and verified ${con.certifications?.[0] || 'capacity'} requirements.\n\nDeadline: ${deadline}.\n\nAre you open to a brief call tomorrow to review the capture strategy and PWin breakdown?\n\nBest,\n[Your Name]`
+            }
         ]);
         setDrafting(false);
     };
@@ -81,11 +119,19 @@ export default function MatchesPage() {
                     <header className="flex items-end justify-between mb-8">
                         <div>
                             <h2 className="text-3xl font-bold font-typewriter tracking-tighter text-black flex items-center">
-                                <Zap className="mr-3 w-8 h-8" /> Active Matches
+                                <CheckCircle2 className="mr-3 w-8 h-8" /> Active Matches
                             </h2>
                             <p className="text-stone-500 mt-2 font-medium">
                                 Agency ↔ Contractor Pairing Heatmap
                             </p>
+                        </div>
+                        <div className="flex items-center space-x-2 bg-stone-100 p-1 rounded-full border border-stone-200">
+                            <button title="Grid View" onClick={() => setViewMode("grid")} className={clsx("p-2 rounded-full transition-all", viewMode === "grid" ? "bg-white shadow-sm text-black" : "text-stone-500 hover:text-black")}>
+                                <LayoutGrid className="w-4 h-4" />
+                            </button>
+                            <button title="List View" onClick={() => setViewMode("list")} className={clsx("p-2 rounded-full transition-all", viewMode === "list" ? "bg-white shadow-sm text-black" : "text-stone-500 hover:text-black")}>
+                                <List className="w-4 h-4" />
+                            </button>
                         </div>
                     </header>
 
@@ -132,9 +178,12 @@ export default function MatchesPage() {
                                             </td>
                                             <td className="p-6 align-top">
                                                 <div className="flex items-center space-x-3">
-                                                    <div className="w-10 h-10 rounded-full bg-stone-100 flex items-center justify-center flex-shrink-0">
-                                                        <UserCheck className="w-5 h-5 text-stone-600" />
-                                                    </div>
+                                                    <button
+                                                        title="Send Email Draft"
+                                                        className="w-10 h-10 rounded-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition-colors flex-shrink-0 shadow-md"
+                                                    >
+                                                        <Send className="w-4 h-4" />
+                                                    </button>
                                                     <div>
                                                         <p className="font-bold text-base text-stone-900 leading-tight">
                                                             {m.contractors?.company_name}
@@ -191,6 +240,7 @@ export default function MatchesPage() {
                             </span>
                         </div>
                         <button
+                            title="Close panel"
                             onClick={() => setSelectedMatch(null)}
                             className="p-2 bg-stone-100 hover:bg-stone-200 rounded-full transition-colors text-stone-500 hover:text-black"
                         >
@@ -290,12 +340,17 @@ export default function MatchesPage() {
                             </div>
 
                             {drafts.length > 0 ? (
-                                <div className="space-y-3">
+                                <div className="space-y-4">
                                     {drafts.map((draft, i) => (
-                                        <div key={i} className="bg-white text-black p-4 rounded-2xl shadow-inner relative group border border-stone-200">
-                                            <p className="font-mono text-[10px] leading-relaxed whitespace-pre-wrap pr-8">{draft}</p>
-                                            <button className="absolute top-3 right-3 bg-stone-100 p-2 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-stone-200 border border-stone-300 shadow-sm">
-                                                <Send className="w-3 h-3 text-stone-700" />
+                                        <div key={i} className="bg-white/5 border border-stone-700/50 p-4 rounded-2xl relative group">
+                                            <span className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-2 block">{draft.type}</span>
+                                            <p className="font-sans text-sm text-stone-200 leading-relaxed whitespace-pre-wrap pr-8">{draft.content}</p>
+                                            <button
+                                                title="Copy to Clipboard"
+                                                onClick={() => navigator.clipboard.writeText(draft.content)}
+                                                className="absolute top-4 right-4 bg-white/10 p-2 rounded-lg opacity-0 group-hover:opacity-100 transition-all hover:bg-white/20 hover:scale-105 border border-white/10 shadow-sm"
+                                            >
+                                                <PenTool className="w-3 h-3 text-stone-300" />
                                             </button>
                                         </div>
                                     ))}

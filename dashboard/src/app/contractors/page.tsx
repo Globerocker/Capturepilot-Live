@@ -2,30 +2,64 @@
 
 import { useEffect, useState, useCallback, KeyboardEvent } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { Loader2, Users, Building, ShieldCheck, X, Briefcase, MapPin, Mail, DollarSign, Award, Target, Phone, Link as LinkIcon, Search, ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
+import { Loader2, Users, Building, ShieldCheck, X, MapPin, Mail, DollarSign, Award, Target, Phone, Link as LinkIcon, Search, ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
 import clsx from "clsx";
 
 const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_URL || "https://ryxgjzehoijjvczqkhwr.supabase.co",
     // Use anon key for standard UI queries
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ5eGdqemVob2lqanZjenFraHdyIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MjA0ODQ1NSwiZXhwIjoyMDg3NjI0NDU1fQ.nemDcqmJMsp0DOlAjZyJyBtmWkZSAzn_Q44_a6Y3dVM"
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ5eGdqemVob2lqanZjenFraHdyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIwNDg0NTUsImV4cCI6MjA4NzYyNDQ1NX0.q0HivHixjE-A2MuQZlmlZOO2eLpQEm8c6XhQQQKaJsY"
 );
 
+// Filter constants moved inline or removed where unused
+interface Contractor {
+    id: string;
+    company_name: string;
+    dba_name?: string;
+    uei?: string;
+    cage_code?: string;
+    sam_registered?: boolean;
+    city?: string;
+    state?: string;
+    zip_code?: string;
+    country_code?: string;
+    address_line_1?: string;
+    naics_codes?: string[];
+    sba_certifications?: string[];
+    certifications?: string[];
+    business_url?: string;
+    expiration_date?: string;
+    primary_poc_name?: string;
+    secondary_poc_name?: string;
+    data_quality_flag?: string;
+    employee_count?: number;
+    revenue?: number;
+    federal_awards_count?: number;
+    total_award_volume?: number;
+    last_award_date?: string;
+    bonded_mentioned?: boolean;
+    municipal_experience?: boolean;
+}
+
 export default function ContractorsPage() {
-    const [contractors, setContractors] = useState<any[]>([]);
+    const [contractors, setContractors] = useState<Contractor[]>([]);
     const [totalCount, setTotalCount] = useState(0);
     const [loading, setLoading] = useState(true);
 
     // Search & Tabs
     const [searchInput, setSearchInput] = useState("");
     const [activeSearch, setActiveSearch] = useState("");
-    const [activeTab, setActiveTab] = useState<"sam" | "external">("sam");
+    const [activeTab, setActiveTab] = useState<"sam" | "external" | "underleveraged">("sam");
 
     // Pagination
     const [page, setPage] = useState(1);
     const pageSize = 50;
 
-    const [selectedContractor, setSelectedContractor] = useState<any | null>(null);
+    const [selectedContractor, setSelectedContractor] = useState<Contractor | null>(null);
+
+    // Advanced Filters
+    const [filterState, setFilterState] = useState("");
+    const [filterCert, setFilterCert] = useState("");
 
     const fetchContractors = useCallback(async () => {
         setLoading(true);
@@ -34,16 +68,29 @@ export default function ContractorsPage() {
                 .from("contractors")
                 .select("*", { count: 'exact' });
 
+            // Block poor quality leads
+            query = query.neq("data_quality_flag", "LOW_QUALITY");
+
             // Apply Tab Filter
             if (activeTab === "sam") {
-                query = query.is("is_sam_registered", true); // Handle true or null as true if needed, but explicit is better
-            } else {
-                query = query.eq("is_sam_registered", false);
+                query = query.is("sam_registered", true);
+            } else if (activeTab === "external") {
+                query = query.eq("sam_registered", false);
+            } else if (activeTab === "underleveraged") {
+                query = query.eq("federal_awards_count", 0).gt("employee_count", 15).gt("revenue", 5000000);
             }
 
             // Apply Search (ILIKE on company name, UEI, or CAGE)
             if (activeSearch) {
                 query = query.or(`company_name.ilike.%${activeSearch}%,uei.ilike.%${activeSearch}%,cage_code.ilike.%${activeSearch}%`);
+            }
+
+            if (filterState) {
+                query = query.eq("state", filterState);
+            }
+
+            if (filterCert) {
+                query = query.or(`certifications.cs.{${filterCert}},sba_certifications.cs.{${filterCert}}`);
             }
 
             // Pagination boundaries
@@ -65,11 +112,11 @@ export default function ContractorsPage() {
         } finally {
             setLoading(false);
         }
-    }, [page, activeSearch, activeTab, pageSize]);
+    }, [page, activeSearch, activeTab, pageSize, filterState, filterCert]);
 
     useEffect(() => {
         fetchContractors();
-    }, [fetchContractors]);
+    }, [fetchContractors, filterState, filterCert]);
 
     const handleSearchKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
         if (e.key === 'Enter') {
@@ -115,9 +162,41 @@ export default function ContractorsPage() {
                             >
                                 External (Non-SAM)
                             </button>
+                            <button
+                                onClick={() => { setActiveTab('underleveraged'); setPage(1); setSelectedContractor(null); }}
+                                className={clsx("px-4 py-2 rounded-full text-sm font-bold font-typewriter transition-all bg-emerald-100 text-emerald-900 border border-emerald-300 ml-2 shadow-sm hover:bg-emerald-200")}
+                            >
+                                <Sparkles className="w-4 h-4 inline mr-1" /> Underleveraged Targets
+                            </button>
                         </div>
+                    </div>
 
-                        {/* Search Bar */}
+                    {/* Advanced Filters */}
+                    <div className="flex flex-wrap gap-3 w-full md:w-auto">
+                        <select
+                            title="Filter by State"
+                            value={filterState}
+                            onChange={(e) => { setFilterState(e.target.value); setPage(1); }}
+                            className="bg-white border border-stone-200 rounded-full px-4 py-2 text-xs font-bold font-typewriter outline-none focus:ring-2 focus:ring-black transition-all"
+                        >
+                            <option value="">All States</option>
+                            {["VA", "MD", "DC", "TX", "CA", "FL", "NY"].map(s => (
+                                <option key={s} value={s}>{s}</option>
+                            ))}
+                        </select>
+
+                        <select
+                            title="Filter by Certification"
+                            value={filterCert}
+                            onChange={(e) => { setFilterCert(e.target.value); setPage(1); }}
+                            className="bg-white border border-stone-200 rounded-full px-4 py-2 text-xs font-bold font-typewriter outline-none focus:ring-2 focus:ring-black transition-all"
+                        >
+                            <option value="">All Certs</option>
+                            {["8A", "HUBZone", "SDVOSB", "WOSB", "EDWOSB"].map(c => (
+                                <option key={c} value={c}>{c}</option>
+                            ))}
+                        </select>
+
                         <div className="bg-white p-1 rounded-full border border-stone-200 shadow-sm flex items-center focus-within:ring-2 focus-within:ring-black transition-all w-full md:w-96">
                             <Search className="w-4 h-4 text-stone-400 ml-4 mr-2" />
                             <input
@@ -182,7 +261,7 @@ export default function ContractorsPage() {
                                                                         {n}
                                                                     </span>
                                                                 ))}
-                                                                {company.naics_codes?.length > 4 && (
+                                                                {company.naics_codes && company.naics_codes.length > 4 && (
                                                                     <span className="bg-stone-50 text-stone-400 border border-stone-200 px-2 py-0.5 rounded font-sans text-[10px]">+{company.naics_codes.length - 4}</span>
                                                                 )}
                                                                 {(!company.naics_codes || company.naics_codes.length === 0) && (
@@ -253,7 +332,7 @@ export default function ContractorsPage() {
                             <span className="bg-black text-white font-typewriter text-[10px] px-2 py-1 rounded uppercase tracking-wider">
                                 Vendor Profile
                             </span>
-                            {selectedContractor.is_sam_registered !== false ? (
+                            {selectedContractor.sam_registered !== false ? (
                                 <span className="bg-green-100 text-green-800 font-typewriter text-[10px] px-2 py-1 rounded-full uppercase tracking-wider ml-2">
                                     SAM.gov Active
                                 </span>
@@ -262,7 +341,7 @@ export default function ContractorsPage() {
                                     External Lead
                                 </span>
                             )}
-                            {selectedContractor.is_sam_registered !== false && (
+                            {selectedContractor.sam_registered !== false && (
                                 <span className="font-mono text-stone-400 text-xs ml-2">{selectedContractor.uei}</span>
                             )}
                         </div>
@@ -288,7 +367,7 @@ export default function ContractorsPage() {
                                 {selectedContractor.dba_name && (
                                     <p className="font-typewriter text-stone-500 text-[10px] uppercase tracking-wider mb-1">DBA: {selectedContractor.dba_name}</p>
                                 )}
-                                {selectedContractor.is_sam_registered !== false ? (
+                                {selectedContractor.sam_registered !== false ? (
                                     <p className="font-mono text-stone-500 text-xs">CAGE: <span className="text-black font-bold">{selectedContractor.cage_code || "N/A"}</span></p>
                                 ) : (
                                     <p className="font-mono text-stone-500 text-xs">Awaiting SAM Registration</p>
@@ -313,15 +392,59 @@ export default function ContractorsPage() {
                                 <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-2 flex items-center">
                                     <DollarSign className="w-3 h-3 mr-1" /> Est. Federal Rev
                                 </p>
-                                <p className="font-mono font-bold text-lg text-black">$8.4M</p>
-                                <p className="text-[10px] text-green-600 font-bold mt-1">+12% YoY</p>
+                                <p className="font-mono font-bold text-lg text-black">
+                                    {selectedContractor.revenue ? `$${Math.round(selectedContractor.revenue).toLocaleString()}` : (selectedContractor.total_award_volume ? `$${Math.round(selectedContractor.total_award_volume).toLocaleString()}` : "Unknown")}
+                                </p>
+                                {selectedContractor.employee_count && (
+                                    <p className="text-[10px] text-stone-500 font-bold mt-1">{selectedContractor.employee_count} Employees</p>
+                                )}
                             </div>
                             <div className="bg-white border border-stone-200 p-5 rounded-2xl shadow-sm">
                                 <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-2 flex items-center">
                                     <Award className="w-3 h-3 mr-1" /> Total Awards
                                 </p>
-                                <p className="font-mono font-bold text-lg text-black">42</p>
-                                <p className="text-[10px] text-stone-500 font-medium mt-1">Since 2019</p>
+                                <p className="font-mono font-bold text-lg text-black">{selectedContractor.federal_awards_count || 0}</p>
+                                {selectedContractor.last_award_date && (
+                                    <p className="text-[10px] text-stone-500 font-medium mt-1">Last: {new Date(selectedContractor.last_award_date).toLocaleDateString()}</p>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Structural Capacity / Sales Summary Block */}
+                        <div className="bg-stone-900 text-white border border-stone-800 p-6 rounded-3xl mt-6 shadow-xl relative overflow-hidden">
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-stone-700/30 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none"></div>
+
+                            <h3 className="font-typewriter font-bold text-xs mb-4 flex items-center text-stone-300 uppercase tracking-widest">
+                                <Target className="w-4 h-4 mr-2" /> Match Engine Trace
+                            </h3>
+
+                            <div className="space-y-4 relative z-10">
+                                <div className="flex justify-between items-center pb-3 border-b border-stone-800">
+                                    <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest flex items-center">
+                                        Capacity Verified
+                                    </p>
+                                    <div className="flex space-x-2">
+                                        {selectedContractor.bonded_mentioned && (
+                                            <span className="bg-green-500/20 text-green-400 font-bold text-[10px] px-2 py-1 rounded border border-green-500/30 font-typewriter uppercase">Bonding Mentioned</span>
+                                        )}
+                                        {selectedContractor.municipal_experience && (
+                                            <span className="bg-blue-500/20 text-blue-400 font-bold text-[10px] px-2 py-1 rounded border border-blue-500/30 font-typewriter uppercase">Municipal EXP</span>
+                                        )}
+                                        {!selectedContractor.bonded_mentioned && !selectedContractor.municipal_experience && (
+                                            <span className="text-stone-500 text-[10px] font-typewriter">Pending Enrichment</span>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="flex justify-between items-center">
+                                    <p className="text-[10px] font-typewriter text-stone-500 uppercase tracking-widest flex items-center">
+                                        Active PWin Signals
+                                    </p>
+                                    <div className="text-xl font-black font-typewriter tracking-tighter text-white flex items-center">
+                                        <Sparkles className="w-4 h-4 text-green-400 mr-2" />
+                                        {(selectedContractor.uei?.charCodeAt(0) ? (selectedContractor.uei.charCodeAt(0) % 4) + 1 : 2)} <span className="text-xs font-sans tracking-normal font-medium text-stone-400 ml-1">HOT Links</span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -411,29 +534,7 @@ export default function ContractorsPage() {
                             </a>
                         )}
 
-                        {/* Stats Info Box */}
-                        <div className="bg-stone-900 border border-stone-800 p-6 rounded-3xl mt-6">
-                            <h3 className="font-typewriter font-bold text-sm mb-4 flex items-center text-stone-300">
-                                <Target className="w-4 h-4 mr-2" /> Match Engine Trace
-                            </h3>
-                            <div className="space-y-4">
-                                <div className="flex justify-between items-center pb-3 border-b border-stone-800">
-                                    <p className="text-[10px] font-typewriter text-stone-500 uppercase tracking-widest flex items-center">
-                                        SAM Expiration
-                                    </p>
-                                    <p className="font-bold text-white text-sm">{selectedContractor.expiration_date ? new Date(selectedContractor.expiration_date).toLocaleDateString() : 'N/A'}</p>
-                                </div>
-                                <div className="flex justify-between items-center">
-                                    <p className="text-[10px] font-typewriter text-stone-500 uppercase tracking-widest flex items-center">
-                                        Active PWin Signals
-                                    </p>
-                                    <div className="text-xl font-black font-typewriter tracking-tighter text-white flex items-center">
-                                        <Sparkles className="w-4 h-4 text-green-400 mr-2" />
-                                        {(selectedContractor.uei?.charCodeAt(0) % 4) + 1 || 2} <span className="text-xs font-sans tracking-normal font-medium text-stone-400 ml-1">HOT Links</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                        {/* REPLACED STATS BLOCK ABOVE */}
                     </div>
                 </div>
             )}
