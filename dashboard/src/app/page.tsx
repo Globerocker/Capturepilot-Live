@@ -20,47 +20,84 @@ export default async function AgencyDashboard() {
   const { count: warmCount } = await supabase.from("matches").select("*", { count: 'exact', head: true }).eq("classification", "WARM");
   const { count: contractorCount } = await supabase.from("contractors").select("*", { count: 'exact', head: true }).neq("data_quality_flag", "LOW_QUALITY");
 
-  // Fetch HOT Matches with direct columns (not broken joins)
-  const { data: hotMatches } = await supabase
+  // Fetch HOT matches (flat query, no joins - more reliable on Vercel)
+  const { data: hotMatchesRaw } = await supabase
     .from("matches")
-    .select("id, score, classification, score_breakdown, opportunity_id, contractor_id, opportunities(title, notice_id, response_deadline, agency, naics_code, notice_type), contractors(company_name, city, state)")
+    .select("id, score, classification, opportunity_id, contractor_id")
     .eq("classification", "HOT")
     .order("score", { ascending: false })
     .limit(10);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const hotList = ((hotMatches as any[]) || []).map((m: any) => ({
-    id: m.id,
-    notice_id: m.opportunities?.notice_id || "UNK",
-    title: m.opportunities?.title || "Unknown",
-    agency: m.opportunities?.agency || "Unknown Agency",
-    naics: m.opportunities?.naics_code || "---",
-    notice_type: m.opportunities?.notice_type || "Unknown",
-    score: m.score,
-    score_pct: Math.round(m.score * 100),
-    deadline: m.opportunities?.response_deadline,
-    contractor: m.contractors?.company_name || "Unknown",
-    contractor_loc: [m.contractors?.city, m.contractors?.state].filter(Boolean).join(", ") || "",
-    opportunity_id: m.opportunity_id,
-  }));
+  const hotMatchList = (hotMatchesRaw || []) as { id: string; score: number; classification: string; opportunity_id: string; contractor_id: string }[];
 
-  // Fetch top WARM matches too
-  const { data: warmMatches } = await supabase
+  // Look up opportunity and contractor details for HOT matches
+  const hotOppIds = [...new Set(hotMatchList.map(m => m.opportunity_id))];
+  const hotConIds = [...new Set(hotMatchList.map(m => m.contractor_id))];
+
+  const { data: hotOpps } = hotOppIds.length > 0
+    ? await supabase.from("opportunities").select("id, title, notice_id, response_deadline, agency, naics_code, notice_type").in("id", hotOppIds)
+    : { data: [] };
+
+  const { data: hotCons } = hotConIds.length > 0
+    ? await supabase.from("contractors").select("id, company_name, city, state").in("id", hotConIds)
+    : { data: [] };
+
+  const oppMap = new Map((hotOpps || []).map((o: Record<string, string>) => [o.id, o]));
+  const conMap = new Map((hotCons || []).map((c: Record<string, string>) => [c.id, c]));
+
+  const hotList = hotMatchList.map(m => {
+    const opp = oppMap.get(m.opportunity_id) as Record<string, string> | undefined;
+    const con = conMap.get(m.contractor_id) as Record<string, string> | undefined;
+    return {
+      id: m.id,
+      notice_id: opp?.notice_id || "UNK",
+      title: opp?.title || "Unknown",
+      agency: opp?.agency || "Unknown Agency",
+      naics: opp?.naics_code || "---",
+      notice_type: opp?.notice_type || "Unknown",
+      score: m.score,
+      score_pct: Math.round(m.score * 100),
+      deadline: opp?.response_deadline,
+      contractor: con?.company_name || "Unknown",
+      contractor_loc: [con?.city, con?.state].filter(Boolean).join(", ") || "",
+      opportunity_id: m.opportunity_id,
+    };
+  });
+
+  // Fetch top WARM matches (also flat, no joins)
+  const { data: warmMatchesRaw } = await supabase
     .from("matches")
-    .select("id, score, opportunity_id, contractor_id, opportunities(title, notice_id, agency, naics_code), contractors(company_name)")
+    .select("id, score, opportunity_id, contractor_id")
     .eq("classification", "WARM")
     .order("score", { ascending: false })
     .limit(5);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const warmList = ((warmMatches as any[]) || []).map((m: any) => ({
-    id: m.id,
-    title: m.opportunities?.title || "Unknown",
-    agency: m.opportunities?.agency || "Unknown",
-    naics: m.opportunities?.naics_code || "---",
-    score_pct: Math.round(m.score * 100),
-    contractor: m.contractors?.company_name || "Unknown",
-  }));
+  const warmMatchList = (warmMatchesRaw || []) as { id: string; score: number; opportunity_id: string; contractor_id: string }[];
+  const warmOppIds = [...new Set(warmMatchList.map(m => m.opportunity_id))];
+  const warmConIds = [...new Set(warmMatchList.map(m => m.contractor_id))];
+
+  const { data: warmOpps } = warmOppIds.length > 0
+    ? await supabase.from("opportunities").select("id, title, naics_code").in("id", warmOppIds)
+    : { data: [] };
+  const { data: warmCons } = warmConIds.length > 0
+    ? await supabase.from("contractors").select("id, company_name").in("id", warmConIds)
+    : { data: [] };
+
+  const warmOppMap = new Map((warmOpps || []).map((o: Record<string, string>) => [o.id, o]));
+  const warmConMap = new Map((warmCons || []).map((c: Record<string, string>) => [c.id, c]));
+
+  const warmList = warmMatchList.map(m => {
+    const opp = warmOppMap.get(m.opportunity_id) as Record<string, string> | undefined;
+    const con = warmConMap.get(m.contractor_id) as Record<string, string> | undefined;
+    return {
+      id: m.id,
+      title: opp?.title || "Unknown",
+      agency: opp?.agency || "Unknown",
+      naics: opp?.naics_code || "---",
+      score_pct: Math.round(m.score * 100),
+      contractor: con?.company_name || "Unknown",
+    };
+  });
 
   return (
     <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
