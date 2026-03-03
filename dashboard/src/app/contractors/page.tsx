@@ -6,6 +6,8 @@ import { createClient } from "@supabase/supabase-js";
 import { Loader2, Users, Building, ShieldCheck, X, MapPin, Mail, DollarSign, Award, Target, Phone, Link as LinkIcon, Search, ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
 import clsx from "clsx";
 
+export const dynamic = 'force-dynamic';
+
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL || "https://ryxgjzehoijjvczqkhwr.supabase.co",
     // Use anon key for standard UI queries

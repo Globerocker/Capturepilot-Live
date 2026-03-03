@@ -6,6 +6,8 @@ import { createClient } from "@supabase/supabase-js";
 import { Loader2, ArrowRight, X, Building, CheckCircle2, PenTool, LayoutGrid, List, Briefcase, Sparkles, AlertCircle, ChevronDown, ChevronUp, Send } from "lucide-react";
 import clsx from "clsx";
 
+export const dynamic = 'force-dynamic';
+
 interface MatchExt {
     id: string;
     score: number;
