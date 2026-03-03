@@ -58,76 +58,104 @@ PHONE_RE = re.compile(r'(\+?1?[-.\s]?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4})')
 TITLE_KEYWORDS = ["ceo", "owner", "president", "founder", "principal", "director", "managing partner", "general manager"]
 
 # Common junk emails to exclude
-JUNK_EMAIL_DOMAINS = {"example.com", "sentry.io", "wixpress.com", "googleapis.com", "w3.org", "schema.org", "gravatar.com"}
+JUNK_EMAIL_DOMAINS = {
+    "example.com", "sentry.io", "wixpress.com", "googleapis.com", "w3.org",
+    "schema.org", "gravatar.com", "wordpress.com", "squarespace.com",
+    "godaddy.com", "cloudflare.com", "mailchimp.com", "constantcontact.com",
+    "facebook.com", "twitter.com", "instagram.com", "linkedin.com",
+    "google.com", "yahoo.com", "hotmail.com", "outlook.com",
+}
 
 # ---------------------------------------------------------------------------
-# APOLLO.IO ENRICHMENT
+# APOLLO.IO ENRICHMENT (Company search + org enrich - free tier compatible)
 # ---------------------------------------------------------------------------
-def enrich_apollo(company_name, domain=None):
+_apollo_disabled = False  # Circuit breaker: set True after auth failure
+
+def enrich_apollo_org(company_name, domain=None):
     """
-    Search Apollo.io for decision-makers at a company.
-    Returns list of contact dicts: [{full_name, title, email, phone, linkedin_url}]
+    Enrich a company via Apollo.io:
+      - If we have a domain: use organizations/enrich (direct lookup)
+      - If name only: use mixed_companies/search (fuzzy match)
+
+    Returns dict with company-level data: {website, phone, linkedin, facebook, twitter}
+    The free tier blocks people/search, so we use org-level endpoints for social links & website,
+    and rely on website scraping + SAM POC for actual person contacts.
     """
-    if not APOLLO_API_KEY:
-        return []
+    global _apollo_disabled
+    if not APOLLO_API_KEY or _apollo_disabled:
+        return {}
+
+    headers = {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-cache",
+        "X-Api-Key": APOLLO_API_KEY,
+    }
 
     try:
-        headers = {
-            "Content-Type": "application/json",
-            "Cache-Control": "no-cache",
-            "X-Api-Key": APOLLO_API_KEY,
-        }
+        org = None
 
-        payload = {
-            "person_titles": ["CEO", "Owner", "President", "Founder", "Principal", "Managing Partner"],
-            "page": 1,
-            "per_page": 5,
-        }
-
+        # Strategy 1: Direct enrich if we have a domain
         if domain:
-            payload["q_organization_domains"] = domain
-        else:
-            payload["q_organization_name"] = company_name
+            res = requests.post(
+                "https://api.apollo.io/api/v1/organizations/enrich",
+                headers=headers,
+                json={"domain": domain},
+                timeout=15,
+            )
+            if res.status_code == 429:
+                print("      ⚠️ Apollo rate limited, waiting 60s...")
+                time.sleep(60)
+                return enrich_apollo_org(company_name, domain)
+            if res.status_code in (401, 403):
+                print(f"      ❌ Apollo auth error: {res.status_code} — disabling Apollo for this run")
+                _apollo_disabled = True
+                return {}
+            if res.status_code == 200:
+                org = res.json().get("organization", {})
 
-        res = requests.post(
-            "https://api.apollo.io/api/v1/mixed_people/search",
-            headers=headers,
-            json=payload,
-            timeout=15,
-        )
+        # Strategy 2: Search by name if no domain or enrich returned nothing
+        if not org or not org.get("id"):
+            res = requests.post(
+                "https://api.apollo.io/api/v1/mixed_companies/search",
+                headers=headers,
+                json={
+                    "q_organization_name": company_name,
+                    "page": 1,
+                    "per_page": 1,
+                },
+                timeout=15,
+            )
+            if res.status_code == 429:
+                print("      ⚠️ Apollo rate limited, waiting 60s...")
+                time.sleep(60)
+                return enrich_apollo_org(company_name, domain)
+            if res.status_code in (401, 403):
+                print(f"      ❌ Apollo auth error: {res.status_code} — disabling Apollo for this run")
+                _apollo_disabled = True
+                return {}
+            if res.status_code == 200:
+                orgs = res.json().get("organizations", [])
+                if orgs:
+                    org = orgs[0]
 
-        if res.status_code == 429:
-            print("      ⚠️ Apollo rate limited, waiting 60s...")
-            time.sleep(60)
-            return enrich_apollo(company_name, domain)
+        if not org or not org.get("id"):
+            return {}
 
-        if res.status_code != 200:
-            print(f"      ❌ Apollo error: {res.status_code}")
-            return []
-
-        data = res.json()
-        people = data.get("people", [])
-
-        contacts = []
-        for person in people:
-            contact = {
-                "full_name": person.get("name"),
-                "title": person.get("title"),
-                "email": person.get("email"),
-                "phone": person.get("phone_number") or (person.get("phone_numbers") or [{}])[0].get("sanitized_number") if person.get("phone_numbers") else None,
-                "linkedin_url": person.get("linkedin_url"),
-                "source": "apollo",
-                "confidence": "high",
-            }
-            # Only keep contacts with at least a name
-            if contact["full_name"]:
-                contacts.append(contact)
-
-        return contacts
+        return {
+            "website": org.get("website_url"),
+            "phone": org.get("phone") or (org.get("primary_phone", {}) or {}).get("number"),
+            "linkedin": org.get("linkedin_url"),
+            "facebook": org.get("facebook_url"),
+            "twitter": org.get("twitter_url"),
+            "industry": org.get("industry"),
+            "estimated_num_employees": org.get("estimated_num_employees"),
+            "founded_year": org.get("founded_year"),
+            "short_description": org.get("short_description"),
+        }
 
     except Exception as e:
         print(f"      ❌ Apollo error: {e}")
-        return []
+        return {}
 
 
 # ---------------------------------------------------------------------------
@@ -155,7 +183,7 @@ def scrape_website_contacts(url):
     # Fetch homepage first, find subpages
     try:
         headers = {"User-Agent": "Mozilla/5.0 (compatible; CapturePilot/2.0)"}
-        homepage_res = requests.get(url, timeout=8, headers=headers, allow_redirects=True)
+        homepage_res = requests.get(url, timeout=12, headers=headers, allow_redirects=True)
 
         if homepage_res.status_code != 200:
             return result
@@ -201,7 +229,7 @@ def scrape_website_contacts(url):
         try:
             if page_url != url:
                 time.sleep(SCRAPE_DELAY)
-            res = requests.get(page_url, timeout=8, headers=headers, allow_redirects=True)
+            res = requests.get(page_url, timeout=12, headers=headers, allow_redirects=True)
             if res.status_code == 200:
                 all_text += " " + res.text
         except Exception:
@@ -238,7 +266,7 @@ def scrape_website_contacts(url):
         for title_kw in TITLE_KEYWORDS:
             # Pattern: "Name, Title" or "Name - Title"
             pattern = re.compile(
-                rf'([A-Z][a-z]+ [A-Z][a-z]+(?:\s[A-Z][a-z]+)?)\s*[,\-–|]\s*(?:[^,\n]*{title_kw}[^,\n]*)',
+                rf'([A-Za-z][A-Za-z]+ [A-Za-z][A-Za-z]+(?:\s[A-Za-z][A-Za-z]+)?)\s*[,\-–|]\s*(?:[^,\n]*{title_kw}[^,\n]*)',
                 re.IGNORECASE
             )
             for match in pattern.finditer(text_content):
@@ -251,7 +279,7 @@ def scrape_website_contacts(url):
 
             # Pattern: "Title: Name" or "Title - Name"
             pattern2 = re.compile(
-                rf'(?:{title_kw})\s*[:\-–|]\s*([A-Z][a-z]+ [A-Z][a-z]+(?:\s[A-Z][a-z]+)?)',
+                rf'(?:{title_kw})\s*[:\-–|]\s*([A-Za-z][A-Za-z]+ [A-Za-z][A-Za-z]+(?:\s[A-Za-z][A-Za-z]+)?)',
                 re.IGNORECASE
             )
             for match in pattern2.finditer(text_content):
@@ -384,17 +412,43 @@ def enrich_contractor_deep(supabase, contractor, job_id):
     print(f"    🔎 Enriching: {name}")
     all_contacts = []
 
-    # --- 1. Apollo.io ---
+    # --- 1. Apollo.io Organization Enrichment ---
     if APOLLO_API_KEY and not contractor.get("apollo_enriched"):
         domain = urlparse(website).netloc if website and website.startswith("http") else None
-        apollo_contacts = enrich_apollo(name, domain)
-        if apollo_contacts:
-            print(f"       Apollo: {len(apollo_contacts)} decision-makers found")
-            all_contacts.extend(apollo_contacts)
-            # Mark as Apollo enriched
-            supabase.table("contractors").update({
-                "apollo_enriched": True,
-            }).eq("id", cid).execute()
+        apollo_org = enrich_apollo_org(name, domain)
+        if apollo_org:
+            # Update contractor with Apollo org data (website, social links, phone)
+            apollo_update = {"apollo_enriched": True, "enrichment_source": "apollo"}
+            if apollo_org.get("website") and not website:
+                apollo_update["business_url"] = apollo_org["website"]
+                website = apollo_org["website"]  # Use for website scraping below
+            if apollo_org.get("linkedin"):
+                apollo_update["social_linkedin"] = apollo_org["linkedin"]
+            if apollo_org.get("facebook"):
+                apollo_update["social_facebook"] = apollo_org["facebook"]
+            if apollo_org.get("twitter"):
+                apollo_update["social_twitter"] = apollo_org["twitter"]
+            supabase.table("contractors").update(apollo_update).eq("id", cid).execute()
+
+            # If Apollo found a phone, add as contact
+            if apollo_org.get("phone"):
+                all_contacts.append({
+                    "full_name": None,
+                    "phone": apollo_org["phone"],
+                    "source": "apollo",
+                    "confidence": "medium",
+                })
+
+            details = []
+            if apollo_org.get("linkedin"):
+                details.append("LinkedIn")
+            if apollo_org.get("phone"):
+                details.append("phone")
+            if apollo_org.get("website"):
+                details.append("website")
+            print(f"       Apollo Org: {', '.join(details) if details else 'basic info'}")
+        else:
+            supabase.table("contractors").update({"apollo_enriched": True}).eq("id", cid).execute()
         time.sleep(APOLLO_DELAY)
 
     # --- 2. Website Scraping ---
@@ -520,7 +574,8 @@ def run_enrichment_pipeline(opportunity_id=None):
         # Fetch contractor data separately
         con_res = supabase.table("contractors").select(
             "id, company_name, business_url, website, city, state, "
-            "primary_poc_phone, primary_poc_email, apollo_enriched, google_place_id"
+            "primary_poc_name, primary_poc_title, primary_poc_phone, primary_poc_email, "
+            "apollo_enriched, google_place_id"
         ).eq("id", contractor_id).single().execute()
 
         contractor = con_res.data
@@ -534,6 +589,28 @@ def run_enrichment_pipeline(opportunity_id=None):
 
         # Run enrichment
         contacts = enrich_contractor_deep(supabase, contractor, job_id)
+
+        # Auto-import SAM POC as contact (always, not just when empty)
+        if contractor.get("primary_poc_name"):
+            poc_contact = {
+                "contractor_id": contractor["id"],
+                "full_name": contractor["primary_poc_name"],
+                "title": contractor.get("primary_poc_title"),
+                "email": contractor.get("primary_poc_email"),
+                "phone": contractor.get("primary_poc_phone"),
+                "source": "sam_poc",
+                "confidence": "high",
+            }
+            # Check if this POC already exists
+            existing = [c for c in contacts if c.get("full_name") == poc_contact["full_name"]]
+            if not existing:
+                try:
+                    supabase.table("contractor_contacts").upsert(
+                        poc_contact, on_conflict="contractor_id,source,full_name"
+                    ).execute()
+                    contacts.append(poc_contact)
+                except Exception:
+                    pass
 
         # Calculate readiness score
         readiness = calculate_contact_readiness(contractor, contacts)

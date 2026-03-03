@@ -56,11 +56,10 @@ def search_sam_entities(naics_code, state, set_aside_code=None, page=0):
 
     url = "https://api.sam.gov/entity-information/v3/entities"
     params = {
-        "api_key": SAM_API_KEY,
         "samRegistered": "Yes",
         "registrationStatus": "A",  # Active registrations only
         "page": page,
-        "size": 100,
+        "size": 10,
     }
 
     if naics_code:
@@ -83,7 +82,8 @@ def search_sam_entities(naics_code, state, set_aside_code=None, page=0):
             params["businessTypeCode"] = "2X"  # Small business
 
     try:
-        res = requests.get(url, params=params, timeout=30)
+        headers = {"X-Api-Key": SAM_API_KEY}
+        res = requests.get(url, params=params, headers=headers, timeout=30)
 
         if res.status_code == 429:
             print("  ⚠️ SAM Entity API rate limited. Waiting 30s...")
@@ -104,39 +104,62 @@ def search_sam_entities(naics_code, state, set_aside_code=None, page=0):
         for entity in entities:
             core = entity.get("entityRegistration", {})
             core_data = entity.get("coreData", {})
+            assertions = entity.get("assertions", {})
             phys_addr = core_data.get("physicalAddress", {})
-            poc_data = core_data.get("pointsOfContact", {})
-            govt_poc = poc_data.get("governmentBusinessPOC", {})
 
-            # Extract NAICS codes from the entity
+            # POC data is at top level, not under coreData
+            poc_data = entity.get("pointsOfContact", {})
+            if not poc_data:
+                poc_data = core_data.get("pointsOfContact", {})
+            govt_poc = poc_data.get("governmentBusinessPOC", {}) or {}
+            ebiz_poc = poc_data.get("electronicBusinessPOC", {}) or {}
+
+            # Use whichever POC has the most info
+            primary_poc = govt_poc if govt_poc.get("firstName") else ebiz_poc
+            poc_name = f"{primary_poc.get('firstName', '')} {primary_poc.get('lastName', '')}".strip() or None
+            poc_title = primary_poc.get("title")
+            poc_email = primary_poc.get("email") or govt_poc.get("email") or ebiz_poc.get("email")
+            poc_phone = (primary_poc.get("USPhone") or primary_poc.get("nonUSPhone")
+                         or govt_poc.get("USPhone") or ebiz_poc.get("USPhone"))
+
+            # Extract NAICS codes from assertions.goodsAndServices
             entity_naics = []
-            naics_list = core_data.get("generalInformation", {}).get("naicsCodeList", [])
+            goods = assertions.get("goodsAndServices", {})
+            naics_list = goods.get("naicsList", [])
             if isinstance(naics_list, list):
                 for n in naics_list:
                     code = n.get("naicsCode") if isinstance(n, dict) else str(n)
                     if code:
                         entity_naics.append(str(code))
+            # Also add primary NAICS if present
+            primary_naics = goods.get("primaryNaics")
+            if primary_naics and str(primary_naics) not in entity_naics:
+                entity_naics.insert(0, str(primary_naics))
 
-            # Extract certifications
+            # Extract certifications from businessTypes
             certs = []
-            biz_types = core.get("businessTypes", [])
-            if isinstance(biz_types, list):
-                for bt in biz_types:
-                    bt_str = str(bt).upper() if bt else ""
-                    if "8(A)" in bt_str or "8A" in bt_str:
-                        certs.append("8A")
-                    elif "HUBZONE" in bt_str:
-                        certs.append("HUBZone")
-                    elif "SDVOSB" in bt_str or "SERVICE-DISABLED" in bt_str:
-                        certs.append("SDVOSB")
-                    elif "WOSB" in bt_str or "WOMEN" in bt_str:
-                        certs.append("WOSB")
-                    elif "VETERAN" in bt_str:
-                        certs.append("VOSB")
+            biz_types_data = core_data.get("businessTypes", {})
+            biz_type_list = biz_types_data.get("businessTypeList", []) if isinstance(biz_types_data, dict) else []
+            sba_list = biz_types_data.get("sbaBusinessTypeList", []) if isinstance(biz_types_data, dict) else []
+            for bt in biz_type_list + sba_list:
+                bt_desc = (bt.get("businessTypeDesc") or bt.get("sbaBusinessTypeDesc") or "").upper()
+                if "8(A)" in bt_desc:
+                    certs.append("8A")
+                elif "HUBZONE" in bt_desc:
+                    certs.append("HUBZone")
+                elif "SERVICE-DISABLED" in bt_desc or "SDVOSB" in bt_desc:
+                    certs.append("SDVOSB")
+                elif "WOMEN" in bt_desc or "WOSB" in bt_desc:
+                    certs.append("WOSB")
+                elif "VETERAN" in bt_desc:
+                    certs.append("VOSB")
 
             uei = core.get("ueiSAM") or core.get("uei")
             if not uei:
                 continue
+
+            # Website from entity info
+            entity_url = core_data.get("entityInformation", {}).get("entityURL")
 
             contractor = {
                 "uei": uei,
@@ -151,12 +174,13 @@ def search_sam_entities(naics_code, state, set_aside_code=None, page=0):
                 "country_code": phys_addr.get("countryCode", "USA"),
                 "naics_codes": entity_naics if entity_naics else None,
                 "sba_certifications": certs if certs else None,
-                "primary_poc_name": f"{govt_poc.get('firstName', '')} {govt_poc.get('lastName', '')}".strip() or None,
-                "primary_poc_email": govt_poc.get("email"),
-                "primary_poc_phone": govt_poc.get("USPhone") or govt_poc.get("nonUSPhone"),
-                "business_url": core_data.get("generalInformation", {}).get("corporateUrl"),
+                "primary_poc_name": poc_name,
+                "primary_poc_title": poc_title,
+                "primary_poc_email": poc_email,
+                "primary_poc_phone": poc_phone,
+                "business_url": entity_url,
                 "activation_date": core.get("activationDate"),
-                "expiration_date": core.get("expirationDate"),
+                "expiration_date": core.get("registrationExpirationDate") or core.get("expirationDate"),
                 "enrichment_source": "sam_entity",
             }
             contractors.append(contractor)
@@ -247,19 +271,81 @@ def search_google_local(query, location):
 # NAICS DESCRIPTION LOOKUP (for building search queries)
 # ---------------------------------------------------------------------------
 NAICS_DESCRIPTIONS = {
+    # 6-digit specific codes (federal contracting common)
+    "236220": "Commercial Building Construction",
+    "237110": "Water & Sewer Line Construction",
+    "237130": "Power & Communication Line Construction",
+    "237310": "Highway & Street Construction",
+    "238110": "Poured Concrete Foundation",
+    "238210": "Electrical Contractors",
+    "238220": "Plumbing, Heating & AC Contractors",
+    "238290": "Other Building Equipment Contractors",
+    "238310": "Drywall & Insulation Contractors",
+    "238910": "Site Preparation Contractors",
+    "238990": "All Other Specialty Trade Contractors",
+    "332710": "Machine Shops",
+    "332911": "Industrial Valve Manufacturing",
+    "332991": "Ball & Roller Bearing Manufacturing",
+    "332994": "Small Arms Manufacturing",
+    "333120": "Construction Machinery Manufacturing",
+    "333517": "Machine Tool Manufacturing",
+    "333613": "Mechanical Power Transmission Equipment",
+    "333618": "Other Engine Equipment Manufacturing",
+    "333914": "Measuring & Dispensing Pump Manufacturing",
+    "334419": "Other Electronic Component Manufacturing",
+    "334511": "Search & Navigation Equipment",
+    "334514": "Totalizing Fluid Meter Manufacturing",
+    "335931": "Current-Carrying Wiring Devices",
+    "336310": "Motor Vehicle Gasoline Engine Parts",
+    "336330": "Motor Vehicle Steering & Suspension",
+    "336350": "Motor Vehicle Transmission Parts",
+    "336390": "Other Motor Vehicle Parts",
+    "336411": "Aircraft Manufacturing",
+    "336413": "Other Aircraft Parts Manufacturing",
+    "336611": "Ship Building & Repairing",
+    "339113": "Surgical Appliance & Supplies",
+    "339991": "Gasket, Packing & Sealing Devices",
+    "326122": "Plastics Pipe & Pipe Fitting Manufacturing",
+    "541330": "Engineering Services",
+    "541511": "Custom Computer Programming",
+    "541512": "Computer Systems Design",
+    "541519": "Other Computer Related Services",
+    "541611": "Administrative Management Consulting",
+    "541620": "Environmental Consulting",
+    "541690": "Other Scientific & Technical Consulting",
+    "541990": "All Other Professional Services",
+    "561210": "Facilities Support Services",
+    "561612": "Security Guards & Patrol Services",
+    "561720": "Janitorial Services",
+    "561730": "Landscaping Services",
+    "561790": "Other Services to Buildings",
+    "562111": "Solid Waste Collection",
+    "562991": "Septic Tank & Portable Toilet Services",
+    "611430": "Professional Development Training",
+    "711219": "Other Spectator Sports",
+    "812320": "Drycleaning & Laundry Services",
+    # 3-digit sector fallbacks
     "236": "Construction", "237": "Heavy & Civil Engineering Construction",
-    "238": "Specialty Trade Contractors", "541": "Professional Services",
-    "561": "Administrative Services", "562": "Waste Management",
-    "811": "Repair & Maintenance", "611": "Educational Services",
-    "621": "Healthcare", "721": "Accommodation", "722": "Food Services",
+    "238": "Specialty Trade Contractors", "332": "Fabricated Metal Manufacturing",
+    "333": "Machinery Manufacturing", "334": "Electronics Manufacturing",
+    "335": "Electrical Equipment Manufacturing", "336": "Transportation Equipment Manufacturing",
+    "339": "Miscellaneous Manufacturing", "326": "Plastics & Rubber Manufacturing",
+    "541": "Professional & Technical Services", "561": "Administrative & Support Services",
+    "562": "Waste Management & Remediation", "611": "Educational Services",
+    "621": "Healthcare", "711": "Performing Arts & Spectator Sports",
+    "721": "Accommodation", "722": "Food Services",
+    "811": "Repair & Maintenance", "812": "Personal & Laundry Services",
 }
 
 def get_naics_description(naics_code):
-    """Get a human-readable description for a NAICS code prefix."""
+    """Get a human-readable description for a NAICS code."""
     if not naics_code:
         return "contractor"
-    code = str(naics_code)
-    # Try exact 3-digit sector match
+    code = str(naics_code).strip()
+    # Try exact 6-digit match first
+    if code in NAICS_DESCRIPTIONS:
+        return NAICS_DESCRIPTIONS[code]
+    # Try 3-digit sector match
     if code[:3] in NAICS_DESCRIPTIONS:
         return NAICS_DESCRIPTIONS[code[:3]]
     # Fallback
@@ -329,6 +415,33 @@ def link_contractor_to_opportunity(supabase, opportunity_id, contractor_id, job_
         print(f"    ❌ Link error: {e}")
 
 
+def enrich_usaspending(supabase, contractor_id, uei):
+    """Fetch federal award history from USASpending.gov (free, no key needed)."""
+    if not uei or len(uei) < 10:
+        return
+    try:
+        payload = {
+            "filters": {
+                "recipient_search_text": [uei],
+                "award_type_codes": ["A", "B", "C", "D"],
+            }
+        }
+        res = requests.post(
+            "https://api.usaspending.gov/api/v2/search/spending_by_award_count/",
+            json=payload, timeout=10
+        )
+        if res.status_code == 200:
+            data = res.json()
+            results = data.get("results", {})
+            contracts = results.get("contracts", 0)
+            count = contracts if isinstance(contracts, int) else (contracts.get("count", 0) if isinstance(contracts, dict) else 0)
+            supabase.table("contractors").update({
+                "federal_awards_count": count,
+            }).eq("id", contractor_id).execute()
+    except Exception:
+        pass
+
+
 def create_enrichment_job(supabase, opportunity_id, trigger_type="auto"):
     """Create an enrichment_jobs record, returns job_id."""
     try:
@@ -381,7 +494,7 @@ def discover_for_opportunity(supabase, opportunity, job_id, serpapi_budget_remai
 
     # --- Phase 1: SAM Entity Search ---
     sam_contractors = []
-    for page in range(3):  # Up to 300 results
+    for page in range(10):  # Up to 100 results (10 per page)
         print(f"    -> SAM Entity search page {page + 1}...")
         batch = search_sam_entities(naics, state, set_aside, page=page)
         if not batch:
@@ -391,12 +504,15 @@ def discover_for_opportunity(supabase, opportunity, job_id, serpapi_budget_remai
 
     print(f"    -> Found {len(sam_contractors)} SAM-registered entities")
 
-    # Upsert and link SAM contractors
+    # Upsert and link SAM contractors + fetch award history
     sam_linked = 0
     for c in sam_contractors:
         cid = upsert_contractor(supabase, c)
         if cid:
             link_contractor_to_opportunity(supabase, opp_id, cid, job_id, "sam_entity")
+            uei = c.get("uei")
+            if uei:
+                enrich_usaspending(supabase, cid, uei)
             sam_linked += 1
 
     # --- Phase 2: Google Local (if SAM < 10 and budget allows) ---
@@ -405,7 +521,7 @@ def discover_for_opportunity(supabase, opportunity, job_id, serpapi_budget_remai
         naics_desc = get_naics_description(naics)
         city = opportunity.get("place_of_performance_city") or ""
         location = f"{city}, {state}" if state else "United States"
-        query = f"{naics_desc} {set_aside or ''}".strip()
+        query = f"{naics_desc} contractor"
 
         print(f"    -> Google Local search: '{query}' near '{location}'")
         google_contractors = search_google_local(query, location)

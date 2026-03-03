@@ -40,16 +40,16 @@ def ingest_sam_opportunities(days_back=2):
         
         while keep_fetching:
             params = {
-                "api_key": SAM_API_KEY,
                 "postedFrom": posted_from_date,
                 "postedTo": posted_to_date,
                 "limit": limit,
                 "offset": offset,
                 "ptype": ptype
             }
-            
+            headers = {"X-Api-Key": SAM_API_KEY}
+
             try:
-                response = requests.get(url, params=params, timeout=30)
+                response = requests.get(url, params=params, headers=headers, timeout=30)
                 
                 if response.status_code == 429:
                     print("⚠️ Rate limit hit. Sleeping for 10 seconds (per SOP)...")
