@@ -3,12 +3,11 @@
 import { useEffect, useState, useCallback, KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
-import { Search, Filter, Loader2, LayoutGrid, List, Download, ArrowRight, X, Building, Target, FileText, Calendar, Link as LinkIcon, Sparkles, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, Filter, Loader2, LayoutGrid, List, Download, X, Building, Target, FileText, Link as LinkIcon, Sparkles, ChevronLeft, ChevronRight, Flame, Users } from "lucide-react";
 import clsx from "clsx";
 
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL || "https://ryxgjzehoijjvczqkhwr.supabase.co",
-    // Use anon key for standard UI queries
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ5eGdqemVob2lqanZjenFraHdyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIwNDg0NTUsImV4cCI6MjA4NzYyNDQ1NX0.q0HivHixjE-A2MuQZlmlZOO2eLpQEm8c6XhQQQKaJsY"
 );
 
@@ -25,11 +24,34 @@ interface Opportunity {
     description?: string;
     link?: string;
     is_archived?: boolean;
-    historical_bidders?: number;
     award_amount?: number;
+    place_of_performance_state?: string;
+    place_of_performance_city?: string;
+    set_aside_code?: string;
+    enrichment_status?: string;
+    incumbent_contractor_name?: string;
+    notice_type_score?: number;
+    past_performance_score?: number;
+    // Joined
     agencies?: { department: string; sub_tier?: string };
     opportunity_types?: { name: string };
     set_asides?: { code: string };
+    // Computed
+    _matchCount?: number;
+    _dataScore?: number;
+}
+
+interface MatchedContractor {
+    id: string;
+    score: number;
+    classification: string;
+    contractors: {
+        company_name: string;
+        uei?: string;
+        city?: string;
+        state?: string;
+        certifications?: string[];
+    };
 }
 
 export default function OpportunitiesPage() {
@@ -38,7 +60,7 @@ export default function OpportunitiesPage() {
     const [totalCount, setTotalCount] = useState(0);
     const [loading, setLoading] = useState(true);
     const [searchInput, setSearchInput] = useState("");
-    const [activeSearch, setActiveSearch] = useState(""); // Submitted search
+    const [activeSearch, setActiveSearch] = useState("");
     const [viewMode, setViewMode] = useState<"grid" | "list">("list");
     const [showFilters, setShowFilters] = useState(false);
 
@@ -46,17 +68,39 @@ export default function OpportunitiesPage() {
     const [page, setPage] = useState(1);
     const pageSize = 50;
 
-    // Fast Pre-Filters (Masterguide)
-    const [quickFilter, setQuickFilter] = useState<"ALL" | "EASY_WIN" | "HIGH_PROB">("ALL");
+    // Quick Filters
+    const [quickFilter, setQuickFilter] = useState<"ALL" | "HAS_MATCHES" | "SOURCES_SOUGHT" | "ENRICHED">("ALL");
+
+    // Sort
+    const [sortBy, setSortBy] = useState<"posted_desc" | "deadline_asc" | "data_rich">("posted_desc");
 
     // Detail Panel State
     const [selectedOpportunity, setSelectedOpportunity] = useState<Opportunity | null>(null);
+    const [matchedContractors, setMatchedContractors] = useState<MatchedContractor[]>([]);
+    const [loadingContractors, setLoadingContractors] = useState(false);
 
     // Advanced Filters
     const [filterAgency, setFilterAgency] = useState("");
     const [filterType, setFilterType] = useState("");
     const [filterNaics, setFilterNaics] = useState("");
-    const [filterDensity, setFilterDensity] = useState(""); // Low, Med, High
+    const [filterState, setFilterState] = useState("");
+    const [filterSetAside, setFilterSetAside] = useState("");
+
+    // Calculate data richness score
+    const calcDataScore = (op: Opportunity): number => {
+        let score = 0;
+        if (op.description) score += 20;
+        if (op.agency) score += 10;
+        if (op.naics_code) score += 10;
+        if (op.notice_type) score += 5;
+        if (op.place_of_performance_state) score += 10;
+        if (op.place_of_performance_city) score += 5;
+        if (op.set_aside_code) score += 10;
+        if (op.award_amount) score += 15;
+        if (op.response_deadline) score += 5;
+        if (op.incumbent_contractor_name) score += 10;
+        return score;
+    };
 
     const fetchOpportunities = useCallback(async () => {
         setLoading(true);
@@ -66,67 +110,108 @@ export default function OpportunitiesPage() {
                 .select("*, agencies(department, sub_tier), opportunity_types(name), set_asides(code)", { count: 'exact' });
 
             if (activeSearch) {
-                // ILIKE on title or notice_id
-                query = query.or(`title.ilike.%${activeSearch}%,notice_id.ilike.%${activeSearch}%`);
+                query = query.or(`title.ilike.%${activeSearch}%,notice_id.ilike.%${activeSearch}%,agency.ilike.%${activeSearch}%`);
             }
 
-            // Base constraint
             query = query.eq("is_archived", false);
 
-            if (quickFilter === "EASY_WIN") {
-                // Easy Win: Sources Sought or less than 5 historical bidders
-                query = query.lt('historical_bidders', 5);
+            // Quick filters
+            if (quickFilter === "SOURCES_SOUGHT") {
+                query = query.eq("notice_type", "Sources Sought");
             }
-
-            if (quickFilter === "HIGH_PROB") {
-                // High Win Probability: Low competition and set-asides
-                query = query.lt('historical_bidders', 8).not('set_aside_id', 'is', null);
+            if (quickFilter === "ENRICHED") {
+                query = query.neq("enrichment_status", "none");
             }
 
             if (filterAgency) {
                 query = query.ilike("agency", `%${filterAgency}%`);
             }
-
             if (filterType) {
-                query = query.eq("opportunity_type_id", filterType);
+                query = query.eq("notice_type", filterType);
             }
-
             if (filterNaics) {
                 query = query.ilike("naics_code", `%${filterNaics}%`);
             }
-
-            if (filterDensity === "LOW") {
-                query = query.lt("historical_bidders", 5);
-            } else if (filterDensity === "MED") {
-                query = query.gte("historical_bidders", 5).lt("historical_bidders", 10);
-            } else if (filterDensity === "HIGH") {
-                query = query.gte("historical_bidders", 10);
+            if (filterState) {
+                query = query.eq("place_of_performance_state", filterState);
+            }
+            if (filterSetAside) {
+                query = query.ilike("set_aside_code", `%${filterSetAside}%`);
             }
 
-            // Pagination boundaries
+            // Sorting
+            if (sortBy === "posted_desc") {
+                query = query.order('posted_date', { ascending: false });
+            } else if (sortBy === "deadline_asc") {
+                query = query.order('response_deadline', { ascending: true, nullsFirst: false });
+            } else {
+                query = query.order('posted_date', { ascending: false }); // data_rich sorted client-side
+            }
+
             const from = (page - 1) * pageSize;
             const to = from + pageSize - 1;
 
-            const { data, count, error } = await query
-                .order('posted_date', { ascending: false })
-                .range(from, to);
+            const { data, count, error } = await query.range(from, to);
 
             if (error) {
                 console.error("Error fetching ops:", error);
             } else {
-                setOpportunities(data || []);
-                setTotalCount(count || 0);
+                let results = (data || []) as Opportunity[];
+
+                // Calculate data scores
+                results = results.map(op => ({ ...op, _dataScore: calcDataScore(op) }));
+
+                // Client-side sort by data richness
+                if (sortBy === "data_rich") {
+                    results.sort((a, b) => (b._dataScore || 0) - (a._dataScore || 0));
+                }
+
+                // For HAS_MATCHES filter, we need to check which have matches
+                if (quickFilter === "HAS_MATCHES") {
+                    const oppIds = results.map(r => r.id);
+                    if (oppIds.length > 0) {
+                        const { data: matchData } = await supabase
+                            .from("matches")
+                            .select("opportunity_id")
+                            .in("opportunity_id", oppIds);
+                        const matchedIds = new Set((matchData || []).map(m => m.opportunity_id));
+                        results = results.filter(r => matchedIds.has(r.id));
+                    }
+                }
+
+                setOpportunities(results);
+                setTotalCount(quickFilter === "HAS_MATCHES" ? results.length : (count || 0));
             }
         } catch (err) {
             console.error(err);
         } finally {
             setLoading(false);
         }
-    }, [page, activeSearch, quickFilter, pageSize, filterAgency, filterType, filterNaics, filterDensity]);
+    }, [page, activeSearch, quickFilter, pageSize, filterAgency, filterType, filterNaics, filterState, filterSetAside, sortBy]);
 
     useEffect(() => {
         fetchOpportunities();
-    }, [fetchOpportunities, filterAgency, filterType, filterNaics, filterDensity]);
+    }, [fetchOpportunities]);
+
+    // Fetch matched contractors when an opportunity is selected
+    useEffect(() => {
+        if (!selectedOpportunity) {
+            setMatchedContractors([]);
+            return;
+        }
+        async function fetchMatches() {
+            setLoadingContractors(true);
+            const { data } = await supabase
+                .from("matches")
+                .select("id, score, classification, contractors(company_name, uei, city, state, certifications)")
+                .eq("opportunity_id", selectedOpportunity!.id)
+                .order("score", { ascending: false })
+                .limit(10);
+            setMatchedContractors((data || []) as unknown as MatchedContractor[]);
+            setLoadingContractors(false);
+        }
+        fetchMatches();
+    }, [selectedOpportunity]);
 
     const handleSearchKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
         if (e.key === 'Enter') {
@@ -137,18 +222,19 @@ export default function OpportunitiesPage() {
 
     const handleExport = () => {
         if (opportunities.length === 0) return;
-        const headers = ["Notice ID", "Title", "Agency", "Notice Type", "NAICS", "Deadline"];
+        const headers = ["Notice ID", "Title", "Agency", "Notice Type", "NAICS", "State", "Set-Aside", "Deadline", "Award Amount"];
         const csvRows = [headers.join(",")];
         for (const row of opportunities) {
-            const agencyName = row.agency || "";
-            const typeName = row.notice_type || "";
             const values = [
                 `"${row.notice_id || ""}"`,
                 `"${(row.title || "").replace(/"/g, '""')}"`,
-                `"${agencyName.replace(/"/g, '""')}"`,
-                `"${typeName}"`,
+                `"${(row.agency || "").replace(/"/g, '""')}"`,
+                `"${row.notice_type || ""}"`,
                 `"${row.naics_code || ""}"`,
-                `"${row.response_deadline || ""}"`
+                `"${row.place_of_performance_state || ""}"`,
+                `"${row.set_aside_code || ""}"`,
+                `"${row.response_deadline || ""}"`,
+                `"${row.award_amount || ""}"`
             ];
             csvRows.push(values.join(","));
         }
@@ -162,6 +248,13 @@ export default function OpportunitiesPage() {
     };
 
     const totalPages = Math.ceil(totalCount / pageSize);
+
+    const formatCurrency = (val: number | null | undefined) => {
+        if (!val) return null;
+        if (val >= 1_000_000) return `$${(val / 1_000_000).toFixed(1)}M`;
+        if (val >= 1_000) return `$${(val / 1_000).toFixed(0)}K`;
+        return `$${val.toLocaleString()}`;
+    };
 
     return (
         <div className="flex gap-6 max-w-[1600px] mx-auto pb-12 items-start">
@@ -177,122 +270,163 @@ export default function OpportunitiesPage() {
                                 </span>
                             </h2>
                             <p className="text-stone-500 mt-2 font-medium">
-                                Data synced directly from SAM.gov APIs (Live)
+                                SAM.gov Federal Opportunities (Live)
                             </p>
                         </div>
                         <div className="flex space-x-3 items-center">
                             <div className="flex items-center bg-stone-100 p-1 rounded-full border border-stone-200">
-                                <button title="Grid View" onClick={() => setViewMode("grid")} className={clsx("p-2 rounded-full transition-all", viewMode === "grid" ? "bg-white shadow-sm text-black" : "text-stone-500 hover:text-black")}>
+                                <button type="button" title="Grid View" onClick={() => setViewMode("grid")} className={clsx("p-2 rounded-full transition-all", viewMode === "grid" ? "bg-white shadow-sm text-black" : "text-stone-500 hover:text-black")}>
                                     <LayoutGrid className="w-4 h-4" />
                                 </button>
-                                <button title="List View" onClick={() => setViewMode("list")} className={clsx("p-2 rounded-full transition-all", viewMode === "list" ? "bg-white shadow-sm text-black" : "text-stone-500 hover:text-black")}>
+                                <button type="button" title="List View" onClick={() => setViewMode("list")} className={clsx("p-2 rounded-full transition-all", viewMode === "list" ? "bg-white shadow-sm text-black" : "text-stone-500 hover:text-black")}>
                                     <List className="w-4 h-4" />
                                 </button>
                             </div>
 
-                            <button title="Filters" onClick={() => setShowFilters(!showFilters)} className={clsx("flex items-center space-x-2 px-4 py-2.5 rounded-full border transition-all text-sm font-medium", showFilters ? "bg-black text-white border-black" : "bg-white text-stone-700 border-stone-200 hover:border-black")}>
+                            <button type="button" title="Filters" onClick={() => setShowFilters(!showFilters)} className={clsx("flex items-center space-x-2 px-4 py-2.5 rounded-full border transition-all text-sm font-medium", showFilters ? "bg-black text-white border-black" : "bg-white text-stone-700 border-stone-200 hover:border-black")}>
                                 <Filter className="w-4 h-4" />
                                 <span className="font-typewriter">Filters</span>
                             </button>
 
-                            <button title="Export" onClick={handleExport} className="flex items-center space-x-2 bg-stone-100 text-black px-4 py-2.5 rounded-full border border-stone-200 hover:border-stone-300 hover:bg-stone-200 transition-all text-sm font-bold">
+                            <button type="button" title="Export" onClick={handleExport} className="flex items-center space-x-2 bg-stone-100 text-black px-4 py-2.5 rounded-full border border-stone-200 hover:border-stone-300 hover:bg-stone-200 transition-all text-sm font-bold">
                                 <Download className="w-4 h-4" />
-                                <span className="font-typewriter hidden sm:inline">Export Page</span>
+                                <span className="font-typewriter hidden sm:inline">Export</span>
                             </button>
                         </div>
                     </header>
 
-                    {/* Pre-Filters Bar */}
+                    {/* Quick Filters + Sort Bar */}
                     <section className="bg-stone-50 border border-stone-200 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4 mb-6">
-                        <div className="flex items-center space-x-3">
-                            <button
-                                onClick={() => { setQuickFilter("ALL"); setPage(1); }}
-                                className={clsx("text-xs font-bold font-typewriter uppercase tracking-widest px-4 py-2 rounded-full transition-all shadow-sm border", quickFilter === "ALL" ? "bg-black text-white border-black" : "bg-white text-stone-600 border-stone-200 hover:bg-stone-100")}
-                            >
-                                All Records
-                            </button>
-                            <button
-                                onClick={() => { setQuickFilter("EASY_WIN"); setPage(1); }}
-                                className={clsx("text-xs font-bold font-typewriter uppercase tracking-widest px-4 py-2 rounded-full transition-all shadow-sm border flex items-center", quickFilter === "EASY_WIN" ? "bg-amber-100 text-amber-900 border-amber-300" : "bg-white text-stone-600 border-stone-200 hover:bg-stone-100")}
-                            >
-                                <Sparkles className="w-3 h-3 mr-2" /> Easy Wins
-                            </button>
-                            <button
-                                onClick={() => { setQuickFilter("HIGH_PROB"); setPage(1); }}
-                                className={clsx("text-xs font-bold font-typewriter uppercase tracking-widest px-4 py-2 rounded-full transition-all shadow-sm border flex items-center", quickFilter === "HIGH_PROB" ? "bg-green-100 text-green-900 border-green-300" : "bg-white text-stone-600 border-stone-200 hover:bg-stone-100")}
-                            >
-                                <Target className="w-3 h-3 mr-2" /> High Win Prob (Low Comp)
-                            </button>
+                        <div className="flex items-center space-x-2 flex-wrap gap-2">
+                            {([
+                                { key: "ALL" as const, label: "All Records", icon: null },
+                                { key: "HAS_MATCHES" as const, label: "Has Matches", icon: Flame },
+                                { key: "SOURCES_SOUGHT" as const, label: "Sources Sought", icon: Sparkles },
+                                { key: "ENRICHED" as const, label: "Enriched", icon: Target },
+                            ]).map(tab => (
+                                <button
+                                    type="button"
+                                    key={tab.key}
+                                    onClick={() => { setQuickFilter(tab.key); setPage(1); }}
+                                    className={clsx(
+                                        "text-xs font-bold font-typewriter uppercase tracking-widest px-4 py-2 rounded-full transition-all shadow-sm border flex items-center",
+                                        quickFilter === tab.key ? "bg-black text-white border-black" : "bg-white text-stone-600 border-stone-200 hover:bg-stone-100"
+                                    )}
+                                >
+                                    {tab.icon && <tab.icon className="w-3 h-3 mr-1.5" />}
+                                    {tab.label}
+                                </button>
+                            ))}
                         </div>
 
-                        {showFilters && (
-                            <div className="flex flex-wrap gap-4 w-full animate-in slide-in-from-top-2 duration-300">
-                                <div className="flex-1 min-w-[200px]">
-                                    <p className="text-[10px] font-typewriter text-stone-500 uppercase mb-2">Agency Filter</p>
-                                    <input
-                                        type="text"
-                                        placeholder="e.g. Dept of Defense"
-                                        className="w-full bg-white border border-stone-200 rounded-2xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-black"
-                                        value={filterAgency}
-                                        onChange={(e) => setFilterAgency(e.target.value)}
-                                    />
-                                </div>
-                                <div className="flex-1 min-w-[200px]">
-                                    <p className="text-[10px] font-typewriter text-stone-500 uppercase mb-2">Notice Type</p>
-                                    <select
-                                        title="Notice Type"
-                                        className="w-full bg-white border border-stone-200 rounded-2xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-black"
-                                        value={filterType}
-                                        onChange={(e) => setFilterType(e.target.value)}
-                                    >
-                                        <option value="">All Types</option>
-                                        <option value="Sources Sought">Sources Sought</option>
-                                        <option value="Solicitation">Solicitation</option>
-                                        <option value="Special Notice">Special Notice</option>
-                                        <option value="Presolicitation">Presolicitation</option>
-                                    </select>
-                                </div>
-                                <div className="flex-1 min-w-[150px]">
-                                    <p className="text-[10px] font-typewriter text-stone-500 uppercase mb-2">NAICS Override</p>
-                                    <input
-                                        type="text"
-                                        placeholder="e.g. 541512"
-                                        className="w-full bg-white border border-stone-200 rounded-2xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-black"
-                                        value={filterNaics}
-                                        onChange={(e) => setFilterNaics(e.target.value)}
-                                    />
-                                </div>
-                                <div className="flex-1 min-w-[150px]">
-                                    <p className="text-[10px] font-typewriter text-stone-500 uppercase mb-2">Competition Density</p>
-                                    <select
-                                        title="Competition Density"
-                                        className="w-full bg-white border border-stone-200 rounded-2xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-black"
-                                        value={filterDensity}
-                                        onChange={(e) => setFilterDensity(e.target.value)}
-                                    >
-                                        <option value="">All Densities</option>
-                                        <option value="LOW">Low (&lt;5 Bidders)</option>
-                                        <option value="MED">Medium (5-9 Bidders)</option>
-                                        <option value="HIGH">High (10+ Bidders)</option>
-                                    </select>
-                                </div>
-                            </div>
-                        )}
+                        <div className="flex items-center gap-3">
+                            <select
+                                title="Sort By"
+                                value={sortBy}
+                                onChange={(e) => { setSortBy(e.target.value as typeof sortBy); setPage(1); }}
+                                className="bg-white border border-stone-200 rounded-full px-3 py-2 text-xs font-bold font-typewriter outline-none focus:ring-2 focus:ring-black"
+                            >
+                                <option value="posted_desc">Newest First</option>
+                                <option value="deadline_asc">Deadline Soonest</option>
+                                <option value="data_rich">Most Data (Richness)</option>
+                            </select>
+                        </div>
                     </section>
+
+                    {/* Advanced Filters Panel */}
+                    {showFilters && (
+                        <section className="bg-white border border-stone-200 rounded-2xl p-4 flex flex-wrap gap-4 mb-6 animate-in slide-in-from-top-2 duration-300">
+                            <div className="flex-1 min-w-[180px]">
+                                <p className="text-[10px] font-typewriter text-stone-500 uppercase mb-2">Agency</p>
+                                <input
+                                    type="text"
+                                    placeholder="e.g. Defense"
+                                    className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-black"
+                                    value={filterAgency}
+                                    onChange={(e) => { setFilterAgency(e.target.value); setPage(1); }}
+                                />
+                            </div>
+                            <div className="flex-1 min-w-[150px]">
+                                <p className="text-[10px] font-typewriter text-stone-500 uppercase mb-2">Notice Type</p>
+                                <select
+                                    title="Notice Type"
+                                    className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-black"
+                                    value={filterType}
+                                    onChange={(e) => { setFilterType(e.target.value); setPage(1); }}
+                                >
+                                    <option value="">All Types</option>
+                                    <option value="Sources Sought">Sources Sought</option>
+                                    <option value="Solicitation">Solicitation</option>
+                                    <option value="Special Notice">Special Notice</option>
+                                    <option value="Presolicitation">Presolicitation</option>
+                                    <option value="Award Notice">Award Notice</option>
+                                </select>
+                            </div>
+                            <div className="flex-1 min-w-[120px]">
+                                <p className="text-[10px] font-typewriter text-stone-500 uppercase mb-2">NAICS</p>
+                                <input
+                                    type="text"
+                                    placeholder="e.g. 561720"
+                                    className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-black"
+                                    value={filterNaics}
+                                    onChange={(e) => { setFilterNaics(e.target.value); setPage(1); }}
+                                />
+                            </div>
+                            <div className="flex-1 min-w-[120px]">
+                                <p className="text-[10px] font-typewriter text-stone-500 uppercase mb-2">State</p>
+                                <select
+                                    title="State"
+                                    className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-black"
+                                    value={filterState}
+                                    onChange={(e) => { setFilterState(e.target.value); setPage(1); }}
+                                >
+                                    <option value="">All States</option>
+                                    {["AL","AK","AZ","AR","CA","CO","CT","DC","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"].map(s => (
+                                        <option key={s} value={s}>{s}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="flex-1 min-w-[120px]">
+                                <p className="text-[10px] font-typewriter text-stone-500 uppercase mb-2">Set-Aside</p>
+                                <select
+                                    title="Set-Aside"
+                                    className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-black"
+                                    value={filterSetAside}
+                                    onChange={(e) => { setFilterSetAside(e.target.value); setPage(1); }}
+                                >
+                                    <option value="">All</option>
+                                    <option value="SBA">Small Business (SBA)</option>
+                                    <option value="8A">8(a)</option>
+                                    <option value="SDVOSB">SDVOSB</option>
+                                    <option value="WOSB">WOSB</option>
+                                    <option value="HUBZone">HUBZone</option>
+                                </select>
+                            </div>
+                            {(filterAgency || filterType || filterNaics || filterState || filterSetAside) && (
+                                <button
+                                    type="button"
+                                    onClick={() => { setFilterAgency(""); setFilterType(""); setFilterNaics(""); setFilterState(""); setFilterSetAside(""); setPage(1); }}
+                                    className="self-end px-4 py-2 text-xs font-bold font-typewriter text-red-600 bg-red-50 border border-red-200 rounded-full hover:bg-red-100"
+                                >
+                                    Clear All
+                                </button>
+                            )}
+                        </section>
+                    )}
 
                     {/* Search Bar */}
                     <div className="bg-white p-2 rounded-full border border-stone-200 shadow-sm flex items-center mb-6 focus-within:ring-2 focus-within:ring-black focus-within:border-transparent transition-all">
                         <Search className="w-5 h-5 text-stone-400 ml-4 mr-2" />
                         <input
                             type="text"
-                            placeholder="Press Enter to Search by Notice ID or Title..."
+                            placeholder="Search by title, notice ID, or agency..."
                             className="bg-transparent border-none outline-none w-full text-stone-700 font-typewriter text-sm"
                             value={searchInput}
                             onChange={(e) => setSearchInput(e.target.value)}
                             onKeyDown={handleSearchKeyDown}
                         />
                         {activeSearch && (
-                            <button title="Clear Search" onClick={() => { setSearchInput(""); setActiveSearch(""); setPage(1); }} className="p-2 text-stone-400 hover:text-black">
+                            <button type="button" title="Clear Search" onClick={() => { setSearchInput(""); setActiveSearch(""); setPage(1); }} className="p-2 text-stone-400 hover:text-black">
                                 <X className="w-4 h-4" />
                             </button>
                         )}
@@ -304,90 +438,58 @@ export default function OpportunitiesPage() {
                         </div>
                     ) : (
                         <div className="flex-1 pr-2 flex flex-col pb-4">
-                            {/* Grid View */}
-                            {viewMode === "grid" && (
-                                <div className={clsx("grid gap-6 transition-all mb-6", selectedOpportunity ? "grid-cols-1 xl:grid-cols-2" : "grid-cols-1 md:grid-cols-2 xl:grid-cols-3")}>
-                                    {opportunities.map((op) => {
-                                        const typeName = op.opportunity_types?.name || "UNKNOWN";
-                                        const agencyName = op.agencies?.sub_tier || op.agencies?.department || "No Agency Info";
-                                        return (
-                                            <button
-                                                key={op.id}
-                                                onClick={() => setSelectedOpportunity(op)}
-                                                onDoubleClick={() => router.push(`/opportunities/${op.id}`)}
-                                                className={clsx(
-                                                    "block group text-left h-full transition-all outline-none",
-                                                    selectedOpportunity?.id === op.id ? "ring-2 ring-black rounded-[32px]" : ""
-                                                )}
-                                            >
-                                                <div className="bg-white h-full p-6 rounded-[32px] border border-stone-200 shadow-sm group-hover:shadow-md group-hover:border-black transition-all flex flex-col justify-between">
-                                                    <div>
-                                                        <div className="flex justify-between items-start mb-3">
-                                                            <span className="bg-stone-100 text-stone-600 font-typewriter text-[10px] px-2 py-1 rounded-md border border-stone-200 uppercase tracking-wider">
-                                                                {typeName}
-                                                            </span>
-                                                            <span className="text-stone-400 font-mono text-xs">{op.notice_id}</span>
-                                                        </div>
-                                                        <h3 className="font-bold text-lg mb-2 line-clamp-2 leading-tight group-hover:text-stone-600 transition-colors">{op.title}</h3>
-                                                        <p className="text-stone-500 text-sm line-clamp-1 mb-4">{agencyName}</p>
-                                                    </div>
-
-                                                    <div className="pt-4 border-t border-stone-100 flex justify-between items-center mt-auto">
-                                                        <div className="space-y-1">
-                                                            <p className="text-[10px] text-stone-400 font-typewriter uppercase">NAICS</p>
-                                                            <p className="font-mono font-bold text-sm">{op.naics_code || "N/A"}</p>
-                                                        </div>
-                                                        <div className="space-y-1 text-right">
-                                                            <p className="text-[10px] text-stone-400 font-typewriter uppercase">Deadline</p>
-                                                            <p className="font-sans font-bold text-sm text-stone-700">
-                                                                {op.response_deadline ? new Date(op.response_deadline).toLocaleDateString() : "TBD"}
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            )}
-
                             {/* List View */}
                             {viewMode === "list" && (
                                 <div className="bg-white rounded-[32px] border border-stone-200 shadow-sm overflow-hidden mb-6 flex-shrink-0">
                                     <table className="w-full text-left border-collapse">
                                         <thead>
                                             <tr className="bg-stone-50 border-b border-stone-200 text-stone-500 text-[10px] font-typewriter uppercase tracking-wider">
-                                                <th className="py-4 px-6 font-bold">Notice ID</th>
-                                                <th className="py-4 px-6 font-bold">Title / Agency</th>
-                                                <th className="py-4 px-6 font-bold">Type</th>
-                                                <th className="py-4 px-6 font-bold">NAICS</th>
-                                                <th className="py-4 px-6 font-bold">Deadline</th>
-                                                <th className="py-4 px-6 font-bold"></th>
+                                                <th className="py-4 px-5 font-bold">Notice ID</th>
+                                                <th className="py-4 px-5 font-bold">Title / Agency</th>
+                                                <th className="py-4 px-5 font-bold">Type</th>
+                                                <th className="py-4 px-5 font-bold">NAICS</th>
+                                                <th className="py-4 px-5 font-bold hidden lg:table-cell">State</th>
+                                                <th className="py-4 px-5 font-bold hidden xl:table-cell">Value</th>
+                                                <th className="py-4 px-5 font-bold">Deadline</th>
+                                                <th className="py-4 px-5 font-bold">Data</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-stone-100 text-sm">
                                             {opportunities.map((op) => {
-                                                const typeName = op.opportunity_types?.name || "UNKNOWN";
-                                                const agencyName = op.agencies?.sub_tier || op.agencies?.department || "No Agency Info";
+                                                const typeName = op.notice_type || op.opportunity_types?.name || "UNKNOWN";
+                                                const agencyName = op.agency || op.agencies?.sub_tier || op.agencies?.department || "No Agency Info";
+                                                const dataScore = op._dataScore || 0;
                                                 return (
                                                     <tr key={op.id} onClick={() => setSelectedOpportunity(op)} onDoubleClick={() => router.push(`/opportunities/${op.id}`)} className={clsx("transition-colors group cursor-pointer", selectedOpportunity?.id === op.id ? "bg-stone-100" : "hover:bg-stone-50")}>
-                                                        <td className="py-4 px-6 font-mono font-semibold text-xs">{op.notice_id}</td>
-                                                        <td className="py-4 px-6">
+                                                        <td className="py-3.5 px-5 font-mono font-semibold text-xs">{op.notice_id?.slice(0, 12)}...</td>
+                                                        <td className="py-3.5 px-5">
                                                             <p className="font-bold text-black line-clamp-1 max-w-[200px] xl:max-w-md group-hover:text-stone-600">{op.title}</p>
-                                                            <p className="text-stone-500 text-xs line-clamp-1 mt-1">{agencyName}</p>
+                                                            <p className="text-stone-500 text-xs line-clamp-1 mt-0.5">{agencyName}</p>
                                                         </td>
-                                                        <td className="py-4 px-6">
-                                                            <span className="bg-stone-100 text-stone-600 font-typewriter text-[9px] px-2 py-1 rounded border border-stone-200 uppercase tracking-widest whitespace-nowrap">
+                                                        <td className="py-3.5 px-5">
+                                                            <span className={clsx(
+                                                                "font-typewriter text-[9px] px-2 py-1 rounded border uppercase tracking-widest whitespace-nowrap",
+                                                                typeName === "Sources Sought" ? "bg-emerald-100 text-emerald-700 border-emerald-200" :
+                                                                typeName === "Presolicitation" ? "bg-blue-100 text-blue-700 border-blue-200" :
+                                                                "bg-stone-100 text-stone-600 border-stone-200"
+                                                            )}>
                                                                 {typeName}
                                                             </span>
                                                         </td>
-                                                        <td className="py-4 px-6 font-mono font-bold text-xs">{op.naics_code || "---"}</td>
-                                                        <td className="py-4 px-6 font-bold text-stone-700">
+                                                        <td className="py-3.5 px-5 font-mono font-bold text-xs">{op.naics_code || "---"}</td>
+                                                        <td className="py-3.5 px-5 font-mono text-xs hidden lg:table-cell">{op.place_of_performance_state || "---"}</td>
+                                                        <td className="py-3.5 px-5 font-mono font-bold text-xs hidden xl:table-cell">
+                                                            {formatCurrency(op.award_amount) || <span className="text-stone-300">---</span>}
+                                                        </td>
+                                                        <td className="py-3.5 px-5 font-bold text-stone-700 text-xs">
                                                             {op.response_deadline ? new Date(op.response_deadline).toLocaleDateString() : "TBD"}
                                                         </td>
-                                                        <td className="py-4 px-6 text-right">
-                                                            <div className={clsx("w-8 h-8 rounded-full flex items-center justify-center transition-all ml-auto", selectedOpportunity?.id === op.id ? "bg-black text-white" : "bg-transparent text-transparent group-hover:bg-black group-hover:text-white")}>
-                                                                <ArrowRight className="w-4 h-4" />
+                                                        <td className="py-3.5 px-5">
+                                                            <div className="flex items-center space-x-1" title={`Data richness: ${dataScore}%`}>
+                                                                <div className="w-12 h-1.5 bg-stone-100 rounded-full overflow-hidden">
+                                                                    <div className={clsx("h-full rounded-full", dataScore >= 60 ? "bg-green-500" : dataScore >= 30 ? "bg-amber-500" : "bg-stone-300")} style={{ width: `${dataScore}%` }} />
+                                                                </div>
+                                                                <span className="text-[10px] font-mono text-stone-400">{dataScore}</span>
                                                             </div>
                                                         </td>
                                                     </tr>
@@ -398,34 +500,73 @@ export default function OpportunitiesPage() {
                                 </div>
                             )}
 
+                            {/* Grid View */}
+                            {viewMode === "grid" && (
+                                <div className={clsx("grid gap-5 transition-all mb-6", selectedOpportunity ? "grid-cols-1 xl:grid-cols-2" : "grid-cols-1 md:grid-cols-2 xl:grid-cols-3")}>
+                                    {opportunities.map((op) => {
+                                        const typeName = op.notice_type || op.opportunity_types?.name || "UNKNOWN";
+                                        const agencyName = op.agency || op.agencies?.sub_tier || op.agencies?.department || "No Agency Info";
+                                        return (
+                                            <button
+                                                type="button"
+                                                key={op.id}
+                                                onClick={() => setSelectedOpportunity(op)}
+                                                onDoubleClick={() => router.push(`/opportunities/${op.id}`)}
+                                                className={clsx("block group text-left h-full transition-all outline-none", selectedOpportunity?.id === op.id ? "ring-2 ring-black rounded-[28px]" : "")}
+                                            >
+                                                <div className="bg-white h-full p-5 rounded-[28px] border border-stone-200 shadow-sm group-hover:shadow-md group-hover:border-black transition-all flex flex-col justify-between">
+                                                    <div>
+                                                        <div className="flex justify-between items-start mb-3">
+                                                            <span className={clsx(
+                                                                "font-typewriter text-[9px] px-2 py-1 rounded border uppercase tracking-widest",
+                                                                typeName === "Sources Sought" ? "bg-emerald-100 text-emerald-700 border-emerald-200" :
+                                                                "bg-stone-100 text-stone-600 border-stone-200"
+                                                            )}>
+                                                                {typeName}
+                                                            </span>
+                                                            {op.award_amount && (
+                                                                <span className="font-mono font-bold text-xs text-green-700 bg-green-50 px-2 py-0.5 rounded border border-green-200">{formatCurrency(op.award_amount)}</span>
+                                                            )}
+                                                        </div>
+                                                        <h3 className="font-bold text-base mb-2 line-clamp-2 leading-tight group-hover:text-stone-600 transition-colors">{op.title}</h3>
+                                                        <p className="text-stone-500 text-sm line-clamp-1 mb-3">{agencyName}</p>
+                                                    </div>
+                                                    <div className="pt-3 border-t border-stone-100 flex justify-between items-center mt-auto">
+                                                        <div className="flex items-center space-x-3">
+                                                            <span className="font-mono font-bold text-xs">{op.naics_code || "N/A"}</span>
+                                                            {op.place_of_performance_state && (
+                                                                <span className="text-xs text-stone-400">{op.place_of_performance_state}</span>
+                                                            )}
+                                                        </div>
+                                                        <span className="font-bold text-xs text-stone-700">
+                                                            {op.response_deadline ? new Date(op.response_deadline).toLocaleDateString() : "TBD"}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            )}
+
                             {opportunities.length === 0 && !loading && (
                                 <div className="bg-stone-50 border border-stone-200 border-dashed rounded-[32px] p-12 text-center mt-auto mb-auto">
                                     <p className="text-stone-500 font-typewriter">No opportunities match the criteria.</p>
                                 </div>
                             )}
 
-                            {/* Pagination Controls */}
+                            {/* Pagination */}
                             {totalPages > 1 && (
                                 <div className="mt-auto pt-6 flex flex-col md:flex-row items-center justify-between px-2 gap-4">
                                     <p className="text-xs text-stone-500 font-typewriter">
                                         Showing {((page - 1) * pageSize) + 1} to {Math.min(page * pageSize, totalCount)} of {totalCount.toLocaleString()} results
                                     </p>
                                     <div className="flex items-center space-x-2">
-                                        <button
-                                            onClick={() => setPage(p => Math.max(1, p - 1))}
-                                            disabled={page === 1}
-                                            className="px-4 py-2 bg-white border border-stone-200 rounded-full hover:bg-stone-50 disabled:opacity-50 transition-colors flex items-center font-bold text-sm"
-                                        >
+                                        <button type="button" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="px-4 py-2 bg-white border border-stone-200 rounded-full hover:bg-stone-50 disabled:opacity-50 transition-colors flex items-center font-bold text-sm">
                                             <ChevronLeft className="w-4 h-4 mr-1" /> Prev
                                         </button>
-                                        <span className="text-xs font-mono px-4 text-stone-600">
-                                            Page {page} of {totalPages}
-                                        </span>
-                                        <button
-                                            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                                            disabled={page === totalPages}
-                                            className="px-4 py-2 bg-white border border-stone-200 rounded-full hover:bg-stone-50 disabled:opacity-50 transition-colors flex items-center font-bold text-sm"
-                                        >
+                                        <span className="text-xs font-mono px-4 text-stone-600">Page {page} of {totalPages}</span>
+                                        <button type="button" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="px-4 py-2 bg-white border border-stone-200 rounded-full hover:bg-stone-50 disabled:opacity-50 transition-colors flex items-center font-bold text-sm">
                                             Next <ChevronRight className="w-4 h-4 ml-1" />
                                         </button>
                                     </div>
@@ -444,9 +585,10 @@ export default function OpportunitiesPage() {
                             <span className="bg-black text-white font-typewriter text-[10px] px-2 py-1 rounded uppercase tracking-wider">
                                 Active View
                             </span>
-                            <span className="font-mono text-stone-400 text-xs">{selectedOpportunity.notice_id}</span>
+                            <span className="font-mono text-stone-400 text-xs">{selectedOpportunity.notice_id?.slice(0, 16)}</span>
                         </div>
                         <button
+                            type="button"
                             title="Close Window"
                             onClick={() => setSelectedOpportunity(null)}
                             className="p-2 hover:bg-stone-200 rounded-full transition-colors text-stone-500 hover:text-black"
@@ -455,10 +597,10 @@ export default function OpportunitiesPage() {
                         </button>
                     </div>
 
-                    <div className="overflow-y-auto flex-1 p-6 custom-scrollbar space-y-8">
+                    <div className="overflow-y-auto flex-1 p-6 custom-scrollbar space-y-6">
                         {/* Title & Agency */}
                         <div>
-                            <h2 className="text-2xl font-bold font-typewriter tracking-tight text-black leading-tight mb-4">
+                            <h2 className="text-xl font-bold font-typewriter tracking-tight text-black leading-tight mb-3">
                                 {selectedOpportunity.title}
                             </h2>
                             <div className="flex items-center space-x-3">
@@ -467,87 +609,117 @@ export default function OpportunitiesPage() {
                                 </div>
                                 <div>
                                     <p className="font-bold text-stone-800 text-sm leading-tight">
-                                        {selectedOpportunity.agencies?.department || "Unknown Department"}
+                                        {selectedOpportunity.agency || selectedOpportunity.agencies?.department || "Unknown Department"}
                                     </p>
-                                    <p className="text-xs text-stone-400">
-                                        {selectedOpportunity.agencies?.sub_tier || "Unknown Sub-tier"}
-                                    </p>
+                                    {selectedOpportunity.agencies?.sub_tier && (
+                                        <p className="text-xs text-stone-400">{selectedOpportunity.agencies.sub_tier}</p>
+                                    )}
                                 </div>
                             </div>
-                        </div>
-
-                        {/* AI Summary Mockup */}
-                        <div className="bg-stone-900 text-white rounded-[32px] p-6 shadow-md relative overflow-hidden">
-                            <div className="absolute top-0 right-0 w-32 h-32 bg-stone-700/30 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none"></div>
-
-                            <h4 className="font-typewriter text-xs text-stone-400 uppercase tracking-widest mb-4 flex items-center">
-                                <Sparkles className="w-4 h-4 mr-2 text-stone-300" /> Executive Intake Summary
-                            </h4>
-
-                            <div className="space-y-3 mb-5">
-                                <div className="flex justify-between items-center bg-black/40 px-4 py-2 rounded-xl text-sm border border-stone-700/50">
-                                    <span className="text-stone-400">Intent</span>
-                                    <span className="font-bold text-right pl-4">{selectedOpportunity.opportunity_types?.name || "Solicitation"}</span>
-                                </div>
-                                <div className="flex justify-between items-center bg-black/40 px-4 py-2 rounded-xl text-sm border border-stone-700/50">
-                                    <span className="text-stone-400">Set-Aside Target</span>
-                                    <span className="font-bold">{selectedOpportunity.set_asides?.code || "Unrestricted"}</span>
-                                </div>
-                            </div>
-                            <p className="text-sm text-stone-300 font-sans leading-relaxed">
-                                Our semantic engine indicates {selectedOpportunity.agencies?.sub_tier || "the agency"} is actively scouting for qualified vendors under NAICS {selectedOpportunity.naics_code}. Priority status favors entities matching the {selectedOpportunity.set_asides?.code || 'Unrestricted'} classification.
-                            </p>
                         </div>
 
                         {/* Metrics Grid */}
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="bg-stone-50 border border-stone-200 p-4 rounded-2xl">
-                                <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1">NAICS Code</p>
-                                <p className="font-mono font-bold text-base">{selectedOpportunity.naics_code || "---"}</p>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="bg-stone-50 border border-stone-200 p-3 rounded-xl">
+                                <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1">NAICS</p>
+                                <p className="font-mono font-bold text-sm">{selectedOpportunity.naics_code || "---"}</p>
                             </div>
-                            <div className="bg-stone-50 border border-stone-200 p-4 rounded-2xl">
+                            <div className="bg-stone-50 border border-stone-200 p-3 rounded-xl">
+                                <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1">Notice Type</p>
+                                <p className="font-typewriter font-bold text-xs pt-0.5">
+                                    {selectedOpportunity.notice_type || selectedOpportunity.opportunity_types?.name || "N/A"}
+                                </p>
+                            </div>
+                            <div className="bg-stone-50 border border-stone-200 p-3 rounded-xl">
                                 <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1">Set-Aside</p>
-                                <p className="font-typewriter font-bold text-xs uppercase pt-1 line-clamp-1" title={selectedOpportunity.set_asides?.code || "NONE"}>
-                                    {selectedOpportunity.set_asides?.code || "NONE"}
+                                <p className="font-typewriter font-bold text-xs pt-0.5">
+                                    {selectedOpportunity.set_aside_code || selectedOpportunity.set_asides?.code || "Unrestricted"}
                                 </p>
                             </div>
-                            <div className="bg-stone-50 border border-stone-200 p-4 rounded-2xl">
-                                <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1 flex items-center">
-                                    <Calendar className="w-3 h-3 mr-1" /> Posted
-                                </p>
-                                <p className="font-bold text-sm">
-                                    {selectedOpportunity.posted_date ? new Date(selectedOpportunity.posted_date).toLocaleDateString() : "---"}
-                                </p>
-                            </div>
-                            <div className="bg-stone-50 border border-stone-200 p-4 rounded-2xl border-l-4 border-l-stone-800">
-                                <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1 flex items-center">
-                                    <Target className="w-3 h-3 mr-1" /> Deadline
-                                </p>
+                            <div className="bg-stone-50 border border-stone-200 p-3 rounded-xl border-l-4 border-l-stone-800">
+                                <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1">Deadline</p>
                                 <p className="font-bold text-sm text-black">
                                     {selectedOpportunity.response_deadline ? new Date(selectedOpportunity.response_deadline).toLocaleDateString() : "TBD"}
                                 </p>
                             </div>
+                            {selectedOpportunity.place_of_performance_state && (
+                                <div className="bg-stone-50 border border-stone-200 p-3 rounded-xl">
+                                    <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1">Location</p>
+                                    <p className="font-bold text-sm">{[selectedOpportunity.place_of_performance_city, selectedOpportunity.place_of_performance_state].filter(Boolean).join(", ")}</p>
+                                </div>
+                            )}
+                            {selectedOpportunity.award_amount && (
+                                <div className="bg-green-50 border border-green-200 p-3 rounded-xl">
+                                    <p className="text-[10px] font-typewriter text-green-600 uppercase tracking-widest mb-1">Est. Value</p>
+                                    <p className="font-mono font-bold text-sm text-green-800">{formatCurrency(selectedOpportunity.award_amount)}</p>
+                                </div>
+                            )}
                         </div>
 
-                        {/* Description (Scrollable) */}
+                        {/* Incumbent Info */}
+                        {selectedOpportunity.incumbent_contractor_name && (
+                            <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl">
+                                <p className="text-[10px] font-typewriter text-amber-600 uppercase tracking-widest mb-1">Incumbent Contractor</p>
+                                <p className="font-bold text-sm text-amber-900">{selectedOpportunity.incumbent_contractor_name}</p>
+                            </div>
+                        )}
+
+                        {/* Matched Contractors */}
                         <div className="border border-stone-200 rounded-2xl p-5 bg-white shadow-sm">
                             <h4 className="font-typewriter font-bold text-xs mb-4 flex items-center text-stone-800 uppercase tracking-wider">
-                                <FileText className="w-4 h-4 mr-2" /> Notice Description
+                                <Users className="w-4 h-4 mr-2" /> Matched Contractors
+                                {matchedContractors.length > 0 && (
+                                    <span className="ml-2 bg-stone-100 text-stone-500 font-mono text-[10px] px-2 py-0.5 rounded-full">{matchedContractors.length}</span>
+                                )}
                             </h4>
-                            <div className="text-sm text-stone-600 max-h-48 overflow-y-auto whitespace-pre-wrap font-sans">
-                                {selectedOpportunity.description || "No detailed description provided by SAM.gov."}
-                            </div>
+                            {loadingContractors ? (
+                                <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-stone-400" /></div>
+                            ) : matchedContractors.length === 0 ? (
+                                <p className="text-stone-400 text-xs font-typewriter">No matches yet. Run the Scoring Engine.</p>
+                            ) : (
+                                <div className="space-y-2">
+                                    {matchedContractors.map((mc) => (
+                                        <div key={mc.id} className="bg-stone-50 p-3 rounded-xl border border-stone-100 flex justify-between items-center hover:border-stone-300 transition-colors cursor-pointer" onClick={() => router.push(`/matches/${mc.id}`)}>
+                                            <div>
+                                                <p className="font-bold text-sm text-stone-900">{mc.contractors?.company_name}</p>
+                                                <div className="flex items-center space-x-2 mt-0.5">
+                                                    {mc.contractors?.city && <span className="text-xs text-stone-400">{mc.contractors.city}, {mc.contractors.state}</span>}
+                                                    {mc.contractors?.certifications?.slice(0, 2).map(c => (
+                                                        <span key={c} className="text-[9px] bg-black text-white px-1.5 py-0.5 rounded font-typewriter uppercase">{c}</span>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center space-x-2">
+                                                <span className={clsx("w-2 h-2 rounded-full", mc.classification === "HOT" ? "bg-red-500" : mc.classification === "WARM" ? "bg-amber-500" : "bg-stone-300")}></span>
+                                                <span className="font-mono font-bold text-sm">{Math.round(mc.score * 100)}</span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
+
+                        {/* Description */}
+                        {selectedOpportunity.description && (
+                            <div className="border border-stone-200 rounded-2xl p-5 bg-white shadow-sm">
+                                <h4 className="font-typewriter font-bold text-xs mb-4 flex items-center text-stone-800 uppercase tracking-wider">
+                                    <FileText className="w-4 h-4 mr-2" /> Description
+                                </h4>
+                                <div className="text-sm text-stone-600 max-h-48 overflow-y-auto whitespace-pre-wrap font-sans">
+                                    {selectedOpportunity.description}
+                                </div>
+                            </div>
+                        )}
 
                         {selectedOpportunity.link && (
                             <a
                                 href={selectedOpportunity.link}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="flex items-center justify-center space-x-2 text-sm font-bold font-typewriter bg-stone-100 border border-stone-200 w-full py-4 rounded-full hover:bg-stone-200 hover:border-stone-300 transition-all text-black mt-4"
+                                className="flex items-center justify-center space-x-2 text-sm font-bold font-typewriter bg-stone-100 border border-stone-200 w-full py-4 rounded-full hover:bg-stone-200 hover:border-stone-300 transition-all text-black"
                             >
                                 <LinkIcon className="w-4 h-4" />
-                                <span>View Data Source</span>
+                                <span>View on SAM.gov</span>
                             </a>
                         )}
                     </div>

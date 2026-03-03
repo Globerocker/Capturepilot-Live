@@ -156,6 +156,8 @@ export default function ContractorsPage() {
     // Advanced Filters
     const [filterState, setFilterState] = useState("");
     const [filterCert, setFilterCert] = useState("");
+    const [filterNaics, setFilterNaics] = useState("");
+    const [sortBy, setSortBy] = useState<"name_asc" | "awards_desc" | "revenue_desc">("name_asc");
 
     const fetchContractors = useCallback(async () => {
         setLoading(true);
@@ -189,12 +191,24 @@ export default function ContractorsPage() {
                 query = query.or(`certifications.cs.{${filterCert}},sba_certifications.cs.{${filterCert}}`);
             }
 
+            if (filterNaics) {
+                query = query.contains("naics_codes", [filterNaics]);
+            }
+
             // Pagination boundaries
             const from = (page - 1) * pageSize;
             const to = from + pageSize - 1;
 
+            // Sort
+            if (sortBy === "awards_desc") {
+                query = query.order('federal_awards_count', { ascending: false, nullsFirst: false });
+            } else if (sortBy === "revenue_desc") {
+                query = query.order('total_award_volume', { ascending: false, nullsFirst: false });
+            } else {
+                query = query.order('company_name', { ascending: true });
+            }
+
             const { data, count, error } = await query
-                .order('company_name', { ascending: true })
                 .range(from, to);
 
             if (error) {
@@ -208,11 +222,11 @@ export default function ContractorsPage() {
         } finally {
             setLoading(false);
         }
-    }, [page, activeSearch, activeTab, pageSize, filterState, filterCert]);
+    }, [page, activeSearch, activeTab, pageSize, filterState, filterCert, filterNaics, sortBy]);
 
     useEffect(() => {
         fetchContractors();
-    }, [fetchContractors, filterState, filterCert]);
+    }, [fetchContractors]);
 
     const handleSearchKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
         if (e.key === 'Enter') {
@@ -267,8 +281,8 @@ export default function ContractorsPage() {
                         </div>
                     </div>
 
-                    {/* Advanced Filters */}
-                    <div className="flex flex-wrap gap-3 w-full md:w-auto">
+                    {/* Filters + Sort + Search */}
+                    <div className="flex flex-wrap gap-3 w-full md:w-auto mb-6">
                         <select
                             title="Filter by State"
                             value={filterState}
@@ -276,7 +290,7 @@ export default function ContractorsPage() {
                             className="bg-white border border-stone-200 rounded-full px-4 py-2 text-xs font-bold font-typewriter outline-none focus:ring-2 focus:ring-black transition-all"
                         >
                             <option value="">All States</option>
-                            {["VA", "MD", "DC", "TX", "CA", "FL", "NY"].map(s => (
+                            {["AL","AK","AZ","AR","CA","CO","CT","DC","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"].map(s => (
                                 <option key={s} value={s}>{s}</option>
                             ))}
                         </select>
@@ -293,18 +307,38 @@ export default function ContractorsPage() {
                             ))}
                         </select>
 
-                        <div className="bg-white p-1 rounded-full border border-stone-200 shadow-sm flex items-center focus-within:ring-2 focus-within:ring-black transition-all w-full md:w-96">
+                        <input
+                            type="text"
+                            placeholder="NAICS e.g. 561720"
+                            title="Filter by NAICS"
+                            className="bg-white border border-stone-200 rounded-full px-4 py-2 text-xs font-bold font-typewriter outline-none focus:ring-2 focus:ring-black transition-all w-36"
+                            value={filterNaics}
+                            onChange={(e) => { setFilterNaics(e.target.value); setPage(1); }}
+                        />
+
+                        <select
+                            title="Sort By"
+                            value={sortBy}
+                            onChange={(e) => { setSortBy(e.target.value as typeof sortBy); setPage(1); }}
+                            className="bg-white border border-stone-200 rounded-full px-4 py-2 text-xs font-bold font-typewriter outline-none focus:ring-2 focus:ring-black transition-all"
+                        >
+                            <option value="name_asc">Name A-Z</option>
+                            <option value="awards_desc">Most Awards</option>
+                            <option value="revenue_desc">Highest Revenue</option>
+                        </select>
+
+                        <div className="bg-white p-1 rounded-full border border-stone-200 shadow-sm flex items-center focus-within:ring-2 focus-within:ring-black transition-all w-full md:flex-1 md:min-w-[250px]">
                             <Search className="w-4 h-4 text-stone-400 ml-4 mr-2" />
                             <input
                                 type="text"
-                                placeholder="Press Enter to Search name, UEI, or CAGE"
+                                placeholder="Search name, UEI, or CAGE..."
                                 className="bg-transparent border-none outline-none w-full text-stone-700 font-typewriter text-sm py-1.5"
                                 value={searchInput}
                                 onChange={(e) => setSearchInput(e.target.value)}
                                 onKeyDown={handleSearchKeyDown}
                             />
                             {activeSearch && (
-                                <button title="Clear" onClick={() => { setSearchInput(""); setActiveSearch(""); setPage(1); }} className="p-2 text-stone-400 hover:text-black">
+                                <button type="button" title="Clear" onClick={() => { setSearchInput(""); setActiveSearch(""); setPage(1); }} className="p-2 text-stone-400 hover:text-black">
                                     <X className="w-4 h-4" />
                                 </button>
                             )}

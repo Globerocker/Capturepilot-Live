@@ -1,0 +1,19 @@
+{
+    "buildCommand": "npm run build",
+    "installCommand": "npm install",
+    "framework": "nextjs",
+    "crons": [
+        {
+            "path": "/api/cron/ingest_sam",
+            "schedule": "0 2 * * *"
+        },
+        {
+            "path": "/api/cron/enrich",
+            "schedule": "0 5 * * *"
+        },
+        {
+            "path": "/api/cron/db_cleanup",
+            "schedule": "0 4 * * 0"
+        }
+    ]
+}

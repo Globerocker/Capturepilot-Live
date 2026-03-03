@@ -1,4 +1,4 @@
-import { Activity, Target, AlertCircle, RefreshCw, Zap, TrendingUp, Play, Calendar, Filter } from "lucide-react";
+import { Activity, Target, TrendingUp, Users, ArrowRight, Flame } from "lucide-react";
 import clsx from "clsx";
 import Link from "next/link";
 import { createClient } from "@supabase/supabase-js";
@@ -9,39 +9,58 @@ export const dynamic = 'force-dynamic';
 
 export default async function AgencyDashboard() {
 
-  // Connect to Supabase using .env.local variables
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_KEY! // Safe in a Next.js Server Component
+    process.env.SUPABASE_SERVICE_KEY!
   );
 
   // Fetch Live Data Metrics
-  const { count: opsCount } = await supabase.from("opportunities").select("*", { count: 'exact', head: true });
+  const { count: opsCount } = await supabase.from("opportunities").select("*", { count: 'exact', head: true }).eq("is_archived", false);
   const { count: hotCount } = await supabase.from("matches").select("*", { count: 'exact', head: true }).eq("classification", "HOT");
-  const { count: outcomesCount } = await supabase.from("capture_outcomes").select("*", { count: 'exact', head: true });
+  const { count: warmCount } = await supabase.from("matches").select("*", { count: 'exact', head: true }).eq("classification", "WARM");
+  const { count: contractorCount } = await supabase.from("contractors").select("*", { count: 'exact', head: true }).neq("data_quality_flag", "LOW_QUALITY");
 
-  // Fetch High Priority HOT Matches
+  // Fetch HOT Matches with direct columns (not broken joins)
   const { data: hotMatches } = await supabase
     .from("matches")
-    .select("score, classification, opportunity_id, contractor_id, opportunities(title, notice_id, response_deadline, agencies(department, sub_tier)), contractors(company_name)")
+    .select("id, score, classification, score_breakdown, opportunity_id, contractor_id, opportunities(title, notice_id, response_deadline, agency, naics_code, notice_type), contractors(company_name, city, state)")
     .eq("classification", "HOT")
+    .order("score", { ascending: false })
+    .limit(10);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const hotList = ((hotMatches as any[]) || []).map((m: any) => ({
+    id: m.id,
+    notice_id: m.opportunities?.notice_id || "UNK",
+    title: m.opportunities?.title || "Unknown",
+    agency: m.opportunities?.agency || "Unknown Agency",
+    naics: m.opportunities?.naics_code || "---",
+    notice_type: m.opportunities?.notice_type || "Unknown",
+    score: m.score,
+    score_pct: Math.round(m.score * 100),
+    deadline: m.opportunities?.response_deadline,
+    contractor: m.contractors?.company_name || "Unknown",
+    contractor_loc: [m.contractors?.city, m.contractors?.state].filter(Boolean).join(", ") || "",
+    opportunity_id: m.opportunity_id,
+  }));
+
+  // Fetch top WARM matches too
+  const { data: warmMatches } = await supabase
+    .from("matches")
+    .select("id, score, opportunity_id, contractor_id, opportunities(title, notice_id, agency, naics_code), contractors(company_name)")
+    .eq("classification", "WARM")
     .order("score", { ascending: false })
     .limit(5);
 
-  const payload = {
-    summary: {
-      total_opportunities_ingested: opsCount || 0,
-      hot_matches_generated: hotCount || 0,
-      recent_outcomes_logged: outcomesCount || 0,
-    },
-    high_maturity_opportunities: ((hotMatches as any[]) || []).map((match: any) => ({
-      notice_id: match.opportunities?.notice_id || "UNK",
-      agency: match.opportunities?.agencies?.sub_tier || match.opportunities?.agencies?.department || "Unknown",
-      maturity_score: match.score,
-      deadline: match.opportunities?.response_deadline || new Date().toISOString(),
-      contractor: match.contractors?.company_name || "Unknown"
-    }))
-  };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const warmList = ((warmMatches as any[]) || []).map((m: any) => ({
+    id: m.id,
+    title: m.opportunities?.title || "Unknown",
+    agency: m.opportunities?.agency || "Unknown",
+    naics: m.opportunities?.naics_code || "---",
+    score_pct: Math.round(m.score * 100),
+    contractor: m.contractors?.company_name || "Unknown",
+  }));
 
   return (
     <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
@@ -50,7 +69,7 @@ export default async function AgencyDashboard() {
       <header className="flex items-end justify-between mb-10">
         <div>
           <h2 className="text-3xl font-bold font-typewriter tracking-tighter text-black">
-            Internal Portal
+            Command Center
           </h2>
           <p className="text-stone-500 mt-2 font-medium">
             Live Intelligence Overview
@@ -59,96 +78,86 @@ export default async function AgencyDashboard() {
         <DashboardActions />
       </header>
 
-      {/* Live Active Filters Bar */}
-      <section className="bg-stone-50 border border-stone-200 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center space-x-6">
-          <div>
-            <p className="text-[10px] font-typewriter text-stone-500 uppercase tracking-widest mb-1">Timeframe Scope</p>
-            <div className="flex items-center space-x-2">
-              <Calendar className="w-4 h-4 text-stone-400" />
-              <span className="font-bold text-sm text-black">Trailing 30 Days</span>
-            </div>
-          </div>
-          <div className="h-8 w-px bg-stone-200"></div>
-          <div>
-            <p className="text-[10px] font-typewriter text-stone-500 uppercase tracking-widest mb-1">Active NAICS Target</p>
-            <div className="flex items-center space-x-2">
-              <span className="bg-black text-white px-2 py-0.5 rounded font-mono text-xs">541512</span>
-              <span className="bg-black text-white px-2 py-0.5 rounded font-mono text-xs">541519</span>
-              <span className="bg-black text-white px-2 py-0.5 rounded font-mono text-xs">541611</span>
-            </div>
-          </div>
-          <div className="h-8 w-px bg-stone-200 hidden md:block"></div>
-          <div className="hidden md:block">
-            <p className="text-[10px] font-typewriter text-stone-500 uppercase tracking-widest mb-1">Notice Types</p>
-            <div className="flex items-center space-x-2">
-              <span className="font-bold text-sm text-black">Sources Sought, Solicitations</span>
-            </div>
-          </div>
-        </div>
-        <Link href="/opportunities" className="text-xs font-typewriter font-bold bg-white border border-stone-200 px-4 py-2 rounded-full hover:bg-stone-100 transition-colors flex items-center shadow-sm">
-          <Filter className="w-3 h-3 mr-2" /> Adjust Scope Control
-        </Link>
-      </section>
-
       {/* KPI Cards */}
-      <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <MetricCard
-          title="Total Ingested"
-          value={payload.summary.total_opportunities_ingested.toLocaleString()}
+          title="Active Opportunities"
+          value={(opsCount || 0).toLocaleString()}
           icon={Activity}
         />
         <MetricCard
-          title="HOT Matches Generated"
-          value={payload.summary.hot_matches_generated}
-          icon={Target}
+          title="HOT Matches"
+          value={hotCount || 0}
+          icon={Flame}
           highlight
         />
         <MetricCard
-          title="System Outcomes Logged"
-          value={payload.summary.recent_outcomes_logged}
-          icon={AlertCircle}
+          title="WARM Matches"
+          value={(warmCount || 0).toLocaleString()}
+          icon={Target}
+        />
+        <MetricCard
+          title="Contractor Pool"
+          value={(contractorCount || 0).toLocaleString()}
+          icon={Users}
         />
       </section>
 
       {/* Two Column Layout */}
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-        {/* High Maturity Table */}
+        {/* HOT Matches Table */}
         <div className="lg:col-span-2 bg-white rounded-[32px] p-8 border border-stone-200 shadow-sm">
           <div className="flex justify-between items-center mb-6">
-            <h3 className="font-typewriter font-bold text-lg">Top HOT Matches</h3>
+            <h3 className="font-typewriter font-bold text-lg flex items-center">
+              <Flame className="w-5 h-5 mr-2 text-red-500" /> HOT Matches
+              <span className="ml-3 text-sm font-normal text-stone-400">Top scoring contractor-opportunity pairs</span>
+            </h3>
+            <Link href="/matches" className="text-xs font-typewriter font-bold bg-stone-100 border border-stone-200 px-4 py-2 rounded-full hover:bg-stone-200 transition-colors flex items-center">
+              View All <ArrowRight className="w-3 h-3 ml-1" />
+            </Link>
           </div>
 
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-stone-200 text-stone-400 text-xs font-typewriter uppercase tracking-wider">
-                  <th className="pb-3 font-normal">Notice</th>
-                  <th className="pb-3 font-normal">Agency/Title</th>
-                  <th className="pb-3 font-normal">Matched Target</th>
                   <th className="pb-3 font-normal">Score</th>
+                  <th className="pb-3 font-normal">Opportunity</th>
+                  <th className="pb-3 font-normal">Contractor</th>
+                  <th className="pb-3 font-normal">NAICS</th>
+                  <th className="pb-3 font-normal">Deadline</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100 text-sm">
-                {payload.high_maturity_opportunities.length === 0 && (
-                  <tr><td colSpan={4} className="py-8 text-center text-stone-400 font-typewriter">No HOT matches detected. Run Scoring Engine.</td></tr>
+                {hotList.length === 0 && (
+                  <tr><td colSpan={5} className="py-8 text-center text-stone-400 font-typewriter">No HOT matches detected. Click &quot;Score Matches&quot; above to generate.</td></tr>
                 )}
-                {payload.high_maturity_opportunities.map((opp, idx) => (
-                  <tr key={idx} className="hover:bg-stone-50 transition-colors group">
-                    <td className="py-4 font-typewriter font-semibold text-black text-xs">{opp.notice_id}</td>
-                    <td className="py-4 text-stone-600 truncate max-w-[200px] text-xs" title={opp.agency}>{opp.agency}</td>
-                    <td className="py-4 text-stone-700 font-medium truncate max-w-[150px]">{opp.contractor}</td>
+                {hotList.map((opp, idx) => (
+                  <tr key={idx} className="hover:bg-stone-50 transition-colors group cursor-pointer">
                     <td className="py-4">
                       <div className="flex items-center space-x-2">
-                        <div className="w-16 h-1.5 bg-stone-100 rounded-full overflow-hidden">
-                          <div
-                            className={clsx("h-full rounded-full", opp.maturity_score > 0.8 ? "bg-black" : "bg-stone-400")}
-                            style={{ width: `${opp.maturity_score * 100}%` }}
-                          />
-                        </div>
-                        <span className="font-typewriter font-bold text-xs">{opp.maturity_score.toFixed(2)}</span>
+                        <div className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0"></div>
+                        <span className="font-mono font-bold text-base">{opp.score_pct}</span>
                       </div>
+                    </td>
+                    <td className="py-4 max-w-[250px]">
+                      <Link href={`/matches/${opp.id}`} className="hover:underline">
+                        <p className="font-bold text-black line-clamp-1 text-sm">{opp.title}</p>
+                        <p className="text-stone-500 text-xs line-clamp-1">{opp.agency}</p>
+                      </Link>
+                    </td>
+                    <td className="py-4">
+                      <p className="font-medium text-stone-800 text-sm">{opp.contractor}</p>
+                      {opp.contractor_loc && <p className="text-stone-400 text-xs">{opp.contractor_loc}</p>}
+                    </td>
+                    <td className="py-4">
+                      <span className="font-mono text-xs bg-stone-100 px-2 py-1 rounded border border-stone-200">{opp.naics}</span>
+                    </td>
+                    <td className="py-4">
+                      <span className="font-bold text-xs text-stone-700">
+                        {opp.deadline ? new Date(opp.deadline).toLocaleDateString() : "TBD"}
+                      </span>
                     </td>
                   </tr>
                 ))}
@@ -159,44 +168,78 @@ export default async function AgencyDashboard() {
 
         {/* Intelligence Briefing */}
         <div className="bg-stone-900 rounded-[32px] p-8 text-white shadow-xl flex flex-col justify-between relative overflow-hidden">
-          {/* Subtle noise/gradient background mock */}
           <div className="absolute top-0 right-0 w-32 h-32 bg-stone-700 rounded-full blur-3xl opacity-20 -mr-10 -mt-10 pointer-events-none"></div>
 
           <div>
             <div className="w-10 h-10 rounded-full bg-stone-800 flex items-center justify-center mb-6">
               <TrendingUp className="w-5 h-5 text-white" />
             </div>
-            <h3 className="font-typewriter text-xl font-bold mb-2">Weekly Briefing</h3>
-            <p className="text-stone-400 text-xs leading-relaxed mb-8 font-sans">
-              Intelligence generated from the last self-annealing analytical pass. System performance is deterministic.
+            <h3 className="font-typewriter text-xl font-bold mb-2">Intelligence Brief</h3>
+            <p className="text-stone-400 text-xs leading-relaxed mb-6 font-sans">
+              Real-time system metrics from the scoring and enrichment engines.
             </p>
 
-            <div className="space-y-6">
+            <div className="space-y-4">
               <div className="bg-black/40 p-4 rounded-2xl border border-stone-800">
-                <p className="text-stone-500 font-typewriter text-[10px] uppercase tracking-wider mb-1">Top Tracked NAICS</p>
-                <p className="font-typewriter font-bold text-lg">541512</p>
+                <p className="text-stone-500 font-typewriter text-[10px] uppercase tracking-wider mb-1">Match Pipeline</p>
+                <div className="flex items-end space-x-3">
+                  <span className="font-typewriter font-bold text-2xl text-red-400">{hotCount || 0}</span>
+                  <span className="text-stone-500 text-xs font-bold mb-1">HOT</span>
+                  <span className="font-typewriter font-bold text-xl text-amber-400">{(warmCount || 0).toLocaleString()}</span>
+                  <span className="text-stone-500 text-xs font-bold mb-1">WARM</span>
+                </div>
               </div>
               <div className="bg-black/40 p-4 rounded-2xl border border-stone-800">
                 <p className="text-stone-500 font-typewriter text-[10px] uppercase tracking-wider mb-1">Contractor Pool</p>
                 <div className="flex items-end space-x-2">
-                  <p className="font-typewriter font-bold text-2xl">50</p>
-                  <span className="text-stone-400 text-xs font-bold mb-1">Active</span>
+                  <p className="font-typewriter font-bold text-2xl">{(contractorCount || 0).toLocaleString()}</p>
+                  <span className="text-stone-400 text-xs font-bold mb-1">Indexed</span>
                 </div>
+              </div>
+              <div className="bg-black/40 p-4 rounded-2xl border border-stone-800">
+                <p className="text-stone-500 font-typewriter text-[10px] uppercase tracking-wider mb-1">Active Opportunities</p>
+                <p className="font-typewriter font-bold text-2xl">{(opsCount || 0).toLocaleString()}</p>
               </div>
             </div>
           </div>
 
-          <button className="w-full py-4 mt-8 rounded-full border border-stone-700 text-stone-300 font-typewriter text-sm font-bold hover:bg-white hover:text-black transition-all">
-            Access Command Logs
-          </button>
+          <Link href="/matches" className="w-full py-4 mt-6 rounded-full border border-stone-700 text-stone-300 font-typewriter text-sm font-bold hover:bg-white hover:text-black transition-all text-center block">
+            View All Matches
+          </Link>
         </div>
 
       </section>
+
+      {/* Top WARM Matches Preview */}
+      {warmList.length > 0 && (
+        <section className="bg-white rounded-[32px] p-8 border border-stone-200 shadow-sm">
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="font-typewriter font-bold text-lg flex items-center">
+              <Target className="w-5 h-5 mr-2 text-amber-500" /> Top WARM Matches
+            </h3>
+            <Link href="/matches" className="text-xs font-typewriter font-bold text-stone-500 hover:text-black transition-colors flex items-center">
+              View All <ArrowRight className="w-3 h-3 ml-1" />
+            </Link>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            {warmList.map((m, idx) => (
+              <Link key={idx} href={`/matches/${m.id}`} className="bg-stone-50 border border-stone-200 rounded-2xl p-4 hover:border-black hover:shadow-md transition-all group">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-mono font-bold text-lg">{m.score_pct}</span>
+                  <span className="bg-amber-100 text-amber-700 text-[9px] font-typewriter px-2 py-0.5 rounded uppercase">WARM</span>
+                </div>
+                <p className="font-bold text-sm line-clamp-2 text-stone-800 group-hover:text-black mb-1">{m.title}</p>
+                <p className="text-xs text-stone-500 line-clamp-1">{m.contractor}</p>
+                <span className="font-mono text-[10px] text-stone-400 mt-2 block">{m.naics}</span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }
 
-// Sub-component for KPI
 function MetricCard({ title, value, icon: Icon, highlight = false }: { title: string, value: string | number, icon: any, highlight?: boolean }) {
   return (
     <div className={clsx(

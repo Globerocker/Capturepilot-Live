@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
-import { Loader2, ArrowRight, X, Building, CheckCircle2, PenTool, LayoutGrid, List, Briefcase, Sparkles, AlertCircle, ChevronDown, ChevronUp, Send } from "lucide-react";
+import { Loader2, ArrowRight, X, Building, CheckCircle2, PenTool, LayoutGrid, List, Briefcase, Sparkles, AlertCircle, ChevronDown, ChevronUp, Search, ChevronLeft, ChevronRight, Flame, Target } from "lucide-react";
 import clsx from "clsx";
 
 export const dynamic = 'force-dynamic';
@@ -13,7 +13,7 @@ interface MatchExt {
     score: number;
     classification: string;
     created_at: string;
-    score_breakdown: any;
+    score_breakdown: Record<string, number> | null;
     opportunity_id: string;
     contractor_id: string;
     opportunities: {
@@ -23,13 +23,12 @@ interface MatchExt {
         naics_code: string;
         agency?: string;
         notice_type?: string;
-        agencies?: { department?: string, sub_tier?: string };
-        opportunity_types?: { name?: string };
-        set_asides?: { code?: string };
     };
     contractors: {
         company_name: string;
         uei: string;
+        city?: string;
+        state?: string;
         naics_codes: string[];
         certifications: string[];
     };
@@ -48,35 +47,114 @@ const supabase = createClient(
 export default function MatchesPage() {
     const router = useRouter();
     const [matches, setMatches] = useState<MatchExt[]>([]);
+    const [totalCount, setTotalCount] = useState(0);
     const [loading, setLoading] = useState(true);
 
+    // Filter & Search
+    const [classFilter, setClassFilter] = useState<"ALL" | "HOT" | "WARM" | "COLD">("ALL");
+    const [searchInput, setSearchInput] = useState("");
+    const [activeSearch, setActiveSearch] = useState("");
+    const [sortBy, setSortBy] = useState<"score_desc" | "score_asc" | "deadline">("score_desc");
+
+    // Pagination
+    const [page, setPage] = useState(1);
+    const pageSize = 25;
+
+    // Panel state
     const [selectedMatch, setSelectedMatch] = useState<MatchExt | null>(null);
     const [drafting, setDrafting] = useState(false);
     const [drafts, setDrafts] = useState<DraftPayload[]>([]);
     const [showBreakdown, setShowBreakdown] = useState(false);
-    const [viewMode, setViewMode] = useState("list"); // Added viewMode state
+    const [viewMode, setViewMode] = useState("list");
 
+    // Counts for tabs
+    const [hotCount, setHotCount] = useState(0);
+    const [warmCount, setWarmCount] = useState(0);
+    const [coldCount, setColdCount] = useState(0);
+
+    // Fetch tab counts once
     useEffect(() => {
-        async function fetchData() {
-            const { data, error } = await supabase
-                .from("matches")
-                .select(`
-          id, score, classification, created_at, score_breakdown, opportunity_id, contractor_id,
-          opportunities (title, notice_id, response_deadline, naics_code, agencies(department, sub_tier), opportunity_types(name), set_asides(code)),
-          contractors (company_name, uei, naics_codes, certifications)
-        `)
-                .order("score", { ascending: false });
-
-            if (data) setMatches(data as any);
-            if (error) console.error("Matches fetch error:", error);
-            setLoading(false);
+        async function fetchCounts() {
+            const [hot, warm, cold] = await Promise.all([
+                supabase.from("matches").select("*", { count: 'exact', head: true }).eq("classification", "HOT"),
+                supabase.from("matches").select("*", { count: 'exact', head: true }).eq("classification", "WARM"),
+                supabase.from("matches").select("*", { count: 'exact', head: true }).eq("classification", "COLD"),
+            ]);
+            setHotCount(hot.count || 0);
+            setWarmCount(warm.count || 0);
+            setColdCount(cold.count || 0);
         }
-        fetchData();
+        fetchCounts();
     }, []);
 
+    const fetchMatches = useCallback(async () => {
+        setLoading(true);
+        try {
+            let query = supabase
+                .from("matches")
+                .select(`
+                    id, score, classification, created_at, score_breakdown, opportunity_id, contractor_id,
+                    opportunities (title, notice_id, response_deadline, naics_code, agency, notice_type),
+                    contractors (company_name, uei, city, state, naics_codes, certifications)
+                `, { count: 'exact' });
+
+            // Classification filter
+            if (classFilter !== "ALL") {
+                query = query.eq("classification", classFilter);
+            }
+
+            // Search filter
+            if (activeSearch) {
+                // Search in contractor name or opportunity title via the join isn't directly supported,
+                // so we search on the main table fields we can access
+                // We'll use a workaround: fetch and filter client-side for search
+            }
+
+            // Sort
+            if (sortBy === "score_desc") {
+                query = query.order("score", { ascending: false });
+            } else if (sortBy === "score_asc") {
+                query = query.order("score", { ascending: true });
+            } else if (sortBy === "deadline") {
+                query = query.order("score", { ascending: false }); // fallback, deadline is on joined table
+            }
+
+            // Pagination
+            const from = (page - 1) * pageSize;
+            const to = from + pageSize - 1;
+            query = query.range(from, to);
+
+            const { data, count, error } = await query;
+
+            if (error) {
+                console.error("Matches fetch error:", error);
+            } else {
+                let results = (data || []) as unknown as MatchExt[];
+
+                // Client-side search filter (Supabase doesn't support ILIKE on joined columns)
+                if (activeSearch) {
+                    const term = activeSearch.toLowerCase();
+                    results = results.filter(m =>
+                        m.contractors?.company_name?.toLowerCase().includes(term) ||
+                        m.opportunities?.title?.toLowerCase().includes(term) ||
+                        m.opportunities?.notice_id?.toLowerCase().includes(term) ||
+                        m.opportunities?.agency?.toLowerCase().includes(term)
+                    );
+                }
+
+                setMatches(results);
+                setTotalCount(count || 0);
+            }
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setLoading(false);
+        }
+    }, [page, classFilter, activeSearch, sortBy]);
+
     useEffect(() => {
-        // We only clear state when necessary, avoiding cascading renders on mount
-    }, [selectedMatch]);
+        fetchMatches();
+    }, [fetchMatches]);
 
     const handleGenerateDrafts = async () => {
         if (!selectedMatch) return;
@@ -94,11 +172,11 @@ export default function MatchesPage() {
             },
             {
                 type: "LinkedIn / SMS",
-                content: `Hi [Name], saw ${con.company_name} is a high-probability fit for the ${opp.agencies?.sub_tier || opp.agencies?.department || 'agency'} "${opp.title}" contract (NAICS ${opp.naics_code}). We have a capture strategy ready. Open to a quick chat?`
+                content: `Hi [Name], saw ${con.company_name} is a high-probability fit for the ${opp.agency || 'agency'} "${opp.title}" contract (NAICS ${opp.naics_code}). We have a capture strategy ready. Open to a quick chat?`
             },
             {
                 type: "Concise Email",
-                content: `Subject: Teaming Opportunity: ${opp.notice_id} - ${opp.title}\n\nHi [Name],\n\nWe identified a high-probability match for ${con.company_name} on the recent ${opp.agencies?.sub_tier || opp.agencies?.department || 'agency'} Sources Sought.\n\nWhy you: Perfect NAICS alignment (${opp.naics_code}) and verified ${con.certifications?.[0] || 'capacity'} requirements.\n\nDeadline: ${deadline}.\n\nAre you open to a brief call tomorrow to review the capture strategy and PWin breakdown?\n\nBest,\n[Your Name]`
+                content: `Subject: Teaming Opportunity: ${opp.notice_id} - ${opp.title}\n\nHi [Name],\n\nWe identified a high-probability match for ${con.company_name} on the recent ${opp.agency || 'agency'} Sources Sought.\n\nWhy you: Perfect NAICS alignment (${opp.naics_code}) and verified ${con.certifications?.[0] || 'capacity'} requirements.\n\nDeadline: ${deadline}.\n\nAre you open to a brief call tomorrow to review the capture strategy and PWin breakdown?\n\nBest,\n[Your Name]`
             }
         ]);
         setDrafting(false);
@@ -111,122 +189,207 @@ export default function MatchesPage() {
         return "text-red-600 bg-red-100 border-red-200";
     };
 
-    const getDotColor = (score: number) => {
-        const val = score * 100;
-        if (val >= 70) return "bg-green-500";
-        if (val >= 40) return "bg-yellow-500";
-        return "bg-red-500";
+    const getDotColor = (cls: string) => {
+        if (cls === "HOT") return "bg-red-500";
+        if (cls === "WARM") return "bg-amber-500";
+        return "bg-stone-400";
     };
+
+    const totalPages = Math.ceil(totalCount / pageSize);
+    const totalAll = hotCount + warmCount + coldCount;
 
     return (
         <div className="flex h-full gap-6 max-w-[1600px] mx-auto pb-12 overflow-hidden">
             {/* Main Content Area */}
             <div className={clsx("transition-all duration-500 ease-in-out flex-1 flex flex-col h-full", selectedMatch ? "hidden lg:flex lg:w-1/2 xl:w-7/12" : "w-full")}>
                 <div className="animate-in fade-in duration-500">
-                    <header className="flex items-end justify-between mb-8">
+                    <header className="flex items-end justify-between mb-6">
                         <div>
                             <h2 className="text-3xl font-bold font-typewriter tracking-tighter text-black flex items-center">
                                 <CheckCircle2 className="mr-3 w-8 h-8" /> Active Matches
+                                <span className="ml-4 text-sm font-sans font-medium bg-stone-100 px-3 py-1 rounded-full text-stone-500 border border-stone-200">
+                                    {totalCount.toLocaleString()} Results
+                                </span>
                             </h2>
                             <p className="text-stone-500 mt-2 font-medium">
-                                Agency ↔ Contractor Pairing Heatmap
+                                Contractor-Opportunity Pairing Intelligence
                             </p>
                         </div>
-                        <div className="flex items-center space-x-2 bg-stone-100 p-1 rounded-full border border-stone-200">
-                            <button title="Grid View" onClick={() => setViewMode("grid")} className={clsx("p-2 rounded-full transition-all", viewMode === "grid" ? "bg-white shadow-sm text-black" : "text-stone-500 hover:text-black")}>
-                                <LayoutGrid className="w-4 h-4" />
-                            </button>
-                            <button title="List View" onClick={() => setViewMode("list")} className={clsx("p-2 rounded-full transition-all", viewMode === "list" ? "bg-white shadow-sm text-black" : "text-stone-500 hover:text-black")}>
-                                <List className="w-4 h-4" />
-                            </button>
+                        <div className="flex items-center space-x-2">
+                            <div className="flex items-center bg-stone-100 p-1 rounded-full border border-stone-200">
+                                <button title="Grid View" onClick={() => setViewMode("grid")} className={clsx("p-2 rounded-full transition-all", viewMode === "grid" ? "bg-white shadow-sm text-black" : "text-stone-500 hover:text-black")}>
+                                    <LayoutGrid className="w-4 h-4" />
+                                </button>
+                                <button title="List View" onClick={() => setViewMode("list")} className={clsx("p-2 rounded-full transition-all", viewMode === "list" ? "bg-white shadow-sm text-black" : "text-stone-500 hover:text-black")}>
+                                    <List className="w-4 h-4" />
+                                </button>
+                            </div>
                         </div>
                     </header>
+
+                    {/* Classification Tabs + Sort + Search */}
+                    <section className="bg-stone-50 border border-stone-200 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4 mb-6">
+                        <div className="flex items-center space-x-2">
+                            {([
+                                { key: "ALL" as const, label: "All", count: totalAll, icon: null, color: "bg-black text-white border-black" },
+                                { key: "HOT" as const, label: "HOT", count: hotCount, icon: Flame, color: "bg-red-100 text-red-900 border-red-300" },
+                                { key: "WARM" as const, label: "WARM", count: warmCount, icon: Target, color: "bg-amber-100 text-amber-900 border-amber-300" },
+                                { key: "COLD" as const, label: "COLD", count: coldCount, icon: null, color: "bg-stone-200 text-stone-700 border-stone-300" },
+                            ]).map(tab => (
+                                <button
+                                    key={tab.key}
+                                    onClick={() => { setClassFilter(tab.key); setPage(1); setSelectedMatch(null); }}
+                                    className={clsx(
+                                        "text-xs font-bold font-typewriter uppercase tracking-widest px-4 py-2 rounded-full transition-all shadow-sm border flex items-center",
+                                        classFilter === tab.key ? tab.color : "bg-white text-stone-600 border-stone-200 hover:bg-stone-100"
+                                    )}
+                                >
+                                    {tab.icon && <tab.icon className="w-3 h-3 mr-1.5" />}
+                                    {tab.label}
+                                    <span className="ml-2 text-[10px] opacity-70">({tab.count.toLocaleString()})</span>
+                                </button>
+                            ))}
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                            {/* Sort */}
+                            <select
+                                title="Sort By"
+                                value={sortBy}
+                                onChange={(e) => { setSortBy(e.target.value as typeof sortBy); setPage(1); }}
+                                className="bg-white border border-stone-200 rounded-full px-3 py-2 text-xs font-bold font-typewriter outline-none focus:ring-2 focus:ring-black"
+                            >
+                                <option value="score_desc">Score: High to Low</option>
+                                <option value="score_asc">Score: Low to High</option>
+                            </select>
+                        </div>
+                    </section>
+
+                    {/* Search Bar */}
+                    <div className="bg-white p-2 rounded-full border border-stone-200 shadow-sm flex items-center mb-6 focus-within:ring-2 focus-within:ring-black focus-within:border-transparent transition-all">
+                        <Search className="w-5 h-5 text-stone-400 ml-4 mr-2" />
+                        <input
+                            type="text"
+                            placeholder="Search contractor, opportunity, notice ID, or agency..."
+                            className="bg-transparent border-none outline-none w-full text-stone-700 font-typewriter text-sm"
+                            value={searchInput}
+                            onChange={(e) => setSearchInput(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') { setPage(1); setActiveSearch(searchInput); } }}
+                        />
+                        {activeSearch && (
+                            <button title="Clear Search" onClick={() => { setSearchInput(""); setActiveSearch(""); setPage(1); }} className="p-2 text-stone-400 hover:text-black">
+                                <X className="w-4 h-4" />
+                            </button>
+                        )}
+                    </div>
 
                     {loading ? (
                         <div className="flex justify-center p-12">
                             <Loader2 className="w-8 h-8 animate-spin text-stone-400" />
                         </div>
                     ) : (
-                        <div className="bg-white rounded-[40px] border border-stone-200 shadow-sm overflow-hidden flex flex-col">
-                            <table className="w-full text-left border-collapse">
-                                <thead>
-                                    <tr className="border-b border-stone-200 bg-stone-50 text-stone-500 text-xs font-typewriter uppercase tracking-wider">
-                                        <th className="p-6 font-medium">Match Tier</th>
-                                        <th className="p-6 font-medium">Contractor Target</th>
-                                        <th className="p-6 font-medium">Federal Opportunity</th>
-                                        <th className="p-6 font-medium">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-stone-100 text-sm">
-                                    {matches.length === 0 && (
-                                        <tr>
-                                            <td colSpan={4} className="p-12 text-center text-stone-400 font-typewriter">
-                                                No deterministic pairs generated yet. Check the scoring engine.
-                                            </td>
+                        <>
+                            <div className="bg-white rounded-[32px] border border-stone-200 shadow-sm overflow-hidden flex flex-col">
+                                <table className="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr className="border-b border-stone-200 bg-stone-50 text-stone-500 text-xs font-typewriter uppercase tracking-wider">
+                                            <th className="p-5 font-medium">Score</th>
+                                            <th className="p-5 font-medium">Contractor</th>
+                                            <th className="p-5 font-medium">Opportunity</th>
+                                            <th className="p-5 font-medium hidden xl:table-cell">NAICS</th>
+                                            <th className="p-5 font-medium hidden lg:table-cell">Deadline</th>
+                                            <th className="p-5 font-medium"></th>
                                         </tr>
-                                    )}
-                                    {matches.map((m) => (
-                                        <tr
-                                            key={m.id}
-                                            onClick={() => setSelectedMatch(m)}
-                                            onDoubleClick={() => router.push(`/matches/${m.id}`)}
-                                            className={clsx(
-                                                "transition-colors group cursor-pointer",
-                                                selectedMatch?.id === m.id ? "bg-stone-50" : "hover:bg-stone-50"
-                                            )}
+                                    </thead>
+                                    <tbody className="divide-y divide-stone-100 text-sm">
+                                        {matches.length === 0 && (
+                                            <tr>
+                                                <td colSpan={6} className="p-12 text-center text-stone-400 font-typewriter">
+                                                    No matches found. {activeSearch ? "Try a different search." : "Run the Scoring Engine to generate matches."}
+                                                </td>
+                                            </tr>
+                                        )}
+                                        {matches.map((m) => (
+                                            <tr
+                                                key={m.id}
+                                                onClick={() => { setSelectedMatch(m); setDrafts([]); setShowBreakdown(false); }}
+                                                onDoubleClick={() => router.push(`/matches/${m.id}`)}
+                                                className={clsx(
+                                                    "transition-colors group cursor-pointer",
+                                                    selectedMatch?.id === m.id ? "bg-stone-50" : "hover:bg-stone-50"
+                                                )}
+                                            >
+                                                <td className="p-5 align-top">
+                                                    <div className="flex items-center space-x-2">
+                                                        <div className={clsx("w-2.5 h-2.5 rounded-full flex-shrink-0", getDotColor(m.classification))}></div>
+                                                        <div>
+                                                            <div className="font-bold text-lg font-mono leading-none">{Math.round(m.score * 100)}</div>
+                                                            <div className="text-[9px] font-typewriter text-stone-400 uppercase tracking-widest mt-0.5">{m.classification}</div>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="p-5 align-top">
+                                                    <p className="font-bold text-stone-900 leading-tight line-clamp-1">
+                                                        {m.contractors?.company_name}
+                                                    </p>
+                                                    <p className="text-stone-400 text-xs mt-0.5">
+                                                        {[m.contractors?.city, m.contractors?.state].filter(Boolean).join(", ") || m.contractors?.uei}
+                                                    </p>
+                                                </td>
+                                                <td className="p-5 align-top max-w-[300px]">
+                                                    <p className="font-medium text-stone-800 line-clamp-1 mb-0.5">{m.opportunities?.title}</p>
+                                                    <p className="text-stone-500 text-xs line-clamp-1">{m.opportunities?.agency || "Unknown Agency"}</p>
+                                                </td>
+                                                <td className="p-5 align-top hidden xl:table-cell">
+                                                    <span className="text-xs font-mono bg-stone-100 text-stone-600 px-2 py-1 rounded border border-stone-200">
+                                                        {m.opportunities?.naics_code || "---"}
+                                                    </span>
+                                                </td>
+                                                <td className="p-5 align-top hidden lg:table-cell">
+                                                    <span className="font-bold text-xs text-stone-700">
+                                                        {m.opportunities?.response_deadline ? new Date(m.opportunities.response_deadline).toLocaleDateString() : "TBD"}
+                                                    </span>
+                                                </td>
+                                                <td className="p-5 align-middle text-right">
+                                                    <div className={clsx("inline-flex items-center space-x-1 border px-3 py-1.5 rounded-full transition-all text-xs font-bold font-typewriter", selectedMatch?.id === m.id ? "bg-black text-white border-black" : "bg-white border-stone-200 text-stone-700 group-hover:bg-black group-hover:text-white group-hover:border-black")}>
+                                                        <span>View</span>
+                                                        <ArrowRight className="w-3 h-3" />
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            {/* Pagination */}
+                            {totalPages > 1 && (
+                                <div className="mt-6 flex flex-col md:flex-row items-center justify-between px-2 gap-4">
+                                    <p className="text-xs text-stone-500 font-typewriter">
+                                        Showing {((page - 1) * pageSize) + 1} to {Math.min(page * pageSize, totalCount)} of {totalCount.toLocaleString()} matches
+                                    </p>
+                                    <div className="flex items-center space-x-2">
+                                        <button
+                                            onClick={() => setPage(p => Math.max(1, p - 1))}
+                                            disabled={page === 1}
+                                            className="px-4 py-2 bg-white border border-stone-200 rounded-full hover:bg-stone-50 disabled:opacity-50 transition-colors flex items-center font-bold text-sm"
                                         >
-                                            <td className="p-6 align-top">
-                                                <div className="flex items-center space-x-3">
-                                                    <div className={clsx("w-3 h-3 rounded-full flex-shrink-0", getDotColor(m.score))}></div>
-                                                    <div>
-                                                        <div className="font-bold text-xl font-mono leading-none">{Math.round(m.score * 100)}<span className="text-stone-400 text-sm">/100</span></div>
-                                                        <div className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mt-1">{m.classification}</div>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td className="p-6 align-top">
-                                                <div className="flex items-center space-x-3">
-                                                    <button
-                                                        title="Send Email Draft"
-                                                        className="w-10 h-10 rounded-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition-colors flex-shrink-0 shadow-md"
-                                                    >
-                                                        <Send className="w-4 h-4" />
-                                                    </button>
-                                                    <div>
-                                                        <p className="font-bold text-base text-stone-900 leading-tight">
-                                                            {m.contractors?.company_name}
-                                                        </p>
-                                                        <p className="text-stone-400 font-mono text-xs mt-1">
-                                                            UEI: {m.contractors?.uei}
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td className="p-6 align-top">
-                                                <div>
-                                                    <p className="font-bold text-stone-800 line-clamp-1 mb-1">{m.opportunities?.title}</p>
-                                                    <p className="text-stone-500 text-xs mb-2 truncate max-w-[250px]">{m.opportunities?.agencies?.sub_tier || m.opportunities?.agencies?.department || "No Agency Info"}</p>
-                                                    <div className="flex space-x-2">
-                                                        <span className="text-[10px] font-mono bg-stone-100 text-stone-600 px-2 py-0.5 rounded border border-stone-200">
-                                                            {m.opportunities?.notice_id}
-                                                        </span>
-                                                        <span className="text-[10px] font-mono bg-stone-100 text-stone-600 px-2 py-0.5 rounded border border-stone-200">
-                                                            NAICS: {m.opportunities?.naics_code}
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td className="p-6 align-middle text-right">
-                                                <div className={clsx("inline-flex items-center space-x-2 border px-4 py-2 mt-2 rounded-full transition-all text-xs font-bold font-typewriter", selectedMatch?.id === m.id ? "bg-black text-white border-black" : "bg-white border-stone-200 text-stone-700 group-hover:bg-black group-hover:text-white group-hover:border-black")}>
-                                                    <span>Explore</span>
-                                                    <ArrowRight className="w-3 h-3" />
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
+                                            <ChevronLeft className="w-4 h-4 mr-1" /> Prev
+                                        </button>
+                                        <span className="text-xs font-mono px-4 text-stone-600">
+                                            Page {page} of {totalPages}
+                                        </span>
+                                        <button
+                                            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                                            disabled={page === totalPages}
+                                            className="px-4 py-2 bg-white border border-stone-200 rounded-full hover:bg-stone-50 disabled:opacity-50 transition-colors flex items-center font-bold text-sm"
+                                        >
+                                            Next <ChevronRight className="w-4 h-4 ml-1" />
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </>
                     )}
                 </div>
             </div>
@@ -240,7 +403,7 @@ export default function MatchesPage() {
                                 "font-typewriter text-[10px] px-2 py-1 rounded font-bold border tracking-wider flex items-center shadow-sm",
                                 getScoreColor(selectedMatch.score)
                             )}>
-                                <div className={clsx("w-1.5 h-1.5 rounded-full mr-1.5", getDotColor(selectedMatch.score))}></div>
+                                <div className={clsx("w-1.5 h-1.5 rounded-full mr-1.5", getDotColor(selectedMatch.classification))}></div>
                                 {selectedMatch.classification} MATCH
                             </span>
                             <span className="font-mono text-stone-600 font-bold text-sm border bg-stone-50 px-3 py-1 rounded-md shadow-sm">
@@ -263,7 +426,10 @@ export default function MatchesPage() {
                                 <Building className="w-4 h-4 mr-2" /> Contractor Target
                             </h3>
                             <p className="font-bold text-black text-lg">{selectedMatch.contractors.company_name}</p>
-                            <p className="font-mono text-stone-500 text-xs mb-3">UEI: {selectedMatch.contractors.uei}</p>
+                            <p className="font-mono text-stone-500 text-xs mb-1">UEI: {selectedMatch.contractors.uei}</p>
+                            {(selectedMatch.contractors.city || selectedMatch.contractors.state) && (
+                                <p className="text-stone-400 text-xs">{[selectedMatch.contractors.city, selectedMatch.contractors.state].filter(Boolean).join(", ")}</p>
+                            )}
 
                             <div className="border-t border-stone-100 pt-3 mt-3">
                                 <p className="text-stone-500 font-typewriter text-[10px] uppercase mb-1">Certifications</p>
@@ -271,6 +437,9 @@ export default function MatchesPage() {
                                     {selectedMatch.contractors.certifications?.map((c: string) => (
                                         <span key={c} className="bg-black text-white px-2 py-0.5 rounded font-typewriter text-[9px] uppercase tracking-wider">{c}</span>
                                     ))}
+                                    {(!selectedMatch.contractors.certifications || selectedMatch.contractors.certifications.length === 0) && (
+                                        <span className="text-stone-400 text-xs italic">None listed</span>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -281,12 +450,16 @@ export default function MatchesPage() {
                                 <Briefcase className="w-4 h-4 mr-2" /> Federal Opportunity
                             </h3>
                             <p className="font-bold text-black line-clamp-2">{selectedMatch.opportunities.title}</p>
-                            <p className="text-stone-500 text-sm mt-1">{selectedMatch.opportunities?.agencies?.sub_tier || selectedMatch.opportunities?.agencies?.department || "No Agency Info"}</p>
+                            <p className="text-stone-500 text-sm mt-1">{selectedMatch.opportunities.agency || "Unknown Agency"}</p>
 
-                            <div className="grid grid-cols-2 gap-4 mt-4 border-t border-stone-100 pt-4">
+                            <div className="grid grid-cols-3 gap-3 mt-4 border-t border-stone-100 pt-4">
                                 <div>
                                     <p className="text-stone-400 font-typewriter text-[10px] uppercase mb-1">NAICS</p>
                                     <p className="font-mono font-bold text-stone-800 text-sm">{selectedMatch.opportunities.naics_code}</p>
+                                </div>
+                                <div>
+                                    <p className="text-stone-400 font-typewriter text-[10px] uppercase mb-1">Type</p>
+                                    <p className="font-typewriter font-bold text-stone-800 text-xs">{selectedMatch.opportunities.notice_type || "N/A"}</p>
                                 </div>
                                 <div className="border-l-4 border-stone-800 pl-3">
                                     <p className="text-stone-400 font-typewriter text-[10px] uppercase mb-1">Deadline</p>
@@ -297,16 +470,13 @@ export default function MatchesPage() {
                             </div>
                         </div>
 
-                        {/* AI Engine */}
-                        <div className="bg-stone-900 rounded-3xl p-6 text-white relative shadow-xl overflow-hidden mt-8">
+                        {/* Score Breakdown + AI Engine */}
+                        <div className="bg-stone-900 rounded-3xl p-6 text-white relative shadow-xl overflow-hidden mt-4">
                             <div className="absolute top-0 right-0 w-32 h-32 bg-stone-700/30 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
 
                             <h3 className="font-typewriter font-bold text-sm mb-3 flex items-center text-stone-100">
-                                <Sparkles className="w-4 h-4 mr-2 text-stone-400" /> B.L.A.S.T AI Engine
+                                <Sparkles className="w-4 h-4 mr-2 text-stone-400" /> Match Intelligence
                             </h3>
-                            <p className="text-stone-400 font-sans text-xs mb-5 leading-relaxed">
-                                Generate strategic outreach drafts specifically formatted for this pairing.
-                            </p>
 
                             <div className="bg-black/40 border border-stone-700 rounded-xl mb-6 overflow-hidden">
                                 <button
@@ -315,28 +485,28 @@ export default function MatchesPage() {
                                 >
                                     <div className="flex items-center">
                                         <AlertCircle className="w-4 h-4 mr-2 text-stone-400" />
-                                        <span className="font-bold text-sm">10-Factor PWin Masterguide Breakdown</span>
+                                        <span className="font-bold text-sm">Score Breakdown</span>
                                     </div>
                                     {showBreakdown ? <ChevronUp className="w-4 h-4 text-stone-400" /> : <ChevronDown className="w-4 h-4 text-stone-400" />}
                                 </button>
 
-                                {showBreakdown && (
+                                {showBreakdown && selectedMatch.score_breakdown && (
                                     <div className="p-4 border-t border-stone-800 bg-stone-900/50">
                                         <div className="grid grid-cols-2 gap-x-4 gap-y-3">
                                             {[
-                                                { name: "NAICS Fit", score: selectedMatch.score_breakdown?.naics ?? 0, max: 30 },
-                                                { name: "Geographic", score: selectedMatch.score_breakdown?.geo ?? 0, max: 15 },
-                                                { name: "Capacity", score: selectedMatch.score_breakdown?.capacity ?? 0, max: 20 },
-                                                { name: "Fed. Inactivity", score: selectedMatch.score_breakdown?.inactivity ?? 0, max: 20 },
-                                                { name: "Competition", score: selectedMatch.score_breakdown?.density ?? 0, max: 15 },
-                                                { name: "Notice Type", score: selectedMatch.score_breakdown?.notice_type ?? 0, max: 20 },
-                                                { name: "Past Performance", score: selectedMatch.score_breakdown?.past_performance ?? 0, max: 20 },
-                                                { name: "Incumbent Risk", score: selectedMatch.score_breakdown?.incumbent_risk ?? 0, max: 15 },
+                                                { name: "NAICS Fit", score: selectedMatch.score_breakdown.naics ?? 0, max: 30 },
+                                                { name: "Geographic", score: selectedMatch.score_breakdown.geo ?? 0, max: 15 },
+                                                { name: "Capacity", score: selectedMatch.score_breakdown.capacity ?? 0, max: 20 },
+                                                { name: "Fed. Inactivity", score: selectedMatch.score_breakdown.inactivity ?? 0, max: 20 },
+                                                { name: "Competition", score: selectedMatch.score_breakdown.density ?? 0, max: 15 },
+                                                { name: "Notice Type", score: selectedMatch.score_breakdown.notice_type ?? 0, max: 20 },
+                                                { name: "Past Performance", score: selectedMatch.score_breakdown.past_performance ?? 0, max: 20 },
+                                                { name: "Incumbent Risk", score: selectedMatch.score_breakdown.incumbent_risk ?? 0, max: 15 },
                                             ].map((factor, idx) => {
                                                 const pct = factor.max > 0 ? factor.score / factor.max : 0;
                                                 return (
-                                                    <div key={idx} className="flex justify-between items-center text-[10px] xl:text-xs">
-                                                        <span className="text-stone-400 truncate pr-2" title={factor.name}>{factor.name}</span>
+                                                    <div key={idx} className="flex justify-between items-center text-xs">
+                                                        <span className="text-stone-400 truncate pr-2">{factor.name}</span>
                                                         <span className={clsx("font-mono font-bold", pct > 0.7 ? "text-green-400" : pct > 0.3 ? "text-yellow-500" : factor.score === 0 ? "text-stone-600" : "text-red-400")}>
                                                             {factor.score}<span className="text-stone-600">/{factor.max}</span>
                                                         </span>
@@ -346,11 +516,15 @@ export default function MatchesPage() {
                                         </div>
                                         <div className="mt-3 pt-2 border-t border-stone-800 flex justify-between text-xs font-mono">
                                             <span className="text-stone-400">Total</span>
-                                            <span className="text-white font-bold">{selectedMatch.score_breakdown?.total ?? Math.round(selectedMatch.score * 140)}/140</span>
+                                            <span className="text-white font-bold">{selectedMatch.score_breakdown.total ?? Math.round(selectedMatch.score * 140)}/140</span>
                                         </div>
                                     </div>
                                 )}
                             </div>
+
+                            <p className="text-stone-400 font-sans text-xs mb-5 leading-relaxed">
+                                Generate strategic outreach drafts for this pairing.
+                            </p>
 
                             {drafts.length > 0 ? (
                                 <div className="space-y-4">
@@ -375,7 +549,7 @@ export default function MatchesPage() {
                                     className="w-full py-4 rounded-full bg-white text-black font-typewriter text-xs font-bold hover:bg-stone-100 transition-all flex items-center justify-center mt-2 group"
                                 >
                                     {drafting ? (
-                                        <><Loader2 className="w-4 h-4 mr-2 animate-spin text-stone-400" /> Processing Intake...</>
+                                        <><Loader2 className="w-4 h-4 mr-2 animate-spin text-stone-400" /> Processing...</>
                                     ) : (
                                         <>Generate AI Drafts <ArrowRight className="w-3 h-3 ml-2 text-stone-400 group-hover:text-black transition-colors" /></>
                                     )}
