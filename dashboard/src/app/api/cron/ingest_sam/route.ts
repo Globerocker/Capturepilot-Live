@@ -4,11 +4,12 @@ import { createClient } from "@supabase/supabase-js";
 // Allows cron jobs to run longer
 export const maxDuration = 300;
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY!;
-const SAM_API_KEY = process.env.SAM_API_KEY!;
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+function getSupabase() {
+    return createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_KEY!
+    );
+}
 
 export async function GET(req: NextRequest) {
     // 1. Authorization: Only allow authorized requests (e.g. from Vercel Cron)
@@ -18,6 +19,8 @@ export async function GET(req: NextRequest) {
     }
 
     try {
+        const supabase = getSupabase();
+        const SAM_API_KEY = process.env.SAM_API_KEY!;
         console.log("Starting SAM API Ingestion...");
 
         // 2. Determine Date Range (Last 3 days by default)

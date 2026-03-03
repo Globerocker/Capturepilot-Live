@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { useParams } from "next/navigation";
-import { Loader2, ArrowLeft, ArrowRight, Send, Sparkles, Building, Briefcase, FileText, MapPin, Globe, Phone, Users, ExternalLink, Target } from "lucide-react";
+import { Loader2, ArrowLeft, ArrowRight, Send, Sparkles, Building, Briefcase, FileText, MapPin, Globe, Phone, Users, ExternalLink, Target, Mail, Star } from "lucide-react";
 import Link from "next/link";
 import clsx from "clsx";
 
@@ -16,6 +16,7 @@ export default function MatchDetailPage() {
     const { id } = useParams();
     const [match, setMatch] = useState<any>(null);
     const [alternatives, setAlternatives] = useState<any[]>([]);
+    const [contacts, setContacts] = useState<{ id: string; full_name: string | null; title: string | null; email: string | null; phone: string | null; linkedin_url: string | null; source: string; confidence: string }[]>([]);
     const [loading, setLoading] = useState(true);
 
     // AI Email UI State
@@ -48,6 +49,15 @@ export default function MatchDetailPage() {
                     .order("score", { ascending: false })
                     .limit(10);
                 if (altData) setAlternatives(altData);
+            }
+
+            if (data?.contractor_id) {
+                const { data: contactData } = await supabase
+                    .from("contractor_contacts")
+                    .select("*")
+                    .eq("contractor_id", data.contractor_id)
+                    .order("confidence", { ascending: true });
+                if (contactData) setContacts(contactData as typeof contacts);
             }
 
             setLoading(false);
@@ -154,6 +164,39 @@ export default function MatchDetailPage() {
                                     ))}
                                 </div>
                             </div>
+
+                            {/* Decision Makers from Enrichment */}
+                            {contacts.length > 0 && (
+                                <div className="mt-2 pt-4 border-t border-stone-200">
+                                    <p className="text-stone-500 font-typewriter text-xs uppercase mb-3 flex items-center">
+                                        <Star className="w-3 h-3 mr-1 text-amber-400 fill-amber-400" /> Decision Makers
+                                    </p>
+                                    <div className="space-y-2">
+                                        {contacts.map((contact) => (
+                                            <div key={contact.id} className="bg-stone-50 p-3 rounded-xl border border-stone-100 flex justify-between items-start">
+                                                <div>
+                                                    {contact.full_name && <p className="font-bold text-sm">{contact.full_name}</p>}
+                                                    {contact.title && <p className="text-xs text-stone-500">{contact.title}</p>}
+                                                    {contact.email && <p className="text-xs text-blue-600 mt-0.5">{contact.email}</p>}
+                                                    {contact.phone && <p className="text-xs text-stone-600 mt-0.5">{contact.phone}</p>}
+                                                </div>
+                                                <div className="flex gap-1">
+                                                    {contact.email && (
+                                                        <a href={`mailto:${contact.email}`} title="Email" className="p-1.5 bg-white hover:bg-stone-200 rounded-full text-stone-600 border border-stone-200 transition-colors">
+                                                            <Mail className="w-3 h-3" />
+                                                        </a>
+                                                    )}
+                                                    {contact.linkedin_url && (
+                                                        <a href={contact.linkedin_url} title="LinkedIn" target="_blank" rel="noopener noreferrer" className="p-1.5 bg-white hover:bg-stone-200 rounded-full text-stone-600 border border-stone-200 transition-colors">
+                                                            <ExternalLink className="w-3 h-3" />
+                                                        </a>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
 

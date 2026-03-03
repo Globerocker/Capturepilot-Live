@@ -1,6 +1,6 @@
 "use client";
 
-import { RefreshCw, Zap, Play } from "lucide-react";
+import { RefreshCw, Zap, Play, Sparkles } from "lucide-react";
 import { useState } from "react";
 
 export default function DashboardActions() {
@@ -46,6 +46,15 @@ export default function DashboardActions() {
             >
                 <Play className="w-4 h-4" />
                 <span className="font-typewriter">Run Gen AI Engine</span>
+            </button>
+
+            <button
+                onClick={() => handleAction("/api/engine/orchestrate", "Run Enrichment")}
+                disabled={loading === "Run Enrichment"}
+                className="flex items-center space-x-2 bg-emerald-600 text-white px-5 py-2.5 rounded-full shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition-all text-sm font-bold disabled:opacity-50"
+            >
+                <Sparkles className={`w-4 h-4 ${loading === "Run Enrichment" ? "animate-spin" : ""}`} />
+                <span className="font-typewriter">Run Enrichment</span>
             </button>
         </div>
     );

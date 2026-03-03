@@ -3,10 +3,12 @@ import { createClient } from "@supabase/supabase-js";
 
 export const maxDuration = 300;
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY!;
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+function getSupabase() {
+    return createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_KEY!
+    );
+}
 
 export async function GET(req: NextRequest) {
     const authHeader = req.headers.get('authorization');
@@ -15,6 +17,7 @@ export async function GET(req: NextRequest) {
     }
 
     try {
+        const supabase = getSupabase();
         console.log("Starting DB Cleanup...");
         let archivedCount = 0;
         let flaggedCount = 0;

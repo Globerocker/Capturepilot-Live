@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
-import { Loader2, Users, Building, ShieldCheck, X, MapPin, Mail, DollarSign, Award, Target, Phone, Link as LinkIcon, Search, ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
+import { Loader2, Users, Building, ShieldCheck, X, MapPin, Mail, DollarSign, Award, Target, Phone, Link as LinkIcon, Search, ChevronLeft, ChevronRight, Sparkles, Star, ExternalLink } from "lucide-react";
 import clsx from "clsx";
 
 export const dynamic = 'force-dynamic';
@@ -42,6 +42,98 @@ interface Contractor {
     last_award_date?: string;
     bonded_mentioned?: boolean;
     municipal_experience?: boolean;
+}
+
+interface ContractorContact {
+    id: string;
+    full_name: string | null;
+    title: string | null;
+    email: string | null;
+    phone: string | null;
+    linkedin_url: string | null;
+    source: string;
+    confidence: string;
+}
+
+function DecisionMakersPanel({ contractorId }: { contractorId: string }) {
+    const [contacts, setContacts] = useState<ContractorContact[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        async function fetchContacts() {
+            setLoading(true);
+            const { data } = await supabase
+                .from("contractor_contacts")
+                .select("*")
+                .eq("contractor_id", contractorId)
+                .order("confidence", { ascending: true });
+            setContacts((data || []) as ContractorContact[]);
+            setLoading(false);
+        }
+        fetchContacts();
+    }, [contractorId]);
+
+    if (loading) return null;
+    if (contacts.length === 0) return null;
+
+    return (
+        <div className="border border-stone-200 rounded-2xl p-5 bg-white shadow-sm">
+            <h4 className="font-typewriter font-bold text-xs mb-4 flex items-center text-stone-800 uppercase tracking-wider">
+                <Star className="w-4 h-4 mr-2 text-amber-400 fill-amber-400" /> Decision Makers
+            </h4>
+            <div className="space-y-3">
+                {contacts.map((contact) => (
+                    <div key={contact.id} className="bg-stone-50 p-3 rounded-xl border border-stone-200">
+                        <div className="flex justify-between items-start">
+                            <div>
+                                {contact.full_name && (
+                                    <p className="font-bold text-sm text-stone-900">{contact.full_name}</p>
+                                )}
+                                {contact.title && (
+                                    <p className="text-xs text-stone-500 font-typewriter">{contact.title}</p>
+                                )}
+                                {contact.email && (
+                                    <p className="text-xs text-blue-600 mt-1">{contact.email}</p>
+                                )}
+                                {contact.phone && (
+                                    <p className="text-xs text-stone-600 mt-0.5">{contact.phone}</p>
+                                )}
+                            </div>
+                            <div className="flex gap-1.5">
+                                {contact.email && (
+                                    <a href={`mailto:${contact.email}`} title="Email" className="p-1.5 bg-white hover:bg-stone-200 rounded-full text-stone-600 border border-stone-200 transition-colors">
+                                        <Mail className="w-3 h-3" />
+                                    </a>
+                                )}
+                                {contact.phone && (
+                                    <a href={`tel:${contact.phone}`} title="Call" className="p-1.5 bg-white hover:bg-stone-200 rounded-full text-stone-600 border border-stone-200 transition-colors">
+                                        <Phone className="w-3 h-3" />
+                                    </a>
+                                )}
+                                {contact.linkedin_url && (
+                                    <a href={contact.linkedin_url} title="LinkedIn" target="_blank" rel="noopener noreferrer" className="p-1.5 bg-white hover:bg-stone-200 rounded-full text-stone-600 border border-stone-200 transition-colors">
+                                        <ExternalLink className="w-3 h-3" />
+                                    </a>
+                                )}
+                            </div>
+                        </div>
+                        <div className="flex gap-2 mt-2">
+                            <span className={`text-[9px] font-typewriter px-1.5 py-0.5 rounded ${
+                                contact.confidence === "high" ? "bg-emerald-100 text-emerald-700" :
+                                contact.confidence === "medium" ? "bg-amber-100 text-amber-700" :
+                                "bg-stone-100 text-stone-500"
+                            }`}>
+                                {contact.confidence}
+                            </span>
+                            <span className="text-[9px] font-typewriter bg-stone-100 text-stone-500 px-1.5 py-0.5 rounded">
+                                {contact.source.replace("_", " ")}
+                            </span>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
 }
 
 export default function ContractorsPage() {
@@ -495,6 +587,9 @@ export default function ContractorsPage() {
                                 </div>
                             </div>
                         )}
+
+                        {/* Enriched Decision Makers */}
+                        <DecisionMakersPanel contractorId={selectedContractor.id} />
 
                         {/* Details */}
                         <div className="space-y-6">

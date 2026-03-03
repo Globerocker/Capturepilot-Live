@@ -16,7 +16,11 @@ export async function POST(
         "ingest": "1_ingest_sam.py",
         "score": "2_score_matches.py",
         "drafts": "3_generate_email_drafts.py",
-        "log": "4_log_outcome.py"
+        "log": "4_log_outcome.py",
+        "discover": "7_discover_contractors.py",
+        "enrich_deep": "8_enrich_contacts.py",
+        "attachments": "9_download_attachments.py",
+        "orchestrate": "10_enrichment_orchestrator.py",
     };
 
     const scriptName = scriptMap[action];

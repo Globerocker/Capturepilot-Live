@@ -1,8 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
-import { ArrowLeft, Building, Target, FileText, Link as LinkIcon, BrainCircuit, ShieldAlert, Award, Briefcase, Zap, MapPin, DollarSign, Calendar, CheckSquare } from "lucide-react";
+import { ArrowLeft, Building, Target, FileText, Link as LinkIcon, ShieldAlert, Award, Briefcase, Zap, MapPin, Calendar, CheckSquare, Sparkles } from "lucide-react";
 import clsx from "clsx";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import EnrichButton from "@/components/EnrichButton";
+import EnrichedContractorsList from "@/components/EnrichedContractorsList";
 
 export const dynamic = 'force-dynamic';
 
@@ -361,7 +363,25 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                 </div>
             </div>
 
-            {/* 5. FIND CANDIDATE MATCHES (Bottom Section) */}
+            {/* 5. CONTRACTOR DISCOVERY & ENRICHMENT */}
+            <div className="bg-white rounded-3xl border border-stone-200 shadow-sm overflow-hidden">
+                <div className="bg-stone-50 border-b border-stone-100 px-8 py-5 flex items-center justify-between">
+                    <h2 className="font-typewriter text-lg font-bold flex items-center text-stone-800">
+                        <Sparkles className="w-5 h-5 mr-3 text-stone-400" /> Contractor Discovery
+                        {opp.enrichment_status === "completed" && (
+                            <span className="ml-3 text-sm font-sans font-medium bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full border border-emerald-200">
+                                Enriched
+                            </span>
+                        )}
+                    </h2>
+                    <EnrichButton opportunityId={opp.id} currentStatus={opp.enrichment_status} />
+                </div>
+                <div className="p-8">
+                    <EnrichedContractorsList opportunityId={opp.id} />
+                </div>
+            </div>
+
+            {/* 6. FIND CANDIDATE MATCHES (Bottom Section) */}
             <div className="mt-16 bg-white border border-stone-200 rounded-3xl p-10 text-center shadow-sm relative overflow-hidden">
                 <div className="absolute left-0 top-0 bottom-0 w-2 bg-gradient-to-b from-blue-400 to-emerald-400"></div>
                 <h2 className="text-2xl font-bold font-typewriter text-stone-900 mb-4">Ready to build your capture pipeline?</h2>
