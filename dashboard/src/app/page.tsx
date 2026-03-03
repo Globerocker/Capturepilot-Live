@@ -1,103 +1,125 @@
-import { Activity, Target, TrendingUp, Users, ArrowRight, Flame } from "lucide-react";
+"use client";
+
+import { useEffect, useState } from "react";
+import { Activity, Target, TrendingUp, Users, ArrowRight, Flame, Loader2 } from "lucide-react";
 import clsx from "clsx";
 import Link from "next/link";
 import { createClient } from "@supabase/supabase-js";
 import DashboardActions from "@/components/DashboardActions";
 
-// Force dynamic rendering
-export const dynamic = 'force-dynamic';
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL || "https://ryxgjzehoijjvczqkhwr.supabase.co",
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ5eGdqemVob2lqanZjenFraHdyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIwNDg0NTUsImV4cCI6MjA4NzYyNDQ1NX0.q0HivHixjE-A2MuQZlmlZOO2eLpQEm8c6XhQQQKaJsY"
+);
 
-export default async function AgencyDashboard() {
+interface HotMatch {
+  id: string;
+  notice_id: string;
+  title: string;
+  agency: string;
+  naics: string;
+  score_pct: number;
+  deadline?: string;
+  contractor: string;
+  contractor_loc: string;
+}
 
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL || "https://ryxgjzehoijjvczqkhwr.supabase.co",
-    process.env.SUPABASE_SERVICE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ5eGdqemVob2lqanZjenFraHdyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIwNDg0NTUsImV4cCI6MjA4NzYyNDQ1NX0.q0HivHixjE-A2MuQZlmlZOO2eLpQEm8c6XhQQQKaJsY"
-  );
+interface WarmMatch {
+  id: string;
+  title: string;
+  naics: string;
+  score_pct: number;
+  contractor: string;
+}
 
-  // Fetch Live Data Metrics
-  const { count: opsCount } = await supabase.from("opportunities").select("*", { count: 'exact', head: true }).eq("is_archived", false);
-  const { count: hotCount } = await supabase.from("matches").select("*", { count: 'exact', head: true }).eq("classification", "HOT");
-  const { count: warmCount } = await supabase.from("matches").select("*", { count: 'exact', head: true }).eq("classification", "WARM");
-  const { count: contractorCount } = await supabase.from("contractors").select("*", { count: 'exact', head: true }).neq("data_quality_flag", "LOW_QUALITY");
+export default function AgencyDashboard() {
+  const [loading, setLoading] = useState(true);
+  const [opsCount, setOpsCount] = useState(0);
+  const [hotCount, setHotCount] = useState(0);
+  const [warmCount, setWarmCount] = useState(0);
+  const [contractorCount, setContractorCount] = useState(0);
+  const [hotList, setHotList] = useState<HotMatch[]>([]);
+  const [warmList, setWarmList] = useState<WarmMatch[]>([]);
 
-  // Fetch HOT matches (flat query, no joins - more reliable on Vercel)
-  const { data: hotMatchesRaw } = await supabase
-    .from("matches")
-    .select("id, score, classification, opportunity_id, contractor_id")
-    .eq("classification", "HOT")
-    .order("score", { ascending: false })
-    .limit(10);
+  useEffect(() => {
+    async function loadDashboard() {
+      // Run counts in parallel
+      const [opsRes, hotRes, warmRes, conRes] = await Promise.all([
+        supabase.from("opportunities").select("*", { count: 'exact', head: true }).eq("is_archived", false),
+        supabase.from("matches").select("*", { count: 'exact', head: true }).eq("classification", "HOT"),
+        supabase.from("matches").select("*", { count: 'exact', head: true }).eq("classification", "WARM"),
+        supabase.from("contractors").select("*", { count: 'exact', head: true }).neq("data_quality_flag", "LOW_QUALITY"),
+      ]);
 
-  const hotMatchList = (hotMatchesRaw || []) as { id: string; score: number; classification: string; opportunity_id: string; contractor_id: string }[];
+      setOpsCount(opsRes.count || 0);
+      setHotCount(hotRes.count || 0);
+      setWarmCount(warmRes.count || 0);
+      setContractorCount(conRes.count || 0);
 
-  // Look up opportunity and contractor details for HOT matches
-  const hotOppIds = [...new Set(hotMatchList.map(m => m.opportunity_id))];
-  const hotConIds = [...new Set(hotMatchList.map(m => m.contractor_id))];
+      // Fetch HOT matches + WARM matches in parallel
+      const [hotMatchRes, warmMatchRes] = await Promise.all([
+        supabase.from("matches").select("id, score, opportunity_id, contractor_id").eq("classification", "HOT").order("score", { ascending: false }).limit(10),
+        supabase.from("matches").select("id, score, opportunity_id, contractor_id").eq("classification", "WARM").order("score", { ascending: false }).limit(5),
+      ]);
 
-  const { data: hotOpps } = hotOppIds.length > 0
-    ? await supabase.from("opportunities").select("id, title, notice_id, response_deadline, agency, naics_code, notice_type").in("id", hotOppIds)
-    : { data: [] };
+      const hotMatches = hotMatchRes.data || [];
+      const warmMatches = warmMatchRes.data || [];
 
-  const { data: hotCons } = hotConIds.length > 0
-    ? await supabase.from("contractors").select("id, company_name, city, state").in("id", hotConIds)
-    : { data: [] };
+      // Collect all needed opp/contractor IDs
+      const allOppIds = [...new Set([...hotMatches, ...warmMatches].map(m => m.opportunity_id))];
+      const allConIds = [...new Set([...hotMatches, ...warmMatches].map(m => m.contractor_id))];
 
-  const oppMap = new Map((hotOpps || []).map((o: Record<string, string>) => [o.id, o]));
-  const conMap = new Map((hotCons || []).map((c: Record<string, string>) => [c.id, c]));
+      // Fetch details in parallel
+      const [oppsRes, consRes] = await Promise.all([
+        allOppIds.length > 0 ? supabase.from("opportunities").select("id, title, notice_id, response_deadline, agency, naics_code, notice_type").in("id", allOppIds) : Promise.resolve({ data: [] }),
+        allConIds.length > 0 ? supabase.from("contractors").select("id, company_name, city, state").in("id", allConIds) : Promise.resolve({ data: [] }),
+      ]);
 
-  const hotList = hotMatchList.map(m => {
-    const opp = oppMap.get(m.opportunity_id) as Record<string, string> | undefined;
-    const con = conMap.get(m.contractor_id) as Record<string, string> | undefined;
-    return {
-      id: m.id,
-      notice_id: opp?.notice_id || "UNK",
-      title: opp?.title || "Unknown",
-      agency: opp?.agency || "Unknown Agency",
-      naics: opp?.naics_code || "---",
-      notice_type: opp?.notice_type || "Unknown",
-      score: m.score,
-      score_pct: Math.round(m.score * 100),
-      deadline: opp?.response_deadline,
-      contractor: con?.company_name || "Unknown",
-      contractor_loc: [con?.city, con?.state].filter(Boolean).join(", ") || "",
-      opportunity_id: m.opportunity_id,
-    };
-  });
+      const oppMap = new Map((oppsRes.data || []).map((o: Record<string, string>) => [o.id, o]));
+      const conMap = new Map((consRes.data || []).map((c: Record<string, string>) => [c.id, c]));
 
-  // Fetch top WARM matches (also flat, no joins)
-  const { data: warmMatchesRaw } = await supabase
-    .from("matches")
-    .select("id, score, opportunity_id, contractor_id")
-    .eq("classification", "WARM")
-    .order("score", { ascending: false })
-    .limit(5);
+      // Build hot list
+      setHotList(hotMatches.map(m => {
+        const opp = oppMap.get(m.opportunity_id) as Record<string, string> | undefined;
+        const con = conMap.get(m.contractor_id) as Record<string, string> | undefined;
+        return {
+          id: m.id,
+          notice_id: opp?.notice_id || "UNK",
+          title: opp?.title || "Unknown",
+          agency: opp?.agency || "Unknown Agency",
+          naics: opp?.naics_code || "---",
+          score_pct: Math.round(m.score * 100),
+          deadline: opp?.response_deadline || undefined,
+          contractor: con?.company_name || "Unknown",
+          contractor_loc: [con?.city, con?.state].filter(Boolean).join(", ") || "",
+        };
+      }));
 
-  const warmMatchList = (warmMatchesRaw || []) as { id: string; score: number; opportunity_id: string; contractor_id: string }[];
-  const warmOppIds = [...new Set(warmMatchList.map(m => m.opportunity_id))];
-  const warmConIds = [...new Set(warmMatchList.map(m => m.contractor_id))];
+      // Build warm list
+      setWarmList(warmMatches.map(m => {
+        const opp = oppMap.get(m.opportunity_id) as Record<string, string> | undefined;
+        const con = conMap.get(m.contractor_id) as Record<string, string> | undefined;
+        return {
+          id: m.id,
+          title: opp?.title || "Unknown",
+          naics: opp?.naics_code || "---",
+          score_pct: Math.round(m.score * 100),
+          contractor: con?.company_name || "Unknown",
+        };
+      }));
 
-  const { data: warmOpps } = warmOppIds.length > 0
-    ? await supabase.from("opportunities").select("id, title, naics_code").in("id", warmOppIds)
-    : { data: [] };
-  const { data: warmCons } = warmConIds.length > 0
-    ? await supabase.from("contractors").select("id, company_name").in("id", warmConIds)
-    : { data: [] };
+      setLoading(false);
+    }
+    loadDashboard();
+  }, []);
 
-  const warmOppMap = new Map((warmOpps || []).map((o: Record<string, string>) => [o.id, o]));
-  const warmConMap = new Map((warmCons || []).map((c: Record<string, string>) => [c.id, c]));
-
-  const warmList = warmMatchList.map(m => {
-    const opp = warmOppMap.get(m.opportunity_id) as Record<string, string> | undefined;
-    const con = warmConMap.get(m.contractor_id) as Record<string, string> | undefined;
-    return {
-      id: m.id,
-      title: opp?.title || "Unknown",
-      agency: opp?.agency || "Unknown",
-      naics: opp?.naics_code || "---",
-      score_pct: Math.round(m.score * 100),
-      contractor: con?.company_name || "Unknown",
-    };
-  });
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center min-h-[400px]">
+        <Loader2 className="w-10 h-10 animate-spin text-stone-400" />
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
@@ -117,27 +139,10 @@ export default async function AgencyDashboard() {
 
       {/* KPI Cards */}
       <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <MetricCard
-          title="Active Opportunities"
-          value={(opsCount || 0).toLocaleString()}
-          icon={Activity}
-        />
-        <MetricCard
-          title="HOT Matches"
-          value={hotCount || 0}
-          icon={Flame}
-          highlight
-        />
-        <MetricCard
-          title="WARM Matches"
-          value={(warmCount || 0).toLocaleString()}
-          icon={Target}
-        />
-        <MetricCard
-          title="Contractor Pool"
-          value={(contractorCount || 0).toLocaleString()}
-          icon={Users}
-        />
+        <MetricCard title="Active Opportunities" value={opsCount.toLocaleString()} icon={Activity} />
+        <MetricCard title="HOT Matches" value={hotCount} icon={Flame} highlight />
+        <MetricCard title="WARM Matches" value={warmCount.toLocaleString()} icon={Target} />
+        <MetricCard title="Contractor Pool" value={contractorCount.toLocaleString()} icon={Users} />
       </section>
 
       {/* Two Column Layout */}
@@ -148,7 +153,7 @@ export default async function AgencyDashboard() {
           <div className="flex justify-between items-center mb-6">
             <h3 className="font-typewriter font-bold text-lg flex items-center">
               <Flame className="w-5 h-5 mr-2 text-red-500" /> HOT Matches
-              <span className="ml-3 text-sm font-normal text-stone-400">Top scoring contractor-opportunity pairs</span>
+              <span className="ml-3 text-sm font-normal text-stone-400">Top scoring pairs</span>
             </h3>
             <Link href="/matches" className="text-xs font-typewriter font-bold bg-stone-100 border border-stone-200 px-4 py-2 rounded-full hover:bg-stone-200 transition-colors flex items-center">
               View All <ArrowRight className="w-3 h-3 ml-1" />
@@ -170,8 +175,8 @@ export default async function AgencyDashboard() {
                 {hotList.length === 0 && (
                   <tr><td colSpan={5} className="py-8 text-center text-stone-400 font-typewriter">No HOT matches detected. Click &quot;Score Matches&quot; above to generate.</td></tr>
                 )}
-                {hotList.map((opp, idx) => (
-                  <tr key={idx} className="hover:bg-stone-50 transition-colors group cursor-pointer">
+                {hotList.map((opp) => (
+                  <tr key={opp.id} className="hover:bg-stone-50 transition-colors group cursor-pointer">
                     <td className="py-4">
                       <div className="flex items-center space-x-2">
                         <div className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0"></div>
@@ -213,29 +218,29 @@ export default async function AgencyDashboard() {
             </div>
             <h3 className="font-typewriter text-xl font-bold mb-2">Intelligence Brief</h3>
             <p className="text-stone-400 text-xs leading-relaxed mb-6 font-sans">
-              Real-time system metrics from the scoring and enrichment engines.
+              Real-time metrics from scoring and enrichment engines.
             </p>
 
             <div className="space-y-4">
               <div className="bg-black/40 p-4 rounded-2xl border border-stone-800">
                 <p className="text-stone-500 font-typewriter text-[10px] uppercase tracking-wider mb-1">Match Pipeline</p>
                 <div className="flex items-end space-x-3">
-                  <span className="font-typewriter font-bold text-2xl text-red-400">{hotCount || 0}</span>
+                  <span className="font-typewriter font-bold text-2xl text-red-400">{hotCount}</span>
                   <span className="text-stone-500 text-xs font-bold mb-1">HOT</span>
-                  <span className="font-typewriter font-bold text-xl text-amber-400">{(warmCount || 0).toLocaleString()}</span>
+                  <span className="font-typewriter font-bold text-xl text-amber-400">{warmCount.toLocaleString()}</span>
                   <span className="text-stone-500 text-xs font-bold mb-1">WARM</span>
                 </div>
               </div>
               <div className="bg-black/40 p-4 rounded-2xl border border-stone-800">
                 <p className="text-stone-500 font-typewriter text-[10px] uppercase tracking-wider mb-1">Contractor Pool</p>
                 <div className="flex items-end space-x-2">
-                  <p className="font-typewriter font-bold text-2xl">{(contractorCount || 0).toLocaleString()}</p>
+                  <p className="font-typewriter font-bold text-2xl">{contractorCount.toLocaleString()}</p>
                   <span className="text-stone-400 text-xs font-bold mb-1">Indexed</span>
                 </div>
               </div>
               <div className="bg-black/40 p-4 rounded-2xl border border-stone-800">
                 <p className="text-stone-500 font-typewriter text-[10px] uppercase tracking-wider mb-1">Active Opportunities</p>
-                <p className="font-typewriter font-bold text-2xl">{(opsCount || 0).toLocaleString()}</p>
+                <p className="font-typewriter font-bold text-2xl">{opsCount.toLocaleString()}</p>
               </div>
             </div>
           </div>
@@ -259,8 +264,8 @@ export default async function AgencyDashboard() {
             </Link>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-            {warmList.map((m, idx) => (
-              <Link key={idx} href={`/matches/${m.id}`} className="bg-stone-50 border border-stone-200 rounded-2xl p-4 hover:border-black hover:shadow-md transition-all group">
+            {warmList.map((m) => (
+              <Link key={m.id} href={`/matches/${m.id}`} className="bg-stone-50 border border-stone-200 rounded-2xl p-4 hover:border-black hover:shadow-md transition-all group">
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-mono font-bold text-lg">{m.score_pct}</span>
                   <span className="bg-amber-100 text-amber-700 text-[9px] font-typewriter px-2 py-0.5 rounded uppercase">WARM</span>
@@ -277,7 +282,7 @@ export default async function AgencyDashboard() {
   );
 }
 
-function MetricCard({ title, value, icon: Icon, highlight = false }: { title: string, value: string | number, icon: any, highlight?: boolean }) {
+function MetricCard({ title, value, icon: Icon, highlight = false }: { title: string, value: string | number, icon: React.ComponentType<{ className?: string }>, highlight?: boolean }) {
   return (
     <div className={clsx(
       "p-6 rounded-[32px] flex flex-col justify-between transition-all duration-300",
@@ -296,5 +301,5 @@ function MetricCard({ title, value, icon: Icon, highlight = false }: { title: st
         <h4 className="text-4xl font-black font-typewriter tracking-tighter">{value}</h4>
       </div>
     </div>
-  )
+  );
 }
