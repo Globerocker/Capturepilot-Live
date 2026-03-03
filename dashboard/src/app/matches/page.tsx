@@ -324,24 +324,29 @@ export default function MatchesPage() {
                                     <div className="p-4 border-t border-stone-800 bg-stone-900/50">
                                         <div className="grid grid-cols-2 gap-x-4 gap-y-3">
                                             {[
-                                                { name: "Requirements Gap (Fit)", weight: selectedMatch.score_breakdown?.naics_match || 0.8 },
-                                                { name: "Past Performance Relevance", weight: selectedMatch.score_breakdown?.geo_match || 0.7 },
-                                                { name: "Customer Relationship", weight: 0.6 },
-                                                { name: "Pricing/Cost", weight: 0.85 },
-                                                { name: "Teaming Strategy", weight: 0.9 },
-                                                { name: "Incumbent Advantage", weight: 0.4 },
-                                                { name: "Capture Maturity", weight: 0.75 },
-                                                { name: "Proposal Resources", weight: 0.8 },
-                                                { name: "Risk Profile", weight: 0.95 },
-                                                { name: "Set-aside Eligibility", weight: selectedMatch.score_breakdown?.setaside_match || 1.0 },
-                                            ].map((factor, idx) => (
-                                                <div key={idx} className="flex justify-between items-center text-[10px] xl:text-xs">
-                                                    <span className="text-stone-400 truncate pr-2" title={factor.name}>{idx + 1}. {factor.name}</span>
-                                                    <span className={clsx("font-mono font-bold", factor.weight > 0.7 ? "text-green-400" : factor.weight > 0.4 ? "text-yellow-500" : "text-red-400")}>
-                                                        {Math.round(factor.weight * 10)}<span className="text-stone-600">/10</span>
-                                                    </span>
-                                                </div>
-                                            ))}
+                                                { name: "NAICS Fit", score: selectedMatch.score_breakdown?.naics ?? 0, max: 30 },
+                                                { name: "Geographic", score: selectedMatch.score_breakdown?.geo ?? 0, max: 15 },
+                                                { name: "Capacity", score: selectedMatch.score_breakdown?.capacity ?? 0, max: 20 },
+                                                { name: "Fed. Inactivity", score: selectedMatch.score_breakdown?.inactivity ?? 0, max: 20 },
+                                                { name: "Competition", score: selectedMatch.score_breakdown?.density ?? 0, max: 15 },
+                                                { name: "Notice Type", score: selectedMatch.score_breakdown?.notice_type ?? 0, max: 20 },
+                                                { name: "Past Performance", score: selectedMatch.score_breakdown?.past_performance ?? 0, max: 20 },
+                                                { name: "Incumbent Risk", score: selectedMatch.score_breakdown?.incumbent_risk ?? 0, max: 15 },
+                                            ].map((factor, idx) => {
+                                                const pct = factor.max > 0 ? factor.score / factor.max : 0;
+                                                return (
+                                                    <div key={idx} className="flex justify-between items-center text-[10px] xl:text-xs">
+                                                        <span className="text-stone-400 truncate pr-2" title={factor.name}>{factor.name}</span>
+                                                        <span className={clsx("font-mono font-bold", pct > 0.7 ? "text-green-400" : pct > 0.3 ? "text-yellow-500" : factor.score === 0 ? "text-stone-600" : "text-red-400")}>
+                                                            {factor.score}<span className="text-stone-600">/{factor.max}</span>
+                                                        </span>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                        <div className="mt-3 pt-2 border-t border-stone-800 flex justify-between text-xs font-mono">
+                                            <span className="text-stone-400">Total</span>
+                                            <span className="text-white font-bold">{selectedMatch.score_breakdown?.total ?? Math.round(selectedMatch.score * 140)}/140</span>
                                         </div>
                                     </div>
                                 )}

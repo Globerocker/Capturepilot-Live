@@ -238,16 +238,34 @@ export default function MatchDetailPage() {
                     </p>
 
                     <div className="bg-black/50 border border-stone-700 p-5 rounded-2xl mb-8">
-                        <p className="font-typewriter text-xs text-stone-500 uppercase mb-3 text-center">100-Point Match Math</p>
+                        <p className="font-typewriter text-xs text-stone-500 uppercase mb-3 text-center">Enhanced Match Intelligence</p>
                         <div className="grid grid-cols-2 gap-4 text-sm font-mono text-stone-300 px-4">
-                            <span className="flex justify-between"><span>NAICS:</span> <span>{match.score_breakdown?.naics_fit || 0}/30</span></span>
-                            <span className="flex justify-between"><span>Geo:</span> <span>{match.score_breakdown?.geo_fit || 0}/15</span></span>
-                            <span className="flex justify-between"><span>Capacity:</span> <span>{match.score_breakdown?.capacity || 0}/20</span></span>
-                            <span className="flex justify-between"><span>Inactivity:</span> <span>{match.score_breakdown?.federal_inactivity || 0}/20</span></span>
-                            <span className="flex justify-between items-center col-span-2 border-t border-stone-700 pt-2 mt-2">
-                                <span>Competition Tuning:</span> <span>{match.score_breakdown?.competition_adjustment || 0}/15</span>
-                            </span>
+                            <span className="flex justify-between"><span>NAICS:</span> <span>{match.score_breakdown?.naics ?? match.score_breakdown?.naics_fit ?? 0}/30</span></span>
+                            <span className="flex justify-between"><span>Geo:</span> <span>{match.score_breakdown?.geo ?? match.score_breakdown?.geo_fit ?? 0}/15</span></span>
+                            <span className="flex justify-between"><span>Capacity:</span> <span>{match.score_breakdown?.capacity ?? 0}/20</span></span>
+                            <span className="flex justify-between"><span>Inactivity:</span> <span>{match.score_breakdown?.inactivity ?? match.score_breakdown?.federal_inactivity ?? 0}/20</span></span>
+                            <span className="flex justify-between"><span>Density:</span> <span>{match.score_breakdown?.density ?? match.score_breakdown?.competition_adjustment ?? 0}/15</span></span>
+                            <span className="flex justify-between"><span>Base:</span> <span className="text-stone-400">{match.score_breakdown?.base ?? match.score_breakdown?.total_score ?? 0}/100</span></span>
                         </div>
+                        {(match.score_breakdown?.notice_type > 0 || match.score_breakdown?.past_performance > 0 || match.score_breakdown?.incumbent_risk !== 0) && (
+                            <div className="mt-3 pt-3 border-t border-stone-700">
+                                <p className="font-typewriter text-xs text-stone-500 uppercase mb-2 text-center">Intelligence Bonus</p>
+                                <div className="grid grid-cols-2 gap-4 text-sm font-mono text-stone-300 px-4">
+                                    {match.score_breakdown?.notice_type > 0 && (
+                                        <span className="flex justify-between"><span>Notice Type:</span> <span className="text-emerald-400">+{match.score_breakdown.notice_type}</span></span>
+                                    )}
+                                    {match.score_breakdown?.past_performance > 0 && (
+                                        <span className="flex justify-between"><span>Past Perf:</span> <span className="text-emerald-400">+{match.score_breakdown.past_performance}</span></span>
+                                    )}
+                                    {match.score_breakdown?.incumbent_risk < 0 && (
+                                        <span className="flex justify-between"><span>Incumbent:</span> <span className="text-amber-400">{match.score_breakdown.incumbent_risk}</span></span>
+                                    )}
+                                    <span className="flex justify-between col-span-2 border-t border-stone-700 pt-2 mt-1">
+                                        <span>Final:</span> <span className="text-white font-bold">{match.score_breakdown?.total ?? 0}/140</span>
+                                    </span>
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {drafts.length > 0 ? (

@@ -30,12 +30,15 @@ export async function POST(
     }
 
     try {
-        // Determine path relative to the dashboard directory (assuming tools is sibling)
-        const scriptPath = path.join(process.cwd(), "..", "tools", scriptName);
+        // Determine path relative to the dashboard directory (tools is sibling)
+        const projectRoot = path.join(process.cwd(), "..");
+        const scriptPath = path.join(projectRoot, "tools", scriptName);
 
-        // Execute python script. Note: Assumes python environment is active or global python has dependencies.
-        // In a production setup, explicit python path (e.g., ../venv/bin/python) should be used.
-        const { stdout, stderr } = await execAsync(`python "${scriptPath}"`);
+        // Execute python script from the project root so .env loading works
+        const { stdout, stderr } = await execAsync(`python3 "${scriptPath}"`, {
+            cwd: projectRoot,
+            timeout: 300000, // 5 minute timeout
+        });
 
         return NextResponse.json({
             success: true,

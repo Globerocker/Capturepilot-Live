@@ -31,7 +31,7 @@ export default function DashboardActions() {
             </button>
 
             <button
-                onClick={() => handleAction("/api/cron/score_matches", "Score Matches")}
+                onClick={() => handleAction("/api/engine/score", "Score Matches")}
                 disabled={loading === "Score Matches"}
                 className="flex items-center space-x-2 bg-stone-100 text-black px-4 py-2.5 rounded-full border border-stone-300 hover:bg-stone-200 transition-all text-sm font-bold disabled:opacity-50"
             >
