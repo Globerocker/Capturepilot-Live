@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
-import { Search, Filter, Loader2, LayoutGrid, List, Download, X, Building, Target, FileText, Link as LinkIcon, Sparkles, ChevronLeft, ChevronRight, Flame, Users } from "lucide-react";
+import { Search, Filter, Loader2, LayoutGrid, List, Download, X, Building, Target, FileText, Link as LinkIcon, Sparkles, ChevronLeft, ChevronRight, Flame, Users, ChevronUp, ChevronDown, Sprout, Leaf, Sun, Award } from "lucide-react";
 import clsx from "clsx";
 
 const supabase = createClient(
@@ -43,6 +43,8 @@ interface Opportunity {
 
 interface MatchedContractor {
     id: string;
+    contractor_id: string;
+    opportunity_id: string;
     score: number;
     classification: string;
     contractors: {
@@ -71,8 +73,35 @@ export default function OpportunitiesPage() {
     // Quick Filters
     const [quickFilter, setQuickFilter] = useState<"ALL" | "HAS_MATCHES" | "SOURCES_SOUGHT" | "ENRICHED">("ALL");
 
-    // Sort
-    const [sortBy, setSortBy] = useState<"posted_desc" | "deadline_asc" | "data_rich">("posted_desc");
+    // Sort — column header click-to-sort
+    const [sortCol, setSortCol] = useState<string>("posted_date");
+    const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
+    const handleColumnSort = (col: string) => {
+        if (sortCol === col) {
+            setSortDir(d => d === "asc" ? "desc" : "asc");
+        } else {
+            setSortCol(col);
+            setSortDir(col === "posted_date" ? "desc" : "asc");
+        }
+        setPage(1);
+    };
+
+    const SortIndicator = ({ col }: { col: string }) => {
+        if (sortCol !== col) return null;
+        return sortDir === "asc" ? <ChevronUp className="w-3 h-3 inline ml-0.5" /> : <ChevronDown className="w-3 h-3 inline ml-0.5" />;
+    };
+
+    // Lifecycle stage helper
+    const getLifecycleStage = (noticeType?: string) => {
+        if (!noticeType) return null;
+        const nt = noticeType.toLowerCase();
+        if (nt.includes("sources sought") || nt.includes("rfi")) return { label: "Seed Planted", color: "bg-emerald-100 text-emerald-700 border-emerald-200", desc: "6-18 months before award", icon: Sprout };
+        if (nt.includes("presolicitation")) return { label: "Growing", color: "bg-blue-100 text-blue-700 border-blue-200", desc: "3-6 months before award", icon: Leaf };
+        if (nt.includes("solicitation") || nt.includes("combined") || nt.includes("synopsis")) return { label: "In Bloom", color: "bg-amber-100 text-amber-700 border-amber-200", desc: "Active bidding window", icon: Sun };
+        if (nt.includes("award")) return { label: "Harvested", color: "bg-stone-800 text-stone-100 border-stone-700", desc: "Contract awarded", icon: Award };
+        return null;
+    };
 
     // Detail Panel State
     const [selectedOpportunity, setSelectedOpportunity] = useState<Opportunity | null>(null);
@@ -139,13 +168,12 @@ export default function OpportunitiesPage() {
                 query = query.ilike("set_aside_code", `%${filterSetAside}%`);
             }
 
-            // Sorting
-            if (sortBy === "posted_desc") {
-                query = query.order('posted_date', { ascending: false });
-            } else if (sortBy === "deadline_asc") {
-                query = query.order('response_deadline', { ascending: true, nullsFirst: false });
+            // Sorting via column headers
+            const dbSortable = ["posted_date", "response_deadline", "notice_type", "place_of_performance_state", "naics_code"];
+            if (dbSortable.includes(sortCol)) {
+                query = query.order(sortCol, { ascending: sortDir === "asc", nullsFirst: false });
             } else {
-                query = query.order('posted_date', { ascending: false }); // data_rich sorted client-side
+                query = query.order("posted_date", { ascending: false }); // data_rich sorted client-side
             }
 
             const from = (page - 1) * pageSize;
@@ -162,8 +190,8 @@ export default function OpportunitiesPage() {
                 results = results.map(op => ({ ...op, _dataScore: calcDataScore(op) }));
 
                 // Client-side sort by data richness
-                if (sortBy === "data_rich") {
-                    results.sort((a, b) => (b._dataScore || 0) - (a._dataScore || 0));
+                if (sortCol === "data_rich") {
+                    results.sort((a, b) => sortDir === "desc" ? (b._dataScore || 0) - (a._dataScore || 0) : (a._dataScore || 0) - (b._dataScore || 0));
                 }
 
                 // For HAS_MATCHES filter, we need to check which have matches
@@ -187,7 +215,7 @@ export default function OpportunitiesPage() {
         } finally {
             setLoading(false);
         }
-    }, [page, activeSearch, quickFilter, pageSize, filterAgency, filterType, filterNaics, filterState, filterSetAside, sortBy]);
+    }, [page, activeSearch, quickFilter, pageSize, filterAgency, filterType, filterNaics, filterState, filterSetAside, sortCol, sortDir]);
 
     useEffect(() => {
         fetchOpportunities();
@@ -203,7 +231,7 @@ export default function OpportunitiesPage() {
             setLoadingContractors(true);
             const { data } = await supabase
                 .from("matches")
-                .select("id, score, classification, contractors(company_name, uei, city, state, certifications)")
+                .select("id, contractor_id, opportunity_id, score, classification, contractors(company_name, uei, city, state, certifications)")
                 .eq("opportunity_id", selectedOpportunity!.id)
                 .order("score", { ascending: false })
                 .limit(10);
@@ -319,17 +347,8 @@ export default function OpportunitiesPage() {
                             ))}
                         </div>
 
-                        <div className="flex items-center gap-3">
-                            <select
-                                title="Sort By"
-                                value={sortBy}
-                                onChange={(e) => { setSortBy(e.target.value as typeof sortBy); setPage(1); }}
-                                className="bg-white border border-stone-200 rounded-full px-3 py-2 text-xs font-bold font-typewriter outline-none focus:ring-2 focus:ring-black"
-                            >
-                                <option value="posted_desc">Newest First</option>
-                                <option value="deadline_asc">Deadline Soonest</option>
-                                <option value="data_rich">Most Data (Richness)</option>
-                            </select>
+                        <div className="flex items-center gap-3 text-xs text-stone-500 font-typewriter">
+                            <span>Sort by column headers</span>
                         </div>
                     </section>
 
@@ -444,14 +463,14 @@ export default function OpportunitiesPage() {
                                     <table className="w-full text-left border-collapse">
                                         <thead>
                                             <tr className="bg-stone-50 border-b border-stone-200 text-stone-500 text-[10px] font-typewriter uppercase tracking-wider">
-                                                <th className="py-4 px-5 font-bold">Notice ID</th>
+                                                <th className="py-4 px-5 font-bold cursor-pointer hover:text-black select-none" onClick={() => handleColumnSort("posted_date")}>Posted <SortIndicator col="posted_date" /></th>
                                                 <th className="py-4 px-5 font-bold">Title / Agency</th>
-                                                <th className="py-4 px-5 font-bold">Type</th>
-                                                <th className="py-4 px-5 font-bold">NAICS</th>
-                                                <th className="py-4 px-5 font-bold hidden lg:table-cell">State</th>
+                                                <th className="py-4 px-5 font-bold cursor-pointer hover:text-black select-none" onClick={() => handleColumnSort("notice_type")}>Type <SortIndicator col="notice_type" /></th>
+                                                <th className="py-4 px-5 font-bold cursor-pointer hover:text-black select-none" onClick={() => handleColumnSort("naics_code")}>NAICS <SortIndicator col="naics_code" /></th>
+                                                <th className="py-4 px-5 font-bold cursor-pointer hover:text-black select-none" onClick={() => handleColumnSort("place_of_performance_state")}>State <SortIndicator col="place_of_performance_state" /></th>
                                                 <th className="py-4 px-5 font-bold hidden xl:table-cell">Value</th>
-                                                <th className="py-4 px-5 font-bold">Deadline</th>
-                                                <th className="py-4 px-5 font-bold">Data</th>
+                                                <th className="py-4 px-5 font-bold cursor-pointer hover:text-black select-none" onClick={() => handleColumnSort("response_deadline")}>Deadline <SortIndicator col="response_deadline" /></th>
+                                                <th className="py-4 px-5 font-bold cursor-pointer hover:text-black select-none" onClick={() => handleColumnSort("data_rich")}>Data <SortIndicator col="data_rich" /></th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-stone-100 text-sm">
@@ -461,7 +480,7 @@ export default function OpportunitiesPage() {
                                                 const dataScore = op._dataScore || 0;
                                                 return (
                                                     <tr key={op.id} onClick={() => setSelectedOpportunity(op)} onDoubleClick={() => router.push(`/opportunities/${op.id}`)} className={clsx("transition-colors group cursor-pointer", selectedOpportunity?.id === op.id ? "bg-stone-100" : "hover:bg-stone-50")}>
-                                                        <td className="py-3.5 px-5 font-mono font-semibold text-xs">{op.notice_id?.slice(0, 12)}...</td>
+                                                        <td className="py-3.5 px-5 font-mono text-xs text-stone-500">{op.posted_date ? new Date(op.posted_date).toLocaleDateString() : "---"}</td>
                                                         <td className="py-3.5 px-5">
                                                             <p className="font-bold text-black line-clamp-1 max-w-[200px] xl:max-w-md group-hover:text-stone-600">{op.title}</p>
                                                             <p className="text-stone-500 text-xs line-clamp-1 mt-0.5">{agencyName}</p>
@@ -477,7 +496,7 @@ export default function OpportunitiesPage() {
                                                             </span>
                                                         </td>
                                                         <td className="py-3.5 px-5 font-mono font-bold text-xs">{op.naics_code || "---"}</td>
-                                                        <td className="py-3.5 px-5 font-mono text-xs hidden lg:table-cell">{op.place_of_performance_state || "---"}</td>
+                                                        <td className="py-3.5 px-5 font-mono text-xs">{op.place_of_performance_state || "---"}</td>
                                                         <td className="py-3.5 px-5 font-mono font-bold text-xs hidden xl:table-cell">
                                                             {formatCurrency(op.award_amount) || <span className="text-stone-300">---</span>}
                                                         </td>
@@ -607,7 +626,7 @@ export default function OpportunitiesPage() {
                                 <div className="w-10 h-10 rounded-full bg-stone-100 flex items-center justify-center">
                                     <Building className="w-5 h-5 text-stone-600" />
                                 </div>
-                                <div>
+                                <div className="flex-1">
                                     <p className="font-bold text-stone-800 text-sm leading-tight">
                                         {selectedOpportunity.agency || selectedOpportunity.agencies?.department || "Unknown Department"}
                                     </p>
@@ -615,11 +634,36 @@ export default function OpportunitiesPage() {
                                         <p className="text-xs text-stone-400">{selectedOpportunity.agencies.sub_tier}</p>
                                     )}
                                 </div>
+                                {selectedOpportunity.place_of_performance_state && (
+                                    <span className="font-mono font-bold text-xs bg-stone-100 border border-stone-200 px-3 py-1.5 rounded-full">{selectedOpportunity.place_of_performance_state}</span>
+                                )}
                             </div>
                         </div>
 
+                        {/* Lifecycle Stage Badge */}
+                        {(() => {
+                            const stage = getLifecycleStage(selectedOpportunity.notice_type || selectedOpportunity.opportunity_types?.name);
+                            if (!stage) return null;
+                            const Icon = stage.icon;
+                            return (
+                                <div className={clsx("flex items-center space-x-3 p-4 rounded-xl border", stage.color)}>
+                                    <Icon className="w-5 h-5 flex-shrink-0" />
+                                    <div>
+                                        <p className="font-bold text-sm">{stage.label}</p>
+                                        <p className="text-xs opacity-75">{stage.desc}</p>
+                                    </div>
+                                </div>
+                            );
+                        })()}
+
                         {/* Metrics Grid */}
                         <div className="grid grid-cols-2 gap-3">
+                            {selectedOpportunity.posted_date && (
+                                <div className="bg-stone-50 border border-stone-200 p-3 rounded-xl">
+                                    <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1">Posted</p>
+                                    <p className="font-bold text-sm">{new Date(selectedOpportunity.posted_date).toLocaleDateString()}</p>
+                                </div>
+                            )}
                             <div className="bg-stone-50 border border-stone-200 p-3 rounded-xl">
                                 <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1">NAICS</p>
                                 <p className="font-mono font-bold text-sm">{selectedOpportunity.naics_code || "---"}</p>
@@ -679,7 +723,7 @@ export default function OpportunitiesPage() {
                             ) : (
                                 <div className="space-y-2">
                                     {matchedContractors.map((mc) => (
-                                        <div key={mc.id} className="bg-stone-50 p-3 rounded-xl border border-stone-100 flex justify-between items-center hover:border-stone-300 transition-colors cursor-pointer" onClick={() => router.push(`/matches/${mc.id}`)}>
+                                        <div key={mc.id} className="bg-stone-50 p-3 rounded-xl border border-stone-100 flex justify-between items-center hover:border-stone-300 transition-colors cursor-pointer" onClick={() => router.push(`/matches/${mc.opportunity_id}/${mc.contractor_id}`)}>
                                             <div>
                                                 <p className="font-bold text-sm text-stone-900">{mc.contractors?.company_name}</p>
                                                 <div className="flex items-center space-x-2 mt-0.5">

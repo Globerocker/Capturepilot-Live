@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { ArrowLeft, Building, Target, Link as LinkIcon, MapPin, Phone, Award, ShieldCheck, DollarSign, Users, Truck, Briefcase, Activity, ExternalLink, Edit2, Save, X, Loader2 } from "lucide-react";
+import { ArrowLeft, Building, Target, Link as LinkIcon, MapPin, Phone, Award, ShieldCheck, DollarSign, Users, Truck, Briefcase, Activity, ExternalLink, Edit2, Save, X, Loader2, Flame } from "lucide-react";
 import Link from "next/link";
 import clsx from "clsx";
 import { useRouter } from "next/navigation";
@@ -11,6 +11,95 @@ const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
+
+interface MatchRecord {
+    id: string;
+    opportunity_id: string;
+    contractor_id: string;
+    score: number;
+    classification: string;
+    opportunities: { title?: string; agency?: string; naics_code?: string; notice_type?: string; response_deadline?: string } | null;
+}
+
+function MatchHistoryPanel({ contractorId }: { contractorId: string }) {
+    const [matches, setMatches] = useState<MatchRecord[]>([]);
+    const [loading, setLoading] = useState(true);
+    const router = useRouter();
+
+    useEffect(() => {
+        async function fetchMatches() {
+            setLoading(true);
+            const { data } = await supabase
+                .from("matches")
+                .select("id, opportunity_id, contractor_id, score, classification, opportunities(title, agency, naics_code, notice_type, response_deadline)")
+                .eq("contractor_id", contractorId)
+                .order("score", { ascending: false })
+                .limit(10);
+            setMatches((data || []) as unknown as MatchRecord[]);
+            setLoading(false);
+        }
+        fetchMatches();
+    }, [contractorId]);
+
+    if (loading) return (
+        <div className="bg-white rounded-[32px] border border-stone-200 shadow-sm p-8">
+            <h2 className="font-typewriter text-lg font-bold mb-4 flex items-center">
+                <Flame className="w-5 h-5 mr-3 text-stone-400" /> Match History
+            </h2>
+            <div className="flex justify-center py-6"><Loader2 className="w-6 h-6 animate-spin text-stone-400" /></div>
+        </div>
+    );
+
+    return (
+        <div className="bg-white rounded-[32px] border border-stone-200 shadow-sm p-8">
+            <h2 className="font-typewriter text-lg font-bold mb-6 flex items-center">
+                <Flame className="w-5 h-5 mr-3 text-stone-400" /> Match History
+                {matches.length > 0 && (
+                    <span className="ml-3 text-xs font-sans font-medium bg-stone-100 px-2.5 py-0.5 rounded-full text-stone-500 border border-stone-200">{matches.length}</span>
+                )}
+            </h2>
+            {matches.length === 0 ? (
+                <p className="text-stone-400 text-sm font-typewriter">No matches found. Run the Scoring Engine to generate matches.</p>
+            ) : (
+                <div className="space-y-3">
+                    {matches.map((m) => {
+                        const opp = m.opportunities || {};
+                        return (
+                            <div
+                                key={m.id}
+                                className="bg-stone-50 p-4 rounded-xl border border-stone-100 hover:border-stone-300 transition-colors cursor-pointer flex justify-between items-start"
+                                onClick={() => router.push(`/matches/${m.opportunity_id}/${m.contractor_id}`)}
+                            >
+                                <div className="flex-1 min-w-0 mr-3">
+                                    <p className="font-bold text-sm text-stone-900 line-clamp-1">{opp.title || "Unknown Opportunity"}</p>
+                                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                        <span className="text-xs text-stone-500">{opp.agency || "---"}</span>
+                                        {opp.naics_code && <span className="font-mono text-[10px] bg-stone-100 border border-stone-200 px-1.5 py-0.5 rounded">{opp.naics_code}</span>}
+                                        {opp.notice_type && (
+                                            <span className={clsx(
+                                                "font-typewriter text-[9px] px-1.5 py-0.5 rounded border uppercase",
+                                                opp.notice_type === "Sources Sought" ? "bg-emerald-100 text-emerald-700 border-emerald-200" :
+                                                opp.notice_type === "Presolicitation" ? "bg-blue-100 text-blue-700 border-blue-200" :
+                                                "bg-stone-100 text-stone-600 border-stone-200"
+                                            )}>{opp.notice_type}</span>
+                                        )}
+                                    </div>
+                                    {opp.response_deadline && (
+                                        <p className="text-[10px] text-stone-400 mt-1">Deadline: {new Date(opp.response_deadline).toLocaleDateString()}</p>
+                                    )}
+                                </div>
+                                <div className="flex items-center space-x-2 flex-shrink-0">
+                                    <span className={clsx("w-2 h-2 rounded-full", m.classification === "HOT" ? "bg-red-500" : m.classification === "WARM" ? "bg-amber-500" : "bg-stone-300")} />
+                                    <span className="font-mono font-bold text-sm">{Math.round(m.score * 100)}</span>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+        </div>
+    );
+}
 
 export default function ContractorDetailClient({ initialData }: { initialData: any }) {
     const router = useRouter();
@@ -316,6 +405,9 @@ export default function ContractorDetailClient({ initialData }: { initialData: a
                         </div>
 
                     </div>
+
+                    {/* Match History */}
+                    <MatchHistoryPanel contractorId={contractor.id} />
                 </div>
 
                 {/* Right Column */}

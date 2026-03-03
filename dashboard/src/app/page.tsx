@@ -14,6 +14,8 @@ const supabase = createClient(
 
 interface HotMatch {
   id: string;
+  opportunity_id: string;
+  contractor_id: string;
   notice_id: string;
   title: string;
   agency: string;
@@ -26,6 +28,8 @@ interface HotMatch {
 
 interface WarmMatch {
   id: string;
+  opportunity_id: string;
+  contractor_id: string;
   title: string;
   naics: string;
   score_pct: number;
@@ -84,6 +88,8 @@ export default function AgencyDashboard() {
         const con = conMap.get(m.contractor_id) as Record<string, string> | undefined;
         return {
           id: m.id,
+          opportunity_id: m.opportunity_id,
+          contractor_id: m.contractor_id,
           notice_id: opp?.notice_id || "UNK",
           title: opp?.title || "Unknown",
           agency: opp?.agency || "Unknown Agency",
@@ -101,6 +107,8 @@ export default function AgencyDashboard() {
         const con = conMap.get(m.contractor_id) as Record<string, string> | undefined;
         return {
           id: m.id,
+          opportunity_id: m.opportunity_id,
+          contractor_id: m.contractor_id,
           title: opp?.title || "Unknown",
           naics: opp?.naics_code || "---",
           score_pct: Math.round(m.score * 100),
@@ -137,12 +145,12 @@ export default function AgencyDashboard() {
         <DashboardActions />
       </header>
 
-      {/* KPI Cards */}
+      {/* KPI Cards — All clickable */}
       <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <MetricCard title="Active Opportunities" value={opsCount.toLocaleString()} icon={Activity} />
-        <MetricCard title="HOT Matches" value={hotCount} icon={Flame} highlight />
-        <MetricCard title="WARM Matches" value={warmCount.toLocaleString()} icon={Target} />
-        <MetricCard title="Contractor Pool" value={contractorCount.toLocaleString()} icon={Users} />
+        <MetricCard title="Active Opportunities" value={opsCount.toLocaleString()} icon={Activity} href="/opportunities" />
+        <MetricCard title="HOT Matches" value={hotCount} icon={Flame} highlight href="/matches?class=HOT" />
+        <MetricCard title="WARM Matches" value={warmCount.toLocaleString()} icon={Target} href="/matches?class=WARM" />
+        <MetricCard title="Contractor Pool" value={contractorCount.toLocaleString()} icon={Users} href="/contractors" />
       </section>
 
       {/* Two Column Layout */}
@@ -155,7 +163,7 @@ export default function AgencyDashboard() {
               <Flame className="w-5 h-5 mr-2 text-red-500" /> HOT Matches
               <span className="ml-3 text-sm font-normal text-stone-400">Top scoring pairs</span>
             </h3>
-            <Link href="/matches" className="text-xs font-typewriter font-bold bg-stone-100 border border-stone-200 px-4 py-2 rounded-full hover:bg-stone-200 transition-colors flex items-center">
+            <Link href="/matches?class=HOT" className="text-xs font-typewriter font-bold bg-stone-100 border border-stone-200 px-4 py-2 rounded-full hover:bg-stone-200 transition-colors flex items-center">
               View All <ArrowRight className="w-3 h-3 ml-1" />
             </Link>
           </div>
@@ -184,7 +192,7 @@ export default function AgencyDashboard() {
                       </div>
                     </td>
                     <td className="py-4 max-w-[250px]">
-                      <Link href={`/matches/${opp.id}`} className="hover:underline">
+                      <Link href={`/matches/${opp.opportunity_id}/${opp.contractor_id}`} className="hover:underline">
                         <p className="font-bold text-black line-clamp-1 text-sm">{opp.title}</p>
                         <p className="text-stone-500 text-xs line-clamp-1">{opp.agency}</p>
                       </Link>
@@ -222,7 +230,7 @@ export default function AgencyDashboard() {
             </p>
 
             <div className="space-y-4">
-              <div className="bg-black/40 p-4 rounded-2xl border border-stone-800">
+              <Link href="/matches" className="bg-black/40 p-4 rounded-2xl border border-stone-800 block hover:border-stone-600 transition-colors">
                 <p className="text-stone-500 font-typewriter text-[10px] uppercase tracking-wider mb-1">Match Pipeline</p>
                 <div className="flex items-end space-x-3">
                   <span className="font-typewriter font-bold text-2xl text-red-400">{hotCount}</span>
@@ -230,18 +238,18 @@ export default function AgencyDashboard() {
                   <span className="font-typewriter font-bold text-xl text-amber-400">{warmCount.toLocaleString()}</span>
                   <span className="text-stone-500 text-xs font-bold mb-1">WARM</span>
                 </div>
-              </div>
-              <div className="bg-black/40 p-4 rounded-2xl border border-stone-800">
+              </Link>
+              <Link href="/contractors" className="bg-black/40 p-4 rounded-2xl border border-stone-800 block hover:border-stone-600 transition-colors">
                 <p className="text-stone-500 font-typewriter text-[10px] uppercase tracking-wider mb-1">Contractor Pool</p>
                 <div className="flex items-end space-x-2">
                   <p className="font-typewriter font-bold text-2xl">{contractorCount.toLocaleString()}</p>
                   <span className="text-stone-400 text-xs font-bold mb-1">Indexed</span>
                 </div>
-              </div>
-              <div className="bg-black/40 p-4 rounded-2xl border border-stone-800">
+              </Link>
+              <Link href="/opportunities" className="bg-black/40 p-4 rounded-2xl border border-stone-800 block hover:border-stone-600 transition-colors">
                 <p className="text-stone-500 font-typewriter text-[10px] uppercase tracking-wider mb-1">Active Opportunities</p>
                 <p className="font-typewriter font-bold text-2xl">{opsCount.toLocaleString()}</p>
-              </div>
+              </Link>
             </div>
           </div>
 
@@ -259,13 +267,13 @@ export default function AgencyDashboard() {
             <h3 className="font-typewriter font-bold text-lg flex items-center">
               <Target className="w-5 h-5 mr-2 text-amber-500" /> Top WARM Matches
             </h3>
-            <Link href="/matches" className="text-xs font-typewriter font-bold text-stone-500 hover:text-black transition-colors flex items-center">
+            <Link href="/matches?class=WARM" className="text-xs font-typewriter font-bold text-stone-500 hover:text-black transition-colors flex items-center">
               View All <ArrowRight className="w-3 h-3 ml-1" />
             </Link>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             {warmList.map((m) => (
-              <Link key={m.id} href={`/matches/${m.id}`} className="bg-stone-50 border border-stone-200 rounded-2xl p-4 hover:border-black hover:shadow-md transition-all group">
+              <Link key={m.id} href={`/matches/${m.opportunity_id}/${m.contractor_id}`} className="bg-stone-50 border border-stone-200 rounded-2xl p-4 hover:border-black hover:shadow-md transition-all group">
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-mono font-bold text-lg">{m.score_pct}</span>
                   <span className="bg-amber-100 text-amber-700 text-[9px] font-typewriter px-2 py-0.5 rounded uppercase">WARM</span>
@@ -282,11 +290,12 @@ export default function AgencyDashboard() {
   );
 }
 
-function MetricCard({ title, value, icon: Icon, highlight = false }: { title: string, value: string | number, icon: React.ComponentType<{ className?: string }>, highlight?: boolean }) {
-  return (
+function MetricCard({ title, value, icon: Icon, highlight = false, href }: { title: string, value: string | number, icon: React.ComponentType<{ className?: string }>, highlight?: boolean, href?: string }) {
+  const content = (
     <div className={clsx(
       "p-6 rounded-[32px] flex flex-col justify-between transition-all duration-300",
-      highlight ? "bg-white shadow-md border-2 border-black" : "bg-white border border-stone-200 shadow-sm"
+      highlight ? "bg-white shadow-md border-2 border-black" : "bg-white border border-stone-200 shadow-sm",
+      href && "cursor-pointer hover:shadow-md hover:border-black"
     )}>
       <div className="flex justify-between items-start mb-4">
         <p className="text-sm font-medium text-stone-500 font-sans tracking-tight">{title}</p>
@@ -302,4 +311,9 @@ function MetricCard({ title, value, icon: Icon, highlight = false }: { title: st
       </div>
     </div>
   );
+
+  if (href) {
+    return <Link href={href}>{content}</Link>;
+  }
+  return content;
 }

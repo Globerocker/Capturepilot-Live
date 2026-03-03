@@ -1,12 +1,20 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState, useCallback, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 import { Loader2, ArrowRight, X, Building, CheckCircle2, PenTool, LayoutGrid, List, Briefcase, Sparkles, AlertCircle, ChevronDown, ChevronUp, Search, ChevronLeft, ChevronRight, Flame, Target } from "lucide-react";
 import clsx from "clsx";
 
 export const dynamic = 'force-dynamic';
+
+export default function MatchesPageWrapper() {
+    return (
+        <Suspense fallback={<div className="flex justify-center p-12"><Loader2 className="w-8 h-8 animate-spin text-stone-400" /></div>}>
+            <MatchesPage />
+        </Suspense>
+    );
+}
 
 interface MatchExt {
     id: string;
@@ -44,14 +52,18 @@ const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ5eGdqemVob2lqanZjenFraHdyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIwNDg0NTUsImV4cCI6MjA4NzYyNDQ1NX0.q0HivHixjE-A2MuQZlmlZOO2eLpQEm8c6XhQQQKaJsY"
 );
 
-export default function MatchesPage() {
+function MatchesPage() {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const [matches, setMatches] = useState<MatchExt[]>([]);
     const [totalCount, setTotalCount] = useState(0);
     const [loading, setLoading] = useState(true);
 
+    // Read initial class filter from URL query param
+    const initialClass = (searchParams.get("class")?.toUpperCase() || "ALL") as "ALL" | "HOT" | "WARM" | "COLD";
+
     // Filter & Search
-    const [classFilter, setClassFilter] = useState<"ALL" | "HOT" | "WARM" | "COLD">("ALL");
+    const [classFilter, setClassFilter] = useState<"ALL" | "HOT" | "WARM" | "COLD">(initialClass);
     const [searchInput, setSearchInput] = useState("");
     const [activeSearch, setActiveSearch] = useState("");
     const [sortBy, setSortBy] = useState<"score_desc" | "score_asc" | "deadline">("score_desc");
@@ -313,7 +325,7 @@ export default function MatchesPage() {
                                             <tr
                                                 key={m.id}
                                                 onClick={() => { setSelectedMatch(m); setDrafts([]); setShowBreakdown(false); }}
-                                                onDoubleClick={() => router.push(`/matches/${m.id}`)}
+                                                onDoubleClick={() => router.push(`/matches/${m.opportunity_id}/${m.contractor_id}`)}
                                                 className={clsx(
                                                     "transition-colors group cursor-pointer",
                                                     selectedMatch?.id === m.id ? "bg-stone-50" : "hover:bg-stone-50"

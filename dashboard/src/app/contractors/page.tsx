@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
-import { Loader2, Users, Building, ShieldCheck, X, MapPin, Mail, DollarSign, Award, Target, Phone, Link as LinkIcon, Search, ChevronLeft, ChevronRight, Sparkles, Star, ExternalLink } from "lucide-react";
+import { Loader2, Users, Building, ShieldCheck, X, MapPin, Mail, DollarSign, Award, Target, Phone, Link as LinkIcon, Search, ChevronLeft, ChevronRight, Sparkles, Star, ExternalLink, LayoutGrid, List, ChevronUp, ChevronDown } from "lucide-react";
 import clsx from "clsx";
 
 export const dynamic = 'force-dynamic';
@@ -152,12 +152,31 @@ export default function ContractorsPage() {
     const pageSize = 50;
 
     const [selectedContractor, setSelectedContractor] = useState<Contractor | null>(null);
+    const [viewMode, setViewMode] = useState<"grid" | "list">("list");
+
+    // Column sort
+    const [sortCol, setSortCol] = useState<string>("company_name");
+    const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+
+    const handleColumnSort = (col: string) => {
+        if (sortCol === col) {
+            setSortDir(d => d === "asc" ? "desc" : "asc");
+        } else {
+            setSortCol(col);
+            setSortDir(col === "company_name" ? "asc" : "desc");
+        }
+        setPage(1);
+    };
+
+    const SortIndicator = ({ col }: { col: string }) => {
+        if (sortCol !== col) return null;
+        return sortDir === "asc" ? <ChevronUp className="w-3 h-3 inline ml-0.5" /> : <ChevronDown className="w-3 h-3 inline ml-0.5" />;
+    };
 
     // Advanced Filters
     const [filterState, setFilterState] = useState("");
     const [filterCert, setFilterCert] = useState("");
     const [filterNaics, setFilterNaics] = useState("");
-    const [sortBy, setSortBy] = useState<"name_asc" | "awards_desc" | "revenue_desc">("name_asc");
 
     const fetchContractors = useCallback(async () => {
         setLoading(true);
@@ -199,14 +218,16 @@ export default function ContractorsPage() {
             const from = (page - 1) * pageSize;
             const to = from + pageSize - 1;
 
-            // Sort
-            if (sortBy === "awards_desc") {
-                query = query.order('federal_awards_count', { ascending: false, nullsFirst: false });
-            } else if (sortBy === "revenue_desc") {
-                query = query.order('total_award_volume', { ascending: false, nullsFirst: false });
-            } else {
-                query = query.order('company_name', { ascending: true });
-            }
+            // Sort via column headers
+            const sortMap: Record<string, string> = {
+                company_name: "company_name",
+                state: "state",
+                federal_awards_count: "federal_awards_count",
+                revenue: "revenue",
+                employee_count: "employee_count",
+            };
+            const dbCol = sortMap[sortCol] || "company_name";
+            query = query.order(dbCol, { ascending: sortDir === "asc", nullsFirst: false });
 
             const { data, count, error } = await query
                 .range(from, to);
@@ -222,7 +243,7 @@ export default function ContractorsPage() {
         } finally {
             setLoading(false);
         }
-    }, [page, activeSearch, activeTab, pageSize, filterState, filterCert, filterNaics, sortBy]);
+    }, [page, activeSearch, activeTab, pageSize, filterState, filterCert, filterNaics, sortCol, sortDir]);
 
     useEffect(() => {
         fetchContractors();
@@ -316,16 +337,14 @@ export default function ContractorsPage() {
                             onChange={(e) => { setFilterNaics(e.target.value); setPage(1); }}
                         />
 
-                        <select
-                            title="Sort By"
-                            value={sortBy}
-                            onChange={(e) => { setSortBy(e.target.value as typeof sortBy); setPage(1); }}
-                            className="bg-white border border-stone-200 rounded-full px-4 py-2 text-xs font-bold font-typewriter outline-none focus:ring-2 focus:ring-black transition-all"
-                        >
-                            <option value="name_asc">Name A-Z</option>
-                            <option value="awards_desc">Most Awards</option>
-                            <option value="revenue_desc">Highest Revenue</option>
-                        </select>
+                        <div className="flex items-center bg-stone-100 p-1 rounded-full border border-stone-200">
+                            <button type="button" title="Grid View" onClick={() => setViewMode("grid")} className={clsx("p-2 rounded-full transition-all", viewMode === "grid" ? "bg-white shadow-sm text-black" : "text-stone-500 hover:text-black")}>
+                                <LayoutGrid className="w-4 h-4" />
+                            </button>
+                            <button type="button" title="List View" onClick={() => setViewMode("list")} className={clsx("p-2 rounded-full transition-all", viewMode === "list" ? "bg-white shadow-sm text-black" : "text-stone-500 hover:text-black")}>
+                                <List className="w-4 h-4" />
+                            </button>
+                        </div>
 
                         <div className="bg-white p-1 rounded-full border border-stone-200 shadow-sm flex items-center focus-within:ring-2 focus-within:ring-black transition-all w-full md:flex-1 md:min-w-[250px]">
                             <Search className="w-4 h-4 text-stone-400 ml-4 mr-2" />
@@ -354,6 +373,55 @@ export default function ContractorsPage() {
                             {contractors.length === 0 ? (
                                 <div className="bg-stone-50 border border-stone-200 border-dashed rounded-[32px] p-12 text-center mt-auto mb-auto">
                                     <p className="font-typewriter text-stone-500">No contractors found matching criteria.</p>
+                                </div>
+                            ) : viewMode === "list" ? (
+                                <div className="bg-white rounded-[32px] border border-stone-200 shadow-sm overflow-hidden mb-6 flex-shrink-0">
+                                    <table className="w-full text-left border-collapse">
+                                        <thead>
+                                            <tr className="bg-stone-50 border-b border-stone-200 text-stone-500 text-[10px] font-typewriter uppercase tracking-wider">
+                                                <th className="py-4 px-5 font-bold cursor-pointer hover:text-black select-none" onClick={() => handleColumnSort("company_name")}>Company <SortIndicator col="company_name" /></th>
+                                                <th className="py-4 px-5 font-bold cursor-pointer hover:text-black select-none" onClick={() => handleColumnSort("state")}>Location <SortIndicator col="state" /></th>
+                                                <th className="py-4 px-5 font-bold">NAICS</th>
+                                                <th className="py-4 px-5 font-bold">Certs</th>
+                                                <th className="py-4 px-5 font-bold cursor-pointer hover:text-black select-none" onClick={() => handleColumnSort("federal_awards_count")}>Awards <SortIndicator col="federal_awards_count" /></th>
+                                                <th className="py-4 px-5 font-bold cursor-pointer hover:text-black select-none hidden xl:table-cell" onClick={() => handleColumnSort("revenue")}>Revenue <SortIndicator col="revenue" /></th>
+                                                <th className="py-4 px-5 font-bold cursor-pointer hover:text-black select-none hidden xl:table-cell" onClick={() => handleColumnSort("employee_count")}>Staff <SortIndicator col="employee_count" /></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-stone-100 text-sm">
+                                            {contractors.map((company) => (
+                                                <tr key={company.id} onClick={() => setSelectedContractor(company)} onDoubleClick={() => router.push(`/contractors/${company.id}`)} className={clsx("transition-colors group cursor-pointer", selectedContractor?.id === company.id ? "bg-stone-100" : "hover:bg-stone-50")}>
+                                                    <td className="py-3.5 px-5">
+                                                        <p className="font-bold text-black line-clamp-1 max-w-[220px] group-hover:text-stone-600">{company.company_name}</p>
+                                                        {company.uei && <p className="text-stone-400 text-[10px] font-mono mt-0.5">{company.uei}</p>}
+                                                    </td>
+                                                    <td className="py-3.5 px-5 font-mono text-xs">{company.city && company.state ? `${company.city}, ${company.state}` : company.state || "---"}</td>
+                                                    <td className="py-3.5 px-5">
+                                                        <div className="flex flex-wrap gap-1">
+                                                            {company.naics_codes?.slice(0, 3).map((n: string) => (
+                                                                <span key={n} className="bg-stone-100 text-stone-600 border border-stone-200 px-1.5 py-0.5 rounded font-mono text-[10px]">{n}</span>
+                                                            ))}
+                                                            {company.naics_codes && company.naics_codes.length > 3 && (
+                                                                <span className="text-stone-400 text-[10px]">+{company.naics_codes.length - 3}</span>
+                                                            )}
+                                                            {(!company.naics_codes || company.naics_codes.length === 0) && <span className="text-stone-300 text-xs">---</span>}
+                                                        </div>
+                                                    </td>
+                                                    <td className="py-3.5 px-5">
+                                                        <div className="flex flex-wrap gap-1">
+                                                            {(company.sba_certifications || company.certifications)?.slice(0, 2).map((c: string) => (
+                                                                <span key={c} className="bg-black text-white px-1.5 py-0.5 rounded font-typewriter text-[9px] uppercase">{c}</span>
+                                                            ))}
+                                                            {(!company.sba_certifications && !company.certifications) && <span className="text-stone-300 text-xs">---</span>}
+                                                        </div>
+                                                    </td>
+                                                    <td className="py-3.5 px-5 font-mono font-bold text-xs">{company.federal_awards_count || 0}</td>
+                                                    <td className="py-3.5 px-5 font-mono text-xs hidden xl:table-cell">{company.revenue ? `$${Math.round(company.revenue).toLocaleString()}` : "---"}</td>
+                                                    <td className="py-3.5 px-5 font-mono text-xs hidden xl:table-cell">{company.employee_count?.toLocaleString() || "---"}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
                                 </div>
                             ) : (
                                 <div className={clsx("grid gap-6 transition-all mb-6", selectedContractor ? "grid-cols-1 xl:grid-cols-2" : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3")}>

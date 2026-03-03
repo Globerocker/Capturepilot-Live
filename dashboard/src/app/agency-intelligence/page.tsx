@@ -3,7 +3,8 @@
 // Force rebuild for intelligence route detection
 import { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { Loader2, Activity, BrainCircuit, BarChart, FileText, Layers, Target } from "lucide-react";
+import { Loader2, Activity, BarChart, FileText, Layers, Target } from "lucide-react";
+import Link from "next/link";
 import clsx from "clsx";
 
 const supabase = createClient(
@@ -51,7 +52,17 @@ export default function IntelligencePage() {
                     <div className="bg-white rounded-[40px] border border-stone-200 shadow-sm p-12 text-center flex-1 flex flex-col items-center justify-center">
                         <BarChart className="w-12 h-12 text-stone-300 mb-4" />
                         <h3 className="font-bold text-lg mb-2 text-stone-800">No Intelligence Data Yet</h3>
-                        <p className="text-stone-500 font-typewriter max-w-sm">The background engine has not yet generated weekly intelligence logs. They will appear here once processed.</p>
+                        <p className="text-stone-500 font-typewriter max-w-md mb-6">
+                            This page shows weekly market intelligence: top agencies, trending NAICS codes, competition analysis, and certification demand. Data is generated automatically every Sunday by the scoring pipeline.
+                        </p>
+                        <div className="flex gap-3">
+                            <Link href="/matches" className="inline-flex items-center text-sm font-bold font-typewriter bg-black text-white px-6 py-3 rounded-full hover:bg-stone-800 transition-colors">
+                                Browse Matches
+                            </Link>
+                            <Link href="/opportunities" className="inline-flex items-center text-sm font-bold font-typewriter bg-stone-100 text-black px-6 py-3 rounded-full border border-stone-200 hover:bg-stone-200 transition-colors">
+                                View Opportunities
+                            </Link>
+                        </div>
                     </div>
                 ) : (
                     <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">

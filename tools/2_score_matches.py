@@ -279,14 +279,42 @@ def score_matches():
                 except Exception:
                     pass
 
-        # Clear old matches
-        for chunk in chunk_list(op_ids, 100):
-            if chunk:
-                supabase.table("matches").delete().in_("opportunity_id", chunk).execute()
+        # Upsert matches (preserves IDs for stable URLs)
+        # First, collect contractor IDs per opportunity for cleanup
+        from collections import defaultdict
+        opp_contractor_map = defaultdict(list)
+        for m in match_payloads:
+            opp_contractor_map[m["opportunity_id"]].append(m["contractor_id"])
 
-        # Insert new matches
+        # Remove stale matches no longer in top 10 per opportunity
+        for opp_id_chunk in chunk_list(op_ids, 50):
+            for oid in opp_id_chunk:
+                keep_ids = opp_contractor_map.get(oid, [])
+                if keep_ids:
+                    try:
+                        supabase.table("matches").delete() \
+                            .eq("opportunity_id", oid) \
+                            .not_.in_("contractor_id", keep_ids) \
+                            .execute()
+                    except Exception:
+                        pass
+
+        # Upsert new/updated matches
         for chunk in chunk_list(match_payloads, 500):
-            supabase.table("matches").insert(chunk).execute()
+            try:
+                supabase.table("matches").upsert(
+                    chunk,
+                    on_conflict="opportunity_id,contractor_id"
+                ).execute()
+            except Exception:
+                # Fallback: if no unique constraint exists yet, use insert
+                try:
+                    supabase.table("matches").delete().in_(
+                        "opportunity_id", list(set(m["opportunity_id"] for m in chunk))
+                    ).execute()
+                    supabase.table("matches").insert(chunk).execute()
+                except Exception as e2:
+                    print(f"  ⚠️ Chunk write error: {e2}")
 
         # Stats
         hot = sum(1 for m in match_payloads if m["classification"] == "HOT")

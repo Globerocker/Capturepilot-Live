@@ -91,7 +91,15 @@ export default function MatchDetailPage() {
         );
     }
 
-    if (!match) return <div>Match not found.</div>;
+    if (!match) return (
+        <div className="max-w-3xl mx-auto py-20 text-center space-y-4">
+            <h2 className="text-2xl font-bold font-typewriter">Match Link Expired</h2>
+            <p className="text-stone-500">Match IDs refresh during each scoring run. This link is no longer valid.</p>
+            <Link href="/matches" className="inline-flex items-center text-sm font-bold font-typewriter bg-black text-white px-6 py-3 rounded-full hover:bg-stone-800 transition-colors">
+                <ArrowLeft className="w-4 h-4 mr-2" /> Browse All Matches
+            </Link>
+        </div>
+    );
 
     return (
         <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500 pb-12">
