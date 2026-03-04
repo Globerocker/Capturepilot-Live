@@ -42,6 +42,36 @@ interface MatchExt {
     };
 }
 
+interface RawMatch {
+    id: string;
+    score: number;
+    classification: string;
+    created_at: string;
+    score_breakdown: Record<string, number> | null;
+    opportunity_id: string;
+    contractor_id: string;
+}
+
+interface RawOpp {
+    id: string;
+    title: string;
+    notice_id: string;
+    response_deadline: string;
+    naics_code: string;
+    agency: string;
+    notice_type: string;
+}
+
+interface RawCon {
+    id: string;
+    company_name: string;
+    uei: string;
+    city: string;
+    state: string;
+    naics_codes: string[];
+    certifications: string[];
+}
+
 interface DraftPayload {
     type: string;
     content: string;
@@ -102,61 +132,74 @@ function MatchesPage() {
     const fetchMatches = useCallback(async () => {
         setLoading(true);
         try {
+            // Step 1: Fetch flat match rows (no joins — avoids PGRST200 FK error)
             let query = supabase
                 .from("matches")
-                .select(`
-                    id, score, classification, created_at, score_breakdown, opportunity_id, contractor_id,
-                    opportunities (title, notice_id, response_deadline, naics_code, agency, notice_type),
-                    contractors (company_name, uei, city, state, naics_codes, certifications)
-                `, { count: 'exact' });
+                .select("id, score, classification, created_at, score_breakdown, opportunity_id, contractor_id", { count: 'exact' });
 
-            // Classification filter
             if (classFilter !== "ALL") {
                 query = query.eq("classification", classFilter);
             }
 
-            // Search filter
-            if (activeSearch) {
-                // Search in contractor name or opportunity title via the join isn't directly supported,
-                // so we search on the main table fields we can access
-                // We'll use a workaround: fetch and filter client-side for search
-            }
-
-            // Sort
             if (sortBy === "score_desc") {
                 query = query.order("score", { ascending: false });
             } else if (sortBy === "score_asc") {
                 query = query.order("score", { ascending: true });
-            } else if (sortBy === "deadline") {
-                query = query.order("score", { ascending: false }); // fallback, deadline is on joined table
             }
 
-            // Pagination
             const from = (page - 1) * pageSize;
             const to = from + pageSize - 1;
             query = query.range(from, to);
 
-            const { data, count, error } = await query;
+            const { data: rawMatches, count, error } = await query;
 
             if (error) {
                 console.error("Matches fetch error:", error);
-            } else {
-                let results = (data || []) as unknown as MatchExt[];
-
-                // Client-side search filter (Supabase doesn't support ILIKE on joined columns)
-                if (activeSearch) {
-                    const term = activeSearch.toLowerCase();
-                    results = results.filter(m =>
-                        m.contractors?.company_name?.toLowerCase().includes(term) ||
-                        m.opportunities?.title?.toLowerCase().includes(term) ||
-                        m.opportunities?.notice_id?.toLowerCase().includes(term) ||
-                        m.opportunities?.agency?.toLowerCase().includes(term)
-                    );
-                }
-
-                setMatches(results);
-                setTotalCount(count || 0);
+                setLoading(false);
+                return;
             }
+
+            const matchRows = rawMatches || [];
+            setTotalCount(count || 0);
+
+            if (matchRows.length === 0) {
+                setMatches([]);
+                setLoading(false);
+                return;
+            }
+
+            // Step 2: Collect unique IDs and fetch related data in parallel
+            const typedMatches = matchRows as unknown as RawMatch[];
+            const oppIds = [...new Set(typedMatches.map((m) => m.opportunity_id))];
+            const conIds = [...new Set(typedMatches.map((m) => m.contractor_id))];
+
+            const [oppRes, conRes] = await Promise.all([
+                supabase.from("opportunities").select("id, title, notice_id, response_deadline, naics_code, agency, notice_type").in("id", oppIds),
+                supabase.from("contractors").select("id, company_name, uei, city, state, naics_codes, certifications").in("id", conIds),
+            ]);
+
+            const oppMap = new Map((oppRes.data as unknown as RawOpp[] || []).map((o) => [o.id, o]));
+            const conMap = new Map((conRes.data as unknown as RawCon[] || []).map((c) => [c.id, c]));
+
+            // Step 3: Merge into MatchExt shape
+            let results: MatchExt[] = typedMatches.map((m) => ({
+                ...m,
+                opportunities: oppMap.get(m.opportunity_id) || { title: "Unknown", notice_id: "", response_deadline: "", naics_code: "", agency: "", notice_type: "" },
+                contractors: conMap.get(m.contractor_id) || { company_name: "Unknown", uei: "", city: "", state: "", naics_codes: [], certifications: [] },
+            }));
+
+            // Client-side search filter
+            if (activeSearch) {
+                const term = activeSearch.toLowerCase();
+                results = results.filter(m =>
+                    m.contractors?.company_name?.toLowerCase().includes(term) ||
+                    m.opportunities?.title?.toLowerCase().includes(term) ||
+                    m.opportunities?.notice_id?.toLowerCase().includes(term) ||
+                    m.opportunities?.agency?.toLowerCase().includes(term)
+                );
+            }
+
+            setMatches(results);
         } catch (err) {
             console.error(err);
         } finally {

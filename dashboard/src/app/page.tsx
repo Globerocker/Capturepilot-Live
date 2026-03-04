@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Activity, Target, TrendingUp, Users, ArrowRight, Flame, Loader2 } from "lucide-react";
+import { Activity, Target, TrendingUp, Users, ArrowRight, Flame, Loader2, Clock, Briefcase, UserCheck } from "lucide-react";
 import clsx from "clsx";
 import Link from "next/link";
 import { createClient } from "@supabase/supabase-js";
@@ -44,21 +44,27 @@ export default function AgencyDashboard() {
   const [contractorCount, setContractorCount] = useState(0);
   const [hotList, setHotList] = useState<HotMatch[]>([]);
   const [warmList, setWarmList] = useState<WarmMatch[]>([]);
+  const [pipelineCount, setPipelineCount] = useState(0);
+  const [lastScoredAt, setLastScoredAt] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadDashboard() {
       // Run counts in parallel
-      const [opsRes, hotRes, warmRes, conRes] = await Promise.all([
+      const [opsRes, hotRes, warmRes, conRes, pipeRes, freshRes] = await Promise.all([
         supabase.from("opportunities").select("*", { count: 'exact', head: true }).eq("is_archived", false),
         supabase.from("matches").select("*", { count: 'exact', head: true }).eq("classification", "HOT"),
         supabase.from("matches").select("*", { count: 'exact', head: true }).eq("classification", "WARM"),
         supabase.from("contractors").select("*", { count: 'exact', head: true }).neq("data_quality_flag", "LOW_QUALITY"),
+        supabase.from("capture_outcomes").select("*", { count: 'exact', head: true }),
+        supabase.from("matches").select("created_at").order("created_at", { ascending: false }).limit(1),
       ]);
 
       setOpsCount(opsRes.count || 0);
       setHotCount(hotRes.count || 0);
       setWarmCount(warmRes.count || 0);
       setContractorCount(conRes.count || 0);
+      setPipelineCount(pipeRes.count || 0);
+      if (freshRes.data && freshRes.data.length > 0) setLastScoredAt(freshRes.data[0].created_at);
 
       // Fetch HOT matches + WARM matches in parallel
       const [hotMatchRes, warmMatchRes] = await Promise.all([
@@ -239,23 +245,33 @@ export default function AgencyDashboard() {
                   <span className="text-stone-500 text-xs font-bold mb-1">WARM</span>
                 </div>
               </Link>
-              <Link href="/contractors" className="bg-black/40 p-4 rounded-2xl border border-stone-800 block hover:border-stone-600 transition-colors">
-                <p className="text-stone-500 font-typewriter text-[10px] uppercase tracking-wider mb-1">Contractor Pool</p>
-                <div className="flex items-end space-x-2">
-                  <p className="font-typewriter font-bold text-2xl">{contractorCount.toLocaleString()}</p>
-                  <span className="text-stone-400 text-xs font-bold mb-1">Indexed</span>
-                </div>
-              </Link>
-              <Link href="/opportunities" className="bg-black/40 p-4 rounded-2xl border border-stone-800 block hover:border-stone-600 transition-colors">
-                <p className="text-stone-500 font-typewriter text-[10px] uppercase tracking-wider mb-1">Active Opportunities</p>
-                <p className="font-typewriter font-bold text-2xl">{opsCount.toLocaleString()}</p>
-              </Link>
+              <div className="grid grid-cols-2 gap-3">
+                <Link href="/contractors" className="bg-black/40 p-4 rounded-2xl border border-stone-800 block hover:border-stone-600 transition-colors">
+                  <p className="text-stone-500 font-typewriter text-[10px] uppercase tracking-wider mb-1">Contractors</p>
+                  <p className="font-typewriter font-bold text-xl">{contractorCount.toLocaleString()}</p>
+                </Link>
+                <Link href="/pipeline" className="bg-black/40 p-4 rounded-2xl border border-stone-800 block hover:border-stone-600 transition-colors">
+                  <p className="text-stone-500 font-typewriter text-[10px] uppercase tracking-wider mb-1 flex items-center"><Briefcase className="w-3 h-3 mr-1" />Pipeline</p>
+                  <p className="font-typewriter font-bold text-xl">{pipelineCount}</p>
+                </Link>
+              </div>
+              <div className="bg-black/40 p-4 rounded-2xl border border-stone-800">
+                <p className="text-stone-500 font-typewriter text-[10px] uppercase tracking-wider mb-1 flex items-center"><Clock className="w-3 h-3 mr-1" />Last Scored</p>
+                <p className="font-typewriter font-bold text-sm">
+                  {lastScoredAt ? new Date(lastScoredAt).toLocaleString() : "Never"}
+                </p>
+              </div>
             </div>
           </div>
 
-          <Link href="/matches" className="w-full py-4 mt-6 rounded-full border border-stone-700 text-stone-300 font-typewriter text-sm font-bold hover:bg-white hover:text-black transition-all text-center block">
-            View All Matches
-          </Link>
+          <div className="space-y-3 mt-6">
+            <Link href="/portal" className="w-full py-3 rounded-full bg-white text-black font-typewriter text-sm font-bold hover:bg-stone-100 transition-all text-center block flex items-center justify-center">
+              <UserCheck className="w-4 h-4 mr-2" /> Client Portal
+            </Link>
+            <Link href="/matches" className="w-full py-3 rounded-full border border-stone-700 text-stone-300 font-typewriter text-sm font-bold hover:bg-white hover:text-black transition-all text-center block">
+              View All Matches
+            </Link>
+          </div>
         </div>
 
       </section>

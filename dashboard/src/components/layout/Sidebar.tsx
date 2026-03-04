@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Users, Target, Activity, Settings, Zap, Briefcase } from "lucide-react";
+import { LayoutDashboard, Users, Target, Activity, Settings, Zap, Briefcase, UserCheck, ClipboardList } from "lucide-react";
 import clsx from "clsx";
 
 export default function Sidebar() {
@@ -15,6 +15,8 @@ export default function Sidebar() {
         { name: "Contractors", href: "/contractors", icon: Users },
         { name: "Pipeline", href: "/pipeline", icon: Briefcase },
         { name: "Intelligence", href: "/agency-intelligence", icon: Activity },
+        { name: "Client Portal", href: "/portal", icon: UserCheck },
+        { name: "Onboard", href: "/onboard", icon: ClipboardList },
     ];
 
     return (
@@ -31,7 +33,7 @@ export default function Sidebar() {
             <nav className="flex-1 px-4 space-y-2">
                 {navLinks.map((link) => {
                     const Icon = link.icon;
-                    const isActive = pathname === link.href;
+                    const isActive = link.href === "/" ? pathname === "/" : pathname.startsWith(link.href);
 
                     return (
                         <Link

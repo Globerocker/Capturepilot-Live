@@ -235,6 +235,52 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                         </div>
                     </div>
 
+                    {/* Description */}
+                    {opp.description && (
+                        <div className="bg-white rounded-3xl border border-stone-200 shadow-sm overflow-hidden">
+                            <div className="bg-stone-50 border-b border-stone-100 px-8 py-5">
+                                <h2 className="font-typewriter text-lg font-bold flex items-center text-stone-800">
+                                    <FileText className="w-5 h-5 mr-3 text-stone-400" /> Description
+                                </h2>
+                            </div>
+                            <div className="p-8">
+                                <p className="text-sm text-stone-700 leading-relaxed whitespace-pre-wrap">{opp.description}</p>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Incumbent Intelligence */}
+                    {(opp.incumbent_contractor_name || opp.award_amount) && (
+                        <div className="bg-amber-50 rounded-3xl border border-amber-200 shadow-sm overflow-hidden">
+                            <div className="bg-amber-100/50 border-b border-amber-200 px-8 py-5">
+                                <h2 className="font-typewriter text-lg font-bold flex items-center text-amber-900">
+                                    <ShieldAlert className="w-5 h-5 mr-3 text-amber-600" /> Incumbent Intelligence
+                                </h2>
+                            </div>
+                            <div className="p-8">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    {opp.incumbent_contractor_name && (
+                                        <div>
+                                            <p className="text-[10px] font-typewriter text-amber-600 uppercase tracking-widest mb-1.5">Current Contractor</p>
+                                            <p className="font-bold text-amber-900 text-lg">{opp.incumbent_contractor_name}</p>
+                                            {opp.incumbent_contractor_uei && (
+                                                <p className="font-mono text-xs text-amber-700 mt-1">UEI: {opp.incumbent_contractor_uei}</p>
+                                            )}
+                                        </div>
+                                    )}
+                                    {opp.award_amount && (
+                                        <div>
+                                            <p className="text-[10px] font-typewriter text-amber-600 uppercase tracking-widest mb-1.5">Previous Award Value</p>
+                                            <p className="font-bold text-amber-900 text-lg">
+                                                {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(opp.award_amount)}
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Resources */}
                     <div className="bg-white rounded-3xl border border-stone-200 shadow-sm overflow-hidden p-8">
                         <h2 className="font-typewriter text-lg font-bold mb-6 flex items-center text-stone-800">
@@ -332,7 +378,7 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                             {aiStrat.sales_angle && (
                                 <div className="bg-stone-950/50 rounded-2xl p-4 border border-emerald-900/30">
                                     <p className="text-[10px] font-typewriter text-emerald-400 uppercase tracking-widest mb-2">Recommended Sales Angle</p>
-                                    <p className="text-sm text-white font-medium italic">"{aiStrat.sales_angle}"</p>
+                                    <p className="text-sm text-white font-medium italic">&ldquo;{aiStrat.sales_angle}&rdquo;</p>
                                 </div>
                             )}
 

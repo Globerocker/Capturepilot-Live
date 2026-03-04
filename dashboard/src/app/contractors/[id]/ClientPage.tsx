@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { ArrowLeft, Building, Target, Link as LinkIcon, MapPin, Phone, Award, ShieldCheck, DollarSign, Users, Truck, Briefcase, Activity, ExternalLink, Edit2, Save, X, Loader2, Flame } from "lucide-react";
+import { ArrowLeft, Building, Target, Link as LinkIcon, MapPin, Phone, Award, ShieldCheck, DollarSign, Users, Truck, Briefcase, Activity, ExternalLink, Edit2, Save, X, Loader2, Flame, Globe, Star, Mail } from "lucide-react";
 import Link from "next/link";
 import clsx from "clsx";
 import { useRouter } from "next/navigation";
@@ -29,13 +29,28 @@ function MatchHistoryPanel({ contractorId }: { contractorId: string }) {
     useEffect(() => {
         async function fetchMatches() {
             setLoading(true);
-            const { data } = await supabase
+            // Flat query to avoid PGRST200 FK error
+            const { data: rawMatches } = await supabase
                 .from("matches")
-                .select("id, opportunity_id, contractor_id, score, classification, opportunities(title, agency, naics_code, notice_type, response_deadline)")
+                .select("id, opportunity_id, contractor_id, score, classification")
                 .eq("contractor_id", contractorId)
                 .order("score", { ascending: false })
                 .limit(10);
-            setMatches((data || []) as unknown as MatchRecord[]);
+
+            const rows = rawMatches || [];
+            if (rows.length === 0) { setMatches([]); setLoading(false); return; }
+
+            const oppIds = [...new Set(rows.map((m: Record<string, string>) => m.opportunity_id))];
+            const { data: opps } = await supabase
+                .from("opportunities")
+                .select("id, title, agency, naics_code, notice_type, response_deadline")
+                .in("id", oppIds);
+            const oppMap = new Map((opps || []).map((o: Record<string, string>) => [o.id, o]));
+
+            setMatches(rows.map((m: Record<string, unknown>) => ({
+                ...m,
+                opportunities: oppMap.get(m.opportunity_id as string) || null,
+            })) as unknown as MatchRecord[]);
             setLoading(false);
         }
         fetchMatches();
@@ -97,6 +112,101 @@ function MatchHistoryPanel({ contractorId }: { contractorId: string }) {
                     })}
                 </div>
             )}
+        </div>
+    );
+}
+
+interface ContactRecord {
+    id: string;
+    full_name: string;
+    title: string;
+    email: string;
+    phone: string;
+    linkedin_url: string;
+    source: string;
+    confidence: string;
+}
+
+function DecisionMakersPanel({ contractorId }: { contractorId: string }) {
+    const [contacts, setContacts] = useState<ContactRecord[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        async function fetchContacts() {
+            const { data } = await supabase
+                .from("contractor_contacts")
+                .select("id, full_name, title, email, phone, linkedin_url, source, confidence")
+                .eq("contractor_id", contractorId)
+                .order("confidence", { ascending: false })
+                .limit(10);
+            setContacts((data || []) as unknown as ContactRecord[]);
+            setLoading(false);
+        }
+        fetchContacts();
+    }, [contractorId]);
+
+    if (loading) return (
+        <div className="bg-white rounded-[32px] border border-stone-200 shadow-sm p-8">
+            <h2 className="font-typewriter text-lg font-bold mb-4 flex items-center">
+                <Mail className="w-5 h-5 mr-3 text-stone-400" /> Decision Makers
+            </h2>
+            <div className="flex justify-center py-6"><Loader2 className="w-6 h-6 animate-spin text-stone-400" /></div>
+        </div>
+    );
+
+    if (contacts.length === 0) return null;
+
+    const sourceLabel = (s: string) => {
+        if (s === "apollo") return "Apollo";
+        if (s === "sam_poc") return "SAM.gov";
+        if (s === "website_scrape") return "Website";
+        if (s === "google_business") return "Google";
+        return s || "Manual";
+    };
+
+    return (
+        <div className="bg-white rounded-[32px] border border-stone-200 shadow-sm p-8">
+            <h2 className="font-typewriter text-lg font-bold mb-6 flex items-center">
+                <Mail className="w-5 h-5 mr-3 text-stone-400" /> Decision Makers
+                <span className="ml-3 text-xs font-sans font-medium bg-stone-100 px-2.5 py-0.5 rounded-full text-stone-500 border border-stone-200">{contacts.length}</span>
+            </h2>
+            <div className="space-y-4">
+                {contacts.map((c) => (
+                    <div key={c.id} className="bg-stone-50 p-4 rounded-xl border border-stone-100 flex justify-between items-start">
+                        <div className="flex-1 min-w-0 mr-3">
+                            <p className="font-bold text-sm text-stone-900">{c.full_name}</p>
+                            <p className="text-xs text-stone-500 mt-0.5">{c.title || "Contact"}</p>
+                            <div className="flex items-center gap-3 mt-2 flex-wrap">
+                                {c.email && (
+                                    <a href={`mailto:${c.email}`} className="text-xs text-blue-600 hover:underline flex items-center">
+                                        <Mail className="w-3 h-3 mr-1" /> {c.email}
+                                    </a>
+                                )}
+                                {c.phone && (
+                                    <a href={`tel:${c.phone}`} className="text-xs text-stone-600 hover:text-black flex items-center">
+                                        <Phone className="w-3 h-3 mr-1" /> {c.phone}
+                                    </a>
+                                )}
+                                {c.linkedin_url && (
+                                    <a href={c.linkedin_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline flex items-center">
+                                        <ExternalLink className="w-3 h-3 mr-1" /> LinkedIn
+                                    </a>
+                                )}
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                            <span className={clsx("font-typewriter text-[9px] px-2 py-0.5 rounded border uppercase",
+                                c.confidence === "high" ? "bg-emerald-100 text-emerald-700 border-emerald-200" :
+                                c.confidence === "medium" ? "bg-amber-100 text-amber-700 border-amber-200" :
+                                "bg-stone-100 text-stone-600 border-stone-200"
+                            )}>{c.confidence || "low"}</span>
+                            <span className="font-typewriter text-[9px] px-2 py-0.5 rounded border bg-stone-100 text-stone-600 border-stone-200 uppercase">
+                                {sourceLabel(c.source)}
+                            </span>
+                        </div>
+                    </div>
+                ))}
+            </div>
         </div>
     );
 }
@@ -406,6 +516,9 @@ export default function ContractorDetailClient({ initialData }: { initialData: a
 
                     </div>
 
+                    {/* Decision Makers */}
+                    <DecisionMakersPanel contractorId={contractor.id} />
+
                     {/* Match History */}
                     <MatchHistoryPanel contractorId={contractor.id} />
                 </div>
@@ -502,6 +615,88 @@ export default function ContractorDetailClient({ initialData }: { initialData: a
                             ) : (
                                 <p className="text-sm text-stone-400 italic">No set-aside certs registered.</p>
                             )}
+                        </div>
+                    </div>
+
+                    {/* Digital Presence & Signals */}
+                    <div className="bg-white rounded-[32px] border border-stone-200 shadow-sm p-8">
+                        <p className="font-typewriter text-lg font-bold mb-6 flex items-center">
+                            <Globe className="w-5 h-5 mr-3 text-stone-400" /> Digital Presence
+                        </p>
+                        <div className="space-y-4">
+                            {contractor.business_url && (
+                                <div className="flex items-center justify-between">
+                                    <span className="text-xs font-typewriter text-stone-500 uppercase tracking-widest">Website</span>
+                                    <a href={contractor.business_url.startsWith('http') ? contractor.business_url : `https://${contractor.business_url}`} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline flex items-center">
+                                        <Globe className="w-3 h-3 mr-1" /> Visit
+                                    </a>
+                                </div>
+                            )}
+                            {(contractor.google_rating !== null && contractor.google_rating !== undefined) && (
+                                <div className="flex items-center justify-between border-t border-stone-100 pt-3">
+                                    <span className="text-xs font-typewriter text-stone-500 uppercase tracking-widest">Google Rating</span>
+                                    <div className="flex items-center">
+                                        <Star className="w-4 h-4 text-amber-500 mr-1" />
+                                        <span className="font-bold text-sm">{contractor.google_rating}</span>
+                                        {contractor.google_reviews_count > 0 && (
+                                            <span className="text-xs text-stone-400 ml-1">({contractor.google_reviews_count} reviews)</span>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                            {contractor.social_linkedin && (
+                                <div className="flex items-center justify-between border-t border-stone-100 pt-3">
+                                    <span className="text-xs font-typewriter text-stone-500 uppercase tracking-widest">LinkedIn</span>
+                                    <a href={contractor.social_linkedin} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline flex items-center">
+                                        <ExternalLink className="w-3 h-3 mr-1" /> View
+                                    </a>
+                                </div>
+                            )}
+                            {contractor.social_facebook && (
+                                <div className="flex items-center justify-between border-t border-stone-100 pt-3">
+                                    <span className="text-xs font-typewriter text-stone-500 uppercase tracking-widest">Facebook</span>
+                                    <a href={contractor.social_facebook} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline flex items-center">
+                                        <ExternalLink className="w-3 h-3 mr-1" /> View
+                                    </a>
+                                </div>
+                            )}
+                            <div className="border-t border-stone-100 pt-4 mt-2">
+                                <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-3">Website Signals</p>
+                                <div className="flex flex-wrap gap-2">
+                                    <span className={clsx("text-[10px] font-typewriter px-2.5 py-1 rounded-full border uppercase tracking-wider",
+                                        contractor.bonded_mentioned ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "bg-stone-100 text-stone-400 border-stone-200"
+                                    )}>{contractor.bonded_mentioned ? "Bonded" : "No Bonding"}</span>
+                                    <span className={clsx("text-[10px] font-typewriter px-2.5 py-1 rounded-full border uppercase tracking-wider",
+                                        contractor.municipal_experience ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "bg-stone-100 text-stone-400 border-stone-200"
+                                    )}>{contractor.municipal_experience ? "Gov Experience" : "No Gov Exp"}</span>
+                                </div>
+                            </div>
+                            {!contractor.business_url && !contractor.social_linkedin && !contractor.google_rating && (
+                                <p className="text-sm text-stone-400 italic text-center py-4">No digital presence data enriched yet.</p>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* SAM Registration Timeline */}
+                    <div className="bg-white rounded-[32px] border border-stone-200 shadow-sm p-8">
+                        <p className="font-typewriter text-lg font-bold mb-6 flex items-center">
+                            <ShieldCheck className="w-5 h-5 mr-3 text-stone-400" /> Registration
+                        </p>
+                        <div className="space-y-3">
+                            <div className="flex justify-between items-center">
+                                <span className="text-xs font-typewriter text-stone-500 uppercase tracking-widest">Registered</span>
+                                <span className="font-bold text-sm">{contractor.sam_registration_date ? new Date(contractor.sam_registration_date).toLocaleDateString() : "---"}</span>
+                            </div>
+                            <div className="flex justify-between items-center border-t border-stone-100 pt-3">
+                                <span className="text-xs font-typewriter text-stone-500 uppercase tracking-widest">Activated</span>
+                                <span className="font-bold text-sm">{contractor.activation_date ? new Date(contractor.activation_date).toLocaleDateString() : "---"}</span>
+                            </div>
+                            <div className="flex justify-between items-center border-t border-stone-100 pt-3">
+                                <span className="text-xs font-typewriter text-stone-500 uppercase tracking-widest">Expires</span>
+                                <span className={clsx("font-bold text-sm",
+                                    contractor.expiration_date && new Date(contractor.expiration_date) < new Date() ? "text-red-600" : ""
+                                )}>{contractor.expiration_date ? new Date(contractor.expiration_date).toLocaleDateString() : "---"}</span>
+                            </div>
                         </div>
                     </div>
                 </div>
