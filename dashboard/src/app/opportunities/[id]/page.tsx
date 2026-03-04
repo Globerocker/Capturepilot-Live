@@ -10,13 +10,13 @@ export const dynamic = 'force-dynamic';
 
 export default async function OpportunityDetailPage({ params }: { params: Promise<{ id: string }> }) {
     const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_KEY!
+        process.env.NEXT_PUBLIC_SUPABASE_URL || "https://ryxgjzehoijjvczqkhwr.supabase.co",
+        process.env.SUPABASE_SERVICE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ5eGdqemVob2lqanZjenFraHdyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIwNDg0NTUsImV4cCI6MjA4NzYyNDQ1NX0.q0HivHixjE-A2MuQZlmlZOO2eLpQEm8c6XhQQQKaJsY"
     );
 
     const { data: opp, error } = await supabase
         .from("opportunities")
-        .select("*, agencies(department, sub_tier), opportunity_types(name), set_asides(code)")
+        .select("*")
         .eq("id", (await params).id)
         .single();
 
@@ -61,7 +61,7 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                         {opp.notice_id}
                     </span>
                     <span className="bg-blue-50 text-blue-700 font-bold font-typewriter text-xs px-3 py-1.5 rounded-md border border-blue-200 tracking-wider shadow-sm">
-                        {opp.opportunity_types?.name || "UNKNOWN TYPE"}
+                        {opp.notice_type || "UNKNOWN TYPE"}
                     </span>
                     {opp.is_archived && (
                         <span className="bg-stone-800 text-stone-100 font-bold font-typewriter text-xs px-3 py-1.5 rounded-md shadow-sm tracking-wider">
@@ -95,8 +95,8 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                                         <div className="flex items-start">
                                             <Building className="w-5 h-5 text-stone-400 mr-2 shrink-0 mt-0.5" />
                                             <div>
-                                                <p className="font-bold text-stone-800">{opp.agency || opp.agencies?.sub_tier || "Agency Not Specified"}</p>
-                                                <p className="text-sm text-stone-500">{opp.department || opp.agencies?.department || ""}</p>
+                                                <p className="font-bold text-stone-800">{opp.agency || "Agency Not Specified"}</p>
+                                                <p className="text-sm text-stone-500">{opp.department || ""}</p>
                                             </div>
                                         </div>
                                     </div>
@@ -147,7 +147,7 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                                         <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-2.5">Set-Aside Target</p>
                                         <div className="bg-stone-50 rounded-xl p-4 border border-stone-100">
                                             <p className="font-bold text-stone-800 mb-3 text-sm pb-2 border-b border-stone-200">
-                                                Raw: {opp.set_asides?.code || opp.set_aside_code || "UNRESTRICTED"}
+                                                Raw: {opp.set_aside_code || "UNRESTRICTED"}
                                             </p>
                                             <div className="grid grid-cols-2 gap-y-2 gap-x-4">
                                                 <div className="flex items-center space-x-2 text-sm">
