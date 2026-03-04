@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Activity, Target, TrendingUp, Users, ArrowRight, Flame, Loader2, Clock, Briefcase, UserCheck, AlertTriangle } from "lucide-react";
+import { Activity, Target, TrendingUp, Users, ArrowRight, Flame, Loader2, Clock, Briefcase, UserCheck, AlertTriangle, Trophy, PhoneCall, SearchX } from "lucide-react";
 import clsx from "clsx";
 import Link from "next/link";
 import { createClient } from "@supabase/supabase-js";
@@ -50,6 +50,9 @@ export default function AgencyDashboard() {
   const [lastScoredAt, setLastScoredAt] = useState<string | null>(null);
   const [urgentCount, setUrgentCount] = useState(0);
   const [topNaics, setTopNaics] = useState("");
+  const [easyWinsCount, setEasyWinsCount] = useState(0);
+  const [readyToContactCount, setReadyToContactCount] = useState(0);
+  const [needsEnrichmentCount, setNeedsEnrichmentCount] = useState(0);
 
   useEffect(() => {
     async function loadDashboard() {
@@ -148,6 +151,27 @@ export default function AgencyDashboard() {
       const sortedNaics = Object.entries(naicsCounts).sort((a, b) => b[1] - a[1]);
       if (sortedNaics.length > 0) setTopNaics(sortedNaics[0][0]);
 
+      // Sales KPIs
+      const today = new Date().toISOString().split("T")[0];
+      const [easyWinsRes, readyContactRes, needsEnrichRes] = await Promise.all([
+        // Easy Wins: Sources Sought with set-aside and active deadline
+        supabase.from("opportunities").select("*", { count: 'exact', head: true })
+          .eq("is_archived", false)
+          .ilike("notice_type", "%Sources Sought%")
+          .not("set_aside_code", "is", null)
+          .gte("response_deadline", today),
+        // Contractors with POC name + email or phone (ready to pitch)
+        supabase.from("contractors").select("*", { count: 'exact', head: true })
+          .not("primary_poc_name", "is", null)
+          .neq("data_quality_flag", "LOW_QUALITY"),
+        // HOT match contractors that have no enrichment data
+        supabase.from("matches").select("contractor_id", { count: 'exact', head: true })
+          .eq("classification", "HOT"),
+      ]);
+      setEasyWinsCount(easyWinsRes.count || 0);
+      setReadyToContactCount(readyContactRes.count || 0);
+      setNeedsEnrichmentCount(needsEnrichRes.count || 0);
+
       setLoading(false);
     }
     loadDashboard();
@@ -183,6 +207,42 @@ export default function AgencyDashboard() {
         <MetricCard title="HOT Matches" value={hotCount} icon={Flame} highlight href="/matches?class=HOT" />
         <MetricCard title="WARM Matches" value={warmCount.toLocaleString()} icon={Target} href="/matches?class=WARM" />
         <MetricCard title="Contractor Pool" value={contractorCount.toLocaleString()} icon={Users} href="/contractors" />
+      </section>
+
+      {/* Sales Action KPIs */}
+      <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Link href="/opportunities" className="bg-gradient-to-br from-emerald-50 to-white p-6 rounded-[32px] border border-emerald-200 shadow-sm hover:shadow-md hover:border-emerald-300 hover:-translate-y-0.5 transition-all cursor-pointer">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-sm font-medium text-emerald-700">Easy Wins Available</p>
+            <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center">
+              <Trophy className="w-4 h-4 text-emerald-600" />
+            </div>
+          </div>
+          <h4 className="text-3xl font-black font-typewriter tracking-tighter text-emerald-900">{easyWinsCount}</h4>
+          <p className="text-xs text-emerald-600 mt-1">Sources Sought with set-asides & active deadlines</p>
+        </Link>
+
+        <Link href="/contractors" className="bg-gradient-to-br from-blue-50 to-white p-6 rounded-[32px] border border-blue-200 shadow-sm hover:shadow-md hover:border-blue-300 hover:-translate-y-0.5 transition-all cursor-pointer">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-sm font-medium text-blue-700">Contractors with POC</p>
+            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+              <PhoneCall className="w-4 h-4 text-blue-600" />
+            </div>
+          </div>
+          <h4 className="text-3xl font-black font-typewriter tracking-tighter text-blue-900">{readyToContactCount.toLocaleString()}</h4>
+          <p className="text-xs text-blue-600 mt-1">Have decision maker names from SAM registration</p>
+        </Link>
+
+        <Link href="/matches?class=HOT" className="bg-gradient-to-br from-amber-50 to-white p-6 rounded-[32px] border border-amber-200 shadow-sm hover:shadow-md hover:border-amber-300 hover:-translate-y-0.5 transition-all cursor-pointer">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-sm font-medium text-amber-700">HOT Match Pairs</p>
+            <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center">
+              <SearchX className="w-4 h-4 text-amber-600" />
+            </div>
+          </div>
+          <h4 className="text-3xl font-black font-typewriter tracking-tighter text-amber-900">{needsEnrichmentCount.toLocaleString()}</h4>
+          <p className="text-xs text-amber-600 mt-1">Contractor-opportunity pairs ready for outreach</p>
+        </Link>
       </section>
 
       {/* Two Column Layout */}

@@ -8,13 +8,15 @@ import Link from "next/link";
 import clsx from "clsx";
 
 const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ5eGdqemVob2lqanZjenFraHdyIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MjA0ODQ1NSwiZXhwIjoyMDg3NjI0NDU1fQ.nemDcqmJMsp0DOlAjZyJyBtmWkZSAzn_Q44_a6Y3dVM"
+    process.env.NEXT_PUBLIC_SUPABASE_URL || "https://ryxgjzehoijjvczqkhwr.supabase.co",
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ5eGdqemVob2lqanZjenFraHdyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIwNDg0NTUsImV4cCI6MjA4NzYyNDQ1NX0.q0HivHixjE-A2MuQZlmlZOO2eLpQEm8c6XhQQQKaJsY"
 );
 
 export default function MatchDetailPage() {
     const { id } = useParams();
     const [match, setMatch] = useState<any>(null);
+    const [opportunity, setOpportunity] = useState<any>(null);
+    const [contractor, setContractor] = useState<any>(null);
     const [alternatives, setAlternatives] = useState<any[]>([]);
     const [contacts, setContacts] = useState<{ id: string; full_name: string | null; title: string | null; email: string | null; phone: string | null; linkedin_url: string | null; source: string; confidence: string }[]>([]);
     const [loading, setLoading] = useState(true);
@@ -25,40 +27,53 @@ export default function MatchDetailPage() {
 
     useEffect(() => {
         async function fetchData() {
-            const { data } = await supabase
+            // Flat query - no FK joins to avoid PGRST200
+            const { data: matchData } = await supabase
                 .from("matches")
-                .select(`
-          id, score, classification, score_breakdown, opportunity_id, contractor_id,
-          opportunities (title, notice_id, response_deadline, naics_code, agencies(department, sub_tier), opportunity_types(name), set_asides(code)),
-          contractors (company_name, uei, naics_codes, certifications, website, phone, city, state, company_size_bracket, data_quality_flag)
-        `)
+                .select("id, score, classification, score_breakdown, opportunity_id, contractor_id")
                 .eq("id", id)
                 .single();
 
-            setMatch(data);
+            if (!matchData) { setLoading(false); return; }
+            setMatch(matchData);
 
-            if (data?.opportunity_id) {
-                const { data: altData } = await supabase
-                    .from("matches")
-                    .select(`
-                        id, score, contractor_id,
-                        contractors (company_name, uei, city, state, data_quality_flag)
-                    `)
-                    .eq("opportunity_id", data.opportunity_id)
-                    .neq("contractor_id", data.contractor_id)
-                    .order("score", { ascending: false })
-                    .limit(10);
-                if (altData) setAlternatives(altData);
+            // Fetch opportunity and contractor separately (flat queries)
+            const [oppRes, conRes] = await Promise.all([
+                supabase.from("opportunities").select("*").eq("id", matchData.opportunity_id).single(),
+                supabase.from("contractors").select("*").eq("id", matchData.contractor_id).single(),
+            ]);
+            setOpportunity(oppRes.data);
+            setContractor(conRes.data);
+
+            // Fetch alternatives (flat query with separate contractor fetch)
+            const { data: altMatchData } = await supabase
+                .from("matches")
+                .select("id, score, contractor_id")
+                .eq("opportunity_id", matchData.opportunity_id)
+                .neq("contractor_id", matchData.contractor_id)
+                .order("score", { ascending: false })
+                .limit(10);
+
+            if (altMatchData && altMatchData.length > 0) {
+                const altConIds = [...new Set(altMatchData.map((m: any) => m.contractor_id))];
+                const { data: altConData } = await supabase
+                    .from("contractors")
+                    .select("id, company_name, uei, city, state, data_quality_flag")
+                    .in("id", altConIds);
+                const conMap = new Map((altConData || []).map((c: any) => [c.id, c]));
+                setAlternatives(altMatchData.map((m: any) => ({
+                    ...m,
+                    contractors: conMap.get(m.contractor_id) || {},
+                })));
             }
 
-            if (data?.contractor_id) {
-                const { data: contactData } = await supabase
-                    .from("contractor_contacts")
-                    .select("*")
-                    .eq("contractor_id", data.contractor_id)
-                    .order("confidence", { ascending: true });
-                if (contactData) setContacts(contactData as typeof contacts);
-            }
+            // Fetch contacts
+            const { data: contactData } = await supabase
+                .from("contractor_contacts")
+                .select("*")
+                .eq("contractor_id", matchData.contractor_id)
+                .order("confidence", { ascending: true });
+            if (contactData) setContacts(contactData as typeof contacts);
 
             setLoading(false);
         }
@@ -71,14 +86,13 @@ export default function MatchDetailPage() {
         await new Promise(r => setTimeout(r, 2000));
 
         // Simulate the exact B.L.A.S.T Prompt constraints: 180 words max, mention NAICS, deadline, and why matched.
-        const opp = match.opportunities;
-        const con = match.contractors;
-        const deadline = opp.response_deadline ? new Date(opp.response_deadline).toLocaleDateString() : 'TBD';
+        if (!opportunity || !contractor) return;
+        const deadline = opportunity.response_deadline ? new Date(opportunity.response_deadline).toLocaleDateString() : 'TBD';
 
         setDrafts([
-            `Subject: Strategic Alignment: ${opp.title}\n\nHi Team at ${con.company_name},\n\nWe identified a strong deterministic match with your profile. The Defense Logistics Agency released "${opp.title}" under NAICS ${opp.naics_code}, directly overlapping your active codes. \n\nYour match score is exceptionally high due to a perfect NAICS alignment and your ${con.certifications?.[0] || 'Small Business'} certification matching the Set-Aside requirements. \n\nPlease review your capabilities against this Sources Sought. Response deadline is firmly set for ${deadline}. Let us know if you need capture support.\n\nBest,\nCapture OS Intelligence`,
+            `Subject: Strategic Alignment: ${opportunity.title}\n\nHi Team at ${contractor.company_name},\n\nWe identified a strong deterministic match with your profile. The agency released "${opportunity.title}" under NAICS ${opportunity.naics_code}, directly overlapping your active codes. \n\nYour match score is exceptionally high due to a perfect NAICS alignment and your ${contractor.sba_certifications?.[0] || 'Small Business'} certification matching the Set-Aside requirements. \n\nPlease review your capabilities against this ${opportunity.notice_type || 'solicitation'}. Response deadline is firmly set for ${deadline}. Let us know if you need capture support.\n\nBest,\nCapture OS Intelligence`,
 
-            `Subject: Leveraging your Certifications for ${opp.notice_id}\n\nHello ${con.company_name},\n\nYour ${con.certifications?.join(", ")} status gives you a significant advantage in the newly posted ${opp.opportunity_types?.name || 'solicitation'} by ${opp.agencies?.sub_tier || opp.agencies?.department || 'the agency'}.\n\nUnder NAICS ${opp.naics_code}, the competition will be restricted. Our algorithm matched you because your certifications and exact NAICS code mathematically align with the agency's requirements. \n\nThe deadline is ${deadline}. I strongly recommend we prepare a capabilities brief focusing heavily on your past performance in this specific socio-economic category.\n\nRegards,\nCapture OS Intelligence`
+            `Subject: Leveraging your Certifications for ${opportunity.notice_id}\n\nHello ${contractor.company_name},\n\nYour ${contractor.sba_certifications?.join(", ") || 'Small Business'} status gives you a significant advantage in the newly posted ${opportunity.notice_type || 'solicitation'} by ${opportunity.agency || 'the agency'}.\n\nUnder NAICS ${opportunity.naics_code}, the competition will be restricted. Our algorithm matched you because your certifications and exact NAICS code mathematically align with the agency's requirements. \n\nThe deadline is ${deadline}. I strongly recommend we prepare a capabilities brief focusing heavily on your past performance in this specific socio-economic category.\n\nRegards,\nCapture OS Intelligence`
         ]);
         setDrafting(false);
     };
@@ -119,7 +133,7 @@ export default function MatchDetailPage() {
                         <span className="font-typewriter text-stone-400 text-sm">Score: {match.score}/100</span>
                     </div>
                     <h2 className="text-3xl font-bold font-typewriter tracking-tighter text-black flex items-center">
-                        {match.contractors.company_name} <ArrowRight className="mx-3 text-stone-300 w-6 h-6" /> {match.opportunities.notice_id}
+                        {contractor?.company_name} <ArrowRight className="mx-3 text-stone-300 w-6 h-6" /> {opportunity?.notice_id}
                     </h2>
                 </div>
             </header>
@@ -134,51 +148,51 @@ export default function MatchDetailPage() {
                             <div>
                                 <p className="text-stone-500 font-typewriter text-xs uppercase mb-1">Company</p>
                                 <Link href={`/contractors/${match.contractor_id}`} className="font-bold hover:underline flex items-center">
-                                    {match.contractors.company_name} <ExternalLink className="w-3 h-3 ml-1 text-stone-400" />
+                                    {contractor?.company_name} <ExternalLink className="w-3 h-3 ml-1 text-stone-400" />
                                 </Link>
-                                <p className="text-stone-400 text-xs mt-0.5">UEI: {match.contractors.uei}</p>
+                                <p className="text-stone-400 text-xs mt-0.5">UEI: {contractor?.uei}</p>
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <p className="text-stone-500 font-typewriter text-xs uppercase mb-1 flex items-center"><MapPin className="w-3 h-3 mr-1" /> Location</p>
-                                    <p className="font-medium text-stone-800">{match.contractors.city || 'Unknown'}, {match.contractors.state || 'N/A'}</p>
+                                    <p className="font-medium text-stone-800">{contractor?.city || 'Unknown'}, {contractor?.state || 'N/A'}</p>
                                 </div>
                                 <div>
                                     <p className="text-stone-500 font-typewriter text-xs uppercase mb-1 flex items-center"><Globe className="w-3 h-3 mr-1" /> Website</p>
                                     <p className="font-medium text-stone-800">
-                                        {match.contractors.website ? (
-                                            <a href={match.contractors.website.startsWith('http') ? match.contractors.website : `https://${match.contractors.website}`} target="_blank" rel="noopener noreferrer" className="hover:underline text-blue-600 block truncate" title={match.contractors.website}>{match.contractors.website.replace(/^https?:\/\//, '')}</a>
+                                        {(contractor?.website || contractor?.business_url) ? (
+                                            <a href={(contractor.website || contractor.business_url)!.startsWith('http') ? (contractor.website || contractor.business_url) : `https://${contractor.website || contractor.business_url}`} target="_blank" rel="noopener noreferrer" className="hover:underline text-blue-600 block truncate" title={contractor.website || contractor.business_url}>{(contractor.website || contractor.business_url || '').replace(/^https?:\/\//, '')}</a>
                                         ) : "N/A"}
                                     </p>
                                 </div>
                                 <div>
                                     <p className="text-stone-500 font-typewriter text-xs uppercase mb-1 flex items-center"><Phone className="w-3 h-3 mr-1" /> Phone</p>
-                                    <p className="font-medium text-stone-800">{match.contractors.phone || 'N/A'}</p>
+                                    <p className="font-medium text-stone-800">{contractor?.phone || contractor?.primary_poc_phone || 'N/A'}</p>
                                 </div>
                                 <div>
                                     <p className="text-stone-500 font-typewriter text-xs uppercase mb-1 flex items-center"><Users className="w-3 h-3 mr-1" /> Size Bracket</p>
-                                    <p className="font-medium text-stone-800">{match.contractors.company_size_bracket || 'Unknown'}</p>
+                                    <p className="font-medium text-stone-800">{contractor?.employee_count ? `${contractor.employee_count} employees` : 'Unknown'}</p>
                                 </div>
                             </div>
                             <div>
                                 <p className="text-stone-500 font-typewriter text-xs uppercase mb-1 mt-2">NAICS Codes</p>
-                                <p className="font-mono bg-stone-100 p-2 rounded-lg text-xs break-all leading-relaxed border border-stone-200">{match.contractors.naics_codes?.join(", ")}</p>
+                                <p className="font-mono bg-stone-100 p-2 rounded-lg text-xs break-all leading-relaxed border border-stone-200">{contractor?.naics_codes?.join(", ") || "---"}</p>
                             </div>
                             <div>
                                 <p className="text-stone-500 font-typewriter text-xs uppercase mb-1">Certifications</p>
                                 <div className="flex flex-wrap gap-2">
-                                    {match.contractors.certifications?.map((c: string) => (
+                                    {(contractor?.sba_certifications || contractor?.certifications || [])?.map((c: string) => (
                                         <span key={c} className="bg-stone-800 text-stone-200 px-2 py-1 rounded font-typewriter text-[10px] uppercase tracking-wider">{c}</span>
                                     ))}
                                 </div>
                             </div>
 
-                            {/* Decision Makers from Enrichment */}
-                            {contacts.length > 0 && (
-                                <div className="mt-2 pt-4 border-t border-stone-200">
-                                    <p className="text-stone-500 font-typewriter text-xs uppercase mb-3 flex items-center">
-                                        <Star className="w-3 h-3 mr-1 text-amber-400 fill-amber-400" /> Decision Makers
-                                    </p>
+                            {/* Decision Makers from Enrichment or SAM POC fallback */}
+                            <div className="mt-2 pt-4 border-t border-stone-200">
+                                <p className="text-stone-500 font-typewriter text-xs uppercase mb-3 flex items-center">
+                                    <Star className="w-3 h-3 mr-1 text-amber-400 fill-amber-400" /> Decision Makers
+                                </p>
+                                {contacts.length > 0 ? (
                                     <div className="space-y-2">
                                         {contacts.map((contact) => (
                                             <div key={contact.id} className="bg-stone-50 p-3 rounded-xl border border-stone-100 flex justify-between items-start">
@@ -203,8 +217,27 @@ export default function MatchDetailPage() {
                                             </div>
                                         ))}
                                     </div>
-                                </div>
-                            )}
+                                ) : contractor?.primary_poc_name ? (
+                                    <div className="bg-stone-50 p-3 rounded-xl border border-stone-100 flex justify-between items-start">
+                                        <div>
+                                            <p className="font-bold text-sm">{contractor.primary_poc_name}</p>
+                                            {contractor.primary_poc_title && <p className="text-xs text-stone-500">{contractor.primary_poc_title}</p>}
+                                            {contractor.primary_poc_email && <p className="text-xs text-blue-600 mt-0.5">{contractor.primary_poc_email}</p>}
+                                            {contractor.primary_poc_phone && <p className="text-xs text-stone-600 mt-0.5">{contractor.primary_poc_phone}</p>}
+                                            <p className="text-[9px] text-stone-400 mt-1 font-typewriter">Source: SAM.gov Registration</p>
+                                        </div>
+                                        <div className="flex gap-1">
+                                            {contractor.primary_poc_email && (
+                                                <a href={`mailto:${contractor.primary_poc_email}`} title="Email" className="p-1.5 bg-white hover:bg-stone-200 rounded-full text-stone-600 border border-stone-200 transition-colors">
+                                                    <Mail className="w-3 h-3" />
+                                                </a>
+                                            )}
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <p className="text-xs text-stone-400 italic">No decision maker data yet. Run enrichment to discover contacts.</p>
+                                )}
+                            </div>
                         </div>
                     </div>
 
@@ -214,19 +247,19 @@ export default function MatchDetailPage() {
                             <div>
                                 <p className="text-stone-500 font-typewriter text-xs uppercase mb-1">Agency & Title</p>
                                 <Link href={`/opportunities/${match.opportunity_id}`} className="block hover:opacity-70 transition-opacity">
-                                    <p className="font-bold">{match.opportunities.agencies?.sub_tier || match.opportunities.agencies?.department || "No Agency Info"}</p>
-                                    <p className="text-stone-600 italic mt-1">{match.opportunities.title}</p>
+                                    <p className="font-bold">{opportunity?.agency || "No Agency Info"}</p>
+                                    <p className="text-stone-600 italic mt-1">{opportunity?.title}</p>
                                 </Link>
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <p className="text-stone-500 font-typewriter text-xs uppercase mb-1">NAICS</p>
-                                    <p className="font-mono font-bold text-black">{match.opportunities.naics_code}</p>
+                                    <p className="font-mono font-bold text-black">{opportunity?.naics_code}</p>
                                 </div>
                                 <div>
                                     <p className="text-stone-500 font-typewriter text-xs uppercase mb-1">Deadline</p>
                                     <p className="font-sans font-bold text-red-600">
-                                        {match.opportunities.response_deadline ? new Date(match.opportunities.response_deadline).toLocaleDateString() : "TBD"}
+                                        {opportunity?.response_deadline ? new Date(opportunity.response_deadline).toLocaleDateString() : "TBD"}
                                     </p>
                                 </div>
                             </div>

@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
-import { Search, Filter, Loader2, LayoutGrid, List, Download, X, Building, Target, FileText, Link as LinkIcon, Sparkles, ChevronLeft, ChevronRight, Flame, Users, ChevronUp, ChevronDown, Sprout, Leaf, Sun, Award } from "lucide-react";
+import { Search, Filter, Loader2, LayoutGrid, List, Download, X, Building, Target, FileText, Link as LinkIcon, Sparkles, ChevronLeft, ChevronRight, Flame, Users, ChevronUp, ChevronDown, Sprout, Leaf, Sun, Award, Trophy } from "lucide-react";
 import clsx from "clsx";
 
 const supabase = createClient(
@@ -71,7 +71,7 @@ export default function OpportunitiesPage() {
     const pageSize = 50;
 
     // Quick Filters
-    const [quickFilter, setQuickFilter] = useState<"ALL" | "HAS_MATCHES" | "SOURCES_SOUGHT" | "ENRICHED">("ALL");
+    const [quickFilter, setQuickFilter] = useState<"ALL" | "HAS_MATCHES" | "SOURCES_SOUGHT" | "ENRICHED" | "EASY_WINS">("ALL");
 
     // Sort — column header click-to-sort
     const [sortCol, setSortCol] = useState<string>("posted_date");
@@ -194,6 +194,18 @@ export default function OpportunitiesPage() {
                     results.sort((a, b) => sortDir === "desc" ? (b._dataScore || 0) - (a._dataScore || 0) : (a._dataScore || 0) - (b._dataScore || 0));
                 }
 
+                // Easy Wins: High winability + deadline not passed
+                if (quickFilter === "EASY_WINS") {
+                    const today = new Date().toISOString().split("T")[0];
+                    results = results.filter(op => {
+                        const win = getWinability(op);
+                        if (win.label !== "High") return false;
+                        // Keep if no deadline (TBD) or deadline is in the future
+                        if (op.response_deadline && op.response_deadline < today) return false;
+                        return true;
+                    });
+                }
+
                 // For HAS_MATCHES filter, we need to check which have matches
                 if (quickFilter === "HAS_MATCHES") {
                     const oppIds = results.map(r => r.id);
@@ -208,7 +220,7 @@ export default function OpportunitiesPage() {
                 }
 
                 setOpportunities(results);
-                setTotalCount(quickFilter === "HAS_MATCHES" ? results.length : (count || 0));
+                setTotalCount(quickFilter === "HAS_MATCHES" || quickFilter === "EASY_WINS" ? results.length : (count || 0));
             }
         } catch (err) {
             console.error(err);
@@ -354,6 +366,7 @@ export default function OpportunitiesPage() {
                         <div className="flex items-center space-x-2 flex-wrap gap-2">
                             {([
                                 { key: "ALL" as const, label: "All Records", icon: null },
+                                { key: "EASY_WINS" as const, label: "Easy Wins", icon: Trophy },
                                 { key: "HAS_MATCHES" as const, label: "Has Matches", icon: Flame },
                                 { key: "SOURCES_SOUGHT" as const, label: "Sources Sought", icon: Sparkles },
                                 { key: "ENRICHED" as const, label: "Enriched", icon: Target },
@@ -496,7 +509,8 @@ export default function OpportunitiesPage() {
                                                 <th className="py-4 px-5 font-bold cursor-pointer hover:text-black select-none" onClick={() => handleColumnSort("place_of_performance_state")}>State <SortIndicator col="place_of_performance_state" /></th>
                                                 <th className="py-4 px-5 font-bold hidden xl:table-cell">Value</th>
                                                 <th className="py-4 px-5 font-bold cursor-pointer hover:text-black select-none" onClick={() => handleColumnSort("response_deadline")}>Deadline <SortIndicator col="response_deadline" /></th>
-                                                <th className="py-4 px-5 font-bold cursor-pointer hover:text-black select-none" onClick={() => handleColumnSort("data_rich")}>Data <SortIndicator col="data_rich" /></th>
+                                                <th className="py-4 px-5 font-bold">Winability</th>
+                                                <th className="py-4 px-5 font-bold cursor-pointer hover:text-black select-none hidden 2xl:table-cell" onClick={() => handleColumnSort("data_rich")}>Data <SortIndicator col="data_rich" /></th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-stone-100 text-sm">
@@ -530,6 +544,16 @@ export default function OpportunitiesPage() {
                                                             {op.response_deadline ? new Date(op.response_deadline).toLocaleDateString() : "TBD"}
                                                         </td>
                                                         <td className="py-3.5 px-5">
+                                                            {(() => {
+                                                                const win = getWinability(op);
+                                                                return (
+                                                                    <span className={clsx("text-[9px] font-typewriter px-2 py-1 rounded border uppercase tracking-widest whitespace-nowrap", win.color)}>
+                                                                        {win.label}
+                                                                    </span>
+                                                                );
+                                                            })()}
+                                                        </td>
+                                                        <td className="py-3.5 px-5 hidden 2xl:table-cell">
                                                             <div className="flex items-center space-x-1" title={`Data richness: ${dataScore}%`}>
                                                                 <div className="w-12 h-1.5 bg-stone-100 rounded-full overflow-hidden">
                                                                     <div className={clsx("h-full rounded-full", dataScore >= 60 ? "bg-green-500" : dataScore >= 30 ? "bg-amber-500" : "bg-stone-300")} style={{ width: `${dataScore}%` }} />

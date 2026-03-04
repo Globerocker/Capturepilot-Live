@@ -267,6 +267,20 @@ export default function ContractorsPage() {
                !!(c.business_url);
     };
 
+    const getOutreachPriority = (c: Contractor): { label: string; color: string } => {
+        const hasContact = !!(c.primary_poc_name);
+        const hasEmail = !!(c.email);
+        const hasPhone = !!(c.direct_phone || c.main_phone || c.phone);
+        const hasWebsite = !!(c.business_url);
+        const hasNaics = !!(c.naics_codes && c.naics_codes.length > 0);
+
+        if (hasContact && (hasEmail || hasPhone)) return { label: "Ready to Pitch", color: "bg-emerald-100 text-emerald-700 border-emerald-200" };
+        if (hasContact && !hasEmail && !hasPhone) return { label: "Need Contact Info", color: "bg-amber-100 text-amber-700 border-amber-200" };
+        if (hasWebsite && !hasContact) return { label: "Ready to Enrich", color: "bg-blue-100 text-blue-700 border-blue-200" };
+        if (!hasNaics) return { label: "Needs Setup", color: "bg-stone-100 text-stone-500 border-stone-200" };
+        return { label: "Basic Lead", color: "bg-stone-100 text-stone-500 border-stone-200" };
+    };
+
     const totalPages = Math.ceil(totalCount / pageSize);
 
     return (
@@ -394,6 +408,7 @@ export default function ContractorsPage() {
                                                 <th className="py-4 px-5 font-bold cursor-pointer hover:text-black select-none" onClick={() => handleColumnSort("state")}>Location <SortIndicator col="state" /></th>
                                                 <th className="py-4 px-5 font-bold">NAICS</th>
                                                 <th className="py-4 px-5 font-bold">Certs</th>
+                                                <th className="py-4 px-5 font-bold">Outreach</th>
                                                 <th className="py-4 px-5 font-bold cursor-pointer hover:text-black select-none" onClick={() => handleColumnSort("federal_awards_count")}>Awards <SortIndicator col="federal_awards_count" /></th>
                                                 <th className="py-4 px-5 font-bold cursor-pointer hover:text-black select-none hidden xl:table-cell" onClick={() => handleColumnSort("revenue")}>Revenue <SortIndicator col="revenue" /></th>
                                                 <th className="py-4 px-5 font-bold cursor-pointer hover:text-black select-none hidden xl:table-cell" onClick={() => handleColumnSort("employee_count")}>Staff <SortIndicator col="employee_count" /></th>
@@ -425,6 +440,16 @@ export default function ContractorsPage() {
                                                             ))}
                                                             {(!company.sba_certifications && !company.certifications) && <span className="text-stone-300 text-xs">---</span>}
                                                         </div>
+                                                    </td>
+                                                    <td className="py-3.5 px-5">
+                                                        {(() => {
+                                                            const priority = getOutreachPriority(company);
+                                                            return (
+                                                                <span className={clsx("text-[9px] font-typewriter px-2 py-1 rounded border uppercase tracking-widest whitespace-nowrap", priority.color)}>
+                                                                    {priority.label}
+                                                                </span>
+                                                            );
+                                                        })()}
                                                     </td>
                                                     <td className="py-3.5 px-5 font-mono font-bold text-xs">{company.federal_awards_count || 0}</td>
                                                     <td className="py-3.5 px-5 font-mono text-xs hidden xl:table-cell">{company.revenue ? `$${Math.round(company.revenue).toLocaleString()}` : "---"}</td>
@@ -465,13 +490,23 @@ export default function ContractorsPage() {
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                        {isEnriched(company) ? (
-                                                            <span className="flex items-center gap-1 bg-green-100 text-green-700 text-[9px] font-typewriter px-2 py-0.5 rounded-full border border-green-200 uppercase tracking-wider flex-shrink-0">
-                                                                <CheckCircle2 className="w-3 h-3" /> Enriched
-                                                            </span>
-                                                        ) : (
-                                                            <span className="bg-stone-100 text-stone-400 text-[9px] font-typewriter px-2 py-0.5 rounded-full border border-stone-200 uppercase tracking-wider flex-shrink-0">Basic</span>
-                                                        )}
+                                                        <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                                                            {(() => {
+                                                                const priority = getOutreachPriority(company);
+                                                                return (
+                                                                    <span className={clsx("text-[9px] font-typewriter px-2 py-0.5 rounded border uppercase tracking-widest whitespace-nowrap", priority.color)}>
+                                                                        {priority.label}
+                                                                    </span>
+                                                                );
+                                                            })()}
+                                                            {isEnriched(company) ? (
+                                                                <span className="flex items-center gap-1 bg-green-100 text-green-700 text-[9px] font-typewriter px-2 py-0.5 rounded-full border border-green-200 uppercase tracking-wider">
+                                                                    <CheckCircle2 className="w-3 h-3" /> Enriched
+                                                                </span>
+                                                            ) : (
+                                                                <span className="bg-stone-100 text-stone-400 text-[9px] font-typewriter px-2 py-0.5 rounded-full border border-stone-200 uppercase tracking-wider">Basic</span>
+                                                            )}
+                                                        </div>
                                                     </div>
 
                                                     <div className="space-y-3 pt-3 border-t border-stone-100">
