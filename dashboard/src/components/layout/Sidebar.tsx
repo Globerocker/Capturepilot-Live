@@ -20,7 +20,7 @@ export default function Sidebar() {
     ];
 
     return (
-        <aside className="w-64 flex-shrink-0 bg-gradient-to-b from-white via-white to-stone-50 border-r border-stone-200 h-screen flex flex-col pt-6 pb-6 shadow-sm rounded-r-[40px]">
+        <aside className="w-64 flex-shrink-0 bg-gradient-to-b from-white via-white to-stone-50 border-r border-stone-200 h-screen sticky top-0 flex flex-col pt-6 pb-6 shadow-sm rounded-r-[40px]">
             {/* Logo */}
             <div className="px-8 mb-12 flex items-center space-x-3">
                 <div className="w-9 h-9 rounded-xl bg-black flex items-center justify-center shadow-lg shadow-stone-300">

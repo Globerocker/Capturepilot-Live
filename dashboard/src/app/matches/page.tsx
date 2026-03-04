@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
-import { Loader2, ArrowRight, X, Building, CheckCircle2, PenTool, LayoutGrid, List, Briefcase, Sparkles, AlertCircle, ChevronDown, ChevronUp, Search, ChevronLeft, ChevronRight, Flame, Target } from "lucide-react";
+import { Loader2, ArrowRight, X, Building, CheckCircle2, PenTool, LayoutGrid, List, Briefcase, Sparkles, AlertCircle, ChevronDown, ChevronUp, Search, ChevronLeft, ChevronRight, Flame, Target, Globe, ExternalLink } from "lucide-react";
 import clsx from "clsx";
 
 export const dynamic = 'force-dynamic';
@@ -39,6 +39,7 @@ interface MatchExt {
         state?: string;
         naics_codes: string[];
         certifications: string[];
+        business_url?: string;
     };
 }
 
@@ -70,6 +71,7 @@ interface RawCon {
     state: string;
     naics_codes: string[];
     certifications: string[];
+    business_url: string;
 }
 
 interface DraftPayload {
@@ -106,7 +108,7 @@ function MatchesPage() {
     const [selectedMatch, setSelectedMatch] = useState<MatchExt | null>(null);
     const [drafting, setDrafting] = useState(false);
     const [drafts, setDrafts] = useState<DraftPayload[]>([]);
-    const [showBreakdown, setShowBreakdown] = useState(false);
+    const [showBreakdown, setShowBreakdown] = useState(true);
     const [viewMode, setViewMode] = useState("list");
 
     // Counts for tabs
@@ -175,7 +177,7 @@ function MatchesPage() {
 
             const [oppRes, conRes] = await Promise.all([
                 supabase.from("opportunities").select("id, title, notice_id, response_deadline, naics_code, agency, notice_type").in("id", oppIds),
-                supabase.from("contractors").select("id, company_name, uei, city, state, naics_codes, certifications").in("id", conIds),
+                supabase.from("contractors").select("id, company_name, uei, city, state, naics_codes, certifications, business_url").in("id", conIds),
             ]);
 
             const oppMap = new Map((oppRes.data as unknown as RawOpp[] || []).map((o) => [o.id, o]));
@@ -250,13 +252,29 @@ function MatchesPage() {
         return "bg-stone-400";
     };
 
+    const generateMatchSummary = (match: MatchExt): string => {
+        const bd = match.score_breakdown;
+        if (!bd) return "Score breakdown unavailable.";
+        const parts: string[] = [];
+        if ((bd.naics ?? 0) >= 25) parts.push("strong NAICS code alignment");
+        else if ((bd.naics ?? 0) >= 15) parts.push("partial NAICS overlap");
+        if ((bd.geo ?? 0) >= 12) parts.push("close geographic proximity");
+        if ((bd.capacity ?? 0) >= 15) parts.push("verified operational capacity");
+        if ((bd.inactivity ?? 0) >= 15) parts.push("low recent federal activity (hungry for contracts)");
+        if ((bd.notice_type ?? 0) >= 15) parts.push("early-stage opportunity (Sources Sought)");
+        if ((bd.past_performance ?? 0) >= 15) parts.push("strong federal track record");
+        if ((bd.density ?? 0) >= 12) parts.push("lower competition density");
+        if (parts.length === 0) return "Marginal fit across scoring factors.";
+        return "This pairing scores well due to " + parts.slice(0, 4).join(", ") + ".";
+    };
+
     const totalPages = Math.ceil(totalCount / pageSize);
     const totalAll = hotCount + warmCount + coldCount;
 
     return (
-        <div className="flex h-full gap-6 max-w-[1600px] mx-auto pb-12 overflow-hidden">
+        <div className="flex gap-6 max-w-[1600px] mx-auto pb-12 items-start">
             {/* Main Content Area */}
-            <div className={clsx("transition-all duration-500 ease-in-out flex-1 flex flex-col h-full", selectedMatch ? "hidden lg:flex lg:w-1/2 xl:w-7/12" : "w-full")}>
+            <div className={clsx("transition-all duration-500 ease-in-out flex-1 flex flex-col", selectedMatch ? "hidden lg:flex lg:w-1/2 xl:w-7/12" : "w-full")}>
                 <div className="animate-in fade-in duration-500">
                     <header className="flex items-end justify-between mb-6">
                         <div>
@@ -344,6 +362,7 @@ function MatchesPage() {
                         </div>
                     ) : (
                         <>
+                            {viewMode === "list" ? (
                             <div className="bg-white rounded-[32px] border border-stone-200 shadow-sm overflow-hidden flex flex-col">
                                 <table className="w-full text-left border-collapse">
                                     <thead>
@@ -367,7 +386,7 @@ function MatchesPage() {
                                         {matches.map((m) => (
                                             <tr
                                                 key={m.id}
-                                                onClick={() => { setSelectedMatch(m); setDrafts([]); setShowBreakdown(false); }}
+                                                onClick={() => { setSelectedMatch(m); setDrafts([]); setShowBreakdown(true); }}
                                                 onDoubleClick={() => router.push(`/matches/${m.opportunity_id}/${m.contractor_id}`)}
                                                 className={clsx(
                                                     "transition-colors group cursor-pointer",
@@ -416,6 +435,58 @@ function MatchesPage() {
                                     </tbody>
                                 </table>
                             </div>
+                            ) : (
+                            /* Grid View */
+                            <div className={clsx("grid gap-4 transition-all", selectedMatch ? "grid-cols-1 xl:grid-cols-2" : "grid-cols-1 md:grid-cols-2 xl:grid-cols-3")}>
+                                {matches.length === 0 && (
+                                    <div className="col-span-full bg-stone-50 border border-stone-200 border-dashed rounded-[32px] p-12 text-center">
+                                        <p className="text-stone-500 font-typewriter">
+                                            No matches found. {activeSearch ? "Try a different search." : "Run the Scoring Engine to generate matches."}
+                                        </p>
+                                    </div>
+                                )}
+                                {matches.map((m) => (
+                                    <div
+                                        key={m.id}
+                                        onClick={() => { setSelectedMatch(m); setDrafts([]); setShowBreakdown(true); }}
+                                        onDoubleClick={() => router.push(`/matches/${m.opportunity_id}/${m.contractor_id}`)}
+                                        className={clsx(
+                                            "bg-white p-5 rounded-[28px] border shadow-sm hover:shadow-md hover:border-black transition-all cursor-pointer flex flex-col justify-between",
+                                            selectedMatch?.id === m.id ? "border-black ring-2 ring-black/10" : "border-stone-200"
+                                        )}
+                                    >
+                                        <div>
+                                            <div className="flex justify-between items-center mb-3">
+                                                <div className="flex items-center space-x-2">
+                                                    <div className={clsx("w-2.5 h-2.5 rounded-full flex-shrink-0", getDotColor(m.classification))}></div>
+                                                    <span className="font-mono font-bold text-2xl">{Math.round(m.score * 100)}</span>
+                                                    <span className="text-[9px] font-typewriter text-stone-400 uppercase tracking-widest">{m.classification}</span>
+                                                </div>
+                                            </div>
+                                            <p className="font-bold text-black text-sm line-clamp-1 mb-0.5">{m.contractors?.company_name}</p>
+                                            <p className="text-stone-400 text-xs mb-3">
+                                                {[m.contractors?.city, m.contractors?.state].filter(Boolean).join(", ") || m.contractors?.uei}
+                                            </p>
+                                            <p className="font-medium text-stone-700 text-sm line-clamp-2 mb-1">{m.opportunities?.title}</p>
+                                            <p className="text-stone-500 text-xs line-clamp-1">{m.opportunities?.agency || "Unknown Agency"}</p>
+                                        </div>
+                                        <div className="pt-3 border-t border-stone-100 mt-3 flex flex-wrap items-center justify-between gap-2">
+                                            <span className="font-mono text-[10px] bg-stone-100 text-stone-600 px-2 py-0.5 rounded border border-stone-200">
+                                                {m.opportunities?.naics_code || "---"}
+                                            </span>
+                                            {m.opportunities?.notice_type && (
+                                                <span className="text-[9px] font-typewriter text-stone-400 uppercase tracking-widest">
+                                                    {m.opportunities.notice_type}
+                                                </span>
+                                            )}
+                                            <span className="font-bold text-xs text-stone-700">
+                                                {m.opportunities?.response_deadline ? new Date(m.opportunities.response_deadline).toLocaleDateString() : "TBD"}
+                                            </span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            )}
 
                             {/* Pagination */}
                             {totalPages > 1 && (
@@ -525,6 +596,39 @@ function MatchesPage() {
                             </div>
                         </div>
 
+                        {/* Action Buttons */}
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => router.push(`/matches/${selectedMatch.opportunity_id}/${selectedMatch.contractor_id}`)}
+                                className="flex-1 flex items-center justify-center space-x-2 text-sm font-bold font-typewriter bg-black text-white py-3 rounded-full hover:bg-stone-800 transition-all"
+                            >
+                                <ArrowRight className="w-4 h-4" />
+                                <span>View Details</span>
+                            </button>
+                            {selectedMatch.contractors.business_url && (
+                                <a
+                                    href={selectedMatch.contractors.business_url.startsWith('http') ? selectedMatch.contractors.business_url : `https://${selectedMatch.contractors.business_url}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center justify-center space-x-1.5 text-xs font-bold font-typewriter bg-stone-100 border border-stone-200 px-4 py-3 rounded-full hover:bg-stone-200 transition-all"
+                                >
+                                    <Globe className="w-3.5 h-3.5" />
+                                    <span>Website</span>
+                                </a>
+                            )}
+                            {selectedMatch.opportunities.notice_id && (
+                                <a
+                                    href={`https://sam.gov/opp/${selectedMatch.opportunities.notice_id}/view`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center justify-center space-x-1.5 text-xs font-bold font-typewriter bg-stone-100 border border-stone-200 px-4 py-3 rounded-full hover:bg-stone-200 transition-all"
+                                >
+                                    <ExternalLink className="w-3.5 h-3.5" />
+                                    <span>SAM.gov</span>
+                                </a>
+                            )}
+                        </div>
+
                         {/* Score Breakdown + AI Engine */}
                         <div className="bg-stone-900 rounded-3xl p-6 text-white relative shadow-xl overflow-hidden mt-4">
                             <div className="absolute top-0 right-0 w-32 h-32 bg-stone-700/30 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
@@ -532,6 +636,10 @@ function MatchesPage() {
                             <h3 className="font-typewriter font-bold text-sm mb-3 flex items-center text-stone-100">
                                 <Sparkles className="w-4 h-4 mr-2 text-stone-400" /> Match Intelligence
                             </h3>
+
+                            <p className="text-stone-400 font-sans text-xs mb-4 leading-relaxed">
+                                {generateMatchSummary(selectedMatch)}
+                            </p>
 
                             <div className="bg-black/40 border border-stone-700 rounded-xl mb-6 overflow-hidden">
                                 <button

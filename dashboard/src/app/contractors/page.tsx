@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
-import { Loader2, Users, Building, ShieldCheck, X, MapPin, Mail, DollarSign, Award, Target, Phone, Link as LinkIcon, Search, ChevronLeft, ChevronRight, Sparkles, Star, ExternalLink, LayoutGrid, List, ChevronUp, ChevronDown } from "lucide-react";
+import { Loader2, Users, Building, ShieldCheck, X, MapPin, Mail, DollarSign, Award, Target, Phone, Link as LinkIcon, Search, ChevronLeft, ChevronRight, Sparkles, Star, ExternalLink, LayoutGrid, List, ChevronUp, ChevronDown, CheckCircle2, Globe } from "lucide-react";
 import clsx from "clsx";
 
 export const dynamic = 'force-dynamic';
@@ -260,6 +260,13 @@ export default function ContractorsPage() {
         }
     };
 
+    const isEnriched = (c: Contractor): boolean => {
+        return !!(c.federal_awards_count && c.federal_awards_count > 0) ||
+               !!(c.employee_count) ||
+               !!(c.revenue) ||
+               !!(c.business_url);
+    };
+
     const totalPages = Math.ceil(totalCount / pageSize);
 
     return (
@@ -430,34 +437,46 @@ export default function ContractorsPage() {
                             ) : (
                                 <div className={clsx("grid gap-6 transition-all mb-6", selectedContractor ? "grid-cols-1 xl:grid-cols-2" : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3")}>
                                     {contractors.map((company) => (
-                                        <button
+                                        <div
                                             onClick={() => setSelectedContractor(company)}
                                             onDoubleClick={() => router.push(`/contractors/${company.id}`)}
                                             key={company.id}
                                             className={clsx(
-                                                "block group text-left h-full transition-all outline-none",
+                                                "block group text-left h-full transition-all outline-none cursor-pointer",
                                                 selectedContractor?.id === company.id ? "ring-2 ring-black rounded-[32px]" : ""
                                             )}
                                         >
                                             <div className="bg-white h-full rounded-[32px] p-6 border border-stone-200 shadow-sm group-hover:border-black group-hover:shadow-md transition-all flex flex-col justify-between">
                                                 <div>
-                                                    <div className="flex items-start space-x-4 mb-4">
-                                                        <div className="w-12 h-12 rounded-full bg-stone-100 flex items-center justify-center flex-shrink-0">
-                                                            <Building className="w-6 h-6 text-stone-600" />
+                                                    <div className="flex items-start justify-between mb-3">
+                                                        <div className="flex items-start space-x-3 flex-1 min-w-0">
+                                                            <div className="w-10 h-10 rounded-full bg-stone-100 flex items-center justify-center flex-shrink-0">
+                                                                <Building className="w-5 h-5 text-stone-600" />
+                                                            </div>
+                                                            <div className="min-w-0">
+                                                                <h3 className="font-bold text-base text-black line-clamp-2 leading-tight">{company.company_name}</h3>
+                                                                <div className="flex items-center gap-2 mt-1">
+                                                                    {company.state && (
+                                                                        <span className="font-mono text-xs bg-stone-100 border border-stone-200 px-2 py-0.5 rounded-full font-bold">{company.state}</span>
+                                                                    )}
+                                                                    {company.city && (
+                                                                        <span className="font-mono text-xs text-stone-400">{company.city}</span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
                                                         </div>
-                                                        <div>
-                                                            <h3 className="font-bold text-lg text-black line-clamp-2 leading-tight">{company.company_name}</h3>
-                                                            {company.city && company.state ? (
-                                                                <p className="font-mono text-xs text-stone-400 mt-1">{company.city}, {company.state}</p>
-                                                            ) : (
-                                                                <p className="font-mono text-xs text-stone-400 mt-1">UEI: {company.uei || "N/A"}</p>
-                                                            )}
-                                                        </div>
+                                                        {isEnriched(company) ? (
+                                                            <span className="flex items-center gap-1 bg-green-100 text-green-700 text-[9px] font-typewriter px-2 py-0.5 rounded-full border border-green-200 uppercase tracking-wider flex-shrink-0">
+                                                                <CheckCircle2 className="w-3 h-3" /> Enriched
+                                                            </span>
+                                                        ) : (
+                                                            <span className="bg-stone-100 text-stone-400 text-[9px] font-typewriter px-2 py-0.5 rounded-full border border-stone-200 uppercase tracking-wider flex-shrink-0">Basic</span>
+                                                        )}
                                                     </div>
 
-                                                    <div className="space-y-4 pt-4 border-t border-stone-100">
+                                                    <div className="space-y-3 pt-3 border-t border-stone-100">
                                                         <div>
-                                                            <p className="font-typewriter text-[10px] text-stone-400 uppercase mb-2">Active NAICS (Top)</p>
+                                                            <p className="font-typewriter text-[10px] text-stone-400 uppercase mb-1.5">NAICS</p>
                                                             <div className="flex flex-wrap gap-1">
                                                                 {company.naics_codes?.slice(0, 4).map((n: string) => (
                                                                     <span key={n} className="bg-stone-100 text-stone-600 border border-stone-200 px-2 py-0.5 rounded font-mono text-[10px]">
@@ -472,25 +491,39 @@ export default function ContractorsPage() {
                                                                 )}
                                                             </div>
                                                         </div>
+                                                        <div>
+                                                            <p className="font-typewriter text-[10px] text-stone-400 uppercase mb-1.5 flex items-center">
+                                                                <ShieldCheck className="w-3 h-3 mr-1" /> Certs
+                                                            </p>
+                                                            <div className="flex flex-wrap gap-1">
+                                                                {(company.sba_certifications || company.certifications)?.slice(0, 3).map((c: string) => (
+                                                                    <span key={c} className="bg-black text-white px-2 py-0.5 rounded font-typewriter tracking-widest text-[9px] uppercase">
+                                                                        {c}
+                                                                    </span>
+                                                                ))}
+                                                                {(!company.sba_certifications && !company.certifications) && (
+                                                                    <span className="text-stone-400 text-[10px] italic">None listed</span>
+                                                                )}
+                                                            </div>
+                                                        </div>
                                                     </div>
                                                 </div>
-                                                <div className="mt-4 pt-4 border-t border-stone-100">
-                                                    <p className="font-typewriter text-[10px] text-stone-400 uppercase mb-2 flex items-center">
-                                                        <ShieldCheck className="w-3 h-3 mr-1" /> Certifications
-                                                    </p>
-                                                    <div className="flex flex-wrap gap-1">
-                                                        {(company.sba_certifications || company.certifications)?.slice(0, 3).map((c: string) => (
-                                                            <span key={c} className="bg-black text-white px-2 py-0.5 rounded font-typewriter tracking-widest text-[9px] uppercase">
-                                                                {c}
-                                                            </span>
-                                                        ))}
-                                                        {(!company.sba_certifications && !company.certifications) && (
-                                                            <span className="text-stone-400 text-[10px] italic">None listed</span>
-                                                        )}
+                                                {company.business_url && (
+                                                    <div className="mt-3 pt-3 border-t border-stone-100">
+                                                        <a
+                                                            href={company.business_url.startsWith('http') ? company.business_url : `https://${company.business_url}`}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            onClick={(e) => e.stopPropagation()}
+                                                            className="text-xs text-blue-600 hover:text-blue-800 flex items-center truncate transition-colors"
+                                                        >
+                                                            <Globe className="w-3 h-3 mr-1 flex-shrink-0" />
+                                                            <span className="truncate">{company.business_url.replace(/^https?:\/\//, '')}</span>
+                                                        </a>
                                                     </div>
-                                                </div>
+                                                )}
                                             </div>
-                                        </button>
+                                        </div>
                                     ))}
                                 </div>
                             )}

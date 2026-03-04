@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Activity, Target, TrendingUp, Users, ArrowRight, Flame, Loader2, Clock, Briefcase, UserCheck } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Activity, Target, TrendingUp, Users, ArrowRight, Flame, Loader2, Clock, Briefcase, UserCheck, AlertTriangle } from "lucide-react";
 import clsx from "clsx";
 import Link from "next/link";
 import { createClient } from "@supabase/supabase-js";
@@ -37,6 +38,7 @@ interface WarmMatch {
 }
 
 export default function AgencyDashboard() {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [opsCount, setOpsCount] = useState(0);
   const [hotCount, setHotCount] = useState(0);
@@ -46,6 +48,8 @@ export default function AgencyDashboard() {
   const [warmList, setWarmList] = useState<WarmMatch[]>([]);
   const [pipelineCount, setPipelineCount] = useState(0);
   const [lastScoredAt, setLastScoredAt] = useState<string | null>(null);
+  const [urgentCount, setUrgentCount] = useState(0);
+  const [topNaics, setTopNaics] = useState("");
 
   useEffect(() => {
     async function loadDashboard() {
@@ -122,6 +126,28 @@ export default function AgencyDashboard() {
         };
       }));
 
+      // Urgent deadlines (next 7 days)
+      const nextWeek = new Date();
+      nextWeek.setDate(nextWeek.getDate() + 7);
+      const { count: urgentDeadlines } = await supabase
+        .from("opportunities")
+        .select("*", { count: 'exact', head: true })
+        .eq("is_archived", false)
+        .lte("response_deadline", nextWeek.toISOString())
+        .gte("response_deadline", new Date().toISOString());
+      setUrgentCount(urgentDeadlines || 0);
+
+      // Top NAICS from hot matches
+      const naicsCounts: Record<string, number> = {};
+      hotMatches.forEach(m => {
+        const opp = oppMap.get(m.opportunity_id) as Record<string, string> | undefined;
+        if (opp?.naics_code) {
+          naicsCounts[opp.naics_code] = (naicsCounts[opp.naics_code] || 0) + 1;
+        }
+      });
+      const sortedNaics = Object.entries(naicsCounts).sort((a, b) => b[1] - a[1]);
+      if (sortedNaics.length > 0) setTopNaics(sortedNaics[0][0]);
+
       setLoading(false);
     }
     loadDashboard();
@@ -190,7 +216,7 @@ export default function AgencyDashboard() {
                   <tr><td colSpan={5} className="py-8 text-center text-stone-400 font-typewriter">No HOT matches detected. Click &quot;Score Matches&quot; above to generate.</td></tr>
                 )}
                 {hotList.map((opp) => (
-                  <tr key={opp.id} className="hover:bg-stone-50 transition-colors group cursor-pointer">
+                  <tr key={opp.id} onClick={() => router.push(`/matches/${opp.opportunity_id}/${opp.contractor_id}`)} className="hover:bg-stone-50 transition-colors group cursor-pointer">
                     <td className="py-4">
                       <div className="flex items-center space-x-2">
                         <div className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0"></div>
@@ -198,10 +224,8 @@ export default function AgencyDashboard() {
                       </div>
                     </td>
                     <td className="py-4 max-w-[250px]">
-                      <Link href={`/matches/${opp.opportunity_id}/${opp.contractor_id}`} className="hover:underline">
-                        <p className="font-bold text-black line-clamp-1 text-sm">{opp.title}</p>
-                        <p className="text-stone-500 text-xs line-clamp-1">{opp.agency}</p>
-                      </Link>
+                      <p className="font-bold text-black line-clamp-1 text-sm">{opp.title}</p>
+                      <p className="text-stone-500 text-xs line-clamp-1">{opp.agency}</p>
                     </td>
                     <td className="py-4">
                       <p className="font-medium text-stone-800 text-sm">{opp.contractor}</p>
@@ -256,6 +280,18 @@ export default function AgencyDashboard() {
                   <p className="font-typewriter font-bold text-xl">{pipelineCount}</p>
                 </Link>
               </div>
+              {urgentCount > 0 && (
+              <div className="bg-red-500/10 p-4 rounded-2xl border border-red-500/20">
+                <p className="text-red-400 font-typewriter text-[10px] uppercase tracking-wider mb-1 flex items-center"><AlertTriangle className="w-3 h-3 mr-1" />Urgent</p>
+                <p className="font-typewriter font-bold text-sm text-red-300">{urgentCount} deadline{urgentCount !== 1 ? 's' : ''} in 7 days</p>
+              </div>
+              )}
+              {topNaics && (
+              <div className="bg-black/40 p-4 rounded-2xl border border-stone-800">
+                <p className="text-stone-500 font-typewriter text-[10px] uppercase tracking-wider mb-1">Top HOT NAICS</p>
+                <p className="font-mono font-bold text-sm">{topNaics}</p>
+              </div>
+              )}
               <div className="bg-black/40 p-4 rounded-2xl border border-stone-800">
                 <p className="text-stone-500 font-typewriter text-[10px] uppercase tracking-wider mb-1 flex items-center"><Clock className="w-3 h-3 mr-1" />Last Scored</p>
                 <p className="font-typewriter font-bold text-sm">

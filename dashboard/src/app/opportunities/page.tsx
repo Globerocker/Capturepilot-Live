@@ -287,6 +287,20 @@ export default function OpportunitiesPage() {
         URL.revokeObjectURL(url);
     };
 
+    const getWinability = (op: Opportunity): { label: string; color: string } => {
+        let score = 0;
+        const nt = (op.notice_type || "").toLowerCase();
+        if (nt.includes("sources sought") || nt.includes("rfi")) score += 3;
+        else if (nt.includes("presolicitation")) score += 2;
+        else if (nt.includes("solicitation") || nt.includes("combined")) score += 1;
+        if (op.set_aside_code && !op.set_aside_code.toLowerCase().includes("unrestricted")) score += 2;
+        if (!op.incumbent_contractor_name) score += 1;
+        if (op.award_amount && op.award_amount < 250000) score += 1;
+        if (score >= 5) return { label: "High", color: "bg-green-100 text-green-700 border-green-200" };
+        if (score >= 3) return { label: "Medium", color: "bg-amber-100 text-amber-700 border-amber-200" };
+        return { label: "Low", color: "bg-stone-100 text-stone-500 border-stone-200" };
+    };
+
     const totalPages = Math.ceil(totalCount / pageSize);
 
     const formatCurrency = (val: number | null | undefined) => {
@@ -551,22 +565,36 @@ export default function OpportunitiesPage() {
                                                             <span className={clsx(
                                                                 "font-typewriter text-[9px] px-2 py-1 rounded border uppercase tracking-widest",
                                                                 typeName === "Sources Sought" ? "bg-emerald-100 text-emerald-700 border-emerald-200" :
+                                                                typeName === "Presolicitation" ? "bg-blue-100 text-blue-700 border-blue-200" :
                                                                 "bg-stone-100 text-stone-600 border-stone-200"
                                                             )}>
                                                                 {typeName}
                                                             </span>
-                                                            {op.award_amount && (
-                                                                <span className="font-mono font-bold text-xs text-green-700 bg-green-50 px-2 py-0.5 rounded border border-green-200">{formatCurrency(op.award_amount)}</span>
-                                                            )}
+                                                            <div className="flex items-center gap-1.5">
+                                                                {(() => {
+                                                                    const win = getWinability(op);
+                                                                    return (
+                                                                        <span className={clsx("text-[9px] font-typewriter px-2 py-0.5 rounded border uppercase tracking-widest", win.color)}>
+                                                                            Win: {win.label}
+                                                                        </span>
+                                                                    );
+                                                                })()}
+                                                                {op.award_amount && (
+                                                                    <span className="font-mono font-bold text-xs text-green-700 bg-green-50 px-2 py-0.5 rounded border border-green-200">{formatCurrency(op.award_amount)}</span>
+                                                                )}
+                                                            </div>
                                                         </div>
                                                         <h3 className="font-bold text-base mb-2 line-clamp-2 leading-tight group-hover:text-stone-600 transition-colors">{op.title}</h3>
-                                                        <p className="text-stone-500 text-sm line-clamp-1 mb-3">{agencyName}</p>
+                                                        <p className="text-stone-500 text-sm line-clamp-1 mb-1">{agencyName}</p>
+                                                        {op.posted_date && (
+                                                            <p className="text-[10px] text-stone-400 font-mono">Posted {new Date(op.posted_date).toLocaleDateString()}</p>
+                                                        )}
                                                     </div>
-                                                    <div className="pt-3 border-t border-stone-100 flex justify-between items-center mt-auto">
-                                                        <div className="flex items-center space-x-3">
+                                                    <div className="pt-3 border-t border-stone-100 flex justify-between items-center mt-3">
+                                                        <div className="flex items-center space-x-2">
                                                             <span className="font-mono font-bold text-xs">{op.naics_code || "N/A"}</span>
                                                             {op.place_of_performance_state && (
-                                                                <span className="text-xs text-stone-400">{op.place_of_performance_state}</span>
+                                                                <span className="font-mono text-xs bg-stone-100 border border-stone-200 px-2 py-0.5 rounded-full font-bold">{op.place_of_performance_state}</span>
                                                             )}
                                                         </div>
                                                         <span className="font-bold text-xs text-stone-700">

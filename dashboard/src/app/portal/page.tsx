@@ -6,7 +6,7 @@ import { createClient } from "@supabase/supabase-js";
 import {
     Loader2, Building, Target, Flame, ArrowRight, Search, X,
     ShieldCheck, MapPin, Briefcase, DollarSign, ChevronLeft, ChevronRight,
-    ExternalLink, Calendar, FileText, Award, Users
+    ExternalLink, Calendar, FileText, Award, Users, Star, Zap
 } from "lucide-react";
 import Link from "next/link";
 import clsx from "clsx";
@@ -233,6 +233,53 @@ function PortalPage() {
                         </button>
                     )}
                 </div>
+
+                {/* Featured Demo Contractor */}
+                {(() => {
+                    const demo = [...filteredContractors].sort((a, b) => (b.federal_awards_count || 0) - (a.federal_awards_count || 0))[0];
+                    if (!demo) return null;
+                    return (
+                        <div className="mb-6 bg-gradient-to-br from-stone-900 via-stone-800 to-stone-900 rounded-[32px] p-8 text-white shadow-xl border border-stone-700 relative overflow-hidden">
+                            <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2" />
+                            <div className="relative">
+                                <div className="flex items-center gap-2 mb-4">
+                                    <Star className="w-4 h-4 text-amber-400 fill-amber-400" />
+                                    <span className="text-[10px] font-typewriter uppercase tracking-[0.2em] text-amber-400 font-bold">Featured Client Demo</span>
+                                </div>
+                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                                    <div>
+                                        <h3 className="text-xl font-bold font-typewriter tracking-tight">{demo.company_name}</h3>
+                                        <div className="flex items-center gap-3 mt-2 text-stone-400 text-sm">
+                                            <span className="flex items-center"><MapPin className="w-3 h-3 mr-1" />{[demo.city, demo.state].filter(Boolean).join(", ") || "---"}</span>
+                                            <span className="font-mono text-xs">UEI: {demo.uei}</span>
+                                        </div>
+                                        <div className="flex gap-4 mt-4">
+                                            <div className="bg-white/10 rounded-xl px-4 py-2 text-center">
+                                                <p className="text-[9px] font-typewriter uppercase tracking-widest text-stone-400">Awards</p>
+                                                <p className="font-bold text-lg">{demo.federal_awards_count || 0}</p>
+                                            </div>
+                                            <div className="bg-white/10 rounded-xl px-4 py-2 text-center">
+                                                <p className="text-[9px] font-typewriter uppercase tracking-widest text-stone-400">NAICS</p>
+                                                <p className="font-bold text-lg">{(demo.naics_codes || []).length}</p>
+                                            </div>
+                                            <div className="bg-white/10 rounded-xl px-4 py-2 text-center">
+                                                <p className="text-[9px] font-typewriter uppercase tracking-widest text-stone-400">Employees</p>
+                                                <p className="font-bold text-lg">{demo.employee_count || "---"}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleSelectClient(demo)}
+                                        className="inline-flex items-center bg-white text-black font-typewriter font-bold px-8 py-4 rounded-full hover:bg-stone-100 transition-all shadow-lg text-sm self-start md:self-center"
+                                    >
+                                        <Zap className="w-4 h-4 mr-2" /> View Portal
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })()}
 
                 <div className="bg-white rounded-[32px] border border-stone-200 shadow-sm overflow-hidden">
                     <table className="w-full text-left border-collapse">
