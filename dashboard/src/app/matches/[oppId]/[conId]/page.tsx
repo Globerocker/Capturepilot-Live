@@ -45,16 +45,27 @@ export default function MatchDetailPage() {
             setOpportunity(oppRes.data);
             setContractor(conRes.data);
 
-            // Fetch alternatives for this opportunity
+            // Fetch alternatives for this opportunity (flat query to avoid PGRST200)
             if (oppId) {
-                const { data: altData } = await supabase
+                const { data: altMatchData } = await supabase
                     .from("matches")
-                    .select("id, score, contractor_id, contractors(company_name, uei, city, state)")
+                    .select("id, score, contractor_id")
                     .eq("opportunity_id", oppId as string)
                     .neq("contractor_id", conId as string)
                     .order("score", { ascending: false })
                     .limit(10);
-                if (altData) setAlternatives(altData);
+                if (altMatchData && altMatchData.length > 0) {
+                    const altConIds = [...new Set(altMatchData.map((m: Record<string, string>) => m.contractor_id))];
+                    const { data: altConData } = await supabase
+                        .from("contractors")
+                        .select("id, company_name, uei, city, state")
+                        .in("id", altConIds);
+                    const altConMap = new Map((altConData || []).map((c: Record<string, string>) => [c.id, c]));
+                    setAlternatives(altMatchData.map((m: Record<string, unknown>) => ({
+                        ...m,
+                        contractors: altConMap.get(m.contractor_id as string) || { company_name: "Unknown", uei: "", city: "", state: "" },
+                    })));
+                }
             }
 
             // Fetch contacts
@@ -174,7 +185,11 @@ export default function MatchDetailPage() {
                                     </div>
                                     <div>
                                         <p className="text-stone-500 font-typewriter text-xs uppercase mb-1 flex items-center"><Phone className="w-3 h-3 mr-1" /> Phone</p>
-                                        <p className="font-medium text-stone-800">{phone || 'N/A'}</p>
+                                        <p className="font-medium text-stone-800">
+                                            {phone ? (
+                                                <a href={`tel:${phone}`} className="hover:text-blue-600 transition-colors">{phone}</a>
+                                            ) : 'N/A'}
+                                        </p>
                                     </div>
                                     <div>
                                         <p className="text-stone-500 font-typewriter text-xs uppercase mb-1 flex items-center"><Users className="w-3 h-3 mr-1" /> Size</p>
@@ -217,12 +232,17 @@ export default function MatchDetailPage() {
                                                         {contact.full_name && <p className="font-bold text-sm">{contact.full_name}</p>}
                                                         {contact.title && <p className="text-xs text-stone-500">{contact.title}</p>}
                                                         {contact.email && <p className="text-xs text-blue-600 mt-0.5">{contact.email}</p>}
-                                                        {contact.phone && <p className="text-xs text-stone-600 mt-0.5">{contact.phone}</p>}
+                                                        {contact.phone && <a href={`tel:${contact.phone}`} className="text-xs text-stone-600 hover:text-blue-600 mt-0.5 block transition-colors">{contact.phone}</a>}
                                                     </div>
                                                     <div className="flex gap-1">
                                                         {contact.email && (
                                                             <a href={`mailto:${contact.email}`} title="Email" className="p-1.5 bg-white hover:bg-stone-200 rounded-full text-stone-600 border border-stone-200 transition-colors">
                                                                 <Mail className="w-3 h-3" />
+                                                            </a>
+                                                        )}
+                                                        {contact.phone && (
+                                                            <a href={`tel:${contact.phone}`} title="Call" className="p-1.5 bg-white hover:bg-stone-200 rounded-full text-stone-600 border border-stone-200 transition-colors">
+                                                                <Phone className="w-3 h-3" />
                                                             </a>
                                                         )}
                                                         {contact.linkedin_url && (
@@ -283,8 +303,9 @@ export default function MatchDetailPage() {
                 </div>
 
                 {/* Right Column: Score + AI Drafting */}
-                <div className="bg-stone-900 rounded-[32px] p-8 text-white relative flex flex-col shadow-xl">
-                    <div className="absolute top-0 right-0 w-48 h-48 bg-stone-700/30 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
+                <div className="bg-gradient-to-br from-stone-900 via-stone-900 to-black rounded-[32px] p-8 text-white relative flex flex-col shadow-xl">
+                    <div className="absolute top-0 right-0 w-48 h-48 bg-stone-600/20 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
+                    <div className="absolute bottom-0 left-0 w-32 h-32 bg-stone-700/15 rounded-full blur-3xl -ml-8 -mb-8 pointer-events-none"></div>
 
                     <h3 className="font-typewriter font-bold text-xl mb-4 flex items-center text-stone-100">
                         <Sparkles className="w-5 h-5 mr-3 text-stone-400" /> Capture OS Communications

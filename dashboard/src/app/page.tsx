@@ -223,8 +223,9 @@ export default function AgencyDashboard() {
         </div>
 
         {/* Intelligence Briefing */}
-        <div className="bg-stone-900 rounded-[32px] p-8 text-white shadow-xl flex flex-col justify-between relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-stone-700 rounded-full blur-3xl opacity-20 -mr-10 -mt-10 pointer-events-none"></div>
+        <div className="bg-gradient-to-br from-stone-900 via-stone-900 to-black rounded-[32px] p-8 text-white shadow-xl flex flex-col justify-between relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-40 h-40 bg-stone-600 rounded-full blur-3xl opacity-15 -mr-10 -mt-10 pointer-events-none"></div>
+          <div className="absolute bottom-0 left-0 w-32 h-32 bg-stone-700 rounded-full blur-3xl opacity-10 -ml-8 -mb-8 pointer-events-none"></div>
 
           <div>
             <div className="w-10 h-10 rounded-full bg-stone-800 flex items-center justify-center mb-6">
@@ -311,7 +312,7 @@ function MetricCard({ title, value, icon: Icon, highlight = false, href }: { tit
     <div className={clsx(
       "p-6 rounded-[32px] flex flex-col justify-between transition-all duration-300",
       highlight ? "bg-white shadow-md border-2 border-black" : "bg-white border border-stone-200 shadow-sm",
-      href && "cursor-pointer hover:shadow-md hover:border-black"
+      href && "cursor-pointer hover:shadow-lg hover:border-black hover:-translate-y-0.5"
     )}>
       <div className="flex justify-between items-start mb-4">
         <p className="text-sm font-medium text-stone-500 font-sans tracking-tight">{title}</p>

@@ -229,13 +229,25 @@ export default function OpportunitiesPage() {
         }
         async function fetchMatches() {
             setLoadingContractors(true);
-            const { data } = await supabase
+            // Flat query to avoid PGRST200 FK error
+            const { data: matchData } = await supabase
                 .from("matches")
-                .select("id, contractor_id, opportunity_id, score, classification, contractors(company_name, uei, city, state, certifications)")
+                .select("id, contractor_id, opportunity_id, score, classification")
                 .eq("opportunity_id", selectedOpportunity!.id)
                 .order("score", { ascending: false })
                 .limit(10);
-            setMatchedContractors((data || []) as unknown as MatchedContractor[]);
+            const rows = matchData || [];
+            if (rows.length === 0) { setMatchedContractors([]); setLoadingContractors(false); return; }
+            const conIds = [...new Set(rows.map((m: Record<string, string>) => m.contractor_id))];
+            const { data: conData } = await supabase
+                .from("contractors")
+                .select("id, company_name, uei, city, state, certifications")
+                .in("id", conIds);
+            const conMap = new Map((conData || []).map((c: Record<string, string>) => [c.id, c]));
+            setMatchedContractors(rows.map((m: Record<string, unknown>) => ({
+                ...m,
+                contractors: conMap.get(m.contractor_id as string) || { company_name: "Unknown", uei: "", city: "", state: "", certifications: [] },
+            })) as unknown as MatchedContractor[]);
             setLoadingContractors(false);
         }
         fetchMatches();

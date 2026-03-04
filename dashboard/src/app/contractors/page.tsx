@@ -42,6 +42,10 @@ interface Contractor {
     last_award_date?: string;
     bonded_mentioned?: boolean;
     municipal_experience?: boolean;
+    email?: string;
+    direct_phone?: string;
+    main_phone?: string;
+    phone?: string;
 }
 
 interface ContractorContact {
@@ -659,14 +663,24 @@ export default function ContractorsPage() {
                                             <div>
                                                 <p className="font-bold text-sm text-stone-900">{selectedContractor.primary_poc_name}</p>
                                                 <p className="text-xs text-stone-500 font-typewriter">Primary Point of Contact</p>
+                                                {selectedContractor.email && (
+                                                    <a href={`mailto:${selectedContractor.email}`} className="text-xs text-blue-600 hover:underline mt-1 block">{selectedContractor.email}</a>
+                                                )}
+                                                {(selectedContractor.direct_phone || selectedContractor.phone) && (
+                                                    <a href={`tel:${selectedContractor.direct_phone || selectedContractor.phone}`} className="text-xs text-stone-600 hover:text-blue-600 mt-0.5 block transition-colors">{selectedContractor.direct_phone || selectedContractor.phone}</a>
+                                                )}
                                             </div>
                                             <div className="flex space-x-2">
-                                                <button title="Email" className="p-2 bg-white hover:bg-stone-200 rounded-full text-stone-600 border border-stone-200 transition-colors">
-                                                    <Mail className="w-3 h-3" />
-                                                </button>
-                                                <button title="Call" className="p-2 bg-white hover:bg-stone-200 rounded-full text-stone-600 border border-stone-200 transition-colors">
-                                                    <Phone className="w-3 h-3" />
-                                                </button>
+                                                {selectedContractor.email && (
+                                                    <a href={`mailto:${selectedContractor.email}`} title="Email" className="p-2 bg-white hover:bg-stone-200 rounded-full text-stone-600 border border-stone-200 transition-colors">
+                                                        <Mail className="w-3 h-3" />
+                                                    </a>
+                                                )}
+                                                {(selectedContractor.direct_phone || selectedContractor.phone) && (
+                                                    <a href={`tel:${selectedContractor.direct_phone || selectedContractor.phone}`} title="Call" className="p-2 bg-white hover:bg-stone-200 rounded-full text-stone-600 border border-stone-200 transition-colors">
+                                                        <Phone className="w-3 h-3" />
+                                                    </a>
+                                                )}
                                             </div>
                                         </div>
                                     )}
@@ -675,14 +689,16 @@ export default function ContractorsPage() {
                                             <div>
                                                 <p className="font-bold text-sm text-stone-900">{selectedContractor.secondary_poc_name}</p>
                                                 <p className="text-xs text-stone-500 font-typewriter">Secondary Contact</p>
+                                                {selectedContractor.main_phone && (
+                                                    <a href={`tel:${selectedContractor.main_phone}`} className="text-xs text-stone-600 hover:text-blue-600 mt-0.5 block transition-colors">{selectedContractor.main_phone}</a>
+                                                )}
                                             </div>
                                             <div className="flex space-x-2">
-                                                <button title="Email" className="p-2 bg-white hover:bg-stone-200 rounded-full text-stone-600 border border-stone-200 transition-colors">
-                                                    <Mail className="w-3 h-3" />
-                                                </button>
-                                                <button title="Call" className="p-2 bg-white hover:bg-stone-200 rounded-full text-stone-600 border border-stone-200 transition-colors">
-                                                    <Phone className="w-3 h-3" />
-                                                </button>
+                                                {selectedContractor.main_phone && (
+                                                    <a href={`tel:${selectedContractor.main_phone}`} title="Call" className="p-2 bg-white hover:bg-stone-200 rounded-full text-stone-600 border border-stone-200 transition-colors">
+                                                        <Phone className="w-3 h-3" />
+                                                    </a>
+                                                )}
                                             </div>
                                         </div>
                                     )}

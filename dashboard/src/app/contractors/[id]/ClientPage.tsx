@@ -472,8 +472,9 @@ export default function ContractorDetailClient({ initialData }: { initialData: a
                     </div>
 
                     {/* Federal Profile */}
-                    <div className="bg-stone-900 text-white rounded-[32px] p-8 shadow-xl relative overflow-hidden">
-                        <div className="absolute top-0 right-0 w-64 h-64 bg-stone-700/30 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none"></div>
+                    <div className="bg-gradient-to-br from-stone-900 via-stone-900 to-black text-white rounded-[32px] p-8 shadow-xl relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-64 h-64 bg-stone-600/20 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none"></div>
+                        <div className="absolute bottom-0 left-0 w-48 h-48 bg-stone-700/10 rounded-full blur-3xl -ml-12 -mb-12 pointer-events-none"></div>
 
                         <h2 className="font-typewriter text-lg font-bold mb-6 flex items-center relative z-10">
                             <Award className="w-5 h-5 mr-3 text-stone-400" /> Federal Profile & Health
@@ -559,16 +560,24 @@ export default function ContractorDetailClient({ initialData }: { initialData: a
                                     <p className="text-[10px] text-stone-400 font-typewriter uppercase tracking-widest mb-1">Direct Phone</p>
                                     {isEditing ? (
                                         <input type="text" value={editForm.direct_phone} onChange={(e) => setEditForm({ ...editForm, direct_phone: e.target.value })} className="w-full text-sm font-mono p-1 border rounded" placeholder="Direct Phone" />
+                                    ) : (contractor.direct_phone || contractor.phone) ? (
+                                        <a href={`tel:${contractor.direct_phone || contractor.phone}`} className="font-bold font-mono text-sm text-black hover:text-blue-600 transition-colors">
+                                            {contractor.direct_phone || contractor.phone}
+                                        </a>
                                     ) : (
-                                        <p className="font-bold font-mono text-sm">{contractor.direct_phone || contractor.phone || "---"}</p>
+                                        <p className="font-bold font-mono text-sm text-stone-300">---</p>
                                     )}
                                 </div>
                                 <div>
                                     <p className="text-[10px] text-stone-400 font-typewriter uppercase tracking-widest mb-1">Main Line</p>
                                     {isEditing ? (
                                         <input type="text" value={editForm.main_phone} onChange={(e) => setEditForm({ ...editForm, main_phone: e.target.value })} className="w-full text-sm font-mono p-1 border rounded" placeholder="Main Line Phone" />
+                                    ) : contractor.main_phone ? (
+                                        <a href={`tel:${contractor.main_phone}`} className="font-bold font-mono text-sm text-black hover:text-blue-600 transition-colors">
+                                            {contractor.main_phone}
+                                        </a>
                                     ) : (
-                                        <p className="font-bold font-mono text-sm">{contractor.main_phone || "---"}</p>
+                                        <p className="font-bold font-mono text-sm text-stone-300">---</p>
                                     )}
                                 </div>
                                 <div>

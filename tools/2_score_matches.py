@@ -21,8 +21,11 @@ def load_env_file(filepath=".env"):
                     k, v = line.split('=', 1)
                     os.environ[k.strip()] = v.strip().strip("'").strip('"')
 
-load_env_file(".env.local")
-load_env_file(".env")
+# Load env from script's parent directory (project root)
+_script_dir = os.path.dirname(os.path.abspath(__file__))
+_project_root = os.path.dirname(_script_dir)
+load_env_file(os.path.join(_project_root, ".env.local"))
+load_env_file(os.path.join(_project_root, ".env"))
 
 SUPABASE_URL = os.getenv("SUPABASE_URL") or os.getenv("NEXT_PUBLIC_SUPABASE_URL")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")

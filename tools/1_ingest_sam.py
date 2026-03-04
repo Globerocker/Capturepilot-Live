@@ -1,10 +1,22 @@
 import os
 import requests
 from supabase import create_client, Client
-from dotenv import load_dotenv
 from datetime import datetime, timedelta
 
-load_dotenv()
+def load_env_file(filepath=".env"):
+    if os.path.exists(filepath):
+        with open(filepath, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    k, v = line.split('=', 1)
+                    os.environ[k.strip()] = v.strip().strip("'").strip('"')
+
+# Load env from project root (parent of tools/)
+_script_dir = os.path.dirname(os.path.abspath(__file__))
+_project_root = os.path.dirname(_script_dir)
+load_env_file(os.path.join(_project_root, ".env.local"))
+load_env_file(os.path.join(_project_root, ".env"))
 
 SAM_API_KEY = os.getenv("SAM_API_KEY")
 SUPABASE_URL = os.getenv("SUPABASE_URL")
@@ -96,13 +108,51 @@ def ingest_sam_opportunities(days_back=2):
                     db_payload.append(normalized)
                 
                 if db_payload:
+                    # Fix empty strings (Supabase rejects "" for timestamp/FK columns)
+                    for row in db_payload:
+                        if not row.get("response_deadline"):
+                            row["response_deadline"] = None
+                        if not row.get("posted_date"):
+                            row["posted_date"] = None
+                        if not row.get("psc_code"):
+                            row["psc_code"] = None
+                        if not row.get("naics_code"):
+                            row["naics_code"] = None
+
                     try:
                         # Upsert batch to Supabase
                         res = supabase.table("opportunities").upsert(db_payload, on_conflict="notice_id").execute()
                         total_upserted += len(db_payload)
                         print(f"  ✅ Upserted batch of {len(db_payload)}. Moving to next offset.")
                     except Exception as db_err:
-                        print(f"  ❌ DB Error Upserting Batch: {db_err}")
+                        err_msg = str(db_err)
+                        # Handle FK constraint errors by nulling bad codes and retrying
+                        if "foreign key constraint" in err_msg or "23503" in err_msg:
+                            print(f"  ⚠️ FK constraint error. Stripping unknown codes and retrying...")
+                            # Collect valid NAICS and PSC codes from DB
+                            try:
+                                valid_naics = set()
+                                valid_psc = set()
+                                naics_res = supabase.table("naics_codes").select("code").execute()
+                                psc_res = supabase.table("psc_codes").select("code").execute()
+                                if naics_res.data:
+                                    valid_naics = {r["code"] for r in naics_res.data}
+                                if psc_res.data:
+                                    valid_psc = {r["code"] for r in psc_res.data}
+
+                                for row in db_payload:
+                                    if row.get("naics_code") and row["naics_code"] not in valid_naics:
+                                        row["naics_code"] = None
+                                    if row.get("psc_code") and row["psc_code"] not in valid_psc:
+                                        row["psc_code"] = None
+
+                                res2 = supabase.table("opportunities").upsert(db_payload, on_conflict="notice_id").execute()
+                                total_upserted += len(db_payload)
+                                print(f"  ✅ Retry succeeded. Upserted {len(db_payload)} (some codes nulled).")
+                            except Exception as retry_err:
+                                print(f"  ❌ Retry also failed: {retry_err}")
+                        else:
+                            print(f"  ❌ DB Error Upserting Batch: {db_err}")
                 
                 offset += limit
                 
