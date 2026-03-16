@@ -60,8 +60,9 @@ export default function UserDashboard() {
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [opsCount, setOpsCount] = useState(0);
-  const [easyWinsCount, setEasyWinsCount] = useState(0);
-  const [naicsMatchCount, setNaicsMatchCount] = useState(0);
+  const [hotMatchCount, setHotMatchCount] = useState(0);
+  const [warmMatchCount, setWarmMatchCount] = useState(0);
+  const [totalMatchCount, setTotalMatchCount] = useState(0);
   const [urgentCount, setUrgentCount] = useState(0);
   const [topOpps, setTopOpps] = useState<TopOpp[]>([]);
   const [pipelineCount, setPipelineCount] = useState(0);
@@ -88,48 +89,49 @@ export default function UserDashboard() {
       }
       setProfile(profileData as UserProfile);
 
-      const userNaics = (profileData as UserProfile).naics_codes || [];
       const today = new Date().toISOString().split("T")[0];
+      const profileId = (profileData as Record<string, unknown>).id as string;
 
       // Run all counts in parallel
-      const [opsRes, naicsRes, easyRes, urgentRes, topRes] = await Promise.all([
+      const [opsRes, hotRes, warmRes, urgentRes, topMatchRes] = await Promise.all([
         // Total active opportunities
         supabase.from("opportunities").select("*", { count: "exact", head: true }).eq("is_archived", false),
-        // NAICS matched opportunities
-        userNaics.length > 0
-          ? supabase.from("opportunities").select("*", { count: "exact", head: true }).eq("is_archived", false).in("naics_code", userNaics)
+        // HOT matches from user_matches
+        profileId
+          ? supabase.from("user_matches").select("*", { count: "exact", head: true }).eq("user_profile_id", profileId).eq("classification", "HOT").eq("is_dismissed", false)
           : Promise.resolve({ count: 0 }),
-        // Easy wins: Sources Sought with set-aside + active deadline
-        supabase.from("opportunities").select("*", { count: "exact", head: true })
-          .eq("is_archived", false)
-          .ilike("notice_type", "%Sources Sought%")
-          .not("set_aside_code", "is", null)
-          .gte("response_deadline", today),
+        // WARM matches
+        profileId
+          ? supabase.from("user_matches").select("*", { count: "exact", head: true }).eq("user_profile_id", profileId).eq("classification", "WARM").eq("is_dismissed", false)
+          : Promise.resolve({ count: 0 }),
         // Urgent: deadlines in 7 days
         supabase.from("opportunities").select("*", { count: "exact", head: true })
           .eq("is_archived", false)
           .lte("response_deadline", new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString())
           .gte("response_deadline", today),
-        // Top matching opportunities by NAICS
-        userNaics.length > 0
-          ? supabase.from("opportunities")
-            .select("id, title, agency, naics_code, notice_type, response_deadline, set_aside_code")
-            .eq("is_archived", false)
-            .in("naics_code", userNaics)
-            .gte("response_deadline", today)
-            .order("response_deadline", { ascending: true })
+        // Top matches from user_matches (joined with opportunities)
+        profileId
+          ? supabase.from("user_matches")
+            .select("score, classification, opportunities(id, title, agency, naics_code, notice_type, response_deadline, set_aside_code)")
+            .eq("user_profile_id", profileId)
+            .eq("is_dismissed", false)
+            .order("score", { ascending: false })
             .limit(8)
           : Promise.resolve({ data: [] }),
       ]);
 
       setOpsCount(opsRes.count || 0);
-      setNaicsMatchCount((naicsRes as { count: number | null }).count || 0);
-      setEasyWinsCount(easyRes.count || 0);
+      const hot = (hotRes as { count: number | null }).count || 0;
+      const warm = (warmRes as { count: number | null }).count || 0;
+      setHotMatchCount(hot);
+      setWarmMatchCount(warm);
+      setTotalMatchCount(hot + warm);
       setUrgentCount(urgentRes.count || 0);
-      setTopOpps((topRes.data || []) as TopOpp[]);
+      // Extract opportunity data from joined matches
+      const topData = (topMatchRes.data || []) as unknown as Array<{ score: number; classification: string; opportunities: TopOpp }>;
+      setTopOpps(topData.map(m => m.opportunities).filter(Boolean));
 
       // Fetch pipeline and action item counts
-      const profileId = (profileData as Record<string, unknown>).id as string;
       if (profileId) {
         const [pursuitRes, actionsRes] = await Promise.all([
           supabase.from("user_pursuits").select("stage").eq("user_profile_id", profileId),
@@ -177,18 +179,18 @@ export default function UserDashboard() {
       <section className="grid grid-cols-2 gap-3 sm:gap-4">
         <KpiCard
           title="Your Matches"
-          value={naicsMatchCount}
-          subtitle="Opportunities matching your NAICS"
+          value={totalMatchCount}
+          subtitle={`${hotMatchCount} HOT, ${warmMatchCount} WARM`}
           icon={Target}
-          href="/opportunities"
+          href="/matches"
           highlight
         />
         <KpiCard
-          title="Easy Wins"
-          value={easyWinsCount}
-          subtitle="Sources Sought with set-asides"
+          title="HOT Matches"
+          value={hotMatchCount}
+          subtitle="Strong profile alignment"
           icon={Trophy}
-          href="/opportunities"
+          href="/matches"
           color="emerald"
         />
         <KpiCard

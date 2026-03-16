@@ -3,35 +3,42 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseClient } from "@/lib/supabase/client";
-import { Loader2, Zap, Search, X, ChevronLeft, ChevronRight, Trophy, Clock, Shield, Target, ArrowRight } from "lucide-react";
+import { Loader2, Zap, Search, X, ChevronLeft, ChevronRight, Trophy, Clock, Shield, Target, ArrowRight, Bookmark, EyeOff, Flame } from "lucide-react";
 import clsx from "clsx";
 import Link from "next/link";
 
 const supabase = createSupabaseClient();
 
-interface MatchedOpp {
+interface UserMatch {
     id: string;
-    title: string;
-    agency: string;
-    naics_code: string;
-    notice_type: string;
-    response_deadline: string;
-    set_aside_code: string;
-    place_of_performance_state: string;
-    award_amount: number | null;
+    score: number;
+    classification: string;
+    score_breakdown: Record<string, number> | null;
+    is_saved: boolean;
+    is_dismissed: boolean;
+    opportunities: {
+        id: string;
+        title: string;
+        agency: string;
+        naics_code: string;
+        notice_type: string;
+        response_deadline: string;
+        set_aside_code: string;
+        place_of_performance_state: string;
+        award_amount: number | null;
+    };
 }
 
 export default function MyMatchesPage() {
     const router = useRouter();
     const [loading, setLoading] = useState(true);
-    const [opps, setOpps] = useState<MatchedOpp[]>([]);
+    const [matches, setMatches] = useState<UserMatch[]>([]);
     const [totalCount, setTotalCount] = useState(0);
-    const [userNaics, setUserNaics] = useState<string[]>([]);
-    const [userState, setUserState] = useState("");
+    const [profileId, setProfileId] = useState<string | null>(null);
     const [searchInput, setSearchInput] = useState("");
     const [activeSearch, setActiveSearch] = useState("");
     const [page, setPage] = useState(1);
-    const [filter, setFilter] = useState<"ALL" | "EASY_WINS" | "SET_ASIDE" | "URGENT">("ALL");
+    const [filter, setFilter] = useState<"ALL" | "HOT" | "WARM" | "SAVED">("ALL");
     const pageSize = 25;
 
     useEffect(() => {
@@ -41,56 +48,73 @@ export default function MyMatchesPage() {
 
             const { data: profile } = await supabase
                 .from("user_profiles")
-                .select("naics_codes, state, target_states, sba_certifications")
+                .select("id")
                 .eq("auth_user_id", user.id)
                 .single();
 
             if (!profile) { router.push("/onboard"); return; }
-            setUserNaics((profile as Record<string, unknown>).naics_codes as string[] || []);
-            setUserState((profile as Record<string, unknown>).state as string || "");
+            setProfileId((profile as Record<string, unknown>).id as string);
         }
         loadProfile();
     }, [router]);
 
     const fetchMatches = useCallback(async () => {
-        if (userNaics.length === 0) { setLoading(false); return; }
+        if (!profileId) { setLoading(false); return; }
         setLoading(true);
 
-        const today = new Date().toISOString().split("T")[0];
-
         let query = supabase
-            .from("opportunities")
-            .select("id, title, agency, naics_code, notice_type, response_deadline, set_aside_code, place_of_performance_state, award_amount", { count: "exact" })
-            .eq("is_archived", false)
-            .in("naics_code", userNaics);
+            .from("user_matches")
+            .select(
+                "id, score, classification, score_breakdown, is_saved, is_dismissed, " +
+                "opportunities(id, title, agency, naics_code, notice_type, response_deadline, set_aside_code, place_of_performance_state, award_amount)",
+                { count: "exact" }
+            )
+            .eq("user_profile_id", profileId)
+            .eq("is_dismissed", false);
 
-        if (activeSearch) {
-            query = query.or(`title.ilike.%${activeSearch}%,agency.ilike.%${activeSearch}%`);
+        if (filter === "HOT") {
+            query = query.eq("classification", "HOT");
+        } else if (filter === "WARM") {
+            query = query.eq("classification", "WARM");
+        } else if (filter === "SAVED") {
+            query = query.eq("is_saved", true);
         }
 
-        if (filter === "EASY_WINS") {
-            query = query.ilike("notice_type", "%Sources Sought%").not("set_aside_code", "is", null).gte("response_deadline", today);
-        } else if (filter === "SET_ASIDE") {
-            query = query.not("set_aside_code", "is", null);
-        } else if (filter === "URGENT") {
-            const weekFromNow = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-            query = query.gte("response_deadline", today).lte("response_deadline", weekFromNow);
-        }
-
-        query = query.order("response_deadline", { ascending: true, nullsFirst: false });
+        query = query.order("score", { ascending: false });
 
         const from = (page - 1) * pageSize;
         const to = from + pageSize - 1;
         const { data, count } = await query.range(from, to);
 
-        setOpps((data || []) as MatchedOpp[]);
-        setTotalCount(count || 0);
+        // Filter by search client-side (Supabase can't search joined fields easily)
+        let filtered = (data || []) as unknown as UserMatch[];
+        if (activeSearch) {
+            const s = activeSearch.toLowerCase();
+            filtered = filtered.filter(m =>
+                m.opportunities?.title?.toLowerCase().includes(s) ||
+                m.opportunities?.agency?.toLowerCase().includes(s)
+            );
+        }
+
+        setMatches(filtered);
+        setTotalCount(activeSearch ? filtered.length : (count || 0));
         setLoading(false);
-    }, [userNaics, page, activeSearch, filter]);
+    }, [profileId, page, activeSearch, filter]);
 
     useEffect(() => {
-        if (userNaics.length > 0) fetchMatches();
-    }, [fetchMatches, userNaics]);
+        if (profileId) fetchMatches();
+    }, [fetchMatches, profileId]);
+
+    const toggleSave = async (matchId: string, currentlySaved: boolean) => {
+        await supabase.from("user_matches").update({ is_saved: !currentlySaved }).eq("id", matchId);
+        setMatches(prev => prev.map(m => m.id === matchId ? { ...m, is_saved: !currentlySaved } : m));
+    };
+
+    const dismissMatch = async (matchId: string) => {
+        await supabase.from("user_matches").update({ is_dismissed: true }).eq("id", matchId);
+        setMatches(prev => prev.filter(m => m.id !== matchId));
+        setTotalCount(prev => prev - 1);
+    };
 
     const totalPages = Math.ceil(totalCount / pageSize);
 
@@ -102,7 +126,13 @@ export default function MyMatchesPage() {
         return "bg-stone-100 text-stone-500 border-stone-200";
     };
 
-    if (loading && opps.length === 0) {
+    const getScoreColor = (score: number) => {
+        if (score >= 0.70) return "text-emerald-600 bg-emerald-50 border-emerald-200";
+        if (score >= 0.50) return "text-amber-600 bg-amber-50 border-amber-200";
+        return "text-stone-500 bg-stone-50 border-stone-200";
+    };
+
+    if (loading && matches.length === 0) {
         return (
             <div className="flex justify-center items-center min-h-[400px]">
                 <Loader2 className="w-10 h-10 animate-spin text-stone-400" />
@@ -120,7 +150,7 @@ export default function MyMatchesPage() {
                     </span>
                 </h2>
                 <p className="text-stone-500 mt-1 font-medium text-sm">
-                    Opportunities matching your NAICS codes ({userNaics.join(", ") || "none set"})
+                    Opportunities scored and ranked based on your complete profile
                 </p>
             </header>
 
@@ -128,9 +158,9 @@ export default function MyMatchesPage() {
             <section className="flex flex-wrap gap-2 mb-4">
                 {([
                     { key: "ALL" as const, label: "All Matches", icon: Target },
-                    { key: "EASY_WINS" as const, label: "Easy Wins", icon: Trophy },
-                    { key: "SET_ASIDE" as const, label: "Set-Aside", icon: Shield },
-                    { key: "URGENT" as const, label: "Urgent", icon: Clock },
+                    { key: "HOT" as const, label: "HOT", icon: Flame },
+                    { key: "WARM" as const, label: "WARM", icon: Trophy },
+                    { key: "SAVED" as const, label: "Saved", icon: Bookmark },
                 ]).map(tab => (
                     <button
                         type="button"
@@ -165,39 +195,56 @@ export default function MyMatchesPage() {
                 )}
             </div>
 
-            {/* No NAICS set */}
-            {userNaics.length === 0 && (
-                <div className="bg-amber-50 border border-amber-200 rounded-[24px] p-6 sm:p-8 text-center">
-                    <p className="text-amber-800 font-bold mb-2">No NAICS codes in your profile</p>
-                    <p className="text-amber-600 text-sm mb-4">Add your NAICS codes so we can match you with relevant opportunities.</p>
-                    <Link href="/settings" className="bg-black text-white px-6 py-2.5 rounded-full text-sm font-bold inline-flex items-center">
-                        Update Profile <ArrowRight className="w-3 h-3 ml-2" />
-                    </Link>
+            {/* Empty States */}
+            {matches.length === 0 && !loading && (
+                <div className="bg-stone-50 border border-stone-200 border-dashed rounded-[24px] p-8 sm:p-12 text-center">
+                    {filter === "SAVED" ? (
+                        <>
+                            <Bookmark className="w-10 h-10 text-stone-300 mx-auto mb-3" />
+                            <p className="text-stone-500 font-typewriter mb-2">No saved matches yet.</p>
+                            <p className="text-stone-400 text-sm">Click the bookmark icon on any match to save it for later.</p>
+                        </>
+                    ) : (
+                        <>
+                            <Zap className="w-10 h-10 text-stone-300 mx-auto mb-3" />
+                            <p className="text-stone-500 font-typewriter mb-2">No matches found.</p>
+                            <p className="text-stone-400 text-sm mb-4">
+                                Make sure your profile is complete, then matches will be generated automatically.
+                            </p>
+                            <Link href="/settings" className="bg-black text-white px-6 py-2.5 rounded-full text-sm font-bold inline-flex items-center">
+                                Update Profile <ArrowRight className="w-3 h-3 ml-2" />
+                            </Link>
+                        </>
+                    )}
                 </div>
             )}
 
             {/* Results */}
-            {userNaics.length > 0 && (
+            {matches.length > 0 && (
                 <div className="space-y-2">
-                    {opps.length === 0 && !loading && (
-                        <div className="bg-stone-50 border border-stone-200 border-dashed rounded-[24px] p-8 sm:p-12 text-center">
-                            <p className="text-stone-500 font-typewriter">No matches found for this filter.</p>
-                        </div>
-                    )}
-                    {opps.map((opp) => {
-                        const isEasyWin = opp.notice_type?.includes("Sources Sought") && opp.set_aside_code;
+                    {matches.map((match) => {
+                        const opp = match.opportunities;
+                        if (!opp) return null;
+                        const scorePercent = Math.round(match.score * 100);
                         return (
-                            <Link
-                                key={opp.id}
-                                href={`/opportunities/${opp.id}`}
-                                className="block bg-white hover:bg-stone-50 active:bg-stone-100 border border-stone-200 hover:border-stone-300 rounded-xl sm:rounded-2xl p-3 sm:p-4 transition-all shadow-sm"
-                            >
+                            <div key={match.id} className="bg-white border border-stone-200 hover:border-stone-300 rounded-xl sm:rounded-2xl p-3 sm:p-4 transition-all shadow-sm group">
                                 <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                                    <div className="flex-1 min-w-0">
+                                    {/* Score Badge */}
+                                    <div className={clsx("flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 rounded-xl border-2 font-black font-typewriter text-sm sm:text-base flex-shrink-0", getScoreColor(match.score))}>
+                                        {scorePercent}%
+                                    </div>
+
+                                    {/* Content */}
+                                    <Link href={`/opportunities/${opp.id}`} className="flex-1 min-w-0">
                                         <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-                                            {isEasyWin && (
-                                                <span className="text-[9px] font-typewriter font-bold bg-emerald-100 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded uppercase">Easy Win</span>
-                                            )}
+                                            <span className={clsx(
+                                                "text-[9px] font-typewriter font-bold px-2 py-0.5 rounded uppercase tracking-widest border",
+                                                match.classification === "HOT"
+                                                    ? "bg-red-50 text-red-600 border-red-200"
+                                                    : "bg-amber-50 text-amber-600 border-amber-200"
+                                            )}>
+                                                {match.classification}
+                                            </span>
                                             {opp.set_aside_code && (
                                                 <span className="text-[9px] font-typewriter font-bold bg-blue-100 text-blue-600 border border-blue-200 px-2 py-0.5 rounded uppercase">{opp.set_aside_code}</span>
                                             )}
@@ -209,7 +256,9 @@ export default function MyMatchesPage() {
                                         </div>
                                         <p className="font-bold text-sm text-black line-clamp-1">{opp.title}</p>
                                         <p className="text-xs text-stone-500 line-clamp-1">{opp.agency}</p>
-                                    </div>
+                                    </Link>
+
+                                    {/* Right Side */}
                                     <div className="flex items-center gap-2 sm:gap-3 text-xs flex-shrink-0 flex-wrap sm:flex-nowrap">
                                         <span className="font-mono bg-stone-100 px-2 py-0.5 rounded text-stone-600 border border-stone-200">{opp.naics_code}</span>
                                         {opp.place_of_performance_state && (
@@ -218,10 +267,46 @@ export default function MyMatchesPage() {
                                         <span className="font-bold text-stone-700 whitespace-nowrap">
                                             {opp.response_deadline ? new Date(opp.response_deadline).toLocaleDateString() : "TBD"}
                                         </span>
+
+                                        {/* Actions */}
+                                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <button type="button" title={match.is_saved ? "Unsave" : "Save"}
+                                                onClick={(e) => { e.preventDefault(); toggleSave(match.id, match.is_saved); }}
+                                                className={clsx("p-1.5 rounded-lg transition-colors",
+                                                    match.is_saved ? "text-amber-500 bg-amber-50" : "text-stone-400 hover:text-amber-500 hover:bg-amber-50"
+                                                )}>
+                                                <Bookmark className="w-3.5 h-3.5" fill={match.is_saved ? "currentColor" : "none"} />
+                                            </button>
+                                            <button type="button" title="Dismiss"
+                                                onClick={(e) => { e.preventDefault(); dismissMatch(match.id); }}
+                                                className="p-1.5 rounded-lg text-stone-400 hover:text-red-500 hover:bg-red-50 transition-colors">
+                                                <EyeOff className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
+
                                         <ArrowRight className="w-3.5 h-3.5 text-stone-400 hidden sm:block" />
                                     </div>
                                 </div>
-                            </Link>
+
+                                {/* Score Breakdown (expandable on hover) */}
+                                {match.score_breakdown && (
+                                    <div className="hidden group-hover:flex mt-2 pt-2 border-t border-stone-100 gap-2 flex-wrap">
+                                        {Object.entries(match.score_breakdown)
+                                            .filter(([k]) => k !== "total")
+                                            .map(([key, val]) => (
+                                                <span key={key} className={clsx(
+                                                    "text-[9px] font-mono px-1.5 py-0.5 rounded border",
+                                                    val >= 0.7 ? "bg-emerald-50 text-emerald-600 border-emerald-200" :
+                                                    val >= 0.4 ? "bg-amber-50 text-amber-600 border-amber-200" :
+                                                    "bg-stone-50 text-stone-400 border-stone-200"
+                                                )}>
+                                                    {key}: {Math.round(val * 100)}%
+                                                </span>
+                                            ))
+                                        }
+                                    </div>
+                                )}
+                            </div>
                         );
                     })}
                 </div>

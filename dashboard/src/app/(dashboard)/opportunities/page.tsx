@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseClient } from "@/lib/supabase/client";
-import { Search, Filter, Loader2, LayoutGrid, List, Download, X, Building, Target, FileText, Link as LinkIcon, Sparkles, ChevronLeft, ChevronRight, Flame, Users, ChevronUp, ChevronDown, Sprout, Leaf, Sun, Award, Trophy } from "lucide-react";
+import { Search, Filter, Loader2, LayoutGrid, List, Download, X, Building, Target, FileText, Link as LinkIcon, Sparkles, ChevronLeft, ChevronRight, Flame, ChevronUp, ChevronDown, Sprout, Leaf, Sun, Award, Trophy } from "lucide-react";
 import clsx from "clsx";
 
 const supabase = createSupabaseClient();
@@ -36,21 +36,6 @@ interface Opportunity {
     // Computed
     _matchCount?: number;
     _dataScore?: number;
-}
-
-interface MatchedContractor {
-    id: string;
-    contractor_id: string;
-    opportunity_id: string;
-    score: number;
-    classification: string;
-    contractors: {
-        company_name: string;
-        uei?: string;
-        city?: string;
-        state?: string;
-        certifications?: string[];
-    };
 }
 
 export default function OpportunitiesPage() {
@@ -102,8 +87,6 @@ export default function OpportunitiesPage() {
 
     // Detail Panel State
     const [selectedOpportunity, setSelectedOpportunity] = useState<Opportunity | null>(null);
-    const [matchedContractors, setMatchedContractors] = useState<MatchedContractor[]>([]);
-    const [loadingContractors, setLoadingContractors] = useState(false);
 
     // Advanced Filters
     const [filterAgency, setFilterAgency] = useState("");
@@ -230,37 +213,6 @@ export default function OpportunitiesPage() {
         fetchOpportunities();
     }, [fetchOpportunities]);
 
-    // Fetch matched contractors when an opportunity is selected
-    useEffect(() => {
-        if (!selectedOpportunity) {
-            setMatchedContractors([]);
-            return;
-        }
-        async function fetchMatches() {
-            setLoadingContractors(true);
-            // Flat query to avoid PGRST200 FK error
-            const { data: matchData } = await supabase
-                .from("matches")
-                .select("id, contractor_id, opportunity_id, score, classification")
-                .eq("opportunity_id", selectedOpportunity!.id)
-                .order("score", { ascending: false })
-                .limit(10);
-            const rows = matchData || [];
-            if (rows.length === 0) { setMatchedContractors([]); setLoadingContractors(false); return; }
-            const conIds = [...new Set(rows.map((m: Record<string, string>) => m.contractor_id))];
-            const { data: conData } = await supabase
-                .from("contractors")
-                .select("id, company_name, uei, city, state, certifications")
-                .in("id", conIds);
-            const conMap = new Map((conData || []).map((c: Record<string, string>) => [c.id, c]));
-            setMatchedContractors(rows.map((m: Record<string, unknown>) => ({
-                ...m,
-                contractors: conMap.get(m.contractor_id as string) || { company_name: "Unknown", uei: "", city: "", state: "", certifications: [] },
-            })) as unknown as MatchedContractor[]);
-            setLoadingContractors(false);
-        }
-        fetchMatches();
-    }, [selectedOpportunity]);
 
     const handleSearchKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
         if (e.key === 'Enter') {

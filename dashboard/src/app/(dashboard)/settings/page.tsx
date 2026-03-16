@@ -8,6 +8,8 @@ import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import Link from "next/link";
 import { NAICS_CODES } from "@/lib/naics-codes";
+import { PSC_CODES } from "@/lib/psc-codes";
+import { FEDERAL_AGENCIES } from "@/lib/federal-agencies";
 
 const supabase = createSupabaseClient();
 
@@ -51,6 +53,12 @@ interface Profile {
     federal_awards_count: number;
     target_contract_types: string[];
     target_states: string[];
+    target_psc_codes: string[];
+    preferred_agencies: string[];
+    contract_value_min: number | null;
+    contract_value_max: number | null;
+    security_clearances: string[];
+    prime_or_sub: string;
     plan_tier: string;
     notification_preferences: { email: boolean; frequency: string };
 }
@@ -63,6 +71,7 @@ export default function SettingsPage() {
     const [userEmail, setUserEmail] = useState("");
     const [profile, setProfile] = useState<Profile | null>(null);
     const [naicsSearch, setNaicsSearch] = useState("");
+    const [pscSearch, setPscSearch] = useState("");
     const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
     useEffect(() => {
@@ -91,7 +100,7 @@ export default function SettingsPage() {
         setSaved(false);
     };
 
-    const toggleArray = (key: "naics_codes" | "sba_certifications" | "target_states", value: string) => {
+    const toggleArray = (key: "naics_codes" | "sba_certifications" | "target_states" | "target_psc_codes" | "preferred_agencies" | "security_clearances", value: string) => {
         if (!profile) return;
         const arr = (profile[key] || []) as string[];
         updateProfile(key, arr.includes(value) ? arr.filter(v => v !== value) : [...arr, value]);
@@ -142,6 +151,12 @@ export default function SettingsPage() {
                 federal_awards_count: profile.federal_awards_count,
                 target_states: profile.target_states || [],
                 target_contract_types: profile.target_contract_types || [],
+                target_psc_codes: profile.target_psc_codes || [],
+                preferred_agencies: profile.preferred_agencies || [],
+                contract_value_min: profile.contract_value_min,
+                contract_value_max: profile.contract_value_max,
+                security_clearances: profile.security_clearances || [],
+                prime_or_sub: profile.prime_or_sub || "both",
                 notification_preferences: profile.notification_preferences,
             })
             .eq("auth_user_id", user.id);
@@ -400,6 +415,144 @@ export default function SettingsPage() {
                                             : "bg-white text-stone-600 border-stone-200 hover:border-stone-400 active:bg-stone-100"
                                     )}>
                                     {c.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            {/* PSC Codes & Clearances */}
+            <section className="bg-white rounded-[24px] sm:rounded-[32px] border border-stone-200 shadow-sm p-5 sm:p-7">
+                <h3 className="font-typewriter font-bold text-base sm:text-lg flex items-center mb-4">
+                    <Shield className="w-5 h-5 mr-2 text-stone-400" /> Service Codes & Clearances
+                </h3>
+                <div className="space-y-4">
+                    <div>
+                        <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">Product/Service Codes (PSC)</label>
+                        <div className="relative mb-2">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
+                            <input type="text" placeholder="Search PSC codes..." value={pscSearch} onChange={(e) => setPscSearch(e.target.value)}
+                                className="w-full pl-9 pr-4 py-2.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" />
+                        </div>
+                        {(profile.target_psc_codes || []).length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 mb-2">
+                                {(profile.target_psc_codes || []).map(code => (
+                                    <button type="button" key={code} title={`Remove ${code}`} onClick={() => toggleArray("target_psc_codes", code)}
+                                        className="flex items-center bg-black text-white px-2.5 py-1 rounded-full text-xs font-typewriter gap-1">
+                                        <span>{code}</span>
+                                        <span className="opacity-60">&times;</span>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                        <div className="grid grid-cols-1 gap-1.5 max-h-[200px] overflow-y-auto pr-1">
+                            {(() => {
+                                const search = pscSearch.toLowerCase();
+                                const filtered = search
+                                    ? PSC_CODES.filter(p => p.code.toLowerCase().includes(search) || p.label.toLowerCase().includes(search) || p.category.toLowerCase().includes(search))
+                                    : PSC_CODES.filter(p => p.popular || (profile.target_psc_codes || []).includes(p.code));
+                                return filtered.slice(0, 30).map(p => (
+                                    <button type="button" key={p.code} onClick={() => toggleArray("target_psc_codes", p.code)}
+                                        className={clsx(
+                                            "flex items-center text-left px-3 py-2.5 rounded-lg border text-sm transition-all",
+                                            (profile.target_psc_codes || []).includes(p.code)
+                                                ? "bg-black text-white border-black"
+                                                : "bg-white text-stone-700 border-stone-200 hover:border-stone-400 active:bg-stone-100"
+                                        )}>
+                                        <span className="font-mono text-xs mr-2 opacity-70">{p.code}</span>
+                                        <span className="font-medium text-xs sm:text-sm">{p.label}</span>
+                                    </button>
+                                ));
+                            })()}
+                        </div>
+                        {!pscSearch && <p className="text-[10px] text-stone-400 mt-1.5">Showing popular codes. Search to find more.</p>}
+                    </div>
+                    <div>
+                        <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">Security Clearances</label>
+                        <div className="flex flex-wrap gap-2">
+                            {["Confidential", "Secret", "Top Secret", "TS/SCI"].map(c => (
+                                <button type="button" key={c} onClick={() => toggleArray("security_clearances", c)}
+                                    className={clsx(
+                                        "px-3 py-2 rounded-full border text-xs font-typewriter font-bold uppercase transition-all",
+                                        (profile.security_clearances || []).includes(c)
+                                            ? "bg-black text-white border-black"
+                                            : "bg-white text-stone-600 border-stone-200 hover:border-stone-400 active:bg-stone-100"
+                                    )}>
+                                    {c}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            {/* Preferred Agencies & Contract Preferences */}
+            <section className="bg-white rounded-[24px] sm:rounded-[32px] border border-stone-200 shadow-sm p-5 sm:p-7">
+                <h3 className="font-typewriter font-bold text-base sm:text-lg flex items-center mb-4">
+                    <Building className="w-5 h-5 mr-2 text-stone-400" /> Targeting Preferences
+                </h3>
+                <div className="space-y-4">
+                    <div>
+                        <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">Preferred Agencies</label>
+                        <div className="flex flex-wrap gap-1.5">
+                            {FEDERAL_AGENCIES.filter(a => a.popular).map(a => (
+                                <button type="button" key={a.code} onClick={() => toggleArray("preferred_agencies", a.code)}
+                                    className={clsx(
+                                        "px-3 py-2 rounded-lg border text-xs font-typewriter font-bold transition-all",
+                                        (profile.preferred_agencies || []).includes(a.code)
+                                            ? "bg-black text-white border-black"
+                                            : "bg-white text-stone-600 border-stone-200 hover:border-stone-400 active:bg-stone-100"
+                                    )}>
+                                    {a.shortName}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">Min Contract Value</label>
+                            <select title="Min Contract Value" value={profile.contract_value_min || ""} onChange={(e) => updateProfile("contract_value_min", e.target.value ? parseFloat(e.target.value) : null)}
+                                className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm bg-white">
+                                <option value="">No preference</option>
+                                <option value="10000">$10K</option>
+                                <option value="25000">$25K</option>
+                                <option value="100000">$100K</option>
+                                <option value="250000">$250K</option>
+                                <option value="1000000">$1M</option>
+                                <option value="5000000">$5M</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">Max Contract Value</label>
+                            <select title="Max Contract Value" value={profile.contract_value_max || ""} onChange={(e) => updateProfile("contract_value_max", e.target.value ? parseFloat(e.target.value) : null)}
+                                className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm bg-white">
+                                <option value="">No preference</option>
+                                <option value="25000">$25K</option>
+                                <option value="100000">$100K</option>
+                                <option value="250000">$250K</option>
+                                <option value="1000000">$1M</option>
+                                <option value="5000000">$5M</option>
+                                <option value="10000000">$10M+</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div>
+                        <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">Role Preference</label>
+                        <div className="flex gap-2">
+                            {[
+                                { value: "prime", label: "Prime Only" },
+                                { value: "sub", label: "Sub Only" },
+                                { value: "both", label: "Both" },
+                            ].map(opt => (
+                                <button type="button" key={opt.value} onClick={() => updateProfile("prime_or_sub", opt.value)}
+                                    className={clsx(
+                                        "flex-1 px-4 py-2.5 rounded-xl border text-xs font-bold transition-all text-center",
+                                        (profile.prime_or_sub || "both") === opt.value
+                                            ? "bg-black text-white border-black"
+                                            : "bg-white text-stone-600 border-stone-200 hover:border-stone-400"
+                                    )}>
+                                    {opt.label}
                                 </button>
                             ))}
                         </div>

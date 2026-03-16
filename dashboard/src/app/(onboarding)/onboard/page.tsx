@@ -10,6 +10,8 @@ import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { NAICS_CODES, searchNaics } from "@/lib/naics-codes";
+import { PSC_CODES } from "@/lib/psc-codes";
+import { FEDERAL_AGENCIES } from "@/lib/federal-agencies";
 
 const supabase = createSupabaseClient();
 
@@ -58,6 +60,24 @@ const CONTRACT_TARGETS = [
     { value: "idiq", label: "IDIQ / GWAC" },
 ];
 
+const CONTRACT_VALUE_RANGES = [
+    { value: "", label: "No preference" },
+    { value: "10000", label: "Under $10K" },
+    { value: "25000", label: "$10K - $25K" },
+    { value: "100000", label: "$25K - $100K" },
+    { value: "250000", label: "$100K - $250K" },
+    { value: "1000000", label: "$250K - $1M" },
+    { value: "5000000", label: "$1M - $5M" },
+    { value: "10000000", label: "$5M+" },
+];
+
+const CLEARANCE_OPTIONS = [
+    { value: "Confidential", label: "Confidential" },
+    { value: "Secret", label: "Secret" },
+    { value: "Top Secret", label: "Top Secret" },
+    { value: "TS/SCI", label: "TS/SCI" },
+];
+
 // Validation helpers
 function validateUEI(uei: string): { valid: boolean; error?: string } {
     if (!uei) return { valid: true };
@@ -104,8 +124,9 @@ export default function OnboardPage() {
     const [samPopulated, setSamPopulated] = useState(false);
     const [searchMode, setSearchMode] = useState<"uei" | "name">("uei");
 
-    // NAICS search
+    // NAICS/PSC search
     const [naicsSearch, setNaicsSearch] = useState("");
+    const [pscSearch, setPscSearch] = useState("");
 
     // Form state
     const [form, setForm] = useState({
@@ -131,11 +152,17 @@ export default function OnboardPage() {
         federal_awards_count: "",
         target_contract_types: [] as string[],
         target_states: [] as string[],
+        target_psc_codes: [] as string[],
+        preferred_agencies: [] as string[],
+        contract_value_min: "",
+        contract_value_max: "",
+        security_clearances: [] as string[],
+        prime_or_sub: "both",
     });
 
     const updateForm = (key: string, value: unknown) => setForm(prev => ({ ...prev, [key]: value }));
 
-    const toggleArray = (key: "naics_codes" | "sba_certifications" | "target_contract_types" | "target_states", value: string) => {
+    const toggleArray = (key: "naics_codes" | "sba_certifications" | "target_contract_types" | "target_states" | "target_psc_codes" | "preferred_agencies" | "security_clearances", value: string) => {
         setForm(prev => {
             const arr = prev[key] as string[];
             return { ...prev, [key]: arr.includes(value) ? arr.filter(v => v !== value) : [...arr, value] };
@@ -244,6 +271,12 @@ export default function OnboardPage() {
             federal_awards_count: form.federal_awards_count ? parseInt(form.federal_awards_count) : 0,
             target_contract_types: form.target_contract_types.length > 0 ? form.target_contract_types : [],
             target_states: form.target_states.length > 0 ? form.target_states : [],
+            target_psc_codes: form.target_psc_codes.length > 0 ? form.target_psc_codes : [],
+            preferred_agencies: form.preferred_agencies.length > 0 ? form.preferred_agencies : [],
+            contract_value_min: form.contract_value_min ? parseFloat(form.contract_value_min) : null,
+            contract_value_max: form.contract_value_max ? parseFloat(form.contract_value_max) : null,
+            security_clearances: form.security_clearances.length > 0 ? form.security_clearances : [],
+            prime_or_sub: form.prime_or_sub || "both",
             onboarding_complete: true,
         };
 
@@ -681,6 +714,80 @@ export default function OnboardPage() {
                                 ))}
                             </div>
                         </div>
+
+                        {/* PSC Codes */}
+                        <div>
+                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">
+                                Product/Service Codes (PSC)
+                                <InfoTooltip text="PSC codes describe the specific products or services you provide. These help match you to the right opportunities beyond NAICS." />
+                            </label>
+                            <div className="relative mb-3">
+                                <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                                <input type="text" value={pscSearch} onChange={(e) => setPscSearch(e.target.value)}
+                                    className="w-full pl-9 pr-8 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm"
+                                    placeholder="Search PSC codes..." />
+                                {pscSearch && (
+                                    <button type="button" title="Clear search" onClick={() => setPscSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600">
+                                        <X className="w-4 h-4" />
+                                    </button>
+                                )}
+                            </div>
+                            {form.target_psc_codes.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5 mb-3">
+                                    {form.target_psc_codes.map(code => (
+                                        <span key={code} className="inline-flex items-center bg-black text-white text-xs font-mono px-2.5 py-1 rounded-lg">
+                                            {code}
+                                            <button type="button" title={`Remove ${code}`} onClick={() => toggleArray("target_psc_codes", code)} className="ml-1.5 hover:text-red-300">
+                                                <X className="w-3 h-3" />
+                                            </button>
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
+                            <div className="grid grid-cols-1 gap-1.5 max-h-[200px] overflow-y-auto pr-1">
+                                {(() => {
+                                    const search = pscSearch.toLowerCase();
+                                    const filtered = search
+                                        ? PSC_CODES.filter(p => p.code.toLowerCase().includes(search) || p.label.toLowerCase().includes(search) || p.category.toLowerCase().includes(search))
+                                        : PSC_CODES.filter(p => p.popular);
+                                    return filtered.slice(0, 30).map(p => (
+                                        <button type="button" key={p.code} onClick={() => toggleArray("target_psc_codes", p.code)}
+                                            className={clsx(
+                                                "flex items-center text-left px-4 py-2.5 rounded-xl border text-sm transition-all",
+                                                form.target_psc_codes.includes(p.code)
+                                                    ? "bg-black text-white border-black"
+                                                    : "bg-white text-stone-700 border-stone-200 hover:border-stone-400 active:bg-stone-100"
+                                            )}>
+                                            <span className="font-mono text-xs mr-2 opacity-70">{p.code}</span>
+                                            <span className="font-medium">{p.label}</span>
+                                        </button>
+                                    ));
+                                })()}
+                            </div>
+                            {!pscSearch && <p className="text-[10px] text-stone-400 mt-1.5">Showing popular codes. Search to find more.</p>}
+                        </div>
+
+                        {/* Security Clearances */}
+                        <div>
+                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-3">
+                                Security Clearances
+                                <InfoTooltip text="If your company holds security clearances, select them here. Many DoD and intelligence contracts require specific clearance levels." />
+                            </label>
+                            <div className="flex flex-wrap gap-2">
+                                {CLEARANCE_OPTIONS.map(c => (
+                                    <button type="button" key={c.value} onClick={() => toggleArray("security_clearances", c.value)}
+                                        className={clsx(
+                                            "px-3 sm:px-4 py-2.5 rounded-full border text-xs font-typewriter font-bold uppercase tracking-wider transition-all",
+                                            form.security_clearances.includes(c.value)
+                                                ? "bg-black text-white border-black"
+                                                : "bg-white text-stone-600 border-stone-200 hover:border-stone-400 active:bg-stone-100"
+                                        )}>
+                                        {form.security_clearances.includes(c.value) && <CheckCircle2 className="w-3 h-3 inline mr-1" />}
+                                        {c.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
                     </div>
                 )}
 
@@ -775,6 +882,78 @@ export default function OnboardPage() {
                                         )}>
                                         {form.target_contract_types.includes(ct.value) && <CheckCircle2 className="w-3 h-3 inline mr-1" />}
                                         {ct.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Preferred Agencies */}
+                        <div>
+                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-3">
+                                Preferred Agencies
+                                <InfoTooltip text="Select federal agencies you want to work with. This helps prioritize opportunities from agencies you're targeting." />
+                            </label>
+                            <div className="flex flex-wrap gap-1.5 max-h-[180px] overflow-y-auto pr-1">
+                                {FEDERAL_AGENCIES.filter(a => a.popular).map(a => (
+                                    <button type="button" key={a.code} onClick={() => toggleArray("preferred_agencies", a.code)}
+                                        className={clsx(
+                                            "px-3 py-2 rounded-lg border text-xs font-typewriter font-bold transition-all",
+                                            form.preferred_agencies.includes(a.code)
+                                                ? "bg-black text-white border-black"
+                                                : "bg-white text-stone-600 border-stone-200 hover:border-stone-400 active:bg-stone-100"
+                                        )}>
+                                        {a.shortName}
+                                    </button>
+                                ))}
+                            </div>
+                            {form.preferred_agencies.length > 0 && (
+                                <p className="text-xs text-emerald-600 font-bold mt-2">{form.preferred_agencies.length} agencies selected</p>
+                            )}
+                        </div>
+
+                        {/* Contract Value Range */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">
+                                    Min Contract Value
+                                    <InfoTooltip text="Minimum contract value you're interested in. Helps filter out contracts that are too small." />
+                                </label>
+                                <select title="Min Contract Value" value={form.contract_value_min} onChange={(e) => updateForm("contract_value_min", e.target.value)}
+                                    className="w-full px-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm bg-white">
+                                    {CONTRACT_VALUE_RANGES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">
+                                    Max Contract Value
+                                </label>
+                                <select title="Max Contract Value" value={form.contract_value_max} onChange={(e) => updateForm("contract_value_max", e.target.value)}
+                                    className="w-full px-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm bg-white">
+                                    {CONTRACT_VALUE_RANGES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                                </select>
+                            </div>
+                        </div>
+
+                        {/* Prime vs Sub */}
+                        <div>
+                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-3">
+                                Role Preference
+                                <InfoTooltip text="Do you want to bid as a prime contractor, subcontractor, or both? Primes lead the contract; subs support a prime." />
+                            </label>
+                            <div className="flex gap-2">
+                                {[
+                                    { value: "prime", label: "Prime Only" },
+                                    { value: "sub", label: "Sub Only" },
+                                    { value: "both", label: "Both" },
+                                ].map(opt => (
+                                    <button type="button" key={opt.value} onClick={() => updateForm("prime_or_sub", opt.value)}
+                                        className={clsx(
+                                            "flex-1 px-4 py-3 rounded-xl border text-sm font-bold transition-all text-center",
+                                            form.prime_or_sub === opt.value
+                                                ? "bg-black text-white border-black"
+                                                : "bg-white text-stone-600 border-stone-200 hover:border-stone-400"
+                                        )}>
+                                        {opt.label}
                                     </button>
                                 ))}
                             </div>
