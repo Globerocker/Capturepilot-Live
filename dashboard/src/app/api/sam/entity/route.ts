@@ -1,11 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const SAM_API_KEY = process.env.SAM_API_KEY || "";
 const SAM_ENTITY_URL = "https://api.sam.gov/entity-information/v3/entities";
-
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://ryxgjzehoijjvczqkhwr.supabase.co";
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 
 interface SamEntity {
     uei: string;
@@ -75,13 +72,7 @@ function transformEntity(entity: Record<string, unknown>): SamEntity {
 
 export async function GET(request: NextRequest) {
     // Auth check
-    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-        global: {
-            headers: {
-                cookie: request.headers.get("cookie") || "",
-            },
-        },
-    });
+    const supabase = await createSupabaseServerClient();
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
