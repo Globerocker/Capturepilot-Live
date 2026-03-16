@@ -2,8 +2,12 @@
 """
 Fast description enrichment - processes opportunities in parallel using ThreadPoolExecutor.
 Fetches actual description HTML from SAM.gov and stores it + extracted requirements.
+
+Usage:
+    python3 tools/10b_fast_enrich.py [limit] [workers]
+    python3 tools/10b_fast_enrich.py 4200 3
 """
-import os, sys, re, time
+import os, sys, re, time, threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
 
@@ -29,6 +33,11 @@ SAM_KEY = os.getenv("SAM_API_KEY")
 
 session = requests.Session()
 session.headers.update({"X-Api-Key": SAM_KEY})
+
+# Track consecutive 429s to detect rate limiting
+rate_limit_lock = threading.Lock()
+consecutive_429s = 0
+RATE_LIMIT_THRESHOLD = 10  # Stop after this many consecutive 429s
 
 
 def extract_reqs(html):
@@ -58,15 +67,28 @@ def extract_reqs(html):
 
 
 def process_opp(opp):
+    global consecutive_429s
     nid = opp["notice_id"]
     url = f"https://api.sam.gov/prod/opportunities/v1/noticedesc?noticeid={nid}"
+
+    # Check if we're rate limited before even trying
+    with rate_limit_lock:
+        if consecutive_429s >= RATE_LIMIT_THRESHOLD:
+            return ("rate_limited", nid, 0)
+
     for attempt in range(3):
         try:
             r = session.get(url, timeout=20)
             if r.status_code == 429:
+                with rate_limit_lock:
+                    consecutive_429s += 1
+                    if consecutive_429s >= RATE_LIMIT_THRESHOLD:
+                        return ("rate_limited", nid, 0)
                 time.sleep(5 * (attempt + 1))
                 continue
             if r.status_code == 200:
+                with rate_limit_lock:
+                    consecutive_429s = 0  # Reset on success
                 ct = r.headers.get("content-type", "")
                 if "json" in ct or "hal+json" in ct:
                     data = r.json()
@@ -82,6 +104,8 @@ def process_opp(opp):
                     return ("ok", nid, len(desc))
                 return ("empty", nid, 0)
             elif r.status_code == 404:
+                with rate_limit_lock:
+                    consecutive_429s = 0
                 sb.table("opportunities").update({"description": "No description available."}).eq("id", opp["id"]).execute()
                 return ("404", nid, 0)
             else:
@@ -121,11 +145,17 @@ def main():
 
     print(f"Found {len(all_opps)} opportunities to enrich", flush=True)
 
+    if not all_opps:
+        print("Nothing to enrich!", flush=True)
+        return
+
     ok = 0
     fail = 0
     empty = 0
     notfound = 0
+    rate_limited = 0
     start = time.time()
+    stopped_early = False
 
     with ThreadPoolExecutor(max_workers=workers) as executor:
         futures = {executor.submit(process_opp, opp): opp for opp in all_opps}
@@ -138,13 +168,24 @@ def main():
                 notfound += 1
             elif status == "empty":
                 empty += 1
+            elif status == "rate_limited":
+                rate_limited += 1
+                if rate_limited >= 5:
+                    stopped_early = True
+                    # Cancel remaining futures
+                    for f in futures:
+                        f.cancel()
+                    print(f"\n  *** SAM.gov rate limit hit after {ok} enrichments. Stopping early. ***", flush=True)
+                    print(f"  *** Run again later when rate limits reset. ***", flush=True)
+                    break
             else:
                 fail += 1
 
             if i % 50 == 0:
                 elapsed = time.time() - start
                 rate = i / elapsed if elapsed > 0 else 0
-                eta = (len(all_opps) - i) / rate if rate > 0 else 0
+                remaining = len(all_opps) - i
+                eta = remaining / rate if rate > 0 else 0
                 print(f"  [{i}/{len(all_opps)}] ok={ok} 404={notfound} empty={empty} fail={fail} | {rate:.1f}/sec | ETA: {eta/60:.0f}min", flush=True)
 
     elapsed = time.time() - start
@@ -153,6 +194,10 @@ def main():
     print(f"  Not found (404): {notfound}", flush=True)
     print(f"  Empty responses: {empty}", flush=True)
     print(f"  Failed: {fail}", flush=True)
+    if stopped_early:
+        remaining = len(all_opps) - ok - notfound - empty - fail - rate_limited
+        print(f"  Skipped (rate limited): {remaining + rate_limited}", flush=True)
+        print(f"\n  Re-run this script later to continue enrichment.", flush=True)
 
 
 if __name__ == "__main__":

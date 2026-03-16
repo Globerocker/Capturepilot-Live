@@ -3,8 +3,13 @@ venv/
 .venv/
 .next/
 .env
+.env.local
 .vercel/
+.vscode/
+.npm-cache/
+.tmp/
 *.dat
 *.csv
 __pycache__/
 .DS_Store
+*.pyc
