@@ -21,6 +21,9 @@ export async function POST(
         "enrich_deep": "8_enrich_contacts.py",
         "attachments": "9_download_attachments.py",
         "orchestrate": "10_enrichment_orchestrator.py",
+        "win_strategy": "15_ai_win_strategy.py",
+        "usaspending": "12_usaspending_enrich.py",
+        "download_attachments": "13_download_attachments.py",
     };
 
     const scriptName = scriptMap[action];

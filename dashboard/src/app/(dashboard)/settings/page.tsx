@@ -1,36 +1,15 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Settings, User, Bell, Building, MapPin, Shield, Loader2, CheckCircle2, ArrowLeft, Phone, Calendar, UserCheck } from "lucide-react";
+import { Settings, User, Bell, Building, MapPin, Shield, Loader2, CheckCircle2, ArrowLeft, Phone, Calendar, UserCheck, Search, AlertCircle } from "lucide-react";
 import ServiceCTA from "@/components/ui/ServiceCTA";
 import { createSupabaseClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import Link from "next/link";
+import { NAICS_CODES } from "@/lib/naics-codes";
 
 const supabase = createSupabaseClient();
-
-const NAICS_OPTIONS = [
-    { code: "561720", label: "Janitorial Services" },
-    { code: "561210", label: "Facilities Support Services" },
-    { code: "561730", label: "Landscaping Services" },
-    { code: "561710", label: "Exterminating & Pest Control" },
-    { code: "236220", label: "Commercial Building Construction" },
-    { code: "238210", label: "Electrical Contractors" },
-    { code: "238220", label: "Plumbing & HVAC Contractors" },
-    { code: "238320", label: "Painting & Wall Covering" },
-    { code: "238910", label: "Site Preparation Contractors" },
-    { code: "541330", label: "Engineering Services" },
-    { code: "541512", label: "Computer Systems Design" },
-    { code: "541611", label: "Admin Management Consulting" },
-    { code: "541690", label: "Other Scientific/Technical Consulting" },
-    { code: "561320", label: "Temporary Staffing Services" },
-    { code: "561612", label: "Security Guards & Patrol Services" },
-    { code: "562111", label: "Solid Waste Collection" },
-    { code: "562910", label: "Remediation Services" },
-    { code: "488190", label: "Other Support Activities for Air Transportation" },
-    { code: "811310", label: "Commercial Machinery Repair & Maintenance" },
-];
 
 const CERT_OPTIONS = [
     { value: "8(a)", label: "8(a)" },
@@ -83,6 +62,8 @@ export default function SettingsPage() {
     const [saved, setSaved] = useState(false);
     const [userEmail, setUserEmail] = useState("");
     const [profile, setProfile] = useState<Profile | null>(null);
+    const [naicsSearch, setNaicsSearch] = useState("");
+    const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
     useEffect(() => {
         async function load() {
@@ -116,8 +97,21 @@ export default function SettingsPage() {
         updateProfile(key, arr.includes(value) ? arr.filter(v => v !== value) : [...arr, value]);
     };
 
+    const validateFields = (): boolean => {
+        const errors: Record<string, string> = {};
+        if (profile?.uei && !/^[A-Za-z0-9]{12}$/.test(profile.uei)) {
+            errors.uei = "UEI must be exactly 12 alphanumeric characters";
+        }
+        if (profile?.cage_code && !/^[A-Za-z0-9]{5}$/.test(profile.cage_code)) {
+            errors.cage_code = "CAGE code must be exactly 5 alphanumeric characters";
+        }
+        setValidationErrors(errors);
+        return Object.keys(errors).length === 0;
+    };
+
     const handleSave = async () => {
         if (!profile) return;
+        if (!validateFields()) return;
         setSaving(true);
 
         const { data: { user } } = await supabase.auth.getUser();
@@ -128,8 +122,8 @@ export default function SettingsPage() {
             .update({
                 company_name: profile.company_name,
                 dba_name: profile.dba_name,
-                uei: profile.uei,
-                cage_code: profile.cage_code,
+                uei: profile.uei ? profile.uei.toUpperCase() : null,
+                cage_code: profile.cage_code ? profile.cage_code.toUpperCase() : null,
                 address_line_1: profile.address_line_1,
                 city: profile.city,
                 state: profile.state,
@@ -294,14 +288,20 @@ export default function SettingsPage() {
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">UEI</label>
-                            <input type="text" placeholder="Unique Entity ID" value={profile.uei || ""} onChange={(e) => updateProfile("uei", e.target.value)}
-                                className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm font-mono" />
+                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">UEI <span className="text-stone-400 normal-case">(12 alphanumeric)</span></label>
+                            <input type="text" placeholder="e.g. ABC123DEF456" maxLength={12} value={profile.uei || ""}
+                                onChange={(e) => { updateProfile("uei", e.target.value.replace(/[^A-Za-z0-9]/g, "")); setValidationErrors(prev => ({ ...prev, uei: "" })); }}
+                                className={clsx("w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm font-mono uppercase",
+                                    validationErrors.uei ? "border-red-400" : "border-stone-200")} />
+                            {validationErrors.uei && <p className="text-xs text-red-500 mt-1 flex items-center"><AlertCircle className="w-3 h-3 mr-1" />{validationErrors.uei}</p>}
                         </div>
                         <div>
-                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">CAGE Code</label>
-                            <input type="text" placeholder="e.g. 7ABC1" value={profile.cage_code || ""} onChange={(e) => updateProfile("cage_code", e.target.value)}
-                                className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm font-mono" />
+                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">CAGE Code <span className="text-stone-400 normal-case">(5 alphanumeric)</span></label>
+                            <input type="text" placeholder="e.g. 7ABC1" maxLength={5} value={profile.cage_code || ""}
+                                onChange={(e) => { updateProfile("cage_code", e.target.value.replace(/[^A-Za-z0-9]/g, "")); setValidationErrors(prev => ({ ...prev, cage_code: "" })); }}
+                                className={clsx("w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm font-mono uppercase",
+                                    validationErrors.cage_code ? "border-red-400" : "border-stone-200")} />
+                            {validationErrors.cage_code && <p className="text-xs text-red-500 mt-1 flex items-center"><AlertCircle className="w-3 h-3 mr-1" />{validationErrors.cage_code}</p>}
                         </div>
                     </div>
                     <div className="grid grid-cols-3 gap-3">
@@ -324,10 +324,17 @@ export default function SettingsPage() {
                                 className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm font-mono" />
                         </div>
                     </div>
-                    <div>
-                        <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">Website</label>
-                        <input type="text" placeholder="www.example.com" value={profile.website || ""} onChange={(e) => updateProfile("website", e.target.value)}
-                            className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">Website</label>
+                            <input type="text" placeholder="www.example.com" value={profile.website || ""} onChange={(e) => updateProfile("website", e.target.value)}
+                                className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" />
+                        </div>
+                        <div>
+                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">Phone</label>
+                            <input type="tel" placeholder="(555) 123-4567" value={profile.phone || ""} onChange={(e) => updateProfile("phone", e.target.value)}
+                                className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" />
+                        </div>
                     </div>
                 </div>
             </section>
@@ -340,20 +347,46 @@ export default function SettingsPage() {
                 <div className="space-y-4">
                     <div>
                         <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">NAICS Codes</label>
-                        <div className="grid grid-cols-1 gap-1.5 max-h-[200px] overflow-y-auto pr-1">
-                            {NAICS_OPTIONS.map(n => (
-                                <button type="button" key={n.code} onClick={() => toggleArray("naics_codes", n.code)}
-                                    className={clsx(
-                                        "flex items-center text-left px-3 py-2.5 rounded-lg border text-sm transition-all",
-                                        (profile.naics_codes || []).includes(n.code)
-                                            ? "bg-black text-white border-black"
-                                            : "bg-white text-stone-700 border-stone-200 hover:border-stone-400 active:bg-stone-100"
-                                    )}>
-                                    <span className="font-mono text-xs mr-2 opacity-70">{n.code}</span>
-                                    <span className="font-medium text-xs sm:text-sm">{n.label}</span>
-                                </button>
-                            ))}
+                        <div className="relative mb-2">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
+                            <input type="text" placeholder="Search by code or name..." value={naicsSearch} onChange={(e) => setNaicsSearch(e.target.value)}
+                                className="w-full pl-9 pr-4 py-2.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" />
                         </div>
+                        {(profile.naics_codes || []).length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 mb-2">
+                                {(profile.naics_codes || []).map(code => {
+                                    const match = NAICS_CODES.find(n => n.code === code);
+                                    return (
+                                        <button type="button" key={code} onClick={() => toggleArray("naics_codes", code)}
+                                            className="flex items-center bg-black text-white px-2.5 py-1 rounded-full text-xs font-typewriter gap-1">
+                                            <span>{code}</span>
+                                            <span className="opacity-60">&times;</span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
+                        <div className="grid grid-cols-1 gap-1.5 max-h-[240px] overflow-y-auto pr-1">
+                            {(() => {
+                                const search = naicsSearch.toLowerCase();
+                                const filtered = search
+                                    ? NAICS_CODES.filter(n => n.code.includes(search) || n.label.toLowerCase().includes(search))
+                                    : NAICS_CODES.filter(n => n.popular || (profile.naics_codes || []).includes(n.code));
+                                return filtered.slice(0, 50).map(n => (
+                                    <button type="button" key={n.code} onClick={() => toggleArray("naics_codes", n.code)}
+                                        className={clsx(
+                                            "flex items-center text-left px-3 py-2.5 rounded-lg border text-sm transition-all",
+                                            (profile.naics_codes || []).includes(n.code)
+                                                ? "bg-black text-white border-black"
+                                                : "bg-white text-stone-700 border-stone-200 hover:border-stone-400 active:bg-stone-100"
+                                        )}>
+                                        <span className="font-mono text-xs mr-2 opacity-70">{n.code}</span>
+                                        <span className="font-medium text-xs sm:text-sm">{n.label}</span>
+                                    </button>
+                                ));
+                            })()}
+                        </div>
+                        {!naicsSearch && <p className="text-[10px] text-stone-400 mt-1.5">Showing popular codes. Search to find more.</p>}
                     </div>
                     <div>
                         <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">SBA Certifications</label>

@@ -43,9 +43,11 @@ export async function GET(req: NextRequest) {
 
         while (keepFetching) {
             console.log(`Fetching offset: ${offset}`);
-            const url = `https://api.sam.gov/opportunities/v2/search?api_key=${SAM_API_KEY}&postedFrom=${dateRange}&limit=${limit}&offset=${offset}`;
+            const url = `https://api.sam.gov/opportunities/v2/search?postedFrom=${dateRange}&limit=${limit}&offset=${offset}`;
 
-            const reqData = await fetch(url);
+            const reqData = await fetch(url, {
+                headers: { "X-Api-Key": SAM_API_KEY }
+            });
 
             if (!reqData.ok) {
                 console.error(`SAM API Error: ${reqData.status} ${reqData.statusText}`);
