@@ -1,9 +1,12 @@
 import { createClient } from "@supabase/supabase-js";
-import { ArrowLeft, Building, Target, FileText, Link as LinkIcon, ShieldAlert, Award, Briefcase, Zap, MapPin, Calendar, CheckSquare, Phone } from "lucide-react";
+import { ArrowLeft, Building, Target, ShieldAlert, Award, Zap, MapPin, Calendar, CheckSquare, Phone } from "lucide-react";
 import clsx from "clsx";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import PursueButton from "@/components/PursueButton";
+import OpportunityDescription from "@/components/OpportunityDescription";
+import OpportunityAttachments from "@/components/OpportunityAttachments";
+import StructuredRequirements from "@/components/StructuredRequirements";
 
 export const dynamic = 'force-dynamic';
 
@@ -181,72 +184,11 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                         </div>
                     </div>
 
-                    {/* 2. STRUCTURED REQUIREMENTS (AI Extracted) */}
-                    <div className="bg-white rounded-2xl sm:rounded-3xl border border-stone-200 shadow-sm overflow-hidden">
-                        <div className="bg-stone-50 border-b border-stone-100 px-4 sm:px-8 py-4 sm:py-5">
-                            <h2 className="font-typewriter text-base sm:text-lg font-bold flex items-center text-stone-800">
-                                <Briefcase className="w-5 h-5 mr-2 sm:mr-3 text-stone-400" /> Structured Requirements
-                            </h2>
-                        </div>
+                    {/* 2. STRUCTURED REQUIREMENTS - auto-extracted from description */}
+                    <StructuredRequirements dbRequirements={reqs} noticeId={opp.notice_id} />
 
-                        <div className="p-4 sm:p-8">
-                            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-6 mb-6 sm:mb-8">
-                                <div className="bg-stone-50 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-stone-100">
-                                    <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1.5">Min Workforce</p>
-                                    <p className="font-bold text-stone-800 text-lg">{reqs.min_workforce ? `${reqs.min_workforce}+` : "Not Spec."}</p>
-                                </div>
-                                <div className="bg-stone-50 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-stone-100">
-                                    <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1.5">Years Experience</p>
-                                    <p className="font-bold text-stone-800 text-lg">{reqs.years_experience ? `${reqs.years_experience} Years` : "Not Spec."}</p>
-                                </div>
-                                <div className="bg-stone-50 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-stone-100">
-                                    <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1.5">Bonding</p>
-                                    <p className="font-bold text-stone-800 text-lg">{reqs.bonding_req || "Not Spec."}</p>
-                                </div>
-                                <div className="bg-stone-50 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-stone-100">
-                                    <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1.5">Performance Period</p>
-                                    <p className="font-bold text-stone-800">{reqs.performance_period || "Not Spec."}</p>
-                                </div>
-                                <div className="bg-stone-50 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-stone-100 md:col-span-2">
-                                    <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1.5">Equipment Required</p>
-                                    <p className="font-medium text-stone-800 text-sm line-clamp-2">{reqs.equipment_req || "None explicitly requested."}</p>
-                                </div>
-                            </div>
-
-                            <div className="space-y-6">
-                                <div>
-                                    <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-2">Required Certifications</p>
-                                    <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100 text-blue-900 text-sm">
-                                        {reqs.certifications || "None explicitly requested in summary."}
-                                    </div>
-                                </div>
-                                <div>
-                                    <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-2">Evaluation Criteria Summary</p>
-                                    <div className="prose prose-sm prose-stone max-w-none text-stone-700">
-                                        {reqs.eval_criteria_summary ? (
-                                            <p>{reqs.eval_criteria_summary}</p>
-                                        ) : (
-                                            <p className="italic text-stone-500">Evaluation criteria has not yet been extracted from attachments.</p>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Description */}
-                    {opp.description && (
-                        <div className="bg-white rounded-2xl sm:rounded-3xl border border-stone-200 shadow-sm overflow-hidden">
-                            <div className="bg-stone-50 border-b border-stone-100 px-4 sm:px-8 py-4 sm:py-5">
-                                <h2 className="font-typewriter text-base sm:text-lg font-bold flex items-center text-stone-800">
-                                    <FileText className="w-5 h-5 mr-2 sm:mr-3 text-stone-400" /> Description
-                                </h2>
-                            </div>
-                            <div className="p-4 sm:p-8">
-                                <p className="text-sm text-stone-700 leading-relaxed whitespace-pre-wrap">{opp.description}</p>
-                            </div>
-                        </div>
-                    )}
+                    {/* Description - fetched live from SAM.gov */}
+                    <OpportunityDescription noticeId={opp.notice_id} currentDescription={opp.description} />
 
                     {/* Incumbent Intelligence */}
                     {(opp.incumbent_contractor_name || opp.award_amount) && (
@@ -280,46 +222,8 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                         </div>
                     )}
 
-                    {/* Resources */}
-                    <div className="bg-white rounded-2xl sm:rounded-3xl border border-stone-200 shadow-sm overflow-hidden p-4 sm:p-8">
-                        <h2 className="font-typewriter text-base sm:text-lg font-bold mb-4 sm:mb-6 flex items-center text-stone-800">
-                            <FileText className="w-5 h-5 mr-2 sm:mr-3 text-stone-400" /> Source Attachments & Links
-                        </h2>
-                        <div className="bg-stone-50 border border-stone-200 p-5 rounded-2xl">
-                            {opp.resource_links && opp.resource_links.length > 0 ? (
-                                <ul className="space-y-3">
-                                    {opp.resource_links.map((link: string, idx: number) => {
-                                        // Attempt to extract filename from URL
-                                        let fileName = `Attachment ${idx + 1}`;
-                                        try {
-                                            const urlObj = new URL(link);
-                                            const pathname = urlObj.pathname;
-                                            const lastPart = pathname.split('/').pop();
-                                            if (lastPart && lastPart.length > 0) {
-                                                fileName = decodeURIComponent(lastPart);
-                                            }
-                                        } catch (e) {
-                                            // Ignore if URL is invalid
-                                        }
-
-                                        return (
-                                            <li key={idx} className="flex items-start">
-                                                <LinkIcon className="w-4 h-4 mr-3 mt-0.5 text-blue-500 shrink-0" />
-                                                <a href={link} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 hover:underline font-medium break-all">
-                                                    {fileName}
-                                                </a>
-                                            </li>
-                                        )
-                                    })}
-                                </ul>
-                            ) : (
-                                <div className="text-center py-6">
-                                    <FileText className="w-8 h-8 text-stone-300 mx-auto mb-3" />
-                                    <p className="text-sm font-medium text-stone-500">No attachments found on SAM.gov</p>
-                                </div>
-                            )}
-                        </div>
-                    </div>
+                    {/* Attachments - fetched live from SAM.gov */}
+                    <OpportunityAttachments noticeId={opp.notice_id} resourceLinks={opp.resource_links} />
 
                 </div>
 

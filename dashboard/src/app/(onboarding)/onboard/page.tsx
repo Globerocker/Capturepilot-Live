@@ -277,6 +277,28 @@ export default function OnboardPage() {
     const ueiValidation = validateUEI(form.uei);
     const cageValidation = validateCAGE(form.cage_code);
 
+    // Step-level validation
+    const step1Valid = !!(
+        form.company_name.trim() &&
+        form.address_line_1.trim() &&
+        form.city.trim() &&
+        form.state &&
+        form.zip_code.trim() &&
+        (form.uei ? ueiValidation.valid : true) &&
+        (form.cage_code ? cageValidation.valid : true)
+    );
+    const step2Valid = form.naics_codes.length > 0;
+    const step3Valid = !!(form.employee_count && form.revenue && form.years_in_business);
+    const step4Valid = form.target_states.length > 0;
+
+    const canAdvance = (s: number) => {
+        if (s === 1) return step1Valid;
+        if (s === 2) return step2Valid;
+        if (s === 3) return step3Valid;
+        if (s === 4) return step4Valid;
+        return true;
+    };
+
     // NAICS search results
     const filteredNaics = naicsSearch ? searchNaics(naicsSearch) : NAICS_CODES.filter(n => n.popular);
 
@@ -534,18 +556,19 @@ export default function OnboardPage() {
                             </div>
                         </div>
                         <div>
-                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">Street Address</label>
+                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">Street Address *</label>
                             <input type="text" value={form.address_line_1} onChange={(e) => updateForm("address_line_1", e.target.value)}
-                                className="w-full px-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" placeholder="123 Main St" />
+                                className={clsx("w-full px-4 py-3.5 border rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm",
+                                    !form.address_line_1.trim() ? "border-stone-200" : "border-stone-200")} placeholder="123 Main St" />
                         </div>
                         <div className="grid grid-cols-3 gap-3">
                             <div>
-                                <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">City</label>
+                                <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">City *</label>
                                 <input type="text" value={form.city} onChange={(e) => updateForm("city", e.target.value)}
                                     className="w-full px-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" placeholder="City" />
                             </div>
                             <div>
-                                <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">State</label>
+                                <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">State *</label>
                                 <select title="State" value={form.state} onChange={(e) => updateForm("state", e.target.value)}
                                     className="w-full px-3 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm bg-white">
                                     <option value="">--</option>
@@ -553,7 +576,7 @@ export default function OnboardPage() {
                                 </select>
                             </div>
                             <div>
-                                <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">ZIP</label>
+                                <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">ZIP *</label>
                                 <input type="text" value={form.zip_code} onChange={(e) => updateForm("zip_code", e.target.value)}
                                     className="w-full px-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm font-mono" placeholder="ZIP" />
                             </div>
@@ -581,8 +604,8 @@ export default function OnboardPage() {
 
                         <div>
                             <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">
-                                NAICS Codes
-                                <InfoTooltip text="North American Industry Classification System codes that describe your industry. Select all that match the services or products you offer." />
+                                NAICS Codes *
+                                <InfoTooltip text="North American Industry Classification System codes that describe your industry. Select at least one that matches the services or products you offer." />
                             </label>
 
                             {/* NAICS Search */}
@@ -671,14 +694,14 @@ export default function OnboardPage() {
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
-                                <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">Employee Count</label>
+                                <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">Employee Count *</label>
                                 <select title="Employee Count" value={form.employee_count} onChange={(e) => updateForm("employee_count", e.target.value)}
                                     className="w-full px-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm bg-white">
                                     {EMPLOYEE_RANGES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                                 </select>
                             </div>
                             <div>
-                                <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">Annual Revenue</label>
+                                <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">Annual Revenue *</label>
                                 <select title="Annual Revenue" value={form.revenue} onChange={(e) => updateForm("revenue", e.target.value)}
                                     className="w-full px-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm bg-white">
                                     {REVENUE_RANGES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
@@ -688,7 +711,7 @@ export default function OnboardPage() {
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
-                                <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">Years in Business</label>
+                                <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">Years in Business *</label>
                                 <input type="number" value={form.years_in_business} onChange={(e) => updateForm("years_in_business", e.target.value)}
                                     className="w-full px-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" placeholder="e.g. 12" />
                             </div>
@@ -758,7 +781,7 @@ export default function OnboardPage() {
                         </div>
 
                         <div>
-                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-3">Target States (where you can perform work)</label>
+                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-3">Target States (where you can perform work) *</label>
                             <div className="flex flex-wrap gap-1.5 max-h-[180px] overflow-y-auto pr-1">
                                 {STATE_OPTIONS.map(s => (
                                     <button type="button" key={s} onClick={() => toggleArray("target_states", s)}
@@ -788,14 +811,19 @@ export default function OnboardPage() {
                         </button>
 
                         {step < 4 ? (
-                            <button type="button" onClick={() => setStep(s => s + 1)}
-                                disabled={step === 1 && !form.company_name}
-                                className="flex items-center px-5 sm:px-6 py-3 rounded-full bg-black text-white hover:bg-stone-800 active:bg-stone-700 font-bold text-sm transition-all shadow-sm disabled:opacity-50">
-                                Next <ArrowRight className="w-4 h-4 ml-2" />
-                            </button>
+                            <div className="flex items-center gap-3">
+                                {!canAdvance(step) && (
+                                    <span className="text-xs text-red-500 font-medium hidden sm:inline">Fill required fields to continue</span>
+                                )}
+                                <button type="button" onClick={() => setStep(s => s + 1)}
+                                    disabled={!canAdvance(step)}
+                                    className="flex items-center px-5 sm:px-6 py-3 rounded-full bg-black text-white hover:bg-stone-800 active:bg-stone-700 font-bold text-sm transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
+                                    Next <ArrowRight className="w-4 h-4 ml-2" />
+                                </button>
+                            </div>
                         ) : (
-                            <button type="button" onClick={handleSave} disabled={saving || !form.company_name}
-                                className="flex items-center px-6 sm:px-8 py-3 rounded-full bg-emerald-600 text-white hover:bg-emerald-700 active:bg-emerald-800 font-bold text-sm transition-all shadow-lg disabled:opacity-50">
+                            <button type="button" onClick={handleSave} disabled={saving || !canAdvance(step) || !step1Valid}
+                                className="flex items-center px-6 sm:px-8 py-3 rounded-full bg-emerald-600 text-white hover:bg-emerald-700 active:bg-emerald-800 font-bold text-sm transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">
                                 {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Saving...</> : <><CheckCircle2 className="w-4 h-4 mr-2" /> Complete Setup</>}
                             </button>
                         )}

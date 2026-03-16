@@ -23,11 +23,18 @@ interface SamEntity {
 
 function extractCertifications(entity: Record<string, unknown>): string[] {
     const certs: string[] = [];
-    const reg = entity.entityRegistration as Record<string, unknown> | undefined;
-    if (!reg) return certs;
 
-    const businessTypes = (reg.businessTypes as string[]) || [];
-    const typeStr = businessTypes.join(" ").toLowerCase();
+    // Check entityRegistration.businessTypes
+    const reg = entity.entityRegistration as Record<string, unknown> | undefined;
+    const businessTypes = (reg?.businessTypes as string[]) || [];
+
+    // Also check certifications under assertions
+    const assertions = (entity.assertions || {}) as Record<string, unknown>;
+    const certData = (assertions.goodsAndServices || {}) as Record<string, unknown>;
+    const sbaList = (certData.sbaBusinessTypeList || []) as Array<Record<string, unknown>>;
+    const sbaDescs = sbaList.map(s => String(s.sbaBusinessTypeDesc || "").toLowerCase());
+
+    const typeStr = [...businessTypes, ...sbaDescs].join(" ").toLowerCase();
 
     if (typeStr.includes("8(a)") || typeStr.includes("8a")) certs.push("8(a)");
     if (typeStr.includes("hubzone")) certs.push("HUBZone");
@@ -42,7 +49,15 @@ function extractCertifications(entity: Record<string, unknown>): string[] {
 
 function transformEntity(entity: Record<string, unknown>): SamEntity {
     const reg = (entity.entityRegistration || {}) as Record<string, unknown>;
-    const addr = (reg.physicalAddress || {}) as Record<string, unknown>;
+
+    // coreData contains physical address, website, and other details
+    const coreData = (entity.coreData || {}) as Record<string, unknown>;
+    const entityInfo = (coreData.entityInformation || {}) as Record<string, unknown>;
+    const physicalAddr = (coreData.physicalAddress || {}) as Record<string, unknown>;
+    const mailingAddr = (coreData.mailingAddress || {}) as Record<string, unknown>;
+
+    // Use physical address first, fall back to mailing address
+    const addr = Object.keys(physicalAddr).length > 0 ? physicalAddr : mailingAddr;
 
     // Extract NAICS codes from assertions
     const assertions = (entity.assertions || {}) as Record<string, unknown>;
@@ -51,6 +66,15 @@ function transformEntity(entity: Record<string, unknown>): SamEntity {
     const naicsCodes = naicsList
         .map((n) => String(n.naicsCode || ""))
         .filter((c) => c.length > 0);
+
+    // Phone from points of contact (government business POC or electronic business POC)
+    const pocs = (entity.pointsOfContact || {}) as Record<string, unknown>;
+    const govPoc = (pocs.governmentBusinessPOC || {}) as Record<string, unknown>;
+    const elecPoc = (pocs.electronicBusinessPOC || {}) as Record<string, unknown>;
+    const phone = String(govPoc.USPhoneNumber || govPoc.telephoneNumber || elecPoc.USPhoneNumber || elecPoc.telephoneNumber || "");
+
+    // Website from coreData.entityInformation or entityRegistration
+    const website = String(entityInfo.entityURL || reg.entityURL || "");
 
     return {
         uei: String(reg.ueiSAM || reg.uei || ""),
@@ -61,12 +85,12 @@ function transformEntity(entity: Record<string, unknown>): SamEntity {
             line1: String(addr.addressLine1 || ""),
             city: String(addr.city || ""),
             state: String(addr.stateOrProvinceCode || ""),
-            zip: String(addr.zipCode || ""),
+            zip: String(addr.zipCode || addr.zipCodePlus4 || ""),
         },
         naics_codes: naicsCodes,
         sba_certifications: extractCertifications(entity),
-        website: String(reg.entityURL || ""),
-        phone: String(reg.phoneNumber || ""),
+        website,
+        phone,
     };
 }
 
@@ -100,6 +124,7 @@ export async function GET(request: NextRequest) {
             params.set("legalBusinessName", name.trim());
         }
         params.set("registrationStatus", "A");
+        params.set("includeSections", "entityRegistration,coreData,assertions,pointsOfContact");
         params.set("api_key", SAM_API_KEY);
 
         const response = await fetch(`${SAM_ENTITY_URL}?${params.toString()}`, {
@@ -122,6 +147,15 @@ export async function GET(request: NextRequest) {
 
         const data = await response.json();
         const entityData = (data.entityData || []) as Array<Record<string, unknown>>;
+
+        // Log first entity structure for debugging
+        if (entityData.length > 0) {
+            const first = entityData[0];
+            console.log("SAM entity keys:", Object.keys(first));
+            console.log("SAM coreData keys:", Object.keys((first.coreData || {}) as object));
+            console.log("SAM pointsOfContact keys:", Object.keys((first.pointsOfContact || {}) as object));
+        }
+
         const entities = entityData.slice(0, 10).map(transformEntity);
 
         return NextResponse.json({ entities, totalRecords: data.totalRecords || 0 });
