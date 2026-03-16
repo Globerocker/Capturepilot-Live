@@ -41,7 +41,7 @@ def ingest_sam_opportunities(days_back=2):
     
     url = "https://api.sam.gov/opportunities/v2/search"
     limit = 1000
-    ptypes = ["r", "p", "o"] # Sources Sought, Presolicitation, Solicitation priorities
+    ptypes = ["r", "p", "o", "k"] # Sources Sought, Presolicitation, Solicitation, Combined Synopsis/Solicitation
     
     total_upserted = 0
     
@@ -91,6 +91,13 @@ def ingest_sam_opportunities(days_back=2):
                     if not notice_id:
                         continue # Skip malformed records silently per SOP
                         
+                    # Extract resource links from raw data
+                    raw_links = []
+                    for rl in (op.get("resourceLinks") or []):
+                        link_url = rl if isinstance(rl, str) else (rl.get("url", "") if isinstance(rl, dict) else "")
+                        if link_url:
+                            raw_links.append(link_url)
+
                     normalized = {
                         "notice_id": notice_id,
                         "title": op.get("title"),
@@ -103,6 +110,8 @@ def ingest_sam_opportunities(days_back=2):
                         "posted_date": op.get("postedDate"),
                         "response_deadline": op.get("responseDeadLine"),
                         "place_of_performance_state": (op.get("placeOfPerformance") or {}).get("state", {}).get("code"),
+                        "description": op.get("description"),  # SAM.gov description URL
+                        "resource_links": raw_links if raw_links else [],
                         "raw_json": op
                     }
                     db_payload.append(normalized)

@@ -76,9 +76,21 @@ export default function OpportunityDescription({ noticeId, currentDescription }:
                         <FileText className="w-5 h-5 mr-2 sm:mr-3 text-stone-400" /> Description
                     </h2>
                 </div>
-                <div className="p-6 flex items-center text-amber-700 bg-amber-50 m-4 rounded-xl border border-amber-200">
-                    <AlertCircle className="w-4 h-4 mr-2 flex-shrink-0" />
-                    <span className="text-sm">{error}</span>
+                <div className="p-4 sm:p-6">
+                    <div className="flex items-start text-amber-700 bg-amber-50 rounded-xl border border-amber-200 p-4">
+                        <AlertCircle className="w-4 h-4 mr-2 flex-shrink-0 mt-0.5" />
+                        <div className="text-sm">
+                            <p className="mb-2">{error}</p>
+                            <a
+                                href={`https://sam.gov/opp/${noticeId}/view`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-600 hover:text-blue-800 underline font-medium"
+                            >
+                                View full notice on SAM.gov
+                            </a>
+                        </div>
+                    </div>
                 </div>
             </div>
         );
