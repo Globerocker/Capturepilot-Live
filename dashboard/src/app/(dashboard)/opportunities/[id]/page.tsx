@@ -1,10 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
-import { ArrowLeft, Building, Target, FileText, Link as LinkIcon, ShieldAlert, Award, Briefcase, Zap, MapPin, Calendar, CheckSquare, Sparkles } from "lucide-react";
+import { ArrowLeft, Building, Target, FileText, Link as LinkIcon, ShieldAlert, Award, Briefcase, Zap, MapPin, Calendar, CheckSquare, Phone } from "lucide-react";
 import clsx from "clsx";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import EnrichButton from "@/components/EnrichButton";
-import EnrichedContractorsList from "@/components/EnrichedContractorsList";
+import PursueButton from "@/components/PursueButton";
 
 export const dynamic = 'force-dynamic';
 
@@ -49,47 +48,47 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
     ].filter(Boolean).join(", ");
 
     return (
-        <div className="max-w-6xl mx-auto space-y-10 animate-in fade-in duration-500 pb-16">
+        <div className="max-w-6xl mx-auto space-y-6 sm:space-y-10 animate-in fade-in duration-500 pb-16 px-1">
             {/* Header section */}
-            <header className="mb-4">
-                <Link href="/opportunities" className="inline-flex items-center text-sm font-typewriter text-stone-500 hover:text-black mb-6 transition-colors">
+            <header className="mb-2 sm:mb-4">
+                <Link href="/opportunities" className="inline-flex items-center text-sm font-typewriter text-stone-500 hover:text-black mb-4 sm:mb-6 transition-colors">
                     <ArrowLeft className="w-4 h-4 mr-2" />
                     Back to Opportunities
                 </Link>
-                <div className="flex flex-wrap items-center gap-3 mb-4">
-                    <span className="bg-stone-100 text-stone-800 font-bold font-typewriter text-xs px-3 py-1.5 rounded-md border border-stone-200 uppercase tracking-wider shadow-sm">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
+                    <span className="bg-stone-100 text-stone-800 font-bold font-typewriter text-[10px] sm:text-xs px-2 sm:px-3 py-1 sm:py-1.5 rounded-md border border-stone-200 uppercase tracking-wider shadow-sm">
                         {opp.notice_id}
                     </span>
-                    <span className="bg-blue-50 text-blue-700 font-bold font-typewriter text-xs px-3 py-1.5 rounded-md border border-blue-200 tracking-wider shadow-sm">
+                    <span className="bg-blue-50 text-blue-700 font-bold font-typewriter text-[10px] sm:text-xs px-2 sm:px-3 py-1 sm:py-1.5 rounded-md border border-blue-200 tracking-wider shadow-sm">
                         {opp.notice_type || "UNKNOWN TYPE"}
                     </span>
                     {opp.is_archived && (
-                        <span className="bg-stone-800 text-stone-100 font-bold font-typewriter text-xs px-3 py-1.5 rounded-md shadow-sm tracking-wider">
+                        <span className="bg-stone-800 text-stone-100 font-bold font-typewriter text-[10px] sm:text-xs px-2 sm:px-3 py-1 sm:py-1.5 rounded-md shadow-sm tracking-wider">
                             ARCHIVED
                         </span>
                     )}
                 </div>
-                <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-stone-900 leading-tight mb-6">
+                <h1 className="text-2xl sm:text-4xl md:text-5xl font-bold tracking-tight text-stone-900 leading-tight mb-4 sm:mb-6">
                     {opp.title}
                 </h1>
             </header>
 
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-8">
                 {/* Left Column: Data & Requirements */}
-                <div className="xl:col-span-2 space-y-8">
+                <div className="xl:col-span-2 space-y-4 sm:space-y-8">
 
                     {/* 1. BASIC CONTRACT DATA */}
-                    <div className="bg-white rounded-3xl border border-stone-200 shadow-sm overflow-hidden">
-                        <div className="bg-stone-50 border-b border-stone-100 px-8 py-5 flex items-center justify-between">
-                            <h2 className="font-typewriter text-lg font-bold flex items-center text-stone-800">
-                                <Target className="w-5 h-5 mr-3 text-stone-400" /> Basic Contract Data
+                    <div className="bg-white rounded-2xl sm:rounded-3xl border border-stone-200 shadow-sm overflow-hidden">
+                        <div className="bg-stone-50 border-b border-stone-100 px-4 sm:px-8 py-4 sm:py-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                            <h2 className="font-typewriter text-base sm:text-lg font-bold flex items-center text-stone-800">
+                                <Target className="w-5 h-5 mr-2 sm:mr-3 text-stone-400" /> Basic Contract Data
                             </h2>
-                            <span className="text-2xl font-bold text-emerald-600 tracking-tight">{formattedValue}</span>
+                            <span className="text-xl sm:text-2xl font-bold text-emerald-600 tracking-tight">{formattedValue}</span>
                         </div>
 
-                        <div className="p-8">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                <div className="space-y-6">
+                        <div className="p-4 sm:p-8">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8">
+                                <div className="space-y-4 sm:space-y-6">
                                     <div>
                                         <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1.5">Agency / Department</p>
                                         <div className="flex items-start">
@@ -125,8 +124,8 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                                     </div>
                                 </div>
 
-                                <div className="space-y-6">
-                                    <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-4 sm:space-y-6">
+                                    <div className="grid grid-cols-2 gap-3 sm:gap-4">
                                         <div>
                                             <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1.5">Posted Date</p>
                                             <div className="flex items-center text-stone-800 font-medium">
@@ -183,32 +182,32 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                     </div>
 
                     {/* 2. STRUCTURED REQUIREMENTS (AI Extracted) */}
-                    <div className="bg-white rounded-3xl border border-stone-200 shadow-sm overflow-hidden">
-                        <div className="bg-stone-50 border-b border-stone-100 px-8 py-5">
-                            <h2 className="font-typewriter text-lg font-bold flex items-center text-stone-800">
-                                <Briefcase className="w-5 h-5 mr-3 text-stone-400" /> Structured Requirements
+                    <div className="bg-white rounded-2xl sm:rounded-3xl border border-stone-200 shadow-sm overflow-hidden">
+                        <div className="bg-stone-50 border-b border-stone-100 px-4 sm:px-8 py-4 sm:py-5">
+                            <h2 className="font-typewriter text-base sm:text-lg font-bold flex items-center text-stone-800">
+                                <Briefcase className="w-5 h-5 mr-2 sm:mr-3 text-stone-400" /> Structured Requirements
                             </h2>
                         </div>
 
-                        <div className="p-8">
-                            <div className="grid grid-cols-2 md:grid-cols-3 gap-6 mb-8">
-                                <div className="bg-stone-50 p-4 rounded-2xl border border-stone-100">
+                        <div className="p-4 sm:p-8">
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-6 mb-6 sm:mb-8">
+                                <div className="bg-stone-50 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-stone-100">
                                     <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1.5">Min Workforce</p>
                                     <p className="font-bold text-stone-800 text-lg">{reqs.min_workforce ? `${reqs.min_workforce}+` : "Not Spec."}</p>
                                 </div>
-                                <div className="bg-stone-50 p-4 rounded-2xl border border-stone-100">
+                                <div className="bg-stone-50 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-stone-100">
                                     <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1.5">Years Experience</p>
                                     <p className="font-bold text-stone-800 text-lg">{reqs.years_experience ? `${reqs.years_experience} Years` : "Not Spec."}</p>
                                 </div>
-                                <div className="bg-stone-50 p-4 rounded-2xl border border-stone-100">
+                                <div className="bg-stone-50 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-stone-100">
                                     <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1.5">Bonding</p>
                                     <p className="font-bold text-stone-800 text-lg">{reqs.bonding_req || "Not Spec."}</p>
                                 </div>
-                                <div className="bg-stone-50 p-4 rounded-2xl border border-stone-100">
+                                <div className="bg-stone-50 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-stone-100">
                                     <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1.5">Performance Period</p>
                                     <p className="font-bold text-stone-800">{reqs.performance_period || "Not Spec."}</p>
                                 </div>
-                                <div className="bg-stone-50 p-4 rounded-2xl border border-stone-100 md:col-span-2">
+                                <div className="bg-stone-50 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-stone-100 md:col-span-2">
                                     <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1.5">Equipment Required</p>
                                     <p className="font-medium text-stone-800 text-sm line-clamp-2">{reqs.equipment_req || "None explicitly requested."}</p>
                                 </div>
@@ -237,13 +236,13 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
 
                     {/* Description */}
                     {opp.description && (
-                        <div className="bg-white rounded-3xl border border-stone-200 shadow-sm overflow-hidden">
-                            <div className="bg-stone-50 border-b border-stone-100 px-8 py-5">
-                                <h2 className="font-typewriter text-lg font-bold flex items-center text-stone-800">
-                                    <FileText className="w-5 h-5 mr-3 text-stone-400" /> Description
+                        <div className="bg-white rounded-2xl sm:rounded-3xl border border-stone-200 shadow-sm overflow-hidden">
+                            <div className="bg-stone-50 border-b border-stone-100 px-4 sm:px-8 py-4 sm:py-5">
+                                <h2 className="font-typewriter text-base sm:text-lg font-bold flex items-center text-stone-800">
+                                    <FileText className="w-5 h-5 mr-2 sm:mr-3 text-stone-400" /> Description
                                 </h2>
                             </div>
-                            <div className="p-8">
+                            <div className="p-4 sm:p-8">
                                 <p className="text-sm text-stone-700 leading-relaxed whitespace-pre-wrap">{opp.description}</p>
                             </div>
                         </div>
@@ -251,13 +250,13 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
 
                     {/* Incumbent Intelligence */}
                     {(opp.incumbent_contractor_name || opp.award_amount) && (
-                        <div className="bg-amber-50 rounded-3xl border border-amber-200 shadow-sm overflow-hidden">
-                            <div className="bg-amber-100/50 border-b border-amber-200 px-8 py-5">
-                                <h2 className="font-typewriter text-lg font-bold flex items-center text-amber-900">
-                                    <ShieldAlert className="w-5 h-5 mr-3 text-amber-600" /> Incumbent Intelligence
+                        <div className="bg-amber-50 rounded-2xl sm:rounded-3xl border border-amber-200 shadow-sm overflow-hidden">
+                            <div className="bg-amber-100/50 border-b border-amber-200 px-4 sm:px-8 py-4 sm:py-5">
+                                <h2 className="font-typewriter text-base sm:text-lg font-bold flex items-center text-amber-900">
+                                    <ShieldAlert className="w-5 h-5 mr-2 sm:mr-3 text-amber-600" /> Incumbent Intelligence
                                 </h2>
                             </div>
-                            <div className="p-8">
+                            <div className="p-4 sm:p-8">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     {opp.incumbent_contractor_name && (
                                         <div>
@@ -282,9 +281,9 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                     )}
 
                     {/* Resources */}
-                    <div className="bg-white rounded-3xl border border-stone-200 shadow-sm overflow-hidden p-8">
-                        <h2 className="font-typewriter text-lg font-bold mb-6 flex items-center text-stone-800">
-                            <FileText className="w-5 h-5 mr-3 text-stone-400" /> Source Attachments & Links
+                    <div className="bg-white rounded-2xl sm:rounded-3xl border border-stone-200 shadow-sm overflow-hidden p-4 sm:p-8">
+                        <h2 className="font-typewriter text-base sm:text-lg font-bold mb-4 sm:mb-6 flex items-center text-stone-800">
+                            <FileText className="w-5 h-5 mr-2 sm:mr-3 text-stone-400" /> Source Attachments & Links
                         </h2>
                         <div className="bg-stone-50 border border-stone-200 p-5 rounded-2xl">
                             {opp.resource_links && opp.resource_links.length > 0 ? (
@@ -325,19 +324,19 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                 </div>
 
                 {/* Right Column: Strategic AI Win Info */}
-                <div className="space-y-8">
+                <div className="space-y-4 sm:space-y-8">
 
                     {/* 3. STRATEGIC SCORING */}
-                    <div className="bg-white rounded-3xl border border-stone-200 shadow-sm overflow-hidden">
-                        <div className="bg-stone-50 border-b border-stone-100 px-6 py-4">
+                    <div className="bg-white rounded-2xl sm:rounded-3xl border border-stone-200 shadow-sm overflow-hidden">
+                        <div className="bg-stone-50 border-b border-stone-100 px-4 sm:px-6 py-3 sm:py-4">
                             <h2 className="font-typewriter text-[15px] font-bold flex items-center text-stone-800">
                                 <Award className="w-4 h-4 mr-2 text-stone-400" /> Strategic Scoring
                             </h2>
                         </div>
 
-                        <div className="p-6 space-y-4">
+                        <div className="p-4 sm:p-6 space-y-3 sm:space-y-4">
                             <div className="flex justify-between items-center border-b border-stone-100 pb-3">
-                                <span className="text-xs font-typewriter text-stone-500 uppercase tracking-widest">Est. Competition</span>
+                                <span className="text-[10px] sm:text-xs font-typewriter text-stone-500 uppercase tracking-widest">Est. Competition</span>
                                 <span className={clsx("text-xs font-bold px-3 py-1 rounded-full border", statusColor(strat.est_competition_level))}>
                                     {strat.est_competition_level || "UNKNOWN"}
                                 </span>
@@ -358,16 +357,16 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                     </div>
 
                     {/* 4. AI WIN STRATEGY */}
-                    <div className="bg-stone-900 rounded-3xl text-white relative overflow-hidden shadow-xl border border-stone-800">
+                    <div className="bg-stone-900 rounded-2xl sm:rounded-3xl text-white relative overflow-hidden shadow-xl border border-stone-800">
                         <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none"></div>
 
-                        <div className="px-6 py-5 border-b border-stone-800/50 flex items-center justify-between relative z-10">
+                        <div className="px-4 sm:px-6 py-4 sm:py-5 border-b border-stone-800/50 flex items-center justify-between relative z-10">
                             <h2 className="font-typewriter text-[15px] font-bold flex items-center text-white">
                                 <Zap className="w-4 h-4 mr-2 text-emerald-400" /> AI Win Strategy
                             </h2>
                         </div>
 
-                        <div className="p-6 space-y-6 relative z-10">
+                        <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 relative z-10">
                             <div>
                                 <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-2">Executive Summary</p>
                                 <p className="text-sm text-stone-300 leading-relaxed">
@@ -406,40 +405,28 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                             )}
                         </div>
                     </div>
+                    {/* Service CTA */}
+                    <a href="https://calendly.com/americurial/intro-call" target="_blank" rel="noopener noreferrer"
+                        className="block bg-gradient-to-br from-blue-50 to-white rounded-2xl sm:rounded-3xl border border-blue-200 p-4 sm:p-6 hover:shadow-md transition-all group">
+                        <div className="flex items-start gap-3">
+                            <div className="w-9 h-9 rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0">
+                                <Phone className="w-4 h-4 text-blue-600" />
+                            </div>
+                            <div>
+                                <p className="font-typewriter font-bold text-sm text-stone-900 mb-1">
+                                    Want help winning this contract?
+                                </p>
+                                <p className="text-xs text-blue-700 leading-relaxed">
+                                    Book a free strategy call. We&apos;ll review this opportunity with you, assess your competitive position, and help build a capture plan.
+                                </p>
+                            </div>
+                        </div>
+                    </a>
                 </div>
             </div>
 
-            {/* 5. CONTRACTOR DISCOVERY & ENRICHMENT */}
-            <div className="bg-white rounded-3xl border border-stone-200 shadow-sm overflow-hidden">
-                <div className="bg-stone-50 border-b border-stone-100 px-8 py-5 flex items-center justify-between">
-                    <h2 className="font-typewriter text-lg font-bold flex items-center text-stone-800">
-                        <Sparkles className="w-5 h-5 mr-3 text-stone-400" /> Contractor Discovery
-                        {opp.enrichment_status === "completed" && (
-                            <span className="ml-3 text-sm font-sans font-medium bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full border border-emerald-200">
-                                Enriched
-                            </span>
-                        )}
-                    </h2>
-                    <EnrichButton opportunityId={opp.id} currentStatus={opp.enrichment_status} />
-                </div>
-                <div className="p-8">
-                    <EnrichedContractorsList opportunityId={opp.id} />
-                </div>
-            </div>
-
-            {/* 6. FIND CANDIDATE MATCHES (Bottom Section) */}
-            <div className="mt-16 bg-white border border-stone-200 rounded-3xl p-10 text-center shadow-sm relative overflow-hidden">
-                <div className="absolute left-0 top-0 bottom-0 w-2 bg-gradient-to-b from-blue-400 to-emerald-400"></div>
-                <h2 className="text-2xl font-bold font-typewriter text-stone-900 mb-4">Ready to build your capture pipeline?</h2>
-                <p className="text-stone-500 max-w-2xl mx-auto mb-8">
-                    Our 100-point matching engine evaluates NAICS fit, geographic proximity, verified capacity signals, and federal inactivity to find the highest-probability targets.
-                </p>
-                <Link href={`/matches/${opp.id}`}
-                    className="inline-flex items-center justify-center bg-black text-white font-typewriter font-bold px-10 py-5 rounded-full hover:bg-stone-800 transition-all hover:scale-105 active:scale-95 shadow-lg group">
-                    <Target className="w-5 h-5 mr-3 text-emerald-400 group-hover:animate-pulse" />
-                    <span className="text-lg">View Top 15 Matched Contractors</span>
-                </Link>
-            </div>
+            {/* 5. Pursue This Opportunity */}
+            <PursueButton opportunityId={opp.id} noticeType={opp.notice_type || ""} />
         </div>
     );
 }

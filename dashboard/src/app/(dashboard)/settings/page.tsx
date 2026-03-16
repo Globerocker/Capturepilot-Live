@@ -1,439 +1,464 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { Settings, Server, Key, Database, Cpu, BrainCircuit, Network, Download, UploadCloud, Loader2, CheckCircle2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Settings, User, Bell, Building, MapPin, Shield, Loader2, CheckCircle2, ArrowLeft, Phone, Calendar, UserCheck } from "lucide-react";
+import ServiceCTA from "@/components/ui/ServiceCTA";
+import { createSupabaseClient } from "@/lib/supabase/client";
+import { useRouter } from "next/navigation";
 import clsx from "clsx";
-import { importOpportunitiesBatch, importContractorsBatch } from "../actions/import";
+import Link from "next/link";
 
-export default function SettingsPage() {
-    const [activeModel, setActiveModel] = useState("gemini-1.5-pro");
-    const [uploadStatus, setUploadStatus] = useState<{ type: 'opps' | 'contractors' | null, progress: number, status: 'idle' | 'parsing' | 'uploading' | 'done' | 'error', error?: string }>({ type: null, progress: 0, status: 'idle' });
-    const oppsInputRef = useRef<HTMLInputElement>(null);
-    const contractorsInputRef = useRef<HTMLInputElement>(null);
+const supabase = createSupabaseClient();
 
-    // Inject PapaParse globally via CDN to bypass package permission errors
-    useEffect(() => {
-        if (!document.getElementById("papaparse-script")) {
-            const script = document.createElement("script");
-            script.id = "papaparse-script";
-            script.src = "https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js";
-            script.async = true;
-            document.head.appendChild(script);
-        }
-    }, []);
+const NAICS_OPTIONS = [
+    { code: "561720", label: "Janitorial Services" },
+    { code: "561210", label: "Facilities Support Services" },
+    { code: "561730", label: "Landscaping Services" },
+    { code: "561710", label: "Exterminating & Pest Control" },
+    { code: "236220", label: "Commercial Building Construction" },
+    { code: "238210", label: "Electrical Contractors" },
+    { code: "238220", label: "Plumbing & HVAC Contractors" },
+    { code: "238320", label: "Painting & Wall Covering" },
+    { code: "238910", label: "Site Preparation Contractors" },
+    { code: "541330", label: "Engineering Services" },
+    { code: "541512", label: "Computer Systems Design" },
+    { code: "541611", label: "Admin Management Consulting" },
+    { code: "541690", label: "Other Scientific/Technical Consulting" },
+    { code: "561320", label: "Temporary Staffing Services" },
+    { code: "561612", label: "Security Guards & Patrol Services" },
+    { code: "562111", label: "Solid Waste Collection" },
+    { code: "562910", label: "Remediation Services" },
+    { code: "488190", label: "Other Support Activities for Air Transportation" },
+    { code: "811310", label: "Commercial Machinery Repair & Maintenance" },
+];
 
-    const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>, type: 'opps' | 'contractors') => {
-        const file = event.target.files?.[0];
-        if (!file) return;
+const CERT_OPTIONS = [
+    { value: "8(a)", label: "8(a)" },
+    { value: "HUBZone", label: "HUBZone" },
+    { value: "SDVOSB", label: "SDVOSB" },
+    { value: "WOSB", label: "WOSB" },
+    { value: "EDWOSB", label: "EDWOSB" },
+    { value: "VOSB", label: "VOSB" },
+    { value: "SDB", label: "SDB" },
+];
 
-        setUploadStatus({ type, progress: 0, status: 'parsing' });
+const STATE_OPTIONS = [
+    "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD",
+    "MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC",
+    "SD","TN","TX","UT","VT","VA","WA","WV","WI","WY","DC","PR","GU","VI"
+];
 
-        const Papa = (window as any).Papa;
-        if (!Papa) {
-            setUploadStatus({ type, progress: 0, status: 'error', error: "CSV Parser not loaded. Please refresh the page." });
-            return;
-        }
-
-        let batch: any[] = [];
-        const BATCH_SIZE = 1000;
-        let totalProcessed = 0;
-
-        Papa.parse(file, {
-            header: true,
-            skipEmptyLines: true,
-            worker: true,
-            step: async function (results: any, parser: any) {
-                const data = results.data;
-                // Basic mapping based on type
-                if (type === 'opps') {
-                    batch.push({
-                        notice_id: data['NoticeId'],
-                        title: data['Title'] || "Untitled",
-                        agency: data['Department/Ind.Agency'] || "Unknown Agency",
-                        department: data['Department/Ind.Agency'] || "",
-                        sub_tier: data['Sub-Tier'] || "",
-                        office: data['Office'] || "",
-                        published_date: data['PostedDate'] ? new Date(data['PostedDate']).toISOString() : null,
-                        response_deadline: data['ResponseDeadLine'] ? new Date(data['ResponseDeadLine']).toISOString() : null,
-                        naics_code: data['NaicsCode'] || "",
-                        description: data['Description'] || "",
-                        set_aside: data['SetASide'] || "",
-                        type: data['Type'] || "",
-                        is_active: data['Active'] === 'Yes' ? true : false
-                    });
-                } else if (type === 'contractors') {
-                    batch.push({
-                        uei: data['UEI'] || data['Unique Entity ID'],
-                        cage_code: data['CAGE/NCAGE'] || data['CAGE Code'],
-                        company_name: data['Legal Business Name'],
-                        dba_name: data['Doing Business As Name'] || "",
-                        state: data['Physical Address State/Province'] || "",
-                        naics_codes: data['NAICS Code String'] ? data['NAICS Code String'].split(',') : [],
-                        certifications: data['SBA Certification String'] ? data['SBA Certification String'].split(',') : [],
-                        is_sam_registered: true
-                    });
-                }
-
-                if (batch.length >= BATCH_SIZE) {
-                    parser.pause();
-                    const currentBatch = [...batch];
-                    batch = [];
-
-                    setUploadStatus(prev => ({ ...prev, status: 'uploading' }));
-                    const res = type === 'opps' ? await importOpportunitiesBatch(currentBatch) : await importContractorsBatch(currentBatch);
-
-                    if (!res.success) {
-                        setUploadStatus({ type, progress: 0, status: 'error', error: res.error });
-                        parser.abort();
-                        return;
-                    }
-
-                    totalProcessed += currentBatch.length;
-                    setUploadStatus({ type, progress: Math.min(99, Math.round((totalProcessed / 10000) * 100)), status: 'parsing' }); // Fake progress maxing out at 99%
-                    parser.resume();
-                }
-            },
-            complete: async function () {
-                if (batch.length > 0) {
-                    setUploadStatus(prev => ({ ...prev, status: 'uploading' }));
-                    const res = type === 'opps' ? await importOpportunitiesBatch(batch) : await importContractorsBatch(batch);
-                    if (!res.success) {
-                        setUploadStatus({ type, progress: 0, status: 'error', error: res.error });
-                        return;
-                    }
-                }
-                setUploadStatus({ type, progress: 100, status: 'done' });
-                if (event.target) event.target.value = '';
-            },
-            error: function (err: any) {
-                setUploadStatus({ type, progress: 0, status: 'error', error: err.message });
-            }
-        });
-    };
-
-    return (
-        <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-500 pb-12">
-            <header className="mb-10 flex items-end justify-between">
-                <div>
-                    <h2 className="text-3xl font-bold font-typewriter tracking-tighter text-black flex items-center">
-                        <Settings className="mr-3 w-8 h-8" /> System Configuration
-                    </h2>
-                    <p className="text-stone-500 mt-2 font-medium">
-                        Manage B.L.A.S.T Protocol API Keys & Models
-                    </p>
-                </div>
-            </header>
-
-            <div className="space-y-6">
-
-                {/* Core Engine Settings */}
-                <div className="bg-white rounded-[40px] border border-stone-200 shadow-sm p-8">
-                    <div className="flex items-center space-x-3 mb-6">
-                        <Cpu className="w-6 h-6 text-black" />
-                        <h3 className="font-bold text-xl font-typewriter text-black">Deterministic Engine</h3>
-                    </div>
-                    <div className="space-y-4">
-                        <div className="flex justify-between items-center py-4 border-b border-stone-100">
-                            <div>
-                                <p className="font-medium text-stone-800">Match Tolerance Threshold</p>
-                                <p className="text-sm text-stone-500">Minimum score required for WARM classification.</p>
-                            </div>
-                            <div className="bg-stone-100 px-4 py-2 rounded-full font-mono text-sm border border-stone-200 focus-within:ring-2 focus-within:ring-black">
-                                <input type="number" defaultValue={0.33} step={0.01} className="bg-transparent outline-none w-16 text-center font-bold" />
-                            </div>
-                        </div>
-
-                        <div className="flex justify-between items-center py-4 border-b border-stone-100">
-                            <div>
-                                <p className="font-medium text-stone-800">HOT Match Threshold</p>
-                                <p className="text-sm text-stone-500">Minimum score required for HOT classification & AI Drafting.</p>
-                            </div>
-                            <div className="bg-stone-100 px-4 py-2 rounded-full font-mono text-sm border border-stone-200 focus-within:ring-2 focus-within:ring-black">
-                                <input type="number" defaultValue={0.66} step={0.01} className="bg-transparent outline-none w-16 text-center font-bold" />
-                            </div>
-                        </div>
-
-                        <div className="flex justify-between items-center py-4">
-                            <div>
-                                <p className="font-medium text-stone-800">Auto-Drafting Mode</p>
-                                <p className="text-sm text-stone-500">Automatically generate drafts for all HOT matches during Sync.</p>
-                            </div>
-                            <label className="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" value="" className="sr-only peer" defaultChecked />
-                                <div className="w-11 h-6 bg-stone-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-black"></div>
-                            </label>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Crawling Configuration */}
-            <div className="bg-white rounded-[40px] border border-stone-200 shadow-sm p-8">
-                <div className="flex items-center space-x-3 mb-6">
-                    <Network className="w-6 h-6 text-black" />
-                    <h3 className="font-bold text-xl font-typewriter text-black">Crawling Configuration</h3>
-                </div>
-                <div className="space-y-4">
-                    <div className="flex justify-between items-center py-4 border-b border-stone-100">
-                        <div>
-                            <p className="font-medium text-stone-800">Max Service Providers</p>
-                            <p className="text-sm text-stone-500">Global cap on contractors evaluated per opportunity.</p>
-                        </div>
-                        <div className="bg-stone-100 px-4 py-2 rounded-full font-mono text-sm border border-stone-200">
-                            <input type="number" defaultValue={250} className="bg-transparent outline-none w-16 text-right font-bold" />
-                        </div>
-                    </div>
-
-                    <div className="flex justify-between items-center py-4 border-b border-stone-100">
-                        <div>
-                            <p className="font-medium text-stone-800">Max Opportunities / Day</p>
-                            <p className="text-sm text-stone-500">Ingestion limit to prevent API rate limiting.</p>
-                        </div>
-                        <div className="bg-stone-100 px-4 py-2 rounded-full font-mono text-sm border border-stone-200">
-                            <input type="number" defaultValue={5000} className="bg-transparent outline-none w-16 text-right font-bold" />
-                        </div>
-                    </div>
-
-                    <div className="flex justify-between items-center py-4 border-b border-stone-100">
-                        <div>
-                            <p className="font-medium text-stone-800">Historical Timeframe</p>
-                            <p className="text-sm text-stone-500">How far back the crawler should check SAM.gov natively.</p>
-                        </div>
-                        <div className="bg-stone-100 px-4 py-2 rounded-full font-mono text-sm border border-stone-200">
-                            <select className="bg-transparent outline-none font-bold text-right cursor-pointer" defaultValue="7d">
-                                <option value="1d">Last 24 Hours</option>
-                                <option value="7d">Past 7 Days</option>
-                                <option value="30d">Past 30 Days</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div className="flex justify-between items-center py-4">
-                        <div>
-                            <p className="font-medium text-stone-800">Data Retention Expiration</p>
-                            <p className="text-sm text-stone-500">Days to hold un-matched items before system purge.</p>
-                        </div>
-                        <div className="bg-stone-100 px-4 py-2 rounded-full font-mono text-sm border border-stone-200 flex items-center">
-                            <input type="number" defaultValue={90} className="bg-transparent outline-none w-12 text-right font-bold mr-1" />
-                            <span className="font-typewriter text-stone-500 text-[10px] uppercase">Days</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Bulk Data Ingestion */}
-            <div className="bg-white rounded-[40px] border border-stone-200 shadow-sm p-8">
-                <div className="flex items-center space-x-3 mb-6">
-                    <Database className="w-6 h-6 text-black" />
-                    <h3 className="font-bold text-xl font-typewriter text-black">Historical Data Ingestion</h3>
-                </div>
-                <div className="space-y-4">
-                    <p className="text-stone-500 text-sm mb-6">
-                        To accelerate system initialization and minimize API load, download the daily/weekly CSV files from SAM.gov Data Services and upload them here. The system will parse and seed the database natively.
-                    </p>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
-                        {/* Opportunities Upload */}
-                        <div
-                            onClick={() => uploadStatus.status !== 'parsing' && uploadStatus.status !== 'uploading' && oppsInputRef.current?.click()}
-                            className={clsx(
-                                "border-2 border-dashed rounded-3xl p-6 flex flex-col items-center justify-center text-center transition-all cursor-pointer group",
-                                uploadStatus.type === 'opps' && uploadStatus.status === 'done' ? "border-green-500 bg-green-50" :
-                                    (uploadStatus.status === 'parsing' || uploadStatus.status === 'uploading') && uploadStatus.type === 'opps' ? "border-black bg-stone-50 cursor-wait opacity-80" : "border-stone-200 hover:border-black hover:bg-stone-50"
-                            )}
-                        >
-                            <input type="file" ref={oppsInputRef} className="hidden" accept=".csv" onChange={(e) => handleUpload(e, 'opps')} />
-
-                            <div className={clsx("w-12 h-12 rounded-full flex items-center justify-center mb-4 transition-colors", uploadStatus.type === 'opps' && uploadStatus.status === 'done' ? "bg-green-500 text-white" : "bg-stone-100 group-hover:bg-black text-stone-500 group-hover:text-white")}>
-                                {uploadStatus.type === 'opps' && (uploadStatus.status === 'parsing' || uploadStatus.status === 'uploading') ? (
-                                    <Loader2 className="w-5 h-5 animate-spin" />
-                                ) : uploadStatus.type === 'opps' && uploadStatus.status === 'done' ? (
-                                    <CheckCircle2 className="w-5 h-5" />
-                                ) : (
-                                    <UploadCloud className="w-5 h-5" />
-                                )}
-                            </div>
-                            <h4 className="font-bold font-typewriter mb-1 text-sm">Contract Opportunities</h4>
-
-                            {uploadStatus.type === 'opps' && uploadStatus.status === 'error' ? (
-                                <p className="text-xs text-red-500 mb-4 px-4 font-bold">{uploadStatus.error}</p>
-                            ) : uploadStatus.type === 'opps' && uploadStatus.status === 'done' ? (
-                                <p className="text-xs text-green-700 mb-4 px-4 font-bold tracking-widest font-typewriter uppercase">Batch Upload Complete</p>
-                            ) : uploadStatus.type === 'opps' && (uploadStatus.status === 'parsing' || uploadStatus.status === 'uploading') ? (
-                                <p className="text-xs text-stone-500 mb-4 px-4 font-mono">Processing... {uploadStatus.progress}%</p>
-                            ) : (
-                                <p className="text-xs text-stone-400 mb-4 px-4">Download the latest CSV from the <span className="font-mono text-black font-bold">Contract Opportunities</span> folder on SAM.gov Data Services.</p>
-                            )}
-
-                            <button className="bg-white border border-stone-200 shadow-sm px-4 py-2 rounded-full text-xs font-bold font-typewriter group-hover:border-black transition-colors pointer-events-none">
-                                Select CSV File
-                            </button>
-                        </div>
-
-                        {/* Contractors Upload */}
-                        <div
-                            onClick={() => uploadStatus.status !== 'parsing' && uploadStatus.status !== 'uploading' && contractorsInputRef.current?.click()}
-                            className={clsx(
-                                "border-2 border-dashed rounded-3xl p-6 flex flex-col items-center justify-center text-center transition-all cursor-pointer group",
-                                uploadStatus.type === 'contractors' && uploadStatus.status === 'done' ? "border-green-500 bg-green-50" :
-                                    (uploadStatus.status === 'parsing' || uploadStatus.status === 'uploading') && uploadStatus.type === 'contractors' ? "border-black bg-stone-50 cursor-wait opacity-80" : "border-stone-200 hover:border-black hover:bg-stone-50"
-                            )}
-                        >
-                            <input type="file" ref={contractorsInputRef} className="hidden" accept=".csv" onChange={(e) => handleUpload(e, 'contractors')} />
-
-                            <div className={clsx("w-12 h-12 rounded-full flex items-center justify-center mb-4 transition-colors", uploadStatus.type === 'contractors' && uploadStatus.status === 'done' ? "bg-green-500 text-white" : "bg-stone-100 group-hover:bg-black text-stone-500 group-hover:text-white")}>
-                                {uploadStatus.type === 'contractors' && (uploadStatus.status === 'parsing' || uploadStatus.status === 'uploading') ? (
-                                    <Loader2 className="w-5 h-5 animate-spin" />
-                                ) : uploadStatus.type === 'contractors' && uploadStatus.status === 'done' ? (
-                                    <CheckCircle2 className="w-5 h-5" />
-                                ) : (
-                                    <UploadCloud className="w-5 h-5" />
-                                )}
-                            </div>
-                            <h4 className="font-bold font-typewriter mb-1 text-sm">Entity Registrations</h4>
-
-                            {uploadStatus.type === 'contractors' && uploadStatus.status === 'error' ? (
-                                <p className="text-xs text-red-500 mb-4 px-4 font-bold">{uploadStatus.error}</p>
-                            ) : uploadStatus.type === 'contractors' && uploadStatus.status === 'done' ? (
-                                <p className="text-xs text-green-700 mb-4 px-4 font-bold tracking-widest font-typewriter uppercase">Batch Upload Complete</p>
-                            ) : uploadStatus.type === 'contractors' && (uploadStatus.status === 'parsing' || uploadStatus.status === 'uploading') ? (
-                                <p className="text-xs text-stone-500 mb-4 px-4 font-mono">Processing... {uploadStatus.progress}%</p>
-                            ) : (
-                                <p className="text-xs text-stone-400 mb-4 px-4">Download the latest CSV from the <span className="font-mono text-black font-bold">Entity Registrations</span> folder to seed vendor profiles.</p>
-                            )}
-
-                            <button className="bg-white border border-stone-200 shadow-sm px-4 py-2 rounded-full text-xs font-bold font-typewriter group-hover:border-black transition-colors pointer-events-none">
-                                Select CSV File
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* AI Models */}
-            <div className="bg-white rounded-[40px] border border-stone-200 shadow-sm p-8">
-                <div className="flex items-center space-x-3 mb-6">
-                    <BrainCircuit className="w-6 h-6 text-black" />
-                    <h3 className="font-bold text-xl font-typewriter text-black">Intelligence AI Models</h3>
-                </div>
-                <div className="space-y-4 text-sm">
-                    <p className="text-stone-500 mb-4">Select the foundational model used for opportunity summarization and email drafting. Switching models requires a valid API key.</p>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <button
-                            onClick={() => setActiveModel("gemini-2.5-flash")}
-                            className={clsx("p-4 rounded-2xl border text-left transition-all", activeModel === "gemini-2.5-flash" ? "border-black bg-stone-50 shadow-sm" : "border-stone-200 hover:border-stone-300")}
-                        >
-                            <div className="flex justify-between items-center mb-2">
-                                <span className="font-bold">Gemini 2.5 Flash</span>
-                                {activeModel === "gemini-2.5-flash" && <span className="w-3 h-3 bg-black rounded-full"></span>}
-                            </div>
-                            <p className="text-xs text-stone-500 font-mono">Current Default</p>
-                        </button>
-                        <button
-                            onClick={() => setActiveModel("claude-3.5-sonnet")}
-                            className={clsx("p-4 rounded-2xl border text-left transition-all", activeModel === "claude-3.5-sonnet" ? "border-black bg-stone-50 shadow-sm" : "border-stone-200 hover:border-stone-300")}
-                        >
-                            <div className="flex justify-between items-center mb-2">
-                                <span className="font-bold">Claude 3.5 Sonnet</span>
-                                {activeModel === "claude-3.5-sonnet" && <span className="w-3 h-3 bg-black rounded-full"></span>}
-                            </div>
-                            <p className="text-xs text-stone-500 font-mono">Requires Anthropic Key</p>
-                        </button>
-                        <button
-                            onClick={() => setActiveModel("gpt-4o")}
-                            className={clsx("p-4 rounded-2xl border text-left transition-all", activeModel === "gpt-4o" ? "border-black bg-stone-50 shadow-sm" : "border-stone-200 hover:border-stone-300")}
-                        >
-                            <div className="flex justify-between items-center mb-2">
-                                <span className="font-bold">GPT-4o</span>
-                                {activeModel === "gpt-4o" && <span className="w-3 h-3 bg-black rounded-full"></span>}
-                            </div>
-                            <p className="text-xs text-stone-500 font-mono">Requires OpenAI Key</p>
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            {/* API Connections */}
-            <div className="bg-white rounded-[40px] border border-stone-200 shadow-sm p-8">
-                <div className="flex justify-between items-start mb-6">
-                    <div className="flex items-center space-x-3">
-                        <Server className="w-6 h-6 text-black" />
-                        <h3 className="font-bold text-xl font-typewriter text-black">Data Sources & API Integrations</h3>
-                    </div>
-                    <button className="text-xs font-bold font-typewriter bg-stone-100 hover:bg-stone-200 px-4 py-2 rounded-full transition-colors hidden md:block">
-                        + Add Custom Provider
-                    </button>
-                </div>
-                <div className="space-y-4 text-sm">
-                    <ApiRow
-                        title="Supabase PostgreSQL"
-                        icon={Database}
-                        status="CONNECTED"
-                        description="Primary deterministic data warehouse."
-                        defaultKey="••••••••••••••••••••••••••••••"
-                    />
-                    <ApiRow
-                        title="SAM.gov Search API V2"
-                        icon={Key}
-                        status="CONNECTED"
-                        description="Federal Opportunities Stream V2."
-                        defaultKey="SAM-6507bbc9-•••••••••••••••••"
-                    />
-                    <ApiRow
-                        title="Clearbit / ZoomInfo Enrichment (Optional)"
-                        icon={Network}
-                        status="DISCONNECTED"
-                        description="Enrich Contractor Profiles with firmographic and contact data."
-                        defaultKey=""
-                        placeholder="Paste API Key here..."
-                    />
-                    <ApiRow
-                        title="GovTribe / GovWin Database (Optional)"
-                        icon={Download}
-                        status="DISCONNECTED"
-                        description="Alternative local government database extraction APIs."
-                        defaultKey=""
-                        placeholder="Paste API Key here..."
-                    />
-                    <ApiRow
-                        title="OpenAI / Anthropic Keys"
-                        icon={BrainCircuit}
-                        status="DISCONNECTED"
-                        description="Provide keys if switching from the default Gemini Engine."
-                        defaultKey=""
-                        placeholder="sk-ant-api03-..."
-                    />
-                </div>
-            </div>
-
-        </div >
-    );
+interface Profile {
+    company_name: string;
+    dba_name: string | null;
+    uei: string | null;
+    cage_code: string | null;
+    address_line_1: string | null;
+    city: string | null;
+    state: string | null;
+    zip_code: string | null;
+    website: string | null;
+    phone: string | null;
+    email: string | null;
+    naics_codes: string[];
+    sba_certifications: string[];
+    employee_count: number | null;
+    revenue: number | null;
+    years_in_business: number | null;
+    service_radius_miles: number | null;
+    has_bonding: boolean;
+    has_fleet: boolean;
+    has_municipal_exp: boolean;
+    federal_awards_count: number;
+    target_contract_types: string[];
+    target_states: string[];
+    plan_tier: string;
+    notification_preferences: { email: boolean; frequency: string };
 }
 
-function ApiRow({ title, icon: Icon, status, description, defaultKey, placeholder }: any) {
-    const isConnected = status === "CONNECTED";
-    return (
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-stone-50 p-5 rounded-3xl border border-stone-200 space-y-4 md:space-y-0 text-left">
-            <div className="flex-1 pr-4">
-                <div className="flex items-center space-x-3 mb-1">
-                    <Icon className={clsx("w-5 h-5", isConnected ? "text-green-600" : "text-stone-400")} />
-                    <span className="font-bold text-base">{title}</span>
-                    <span className={clsx(
-                        "font-typewriter text-[9px] px-2 py-0.5 rounded font-bold tracking-widest uppercase",
-                        isConnected ? "bg-green-100 text-green-800" : "bg-stone-200 text-stone-600"
-                    )}>
-                        {status}
-                    </span>
-                </div>
-                <p className="text-stone-500 text-xs">{description}</p>
+export default function SettingsPage() {
+    const router = useRouter();
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [saved, setSaved] = useState(false);
+    const [userEmail, setUserEmail] = useState("");
+    const [profile, setProfile] = useState<Profile | null>(null);
+
+    useEffect(() => {
+        async function load() {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) { router.push("/login"); return; }
+            setUserEmail(user.email || "");
+
+            const { data } = await supabase
+                .from("user_profiles")
+                .select("*")
+                .eq("auth_user_id", user.id)
+                .single();
+
+            if (data) {
+                setProfile(data as unknown as Profile);
+            }
+            setLoading(false);
+        }
+        load();
+    }, [router]);
+
+    const updateProfile = (key: string, value: unknown) => {
+        if (!profile) return;
+        setProfile({ ...profile, [key]: value });
+        setSaved(false);
+    };
+
+    const toggleArray = (key: "naics_codes" | "sba_certifications" | "target_states", value: string) => {
+        if (!profile) return;
+        const arr = (profile[key] || []) as string[];
+        updateProfile(key, arr.includes(value) ? arr.filter(v => v !== value) : [...arr, value]);
+    };
+
+    const handleSave = async () => {
+        if (!profile) return;
+        setSaving(true);
+
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const { error } = await supabase
+            .from("user_profiles")
+            .update({
+                company_name: profile.company_name,
+                dba_name: profile.dba_name,
+                uei: profile.uei,
+                cage_code: profile.cage_code,
+                address_line_1: profile.address_line_1,
+                city: profile.city,
+                state: profile.state,
+                zip_code: profile.zip_code,
+                website: profile.website,
+                phone: profile.phone,
+                naics_codes: profile.naics_codes || [],
+                sba_certifications: profile.sba_certifications || [],
+                employee_count: profile.employee_count,
+                revenue: profile.revenue,
+                years_in_business: profile.years_in_business,
+                service_radius_miles: profile.service_radius_miles,
+                has_bonding: profile.has_bonding,
+                has_fleet: profile.has_fleet,
+                has_municipal_exp: profile.has_municipal_exp,
+                federal_awards_count: profile.federal_awards_count,
+                target_states: profile.target_states || [],
+                target_contract_types: profile.target_contract_types || [],
+                notification_preferences: profile.notification_preferences,
+            })
+            .eq("auth_user_id", user.id);
+
+        if (error) {
+            alert("Failed to save: " + error.message);
+        } else {
+            setSaved(true);
+        }
+        setSaving(false);
+    };
+
+    if (loading) {
+        return (
+            <div className="flex justify-center items-center min-h-[400px]">
+                <Loader2 className="w-10 h-10 animate-spin text-stone-400" />
             </div>
-            <div className="w-full md:w-auto flex-shrink-0">
-                <input
-                    type="password"
-                    defaultValue={defaultKey}
-                    placeholder={placeholder}
-                    className="w-full md:w-64 bg-white border border-stone-200 rounded-xl px-4 py-2 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-black placeholder:text-stone-300 transition-all font-bold"
-                />
+        );
+    }
+
+    if (!profile) {
+        return (
+            <div className="max-w-lg mx-auto text-center py-16">
+                <p className="text-stone-500 mb-4">No profile found. Please complete onboarding first.</p>
+                <Link href="/onboard" className="bg-black text-white px-6 py-3 rounded-full font-bold text-sm">
+                    Go to Onboarding
+                </Link>
+            </div>
+        );
+    }
+
+    return (
+        <div className="max-w-3xl mx-auto space-y-6 animate-in fade-in duration-500 pb-12 px-1">
+            <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+                <div>
+                    <h2 className="text-2xl sm:text-3xl font-bold font-typewriter tracking-tighter text-black flex items-center">
+                        <Settings className="mr-3 w-6 h-6 sm:w-8 sm:h-8" /> Settings
+                    </h2>
+                    <p className="text-stone-500 mt-1 font-medium text-sm">
+                        Manage your business profile and preferences
+                    </p>
+                </div>
+                <button
+                    onClick={handleSave}
+                    disabled={saving}
+                    className={clsx(
+                        "flex items-center px-6 py-2.5 rounded-full font-bold text-sm transition-all shadow-sm self-start sm:self-auto",
+                        saved ? "bg-emerald-600 text-white" : "bg-black text-white hover:bg-stone-800 active:bg-stone-700"
+                    )}
+                >
+                    {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Saving...</> :
+                     saved ? <><CheckCircle2 className="w-4 h-4 mr-2" /> Saved</> :
+                     "Save Changes"}
+                </button>
+            </header>
+
+            {/* Account */}
+            <section className="bg-white rounded-[24px] sm:rounded-[32px] border border-stone-200 shadow-sm p-5 sm:p-7">
+                <h3 className="font-typewriter font-bold text-base sm:text-lg flex items-center mb-4">
+                    <User className="w-5 h-5 mr-2 text-stone-400" /> Account
+                </h3>
+                <div className="space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 py-3 border-b border-stone-100">
+                        <div>
+                            <p className="font-medium text-sm">Email</p>
+                            <p className="text-xs text-stone-400">From your Google account</p>
+                        </div>
+                        <p className="text-sm font-mono text-stone-600">{userEmail}</p>
+                    </div>
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 py-3">
+                        <div>
+                            <p className="font-medium text-sm">Plan</p>
+                            <p className="text-xs text-stone-400">Your current subscription</p>
+                        </div>
+                        <div className="flex items-center gap-2 self-start sm:self-auto">
+                            <span className="text-xs font-typewriter font-bold bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full uppercase">
+                                {profile.plan_tier === "free_beta" ? "Free Beta" : profile.plan_tier}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            {/* Profile Completeness */}
+            {(() => {
+                const checks: [boolean, string][] = [
+                    [!!profile.company_name, "Company Name"],
+                    [!!profile.uei, "UEI"],
+                    [!!profile.cage_code, "CAGE Code"],
+                    [(profile.naics_codes?.length || 0) > 0, "NAICS Codes"],
+                    [(profile.sba_certifications?.length || 0) > 0, "SBA Certifications"],
+                    [!!profile.state, "State"],
+                    [(profile.target_states?.length || 0) > 0, "Target States"],
+                    [!!profile.website, "Website"],
+                    [!!profile.phone, "Phone"],
+                    [!!profile.employee_count, "Employee Count"],
+                    [!!profile.years_in_business, "Years in Business"],
+                    [(profile.federal_awards_count || 0) > 0, "Past Federal Awards"],
+                ];
+                const completed = checks.filter(([ok]) => ok).length;
+                const score = Math.round((completed / checks.length) * 100);
+                const missing = checks.filter(([ok]) => !ok).map(([, label]) => label);
+
+                return (
+                    <section className="bg-white rounded-[24px] sm:rounded-[32px] border border-stone-200 shadow-sm p-5 sm:p-7">
+                        <div className="flex items-center justify-between mb-3">
+                            <h3 className="font-typewriter font-bold text-base sm:text-lg flex items-center">
+                                <UserCheck className="w-5 h-5 mr-2 text-stone-400" /> Profile Strength
+                            </h3>
+                            <span className={clsx("text-lg font-black font-typewriter",
+                                score >= 80 ? "text-emerald-600" : score >= 50 ? "text-amber-600" : "text-red-600"
+                            )}>{score}%</span>
+                        </div>
+                        <div className="w-full bg-stone-200 rounded-full h-2.5 mb-3">
+                            <div className={clsx("rounded-full h-2.5 transition-all duration-500",
+                                score >= 80 ? "bg-emerald-500" : score >= 50 ? "bg-amber-500" : "bg-red-500"
+                            )} style={{ width: `${score}%` }} />
+                        </div>
+                        {missing.length > 0 ? (
+                            <div className="flex flex-wrap gap-1.5">
+                                {missing.map(m => (
+                                    <span key={m} className="text-[10px] font-typewriter bg-red-50 text-red-600 border border-red-200 px-2 py-0.5 rounded">
+                                        {m}
+                                    </span>
+                                ))}
+                            </div>
+                        ) : (
+                            <p className="text-xs text-emerald-600 font-bold">Your profile is complete. You are getting the best possible matches.</p>
+                        )}
+                    </section>
+                );
+            })()}
+
+            {/* Company Info */}
+            <section className="bg-white rounded-[24px] sm:rounded-[32px] border border-stone-200 shadow-sm p-5 sm:p-7">
+                <h3 className="font-typewriter font-bold text-base sm:text-lg flex items-center mb-4">
+                    <Building className="w-5 h-5 mr-2 text-stone-400" /> Company Info
+                </h3>
+                <div className="space-y-4">
+                    <div>
+                        <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">Company Name</label>
+                        <input type="text" placeholder="Legal Business Name" value={profile.company_name || ""} onChange={(e) => updateProfile("company_name", e.target.value)}
+                            className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" />
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">UEI</label>
+                            <input type="text" placeholder="Unique Entity ID" value={profile.uei || ""} onChange={(e) => updateProfile("uei", e.target.value)}
+                                className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm font-mono" />
+                        </div>
+                        <div>
+                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">CAGE Code</label>
+                            <input type="text" placeholder="e.g. 7ABC1" value={profile.cage_code || ""} onChange={(e) => updateProfile("cage_code", e.target.value)}
+                                className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm font-mono" />
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                        <div>
+                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">City</label>
+                            <input type="text" placeholder="City" value={profile.city || ""} onChange={(e) => updateProfile("city", e.target.value)}
+                                className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" />
+                        </div>
+                        <div>
+                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">State</label>
+                            <select title="State" value={profile.state || ""} onChange={(e) => updateProfile("state", e.target.value)}
+                                className="w-full px-3 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm bg-white">
+                                <option value="">--</option>
+                                {STATE_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">ZIP</label>
+                            <input type="text" placeholder="ZIP" value={profile.zip_code || ""} onChange={(e) => updateProfile("zip_code", e.target.value)}
+                                className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm font-mono" />
+                        </div>
+                    </div>
+                    <div>
+                        <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">Website</label>
+                        <input type="text" placeholder="www.example.com" value={profile.website || ""} onChange={(e) => updateProfile("website", e.target.value)}
+                            className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" />
+                    </div>
+                </div>
+            </section>
+
+            {/* Industry */}
+            <section className="bg-white rounded-[24px] sm:rounded-[32px] border border-stone-200 shadow-sm p-5 sm:p-7">
+                <h3 className="font-typewriter font-bold text-base sm:text-lg flex items-center mb-4">
+                    <Shield className="w-5 h-5 mr-2 text-stone-400" /> Industry & Certifications
+                </h3>
+                <div className="space-y-4">
+                    <div>
+                        <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">NAICS Codes</label>
+                        <div className="grid grid-cols-1 gap-1.5 max-h-[200px] overflow-y-auto pr-1">
+                            {NAICS_OPTIONS.map(n => (
+                                <button type="button" key={n.code} onClick={() => toggleArray("naics_codes", n.code)}
+                                    className={clsx(
+                                        "flex items-center text-left px-3 py-2.5 rounded-lg border text-sm transition-all",
+                                        (profile.naics_codes || []).includes(n.code)
+                                            ? "bg-black text-white border-black"
+                                            : "bg-white text-stone-700 border-stone-200 hover:border-stone-400 active:bg-stone-100"
+                                    )}>
+                                    <span className="font-mono text-xs mr-2 opacity-70">{n.code}</span>
+                                    <span className="font-medium text-xs sm:text-sm">{n.label}</span>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    <div>
+                        <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">SBA Certifications</label>
+                        <div className="flex flex-wrap gap-2">
+                            {CERT_OPTIONS.map(c => (
+                                <button type="button" key={c.value} onClick={() => toggleArray("sba_certifications", c.value)}
+                                    className={clsx(
+                                        "px-3 py-2 rounded-full border text-xs font-typewriter font-bold uppercase transition-all",
+                                        (profile.sba_certifications || []).includes(c.value)
+                                            ? "bg-black text-white border-black"
+                                            : "bg-white text-stone-600 border-stone-200 hover:border-stone-400 active:bg-stone-100"
+                                    )}>
+                                    {c.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            {/* Target States */}
+            <section className="bg-white rounded-[24px] sm:rounded-[32px] border border-stone-200 shadow-sm p-5 sm:p-7">
+                <h3 className="font-typewriter font-bold text-base sm:text-lg flex items-center mb-4">
+                    <MapPin className="w-5 h-5 mr-2 text-stone-400" /> Target States
+                </h3>
+                <div className="flex flex-wrap gap-1.5 max-h-[150px] overflow-y-auto pr-1">
+                    {STATE_OPTIONS.map(s => (
+                        <button type="button" key={s} onClick={() => toggleArray("target_states", s)}
+                            className={clsx(
+                                "px-3 py-2 rounded-lg border text-xs font-mono font-bold transition-all min-w-[48px]",
+                                (profile.target_states || []).includes(s)
+                                    ? "bg-black text-white border-black"
+                                    : "bg-white text-stone-600 border-stone-200 hover:border-stone-400 active:bg-stone-100"
+                            )}>
+                            {s}
+                        </button>
+                    ))}
+                </div>
+                {(profile.target_states || []).length > 0 && (
+                    <p className="text-xs text-emerald-600 font-bold mt-2">{profile.target_states.length} states selected</p>
+                )}
+            </section>
+
+            {/* Notifications */}
+            <section className="bg-white rounded-[24px] sm:rounded-[32px] border border-stone-200 shadow-sm p-5 sm:p-7">
+                <h3 className="font-typewriter font-bold text-base sm:text-lg flex items-center mb-4">
+                    <Bell className="w-5 h-5 mr-2 text-stone-400" /> Notifications
+                </h3>
+                <div className="space-y-4">
+                    <div className="flex items-center justify-between py-3 border-b border-stone-100">
+                        <div>
+                            <p className="font-medium text-sm">Email Alerts</p>
+                            <p className="text-xs text-stone-400">Get notified about new matching opportunities</p>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                                type="checkbox"
+                                title="Email Alerts"
+                                className="sr-only peer"
+                                checked={profile.notification_preferences?.email ?? true}
+                                onChange={(e) => updateProfile("notification_preferences", { ...profile.notification_preferences, email: e.target.checked })}
+                            />
+                            <div className="w-11 h-6 bg-stone-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-black"></div>
+                        </label>
+                    </div>
+                    <div className="flex items-center justify-between py-3">
+                        <div>
+                            <p className="font-medium text-sm">Alert Frequency</p>
+                            <p className="text-xs text-stone-400">How often to receive email digests</p>
+                        </div>
+                        <select
+                            title="Alert Frequency"
+                            value={profile.notification_preferences?.frequency || "daily"}
+                            onChange={(e) => updateProfile("notification_preferences", { ...profile.notification_preferences, frequency: e.target.value })}
+                            className="bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black"
+                        >
+                            <option value="daily">Daily</option>
+                            <option value="weekly">Weekly</option>
+                            <option value="realtime">Real-time</option>
+                        </select>
+                    </div>
+                </div>
+            </section>
+
+            {/* Service CTA */}
+            <ServiceCTA
+                title="Need help with your GovCon profile?"
+                description="Our team can optimize your SAM.gov registration, identify the best NAICS codes for your business, and match you with the right certifications."
+                variant="default"
+            />
+
+            {/* Save Button (Mobile sticky) */}
+            <div className="sm:hidden fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-md border-t border-stone-200 z-40">
+                <button
+                    onClick={handleSave}
+                    disabled={saving}
+                    className={clsx(
+                        "w-full flex items-center justify-center py-3.5 rounded-2xl font-bold text-sm transition-all shadow-sm",
+                        saved ? "bg-emerald-600 text-white" : "bg-black text-white active:bg-stone-700"
+                    )}
+                >
+                    {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Saving...</> :
+                     saved ? <><CheckCircle2 className="w-4 h-4 mr-2" /> Saved</> :
+                     "Save Changes"}
+                </button>
             </div>
         </div>
     );

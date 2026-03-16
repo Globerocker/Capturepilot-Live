@@ -50,18 +50,39 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // If authenticated user visits landing page, redirect to dashboard
-  if (user && pathname === "/") {
+  // If authenticated user visits public pages, redirect to dashboard
+  if (user && (pathname === "/" || pathname === "/login" || pathname === "/signup")) {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";
     return NextResponse.redirect(url);
   }
 
-  // If authenticated user visits login/signup, redirect to dashboard
-  if (user && (pathname === "/login" || pathname === "/signup")) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
-    return NextResponse.redirect(url);
+  // Onboarding gate: force authenticated users to complete onboarding
+  if (user && !isPublicRoute && pathname !== "/onboard") {
+    // Check cookie first to avoid DB query on every request
+    const onboardingCookie = request.cookies.get("cp_onboarding_complete");
+    if (onboardingCookie?.value !== "true") {
+      // Query DB to check onboarding status
+      const { data: profile } = await supabase
+        .from("user_profiles")
+        .select("onboarding_complete")
+        .eq("auth_user_id", user.id)
+        .single();
+
+      if (!profile || !profile.onboarding_complete) {
+        const url = request.nextUrl.clone();
+        url.pathname = "/onboard";
+        return NextResponse.redirect(url);
+      }
+
+      // Onboarding is complete - set cookie so we skip DB query next time
+      supabaseResponse.cookies.set("cp_onboarding_complete", "true", {
+        path: "/",
+        maxAge: 86400 * 30,
+        httpOnly: true,
+        sameSite: "lax",
+      });
+    }
   }
 
   return supabaseResponse;

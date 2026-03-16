@@ -60,7 +60,7 @@ export default function OpportunitiesPage() {
     const [loading, setLoading] = useState(true);
     const [searchInput, setSearchInput] = useState("");
     const [activeSearch, setActiveSearch] = useState("");
-    const [viewMode, setViewMode] = useState<"grid" | "list">("list");
+    const [viewMode, setViewMode] = useState<"grid" | "list">(typeof window !== "undefined" && window.innerWidth < 768 ? "grid" : "list");
     const [showFilters, setShowFilters] = useState(false);
 
     // Pagination
@@ -320,20 +320,20 @@ export default function OpportunitiesPage() {
     };
 
     return (
-        <div className="flex gap-6 max-w-[1600px] mx-auto pb-12 items-start">
+        <div className="flex gap-4 lg:gap-6 max-w-[1600px] mx-auto pb-12 items-start px-1">
             {/* Main Content Area */}
             <div className={clsx("transition-all duration-500 ease-in-out flex-1 flex flex-col", selectedOpportunity ? "hidden lg:flex lg:w-1/2 xl:w-2/3" : "w-full")}>
                 <div className="animate-in fade-in duration-500 flex flex-col">
-                    <header className="flex flex-col md:flex-row md:items-end justify-between mb-8 space-y-4 md:space-y-0">
+                    <header className="flex flex-col md:flex-row md:items-end justify-between mb-6 sm:mb-8 space-y-3 md:space-y-0">
                         <div>
-                            <h2 className="text-3xl font-bold font-typewriter tracking-tighter text-black flex items-center">
+                            <h2 className="text-2xl sm:text-3xl font-bold font-typewriter tracking-tighter text-black flex items-center">
                                 Opportunities
-                                <span className="ml-4 text-sm font-sans font-medium bg-stone-100 px-3 py-1 rounded-full text-stone-500 border border-stone-200">
-                                    {totalCount.toLocaleString()} Records
+                                <span className="ml-3 sm:ml-4 text-xs sm:text-sm font-sans font-medium bg-stone-100 px-2.5 sm:px-3 py-1 rounded-full text-stone-500 border border-stone-200">
+                                    {totalCount.toLocaleString()}
                                 </span>
                             </h2>
-                            <p className="text-stone-500 mt-2 font-medium">
-                                SAM.gov Federal Opportunities (Live)
+                            <p className="text-stone-500 mt-1 sm:mt-2 font-medium text-sm">
+                                SAM.gov Federal Opportunities
                             </p>
                         </div>
                         <div className="flex space-x-3 items-center">
@@ -659,7 +659,7 @@ export default function OpportunitiesPage() {
 
             {/* Slide-Over Panel */}
             {selectedOpportunity && (
-                <div className="w-full lg:w-1/2 xl:w-1/3 h-[calc(100vh-80px)] xl:h-[calc(100vh-120px)] sticky top-[40px] xl:top-[60px] bg-white border border-stone-200 shadow-2xl rounded-[40px] flex flex-col overflow-hidden animate-in slide-in-from-right-16 duration-300">
+                <div className="fixed inset-0 z-50 lg:relative lg:inset-auto lg:z-auto w-full lg:w-1/2 xl:w-1/3 h-full lg:h-[calc(100vh-80px)] xl:h-[calc(100vh-120px)] lg:sticky lg:top-[40px] xl:top-[60px] bg-white lg:border lg:border-stone-200 shadow-2xl lg:rounded-[40px] flex flex-col overflow-hidden animate-in slide-in-from-right-16 duration-300">
                     <div className="p-6 border-b border-stone-100 flex justify-between items-center bg-stone-50/50 flex-shrink-0">
                         <div className="flex items-center space-x-2">
                             <span className="bg-black text-white font-typewriter text-[10px] px-2 py-1 rounded uppercase tracking-wider">
@@ -768,41 +768,6 @@ export default function OpportunitiesPage() {
                                 <p className="font-bold text-sm text-amber-900">{selectedOpportunity.incumbent_contractor_name}</p>
                             </div>
                         )}
-
-                        {/* Matched Contractors */}
-                        <div className="border border-stone-200 rounded-2xl p-5 bg-white shadow-sm">
-                            <h4 className="font-typewriter font-bold text-xs mb-4 flex items-center text-stone-800 uppercase tracking-wider">
-                                <Users className="w-4 h-4 mr-2" /> Matched Contractors
-                                {matchedContractors.length > 0 && (
-                                    <span className="ml-2 bg-stone-100 text-stone-500 font-mono text-[10px] px-2 py-0.5 rounded-full">{matchedContractors.length}</span>
-                                )}
-                            </h4>
-                            {loadingContractors ? (
-                                <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-stone-400" /></div>
-                            ) : matchedContractors.length === 0 ? (
-                                <p className="text-stone-400 text-xs font-typewriter">No matches yet. Run the Scoring Engine.</p>
-                            ) : (
-                                <div className="space-y-2">
-                                    {matchedContractors.map((mc) => (
-                                        <div key={mc.id} className="bg-stone-50 p-3 rounded-xl border border-stone-100 flex justify-between items-center hover:border-stone-300 transition-colors cursor-pointer" onClick={() => router.push(`/matches/${mc.opportunity_id}/${mc.contractor_id}`)}>
-                                            <div>
-                                                <p className="font-bold text-sm text-stone-900">{mc.contractors?.company_name}</p>
-                                                <div className="flex items-center space-x-2 mt-0.5">
-                                                    {mc.contractors?.city && <span className="text-xs text-stone-400">{mc.contractors.city}, {mc.contractors.state}</span>}
-                                                    {mc.contractors?.certifications?.slice(0, 2).map(c => (
-                                                        <span key={c} className="text-[9px] bg-black text-white px-1.5 py-0.5 rounded font-typewriter uppercase">{c}</span>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center space-x-2">
-                                                <span className={clsx("w-2 h-2 rounded-full", mc.classification === "HOT" ? "bg-red-500" : mc.classification === "WARM" ? "bg-amber-500" : "bg-stone-300")}></span>
-                                                <span className="font-mono font-bold text-sm">{Math.round(mc.score * 100)}</span>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
 
                         {/* Description */}
                         {selectedOpportunity.description && (

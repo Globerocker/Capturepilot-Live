@@ -2,177 +2,155 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Activity, Target, TrendingUp, Users, ArrowRight, Flame, Loader2, Clock, Briefcase, UserCheck, AlertTriangle, Trophy, PhoneCall, SearchX } from "lucide-react";
+import { Activity, Target, Zap, ArrowRight, Loader2, Clock, Trophy, Search, Shield, BarChart3, Layers, CheckSquare, Phone, UserCheck } from "lucide-react";
+import ServiceCTA from "@/components/ui/ServiceCTA";
 import clsx from "clsx";
 import Link from "next/link";
 import { createSupabaseClient } from "@/lib/supabase/client";
-import DashboardActions from "@/components/DashboardActions";
 
 const supabase = createSupabaseClient();
 
-interface HotMatch {
+interface UserProfile {
+  company_name: string;
+  naics_codes: string[];
+  sba_certifications: string[];
+  state: string;
+  target_states: string[];
+  uei: string | null;
+  cage_code: string | null;
+  website: string | null;
+  phone: string | null;
+  employee_count: number | null;
+  years_in_business: number | null;
+  federal_awards_count: number | null;
+}
+
+function calculateProfileCompleteness(profile: UserProfile): { score: number; missing: string[] } {
+  const checks: [boolean, string][] = [
+    [!!profile.company_name, "Company Name"],
+    [!!profile.uei, "UEI"],
+    [!!profile.cage_code, "CAGE Code"],
+    [(profile.naics_codes?.length || 0) > 0, "NAICS Codes"],
+    [(profile.sba_certifications?.length || 0) > 0, "SBA Certifications"],
+    [!!profile.state, "State"],
+    [(profile.target_states?.length || 0) > 0, "Target States"],
+    [!!profile.website, "Website"],
+    [!!profile.phone, "Phone"],
+    [!!profile.employee_count, "Employee Count"],
+    [!!profile.years_in_business, "Years in Business"],
+    [(profile.federal_awards_count || 0) > 0, "Past Federal Awards"],
+  ];
+  const completed = checks.filter(([ok]) => ok).length;
+  const missing = checks.filter(([ok]) => !ok).map(([, label]) => label);
+  return { score: Math.round((completed / checks.length) * 100), missing };
+}
+
+interface TopOpp {
   id: string;
-  opportunity_id: string;
-  contractor_id: string;
-  notice_id: string;
   title: string;
   agency: string;
-  naics: string;
-  score_pct: number;
-  deadline?: string;
-  contractor: string;
-  contractor_loc: string;
+  naics_code: string;
+  notice_type: string;
+  response_deadline: string;
+  set_aside_code: string;
 }
 
-interface WarmMatch {
-  id: string;
-  opportunity_id: string;
-  contractor_id: string;
-  title: string;
-  naics: string;
-  score_pct: number;
-  contractor: string;
-}
-
-export default function AgencyDashboard() {
+export default function UserDashboard() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [opsCount, setOpsCount] = useState(0);
-  const [hotCount, setHotCount] = useState(0);
-  const [warmCount, setWarmCount] = useState(0);
-  const [contractorCount, setContractorCount] = useState(0);
-  const [hotList, setHotList] = useState<HotMatch[]>([]);
-  const [warmList, setWarmList] = useState<WarmMatch[]>([]);
-  const [pipelineCount, setPipelineCount] = useState(0);
-  const [lastScoredAt, setLastScoredAt] = useState<string | null>(null);
-  const [urgentCount, setUrgentCount] = useState(0);
-  const [topNaics, setTopNaics] = useState("");
   const [easyWinsCount, setEasyWinsCount] = useState(0);
-  const [readyToContactCount, setReadyToContactCount] = useState(0);
-  const [needsEnrichmentCount, setNeedsEnrichmentCount] = useState(0);
+  const [naicsMatchCount, setNaicsMatchCount] = useState(0);
+  const [urgentCount, setUrgentCount] = useState(0);
+  const [topOpps, setTopOpps] = useState<TopOpp[]>([]);
+  const [pipelineCount, setPipelineCount] = useState(0);
+  const [pipelineStages, setPipelineStages] = useState<Record<string, number>>({});
+  const [actionsPending, setActionsPending] = useState(0);
+  const [actionsUrgent, setActionsUrgent] = useState(0);
 
   useEffect(() => {
     async function loadDashboard() {
-      // Run counts in parallel
-      const [opsRes, hotRes, warmRes, conRes, pipeRes, freshRes] = await Promise.all([
-        supabase.from("opportunities").select("*", { count: 'exact', head: true }).eq("is_archived", false),
-        supabase.from("matches").select("*", { count: 'exact', head: true }).eq("classification", "HOT"),
-        supabase.from("matches").select("*", { count: 'exact', head: true }).eq("classification", "WARM"),
-        supabase.from("contractors").select("*", { count: 'exact', head: true }).neq("data_quality_flag", "LOW_QUALITY"),
-        supabase.from("capture_outcomes").select("*", { count: 'exact', head: true }),
-        supabase.from("matches").select("created_at").order("created_at", { ascending: false }).limit(1),
-      ]);
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { router.push("/login"); return; }
 
-      setOpsCount(opsRes.count || 0);
-      setHotCount(hotRes.count || 0);
-      setWarmCount(warmRes.count || 0);
-      setContractorCount(conRes.count || 0);
-      setPipelineCount(pipeRes.count || 0);
-      if (freshRes.data && freshRes.data.length > 0) setLastScoredAt(freshRes.data[0].created_at);
+      // Get user profile
+      const { data: profileData } = await supabase
+        .from("user_profiles")
+        .select("id, company_name, naics_codes, sba_certifications, state, target_states, uei, cage_code, website, phone, employee_count, years_in_business, federal_awards_count")
+        .eq("auth_user_id", user.id)
+        .single();
 
-      // Fetch HOT matches + WARM matches in parallel
-      const [hotMatchRes, warmMatchRes] = await Promise.all([
-        supabase.from("matches").select("id, score, opportunity_id, contractor_id").eq("classification", "HOT").order("score", { ascending: false }).limit(10),
-        supabase.from("matches").select("id, score, opportunity_id, contractor_id").eq("classification", "WARM").order("score", { ascending: false }).limit(5),
-      ]);
+      if (!profileData) {
+        router.push("/onboard");
+        return;
+      }
+      setProfile(profileData as UserProfile);
 
-      const hotMatches = hotMatchRes.data || [];
-      const warmMatches = warmMatchRes.data || [];
-
-      // Collect all needed opp/contractor IDs
-      const allOppIds = [...new Set([...hotMatches, ...warmMatches].map(m => m.opportunity_id))];
-      const allConIds = [...new Set([...hotMatches, ...warmMatches].map(m => m.contractor_id))];
-
-      // Fetch details in parallel
-      const [oppsRes, consRes] = await Promise.all([
-        allOppIds.length > 0 ? supabase.from("opportunities").select("id, title, notice_id, response_deadline, agency, naics_code, notice_type").in("id", allOppIds) : Promise.resolve({ data: [] }),
-        allConIds.length > 0 ? supabase.from("contractors").select("id, company_name, city, state").in("id", allConIds) : Promise.resolve({ data: [] }),
-      ]);
-
-      const oppMap = new Map((oppsRes.data || []).map((o: Record<string, string>) => [o.id, o]));
-      const conMap = new Map((consRes.data || []).map((c: Record<string, string>) => [c.id, c]));
-
-      // Build hot list
-      setHotList(hotMatches.map(m => {
-        const opp = oppMap.get(m.opportunity_id) as Record<string, string> | undefined;
-        const con = conMap.get(m.contractor_id) as Record<string, string> | undefined;
-        return {
-          id: m.id,
-          opportunity_id: m.opportunity_id,
-          contractor_id: m.contractor_id,
-          notice_id: opp?.notice_id || "UNK",
-          title: opp?.title || "Unknown",
-          agency: opp?.agency || "Unknown Agency",
-          naics: opp?.naics_code || "---",
-          score_pct: Math.round(m.score * 100),
-          deadline: opp?.response_deadline || undefined,
-          contractor: con?.company_name || "Unknown",
-          contractor_loc: [con?.city, con?.state].filter(Boolean).join(", ") || "",
-        };
-      }));
-
-      // Build warm list
-      setWarmList(warmMatches.map(m => {
-        const opp = oppMap.get(m.opportunity_id) as Record<string, string> | undefined;
-        const con = conMap.get(m.contractor_id) as Record<string, string> | undefined;
-        return {
-          id: m.id,
-          opportunity_id: m.opportunity_id,
-          contractor_id: m.contractor_id,
-          title: opp?.title || "Unknown",
-          naics: opp?.naics_code || "---",
-          score_pct: Math.round(m.score * 100),
-          contractor: con?.company_name || "Unknown",
-        };
-      }));
-
-      // Urgent deadlines (next 7 days)
-      const nextWeek = new Date();
-      nextWeek.setDate(nextWeek.getDate() + 7);
-      const { count: urgentDeadlines } = await supabase
-        .from("opportunities")
-        .select("*", { count: 'exact', head: true })
-        .eq("is_archived", false)
-        .lte("response_deadline", nextWeek.toISOString())
-        .gte("response_deadline", new Date().toISOString());
-      setUrgentCount(urgentDeadlines || 0);
-
-      // Top NAICS from hot matches
-      const naicsCounts: Record<string, number> = {};
-      hotMatches.forEach(m => {
-        const opp = oppMap.get(m.opportunity_id) as Record<string, string> | undefined;
-        if (opp?.naics_code) {
-          naicsCounts[opp.naics_code] = (naicsCounts[opp.naics_code] || 0) + 1;
-        }
-      });
-      const sortedNaics = Object.entries(naicsCounts).sort((a, b) => b[1] - a[1]);
-      if (sortedNaics.length > 0) setTopNaics(sortedNaics[0][0]);
-
-      // Sales KPIs
+      const userNaics = (profileData as UserProfile).naics_codes || [];
       const today = new Date().toISOString().split("T")[0];
-      const [easyWinsRes, readyContactRes, needsEnrichRes] = await Promise.all([
-        // Easy Wins: Sources Sought with set-aside and active deadline
-        supabase.from("opportunities").select("*", { count: 'exact', head: true })
+
+      // Run all counts in parallel
+      const [opsRes, naicsRes, easyRes, urgentRes, topRes] = await Promise.all([
+        // Total active opportunities
+        supabase.from("opportunities").select("*", { count: "exact", head: true }).eq("is_archived", false),
+        // NAICS matched opportunities
+        userNaics.length > 0
+          ? supabase.from("opportunities").select("*", { count: "exact", head: true }).eq("is_archived", false).in("naics_code", userNaics)
+          : Promise.resolve({ count: 0 }),
+        // Easy wins: Sources Sought with set-aside + active deadline
+        supabase.from("opportunities").select("*", { count: "exact", head: true })
           .eq("is_archived", false)
           .ilike("notice_type", "%Sources Sought%")
           .not("set_aside_code", "is", null)
           .gte("response_deadline", today),
-        // Contractors with POC name + email or phone (ready to pitch)
-        supabase.from("contractors").select("*", { count: 'exact', head: true })
-          .not("primary_poc_name", "is", null)
-          .neq("data_quality_flag", "LOW_QUALITY"),
-        // HOT match contractors that have no enrichment data
-        supabase.from("matches").select("contractor_id", { count: 'exact', head: true })
-          .eq("classification", "HOT"),
+        // Urgent: deadlines in 7 days
+        supabase.from("opportunities").select("*", { count: "exact", head: true })
+          .eq("is_archived", false)
+          .lte("response_deadline", new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString())
+          .gte("response_deadline", today),
+        // Top matching opportunities by NAICS
+        userNaics.length > 0
+          ? supabase.from("opportunities")
+            .select("id, title, agency, naics_code, notice_type, response_deadline, set_aside_code")
+            .eq("is_archived", false)
+            .in("naics_code", userNaics)
+            .gte("response_deadline", today)
+            .order("response_deadline", { ascending: true })
+            .limit(8)
+          : Promise.resolve({ data: [] }),
       ]);
-      setEasyWinsCount(easyWinsRes.count || 0);
-      setReadyToContactCount(readyContactRes.count || 0);
-      setNeedsEnrichmentCount(needsEnrichRes.count || 0);
+
+      setOpsCount(opsRes.count || 0);
+      setNaicsMatchCount((naicsRes as { count: number | null }).count || 0);
+      setEasyWinsCount(easyRes.count || 0);
+      setUrgentCount(urgentRes.count || 0);
+      setTopOpps((topRes.data || []) as TopOpp[]);
+
+      // Fetch pipeline and action item counts
+      const profileId = (profileData as Record<string, unknown>).id as string;
+      if (profileId) {
+        const [pursuitRes, actionsRes] = await Promise.all([
+          supabase.from("user_pursuits").select("stage").eq("user_profile_id", profileId),
+          supabase.from("user_action_items").select("status, priority").eq("user_profile_id", profileId),
+        ]);
+
+        const pursuits = (pursuitRes.data || []) as Array<{ stage: string }>;
+        setPipelineCount(pursuits.length);
+        const stages: Record<string, number> = {};
+        pursuits.forEach(p => { stages[p.stage] = (stages[p.stage] || 0) + 1; });
+        setPipelineStages(stages);
+
+        const actions = (actionsRes.data || []) as Array<{ status: string; priority: string }>;
+        setActionsPending(actions.filter(a => a.status !== "completed").length);
+        setActionsUrgent(actions.filter(a => a.priority === "high" && a.status !== "completed").length);
+      }
 
       setLoading(false);
     }
     loadDashboard();
-  }, []);
+  }, [router]);
 
   if (loading) {
     return (
@@ -183,247 +161,292 @@ export default function AgencyDashboard() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
+    <div className="max-w-5xl mx-auto space-y-6 sm:space-y-8 animate-in fade-in duration-500 px-1">
 
-      {/* Header & Actions */}
-      <header className="flex items-end justify-between mb-10">
-        <div>
-          <h2 className="text-3xl font-bold font-typewriter tracking-tighter text-black">
-            Command Center
-          </h2>
-          <p className="text-stone-500 mt-2 font-medium">
-            Live Intelligence Overview
-          </p>
-        </div>
-        <DashboardActions />
+      {/* Welcome Header */}
+      <header>
+        <h2 className="text-2xl sm:text-3xl font-bold font-typewriter tracking-tighter text-black">
+          Welcome back, {profile?.company_name || "there"}
+        </h2>
+        <p className="text-stone-500 mt-1 sm:mt-2 font-medium text-sm sm:text-base">
+          Your contract matching dashboard
+        </p>
       </header>
 
-      {/* KPI Cards — All clickable */}
-      <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <MetricCard title="Active Opportunities" value={opsCount.toLocaleString()} icon={Activity} href="/opportunities" />
-        <MetricCard title="HOT Matches" value={hotCount} icon={Flame} highlight href="/matches?class=HOT" />
-        <MetricCard title="WARM Matches" value={warmCount.toLocaleString()} icon={Target} href="/matches?class=WARM" />
-        <MetricCard title="Contractor Pool" value={contractorCount.toLocaleString()} icon={Users} href="/contractors" />
+      {/* KPI Cards */}
+      <section className="grid grid-cols-2 gap-3 sm:gap-4">
+        <KpiCard
+          title="Your Matches"
+          value={naicsMatchCount}
+          subtitle="Opportunities matching your NAICS"
+          icon={Target}
+          href="/opportunities"
+          highlight
+        />
+        <KpiCard
+          title="Easy Wins"
+          value={easyWinsCount}
+          subtitle="Sources Sought with set-asides"
+          icon={Trophy}
+          href="/opportunities"
+          color="emerald"
+        />
+        <KpiCard
+          title="Active Opps"
+          value={opsCount.toLocaleString()}
+          subtitle="Total federal opportunities"
+          icon={Activity}
+          href="/opportunities"
+        />
+        <KpiCard
+          title="Urgent"
+          value={urgentCount}
+          subtitle="Deadlines in 7 days"
+          icon={Clock}
+          href="/opportunities"
+          color={urgentCount > 0 ? "red" : undefined}
+        />
       </section>
 
-      {/* Sales Action KPIs */}
-      <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Link href="/opportunities" className="bg-gradient-to-br from-emerald-50 to-white p-6 rounded-[32px] border border-emerald-200 shadow-sm hover:shadow-md hover:border-emerald-300 hover:-translate-y-0.5 transition-all cursor-pointer">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-sm font-medium text-emerald-700">Easy Wins Available</p>
-            <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center">
-              <Trophy className="w-4 h-4 text-emerald-600" />
-            </div>
-          </div>
-          <h4 className="text-3xl font-black font-typewriter tracking-tighter text-emerald-900">{easyWinsCount}</h4>
-          <p className="text-xs text-emerald-600 mt-1">Sources Sought with set-asides & active deadlines</p>
-        </Link>
-
-        <Link href="/contractors" className="bg-gradient-to-br from-blue-50 to-white p-6 rounded-[32px] border border-blue-200 shadow-sm hover:shadow-md hover:border-blue-300 hover:-translate-y-0.5 transition-all cursor-pointer">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-sm font-medium text-blue-700">Contractors with POC</p>
-            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
-              <PhoneCall className="w-4 h-4 text-blue-600" />
-            </div>
-          </div>
-          <h4 className="text-3xl font-black font-typewriter tracking-tighter text-blue-900">{readyToContactCount.toLocaleString()}</h4>
-          <p className="text-xs text-blue-600 mt-1">Have decision maker names from SAM registration</p>
-        </Link>
-
-        <Link href="/matches?class=HOT" className="bg-gradient-to-br from-amber-50 to-white p-6 rounded-[32px] border border-amber-200 shadow-sm hover:shadow-md hover:border-amber-300 hover:-translate-y-0.5 transition-all cursor-pointer">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-sm font-medium text-amber-700">HOT Match Pairs</p>
-            <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center">
-              <SearchX className="w-4 h-4 text-amber-600" />
-            </div>
-          </div>
-          <h4 className="text-3xl font-black font-typewriter tracking-tighter text-amber-900">{needsEnrichmentCount.toLocaleString()}</h4>
-          <p className="text-xs text-amber-600 mt-1">Contractor-opportunity pairs ready for outreach</p>
-        </Link>
-      </section>
-
-      {/* Two Column Layout */}
-      <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-        {/* HOT Matches Table */}
-        <div className="lg:col-span-2 bg-white rounded-[32px] p-8 border border-stone-200 shadow-sm">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="font-typewriter font-bold text-lg flex items-center">
-              <Flame className="w-5 h-5 mr-2 text-red-500" /> HOT Matches
-              <span className="ml-3 text-sm font-normal text-stone-400">Top scoring pairs</span>
+      {/* Profile Summary */}
+      {profile && (
+        <section className="bg-white rounded-[24px] sm:rounded-[32px] p-5 sm:p-6 border border-stone-200 shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+            <h3 className="font-typewriter font-bold text-base sm:text-lg flex items-center">
+              <BarChart3 className="w-5 h-5 mr-2 text-stone-400" />
+              Your Profile
             </h3>
-            <Link href="/matches?class=HOT" className="text-xs font-typewriter font-bold bg-stone-100 border border-stone-200 px-4 py-2 rounded-full hover:bg-stone-200 transition-colors flex items-center">
-              View All <ArrowRight className="w-3 h-3 ml-1" />
+            <Link href="/settings" className="text-xs font-typewriter font-bold text-stone-500 hover:text-black transition-colors flex items-center">
+              Edit Profile <ArrowRight className="w-3 h-3 ml-1" />
             </Link>
           </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-stone-200 text-stone-400 text-xs font-typewriter uppercase tracking-wider">
-                  <th className="pb-3 font-normal">Score</th>
-                  <th className="pb-3 font-normal">Opportunity</th>
-                  <th className="pb-3 font-normal">Contractor</th>
-                  <th className="pb-3 font-normal">NAICS</th>
-                  <th className="pb-3 font-normal">Deadline</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-stone-100 text-sm">
-                {hotList.length === 0 && (
-                  <tr><td colSpan={5} className="py-8 text-center text-stone-400 font-typewriter">No HOT matches detected. Click &quot;Score Matches&quot; above to generate.</td></tr>
-                )}
-                {hotList.map((opp) => (
-                  <tr key={opp.id} onClick={() => router.push(`/matches/${opp.opportunity_id}/${opp.contractor_id}`)} className="hover:bg-stone-50 transition-colors group cursor-pointer">
-                    <td className="py-4">
-                      <div className="flex items-center space-x-2">
-                        <div className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0"></div>
-                        <span className="font-mono font-bold text-base">{opp.score_pct}</span>
-                      </div>
-                    </td>
-                    <td className="py-4 max-w-[250px]">
-                      <p className="font-bold text-black line-clamp-1 text-sm">{opp.title}</p>
-                      <p className="text-stone-500 text-xs line-clamp-1">{opp.agency}</p>
-                    </td>
-                    <td className="py-4">
-                      <p className="font-medium text-stone-800 text-sm">{opp.contractor}</p>
-                      {opp.contractor_loc && <p className="text-stone-400 text-xs">{opp.contractor_loc}</p>}
-                    </td>
-                    <td className="py-4">
-                      <span className="font-mono text-xs bg-stone-100 px-2 py-1 rounded border border-stone-200">{opp.naics}</span>
-                    </td>
-                    <td className="py-4">
-                      <span className="font-bold text-xs text-stone-700">
-                        {opp.deadline ? new Date(opp.deadline).toLocaleDateString() : "TBD"}
-                      </span>
-                    </td>
-                  </tr>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="bg-stone-50 rounded-xl p-3 border border-stone-100">
+              <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1">NAICS Codes</p>
+              <div className="flex flex-wrap gap-1">
+                {profile.naics_codes?.slice(0, 4).map(n => (
+                  <span key={n} className="font-mono text-xs bg-black text-white px-2 py-0.5 rounded">{n}</span>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Intelligence Briefing */}
-        <div className="bg-gradient-to-br from-stone-900 via-stone-900 to-black rounded-[32px] p-8 text-white shadow-xl flex flex-col justify-between relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-40 h-40 bg-stone-600 rounded-full blur-3xl opacity-15 -mr-10 -mt-10 pointer-events-none"></div>
-          <div className="absolute bottom-0 left-0 w-32 h-32 bg-stone-700 rounded-full blur-3xl opacity-10 -ml-8 -mb-8 pointer-events-none"></div>
-
-          <div>
-            <div className="w-10 h-10 rounded-full bg-stone-800 flex items-center justify-center mb-6">
-              <TrendingUp className="w-5 h-5 text-white" />
-            </div>
-            <h3 className="font-typewriter text-xl font-bold mb-2">Intelligence Brief</h3>
-            <p className="text-stone-400 text-xs leading-relaxed mb-6 font-sans">
-              Real-time metrics from scoring and enrichment engines.
-            </p>
-
-            <div className="space-y-4">
-              <Link href="/matches" className="bg-black/40 p-4 rounded-2xl border border-stone-800 block hover:border-stone-600 transition-colors">
-                <p className="text-stone-500 font-typewriter text-[10px] uppercase tracking-wider mb-1">Match Pipeline</p>
-                <div className="flex items-end space-x-3">
-                  <span className="font-typewriter font-bold text-2xl text-red-400">{hotCount}</span>
-                  <span className="text-stone-500 text-xs font-bold mb-1">HOT</span>
-                  <span className="font-typewriter font-bold text-xl text-amber-400">{warmCount.toLocaleString()}</span>
-                  <span className="text-stone-500 text-xs font-bold mb-1">WARM</span>
-                </div>
-              </Link>
-              <div className="grid grid-cols-2 gap-3">
-                <Link href="/contractors" className="bg-black/40 p-4 rounded-2xl border border-stone-800 block hover:border-stone-600 transition-colors">
-                  <p className="text-stone-500 font-typewriter text-[10px] uppercase tracking-wider mb-1">Contractors</p>
-                  <p className="font-typewriter font-bold text-xl">{contractorCount.toLocaleString()}</p>
-                </Link>
-                <Link href="/pipeline" className="bg-black/40 p-4 rounded-2xl border border-stone-800 block hover:border-stone-600 transition-colors">
-                  <p className="text-stone-500 font-typewriter text-[10px] uppercase tracking-wider mb-1 flex items-center"><Briefcase className="w-3 h-3 mr-1" />Pipeline</p>
-                  <p className="font-typewriter font-bold text-xl">{pipelineCount}</p>
-                </Link>
-              </div>
-              {urgentCount > 0 && (
-              <div className="bg-red-500/10 p-4 rounded-2xl border border-red-500/20">
-                <p className="text-red-400 font-typewriter text-[10px] uppercase tracking-wider mb-1 flex items-center"><AlertTriangle className="w-3 h-3 mr-1" />Urgent</p>
-                <p className="font-typewriter font-bold text-sm text-red-300">{urgentCount} deadline{urgentCount !== 1 ? 's' : ''} in 7 days</p>
-              </div>
-              )}
-              {topNaics && (
-              <div className="bg-black/40 p-4 rounded-2xl border border-stone-800">
-                <p className="text-stone-500 font-typewriter text-[10px] uppercase tracking-wider mb-1">Top HOT NAICS</p>
-                <p className="font-mono font-bold text-sm">{topNaics}</p>
-              </div>
-              )}
-              <div className="bg-black/40 p-4 rounded-2xl border border-stone-800">
-                <p className="text-stone-500 font-typewriter text-[10px] uppercase tracking-wider mb-1 flex items-center"><Clock className="w-3 h-3 mr-1" />Last Scored</p>
-                <p className="font-typewriter font-bold text-sm">
-                  {lastScoredAt ? new Date(lastScoredAt).toLocaleString() : "Never"}
-                </p>
+                {(profile.naics_codes?.length || 0) > 4 && <span className="text-xs text-stone-400">+{profile.naics_codes.length - 4}</span>}
+                {(!profile.naics_codes || profile.naics_codes.length === 0) && <span className="text-xs text-stone-400">Not set</span>}
               </div>
             </div>
-          </div>
-
-          <div className="space-y-3 mt-6">
-            <Link href="/portal" className="w-full py-3 rounded-full bg-white text-black font-typewriter text-sm font-bold hover:bg-stone-100 transition-all text-center block flex items-center justify-center">
-              <UserCheck className="w-4 h-4 mr-2" /> Client Portal
-            </Link>
-            <Link href="/matches" className="w-full py-3 rounded-full border border-stone-700 text-stone-300 font-typewriter text-sm font-bold hover:bg-white hover:text-black transition-all text-center block">
-              View All Matches
-            </Link>
-          </div>
-        </div>
-
-      </section>
-
-      {/* Top WARM Matches Preview */}
-      {warmList.length > 0 && (
-        <section className="bg-white rounded-[32px] p-8 border border-stone-200 shadow-sm">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="font-typewriter font-bold text-lg flex items-center">
-              <Target className="w-5 h-5 mr-2 text-amber-500" /> Top WARM Matches
-            </h3>
-            <Link href="/matches?class=WARM" className="text-xs font-typewriter font-bold text-stone-500 hover:text-black transition-colors flex items-center">
-              View All <ArrowRight className="w-3 h-3 ml-1" />
-            </Link>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-            {warmList.map((m) => (
-              <Link key={m.id} href={`/matches/${m.opportunity_id}/${m.contractor_id}`} className="bg-stone-50 border border-stone-200 rounded-2xl p-4 hover:border-black hover:shadow-md transition-all group">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="font-mono font-bold text-lg">{m.score_pct}</span>
-                  <span className="bg-amber-100 text-amber-700 text-[9px] font-typewriter px-2 py-0.5 rounded uppercase">WARM</span>
-                </div>
-                <p className="font-bold text-sm line-clamp-2 text-stone-800 group-hover:text-black mb-1">{m.title}</p>
-                <p className="text-xs text-stone-500 line-clamp-1">{m.contractor}</p>
-                <span className="font-mono text-[10px] text-stone-400 mt-2 block">{m.naics}</span>
-              </Link>
-            ))}
+            <div className="bg-stone-50 rounded-xl p-3 border border-stone-100">
+              <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1">Certifications</p>
+              <div className="flex flex-wrap gap-1">
+                {profile.sba_certifications?.slice(0, 3).map(c => (
+                  <span key={c} className="text-xs font-typewriter font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded">{c}</span>
+                ))}
+                {(!profile.sba_certifications || profile.sba_certifications.length === 0) && <span className="text-xs text-stone-400">None</span>}
+              </div>
+            </div>
+            <div className="bg-stone-50 rounded-xl p-3 border border-stone-100">
+              <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1">Location</p>
+              <p className="font-bold text-sm">{profile.state || "Not set"}</p>
+              {profile.target_states?.length > 0 && (
+                <p className="text-xs text-stone-400 mt-0.5">Serving {profile.target_states.length} states</p>
+              )}
+            </div>
           </div>
         </section>
       )}
+
+      {/* Profile Completeness + Service CTA */}
+      {profile && (() => {
+        const { score, missing } = calculateProfileCompleteness(profile);
+        return (
+          <section className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+            <div className="bg-white rounded-[24px] sm:rounded-[32px] p-5 sm:p-6 border border-stone-200 shadow-sm">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-typewriter font-bold text-base flex items-center">
+                  <UserCheck className="w-5 h-5 mr-2 text-stone-400" /> Profile Strength
+                </h3>
+                <span className={clsx("text-sm font-black font-typewriter",
+                  score >= 80 ? "text-emerald-600" : score >= 50 ? "text-amber-600" : "text-red-600"
+                )}>{score}%</span>
+              </div>
+              <div className="w-full bg-stone-200 rounded-full h-2 mb-3">
+                <div className={clsx("rounded-full h-2 transition-all duration-500",
+                  score >= 80 ? "bg-emerald-500" : score >= 50 ? "bg-amber-500" : "bg-red-500"
+                )} style={{ width: `${score}%` }} />
+              </div>
+              {missing.length > 0 && score < 100 && (
+                <div>
+                  <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1.5">Missing</p>
+                  <p className="text-xs text-stone-500">{missing.slice(0, 3).join(", ")}{missing.length > 3 ? ` +${missing.length - 3} more` : ""}</p>
+                  <Link href="/settings" className="text-xs font-typewriter font-bold text-black hover:underline mt-2 inline-flex items-center">
+                    Complete Profile <ArrowRight className="w-3 h-3 ml-1" />
+                  </Link>
+                </div>
+              )}
+              {score >= 100 && (
+                <p className="text-xs text-emerald-600 font-bold">Your profile is complete. You are getting the best possible matches.</p>
+              )}
+            </div>
+            <ServiceCTA
+              title="Book a Free Strategy Call"
+              description="Talk to a GovCon expert about your pipeline, winning strategies, and how to grow your federal business."
+              variant="dark"
+            />
+          </section>
+        );
+      })()}
+
+      {/* Pipeline & Action Items Summary */}
+      {(pipelineCount > 0 || actionsPending > 0) && (
+        <section className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+          <Link href="/pipeline" className="bg-white rounded-[24px] sm:rounded-[32px] p-5 sm:p-6 border border-stone-200 shadow-sm hover:shadow-md hover:border-stone-300 transition-all">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-typewriter font-bold text-base flex items-center">
+                <Layers className="w-5 h-5 mr-2 text-stone-400" /> Pipeline
+              </h3>
+              <ArrowRight className="w-4 h-4 text-stone-400" />
+            </div>
+            {pipelineCount > 0 ? (
+              <div className="space-y-1">
+                {Object.entries(pipelineStages).filter(([, count]) => count > 0).map(([stage, count]) => (
+                  <div key={stage} className="flex items-center justify-between text-xs">
+                    <span className="text-stone-500 capitalize">{stage.replace("_", " ")}</span>
+                    <span className="font-bold text-stone-700">{count}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-stone-400">No opportunities in pipeline</p>
+            )}
+          </Link>
+          <Link href="/actions" className="bg-white rounded-[24px] sm:rounded-[32px] p-5 sm:p-6 border border-stone-200 shadow-sm hover:shadow-md hover:border-stone-300 transition-all">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-typewriter font-bold text-base flex items-center">
+                <CheckSquare className="w-5 h-5 mr-2 text-stone-400" /> Action Items
+              </h3>
+              <ArrowRight className="w-4 h-4 text-stone-400" />
+            </div>
+            {actionsPending > 0 ? (
+              <div>
+                <p className="text-2xl font-black font-typewriter tracking-tighter">{actionsPending}</p>
+                <p className="text-xs text-stone-500">
+                  pending{actionsUrgent > 0 && <span className="text-red-600 font-bold"> ({actionsUrgent} high priority)</span>}
+                </p>
+              </div>
+            ) : (
+              <p className="text-xs text-stone-400">No pending action items</p>
+            )}
+          </Link>
+        </section>
+      )}
+
+      {/* Top Matching Opportunities */}
+      <section className="bg-white rounded-[24px] sm:rounded-[32px] p-5 sm:p-6 border border-stone-200 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+          <h3 className="font-typewriter font-bold text-base sm:text-lg flex items-center">
+            <Zap className="w-5 h-5 mr-2 text-stone-400" />
+            Top Matches for You
+          </h3>
+          <Link href="/opportunities" className="text-xs font-typewriter font-bold bg-stone-100 border border-stone-200 px-4 py-2 rounded-full hover:bg-stone-200 transition-colors flex items-center self-start sm:self-auto">
+            Browse All <ArrowRight className="w-3 h-3 ml-1" />
+          </Link>
+        </div>
+
+        {topOpps.length === 0 ? (
+          <div className="text-center py-8 sm:py-12">
+            <Search className="w-10 h-10 text-stone-300 mx-auto mb-3" />
+            <p className="text-stone-500 font-typewriter text-sm mb-2">No matching opportunities yet</p>
+            <p className="text-stone-400 text-xs">We&apos;re scanning federal databases daily. Check back soon!</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {topOpps.map((opp) => {
+              const isEasyWin = opp.notice_type?.includes("Sources Sought") && opp.set_aside_code;
+              return (
+                <Link
+                  key={opp.id}
+                  href={`/opportunities/${opp.id}`}
+                  className="block bg-stone-50 hover:bg-stone-100 active:bg-stone-200 border border-stone-200 hover:border-stone-300 rounded-xl sm:rounded-2xl p-3 sm:p-4 transition-all"
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        {isEasyWin && (
+                          <span className="text-[9px] font-typewriter font-bold bg-emerald-100 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded uppercase">Easy Win</span>
+                        )}
+                        {opp.notice_type && (
+                          <span className={clsx(
+                            "text-[9px] font-typewriter px-2 py-0.5 rounded border uppercase tracking-widest",
+                            opp.notice_type.includes("Sources Sought") ? "bg-emerald-50 text-emerald-600 border-emerald-200" :
+                            opp.notice_type.includes("Presolicitation") ? "bg-blue-50 text-blue-600 border-blue-200" :
+                            "bg-stone-100 text-stone-500 border-stone-200"
+                          )}>
+                            {opp.notice_type}
+                          </span>
+                        )}
+                      </div>
+                      <p className="font-bold text-sm text-black line-clamp-1">{opp.title}</p>
+                      <p className="text-xs text-stone-500 line-clamp-1">{opp.agency}</p>
+                    </div>
+                    <div className="flex items-center gap-3 text-xs flex-shrink-0">
+                      <span className="font-mono bg-stone-200 px-2 py-0.5 rounded text-stone-600">{opp.naics_code}</span>
+                      <span className="font-bold text-stone-700 whitespace-nowrap">
+                        {opp.response_deadline ? new Date(opp.response_deadline).toLocaleDateString() : "TBD"}
+                      </span>
+                    </div>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      {/* Quick Actions */}
+      <section className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+        <Link href="/opportunities" className="bg-gradient-to-br from-stone-900 to-black text-white rounded-[24px] sm:rounded-[32px] p-5 sm:p-6 hover:shadow-xl transition-all group">
+          <Search className="w-6 h-6 mb-3 text-stone-400 group-hover:text-white transition-colors" />
+          <h4 className="font-typewriter font-bold text-base mb-1">Browse Opportunities</h4>
+          <p className="text-stone-400 text-xs">Search and filter {opsCount.toLocaleString()} federal contracts</p>
+        </Link>
+        <Link href="/settings" className="bg-white border border-stone-200 rounded-[24px] sm:rounded-[32px] p-5 sm:p-6 hover:shadow-lg hover:border-stone-300 transition-all group">
+          <Shield className="w-6 h-6 mb-3 text-stone-400 group-hover:text-black transition-colors" />
+          <h4 className="font-typewriter font-bold text-base mb-1">Update Your Profile</h4>
+          <p className="text-stone-400 text-xs">Improve your matches by refining your business details</p>
+        </Link>
+      </section>
     </div>
   );
 }
 
-function MetricCard({ title, value, icon: Icon, highlight = false, href }: { title: string, value: string | number, icon: React.ComponentType<{ className?: string }>, highlight?: boolean, href?: string }) {
+function KpiCard({ title, value, subtitle, icon: Icon, href, highlight = false, color }: {
+  title: string; value: string | number; subtitle: string;
+  icon: React.ComponentType<{ className?: string }>;
+  href?: string; highlight?: boolean; color?: string;
+}) {
+  const colorMap: Record<string, string> = {
+    emerald: "border-emerald-200 bg-gradient-to-br from-emerald-50 to-white",
+    red: "border-red-200 bg-gradient-to-br from-red-50 to-white",
+  };
+
   const content = (
     <div className={clsx(
-      "p-6 rounded-[32px] flex flex-col justify-between transition-all duration-300",
-      highlight ? "bg-white shadow-md border-2 border-black" : "bg-white border border-stone-200 shadow-sm",
-      href && "cursor-pointer hover:shadow-lg hover:border-black hover:-translate-y-0.5"
+      "p-4 sm:p-5 rounded-[20px] sm:rounded-[28px] flex flex-col justify-between transition-all duration-300",
+      highlight ? "bg-white shadow-md border-2 border-black" : color && colorMap[color] ? colorMap[color] + " border shadow-sm" : "bg-white border border-stone-200 shadow-sm",
+      href && "cursor-pointer hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0"
     )}>
-      <div className="flex justify-between items-start mb-4">
-        <p className="text-sm font-medium text-stone-500 font-sans tracking-tight">{title}</p>
+      <div className="flex justify-between items-start mb-3">
+        <p className="text-xs sm:text-sm font-medium text-stone-500 font-sans tracking-tight">{title}</p>
         <div className={clsx(
-          "w-8 h-8 rounded-full flex items-center justify-center",
-          highlight ? "bg-black text-white" : "bg-stone-100 text-stone-600"
+          "w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center flex-shrink-0",
+          highlight ? "bg-black text-white" : color === "emerald" ? "bg-emerald-100 text-emerald-600" : color === "red" ? "bg-red-100 text-red-600" : "bg-stone-100 text-stone-600"
         )}>
-          <Icon className="w-4 h-4" />
+          <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
         </div>
       </div>
       <div>
-        <h4 className="text-4xl font-black font-typewriter tracking-tighter">{value}</h4>
+        <h4 className="text-2xl sm:text-3xl font-black font-typewriter tracking-tighter">{value}</h4>
+        <p className="text-[10px] sm:text-xs text-stone-400 mt-0.5">{subtitle}</p>
       </div>
     </div>
   );
 
-  if (href) {
-    return <Link href={href}>{content}</Link>;
-  }
+  if (href) return <Link href={href}>{content}</Link>;
   return content;
 }
