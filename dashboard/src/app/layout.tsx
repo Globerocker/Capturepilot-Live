@@ -14,8 +14,8 @@ const courier = Courier_Prime({
 });
 
 export const metadata: Metadata = {
-  title: "Capture Pilot Core OS",
-  description: "Deterministic B2G Capture Intelligence Engine",
+  title: "CapturePilot - Government Contract Matching for Small Business",
+  description: "Find government contracts that fit your business. 15+ criteria matching engine built for Veteran-Owned and Small Businesses.",
 };
 
 export default function RootLayout({
