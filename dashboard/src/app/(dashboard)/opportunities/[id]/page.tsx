@@ -3,6 +3,9 @@ import { ArrowLeft, Building, Target, ShieldAlert, Award, Zap, MapPin, Calendar,
 import clsx from "clsx";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { InfoTooltip } from "@/components/ui/InfoTooltip";
+import EmailDraftPanel from "@/components/EmailDraftPanel";
+import CallButton from "@/components/CallButton";
 import PursueButton from "@/components/PursueButton";
 import OpportunityDescription from "@/components/OpportunityDescription";
 import OpportunityAttachments from "@/components/OpportunityAttachments";
@@ -104,7 +107,7 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                                     </div>
 
                                     <div>
-                                        <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1.5">NAICS Codes</p>
+                                        <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1.5">NAICS Codes <InfoTooltip text="Government classification codes for work type. Your NAICS codes are matched against these to find relevant opportunities." /></p>
                                         <div className="flex flex-wrap gap-2">
                                             {Array.isArray(opp.naics_code) ? opp.naics_code.map((n: string, i: number) => (
                                                 <span key={i} className="bg-stone-100 text-stone-700 font-mono text-sm px-2.5 py-1 rounded border border-stone-200">
@@ -119,7 +122,7 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                                     </div>
 
                                     <div>
-                                        <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1.5">Place of Performance</p>
+                                        <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1.5">Place of Performance <InfoTooltip text="Where the work will be performed. Being nearby improves your match score and reduces mobilization costs." /></p>
                                         <div className="flex items-start">
                                             <MapPin className="w-5 h-5 text-stone-400 mr-2 shrink-0 mt-0.5" />
                                             <p className="font-medium text-stone-800">{locationString || "Location TBD"}</p>
@@ -137,7 +140,7 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                                             </div>
                                         </div>
                                         <div>
-                                            <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1.5">Response Deadline</p>
+                                            <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1.5">Response Deadline <InfoTooltip text="Last date to submit your response. Missing this deadline means automatic disqualification." /></p>
                                             <div className="flex items-center text-red-600 font-bold">
                                                 <Calendar className="w-4 h-4 text-red-400 mr-2" />
                                                 {opp.response_deadline ? new Date(opp.response_deadline).toLocaleDateString() : "TBD"}
@@ -146,7 +149,7 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                                     </div>
 
                                     <div>
-                                        <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-2.5">Set-Aside Target</p>
+                                        <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-2.5">Set-Aside Target <InfoTooltip text="Restricts competition to specific small business categories. If you hold the matching certification (e.g. 8(a), SDVOSB, HUBZone), you have a significant competitive advantage." /></p>
                                         <div className="bg-stone-50 rounded-xl p-4 border border-stone-100">
                                             <p className="font-bold text-stone-800 mb-3 text-sm pb-2 border-b border-stone-200">
                                                 Raw: {opp.set_aside_code || "UNRESTRICTED"}
@@ -202,7 +205,7 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     {opp.incumbent_contractor_name && (
                                         <div>
-                                            <p className="text-[10px] font-typewriter text-amber-600 uppercase tracking-widest mb-1.5">Current Contractor</p>
+                                            <p className="text-[10px] font-typewriter text-amber-600 uppercase tracking-widest mb-1.5">Current Contractor <InfoTooltip text="The company currently performing this work. Incumbents have a significant advantage in rebids. Understanding the incumbent helps shape your competitive strategy." /></p>
                                             <p className="font-bold text-amber-900 text-lg">{opp.incumbent_contractor_name}</p>
                                             {opp.incumbent_contractor_uei && (
                                                 <p className="font-mono text-xs text-amber-700 mt-1">UEI: {opp.incumbent_contractor_uei}</p>
@@ -211,7 +214,7 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                                     )}
                                     {opp.award_amount && (
                                         <div>
-                                            <p className="text-[10px] font-typewriter text-amber-600 uppercase tracking-widest mb-1.5">Previous Award Value</p>
+                                            <p className="text-[10px] font-typewriter text-amber-600 uppercase tracking-widest mb-1.5">Previous Award Value <InfoTooltip text="Contract value. Ideal if 20-80% of your annual revenue for comfortable execution capacity." /></p>
                                             <p className="font-bold text-amber-900 text-lg">
                                                 {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(opp.award_amount)}
                                             </p>
@@ -240,25 +243,28 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
 
                         <div className="p-4 sm:p-6 space-y-3 sm:space-y-4">
                             <div className="flex justify-between items-center border-b border-stone-100 pb-3">
-                                <span className="text-[10px] sm:text-xs font-typewriter text-stone-500 uppercase tracking-widest">Est. Competition</span>
+                                <span className="text-[10px] sm:text-xs font-typewriter text-stone-500 uppercase tracking-widest">Est. Competition <InfoTooltip text="Estimated number of competitors based on NAICS popularity, set-aside type, and contract value. LOW = fewer competitors, better odds." /></span>
                                 <span className={clsx("text-xs font-bold px-3 py-1 rounded-full border", statusColor(strat.est_competition_level))}>
                                     {strat.est_competition_level || "UNKNOWN"}
                                 </span>
                             </div>
                             <div className="flex justify-between items-center border-b border-stone-100 pb-3">
-                                <span className="text-xs font-typewriter text-stone-500 uppercase tracking-widest">Complexity Level</span>
+                                <span className="text-xs font-typewriter text-stone-500 uppercase tracking-widest">Complexity Level <InfoTooltip text="How complex the requirements are based on document length, specialized needs, and compliance requirements. Higher complexity favors experienced contractors." /></span>
                                 <span className={clsx("text-xs font-bold px-3 py-1 rounded-full border", statusColor(strat.complexity_level))}>
                                     {strat.complexity_level || "UNKNOWN"}
                                 </span>
                             </div>
                             <div className="flex justify-between items-center">
-                                <span className="text-xs font-typewriter text-stone-500 uppercase tracking-widest">Win Prob Tier</span>
+                                <span className="text-xs font-typewriter text-stone-500 uppercase tracking-widest">Win Prob Tier <InfoTooltip text="Estimated win probability based on your match score, competition level, and strategic factors. HIGH = strong alignment with your profile." /></span>
                                 <span className={clsx("text-xs font-bold px-3 py-1 rounded-full border shadow-sm", statusColor(strat.win_prob_tier))}>
                                     {strat.win_prob_tier || "UNKNOWN"}
                                 </span>
                             </div>
                         </div>
                     </div>
+
+                    {/* Call & Transcribe */}
+                    <CallButton opportunityId={opp.id} />
 
                     {/* 4. AI WIN STRATEGY */}
                     <div className="bg-stone-900 rounded-2xl sm:rounded-3xl text-white relative overflow-hidden shadow-xl border border-stone-800">
@@ -309,6 +315,9 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                             )}
                         </div>
                     </div>
+                    {/* Email Draft Panel */}
+                    <EmailDraftPanel opportunityId={opp.id} opportunityTitle={opp.title} />
+
                     {/* Service CTA */}
                     <a href="https://calendly.com/americurial/intro-call" target="_blank" rel="noopener noreferrer"
                         className="block bg-gradient-to-br from-blue-50 to-white rounded-2xl sm:rounded-3xl border border-blue-200 p-4 sm:p-6 hover:shadow-md transition-all group">

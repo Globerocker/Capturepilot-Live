@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Target, Zap, Layers, CheckSquare, Settings, LogOut, Menu, X, BarChart3, Crosshair } from "lucide-react";
+import { LayoutDashboard, Target, Zap, Layers, CheckSquare, Settings, LogOut, Menu, X, BarChart3, Crosshair, CreditCard } from "lucide-react";
 import clsx from "clsx";
 import { createSupabaseClient } from "@/lib/supabase/client";
 
@@ -21,6 +21,7 @@ export default function Sidebar() {
         { name: "Action Items", href: "/actions", icon: CheckSquare },
         { name: "Capture Intel", href: "/capture-intel", icon: Crosshair },
         { name: "Analytics", href: "/analytics", icon: BarChart3 },
+        { name: "Billing", href: "/billing", icon: CreditCard },
     ];
 
     const handleSignOut = async () => {

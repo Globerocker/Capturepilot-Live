@@ -67,6 +67,7 @@ export default function ActionItemsPage() {
     const [items, setItems] = useState<ActionItem[]>([]);
     const [profileId, setProfileId] = useState<string | null>(null);
     const [filter, setFilter] = useState<"all" | "pending" | "completed">("all");
+    const [actionSort, setActionSort] = useState<"priority" | "deadline" | "category">("priority");
 
     useEffect(() => {
         async function load() {
@@ -126,8 +127,22 @@ export default function ActionItemsPage() {
         return true;
     });
 
+    // Sort filtered items
+    const sortedItems = [...filteredItems].sort((a, b) => {
+        if (actionSort === "priority") {
+            const order: Record<string, number> = { urgent: 0, high: 1, medium: 2, low: 3 };
+            return (order[a.priority] ?? 2) - (order[b.priority] ?? 2);
+        }
+        if (actionSort === "deadline") {
+            const dlA = a.opportunities?.response_deadline || "9999";
+            const dlB = b.opportunities?.response_deadline || "9999";
+            return dlA.localeCompare(dlB);
+        }
+        return a.category.localeCompare(b.category);
+    });
+
     // Group by opportunity
-    const grouped = filteredItems.reduce((acc, item) => {
+    const grouped = sortedItems.reduce((acc, item) => {
         const oppId = item.opportunity_id || "general";
         if (!acc[oppId]) acc[oppId] = { opportunity: item.opportunities, items: [] };
         acc[oppId].items.push(item);
@@ -201,8 +216,8 @@ export default function ActionItemsPage() {
                         </div>
                     </div>
 
-                    {/* Filter tabs */}
-                    <div className="flex gap-2 mb-4">
+                    {/* Filter tabs + Sort */}
+                    <div className="flex flex-wrap items-center gap-2 mb-4">
                         {(["all", "pending", "completed"] as const).map(f => (
                             <button key={f} type="button" onClick={() => setFilter(f)}
                                 className={clsx(
@@ -210,6 +225,20 @@ export default function ActionItemsPage() {
                                     filter === f ? "bg-black text-white border-black" : "bg-white text-stone-600 border-stone-200 hover:bg-stone-100"
                                 )}>
                                 {f === "all" ? "All" : f === "pending" ? "Pending" : "Done"}
+                            </button>
+                        ))}
+                        <span className="text-stone-300 mx-1">|</span>
+                        <span className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest">Sort</span>
+                        {([
+                            { key: "priority" as const, label: "Priority" },
+                            { key: "deadline" as const, label: "Deadline" },
+                            { key: "category" as const, label: "Category" },
+                        ]).map(opt => (
+                            <button key={opt.key} type="button" onClick={() => setActionSort(opt.key)}
+                                className={clsx("text-xs font-typewriter font-bold px-3 py-1.5 rounded-full border transition-all",
+                                    actionSort === opt.key ? "bg-black text-white border-black" : "bg-white text-stone-500 border-stone-200 hover:bg-stone-100"
+                                )}>
+                                {opt.label}
                             </button>
                         ))}
                     </div>

@@ -3,7 +3,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseClient } from "@/lib/supabase/client";
-import { Loader2, Zap, Search, X, ChevronLeft, ChevronRight, Trophy, Clock, Shield, Target, ArrowRight, Bookmark, EyeOff, Flame } from "lucide-react";
+import { Loader2, Zap, Search, X, ChevronLeft, ChevronRight, Trophy, Clock, Shield, Target, ArrowRight, Bookmark, EyeOff, Flame, ChevronUp, ChevronDown, Filter } from "lucide-react";
+import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import clsx from "clsx";
 import Link from "next/link";
 
@@ -39,6 +40,12 @@ export default function MyMatchesPage() {
     const [activeSearch, setActiveSearch] = useState("");
     const [page, setPage] = useState(1);
     const [filter, setFilter] = useState<"ALL" | "HOT" | "WARM" | "SAVED">("ALL");
+    const [sortBy, setSortBy] = useState<"score" | "deadline" | "agency" | "notice_type">("score");
+    const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+    const [showFilters, setShowFilters] = useState(false);
+    const [filterNoticeType, setFilterNoticeType] = useState("");
+    const [filterSetAside, setFilterSetAside] = useState("");
+    const [filterState, setFilterState] = useState("");
     const pageSize = 25;
 
     useEffect(() => {
@@ -96,10 +103,43 @@ export default function MyMatchesPage() {
             );
         }
 
+        // Advanced filters (client-side on joined fields)
+        if (filterNoticeType) {
+            filtered = filtered.filter(m => m.opportunities?.notice_type === filterNoticeType);
+        }
+        if (filterSetAside) {
+            filtered = filtered.filter(m => m.opportunities?.set_aside_code?.includes(filterSetAside));
+        }
+        if (filterState) {
+            filtered = filtered.filter(m => m.opportunities?.place_of_performance_state === filterState);
+        }
+
+        // Client-side sorting
+        if (sortBy !== "score") {
+            filtered.sort((a, b) => {
+                let aVal = "";
+                let bVal = "";
+                if (sortBy === "deadline") {
+                    aVal = a.opportunities?.response_deadline || "9999";
+                    bVal = b.opportunities?.response_deadline || "9999";
+                } else if (sortBy === "agency") {
+                    aVal = a.opportunities?.agency || "";
+                    bVal = b.opportunities?.agency || "";
+                } else if (sortBy === "notice_type") {
+                    aVal = a.opportunities?.notice_type || "";
+                    bVal = b.opportunities?.notice_type || "";
+                }
+                const cmp = aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
+                return sortDirection === "asc" ? cmp : -cmp;
+            });
+        } else if (sortDirection === "asc") {
+            filtered.reverse();
+        }
+
         setMatches(filtered);
-        setTotalCount(activeSearch ? filtered.length : (count || 0));
+        setTotalCount(activeSearch || filterNoticeType || filterSetAside || filterState ? filtered.length : (count || 0));
         setLoading(false);
-    }, [profileId, page, activeSearch, filter]);
+    }, [profileId, page, activeSearch, filter, sortBy, sortDirection, filterNoticeType, filterSetAside, filterState]);
 
     useEffect(() => {
         if (profileId) fetchMatches();
@@ -151,6 +191,7 @@ export default function MyMatchesPage() {
                 </h2>
                 <p className="text-stone-500 mt-1 font-medium text-sm">
                     Opportunities scored and ranked based on your complete profile
+                    <InfoTooltip text="Scores combine NAICS match, certifications, geography, past performance, contract value fit, and more. HOT = 70%+ alignment. WARM = 50-69%." />
                 </p>
             </header>
 
@@ -176,6 +217,90 @@ export default function MyMatchesPage() {
                     </button>
                 ))}
             </section>
+
+            {/* Sort Bar */}
+            <section className="flex flex-wrap items-center gap-2 mb-3">
+                <span className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mr-1">Sort by</span>
+                {([
+                    { key: "score" as const, label: "Score" },
+                    { key: "deadline" as const, label: "Deadline" },
+                    { key: "agency" as const, label: "Agency" },
+                    { key: "notice_type" as const, label: "Type" },
+                ]).map(opt => (
+                    <button
+                        type="button"
+                        key={opt.key}
+                        onClick={() => {
+                            if (sortBy === opt.key) {
+                                setSortDirection(d => d === "asc" ? "desc" : "asc");
+                            } else {
+                                setSortBy(opt.key);
+                                setSortDirection(opt.key === "score" ? "desc" : "asc");
+                            }
+                            setPage(1);
+                        }}
+                        className={clsx(
+                            "text-xs font-typewriter font-bold px-3 py-1.5 rounded-full border transition-all flex items-center",
+                            sortBy === opt.key ? "bg-black text-white border-black" : "bg-white text-stone-500 border-stone-200 hover:bg-stone-100"
+                        )}
+                    >
+                        {opt.label}
+                        {sortBy === opt.key && (sortDirection === "asc" ? <ChevronUp className="w-3 h-3 ml-1" /> : <ChevronDown className="w-3 h-3 ml-1" />)}
+                    </button>
+                ))}
+                <button
+                    type="button"
+                    onClick={() => setShowFilters(!showFilters)}
+                    className={clsx(
+                        "text-xs font-typewriter font-bold px-3 py-1.5 rounded-full border transition-all flex items-center ml-auto",
+                        showFilters ? "bg-black text-white border-black" : "bg-white text-stone-500 border-stone-200 hover:bg-stone-100"
+                    )}
+                >
+                    <Filter className="w-3 h-3 mr-1.5" />
+                    Filters
+                </button>
+            </section>
+
+            {/* Advanced Filters */}
+            {showFilters && (
+                <section className="bg-white border border-stone-200 rounded-2xl p-4 flex flex-wrap gap-4 mb-4 animate-in slide-in-from-top-2 duration-300">
+                    <div className="flex-1 min-w-[150px]">
+                        <p className="text-[10px] font-typewriter text-stone-500 uppercase mb-2">Notice Type</p>
+                        <select title="Notice Type" className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black" value={filterNoticeType} onChange={(e) => { setFilterNoticeType(e.target.value); setPage(1); }}>
+                            <option value="">All Types</option>
+                            <option value="Sources Sought">Sources Sought</option>
+                            <option value="Presolicitation">Presolicitation</option>
+                            <option value="Solicitation">Solicitation</option>
+                            <option value="Combined Synopsis/Solicitation">Combined</option>
+                        </select>
+                    </div>
+                    <div className="flex-1 min-w-[120px]">
+                        <p className="text-[10px] font-typewriter text-stone-500 uppercase mb-2">Set-Aside</p>
+                        <select title="Set-Aside" className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black" value={filterSetAside} onChange={(e) => { setFilterSetAside(e.target.value); setPage(1); }}>
+                            <option value="">All</option>
+                            <option value="SBA">Small Business</option>
+                            <option value="8A">8(a)</option>
+                            <option value="SDVOSB">SDVOSB</option>
+                            <option value="WOSB">WOSB</option>
+                            <option value="HUBZone">HUBZone</option>
+                        </select>
+                    </div>
+                    <div className="flex-1 min-w-[100px]">
+                        <p className="text-[10px] font-typewriter text-stone-500 uppercase mb-2">State</p>
+                        <select title="State" className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black" value={filterState} onChange={(e) => { setFilterState(e.target.value); setPage(1); }}>
+                            <option value="">All</option>
+                            {["AL","AK","AZ","AR","CA","CO","CT","DC","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"].map(s => (
+                                <option key={s} value={s}>{s}</option>
+                            ))}
+                        </select>
+                    </div>
+                    {(filterNoticeType || filterSetAside || filterState) && (
+                        <button type="button" onClick={() => { setFilterNoticeType(""); setFilterSetAside(""); setFilterState(""); setPage(1); }} className="self-end px-3 py-2 text-xs font-bold font-typewriter text-red-600 bg-red-50 border border-red-200 rounded-full hover:bg-red-100">
+                            Clear
+                        </button>
+                    )}
+                </section>
+            )}
 
             {/* Search */}
             <div className="bg-white p-2 rounded-full border border-stone-200 shadow-sm flex items-center mb-6 focus-within:ring-2 focus-within:ring-black focus-within:border-transparent transition-all">

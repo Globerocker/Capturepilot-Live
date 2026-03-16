@@ -7,6 +7,7 @@ import { Layers, Loader2, Search, Eye, ChevronDown, ArrowRight, Target, Clock, P
 import clsx from "clsx";
 import Link from "next/link";
 import ServiceCTA from "@/components/ui/ServiceCTA";
+import { InfoTooltip } from "@/components/ui/InfoTooltip";
 
 const supabase = createSupabaseClient();
 
@@ -42,6 +43,16 @@ const STAGES = [
 ];
 
 const STAGE_ORDER = STAGES.map(s => s.key);
+
+const STAGE_TOOLTIPS: Record<string, string> = {
+    discovered: "You've identified this opportunity. Next step: research the requirements and assess fit.",
+    researching: "Actively reviewing requirements, evaluating competition, and assessing your competitive position.",
+    preparing: "Writing your proposal, gathering past performance, and assembling your team.",
+    submitted: "Your response has been submitted. Await evaluation results.",
+    awarded: "Congratulations! You won this contract.",
+    lost: "This bid was not selected. Review the debrief to improve future submissions.",
+    no_bid: "You decided not to pursue this opportunity.",
+};
 
 function getStageInfo(stage: string) {
     return STAGES.find(s => s.key === stage) || STAGES[0];
@@ -101,6 +112,7 @@ export default function PipelinePage() {
     const [expandedStages, setExpandedStages] = useState<Record<string, boolean>>({
         discovered: true, researching: true, preparing: true, submitted: true,
     });
+    const [pipelineSort, setPipelineSort] = useState<"deadline" | "value" | "priority">("deadline");
 
     useEffect(() => {
         async function load() {
@@ -213,7 +225,22 @@ export default function PipelinePage() {
                 </div>
             ) : (
                 <>
-                    {/* Pipeline Summary Bar */}
+                    {/* Sort + Summary Bar */}
+                    <div className="flex flex-wrap items-center gap-2 mb-3">
+                        <span className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mr-1">Sort by</span>
+                        {([
+                            { key: "deadline" as const, label: "Deadline" },
+                            { key: "value" as const, label: "Value" },
+                            { key: "priority" as const, label: "Priority" },
+                        ]).map(opt => (
+                            <button type="button" key={opt.key} onClick={() => setPipelineSort(opt.key)}
+                                className={clsx("text-xs font-typewriter font-bold px-3 py-1.5 rounded-full border transition-all",
+                                    pipelineSort === opt.key ? "bg-black text-white border-black" : "bg-white text-stone-500 border-stone-200 hover:bg-stone-100"
+                                )}>
+                                {opt.label}
+                            </button>
+                        ))}
+                    </div>
                     <div className="flex flex-wrap items-center gap-3 mb-4">
                         <div className="bg-white border border-stone-200 rounded-xl px-3 sm:px-4 py-2 text-xs font-typewriter">
                             <span className="font-bold text-black">{activePursuits}</span>
@@ -232,7 +259,19 @@ export default function PipelinePage() {
 
                     <div className="space-y-3">
                         {activeStages.map(stage => {
-                            const items = groupedPursuits[stage.key];
+                            const rawItems = groupedPursuits[stage.key];
+                            const items = [...rawItems].sort((a, b) => {
+                                const oppA = a.opportunities as Pursuit["opportunities"];
+                                const oppB = b.opportunities as Pursuit["opportunities"];
+                                if (pipelineSort === "deadline") {
+                                    return (oppA?.response_deadline || "9999").localeCompare(oppB?.response_deadline || "9999");
+                                }
+                                if (pipelineSort === "value") {
+                                    return (oppB?.estimated_value || 0) - (oppA?.estimated_value || 0);
+                                }
+                                const pOrder: Record<string, number> = { high: 0, medium: 1, low: 2 };
+                                return (pOrder[a.priority] ?? 1) - (pOrder[b.priority] ?? 1);
+                            });
                             const isExpanded = expandedStages[stage.key] ?? false;
                             const serviceCta = STAGE_SERVICE_CTAS[stage.key];
 
@@ -247,6 +286,7 @@ export default function PipelinePage() {
                                             <span className={clsx("text-[10px] sm:text-xs font-typewriter font-bold uppercase tracking-widest px-2.5 py-1 rounded-full border", stage.color)}>
                                                 {stage.label}
                                             </span>
+                                            <InfoTooltip text={STAGE_TOOLTIPS[stage.key] || ""} />
                                             <span className="text-sm font-bold text-stone-700">{items.length}</span>
                                         </div>
                                         <ChevronDown className={clsx("w-4 h-4 text-stone-400 transition-transform", isExpanded && "rotate-180")} />

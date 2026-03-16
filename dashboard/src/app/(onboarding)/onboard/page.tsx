@@ -278,6 +278,8 @@ export default function OnboardPage() {
             security_clearances: form.security_clearances.length > 0 ? form.security_clearances : [],
             prime_or_sub: form.prime_or_sub || "both",
             onboarding_complete: true,
+            trial_ends_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+            subscription_status: "trialing",
         };
 
         const { error } = await supabase
