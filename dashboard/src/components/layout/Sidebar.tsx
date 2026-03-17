@@ -27,8 +27,7 @@ export default function Sidebar() {
 
     const handleSignOut = async () => {
         await supabase.auth.signOut();
-        const marketingUrl = process.env.NEXT_PUBLIC_MARKETING_URL || "/";
-        window.location.href = marketingUrl;
+        router.push("/signup");
     };
 
     const handleLock = () => {

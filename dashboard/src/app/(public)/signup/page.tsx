@@ -14,15 +14,13 @@ export default function SignupPage() {
   const router = useRouter();
   const supabase = createSupabaseClient();
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
-
   const handleGoogleSignup = async () => {
     setLoading(true);
     setError("");
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${appUrl}/auth/callback`,
+        redirectTo: `${window.location.origin}/auth/callback`,
       },
     });
     if (error) {
@@ -39,14 +37,14 @@ export default function SignupPage() {
       email,
       password,
       options: {
-        emailRedirectTo: `${appUrl}/auth/callback`,
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
       },
     });
     if (error) {
       setError(error.message);
       setLoading(false);
     } else {
-      window.location.href = `${appUrl}/onboard`;
+      router.push("/onboard");
     }
   };
 
@@ -65,9 +63,14 @@ export default function SignupPage() {
           <h2 className="text-xl font-bold font-typewriter text-center mb-2">
             Start Your Free Trial
           </h2>
-          <p className="text-sm text-stone-500 text-center mb-8">
-            14 days free. No credit card required.
+          <p className="text-sm text-stone-500 text-center mb-2">
+            It&apos;s completely free right now. No credit card required.
           </p>
+          <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2 mb-6 text-center">
+            <span className="text-xs font-typewriter font-bold text-emerald-700">
+              Beta users save 25% on their subscription when we launch paid plans
+            </span>
+          </div>
 
           {/* Google OAuth */}
           <button
@@ -152,9 +155,10 @@ export default function SignupPage() {
         {/* Benefits */}
         <div className="mt-8 space-y-2">
           {[
-            "Unlimited contract matches for 14 days",
+            "Completely free during beta — no limits",
             "Win probability scoring on every match",
-            "Email alerts for new opportunities",
+            "AI-powered email drafts & win strategies",
+            "Beta users save 25% when paid plans launch",
           ].map((b) => (
             <div
               key={b}

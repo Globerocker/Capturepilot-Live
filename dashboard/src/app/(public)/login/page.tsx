@@ -14,15 +14,13 @@ export default function LoginPage() {
   const router = useRouter();
   const supabase = createSupabaseClient();
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
-
   const handleGoogleLogin = async () => {
     setLoading(true);
     setError("");
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${appUrl}/auth/callback`,
+        redirectTo: `${window.location.origin}/auth/callback`,
       },
     });
     if (error) {
@@ -43,7 +41,7 @@ export default function LoginPage() {
       setError(error.message);
       setLoading(false);
     } else {
-      window.location.href = `${appUrl}/dashboard`;
+      router.push("/dashboard");
     }
   };
 
