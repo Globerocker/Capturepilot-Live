@@ -9,6 +9,9 @@ const SUPABASE_ANON_KEY =
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ5eGdqemVob2lqanZjenFraHdyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIwNDg0NTUsImV4cCI6MjA4NzYyNDQ1NX0.q0HivHixjE-A2MuQZlmlZOO2eLpQEm8c6XhQQQKaJsY";
 
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.capturepilot.com";
+const MARKETING_URL = process.env.NEXT_PUBLIC_MARKETING_URL || "https://www.capturepilot.com";
+
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
@@ -34,35 +37,102 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const pathname = request.nextUrl.pathname;
+  const host = request.headers.get("host") || "";
 
-  // Public routes that don't require auth
-  const publicRoutes = ["/", "/login", "/signup", "/auth/callback"];
-  const isPublicRoute =
-    publicRoutes.includes(pathname) ||
+  // Determine which domain we're on
+  const isLocalhost = host.includes("localhost") || host.includes("127.0.0.1");
+  const isAppDomain = host.startsWith("app.");
+  const isMarketingDomain = !isAppDomain && !isLocalhost;
+
+  // Always allow these paths regardless of domain
+  if (
     pathname.startsWith("/auth/") ||
     pathname.startsWith("/api/") ||
-    pathname.startsWith("/_next/");
+    pathname.startsWith("/_next/")
+  ) {
+    return supabaseResponse;
+  }
 
-  // If user is not authenticated and trying to access a protected route
+  // ─── Marketing domain (www.capturepilot.com) ───
+  if (isMarketingDomain) {
+    const marketingRoutes = ["/", "/login", "/signup", "/pricing"];
+    const isMarketingRoute = marketingRoutes.includes(pathname);
+
+    // Authenticated user on marketing login/signup/home → send to app
+    if (user && (pathname === "/" || pathname === "/login" || pathname === "/signup")) {
+      return NextResponse.redirect(`${APP_URL}/dashboard`);
+    }
+
+    // Allow marketing routes for unauthenticated users
+    if (isMarketingRoute) {
+      return supabaseResponse;
+    }
+
+    // Any dashboard route on marketing domain → redirect to app domain
+    return NextResponse.redirect(`${APP_URL}${pathname}`);
+  }
+
+  // ─── App domain (app.capturepilot.com) ───
+  if (isAppDomain) {
+    // Unauthenticated user on app domain → send to marketing login
+    if (!user && pathname !== "/onboard") {
+      return NextResponse.redirect(`${MARKETING_URL}/login`);
+    }
+
+    // Authenticated user on "/" of app domain → dashboard
+    if (user && pathname === "/") {
+      const url = request.nextUrl.clone();
+      url.pathname = "/dashboard";
+      return NextResponse.redirect(url);
+    }
+
+    // Onboarding gate
+    if (user && pathname !== "/onboard" && pathname !== "/login" && pathname !== "/signup") {
+      const onboardingCookie = request.cookies.get("cp_onboarding_complete");
+      if (onboardingCookie?.value !== "true") {
+        const { data: profile } = await supabase
+          .from("user_profiles")
+          .select("onboarding_complete")
+          .eq("auth_user_id", user.id)
+          .single();
+
+        if (!profile || !profile.onboarding_complete) {
+          const url = request.nextUrl.clone();
+          url.pathname = "/onboard";
+          return NextResponse.redirect(url);
+        }
+
+        supabaseResponse.cookies.set("cp_onboarding_complete", "true", {
+          path: "/",
+          maxAge: 86400 * 30,
+          httpOnly: true,
+          sameSite: "lax",
+        });
+      }
+    }
+
+    return supabaseResponse;
+  }
+
+  // ─── Localhost (development) — original behavior ───
+  const publicRoutes = ["/", "/login", "/signup", "/pricing", "/auth/callback"];
+  const isPublicRoute = publicRoutes.includes(pathname);
+
   if (!user && !isPublicRoute) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
   }
 
-  // If authenticated user visits public pages, redirect to dashboard
   if (user && (pathname === "/" || pathname === "/login" || pathname === "/signup")) {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";
     return NextResponse.redirect(url);
   }
 
-  // Onboarding gate: force authenticated users to complete onboarding
   if (user && !isPublicRoute && pathname !== "/onboard") {
-    // Check cookie first to avoid DB query on every request
     const onboardingCookie = request.cookies.get("cp_onboarding_complete");
     if (onboardingCookie?.value !== "true") {
-      // Query DB to check onboarding status
       const { data: profile } = await supabase
         .from("user_profiles")
         .select("onboarding_complete")
@@ -75,7 +145,6 @@ export async function updateSession(request: NextRequest) {
         return NextResponse.redirect(url);
       }
 
-      // Onboarding is complete - set cookie so we skip DB query next time
       supabaseResponse.cookies.set("cp_onboarding_complete", "true", {
         path: "/",
         maxAge: 86400 * 30,

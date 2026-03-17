@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Target, Zap, Layers, CheckSquare, Settings, LogOut, Menu, X, BarChart3, Crosshair, CreditCard, PenTool } from "lucide-react";
+import { LayoutDashboard, Target, Zap, Layers, CheckSquare, Settings, LogOut, Menu, X, BarChart3, Crosshair, CreditCard, PenTool, Lock } from "lucide-react";
 import clsx from "clsx";
 import { createSupabaseClient } from "@/lib/supabase/client";
 
@@ -27,7 +27,13 @@ export default function Sidebar() {
 
     const handleSignOut = async () => {
         await supabase.auth.signOut();
-        router.push("/");
+        const marketingUrl = process.env.NEXT_PUBLIC_MARKETING_URL || "/";
+        window.location.href = marketingUrl;
+    };
+
+    const handleLock = () => {
+        window.dispatchEvent(new Event("lock-session"));
+        setMobileOpen(false);
     };
 
     const handleNavClick = () => {
@@ -94,6 +100,14 @@ export default function Sidebar() {
                     <Settings className="h-5 w-5" />
                     <span className="font-typewriter font-medium">Settings</span>
                 </Link>
+                <button
+                    type="button"
+                    onClick={handleLock}
+                    className="w-full flex items-center space-x-3 px-4 py-3.5 lg:py-3 rounded-2xl text-stone-400 hover:bg-amber-50 hover:text-amber-600 transition-all duration-200 text-sm"
+                >
+                    <Lock className="h-5 w-5" />
+                    <span className="font-typewriter font-medium">Lock</span>
+                </button>
                 <button
                     type="button"
                     onClick={handleSignOut}

@@ -5,12 +5,15 @@ export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
 
+  // Use app URL for cross-domain redirects, fallback to origin for localhost
+  const appBase = process.env.NEXT_PUBLIC_APP_URL || origin;
+  const marketingBase = process.env.NEXT_PUBLIC_MARKETING_URL || origin;
+
   if (code) {
     const supabase = await createSupabaseServerClient();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (!error) {
-      // Check if user has completed onboarding
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -23,14 +26,13 @@ export async function GET(request: Request) {
           .single();
 
         if (!profile || !profile.onboarding_complete) {
-          return NextResponse.redirect(`${origin}/onboard`);
+          return NextResponse.redirect(`${appBase}/onboard`);
         }
 
-        return NextResponse.redirect(`${origin}/dashboard`);
+        return NextResponse.redirect(`${appBase}/dashboard`);
       }
     }
   }
 
-  // Something went wrong, redirect to login
-  return NextResponse.redirect(`${origin}/login?error=auth`);
+  return NextResponse.redirect(`${marketingBase}/login?error=auth`);
 }
