@@ -96,6 +96,22 @@ export default function SettingsPage() {
         load();
     }, [router]);
 
+    // Scroll to hash field and pulse highlight
+    useEffect(() => {
+        if (loading || !profile) return;
+        const hash = window.location.hash?.replace("#", "");
+        if (!hash) return;
+        const timeout = setTimeout(() => {
+            const el = document.getElementById(hash);
+            if (el) {
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+                el.classList.add("pulse-highlight");
+                setTimeout(() => el.classList.remove("pulse-highlight"), 2500);
+            }
+        }, 300);
+        return () => clearTimeout(timeout);
+    }, [loading, profile]);
+
     const updateProfile = (key: string, value: unknown) => {
         if (!profile) return;
         setProfile({ ...profile, [key]: value });
@@ -300,13 +316,13 @@ export default function SettingsPage() {
                 <div className="space-y-4">
                     <div>
                         <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">Company Name</label>
-                        <input type="text" placeholder="Legal Business Name" value={profile.company_name || ""} onChange={(e) => updateProfile("company_name", e.target.value)}
+                        <input id="company-name" type="text" placeholder="Legal Business Name" value={profile.company_name || ""} onChange={(e) => updateProfile("company_name", e.target.value)}
                             className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" />
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">UEI <span className="text-stone-400 normal-case">(12 alphanumeric)</span> <InfoTooltip text="Unique Entity Identifier — your 12-character code assigned when you register on SAM.gov. Required for all federal contracts." /></label>
-                            <input type="text" placeholder="e.g. ABC123DEF456" maxLength={12} value={profile.uei || ""}
+                            <input id="uei" type="text" placeholder="e.g. ABC123DEF456" maxLength={12} value={profile.uei || ""}
                                 onChange={(e) => { updateProfile("uei", e.target.value.replace(/[^A-Za-z0-9]/g, "")); setValidationErrors(prev => ({ ...prev, uei: "" })); }}
                                 className={clsx("w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm font-mono uppercase",
                                     validationErrors.uei ? "border-red-400" : "border-stone-200")} />
@@ -314,7 +330,7 @@ export default function SettingsPage() {
                         </div>
                         <div>
                             <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">CAGE Code <span className="text-stone-400 normal-case">(5 alphanumeric)</span> <InfoTooltip text="Commercial and Government Entity Code — a 5-character ID assigned by the Department of Defense during SAM.gov registration." /></label>
-                            <input type="text" placeholder="e.g. 7ABC1" maxLength={5} value={profile.cage_code || ""}
+                            <input id="cage-code" type="text" placeholder="e.g. 7ABC1" maxLength={5} value={profile.cage_code || ""}
                                 onChange={(e) => { updateProfile("cage_code", e.target.value.replace(/[^A-Za-z0-9]/g, "")); setValidationErrors(prev => ({ ...prev, cage_code: "" })); }}
                                 className={clsx("w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm font-mono uppercase",
                                     validationErrors.cage_code ? "border-red-400" : "border-stone-200")} />
@@ -343,7 +359,7 @@ export default function SettingsPage() {
                         </div>
                         <div>
                             <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">State</label>
-                            <select title="State" value={profile.state || ""} onChange={(e) => updateProfile("state", e.target.value)}
+                            <select id="state" title="State" value={profile.state || ""} onChange={(e) => updateProfile("state", e.target.value)}
                                 className="w-full px-3 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm bg-white">
                                 <option value="">--</option>
                                 {STATE_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
@@ -358,12 +374,12 @@ export default function SettingsPage() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">Website</label>
-                            <input type="text" placeholder="www.example.com" value={profile.website || ""} onChange={(e) => updateProfile("website", e.target.value)}
+                            <input id="website" type="text" placeholder="www.example.com" value={profile.website || ""} onChange={(e) => updateProfile("website", e.target.value)}
                                 className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" />
                         </div>
                         <div>
                             <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">Phone</label>
-                            <input type="tel" placeholder="(555) 123-4567" value={profile.phone || ""} onChange={(e) => updateProfile("phone", e.target.value)}
+                            <input id="phone" type="tel" placeholder="(555) 123-4567" value={profile.phone || ""} onChange={(e) => updateProfile("phone", e.target.value)}
                                 className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" />
                         </div>
                     </div>
@@ -379,7 +395,7 @@ export default function SettingsPage() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">Employee Count</label>
-                            <select title="Employee Count" value={profile.employee_count || ""} onChange={(e) => updateProfile("employee_count", e.target.value ? parseInt(e.target.value) : null)}
+                            <select id="employee-count" title="Employee Count" value={profile.employee_count || ""} onChange={(e) => updateProfile("employee_count", e.target.value ? parseInt(e.target.value) : null)}
                                 className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm bg-white">
                                 <option value="">Select range...</option>
                                 <option value="5">1-5</option>
@@ -408,12 +424,12 @@ export default function SettingsPage() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">Years in Business</label>
-                            <input type="number" min={0} max={200} placeholder="e.g. 5" value={profile.years_in_business && profile.years_in_business > 200 ? "" : (profile.years_in_business ?? "")} onChange={(e) => { const v = e.target.value ? Math.min(parseInt(e.target.value), 200) : null; updateProfile("years_in_business", v); }}
+                            <input id="years-in-business" type="number" min={0} max={200} placeholder="e.g. 5" value={profile.years_in_business && profile.years_in_business > 200 ? "" : (profile.years_in_business ?? "")} onChange={(e) => { const v = e.target.value ? Math.min(parseInt(e.target.value), 200) : null; updateProfile("years_in_business", v); }}
                                 className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" />
                         </div>
                         <div>
                             <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">Past Federal Awards</label>
-                            <input type="number" min={0} placeholder="Number of past federal contracts (0 if none)" value={profile.federal_awards_count ?? ""} onChange={(e) => updateProfile("federal_awards_count", e.target.value ? parseInt(e.target.value) : 0)}
+                            <input id="past-federal-awards" type="number" min={0} placeholder="Number of past federal contracts (0 if none)" value={profile.federal_awards_count ?? ""} onChange={(e) => updateProfile("federal_awards_count", e.target.value ? parseInt(e.target.value) : 0)}
                                 className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" />
                         </div>
                     </div>
@@ -470,7 +486,7 @@ export default function SettingsPage() {
                         <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">NAICS Codes <InfoTooltip text="North American Industry Classification System — codes that describe your industry. The government uses these to categorize opportunities by service/product type." /></label>
                         <div className="relative mb-2">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
-                            <input type="text" placeholder="Search by code or name..." value={naicsSearch} onChange={(e) => setNaicsSearch(e.target.value)}
+                            <input id="naics-codes" type="text" placeholder="Search by code or name..." value={naicsSearch} onChange={(e) => setNaicsSearch(e.target.value)}
                                 className="w-full pl-9 pr-4 py-2.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" />
                         </div>
                         {(profile.naics_codes || []).length > 0 && (
@@ -511,7 +527,7 @@ export default function SettingsPage() {
                     </div>
                     <div>
                         <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">SBA Certifications <InfoTooltip text="Small Business Administration certifications that qualify you for set-aside contracts reserved for specific business categories (8(a), HUBZone, SDVOSB, WOSB, etc.)." /></label>
-                        <div className="flex flex-wrap gap-2">
+                        <div id="sba-certifications" className="flex flex-wrap gap-2">
                             {CERT_OPTIONS.map(c => (
                                 <button type="button" key={c.value} onClick={() => toggleArray("sba_certifications", c.value)}
                                     className={clsx(
@@ -671,7 +687,7 @@ export default function SettingsPage() {
                 <h3 className="font-typewriter font-bold text-base sm:text-lg flex items-center mb-4">
                     <MapPin className="w-5 h-5 mr-2 text-stone-400" /> Target States
                 </h3>
-                <div className="flex flex-wrap gap-1.5 max-h-[150px] overflow-y-auto pr-1">
+                <div id="target-states" className="flex flex-wrap gap-1.5 max-h-[150px] overflow-y-auto pr-1">
                     {STATE_OPTIONS.map(s => (
                         <button type="button" key={s} onClick={() => toggleArray("target_states", s)}
                             className={clsx(

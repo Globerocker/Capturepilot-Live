@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Loader2, FileText, Download, AlertCircle, Paperclip } from "lucide-react";
+import { Loader2, FileText, Download, AlertCircle, Paperclip, ChevronDown } from "lucide-react";
+import clsx from "clsx";
 
 interface Attachment {
     name: string;
@@ -14,13 +15,15 @@ interface Attachment {
 interface Props {
     noticeId: string;
     resourceLinks?: string[];
+    defaultCollapsed?: boolean;
 }
 
-export default function OpportunityAttachments({ noticeId, resourceLinks }: Props) {
+export default function OpportunityAttachments({ noticeId, resourceLinks, defaultCollapsed = false }: Props) {
     const [attachments, setAttachments] = useState<Attachment[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
     const [fetched, setFetched] = useState(false);
+    const [collapsed, setCollapsed] = useState(defaultCollapsed);
 
     useEffect(() => {
         if (!noticeId || fetched) return;
@@ -76,57 +79,71 @@ export default function OpportunityAttachments({ noticeId, resourceLinks }: Prop
     };
 
     return (
-        <div className="bg-white rounded-2xl sm:rounded-3xl border border-stone-200 shadow-sm overflow-hidden p-4 sm:p-8">
-            <h2 className="font-typewriter text-base sm:text-lg font-bold mb-4 sm:mb-6 flex items-center text-stone-800">
-                <Paperclip className="w-5 h-5 mr-2 sm:mr-3 text-stone-400" /> Attachments & Documents
-            </h2>
+        <div className="bg-white rounded-2xl sm:rounded-3xl border border-stone-200 shadow-sm overflow-hidden">
+            <button
+                type="button"
+                onClick={() => setCollapsed(!collapsed)}
+                className="w-full bg-stone-50 border-b border-stone-100 px-4 sm:px-8 py-4 sm:py-5 flex items-center justify-between hover:bg-stone-100 transition-colors"
+            >
+                <h2 className="font-typewriter text-base sm:text-lg font-bold flex items-center text-stone-800">
+                    <Paperclip className="w-5 h-5 mr-2 sm:mr-3 text-stone-400" /> Attachments & Documents
+                    {!loading && allLinks.length > 0 && (
+                        <span className="ml-2 text-xs font-normal text-stone-400">({allLinks.length})</span>
+                    )}
+                </h2>
+                <ChevronDown className={clsx("w-5 h-5 text-stone-400 transition-transform duration-200", !collapsed && "rotate-180")} />
+            </button>
 
-            {loading && (
-                <div className="flex items-center justify-center py-8">
-                    <Loader2 className="w-5 h-5 animate-spin text-stone-400 mr-3" />
-                    <span className="text-sm text-stone-500">Loading attachments from SAM.gov...</span>
-                </div>
-            )}
+            {!collapsed && (
+                <div className="p-4 sm:p-8">
+                    {loading && (
+                        <div className="flex items-center justify-center py-8">
+                            <Loader2 className="w-5 h-5 animate-spin text-stone-400 mr-3" />
+                            <span className="text-sm text-stone-500">Loading attachments from SAM.gov...</span>
+                        </div>
+                    )}
 
-            {error && !loading && allLinks.length === 0 && (
-                <div className="flex items-center text-amber-700 bg-amber-50 rounded-xl border border-amber-200 p-4">
-                    <AlertCircle className="w-4 h-4 mr-2 flex-shrink-0" />
-                    <span className="text-sm">{error}</span>
-                </div>
-            )}
+                    {error && !loading && allLinks.length === 0 && (
+                        <div className="flex items-center text-amber-700 bg-amber-50 rounded-xl border border-amber-200 p-4">
+                            <AlertCircle className="w-4 h-4 mr-2 flex-shrink-0" />
+                            <span className="text-sm">{error}</span>
+                        </div>
+                    )}
 
-            {!loading && allLinks.length === 0 && !error && (
-                <div className="bg-stone-50 border border-stone-200 p-5 rounded-2xl text-center py-8">
-                    <FileText className="w-8 h-8 text-stone-300 mx-auto mb-3" />
-                    <p className="text-sm font-medium text-stone-500">No attachments found on SAM.gov</p>
-                    <p className="text-xs text-stone-400 mt-1">Attachments may be added later by the contracting office.</p>
-                </div>
-            )}
+                    {!loading && allLinks.length === 0 && !error && (
+                        <div className="bg-stone-50 border border-stone-200 p-5 rounded-2xl text-center py-8">
+                            <FileText className="w-8 h-8 text-stone-300 mx-auto mb-3" />
+                            <p className="text-sm font-medium text-stone-500">No attachments found on SAM.gov</p>
+                            <p className="text-xs text-stone-400 mt-1">Attachments may be added later by the contracting office.</p>
+                        </div>
+                    )}
 
-            {!loading && allLinks.length > 0 && (
-                <div className="bg-stone-50 border border-stone-200 rounded-2xl divide-y divide-stone-200">
-                    {allLinks.map((att, idx) => (
-                        <a
-                            key={idx}
-                            href={att.url || "#"}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center justify-between p-4 hover:bg-stone-100 transition-colors first:rounded-t-2xl last:rounded-b-2xl"
-                        >
-                            <div className="flex items-center min-w-0 flex-1">
-                                <FileText className={`w-5 h-5 mr-3 flex-shrink-0 ${fileIcon(att.name)}`} />
-                                <div className="min-w-0">
-                                    <p className="font-medium text-sm text-stone-800 truncate">{att.name}</p>
-                                    <div className="flex items-center gap-3 mt-0.5">
-                                        {att.size && <span className="text-xs text-stone-400">{att.size}</span>}
-                                        {att.type && <span className="text-xs text-stone-400">{att.type}</span>}
-                                        {att.postedDate && <span className="text-xs text-stone-400">{new Date(att.postedDate).toLocaleDateString()}</span>}
+                    {!loading && allLinks.length > 0 && (
+                        <div className="bg-stone-50 border border-stone-200 rounded-2xl divide-y divide-stone-200">
+                            {allLinks.map((att, idx) => (
+                                <a
+                                    key={idx}
+                                    href={att.url || "#"}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center justify-between p-4 hover:bg-stone-100 transition-colors first:rounded-t-2xl last:rounded-b-2xl"
+                                >
+                                    <div className="flex items-center min-w-0 flex-1">
+                                        <FileText className={`w-5 h-5 mr-3 flex-shrink-0 ${fileIcon(att.name)}`} />
+                                        <div className="min-w-0">
+                                            <p className="font-medium text-sm text-stone-800 truncate">{att.name}</p>
+                                            <div className="flex items-center gap-3 mt-0.5">
+                                                {att.size && <span className="text-xs text-stone-400">{att.size}</span>}
+                                                {att.type && <span className="text-xs text-stone-400">{att.type}</span>}
+                                                {att.postedDate && <span className="text-xs text-stone-400">{new Date(att.postedDate).toLocaleDateString()}</span>}
+                                            </div>
+                                        </div>
                                     </div>
-                                </div>
-                            </div>
-                            <Download className="w-4 h-4 text-blue-500 flex-shrink-0 ml-3" />
-                        </a>
-                    ))}
+                                    <Download className="w-4 h-4 text-blue-500 flex-shrink-0 ml-3" />
+                                </a>
+                            ))}
+                        </div>
+                    )}
                 </div>
             )}
         </div>

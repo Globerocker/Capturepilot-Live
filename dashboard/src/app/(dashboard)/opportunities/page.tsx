@@ -7,6 +7,7 @@ import { Search, Filter, Loader2, LayoutGrid, List, Download, X, Building, Targe
 import clsx from "clsx";
 import Link from "next/link";
 import { createPursuit, getUserProfileId } from "@/lib/pursue-utils";
+import { SkeletonTableRow } from "@/components/ui/Skeleton";
 
 const supabase = createSupabaseClient();
 
@@ -465,8 +466,27 @@ export default function OpportunitiesPage() {
                     </div>
 
                     {loading && opportunities.length === 0 ? (
-                        <div className="flex justify-center p-12">
-                            <Loader2 className="w-8 h-8 animate-spin text-stone-400" />
+                        <div className="bg-white rounded-[32px] border border-stone-200 shadow-sm overflow-hidden mb-6">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="bg-stone-50 border-b border-stone-200 text-stone-500 text-[10px] font-typewriter uppercase tracking-wider">
+                                        <th className="py-4 px-5 font-bold">Posted</th>
+                                        <th className="py-4 px-5 font-bold">Title / Agency</th>
+                                        <th className="py-4 px-5 font-bold">Type</th>
+                                        <th className="py-4 px-5 font-bold">NAICS</th>
+                                        <th className="py-4 px-5 font-bold">State</th>
+                                        <th className="py-4 px-5 font-bold hidden xl:table-cell">Value</th>
+                                        <th className="py-4 px-5 font-bold">Deadline</th>
+                                        <th className="py-4 px-5 font-bold">Winability</th>
+                                        <th className="py-4 px-5 font-bold hidden 2xl:table-cell">Data</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-stone-100">
+                                    {Array.from({ length: 8 }).map((_, i) => (
+                                        <SkeletonTableRow key={i} />
+                                    ))}
+                                </tbody>
+                            </table>
                         </div>
                     ) : (
                         <div className="flex-1 pr-2 flex flex-col pb-4">
@@ -493,7 +513,7 @@ export default function OpportunitiesPage() {
                                                 const agencyName = op.agency || op.department || op.agencies?.sub_tier || op.agencies?.department || "Federal Agency";
                                                 const dataScore = op._dataScore || 0;
                                                 return (
-                                                    <tr key={op.id} onClick={() => setSelectedOpportunity(op)} onDoubleClick={() => router.push(`/opportunities/${op.id}`)} className={clsx("transition-colors group cursor-pointer", selectedOpportunity?.id === op.id ? "bg-stone-100" : "hover:bg-stone-50")}>
+                                                    <tr key={op.id} onClick={() => setSelectedOpportunity(op)} onDoubleClick={() => router.push(`/opportunities/${op.id}`)} className={clsx("transition-all duration-150 group cursor-pointer", selectedOpportunity?.id === op.id ? "bg-stone-100" : "hover:bg-stone-50 hover:shadow-sm")}>
                                                         <td className="py-3.5 px-5 font-mono text-xs text-stone-500">{op.posted_date ? new Date(op.posted_date).toLocaleDateString() : "---"}</td>
                                                         <td className="py-3.5 px-5">
                                                             <p className="font-bold text-black line-clamp-1 max-w-[200px] xl:max-w-md group-hover:text-stone-600">{op.title}</p>

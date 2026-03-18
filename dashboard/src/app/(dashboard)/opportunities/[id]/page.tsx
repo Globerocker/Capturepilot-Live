@@ -318,7 +318,7 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                     <StructuredRequirements dbRequirements={reqs} noticeId={opp.notice_id} />
 
                     {/* Description - fetched live from SAM.gov */}
-                    <OpportunityDescription noticeId={opp.notice_id} currentDescription={opp.description} />
+                    <OpportunityDescription noticeId={opp.notice_id} currentDescription={opp.description} defaultCollapsed={true} />
 
                     {/* Incumbent Intelligence */}
                     {(opp.incumbent_contractor_name || opp.award_amount) && (
@@ -353,7 +353,7 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                     )}
 
                     {/* Attachments - fetched live from SAM.gov */}
-                    <OpportunityAttachments noticeId={opp.notice_id} resourceLinks={opp.resource_links} />
+                    <OpportunityAttachments noticeId={opp.notice_id} resourceLinks={opp.resource_links} defaultCollapsed={true} />
 
                 </div>
 
@@ -469,8 +469,10 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                 </div>
             </div>
 
-            {/* 5. Pursue This Opportunity */}
-            <PursueButton opportunityId={opp.id} noticeType={opp.notice_type || ""} />
+            {/* 5. Pursue This Opportunity - Sticky CTA */}
+            <div className="sticky bottom-0 z-30 -mx-1 px-1 pt-6 pb-2 bg-gradient-to-t from-stone-50 via-stone-50/95 to-transparent">
+                <PursueButton opportunityId={opp.id} noticeType={opp.notice_type || ""} />
+            </div>
         </div>
     );
 }

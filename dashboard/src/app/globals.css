@@ -47,3 +47,17 @@
   outline-offset: 2px;
   border-radius: 8px;
 }
+
+/* Profile field highlight pulse */
+@keyframes field-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5); }
+  25% { box-shadow: 0 0 0 6px rgba(16, 185, 129, 0.3); }
+  50% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.1); }
+  75% { box-shadow: 0 0 0 6px rgba(16, 185, 129, 0.3); }
+  100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+}
+.pulse-highlight {
+  animation: field-pulse 2.5s ease-in-out;
+  border-color: rgb(16, 185, 129) !important;
+  border-radius: 12px;
+}

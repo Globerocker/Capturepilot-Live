@@ -6,6 +6,7 @@ import { createSupabaseClient } from "@/lib/supabase/client";
 import { Loader2, Zap, Search, X, ChevronLeft, ChevronRight, Trophy, Clock, Shield, Target, ArrowRight, Bookmark, EyeOff, Flame, ChevronUp, ChevronDown, Filter, CheckCircle2 } from "lucide-react";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { createPursuit } from "@/lib/pursue-utils";
+import { Skeleton, SkeletonMatchCard } from "@/components/ui/Skeleton";
 import clsx from "clsx";
 import Link from "next/link";
 
@@ -197,8 +198,16 @@ export default function MyMatchesPage() {
 
     if (loading && matches.length === 0) {
         return (
-            <div className="flex justify-center items-center min-h-[400px]">
-                <Loader2 className="w-10 h-10 animate-spin text-stone-400" />
+            <div className="max-w-5xl mx-auto pb-12 animate-in fade-in duration-500 px-1">
+                <header className="mb-6">
+                    <Skeleton className="h-8 w-48 rounded mb-2" />
+                    <Skeleton className="h-4 w-72 rounded" />
+                </header>
+                <div className="space-y-2">
+                    {Array.from({ length: 6 }).map((_, i) => (
+                        <SkeletonMatchCard key={i} />
+                    ))}
+                </div>
             </div>
         );
     }

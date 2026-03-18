@@ -1,11 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Loader2, FileText, AlertCircle } from "lucide-react";
+import { Loader2, FileText, AlertCircle, ChevronDown } from "lucide-react";
+import clsx from "clsx";
 
 interface Props {
     noticeId: string;
     currentDescription?: string;
+    defaultCollapsed?: boolean;
 }
 
 function cleanSamHtml(html: string): string {
@@ -31,11 +33,12 @@ function cleanSamHtml(html: string): string {
     return clean.trim();
 }
 
-export default function OpportunityDescription({ noticeId, currentDescription }: Props) {
+export default function OpportunityDescription({ noticeId, currentDescription, defaultCollapsed = false }: Props) {
     const [description, setDescription] = useState<string>("");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
     const [fetched, setFetched] = useState(false);
+    const [collapsed, setCollapsed] = useState(defaultCollapsed);
 
     // Check if the current description is just a SAM.gov API URL
     const isUrl = currentDescription?.startsWith("https://api.sam.gov/") || currentDescription?.startsWith("http");
@@ -123,35 +126,42 @@ export default function OpportunityDescription({ noticeId, currentDescription }:
 
     return (
         <div className="bg-white rounded-2xl sm:rounded-3xl border border-stone-200 shadow-sm overflow-hidden">
-            <div className="bg-stone-50 border-b border-stone-100 px-4 sm:px-8 py-4 sm:py-5">
+            <button
+                type="button"
+                onClick={() => setCollapsed(!collapsed)}
+                className="w-full bg-stone-50 border-b border-stone-100 px-4 sm:px-8 py-4 sm:py-5 flex items-center justify-between hover:bg-stone-100 transition-colors"
+            >
                 <h2 className="font-typewriter text-base sm:text-lg font-bold flex items-center text-stone-800">
                     <FileText className="w-5 h-5 mr-2 sm:mr-3 text-stone-400" /> Description
                 </h2>
-            </div>
-            <div className="p-4 sm:p-8 max-h-[600px] overflow-y-auto">
-                {/* If content is HTML, clean and render it; otherwise show as text */}
-                {description.includes("<") && description.includes(">") ? (
-                    <div
-                        className="prose prose-sm prose-stone max-w-none text-stone-700 leading-relaxed
-                            [&_table]:border-collapse [&_table]:w-full [&_table]:text-sm
-                            [&_td]:border [&_td]:border-stone-200 [&_td]:p-2 [&_td]:text-sm [&_td]:align-top
-                            [&_th]:border [&_th]:border-stone-200 [&_th]:p-2 [&_th]:text-sm [&_th]:bg-stone-50 [&_th]:font-bold [&_th]:align-top
-                            [&_a]:text-blue-600 [&_a]:underline [&_a]:break-all
-                            [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5
-                            [&_p]:mb-2 [&_p]:text-sm [&_p]:leading-relaxed
-                            [&_h1]:text-lg [&_h1]:font-bold [&_h1]:mt-4 [&_h1]:mb-2
-                            [&_h2]:text-base [&_h2]:font-bold [&_h2]:mt-3 [&_h2]:mb-2
-                            [&_h3]:text-sm [&_h3]:font-bold [&_h3]:mt-3 [&_h3]:mb-1
-                            [&_li]:text-sm [&_li]:mb-1
-                            [&_br]:leading-relaxed
-                            [&_span]:!text-inherit [&_span]:!font-inherit [&_span]:!text-sm
-                            [&_div]:text-sm [&_div]:leading-relaxed"
-                        dangerouslySetInnerHTML={{ __html: cleanSamHtml(description) }}
-                    />
-                ) : (
-                    <p className="text-sm text-stone-700 leading-relaxed whitespace-pre-wrap">{description}</p>
-                )}
-            </div>
+                <ChevronDown className={clsx("w-5 h-5 text-stone-400 transition-transform duration-200", !collapsed && "rotate-180")} />
+            </button>
+            {!collapsed && (
+                <div className="p-4 sm:p-8 max-h-[600px] overflow-y-auto">
+                    {/* If content is HTML, clean and render it; otherwise show as text */}
+                    {description.includes("<") && description.includes(">") ? (
+                        <div
+                            className="prose prose-sm prose-stone max-w-none text-stone-700 leading-relaxed
+                                [&_table]:border-collapse [&_table]:w-full [&_table]:text-sm
+                                [&_td]:border [&_td]:border-stone-200 [&_td]:p-2 [&_td]:text-sm [&_td]:align-top
+                                [&_th]:border [&_th]:border-stone-200 [&_th]:p-2 [&_th]:text-sm [&_th]:bg-stone-50 [&_th]:font-bold [&_th]:align-top
+                                [&_a]:text-blue-600 [&_a]:underline [&_a]:break-all
+                                [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5
+                                [&_p]:mb-2 [&_p]:text-sm [&_p]:leading-relaxed
+                                [&_h1]:text-lg [&_h1]:font-bold [&_h1]:mt-4 [&_h1]:mb-2
+                                [&_h2]:text-base [&_h2]:font-bold [&_h2]:mt-3 [&_h2]:mb-2
+                                [&_h3]:text-sm [&_h3]:font-bold [&_h3]:mt-3 [&_h3]:mb-1
+                                [&_li]:text-sm [&_li]:mb-1
+                                [&_br]:leading-relaxed
+                                [&_span]:!text-inherit [&_span]:!font-inherit [&_span]:!text-sm
+                                [&_div]:text-sm [&_div]:leading-relaxed"
+                            dangerouslySetInnerHTML={{ __html: cleanSamHtml(description) }}
+                        />
+                    ) : (
+                        <p className="text-sm text-stone-700 leading-relaxed whitespace-pre-wrap">{description}</p>
+                    )}
+                </div>
+            )}
         </div>
     );
 }

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Activity, Target, Zap, ArrowRight, Loader2, Clock, Trophy, Search, Shield, BarChart3, Layers, CheckSquare, Phone, UserCheck } from "lucide-react";
 import ServiceCTA from "@/components/ui/ServiceCTA";
+import { Skeleton, SkeletonKpiCard } from "@/components/ui/Skeleton";
 import clsx from "clsx";
 import Link from "next/link";
 import { createSupabaseClient } from "@/lib/supabase/client";
@@ -157,8 +158,25 @@ export default function UserDashboard() {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center min-h-[400px]">
-        <Loader2 className="w-10 h-10 animate-spin text-stone-400" />
+      <div className="max-w-5xl mx-auto space-y-6 sm:space-y-8 animate-in fade-in duration-500 px-1">
+        <header>
+          <Skeleton className="h-8 w-64 rounded mb-2" />
+          <Skeleton className="h-4 w-48 rounded" />
+        </header>
+        <section className="grid grid-cols-2 gap-3 sm:gap-4">
+          <SkeletonKpiCard />
+          <SkeletonKpiCard />
+          <SkeletonKpiCard />
+          <SkeletonKpiCard />
+        </section>
+        <section className="bg-white rounded-[24px] sm:rounded-[32px] p-5 sm:p-6 border border-stone-200 shadow-sm">
+          <Skeleton className="h-5 w-32 rounded mb-4" />
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <Skeleton className="h-16 rounded-xl" />
+            <Skeleton className="h-16 rounded-xl" />
+            <Skeleton className="h-16 rounded-xl" />
+          </div>
+        </section>
       </div>
     );
   }
@@ -276,8 +294,19 @@ export default function UserDashboard() {
               {missing.length > 0 && score < 100 && (
                 <div>
                   <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1.5">Missing</p>
-                  <p className="text-xs text-stone-500">{missing.slice(0, 3).join(", ")}{missing.length > 3 ? ` +${missing.length - 3} more` : ""}</p>
-                  <Link href="/settings" className="text-xs font-typewriter font-bold text-black hover:underline mt-2 inline-flex items-center">
+                  <div className="flex flex-wrap gap-1 mb-2">
+                    {missing.slice(0, 5).map(field => {
+                      const slug = field.toLowerCase().replace(/\s+/g, "-").replace(/[()]/g, "");
+                      return (
+                        <Link key={field} href={`/settings#${slug}`}
+                          className="text-[10px] font-typewriter bg-red-50 text-red-600 border border-red-200 px-2 py-0.5 rounded hover:bg-red-100 transition-colors cursor-pointer">
+                          {field}
+                        </Link>
+                      );
+                    })}
+                    {missing.length > 5 && <span className="text-[10px] text-stone-400">+{missing.length - 5} more</span>}
+                  </div>
+                  <Link href="/settings" className="text-xs font-typewriter font-bold text-black hover:underline inline-flex items-center">
                     Complete Profile <ArrowRight className="w-3 h-3 ml-1" />
                   </Link>
                 </div>
