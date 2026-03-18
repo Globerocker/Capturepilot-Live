@@ -3,8 +3,11 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseClient } from "@/lib/supabase/client";
-import { PenTool, Loader2, Printer, Copy, ExternalLink, Check, Sparkles } from "lucide-react";
+import { PenTool, Loader2, Printer, Copy, ExternalLink, Check, Sparkles, Edit3 } from "lucide-react";
 import clsx from "clsx";
+import dynamic from "next/dynamic";
+
+const RichTextEditor = dynamic(() => import("@/components/RichTextEditor"), { ssr: false });
 
 const supabase = createSupabaseClient();
 
@@ -35,6 +38,8 @@ export default function LettersPage() {
 
     // Generated letter
     const [letterBody, setLetterBody] = useState("");
+    const [editMode, setEditMode] = useState(false);
+    const [editedHtml, setEditedHtml] = useState("");
 
     useEffect(() => {
         async function checkAuth() {
@@ -84,6 +89,13 @@ export default function LettersPage() {
             }
 
             setLetterBody(data.letter.body);
+            // Convert plain text to HTML paragraphs for the editor
+            const htmlContent = data.letter.body
+                .split("\n\n")
+                .map((p: string) => `<p>${p.replace(/\n/g, "<br>")}</p>`)
+                .join("");
+            setEditedHtml(htmlContent);
+            setEditMode(false);
         } catch {
             setError("Network error. Please try again.");
         } finally {
@@ -91,9 +103,23 @@ export default function LettersPage() {
         }
     };
 
+    // Get the content to use for actions (edited HTML or original text)
+    const getPlainText = () => {
+        if (editedHtml && editMode) {
+            // Strip HTML to get plain text
+            const tmp = document.createElement("div");
+            tmp.innerHTML = editedHtml;
+            return tmp.textContent || tmp.innerText || letterBody;
+        }
+        return letterBody;
+    };
+
     const handlePrint = () => {
         const printWindow = window.open("", "_blank");
         if (!printWindow) return;
+
+        const content = editedHtml || letterBody;
+        const isHtml = editedHtml && content.includes("<");
 
         printWindow.document.write(`<!DOCTYPE html>
 <html>
@@ -109,13 +135,17 @@ export default function LettersPage() {
         margin: 1in auto;
         padding: 0;
     }
+    p { margin-bottom: 12px; }
+    h2 { font-size: 16pt; margin: 16px 0 8px; }
+    h3 { font-size: 14pt; margin: 12px 0 6px; }
+    ul, ol { padding-left: 24px; margin: 8px 0; }
     @media print {
         body { margin: 0; max-width: none; }
     }
 </style>
 </head>
 <body>
-<pre style="white-space: pre-wrap; font-family: Georgia, 'Times New Roman', serif; font-size: 12pt; line-height: 1.6;">${letterBody.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</pre>
+${isHtml ? content : `<pre style="white-space: pre-wrap; font-family: Georgia, 'Times New Roman', serif; font-size: 12pt; line-height: 1.6;">${letterBody.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</pre>`}
 </body>
 </html>`);
         printWindow.document.close();
@@ -124,14 +154,15 @@ export default function LettersPage() {
     };
 
     const handleCopy = async () => {
-        await navigator.clipboard.writeText(letterBody);
+        await navigator.clipboard.writeText(getPlainText());
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
     };
 
     const handleEmail = () => {
-        const firstLine = letterBody.split("\n").find(l => l.trim()) || "Letter";
-        const mailto = `mailto:?subject=${encodeURIComponent(`Letter - ${firstLine.substring(0, 60)}`)}&body=${encodeURIComponent(letterBody)}`;
+        const text = getPlainText();
+        const firstLine = text.split("\n").find(l => l.trim()) || "Letter";
+        const mailto = `mailto:?subject=${encodeURIComponent(`Letter - ${firstLine.substring(0, 60)}`)}&body=${encodeURIComponent(text)}`;
         window.open(mailto);
     };
 
@@ -278,17 +309,30 @@ export default function LettersPage() {
                 <div className="bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden flex flex-col">
                     <div className="bg-stone-50 border-b border-stone-100 px-5 sm:px-6 py-3 sm:py-4 flex items-center justify-between">
                         <h3 className="font-typewriter font-bold text-sm uppercase tracking-widest text-stone-500">
-                            Preview
+                            {editMode ? "Edit" : "Preview"}
                         </h3>
                         {letterBody && (
-                            <button
-                                type="button"
-                                onClick={generate}
-                                disabled={generating}
-                                className="text-[10px] font-typewriter text-stone-500 hover:text-black font-bold"
-                            >
-                                {generating ? "Regenerating..." : "Regenerate"}
-                            </button>
+                            <div className="flex items-center gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => setEditMode(!editMode)}
+                                    className={clsx(
+                                        "text-[10px] font-typewriter font-bold flex items-center gap-1",
+                                        editMode ? "text-emerald-600 hover:text-emerald-700" : "text-stone-500 hover:text-black"
+                                    )}
+                                >
+                                    <Edit3 className="w-3 h-3" />
+                                    {editMode ? "Done Editing" : "Edit"}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={generate}
+                                    disabled={generating}
+                                    className="text-[10px] font-typewriter text-stone-500 hover:text-black font-bold"
+                                >
+                                    {generating ? "Regenerating..." : "Regenerate"}
+                                </button>
+                            </div>
                         )}
                     </div>
 
@@ -309,7 +353,14 @@ export default function LettersPage() {
                             </div>
                         )}
 
-                        {letterBody && (
+                        {letterBody && editMode && (
+                            <RichTextEditor
+                                content={editedHtml}
+                                onChange={(html) => setEditedHtml(html)}
+                            />
+                        )}
+
+                        {letterBody && !editMode && (
                             <div
                                 className="text-sm text-stone-800 leading-relaxed whitespace-pre-wrap bg-stone-50 rounded-xl p-4 sm:p-5 border border-stone-100 max-h-[500px] overflow-y-auto"
                                 style={{ fontFamily: "Georgia, 'Times New Roman', serif" }}

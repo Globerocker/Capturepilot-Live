@@ -1,8 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Mail, Loader2, Copy, ExternalLink, Check, ChevronRight } from "lucide-react";
+import { Mail, Loader2, Copy, ExternalLink, Check, Edit3 } from "lucide-react";
 import clsx from "clsx";
+import dynamic from "next/dynamic";
+
+const RichTextEditor = dynamic(() => import("@/components/RichTextEditor"), { ssr: false });
 
 interface Draft {
     strategy: string;
@@ -22,6 +25,8 @@ export default function EmailDraftPanel({ opportunityId, opportunityTitle }: { o
     const [error, setError] = useState("");
     const [activeTab, setActiveTab] = useState(0);
     const [copied, setCopied] = useState(false);
+    const [editMode, setEditMode] = useState(false);
+    const [editedBody, setEditedBody] = useState("");
 
     const generate = async () => {
         setLoading(true);
@@ -130,10 +135,39 @@ export default function EmailDraftPanel({ opportunityId, opportunityTitle }: { o
                     <p className="text-sm font-bold text-stone-900">{current.subject}</p>
                 </div>
                 <div>
-                    <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1">Body</p>
-                    <div className="text-sm text-stone-700 leading-relaxed whitespace-pre-wrap bg-stone-50 rounded-xl p-3 border border-stone-100 max-h-48 overflow-y-auto">
-                        {current.body}
+                    <div className="flex items-center justify-between mb-1">
+                        <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest">Body</p>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                if (!editMode) {
+                                    const htmlContent = current.body
+                                        .split("\n\n")
+                                        .map(p => `<p>${p.replace(/\n/g, "<br>")}</p>`)
+                                        .join("");
+                                    setEditedBody(htmlContent);
+                                }
+                                setEditMode(!editMode);
+                            }}
+                            className={clsx(
+                                "text-[10px] font-typewriter font-bold flex items-center gap-1",
+                                editMode ? "text-emerald-600" : "text-stone-500 hover:text-black"
+                            )}
+                        >
+                            <Edit3 className="w-3 h-3" />
+                            {editMode ? "Done" : "Edit"}
+                        </button>
                     </div>
+                    {editMode ? (
+                        <RichTextEditor
+                            content={editedBody}
+                            onChange={(html) => setEditedBody(html)}
+                        />
+                    ) : (
+                        <div className="text-sm text-stone-700 leading-relaxed whitespace-pre-wrap bg-stone-50 rounded-xl p-3 border border-stone-100 max-h-48 overflow-y-auto">
+                            {current.body}
+                        </div>
+                    )}
                 </div>
 
                 {/* Actions */}

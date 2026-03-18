@@ -12,6 +12,7 @@ import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { NAICS_CODES, searchNaics } from "@/lib/naics-codes";
 import { PSC_CODES } from "@/lib/psc-codes";
 import { FEDERAL_AGENCIES } from "@/lib/federal-agencies";
+import AddressAutocomplete from "@/components/AddressAutocomplete";
 
 const supabase = createSupabaseClient();
 
@@ -592,9 +593,18 @@ export default function OnboardPage() {
                         </div>
                         <div>
                             <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">Street Address *</label>
-                            <input type="text" value={form.address_line_1} onChange={(e) => updateForm("address_line_1", e.target.value)}
-                                className={clsx("w-full px-4 py-3.5 border rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm",
-                                    !form.address_line_1.trim() ? "border-stone-200" : "border-stone-200")} placeholder="123 Main St" />
+                            <AddressAutocomplete
+                                value={form.address_line_1}
+                                onChange={(val) => updateForm("address_line_1", val)}
+                                onSelect={(addr) => {
+                                    updateForm("address_line_1", addr.address_line_1);
+                                    updateForm("city", addr.city);
+                                    updateForm("state", addr.state);
+                                    updateForm("zip_code", addr.zip_code);
+                                }}
+                                placeholder="Start typing an address..."
+                                className="w-full pl-9 pr-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm"
+                            />
                         </div>
                         <div className="grid grid-cols-3 gap-3">
                             <div>

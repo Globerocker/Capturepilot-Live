@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import Link from "next/link";
 import { NAICS_CODES } from "@/lib/naics-codes";
+import AddressAutocomplete from "@/components/AddressAutocomplete";
 import { PSC_CODES } from "@/lib/psc-codes";
 import { FEDERAL_AGENCIES } from "@/lib/federal-agencies";
 
@@ -318,6 +319,20 @@ export default function SettingsPage() {
                                     validationErrors.cage_code ? "border-red-400" : "border-stone-200")} />
                             {validationErrors.cage_code && <p className="text-xs text-red-500 mt-1 flex items-center"><AlertCircle className="w-3 h-3 mr-1" />{validationErrors.cage_code}</p>}
                         </div>
+                    </div>
+                    <div>
+                        <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">Street Address</label>
+                        <AddressAutocomplete
+                            value={profile.address_line_1 || ""}
+                            onChange={(val) => updateProfile("address_line_1", val)}
+                            onSelect={(addr) => {
+                                updateProfile("address_line_1", addr.address_line_1);
+                                updateProfile("city", addr.city);
+                                updateProfile("state", addr.state);
+                                updateProfile("zip_code", addr.zip_code);
+                            }}
+                            placeholder="Start typing your address..."
+                        />
                     </div>
                     <div className="grid grid-cols-3 gap-3">
                         <div>
