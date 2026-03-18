@@ -69,6 +69,7 @@ export default function UserDashboard() {
   const [pipelineStages, setPipelineStages] = useState<Record<string, number>>({});
   const [actionsPending, setActionsPending] = useState(0);
   const [actionsUrgent, setActionsUrgent] = useState(0);
+  const [generatingMatches, setGeneratingMatches] = useState(false);
 
   useEffect(() => {
     async function loadDashboard() {
@@ -352,9 +353,38 @@ export default function UserDashboard() {
 
         {topOpps.length === 0 ? (
           <div className="text-center py-8 sm:py-12">
-            <Search className="w-10 h-10 text-stone-300 mx-auto mb-3" />
-            <p className="text-stone-500 font-typewriter text-sm mb-2">No matching opportunities yet</p>
-            <p className="text-stone-400 text-xs">We&apos;re scanning federal databases daily. Check back soon!</p>
+            <Zap className="w-10 h-10 text-stone-300 mx-auto mb-3" />
+            <p className="text-stone-500 font-typewriter text-sm mb-2">
+              {generatingMatches ? "Calculating your matches..." : "No matches generated yet"}
+            </p>
+            <p className="text-stone-400 text-xs mb-4">
+              {generatingMatches
+                ? "This usually takes 10-30 seconds. We're scoring opportunities against your profile."
+                : "Generate matches to find federal opportunities tailored to your profile."}
+            </p>
+            <div className="flex items-center justify-center gap-3 flex-wrap">
+              <button
+                type="button"
+                onClick={async () => {
+                  setGeneratingMatches(true);
+                  try {
+                    await fetch("/api/matches/refresh", { method: "POST" });
+                    window.location.reload();
+                  } catch { setGeneratingMatches(false); }
+                }}
+                disabled={generatingMatches}
+                className="bg-black text-white px-6 py-2.5 rounded-full text-sm font-bold inline-flex items-center disabled:opacity-60"
+              >
+                {generatingMatches ? (
+                  <><Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" /> Generating...</>
+                ) : (
+                  <><Zap className="w-3.5 h-3.5 mr-2" /> Generate Matches</>
+                )}
+              </button>
+              <Link href="/settings" className="bg-white text-stone-700 border border-stone-200 px-6 py-2.5 rounded-full text-sm font-bold inline-flex items-center hover:bg-stone-50">
+                Update Profile <ArrowRight className="w-3 h-3 ml-2" />
+              </Link>
+            </div>
           </div>
         ) : (
           <div className="space-y-2">

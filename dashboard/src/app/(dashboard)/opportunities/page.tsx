@@ -3,8 +3,10 @@
 import { useEffect, useState, useCallback, KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseClient } from "@/lib/supabase/client";
-import { Search, Filter, Loader2, LayoutGrid, List, Download, X, Building, Target, FileText, Link as LinkIcon, Sparkles, ChevronLeft, ChevronRight, Flame, ChevronUp, ChevronDown, Sprout, Leaf, Sun, Award, Trophy } from "lucide-react";
+import { Search, Filter, Loader2, LayoutGrid, List, Download, X, Building, Target, FileText, Link as LinkIcon, Sparkles, ChevronLeft, ChevronRight, Flame, ChevronUp, ChevronDown, Sprout, Leaf, Sun, Award, Trophy, Zap, Layers, CheckCircle2 } from "lucide-react";
 import clsx from "clsx";
+import Link from "next/link";
+import { createPursuit, getUserProfileId } from "@/lib/pursue-utils";
 
 const supabase = createSupabaseClient();
 
@@ -21,7 +23,9 @@ interface Opportunity {
     description?: string;
     link?: string;
     is_archived?: boolean;
+    estimated_value?: number;
     award_amount?: number;
+    department?: string;
     place_of_performance_state?: string;
     place_of_performance_city?: string;
     set_aside_code?: string;
@@ -78,15 +82,36 @@ export default function OpportunitiesPage() {
     const getLifecycleStage = (noticeType?: string) => {
         if (!noticeType) return null;
         const nt = noticeType.toLowerCase();
-        if (nt.includes("sources sought") || nt.includes("rfi")) return { label: "Seed Planted", color: "bg-emerald-100 text-emerald-700 border-emerald-200", desc: "6-18 months before award", icon: Sprout };
-        if (nt.includes("presolicitation")) return { label: "Growing", color: "bg-blue-100 text-blue-700 border-blue-200", desc: "3-6 months before award", icon: Leaf };
-        if (nt.includes("solicitation") || nt.includes("combined") || nt.includes("synopsis")) return { label: "In Bloom", color: "bg-amber-100 text-amber-700 border-amber-200", desc: "Active bidding window", icon: Sun };
-        if (nt.includes("award")) return { label: "Harvested", color: "bg-stone-800 text-stone-100 border-stone-700", desc: "Contract awarded", icon: Award };
+        if (nt.includes("sources sought") || nt.includes("rfi")) return { label: "Seed Planted", color: "bg-emerald-100 text-emerald-700 border-emerald-200", desc: "Early market research — best time to engage (6-18 months before award)", icon: Sprout };
+        if (nt.includes("presolicitation")) return { label: "Growing", color: "bg-blue-100 text-blue-700 border-blue-200", desc: "Pre-solicitation phase — prepare your response (3-6 months before award)", icon: Leaf };
+        if (nt.includes("solicitation") || nt.includes("combined") || nt.includes("synopsis")) return { label: "In Bloom", color: "bg-amber-100 text-amber-700 border-amber-200", desc: "Active bidding window — submit your proposal now", icon: Sun };
+        if (nt.includes("award")) return { label: "Harvested", color: "bg-stone-800 text-stone-100 border-stone-700", desc: "Contract awarded — review for future rebids", icon: Award };
         return null;
     };
 
     // Detail Panel State
     const [selectedOpportunity, setSelectedOpportunity] = useState<Opportunity | null>(null);
+    const [profileId, setProfileId] = useState<string | null>(null);
+    const [pursuitStatus, setPursuitStatus] = useState<"none" | "loading" | "pursuing" | "pursued">("none");
+
+    // Load profile ID on mount
+    useEffect(() => {
+        getUserProfileId().then(id => setProfileId(id));
+    }, []);
+
+    // Check pursuit status when opportunity is selected
+    useEffect(() => {
+        if (!selectedOpportunity || !profileId) { setPursuitStatus("none"); return; }
+        setPursuitStatus("loading");
+        supabase.from("user_pursuits")
+            .select("id")
+            .eq("user_profile_id", profileId)
+            .eq("opportunity_id", selectedOpportunity.id)
+            .single()
+            .then(({ data }) => {
+                setPursuitStatus(data ? "pursued" : "none");
+            });
+    }, [selectedOpportunity?.id, profileId]);
 
     // Advanced Filters
     const [filterAgency, setFilterAgency] = useState("");
@@ -116,10 +141,10 @@ export default function OpportunitiesPage() {
         try {
             let query = supabase
                 .from("opportunities")
-                .select("*, agencies(department, sub_tier), opportunity_types(name), set_asides(code)", { count: 'exact' });
+                .select("*, estimated_value, department, agencies(department, sub_tier), opportunity_types(name), set_asides(code)", { count: 'exact' });
 
             if (activeSearch) {
-                query = query.or(`title.ilike.%${activeSearch}%,notice_id.ilike.%${activeSearch}%,agency.ilike.%${activeSearch}%`);
+                query = query.or(`title.ilike.%${activeSearch}%,notice_id.ilike.%${activeSearch}%,agency.ilike.%${activeSearch}%,description.ilike.%${activeSearch}%`);
             }
 
             query = query.eq("is_archived", false);
@@ -426,7 +451,7 @@ export default function OpportunitiesPage() {
                         <Search className="w-5 h-5 text-stone-400 ml-4 mr-2" />
                         <input
                             type="text"
-                            placeholder="Search by title, notice ID, or agency..."
+                            placeholder="Search by title, description, notice ID, or agency..."
                             className="bg-transparent border-none outline-none w-full text-stone-700 font-typewriter text-sm"
                             value={searchInput}
                             onChange={(e) => setSearchInput(e.target.value)}
@@ -465,7 +490,7 @@ export default function OpportunitiesPage() {
                                         <tbody className="divide-y divide-stone-100 text-sm">
                                             {opportunities.map((op) => {
                                                 const typeName = op.notice_type || op.opportunity_types?.name || "UNKNOWN";
-                                                const agencyName = op.agency || op.agencies?.sub_tier || op.agencies?.department || "No Agency Info";
+                                                const agencyName = op.agency || op.department || op.agencies?.sub_tier || op.agencies?.department || "Federal Agency";
                                                 const dataScore = op._dataScore || 0;
                                                 return (
                                                     <tr key={op.id} onClick={() => setSelectedOpportunity(op)} onDoubleClick={() => router.push(`/opportunities/${op.id}`)} className={clsx("transition-colors group cursor-pointer", selectedOpportunity?.id === op.id ? "bg-stone-100" : "hover:bg-stone-50")}>
@@ -487,7 +512,7 @@ export default function OpportunitiesPage() {
                                                         <td className="py-3.5 px-5 font-mono font-bold text-xs">{op.naics_code || "---"}</td>
                                                         <td className="py-3.5 px-5 font-mono text-xs">{op.place_of_performance_state || "---"}</td>
                                                         <td className="py-3.5 px-5 font-mono font-bold text-xs hidden xl:table-cell">
-                                                            {formatCurrency(op.award_amount) || <span className="text-stone-300">---</span>}
+                                                            {formatCurrency(op.estimated_value || op.award_amount) || <span className="text-stone-300">---</span>}
                                                         </td>
                                                         <td className="py-3.5 px-5 font-bold text-stone-700 text-xs">
                                                             {op.response_deadline ? new Date(op.response_deadline).toLocaleDateString() : "TBD"}
@@ -523,7 +548,7 @@ export default function OpportunitiesPage() {
                                 <div className={clsx("grid gap-5 transition-all mb-6", selectedOpportunity ? "grid-cols-1 xl:grid-cols-2" : "grid-cols-1 md:grid-cols-2 xl:grid-cols-3")}>
                                     {opportunities.map((op) => {
                                         const typeName = op.notice_type || op.opportunity_types?.name || "UNKNOWN";
-                                        const agencyName = op.agency || op.agencies?.sub_tier || op.agencies?.department || "No Agency Info";
+                                        const agencyName = op.agency || op.department || op.agencies?.sub_tier || op.agencies?.department || "Federal Agency";
                                         return (
                                             <button
                                                 type="button"
@@ -552,8 +577,8 @@ export default function OpportunitiesPage() {
                                                                         </span>
                                                                     );
                                                                 })()}
-                                                                {op.award_amount && (
-                                                                    <span className="font-mono font-bold text-xs text-green-700 bg-green-50 px-2 py-0.5 rounded border border-green-200">{formatCurrency(op.award_amount)}</span>
+                                                                {(op.estimated_value || op.award_amount) && (
+                                                                    <span className="font-mono font-bold text-xs text-green-700 bg-green-50 px-2 py-0.5 rounded border border-green-200">{formatCurrency(op.estimated_value || op.award_amount)}</span>
                                                                 )}
                                                             </div>
                                                         </div>
@@ -641,7 +666,7 @@ export default function OpportunitiesPage() {
                                 </div>
                                 <div className="flex-1">
                                     <p className="font-bold text-stone-800 text-sm leading-tight">
-                                        {selectedOpportunity.agency || selectedOpportunity.agencies?.department || "Unknown Department"}
+                                        {selectedOpportunity.agency || selectedOpportunity.department || selectedOpportunity.agencies?.department || "Federal Agency"}
                                     </p>
                                     {selectedOpportunity.agencies?.sub_tier && (
                                         <p className="text-xs text-stone-400">{selectedOpportunity.agencies.sub_tier}</p>
@@ -705,10 +730,10 @@ export default function OpportunitiesPage() {
                                     <p className="font-bold text-sm">{[selectedOpportunity.place_of_performance_city, selectedOpportunity.place_of_performance_state].filter(Boolean).join(", ")}</p>
                                 </div>
                             )}
-                            {selectedOpportunity.award_amount && (
+                            {(selectedOpportunity.estimated_value || selectedOpportunity.award_amount) && (
                                 <div className="bg-green-50 border border-green-200 p-3 rounded-xl">
                                     <p className="text-[10px] font-typewriter text-green-600 uppercase tracking-widest mb-1">Est. Value</p>
-                                    <p className="font-mono font-bold text-sm text-green-800">{formatCurrency(selectedOpportunity.award_amount)}</p>
+                                    <p className="font-mono font-bold text-sm text-green-800">{formatCurrency(selectedOpportunity.estimated_value || selectedOpportunity.award_amount)}</p>
                                 </div>
                             )}
                         </div>
@@ -743,6 +768,52 @@ export default function OpportunitiesPage() {
                                 <LinkIcon className="w-4 h-4" />
                                 <span>View on SAM.gov</span>
                             </a>
+                        )}
+                    </div>
+
+                    {/* Sticky Pursue Action Bar */}
+                    <div className="border-t border-stone-200 p-4 bg-white flex-shrink-0">
+                        {pursuitStatus === "pursued" ? (
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                                    <span className="text-sm font-bold text-stone-700">In your pipeline</span>
+                                </div>
+                                <Link href="/pipeline" className="inline-flex items-center bg-black text-white font-typewriter font-bold px-4 py-2.5 rounded-full text-xs hover:bg-stone-800 transition-all">
+                                    <Layers className="w-3 h-3 mr-1.5" /> View Pipeline
+                                </Link>
+                            </div>
+                        ) : (
+                            <div className="flex gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => router.push(`/opportunities/${selectedOpportunity.id}`)}
+                                    className="flex-1 inline-flex items-center justify-center bg-stone-100 text-stone-700 font-typewriter font-bold px-4 py-3 rounded-full text-xs hover:bg-stone-200 transition-all border border-stone-200"
+                                >
+                                    View Details
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={pursuitStatus === "loading" || pursuitStatus === "pursuing" || !profileId}
+                                    onClick={async () => {
+                                        if (!profileId || !selectedOpportunity) return;
+                                        setPursuitStatus("pursuing");
+                                        const result = await createPursuit(
+                                            selectedOpportunity.id,
+                                            selectedOpportunity.notice_type || "",
+                                            profileId
+                                        );
+                                        setPursuitStatus(result.success ? "pursued" : "none");
+                                    }}
+                                    className="flex-1 inline-flex items-center justify-center bg-black text-white font-typewriter font-bold px-4 py-3 rounded-full text-xs hover:bg-stone-800 transition-all disabled:opacity-50"
+                                >
+                                    {pursuitStatus === "pursuing" ? (
+                                        <><Loader2 className="w-3 h-3 mr-1.5 animate-spin" /> Adding...</>
+                                    ) : (
+                                        <><Zap className="w-3 h-3 mr-1.5 text-emerald-400" /> Start Pursuing</>
+                                    )}
+                                </button>
+                            </div>
                         )}
                     </div>
                 </div>

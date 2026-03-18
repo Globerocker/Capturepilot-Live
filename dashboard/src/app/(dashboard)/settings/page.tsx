@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Settings, User, Bell, Building, MapPin, Shield, Loader2, CheckCircle2, ArrowLeft, Phone, Calendar, UserCheck, Search, AlertCircle } from "lucide-react";
+import { Settings, User, Bell, Building, MapPin, Shield, Loader2, CheckCircle2, ArrowLeft, Phone, Calendar, UserCheck, Search, AlertCircle, Briefcase, Truck, ShieldCheck } from "lucide-react";
 import ServiceCTA from "@/components/ui/ServiceCTA";
 import { createSupabaseClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
@@ -364,6 +364,96 @@ export default function SettingsPage() {
                             <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">Phone</label>
                             <input type="tel" placeholder="(555) 123-4567" value={profile.phone || ""} onChange={(e) => updateProfile("phone", e.target.value)}
                                 className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" />
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            {/* Capacity & Experience */}
+            <section className="bg-white rounded-[24px] sm:rounded-[32px] border border-stone-200 shadow-sm p-5 sm:p-7">
+                <h3 className="font-typewriter font-bold text-base sm:text-lg flex items-center mb-4">
+                    <Briefcase className="w-5 h-5 mr-2 text-stone-400" /> Capacity & Experience
+                </h3>
+                <div className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">Employee Count</label>
+                            <select title="Employee Count" value={profile.employee_count || ""} onChange={(e) => updateProfile("employee_count", e.target.value ? parseInt(e.target.value) : null)}
+                                className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm bg-white">
+                                <option value="">Select range...</option>
+                                <option value="5">1-5</option>
+                                <option value="15">6-20</option>
+                                <option value="35">21-50</option>
+                                <option value="75">51-100</option>
+                                <option value="150">101-250</option>
+                                <option value="500">250+</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">Annual Revenue</label>
+                            <select title="Annual Revenue" value={profile.revenue || ""} onChange={(e) => updateProfile("revenue", e.target.value ? parseInt(e.target.value) : null)}
+                                className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm bg-white">
+                                <option value="">Select range...</option>
+                                <option value="100000">Under $100K</option>
+                                <option value="500000">$100K - $500K</option>
+                                <option value="1000000">$500K - $1M</option>
+                                <option value="5000000">$1M - $5M</option>
+                                <option value="10000000">$5M - $10M</option>
+                                <option value="25000000">$10M - $25M</option>
+                                <option value="50000000">$25M+</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">Years in Business</label>
+                            <input type="number" min={0} placeholder="e.g. 5" value={profile.years_in_business ?? ""} onChange={(e) => updateProfile("years_in_business", e.target.value ? parseInt(e.target.value) : null)}
+                                className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" />
+                        </div>
+                        <div>
+                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">Past Federal Awards</label>
+                            <input type="number" min={0} placeholder="Number of past federal contracts (0 if none)" value={profile.federal_awards_count ?? ""} onChange={(e) => updateProfile("federal_awards_count", e.target.value ? parseInt(e.target.value) : 0)}
+                                className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" />
+                        </div>
+                    </div>
+                    <div>
+                        <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">Service Radius</label>
+                        <div className="relative">
+                            <input type="number" min={0} placeholder="miles" value={profile.service_radius_miles ?? ""} onChange={(e) => updateProfile("service_radius_miles", e.target.value ? parseInt(e.target.value) : null)}
+                                className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm pr-16" />
+                            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-stone-400 font-typewriter">miles</span>
+                        </div>
+                    </div>
+                    <div>
+                        <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">Operational Capabilities</label>
+                        <div className="flex flex-wrap gap-2">
+                            <button type="button" onClick={() => updateProfile("has_bonding", !profile.has_bonding)}
+                                className={clsx(
+                                    "flex items-center px-4 py-2.5 rounded-xl border text-xs font-bold transition-all",
+                                    profile.has_bonding
+                                        ? "bg-black text-white border-black"
+                                        : "bg-white text-stone-600 border-stone-200 hover:border-stone-400 active:bg-stone-100"
+                                )}>
+                                <ShieldCheck className="w-4 h-4 mr-1.5" /> Bonded / Insured
+                            </button>
+                            <button type="button" onClick={() => updateProfile("has_fleet", !profile.has_fleet)}
+                                className={clsx(
+                                    "flex items-center px-4 py-2.5 rounded-xl border text-xs font-bold transition-all",
+                                    profile.has_fleet
+                                        ? "bg-black text-white border-black"
+                                        : "bg-white text-stone-600 border-stone-200 hover:border-stone-400 active:bg-stone-100"
+                                )}>
+                                <Truck className="w-4 h-4 mr-1.5" /> Fleet / Vehicles
+                            </button>
+                            <button type="button" onClick={() => updateProfile("has_municipal_exp", !profile.has_municipal_exp)}
+                                className={clsx(
+                                    "flex items-center px-4 py-2.5 rounded-xl border text-xs font-bold transition-all",
+                                    profile.has_municipal_exp
+                                        ? "bg-black text-white border-black"
+                                        : "bg-white text-stone-600 border-stone-200 hover:border-stone-400 active:bg-stone-100"
+                                )}>
+                                <Building className="w-4 h-4 mr-1.5" /> Gov Experience
+                            </button>
                         </div>
                     </div>
                 </div>

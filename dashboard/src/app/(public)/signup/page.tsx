@@ -14,6 +14,19 @@ export default function SignupPage() {
   const router = useRouter();
   const supabase = createSupabaseClient();
 
+  const AUTH_ERROR_MAP: Record<string, string> = {
+    "Anonymous sign-ins are disabled": "Please enter your email and password to create an account.",
+    "User already registered": "An account with this email already exists. Try signing in instead.",
+    "Password should be at least 6 characters": "Your password must be at least 6 characters long.",
+    "Invalid email": "Please enter a valid email address.",
+    "Signup requires a valid password": "Please enter a password to create your account.",
+    "Email rate limit exceeded": "Too many attempts. Please try again in a few minutes.",
+  };
+
+  function friendlyError(msg: string): string {
+    return AUTH_ERROR_MAP[msg] || "Something went wrong. Please try again.";
+  }
+
   const handleGoogleSignup = async () => {
     setLoading(true);
     setError("");
@@ -24,7 +37,7 @@ export default function SignupPage() {
       },
     });
     if (error) {
-      setError(error.message);
+      setError(friendlyError(error.message));
       setLoading(false);
     }
   };
@@ -41,7 +54,7 @@ export default function SignupPage() {
       },
     });
     if (error) {
-      setError(error.message);
+      setError(friendlyError(error.message));
       setLoading(false);
     } else {
       router.push("/onboard");
@@ -133,6 +146,7 @@ export default function SignupPage() {
                 required
                 minLength={6}
               />
+              <p className="text-xs text-stone-400 mt-1.5">Minimum 6 characters</p>
             </div>
 
             {error && (
@@ -146,8 +160,8 @@ export default function SignupPage() {
               disabled={loading}
               className="w-full bg-black text-white py-3.5 rounded-2xl font-semibold text-sm hover:bg-stone-800 transition-colors disabled:opacity-50 flex items-center justify-center space-x-2"
             >
-              <span>Create Account</span>
-              <ArrowRight className="w-4 h-4" />
+              <span>{loading ? "Creating Account..." : "Create Account"}</span>
+              {!loading && <ArrowRight className="w-4 h-4" />}
             </button>
           </form>
         </div>
@@ -178,6 +192,12 @@ export default function SignupPage() {
           >
             Sign In
           </Link>
+        </p>
+        <p className="text-center text-xs text-stone-400 mt-4">
+          By creating an account, you agree to our{" "}
+          <Link href="/terms" className="underline hover:text-stone-600">Terms of Service</Link>
+          {" "}and{" "}
+          <Link href="/privacy" className="underline hover:text-stone-600">Privacy Policy</Link>
         </p>
       </div>
     </div>

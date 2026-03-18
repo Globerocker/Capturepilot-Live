@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseClient } from "@/lib/supabase/client";
-import { Layers, Loader2, Search, Eye, ChevronDown, ArrowRight, Target, Clock, Phone, Calendar, DollarSign } from "lucide-react";
+import { Layers, Loader2, Search, Eye, ChevronDown, ArrowRight, Target, Clock, Phone, Calendar, DollarSign, Plus, X } from "lucide-react";
 import clsx from "clsx";
 import Link from "next/link";
 import ServiceCTA from "@/components/ui/ServiceCTA";
@@ -113,6 +113,9 @@ export default function PipelinePage() {
         discovered: true, researching: true, preparing: true, submitted: true,
     });
     const [pipelineSort, setPipelineSort] = useState<"deadline" | "value" | "priority">("deadline");
+    const [showCustomDeal, setShowCustomDeal] = useState(false);
+    const [customDeal, setCustomDeal] = useState({ title: "", agency: "", naics_code: "", estimated_value: "", notes: "" });
+    const [savingDeal, setSavingDeal] = useState(false);
 
     useEffect(() => {
         async function load() {
@@ -162,6 +165,39 @@ export default function PipelinePage() {
         }
     };
 
+    const createCustomDeal = async () => {
+        if (!profileId || !customDeal.title.trim()) return;
+        setSavingDeal(true);
+
+        // Create a custom opportunity record
+        const { data: opp } = await supabase
+            .from("opportunities")
+            .insert({
+                title: customDeal.title.trim(),
+                agency: customDeal.agency.trim() || "Custom Deal",
+                naics_code: customDeal.naics_code.trim() || null,
+                estimated_value: customDeal.estimated_value ? parseFloat(customDeal.estimated_value) : null,
+                notice_type: "Custom",
+                is_archived: false,
+            })
+            .select("id")
+            .single();
+
+        if (opp) {
+            await supabase.from("user_pursuits").insert({
+                user_profile_id: profileId,
+                opportunity_id: opp.id,
+                stage: "discovered",
+                priority: "medium",
+                notes: customDeal.notes.trim() || null,
+            });
+            setCustomDeal({ title: "", agency: "", naics_code: "", estimated_value: "", notes: "" });
+            setShowCustomDeal(false);
+            await fetchPursuits();
+        }
+        setSavingDeal(false);
+    };
+
     const toggleStage = (stage: string) => {
         setExpandedStages(prev => ({ ...prev, [stage]: !prev[stage] }));
     };
@@ -193,29 +229,107 @@ export default function PipelinePage() {
     return (
         <div className="max-w-5xl mx-auto pb-12 animate-in fade-in duration-500 px-1">
             <header className="mb-6">
-                <h2 className="text-2xl sm:text-3xl font-bold font-typewriter tracking-tighter text-black flex items-center">
-                    <Layers className="mr-2 sm:mr-3 w-6 h-6 sm:w-8 sm:h-8" /> Pipeline
-                    <span className="ml-3 text-sm font-sans font-medium bg-stone-100 px-3 py-1 rounded-full text-stone-500 border border-stone-200">
-                        {pursuits.length}
-                    </span>
-                </h2>
+                <div className="flex items-center justify-between">
+                    <h2 className="text-2xl sm:text-3xl font-bold font-typewriter tracking-tighter text-black flex items-center">
+                        <Layers className="mr-2 sm:mr-3 w-6 h-6 sm:w-8 sm:h-8" /> Pipeline
+                        <span className="ml-3 text-sm font-sans font-medium bg-stone-100 px-3 py-1 rounded-full text-stone-500 border border-stone-200">
+                            {pursuits.length}
+                        </span>
+                    </h2>
+                    <button
+                        type="button"
+                        onClick={() => setShowCustomDeal(true)}
+                        className="inline-flex items-center bg-black text-white font-typewriter font-bold px-4 py-2 rounded-full hover:bg-stone-800 transition-all text-xs"
+                    >
+                        <Plus className="w-3.5 h-3.5 mr-1.5" /> Add Deal
+                    </button>
+                </div>
                 <p className="text-stone-500 mt-1 font-medium text-sm">
                     Track your contract pursuit progress
                 </p>
             </header>
+
+            {/* Custom Deal Modal */}
+            {showCustomDeal && (
+                <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-[24px] w-full max-w-md p-6 shadow-xl animate-in fade-in zoom-in-95 duration-200">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="font-typewriter font-bold text-lg">Create Custom Deal</h3>
+                            <button type="button" title="Close" onClick={() => setShowCustomDeal(false)} className="p-1.5 text-stone-400 hover:text-black rounded-lg hover:bg-stone-100">
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+                        <div className="space-y-3">
+                            <div>
+                                <label className="block text-xs font-typewriter font-medium text-stone-500 mb-1">Title *</label>
+                                <input type="text" value={customDeal.title} onChange={(e) => setCustomDeal(d => ({ ...d, title: e.target.value }))}
+                                    placeholder="e.g. Building Maintenance - Fort Belvoir"
+                                    className="w-full px-3 py-2.5 border border-stone-200 rounded-xl text-sm focus:ring-2 focus:ring-black focus:border-transparent outline-none" />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-typewriter font-medium text-stone-500 mb-1">Agency</label>
+                                <input type="text" value={customDeal.agency} onChange={(e) => setCustomDeal(d => ({ ...d, agency: e.target.value }))}
+                                    placeholder="e.g. Department of Defense"
+                                    className="w-full px-3 py-2.5 border border-stone-200 rounded-xl text-sm focus:ring-2 focus:ring-black focus:border-transparent outline-none" />
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-xs font-typewriter font-medium text-stone-500 mb-1">NAICS Code</label>
+                                    <input type="text" value={customDeal.naics_code} onChange={(e) => setCustomDeal(d => ({ ...d, naics_code: e.target.value }))}
+                                        placeholder="e.g. 561720"
+                                        className="w-full px-3 py-2.5 border border-stone-200 rounded-xl text-sm focus:ring-2 focus:ring-black focus:border-transparent outline-none" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-typewriter font-medium text-stone-500 mb-1">Est. Value ($)</label>
+                                    <input type="number" value={customDeal.estimated_value} onChange={(e) => setCustomDeal(d => ({ ...d, estimated_value: e.target.value }))}
+                                        placeholder="e.g. 250000"
+                                        className="w-full px-3 py-2.5 border border-stone-200 rounded-xl text-sm focus:ring-2 focus:ring-black focus:border-transparent outline-none" />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-typewriter font-medium text-stone-500 mb-1">Notes</label>
+                                <textarea value={customDeal.notes} onChange={(e) => setCustomDeal(d => ({ ...d, notes: e.target.value }))}
+                                    rows={2} placeholder="Any notes about this opportunity..."
+                                    className="w-full px-3 py-2.5 border border-stone-200 rounded-xl text-sm focus:ring-2 focus:ring-black focus:border-transparent outline-none resize-none" />
+                            </div>
+                        </div>
+                        <div className="flex gap-2 mt-4">
+                            <button type="button" onClick={() => setShowCustomDeal(false)}
+                                className="flex-1 bg-stone-100 text-stone-700 py-2.5 rounded-xl font-bold text-sm hover:bg-stone-200 transition-colors">
+                                Cancel
+                            </button>
+                            <button type="button" onClick={createCustomDeal} disabled={!customDeal.title.trim() || savingDeal}
+                                className="flex-1 bg-black text-white py-2.5 rounded-xl font-bold text-sm hover:bg-stone-800 transition-colors disabled:opacity-50 flex items-center justify-center">
+                                {savingDeal ? <><Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" /> Saving...</> : <><Plus className="w-3.5 h-3.5 mr-1.5" /> Create Deal</>}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {pursuits.length === 0 ? (
                 <div className="space-y-4">
                     <div className="bg-white border border-stone-200 border-dashed rounded-[24px] sm:rounded-[32px] p-8 sm:p-12 text-center shadow-sm">
                         <Search className="w-12 h-12 text-stone-300 mx-auto mb-4" />
                         <h3 className="font-typewriter font-bold text-lg mb-2">No opportunities in your pipeline</h3>
-                        <p className="text-stone-500 text-sm mb-6 max-w-md mx-auto">
-                            Start by browsing opportunities and clicking &ldquo;Start Pursuing&rdquo; on ones that interest you.
+                        <p className="text-stone-500 text-sm mb-2 max-w-md mx-auto">
+                            Add opportunities you want to pursue, or create a custom deal to track.
                         </p>
-                        <Link href="/opportunities"
-                            className="inline-flex items-center bg-black text-white font-typewriter font-bold px-6 py-3 rounded-full hover:bg-stone-800 transition-all text-sm">
-                            <Target className="w-4 h-4 mr-2" /> Browse Opportunities
-                        </Link>
+                        <div className="text-xs text-stone-400 mb-6 max-w-sm mx-auto space-y-1">
+                            <p>1. Browse opportunities or matches</p>
+                            <p>2. Click the lightning bolt icon to start pursuing</p>
+                            <p>3. Track your progress through each stage</p>
+                        </div>
+                        <div className="flex items-center justify-center gap-3 flex-wrap">
+                            <Link href="/opportunities"
+                                className="inline-flex items-center bg-black text-white font-typewriter font-bold px-6 py-3 rounded-full hover:bg-stone-800 transition-all text-sm">
+                                <Target className="w-4 h-4 mr-2" /> Browse Opportunities
+                            </Link>
+                            <button type="button" onClick={() => setShowCustomDeal(true)}
+                                className="inline-flex items-center bg-white text-stone-700 border border-stone-200 font-typewriter font-bold px-6 py-3 rounded-full hover:bg-stone-50 transition-all text-sm">
+                                <Plus className="w-4 h-4 mr-2" /> Create Custom Deal
+                            </button>
+                        </div>
                     </div>
                     <ServiceCTA
                         title="Not sure where to start? Book a Strategy Call"

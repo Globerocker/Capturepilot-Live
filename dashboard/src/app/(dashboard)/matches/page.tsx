@@ -3,8 +3,9 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseClient } from "@/lib/supabase/client";
-import { Loader2, Zap, Search, X, ChevronLeft, ChevronRight, Trophy, Clock, Shield, Target, ArrowRight, Bookmark, EyeOff, Flame, ChevronUp, ChevronDown, Filter } from "lucide-react";
+import { Loader2, Zap, Search, X, ChevronLeft, ChevronRight, Trophy, Clock, Shield, Target, ArrowRight, Bookmark, EyeOff, Flame, ChevronUp, ChevronDown, Filter, CheckCircle2 } from "lucide-react";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
+import { createPursuit } from "@/lib/pursue-utils";
 import clsx from "clsx";
 import Link from "next/link";
 
@@ -46,6 +47,9 @@ export default function MyMatchesPage() {
     const [filterNoticeType, setFilterNoticeType] = useState("");
     const [filterSetAside, setFilterSetAside] = useState("");
     const [filterState, setFilterState] = useState("");
+    const [pursuingIds, setPursuingIds] = useState<Set<string>>(new Set());
+    const [pursuedIds, setPursuedIds] = useState<Set<string>>(new Set());
+    const [generatingMatches, setGeneratingMatches] = useState(false);
     const pageSize = 25;
 
     useEffect(() => {
@@ -154,6 +158,25 @@ export default function MyMatchesPage() {
         await supabase.from("user_matches").update({ is_dismissed: true }).eq("id", matchId);
         setMatches(prev => prev.filter(m => m.id !== matchId));
         setTotalCount(prev => prev - 1);
+    };
+
+    const handlePursue = async (oppId: string, noticeType: string) => {
+        if (!profileId || pursuingIds.has(oppId) || pursuedIds.has(oppId)) return;
+        setPursuingIds(prev => new Set(prev).add(oppId));
+        const result = await createPursuit(oppId, noticeType, profileId);
+        setPursuingIds(prev => { const n = new Set(prev); n.delete(oppId); return n; });
+        if (result.success) {
+            setPursuedIds(prev => new Set(prev).add(oppId));
+        }
+    };
+
+    const handleGenerateMatches = async () => {
+        setGeneratingMatches(true);
+        try {
+            await fetch("/api/matches/refresh", { method: "POST" });
+            await fetchMatches();
+        } catch { /* ignore */ }
+        setGeneratingMatches(false);
     };
 
     const totalPages = Math.ceil(totalCount / pageSize);
@@ -332,13 +355,33 @@ export default function MyMatchesPage() {
                     ) : (
                         <>
                             <Zap className="w-10 h-10 text-stone-300 mx-auto mb-3" />
-                            <p className="text-stone-500 font-typewriter mb-2">No matches found.</p>
+                            <p className="text-stone-500 font-typewriter mb-2">No matches found yet</p>
                             <p className="text-stone-400 text-sm mb-4">
-                                Make sure your profile is complete, then matches will be generated automatically.
+                                Generate matches based on your profile, or update your profile to improve results.
                             </p>
-                            <Link href="/settings" className="bg-black text-white px-6 py-2.5 rounded-full text-sm font-bold inline-flex items-center">
-                                Update Profile <ArrowRight className="w-3 h-3 ml-2" />
-                            </Link>
+                            <div className="flex items-center justify-center gap-3 flex-wrap">
+                                <button
+                                    type="button"
+                                    onClick={handleGenerateMatches}
+                                    disabled={generatingMatches}
+                                    className="bg-black text-white px-6 py-2.5 rounded-full text-sm font-bold inline-flex items-center disabled:opacity-60"
+                                >
+                                    {generatingMatches ? (
+                                        <>
+                                            <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" />
+                                            Calculating matches...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Zap className="w-3.5 h-3.5 mr-2" />
+                                            Generate Matches
+                                        </>
+                                    )}
+                                </button>
+                                <Link href="/settings" className="bg-white text-stone-700 border border-stone-200 px-6 py-2.5 rounded-full text-sm font-bold inline-flex items-center hover:bg-stone-50">
+                                    Update Profile <ArrowRight className="w-3 h-3 ml-2" />
+                                </Link>
+                            </div>
                         </>
                     )}
                 </div>
@@ -395,6 +438,18 @@ export default function MyMatchesPage() {
 
                                         {/* Actions */}
                                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            {pursuedIds.has(opp.id) ? (
+                                                <span className="flex items-center gap-1 text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg text-[10px] font-bold">
+                                                    <CheckCircle2 className="w-3 h-3" /> Pursuing
+                                                </span>
+                                            ) : (
+                                                <button type="button" title="Start Pursuing"
+                                                    onClick={(e) => { e.preventDefault(); handlePursue(opp.id, opp.notice_type); }}
+                                                    disabled={pursuingIds.has(opp.id)}
+                                                    className="p-1.5 rounded-lg text-stone-400 hover:text-black hover:bg-stone-100 transition-colors disabled:opacity-50">
+                                                    {pursuingIds.has(opp.id) ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+                                                </button>
+                                            )}
                                             <button type="button" title={match.is_saved ? "Unsave" : "Save"}
                                                 onClick={(e) => { e.preventDefault(); toggleSave(match.id, match.is_saved); }}
                                                 className={clsx("p-1.5 rounded-lg transition-colors",

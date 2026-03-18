@@ -14,6 +14,20 @@ export default function LoginPage() {
   const router = useRouter();
   const supabase = createSupabaseClient();
 
+  const AUTH_ERROR_MAP: Record<string, string> = {
+    "Anonymous sign-ins are disabled": "Please enter your email and password to create an account.",
+    "User already registered": "An account with this email already exists. Try signing in instead.",
+    "Password should be at least 6 characters": "Your password must be at least 6 characters long.",
+    "Invalid email": "Please enter a valid email address.",
+    "Signup requires a valid password": "Please enter a password to create your account.",
+    "Email rate limit exceeded": "Too many attempts. Please try again in a few minutes.",
+    "Invalid login credentials": "Incorrect email or password. Please try again.",
+  };
+
+  function friendlyError(msg: string): string {
+    return AUTH_ERROR_MAP[msg] || "Something went wrong. Please try again.";
+  }
+
   const handleGoogleLogin = async () => {
     setLoading(true);
     setError("");
@@ -24,7 +38,7 @@ export default function LoginPage() {
       },
     });
     if (error) {
-      setError(error.message);
+      setError(friendlyError(error.message));
       setLoading(false);
     }
   };
@@ -38,7 +52,7 @@ export default function LoginPage() {
       password,
     });
     if (error) {
-      setError(error.message);
+      setError(friendlyError(error.message));
       setLoading(false);
     } else {
       router.push("/dashboard");
@@ -135,8 +149,8 @@ export default function LoginPage() {
               disabled={loading}
               className="w-full bg-black text-white py-3.5 rounded-2xl font-semibold text-sm hover:bg-stone-800 transition-colors disabled:opacity-50 flex items-center justify-center space-x-2"
             >
-              <span>Sign In</span>
-              <ArrowRight className="w-4 h-4" />
+              <span>{loading ? "Signing In..." : "Sign In"}</span>
+              {!loading && <ArrowRight className="w-4 h-4" />}
             </button>
           </form>
         </div>

@@ -114,6 +114,8 @@ export default function OnboardPage() {
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
     const [matchCount, setMatchCount] = useState(0);
+    const [scoringMatches, setScoringMatches] = useState(false);
+    const [oppCount, setOppCount] = useState(0);
 
     // SAM.gov lookup state
     const [samRegistered, setSamRegistered] = useState<boolean | null>(null);
@@ -294,17 +296,31 @@ export default function OnboardPage() {
             return;
         }
 
+        // Get raw opportunity count for progress display
         if (form.naics_codes.length > 0) {
             const { count } = await supabase
                 .from("opportunities")
                 .select("*", { count: "exact", head: true })
                 .eq("is_archived", false)
                 .in("naics_code", form.naics_codes);
-            setMatchCount(count || 0);
+            setOppCount(count || 0);
         }
 
         setSaved(true);
         setSaving(false);
+
+        // Trigger match scoring in background
+        setScoringMatches(true);
+        try {
+            const res = await fetch("/api/matches/refresh", { method: "POST" });
+            if (res.ok) {
+                const data = await res.json();
+                setMatchCount(data.written || 0);
+            }
+        } catch {
+            // Match scoring failed silently — user can trigger later from dashboard
+        }
+        setScoringMatches(false);
     };
 
     const totalSteps = 5; // 0-4
@@ -347,14 +363,22 @@ export default function OnboardPage() {
                     <p className="text-stone-500 font-medium mb-2">
                         <span className="font-bold text-black">{form.company_name}</span> is now in the system.
                     </p>
-                    {matchCount > 0 && (
+                    {scoringMatches ? (
+                        <div className="mb-6">
+                            <div className="flex items-center justify-center gap-2 text-stone-500 mb-2">
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                <p className="font-medium text-sm">
+                                    Scanning {oppCount > 0 ? `${oppCount.toLocaleString()} ` : ""}opportunities for your best matches...
+                                </p>
+                            </div>
+                        </div>
+                    ) : matchCount > 0 ? (
                         <p className="text-emerald-600 font-bold text-lg mb-6">
-                            We found {matchCount.toLocaleString()} opportunities matching your profile!
+                            We matched {matchCount.toLocaleString()} opportunities to your profile!
                         </p>
-                    )}
-                    {matchCount === 0 && (
+                    ) : (
                         <p className="text-stone-400 text-sm mb-6">
-                            We&apos;re scanning federal databases for your matches now.
+                            Your matches are ready. Head to your dashboard to explore them.
                         </p>
                     )}
                     <button
