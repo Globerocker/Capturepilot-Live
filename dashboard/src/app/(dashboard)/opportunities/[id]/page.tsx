@@ -109,7 +109,8 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
     const setAsides = opp.set_aside_types || {};
 
     // Helper formatting
-    const formattedValue = opp.estimated_value ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(opp.estimated_value) : "TBD";
+    const rawValue = opp.estimated_value || opp.award_amount;
+    const formattedValue = rawValue ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(rawValue) : "TBD";
     const statusColor = (val: string) => {
         if (!val) return "text-stone-500 bg-stone-100";
         const v = val.toUpperCase();

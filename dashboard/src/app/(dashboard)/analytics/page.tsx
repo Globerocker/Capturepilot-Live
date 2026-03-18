@@ -79,7 +79,7 @@ export default function AnalyticsPage() {
             // Parallel data fetches
             const [pursuitRes, actionRes, opsRes, naicsRes, easyRes, urgentRes] = await Promise.all([
                 supabase.from("user_pursuits")
-                    .select("stage, opportunities(estimated_value)")
+                    .select("stage, opportunities(award_amount)")
                     .eq("user_profile_id", profileId),
                 supabase.from("user_action_items")
                     .select("status, priority, category")
@@ -107,7 +107,7 @@ export default function AnalyticsPage() {
             pursuits.forEach(p => {
                 byStage[p.stage] = (byStage[p.stage] || 0) + 1;
                 const opp = p.opportunities as Record<string, unknown> | null;
-                totalValue += (opp?.estimated_value as number) || 0;
+                totalValue += (opp?.award_amount as number) || 0;
                 if (p.stage === "awarded") awarded++;
                 if (p.stage === "lost") lost++;
                 if (p.stage === "no_bid") noBid++;

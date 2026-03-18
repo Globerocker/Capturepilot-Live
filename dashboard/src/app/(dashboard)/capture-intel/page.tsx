@@ -20,7 +20,7 @@ interface PursuitWithOpp {
         agency: string;
         response_deadline: string;
         notice_type: string;
-        estimated_value: number | null;
+        award_amount: number | null;
         strategic_scoring: Record<string, string> | null;
         ai_win_strategy: Record<string, unknown> | null;
         incumbent_contractor_name: string | null;
@@ -48,7 +48,7 @@ export default function CaptureIntelPage() {
 
             const { data } = await supabase
                 .from("user_pursuits")
-                .select("id, stage, priority, opportunities(id, title, agency, response_deadline, notice_type, estimated_value, strategic_scoring, ai_win_strategy, incumbent_contractor_name, set_aside_code)")
+                .select("id, stage, priority, opportunities(id, title, agency, response_deadline, notice_type, award_amount, strategic_scoring, ai_win_strategy, incumbent_contractor_name, set_aside_code)")
                 .eq("user_profile_id", profile.id)
                 .not("stage", "in", "(no_bid,lost)")
                 .order("created_at", { ascending: false });
@@ -69,7 +69,7 @@ export default function CaptureIntelPage() {
 
     // Aggregate intel
     const activePursuits = pursuits.filter(p => !["awarded", "lost", "no_bid"].includes(p.stage));
-    const totalValue = activePursuits.reduce((sum, p) => sum + ((p.opportunities as PursuitWithOpp["opportunities"])?.estimated_value || 0), 0);
+    const totalValue = activePursuits.reduce((sum, p) => sum + ((p.opportunities as PursuitWithOpp["opportunities"])?.award_amount || 0), 0);
     const withIncumbent = activePursuits.filter(p => (p.opportunities as PursuitWithOpp["opportunities"])?.incumbent_contractor_name);
     const highWin = activePursuits.filter(p => {
         const strat = (p.opportunities as PursuitWithOpp["opportunities"])?.strategic_scoring;

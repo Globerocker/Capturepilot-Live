@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import Link from "next/link";
 import { NAICS_CODES } from "@/lib/naics-codes";
+import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import AddressAutocomplete from "@/components/AddressAutocomplete";
 import { PSC_CODES } from "@/lib/psc-codes";
 import { FEDERAL_AGENCIES } from "@/lib/federal-agencies";
@@ -304,7 +305,7 @@ export default function SettingsPage() {
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">UEI <span className="text-stone-400 normal-case">(12 alphanumeric)</span></label>
+                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">UEI <span className="text-stone-400 normal-case">(12 alphanumeric)</span> <InfoTooltip text="Unique Entity Identifier — your 12-character code assigned when you register on SAM.gov. Required for all federal contracts." /></label>
                             <input type="text" placeholder="e.g. ABC123DEF456" maxLength={12} value={profile.uei || ""}
                                 onChange={(e) => { updateProfile("uei", e.target.value.replace(/[^A-Za-z0-9]/g, "")); setValidationErrors(prev => ({ ...prev, uei: "" })); }}
                                 className={clsx("w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm font-mono uppercase",
@@ -312,7 +313,7 @@ export default function SettingsPage() {
                             {validationErrors.uei && <p className="text-xs text-red-500 mt-1 flex items-center"><AlertCircle className="w-3 h-3 mr-1" />{validationErrors.uei}</p>}
                         </div>
                         <div>
-                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">CAGE Code <span className="text-stone-400 normal-case">(5 alphanumeric)</span></label>
+                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">CAGE Code <span className="text-stone-400 normal-case">(5 alphanumeric)</span> <InfoTooltip text="Commercial and Government Entity Code — a 5-character ID assigned by the Department of Defense during SAM.gov registration." /></label>
                             <input type="text" placeholder="e.g. 7ABC1" maxLength={5} value={profile.cage_code || ""}
                                 onChange={(e) => { updateProfile("cage_code", e.target.value.replace(/[^A-Za-z0-9]/g, "")); setValidationErrors(prev => ({ ...prev, cage_code: "" })); }}
                                 className={clsx("w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm font-mono uppercase",
@@ -407,7 +408,7 @@ export default function SettingsPage() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">Years in Business</label>
-                            <input type="number" min={0} placeholder="e.g. 5" value={profile.years_in_business ?? ""} onChange={(e) => updateProfile("years_in_business", e.target.value ? parseInt(e.target.value) : null)}
+                            <input type="number" min={0} max={200} placeholder="e.g. 5" value={profile.years_in_business && profile.years_in_business > 200 ? "" : (profile.years_in_business ?? "")} onChange={(e) => { const v = e.target.value ? Math.min(parseInt(e.target.value), 200) : null; updateProfile("years_in_business", v); }}
                                 className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" />
                         </div>
                         <div>
@@ -466,7 +467,7 @@ export default function SettingsPage() {
                 </h3>
                 <div className="space-y-4">
                     <div>
-                        <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">NAICS Codes</label>
+                        <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">NAICS Codes <InfoTooltip text="North American Industry Classification System — codes that describe your industry. The government uses these to categorize opportunities by service/product type." /></label>
                         <div className="relative mb-2">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
                             <input type="text" placeholder="Search by code or name..." value={naicsSearch} onChange={(e) => setNaicsSearch(e.target.value)}
@@ -509,7 +510,7 @@ export default function SettingsPage() {
                         {!naicsSearch && <p className="text-[10px] text-stone-400 mt-1.5">Showing popular codes. Search to find more.</p>}
                     </div>
                     <div>
-                        <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">SBA Certifications</label>
+                        <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">SBA Certifications <InfoTooltip text="Small Business Administration certifications that qualify you for set-aside contracts reserved for specific business categories (8(a), HUBZone, SDVOSB, WOSB, etc.)." /></label>
                         <div className="flex flex-wrap gap-2">
                             {CERT_OPTIONS.map(c => (
                                 <button type="button" key={c.value} onClick={() => toggleArray("sba_certifications", c.value)}
@@ -534,7 +535,7 @@ export default function SettingsPage() {
                 </h3>
                 <div className="space-y-4">
                     <div>
-                        <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">Product/Service Codes (PSC)</label>
+                        <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">Product/Service Codes (PSC) <InfoTooltip text="PSC codes describe the specific products or services you provide to the government. These help match you to opportunities beyond NAICS." /></label>
                         <div className="relative mb-2">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
                             <input type="text" placeholder="Search PSC codes..." value={pscSearch} onChange={(e) => setPscSearch(e.target.value)}

@@ -141,7 +141,7 @@ export default function OpportunitiesPage() {
         try {
             let query = supabase
                 .from("opportunities")
-                .select("*, estimated_value, department, agencies(department, sub_tier), opportunity_types(name), set_asides(code)", { count: 'exact' });
+                .select("*, agencies(department, sub_tier), opportunity_types(name), set_asides(code)", { count: 'exact' });
 
             if (activeSearch) {
                 query = query.or(`title.ilike.%${activeSearch}%,notice_id.ilike.%${activeSearch}%,agency.ilike.%${activeSearch}%,description.ilike.%${activeSearch}%`);
@@ -512,7 +512,7 @@ export default function OpportunitiesPage() {
                                                         <td className="py-3.5 px-5 font-mono font-bold text-xs">{op.naics_code || "---"}</td>
                                                         <td className="py-3.5 px-5 font-mono text-xs">{op.place_of_performance_state || "---"}</td>
                                                         <td className="py-3.5 px-5 font-mono font-bold text-xs hidden xl:table-cell">
-                                                            {formatCurrency(op.estimated_value || op.award_amount) || <span className="text-stone-300">---</span>}
+                                                            {formatCurrency(op.award_amount) || <span className="text-stone-300">---</span>}
                                                         </td>
                                                         <td className="py-3.5 px-5 font-bold text-stone-700 text-xs">
                                                             {op.response_deadline ? new Date(op.response_deadline).toLocaleDateString() : "TBD"}
@@ -577,8 +577,8 @@ export default function OpportunitiesPage() {
                                                                         </span>
                                                                     );
                                                                 })()}
-                                                                {(op.estimated_value || op.award_amount) && (
-                                                                    <span className="font-mono font-bold text-xs text-green-700 bg-green-50 px-2 py-0.5 rounded border border-green-200">{formatCurrency(op.estimated_value || op.award_amount)}</span>
+                                                                {(op.award_amount) && (
+                                                                    <span className="font-mono font-bold text-xs text-green-700 bg-green-50 px-2 py-0.5 rounded border border-green-200">{formatCurrency(op.award_amount)}</span>
                                                                 )}
                                                             </div>
                                                         </div>
@@ -730,10 +730,10 @@ export default function OpportunitiesPage() {
                                     <p className="font-bold text-sm">{[selectedOpportunity.place_of_performance_city, selectedOpportunity.place_of_performance_state].filter(Boolean).join(", ")}</p>
                                 </div>
                             )}
-                            {(selectedOpportunity.estimated_value || selectedOpportunity.award_amount) && (
+                            {(selectedOpportunity.award_amount) && (
                                 <div className="bg-green-50 border border-green-200 p-3 rounded-xl">
                                     <p className="text-[10px] font-typewriter text-green-600 uppercase tracking-widest mb-1">Est. Value</p>
-                                    <p className="font-mono font-bold text-sm text-green-800">{formatCurrency(selectedOpportunity.estimated_value || selectedOpportunity.award_amount)}</p>
+                                    <p className="font-mono font-bold text-sm text-green-800">{formatCurrency(selectedOpportunity.award_amount)}</p>
                                 </div>
                             )}
                         </div>

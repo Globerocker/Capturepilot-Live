@@ -27,7 +27,7 @@ interface Pursuit {
         notice_type: string;
         set_aside_code: string;
         naics_code: string;
-        estimated_value: number | null;
+        award_amount: number | null;
         strategic_scoring: Record<string, string> | null;
     };
 }
@@ -140,7 +140,7 @@ export default function PipelinePage() {
 
         const { data } = await supabase
             .from("user_pursuits")
-            .select("*, opportunities(id, title, agency, response_deadline, notice_type, set_aside_code, naics_code, estimated_value, strategic_scoring)")
+            .select("*, opportunities(id, title, agency, response_deadline, notice_type, set_aside_code, naics_code, award_amount, strategic_scoring)")
             .eq("user_profile_id", profileId)
             .order("created_at", { ascending: false });
 
@@ -176,7 +176,7 @@ export default function PipelinePage() {
                 title: customDeal.title.trim(),
                 agency: customDeal.agency.trim() || "Custom Deal",
                 naics_code: customDeal.naics_code.trim() || null,
-                estimated_value: customDeal.estimated_value ? parseFloat(customDeal.estimated_value) : null,
+                award_amount: customDeal.estimated_value ? parseFloat(customDeal.estimated_value) : null,
                 notice_type: "Custom",
                 is_archived: false,
             })
@@ -214,7 +214,7 @@ export default function PipelinePage() {
     // Pipeline stats
     const totalValue = pursuits.reduce((sum, p) => {
         const opp = p.opportunities as Pursuit["opportunities"];
-        return sum + (opp?.estimated_value || 0);
+        return sum + (opp?.award_amount || 0);
     }, 0);
     const activePursuits = pursuits.filter(p => !["awarded", "lost", "no_bid"].includes(p.stage)).length;
 
@@ -381,7 +381,7 @@ export default function PipelinePage() {
                                     return (oppA?.response_deadline || "9999").localeCompare(oppB?.response_deadline || "9999");
                                 }
                                 if (pipelineSort === "value") {
-                                    return (oppB?.estimated_value || 0) - (oppA?.estimated_value || 0);
+                                    return (oppB?.award_amount || 0) - (oppA?.award_amount || 0);
                                 }
                                 const pOrder: Record<string, number> = { high: 0, medium: 1, low: 2 };
                                 return (pOrder[a.priority] ?? 1) - (pOrder[b.priority] ?? 1);
@@ -430,9 +430,9 @@ export default function PipelinePage() {
                                                                         {opp?.naics_code && (
                                                                             <span className="font-mono text-[10px] bg-stone-100 px-2 py-0.5 rounded text-stone-600 border border-stone-200">{opp.naics_code}</span>
                                                                         )}
-                                                                        {opp?.estimated_value && (
+                                                                        {opp?.award_amount && (
                                                                             <span className="text-[10px] font-typewriter font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded border border-emerald-200">
-                                                                                {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(opp.estimated_value)}
+                                                                                {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(opp.award_amount!)}
                                                                             </span>
                                                                         )}
                                                                         {winProb && (

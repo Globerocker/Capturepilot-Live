@@ -423,7 +423,7 @@ export default function MyMatchesPage() {
                                             )}
                                         </div>
                                         <p className="font-bold text-sm text-black line-clamp-1">{opp.title}</p>
-                                        <p className="text-xs text-stone-500 line-clamp-1">{opp.agency}</p>
+                                        <p className="text-xs text-stone-500 line-clamp-1">{opp.agency || "Federal Agency"}</p>
                                     </Link>
 
                                     {/* Right Side */}

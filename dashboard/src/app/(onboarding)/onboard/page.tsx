@@ -266,7 +266,7 @@ export default function OnboardPage() {
             sba_certifications: form.sba_certifications.length > 0 ? form.sba_certifications : [],
             employee_count: form.employee_count ? parseInt(form.employee_count) : null,
             revenue: form.revenue ? parseFloat(form.revenue) : null,
-            years_in_business: form.years_in_business ? parseInt(form.years_in_business) : null,
+            years_in_business: form.years_in_business ? Math.min(parseInt(form.years_in_business), 200) : null,
             service_radius_miles: form.service_radius_miles ? parseInt(form.service_radius_miles) : 50,
             has_bonding: form.has_bonding,
             has_fleet: form.has_fleet,
@@ -621,10 +621,13 @@ export default function OnboardPage() {
                                 value={form.address_line_1}
                                 onChange={(val) => updateForm("address_line_1", val)}
                                 onSelect={(addr) => {
-                                    updateForm("address_line_1", addr.address_line_1);
-                                    updateForm("city", addr.city);
-                                    updateForm("state", addr.state);
-                                    updateForm("zip_code", addr.zip_code);
+                                    setForm(prev => ({
+                                        ...prev,
+                                        address_line_1: addr.address_line_1,
+                                        city: addr.city,
+                                        state: addr.state,
+                                        zip_code: addr.zip_code,
+                                    }));
                                 }}
                                 placeholder="Start typing an address..."
                                 className="w-full pl-9 pr-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm"
@@ -855,7 +858,7 @@ export default function OnboardPage() {
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
                                 <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">Years in Business *</label>
-                                <input type="number" value={form.years_in_business} onChange={(e) => updateForm("years_in_business", e.target.value)}
+                                <input type="number" min={0} max={200} value={form.years_in_business} onChange={(e) => { const v = e.target.value ? String(Math.min(parseInt(e.target.value), 200)) : ""; updateForm("years_in_business", v); }}
                                     className="w-full px-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" placeholder="e.g. 12" />
                             </div>
                             <div>
