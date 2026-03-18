@@ -8,8 +8,24 @@
             "schedule": "0 2 * * *"
         },
         {
-            "path": "/api/cron/enrich",
+            "path": "/api/cron/score_matches",
+            "schedule": "0 3 * * *"
+        },
+        {
+            "path": "/api/cron/backfill_requirements",
+            "schedule": "30 3 * * *"
+        },
+        {
+            "path": "/api/cron/ai_strategy",
+            "schedule": "0 4 * * *"
+        },
+        {
+            "path": "/api/cron/enrich_apollo",
             "schedule": "0 5 * * *"
+        },
+        {
+            "path": "/api/cron/enrich",
+            "schedule": "30 5 * * *"
         },
         {
             "path": "/api/cron/db_cleanup",
