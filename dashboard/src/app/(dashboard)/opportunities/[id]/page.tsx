@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { ArrowLeft, Building, Target, ShieldAlert, Award, Zap, MapPin, Calendar, CheckSquare, Phone } from "lucide-react";
+import { ArrowLeft, Building, Target, ShieldAlert, Award, Zap, MapPin, Calendar, CheckSquare, Phone, User, Mail } from "lucide-react";
 import clsx from "clsx";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -12,6 +12,15 @@ import OpportunityAttachments from "@/components/OpportunityAttachments";
 import StructuredRequirements from "@/components/StructuredRequirements";
 
 export const dynamic = 'force-dynamic';
+
+interface SamContact {
+    fullName?: string;
+    title?: string;
+    email?: string;
+    phone?: string;
+    fax?: string;
+    type?: string;
+}
 
 export default async function OpportunityDetailPage({ params }: { params: Promise<{ id: string }> }) {
     const supabase = createClient(
@@ -28,6 +37,70 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
     if (error || !opp) {
         notFound();
     }
+
+    // Fetch contacts from the contacts table
+    const { data: dbContacts } = await supabase
+        .from("contacts")
+        .select("*")
+        .eq("notice_id", opp.notice_id)
+        .order("is_primary", { ascending: false });
+
+    // Also extract POC from SAM.gov raw_json as fallback
+    const rawJson = opp.raw_json || {};
+    const samPocs: SamContact[] = [];
+    if (rawJson.pointOfContact) {
+        const pocs = Array.isArray(rawJson.pointOfContact)
+            ? rawJson.pointOfContact
+            : [rawJson.pointOfContact];
+        for (const poc of pocs) {
+            if (poc.fullName || poc.email || poc.phone) {
+                samPocs.push({
+                    fullName: poc.fullName,
+                    title: poc.title,
+                    email: poc.email,
+                    phone: poc.phone,
+                    fax: poc.fax,
+                    type: poc.type,
+                });
+            }
+        }
+    }
+
+    // Build unified contact list: DB contacts first, then SAM POCs not already in DB
+    const contacts: { name: string; title?: string; email?: string; phone?: string; isPrimary?: boolean; source: string }[] = [];
+
+    if (dbContacts && dbContacts.length > 0) {
+        for (const c of dbContacts) {
+            contacts.push({
+                name: c.fullname || "Unknown",
+                title: c.title || undefined,
+                email: c.email || undefined,
+                phone: c.phone || undefined,
+                isPrimary: c.is_primary,
+                source: "database",
+            });
+        }
+    }
+
+    // Add SAM POCs that aren't duplicates
+    for (const poc of samPocs) {
+        const isDuplicate = contacts.some(
+            (c) => c.name.toLowerCase() === (poc.fullName || "").toLowerCase()
+                || (c.email && poc.email && c.email.toLowerCase() === poc.email.toLowerCase())
+        );
+        if (!isDuplicate && poc.fullName) {
+            contacts.push({
+                name: poc.fullName,
+                title: poc.title || undefined,
+                email: poc.email || undefined,
+                phone: poc.phone || undefined,
+                source: "sam",
+            });
+        }
+    }
+
+    // Primary contact for CallButton
+    const primaryContact = contacts[0] || null;
 
     // Parse complex JSONB fields cleanly
     const reqs = opp.structured_requirements || {};
@@ -187,6 +260,59 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                         </div>
                     </div>
 
+                    {/* POINT OF CONTACT */}
+                    {contacts.length > 0 && (
+                        <div className="bg-white rounded-2xl sm:rounded-3xl border border-stone-200 shadow-sm overflow-hidden">
+                            <div className="bg-stone-50 border-b border-stone-100 px-4 sm:px-8 py-4 sm:py-5">
+                                <h2 className="font-typewriter text-base sm:text-lg font-bold flex items-center text-stone-800">
+                                    <User className="w-5 h-5 mr-2 sm:mr-3 text-stone-400" /> Point of Contact
+                                </h2>
+                            </div>
+                            <div className="p-4 sm:p-8">
+                                <div className="space-y-4">
+                                    {contacts.map((contact, i) => (
+                                        <div key={i} className={clsx(
+                                            "flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-6",
+                                            i > 0 && "pt-4 border-t border-stone-100"
+                                        )}>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <p className="font-bold text-stone-900 text-base">{contact.name}</p>
+                                                    {contact.isPrimary && (
+                                                        <span className="bg-emerald-100 text-emerald-700 text-[10px] font-typewriter font-bold px-2 py-0.5 rounded-full border border-emerald-200">PRIMARY</span>
+                                                    )}
+                                                </div>
+                                                {contact.title && (
+                                                    <p className="text-sm text-stone-500 mb-2">{contact.title}</p>
+                                                )}
+                                            </div>
+                                            <div className="flex flex-wrap gap-2">
+                                                {contact.phone && (
+                                                    <a
+                                                        href={`tel:${contact.phone.replace(/[^\d+]/g, "")}`}
+                                                        className="inline-flex items-center bg-emerald-50 text-emerald-700 font-typewriter font-bold px-3 py-2 rounded-xl text-xs hover:bg-emerald-100 transition-all border border-emerald-200"
+                                                    >
+                                                        <Phone className="w-3.5 h-3.5 mr-1.5" />
+                                                        {contact.phone}
+                                                    </a>
+                                                )}
+                                                {contact.email && (
+                                                    <a
+                                                        href={`mailto:${contact.email}`}
+                                                        className="inline-flex items-center bg-blue-50 text-blue-700 font-typewriter font-bold px-3 py-2 rounded-xl text-xs hover:bg-blue-100 transition-all border border-blue-200"
+                                                    >
+                                                        <Mail className="w-3.5 h-3.5 mr-1.5" />
+                                                        {contact.email}
+                                                    </a>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {/* 2. STRUCTURED REQUIREMENTS - auto-extracted from description */}
                     <StructuredRequirements dbRequirements={reqs} noticeId={opp.notice_id} />
 
@@ -264,7 +390,11 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                     </div>
 
                     {/* Call & Transcribe */}
-                    <CallButton opportunityId={opp.id} />
+                    <CallButton
+                        opportunityId={opp.id}
+                        contactName={primaryContact?.name}
+                        contactPhone={primaryContact?.phone}
+                    />
 
                     {/* 4. AI WIN STRATEGY */}
                     <div className="bg-stone-900 rounded-2xl sm:rounded-3xl text-white relative overflow-hidden shadow-xl border border-stone-800">

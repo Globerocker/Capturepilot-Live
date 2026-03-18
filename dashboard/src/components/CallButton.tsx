@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { Phone, Mic, MicOff, Save, Loader2, Clock, FileText } from "lucide-react";
-import clsx from "clsx";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { Phone, Mic, MicOff, Save, Loader2, Clock, FileText, ChevronDown, ChevronUp } from "lucide-react";
 import { createSupabaseClient } from "@/lib/supabase/client";
 
 const supabase = createSupabaseClient();
@@ -22,16 +21,23 @@ export default function CallButton({ opportunityId, contactPhone, contactName }:
     const [seconds, setSeconds] = useState(0);
     const [showPanel, setShowPanel] = useState(false);
     const [speechSupported, setSpeechSupported] = useState(false);
+    const [hasRecorded, setHasRecorded] = useState(false);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const recognitionRef = useRef<any>(null);
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const transcriptionRef = useRef("");
 
     useEffect(() => {
         const SR = (window as unknown as Record<string, unknown>).SpeechRecognition || (window as unknown as Record<string, unknown>).webkitSpeechRecognition;
         setSpeechSupported(!!SR);
     }, []);
 
-    const startRecording = () => {
+    // Keep ref in sync with state for closure access
+    useEffect(() => {
+        transcriptionRef.current = transcription;
+    }, [transcription]);
+
+    const startRecording = useCallback(() => {
         const SR = (window as unknown as Record<string, unknown>).SpeechRecognition || (window as unknown as Record<string, unknown>).webkitSpeechRecognition;
         if (!SR) return;
 
@@ -41,7 +47,7 @@ export default function CallButton({ opportunityId, contactPhone, contactName }:
         recognition.interimResults = true;
         recognition.lang = "en-US";
 
-        let finalTranscript = transcription;
+        let finalTranscript = transcriptionRef.current;
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         recognition.onresult = (event: any) => {
@@ -58,6 +64,7 @@ export default function CallButton({ opportunityId, contactPhone, contactName }:
         };
 
         recognition.onerror = () => {
+            setTranscription(finalTranscript);
             setIsRecording(false);
             if (timerRef.current) clearInterval(timerRef.current);
         };
@@ -71,20 +78,21 @@ export default function CallButton({ opportunityId, contactPhone, contactName }:
         recognition.start();
         recognitionRef.current = recognition;
         setIsRecording(true);
+        setHasRecorded(true);
         setShowPanel(true);
+        setSaved(false);
 
-        // Start timer
         setSeconds(0);
         timerRef.current = setInterval(() => {
             setSeconds(s => s + 1);
         }, 1000);
-    };
+    }, []);
 
-    const stopRecording = () => {
+    const stopRecording = useCallback(() => {
         recognitionRef.current?.stop();
         setIsRecording(false);
         if (timerRef.current) clearInterval(timerRef.current);
-    };
+    }, []);
 
     const saveCallLog = async () => {
         setSaving(true);
@@ -137,7 +145,7 @@ export default function CallButton({ opportunityId, contactPhone, contactName }:
                         <div className="flex flex-wrap gap-2">
                             {contactPhone && (
                                 <a
-                                    href={`tel:${contactPhone}`}
+                                    href={`tel:${contactPhone.replace(/[^\d+]/g, "")}`}
                                     className="inline-flex items-center bg-emerald-600 text-white font-typewriter font-bold px-4 py-2 rounded-full text-xs hover:bg-emerald-700 transition-all"
                                 >
                                     <Phone className="w-3 h-3 mr-1.5" />
@@ -152,7 +160,7 @@ export default function CallButton({ opportunityId, contactPhone, contactName }:
                                     className="inline-flex items-center bg-black text-white font-typewriter font-bold px-4 py-2 rounded-full text-xs hover:bg-stone-800 transition-all"
                                 >
                                     <Mic className="w-3 h-3 mr-1.5" />
-                                    Start Transcription
+                                    {hasRecorded ? "Resume Transcription" : "Start Transcription"}
                                 </button>
                             )}
 
@@ -167,20 +175,20 @@ export default function CallButton({ opportunityId, contactPhone, contactName }:
                                 </button>
                             )}
 
-                            {!speechSupported && (
+                            {!isRecording && (hasRecorded || !speechSupported) && (
                                 <button
                                     type="button"
                                     onClick={() => setShowPanel(!showPanel)}
                                     className="inline-flex items-center bg-stone-100 text-stone-700 font-typewriter font-bold px-4 py-2 rounded-full text-xs hover:bg-stone-200 transition-all border border-stone-200"
                                 >
-                                    <FileText className="w-3 h-3 mr-1.5" />
-                                    Add Notes
+                                    {showPanel ? <ChevronUp className="w-3 h-3 mr-1.5" /> : <ChevronDown className="w-3 h-3 mr-1.5" />}
+                                    {showPanel ? "Hide Notes" : hasRecorded ? "View Notes" : "Add Notes"}
                                 </button>
                             )}
                         </div>
 
                         {!speechSupported && (
-                            <p className="text-[10px] text-stone-400 mt-2">Transcription available in Chrome/Edge.</p>
+                            <p className="text-[10px] text-stone-400 mt-2">Live transcription available in Chrome/Edge.</p>
                         )}
                     </div>
                 </div>
@@ -199,7 +207,7 @@ export default function CallButton({ opportunityId, contactPhone, contactName }:
                     {transcription && (
                         <div>
                             <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1">Transcription</p>
-                            <div className="text-sm text-stone-700 bg-stone-50 rounded-xl p-3 border border-stone-100 max-h-32 overflow-y-auto whitespace-pre-wrap">
+                            <div className="text-sm text-stone-700 bg-stone-50 rounded-xl p-3 border border-stone-100 max-h-40 overflow-y-auto whitespace-pre-wrap">
                                 {transcription}
                             </div>
                         </div>
@@ -211,7 +219,7 @@ export default function CallButton({ opportunityId, contactPhone, contactName }:
                             value={notes}
                             onChange={(e) => setNotes(e.target.value)}
                             placeholder="Add your call notes here..."
-                            className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black resize-none h-20"
+                            className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black resize-none h-24"
                         />
                     </div>
 

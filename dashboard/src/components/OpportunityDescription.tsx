@@ -8,6 +8,29 @@ interface Props {
     currentDescription?: string;
 }
 
+function cleanSamHtml(html: string): string {
+    let clean = html;
+    // Strip inline style attributes (SAM.gov often has Word/Outlook styles)
+    clean = clean.replace(/\s*style="[^"]*"/gi, "");
+    // Strip class attributes (MsoNormal, etc.)
+    clean = clean.replace(/\s*class="[^"]*"/gi, "");
+    // Remove <font> tags but keep content
+    clean = clean.replace(/<\/?font[^>]*>/gi, "");
+    // Remove <o:p> tags (Word XML namespace)
+    clean = clean.replace(/<\/?o:p[^>]*>/gi, "");
+    // Remove empty paragraphs with only whitespace/nbsp
+    clean = clean.replace(/<p[^>]*>\s*(&nbsp;\s*)*<\/p>/gi, "");
+    // Remove excessive <br> tags (more than 2 in a row)
+    clean = clean.replace(/(<br\s*\/?\s*>){3,}/gi, "<br><br>");
+    // Remove Word-specific XML tags
+    clean = clean.replace(/<\/?[a-z]+:[a-z]+[^>]*>/gi, "");
+    // Remove empty spans
+    clean = clean.replace(/<span[^>]*>\s*<\/span>/gi, "");
+    // Clean up extra whitespace between tags
+    clean = clean.replace(/>\s+</g, "> <");
+    return clean.trim();
+}
+
 export default function OpportunityDescription({ noticeId, currentDescription }: Props) {
     const [description, setDescription] = useState<string>("");
     const [loading, setLoading] = useState(false);
@@ -105,15 +128,25 @@ export default function OpportunityDescription({ noticeId, currentDescription }:
                     <FileText className="w-5 h-5 mr-2 sm:mr-3 text-stone-400" /> Description
                 </h2>
             </div>
-            <div className="p-4 sm:p-8">
-                {/* If content is HTML, render it; otherwise show as text */}
+            <div className="p-4 sm:p-8 max-h-[600px] overflow-y-auto">
+                {/* If content is HTML, clean and render it; otherwise show as text */}
                 {description.includes("<") && description.includes(">") ? (
                     <div
                         className="prose prose-sm prose-stone max-w-none text-stone-700 leading-relaxed
-                            [&_table]:border-collapse [&_table]:w-full [&_td]:border [&_td]:border-stone-200 [&_td]:p-2 [&_td]:text-sm
-                            [&_th]:border [&_th]:border-stone-200 [&_th]:p-2 [&_th]:text-sm [&_th]:bg-stone-50 [&_th]:font-bold
-                            [&_a]:text-blue-600 [&_a]:underline [&_ul]:list-disc [&_ol]:list-decimal [&_p]:mb-3"
-                        dangerouslySetInnerHTML={{ __html: description }}
+                            [&_table]:border-collapse [&_table]:w-full [&_table]:text-sm
+                            [&_td]:border [&_td]:border-stone-200 [&_td]:p-2 [&_td]:text-sm [&_td]:align-top
+                            [&_th]:border [&_th]:border-stone-200 [&_th]:p-2 [&_th]:text-sm [&_th]:bg-stone-50 [&_th]:font-bold [&_th]:align-top
+                            [&_a]:text-blue-600 [&_a]:underline [&_a]:break-all
+                            [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5
+                            [&_p]:mb-2 [&_p]:text-sm [&_p]:leading-relaxed
+                            [&_h1]:text-lg [&_h1]:font-bold [&_h1]:mt-4 [&_h1]:mb-2
+                            [&_h2]:text-base [&_h2]:font-bold [&_h2]:mt-3 [&_h2]:mb-2
+                            [&_h3]:text-sm [&_h3]:font-bold [&_h3]:mt-3 [&_h3]:mb-1
+                            [&_li]:text-sm [&_li]:mb-1
+                            [&_br]:leading-relaxed
+                            [&_span]:!text-inherit [&_span]:!font-inherit [&_span]:!text-sm
+                            [&_div]:text-sm [&_div]:leading-relaxed"
+                        dangerouslySetInnerHTML={{ __html: cleanSamHtml(description) }}
                     />
                 ) : (
                     <p className="text-sm text-stone-700 leading-relaxed whitespace-pre-wrap">{description}</p>
