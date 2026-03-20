@@ -8,6 +8,8 @@ import clsx from "clsx";
 import Link from "next/link";
 import { createPursuit, getUserProfileId } from "@/lib/pursue-utils";
 import { SkeletonTableRow } from "@/components/ui/Skeleton";
+import { cleanDescription } from "@/utils/cleanDescription";
+import { estimateContractValue } from "@/utils/estimateValue";
 
 const supabase = createSupabaseClient();
 
@@ -750,12 +752,25 @@ export default function OpportunitiesPage() {
                                     <p className="font-bold text-sm">{[selectedOpportunity.place_of_performance_city, selectedOpportunity.place_of_performance_state].filter(Boolean).join(", ")}</p>
                                 </div>
                             )}
-                            {(selectedOpportunity.award_amount) && (
-                                <div className="bg-green-50 border border-green-200 p-3 rounded-xl">
-                                    <p className="text-[10px] font-typewriter text-green-600 uppercase tracking-widest mb-1">Est. Value</p>
-                                    <p className="font-mono font-bold text-sm text-green-800">{formatCurrency(selectedOpportunity.award_amount)}</p>
-                                </div>
-                            )}
+                            <div className="bg-green-50 border border-green-200 p-3 rounded-xl">
+                                <p className="text-[10px] font-typewriter text-green-600 uppercase tracking-widest mb-1">
+                                    {selectedOpportunity.award_amount ? "Contract Value" : "Est. Value"}
+                                </p>
+                                <p className="font-mono font-bold text-sm text-green-800">
+                                    {selectedOpportunity.award_amount
+                                        ? formatCurrency(selectedOpportunity.award_amount)
+                                        : (() => {
+                                            const est = estimateContractValue({
+                                                naicsCode: selectedOpportunity.naics_code,
+                                                setAsideCode: selectedOpportunity.set_aside_code,
+                                                noticeType: selectedOpportunity.notice_type,
+                                            });
+                                            return est ? `~${formatCurrency(est.estimatedValue)}` : "TBD";
+                                        })()
+                                    }
+                                    {!selectedOpportunity.award_amount && <span className="text-[9px] font-normal text-stone-400 ml-1">(est.)</span>}
+                                </p>
+                            </div>
                         </div>
 
                         {/* Incumbent Info */}
@@ -773,7 +788,7 @@ export default function OpportunitiesPage() {
                                     <FileText className="w-4 h-4 mr-2" /> Description
                                 </h4>
                                 <div className="text-sm text-stone-600 max-h-48 overflow-y-auto whitespace-pre-wrap font-sans">
-                                    {selectedOpportunity.description}
+                                    {cleanDescription(selectedOpportunity.description)}
                                 </div>
                             </div>
                         )}

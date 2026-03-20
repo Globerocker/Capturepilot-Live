@@ -17,14 +17,14 @@ const W = {
     cert_bonus: 0.10,
 };
 
-const MAX_MATCHES = 100;
+const MAX_MATCHES = 500;
 
-function scoreNaics(userNaics: string[], oppNaics: string | null): number | null {
-    if (!oppNaics || !userNaics?.length) return null;
+function scoreNaics(userNaics: string[], oppNaics: string | null): number {
+    if (!oppNaics || !userNaics?.length) return 0.0;
     if (userNaics.includes(oppNaics)) return 1.0;
     if (userNaics.some(n => n.substring(0, 4) === oppNaics.substring(0, 4))) return 0.6;
     if (userNaics.some(n => n.substring(0, 3) === oppNaics.substring(0, 3))) return 0.3;
-    return null;
+    return 0.0;
 }
 
 function scorePsc(userPscs: string[], oppPsc: string | null): number {
@@ -174,7 +174,6 @@ export async function POST() {
 
     for (const opp of allOpps) {
         const naics = scoreNaics((p.naics_codes as string[]) || [], opp.naics_code as string | null);
-        if (naics === null) continue;
 
         const nt = scoreNoticeType(opp.notice_type as string | null);
         if (nt === null) continue;
@@ -194,13 +193,13 @@ export async function POST() {
             W.value_fit * vf + W.past_perf * pp + W.notice_type * nt +
             W.agency_pref * ap + W.deadline * dl + W.cert_bonus * cb;
 
-        if (total < 0.50) continue;
+        if (total < 0.30) continue;
 
         scored.push({
             user_profile_id: p.id as string,
             opportunity_id: opp.id as string,
             score: Math.round(total * 10000) / 10000,
-            classification: total >= 0.70 ? "HOT" : "WARM",
+            classification: total >= 0.70 ? "HOT" : total >= 0.50 ? "WARM" : "COLD",
             score_breakdown: {
                 naics: Math.round(naics * 100) / 100,
                 psc: Math.round(psc * 100) / 100,
@@ -241,6 +240,7 @@ export async function POST() {
 
     const hot = top.filter(m => m.classification === "HOT").length;
     const warm = top.filter(m => m.classification === "WARM").length;
+    const cold = top.filter(m => m.classification === "COLD").length;
 
     return NextResponse.json({
         success: true,
@@ -248,5 +248,6 @@ export async function POST() {
         written,
         hot,
         warm,
+        cold,
     });
 }

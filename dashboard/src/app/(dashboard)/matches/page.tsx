@@ -12,6 +12,13 @@ import Link from "next/link";
 
 const supabase = createSupabaseClient();
 
+const formatCurrency = (val: number | null | undefined) => {
+    if (!val) return null;
+    if (val >= 1_000_000) return `$${(val / 1_000_000).toFixed(1)}M`;
+    if (val >= 1_000) return `$${(val / 1_000).toFixed(0)}K`;
+    return `$${val.toLocaleString()}`;
+};
+
 interface UserMatch {
     id: string;
     score: number;
@@ -41,7 +48,7 @@ export default function MyMatchesPage() {
     const [searchInput, setSearchInput] = useState("");
     const [activeSearch, setActiveSearch] = useState("");
     const [page, setPage] = useState(1);
-    const [filter, setFilter] = useState<"ALL" | "HOT" | "WARM" | "SAVED">("ALL");
+    const [filter, setFilter] = useState<"ALL" | "HOT" | "WARM" | "COLD" | "SAVED">("ALL");
     const [sortBy, setSortBy] = useState<"score" | "deadline" | "agency" | "notice_type">("score");
     const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
     const [showFilters, setShowFilters] = useState(false);
@@ -88,6 +95,8 @@ export default function MyMatchesPage() {
             query = query.eq("classification", "HOT");
         } else if (filter === "WARM") {
             query = query.eq("classification", "WARM");
+        } else if (filter === "COLD") {
+            query = query.eq("classification", "COLD");
         } else if (filter === "SAVED") {
             query = query.eq("is_saved", true);
         }
@@ -193,6 +202,7 @@ export default function MyMatchesPage() {
     const getScoreColor = (score: number) => {
         if (score >= 0.70) return "text-emerald-600 bg-emerald-50 border-emerald-200";
         if (score >= 0.50) return "text-amber-600 bg-amber-50 border-amber-200";
+        if (score >= 0.30) return "text-blue-600 bg-blue-50 border-blue-200";
         return "text-stone-500 bg-stone-50 border-stone-200";
     };
 
@@ -221,10 +231,24 @@ export default function MyMatchesPage() {
                         {totalCount.toLocaleString()}
                     </span>
                 </h2>
-                <p className="text-stone-500 mt-1 font-medium text-sm">
-                    Opportunities scored and ranked based on your complete profile
-                    <InfoTooltip text="Scores combine NAICS match, certifications, geography, past performance, contract value fit, and more. HOT = 70%+ alignment. WARM = 50-69%." />
-                </p>
+                <div className="flex items-center justify-between mt-1">
+                    <p className="text-stone-500 font-medium text-sm">
+                        Opportunities scored and ranked based on your complete profile
+                        <InfoTooltip text="Scores combine NAICS match, certifications, geography, past performance, contract value fit, and more. HOT = 70%+ alignment. WARM = 50-69%. COLD = 30-49%." />
+                    </p>
+                    <button
+                        type="button"
+                        onClick={handleGenerateMatches}
+                        disabled={generatingMatches}
+                        className="bg-black text-white px-4 py-2 rounded-full text-xs font-bold inline-flex items-center disabled:opacity-60 flex-shrink-0 ml-4"
+                    >
+                        {generatingMatches ? (
+                            <><Loader2 className="w-3 h-3 mr-1.5 animate-spin" /> Scoring...</>
+                        ) : (
+                            <><Zap className="w-3 h-3 mr-1.5" /> Refresh Matches</>
+                        )}
+                    </button>
+                </div>
             </header>
 
             {/* Filter Tabs */}
@@ -233,6 +257,7 @@ export default function MyMatchesPage() {
                     { key: "ALL" as const, label: "All Matches", icon: Target },
                     { key: "HOT" as const, label: "HOT", icon: Flame },
                     { key: "WARM" as const, label: "WARM", icon: Trophy },
+                    { key: "COLD" as const, label: "COLD", icon: Shield },
                     { key: "SAVED" as const, label: "Saved", icon: Bookmark },
                 ]).map(tab => (
                     <button
@@ -361,6 +386,12 @@ export default function MyMatchesPage() {
                             <p className="text-stone-500 font-typewriter mb-2">No saved matches yet.</p>
                             <p className="text-stone-400 text-sm">Click the bookmark icon on any match to save it for later.</p>
                         </>
+                    ) : filter === "COLD" ? (
+                        <>
+                            <Shield className="w-10 h-10 text-blue-300 mx-auto mb-3" />
+                            <p className="text-stone-500 font-typewriter mb-2">No COLD matches found.</p>
+                            <p className="text-stone-400 text-sm">COLD matches (30-49% alignment) show opportunities with partial profile fit. Try generating matches to populate this list.</p>
+                        </>
                     ) : (
                         <>
                             <Zap className="w-10 h-10 text-stone-300 mx-auto mb-3" />
@@ -418,7 +449,9 @@ export default function MyMatchesPage() {
                                                 "text-[9px] font-typewriter font-bold px-2 py-0.5 rounded uppercase tracking-widest border",
                                                 match.classification === "HOT"
                                                     ? "bg-red-50 text-red-600 border-red-200"
-                                                    : "bg-amber-50 text-amber-600 border-amber-200"
+                                                    : match.classification === "WARM"
+                                                    ? "bg-amber-50 text-amber-600 border-amber-200"
+                                                    : "bg-blue-50 text-blue-600 border-blue-200"
                                             )}>
                                                 {match.classification}
                                             </span>
@@ -428,6 +461,11 @@ export default function MyMatchesPage() {
                                             {opp.notice_type && (
                                                 <span className={clsx("text-[9px] font-typewriter px-2 py-0.5 rounded border uppercase tracking-widest", getNoticeColor(opp.notice_type))}>
                                                     {opp.notice_type}
+                                                </span>
+                                            )}
+                                            {formatCurrency(opp.award_amount) && (
+                                                <span className="text-[9px] font-typewriter font-bold bg-emerald-50 text-emerald-600 border border-emerald-200 px-2 py-0.5 rounded">
+                                                    {formatCurrency(opp.award_amount)}
                                                 </span>
                                             )}
                                         </div>

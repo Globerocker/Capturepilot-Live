@@ -48,7 +48,15 @@ export async function GET(request: NextRequest) {
 
         if (contentType.includes("application/json")) {
             const data = await response.json();
-            description = data.description || data.content || JSON.stringify(data);
+            description = data.description || data.content || data.body || data.text || "";
+            if (!description && typeof data === "object") {
+                for (const val of Object.values(data as Record<string, unknown>)) {
+                    if (typeof val === "string" && val.length > 50) {
+                        description = val;
+                        break;
+                    }
+                }
+            }
         } else {
             description = await response.text();
         }

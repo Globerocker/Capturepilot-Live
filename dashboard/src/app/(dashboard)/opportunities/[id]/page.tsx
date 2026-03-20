@@ -10,6 +10,7 @@ import PursueButton from "@/components/PursueButton";
 import OpportunityDescription from "@/components/OpportunityDescription";
 import OpportunityAttachments from "@/components/OpportunityAttachments";
 import StructuredRequirements from "@/components/StructuredRequirements";
+import { estimateContractValue } from "@/utils/estimateValue";
 
 export const dynamic = 'force-dynamic';
 
@@ -110,7 +111,12 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
 
     // Helper formatting
     const rawValue = opp.estimated_value || opp.award_amount;
-    const formattedValue = rawValue ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(rawValue) : "TBD";
+    const estimate = !rawValue ? estimateContractValue({ naicsCode: opp.naics_code, setAsideCode: opp.set_aside_code, noticeType: opp.notice_type }) : null;
+    const displayValue = rawValue || estimate?.estimatedValue;
+    const isEstimated = !rawValue && !!estimate;
+    const formattedValue = displayValue
+        ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(displayValue) + (isEstimated ? " (est.)" : "")
+        : "TBD";
     const statusColor = (val: string) => {
         if (!val) return "text-stone-500 bg-stone-100";
         const v = val.toUpperCase();

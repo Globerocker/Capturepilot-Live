@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Loader2, FileText, AlertCircle, ChevronDown } from "lucide-react";
 import clsx from "clsx";
+import { cleanDescription } from "@/utils/cleanDescription";
 
 interface Props {
     noticeId: string;
@@ -46,7 +47,7 @@ export default function OpportunityDescription({ noticeId, currentDescription, d
 
     useEffect(() => {
         if (!needsFetch && currentDescription) {
-            setDescription(currentDescription);
+            setDescription(cleanDescription(currentDescription));
             setFetched(true);
             return;
         }
@@ -66,7 +67,7 @@ export default function OpportunityDescription({ noticeId, currentDescription, d
                 }
 
                 if (data.description) {
-                    setDescription(data.description);
+                    setDescription(cleanDescription(data.description));
                 }
             } catch {
                 setError("Failed to connect to SAM.gov");

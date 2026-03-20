@@ -46,16 +46,16 @@ W_DEADLINE = 0.05
 W_CERT_BONUS = 0.10
 
 # Max matches to keep per user
-MAX_MATCHES_PER_USER = 100
+MAX_MATCHES_PER_USER = 500
 
 # ---------------------------------------------------------------------------
 # SCORING FUNCTIONS
 # ---------------------------------------------------------------------------
 
 def score_naics(user_naics, opp_naics):
-    """NAICS match: exact=1.0, 4-digit=0.6, 3-digit=0.3, none=None (skip)."""
+    """NAICS match: exact=1.0, 4-digit=0.6, 3-digit=0.3, none=0.0 (soft)."""
     if not opp_naics or not user_naics:
-        return None  # Skip this opportunity
+        return 0.0  # No data — score zero, don't skip
     opp_str = str(opp_naics)
     for n in user_naics:
         if str(n) == opp_str:
@@ -66,7 +66,7 @@ def score_naics(user_naics, opp_naics):
     for n in user_naics:
         if str(n)[:3] == opp_str[:3]:
             return 0.3
-    return None  # No relevance — skip
+    return 0.0  # No relevance — score zero but don't skip
 
 
 def score_psc(user_pscs, opp_psc):
@@ -317,10 +317,8 @@ def score_matches():
         for opp in opportunities:
             opp_id = opp["id"]
 
-            # --- 1. NAICS (15%) — gate: skip if no match ---
+            # --- 1. NAICS (15%) — soft factor (0.0 if no match) ---
             naics = score_naics(user_naics, opp.get("naics_code"))
-            if naics is None:
-                continue
 
             # --- 2. Notice Type (10%) — skip awards ---
             nt = score_notice_type(opp.get("notice_type"))
@@ -356,10 +354,10 @@ def score_matches():
             )
 
             # Only keep WARM or better
-            if total < 0.50:
+            if total < 0.30:
                 continue
 
-            classification = "HOT" if total >= 0.70 else "WARM"
+            classification = "HOT" if total >= 0.70 else ("WARM" if total >= 0.50 else "COLD")
 
             scored_matches.append({
                 "user_profile_id": user_id,
