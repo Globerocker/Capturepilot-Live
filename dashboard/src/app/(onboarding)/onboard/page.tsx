@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { createSupabaseClient } from "@/lib/supabase/client";
 import {
     Building, MapPin, Target, ShieldCheck, Briefcase, Truck,
     ArrowRight, ArrowLeft, CheckCircle2, Loader2, Zap, Search, X, ExternalLink
 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import clsx from "clsx";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { NAICS_CODES, searchNaics } from "@/lib/naics-codes";
@@ -108,8 +108,11 @@ interface SamEntity {
     phone: string;
 }
 
-export default function OnboardPage() {
+function OnboardPageContent() {
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const analysisId = searchParams.get("analysis_id");
+    const [analysisLoaded, setAnalysisLoaded] = useState(false);
     const [step, setStep] = useState(0);
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
@@ -164,6 +167,43 @@ export default function OnboardPage() {
     });
 
     const updateForm = (key: string, value: unknown) => setForm(prev => ({ ...prev, [key]: value }));
+
+    // Pre-fill from lead magnet analysis (if analysis_id in URL)
+    useEffect(() => {
+        if (!analysisId || analysisLoaded) return;
+        fetch(`/api/analyze-company/status/${analysisId}`)
+            .then(res => res.ok ? res.json() : null)
+            .then(data => {
+                if (!data?.inferred_profile) return;
+                const p = data.inferred_profile as Record<string, unknown>;
+                setForm(prev => ({
+                    ...prev,
+                    company_name: (p.company_name as string) || prev.company_name,
+                    dba_name: (p.dba_name as string) || prev.dba_name,
+                    uei: (p.uei as string) || prev.uei,
+                    cage_code: (p.cage_code as string) || prev.cage_code,
+                    address_line_1: (p.address_line_1 as string) || prev.address_line_1,
+                    city: (p.city as string) || prev.city,
+                    state: (p.state as string) || prev.state,
+                    zip_code: (p.zip_code as string) || prev.zip_code,
+                    website: (p.website as string) || prev.website,
+                    phone: (p.phone as string) || prev.phone,
+                    naics_codes: (p.naics_codes as string[])?.length ? (p.naics_codes as string[]) : prev.naics_codes,
+                    sba_certifications: (p.sba_certifications as string[])?.length ? (p.sba_certifications as string[]) : prev.sba_certifications,
+                    employee_count: p.employee_count ? String(p.employee_count) : prev.employee_count,
+                    years_in_business: p.years_in_business ? String(p.years_in_business) : prev.years_in_business,
+                    has_bonding: typeof p.has_bonding === "boolean" ? p.has_bonding : prev.has_bonding,
+                    target_states: (p.target_states as string[])?.length ? (p.target_states as string[]) : prev.target_states,
+                }));
+                // Skip SAM step if data was enriched
+                if (data.sam_data && Object.keys(data.sam_data).length > 0) {
+                    setSamPopulated(true);
+                    setStep(1);
+                }
+                setAnalysisLoaded(true);
+            })
+            .catch(() => { /* ignore - user can fill manually */ });
+    }, [analysisId, analysisLoaded]);
 
     const toggleArray = (key: "naics_codes" | "sba_certifications" | "target_contract_types" | "target_states" | "target_psc_codes" | "preferred_agencies" | "security_clearances", value: string) => {
         setForm(prev => {
@@ -1049,5 +1089,13 @@ export default function OnboardPage() {
                 )}
             </div>
         </div>
+    );
+}
+
+export default function OnboardPage() {
+    return (
+        <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-stone-50"><Loader2 className="w-8 h-8 animate-spin text-stone-400" /></div>}>
+            <OnboardPageContent />
+        </Suspense>
     );
 }

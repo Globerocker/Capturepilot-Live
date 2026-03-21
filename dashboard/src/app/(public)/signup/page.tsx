@@ -1,17 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { Zap, ArrowRight, CheckCircle2 } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Zap, ArrowRight, CheckCircle2, Loader2 } from "lucide-react";
 import { createSupabaseClient } from "@/lib/supabase/client";
 
-export default function SignupPage() {
+function SignupPageContent() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const analysisId = searchParams.get("analysis_id");
   const supabase = createSupabaseClient();
 
   const AUTH_ERROR_MAP: Record<string, string> = {
@@ -33,7 +35,7 @@ export default function SignupPage() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: `${window.location.origin}/auth/callback${analysisId ? `?analysis_id=${analysisId}` : ""}`,
       },
     });
     if (error) {
@@ -57,7 +59,7 @@ export default function SignupPage() {
       setError(friendlyError(error.message));
       setLoading(false);
     } else {
-      router.push("/onboard");
+      router.push(analysisId ? `/onboard?analysis_id=${analysisId}` : "/onboard");
     }
   };
 
@@ -201,5 +203,13 @@ export default function SignupPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function SignupPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-stone-50"><Loader2 className="w-8 h-8 animate-spin text-stone-400" /></div>}>
+      <SignupPageContent />
+    </Suspense>
   );
 }
