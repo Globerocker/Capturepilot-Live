@@ -147,6 +147,59 @@ export interface ScoredMatch {
     score_breakdown: Record<string, number>;
 }
 
+// Relaxed weights for lead magnet — emphasizes data actually available from a web crawl
+export const LEAD_MAGNET_WEIGHTS = {
+    naics: 0.30,
+    psc: 0.00,
+    set_aside: 0.20,
+    geo: 0.15,
+    value_fit: 0.00,
+    past_perf: 0.05,
+    notice_type: 0.15,
+    agency_pref: 0.00,
+    deadline: 0.05,
+    cert_bonus: 0.10,
+};
+
+export function scoreOpportunityLeadMagnet(
+    profile: ProfileForScoring,
+    opp: OpportunityForScoring
+): ScoredMatch | null {
+    const W = LEAD_MAGNET_WEIGHTS;
+
+    const naics = scoreNaics(profile.naics_codes || [], opp.naics_code);
+    const nt = scoreNoticeType(opp.notice_type);
+    if (nt === null) return null;
+    const dl = scoreDeadline(opp.response_deadline);
+    if (dl === null) return null;
+
+    const sa = scoreSetAside(profile.sba_certifications || [], opp.set_aside_code);
+    const geo = scoreGeo(profile.state || "", profile.target_states || [], opp.place_of_performance_state);
+    const pp = scorePastPerf(profile.federal_awards_count || 0);
+    const cb = scoreCertBonus(profile.sba_certifications || [], opp.set_aside_code);
+
+    const total = W.naics * naics + W.set_aside * sa + W.geo * geo +
+        W.past_perf * pp + W.notice_type * nt +
+        W.deadline * dl + W.cert_bonus * cb;
+
+    if (total < 0.20) return null;
+
+    return {
+        opportunity_id: opp.id,
+        score: Math.round(total * 10000) / 10000,
+        classification: total >= 0.60 ? "HOT" : total >= 0.40 ? "WARM" : "COLD",
+        score_breakdown: {
+            naics: Math.round(naics * 100) / 100,
+            set_aside: Math.round(sa * 100) / 100,
+            geo: Math.round(geo * 100) / 100,
+            past_performance: Math.round(pp * 100) / 100,
+            notice_type: Math.round(nt * 100) / 100,
+            deadline: Math.round(dl * 100) / 100,
+            cert_bonus: Math.round(cb * 100) / 100,
+        },
+    };
+}
+
 export function scoreOpportunity(
     profile: ProfileForScoring,
     opp: OpportunityForScoring

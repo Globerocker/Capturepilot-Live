@@ -336,6 +336,19 @@ function OnboardPageContent() {
             return;
         }
 
+        // Link lead magnet analysis if we came from one
+        if (analysisId) {
+            await supabase.from("user_profiles").update({
+                analysis_id: analysisId,
+                onboarding_source: "lead_magnet",
+            }).eq("auth_user_id", user.id);
+
+            await supabase.from("company_analyses").update({
+                converted_user_id: user.id,
+                converted_at: new Date().toISOString(),
+            }).eq("id", analysisId);
+        }
+
         // Get raw opportunity count for progress display
         if (form.naics_codes.length > 0) {
             const { count } = await supabase

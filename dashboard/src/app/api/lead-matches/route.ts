@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { scoreOpportunity, type ProfileForScoring, type OpportunityForScoring } from "@/lib/match-scoring";
+import { scoreOpportunityLeadMagnet, type ProfileForScoring, type OpportunityForScoring } from "@/lib/match-scoring";
 
 /**
  * POST /api/lead-matches
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
         // Score
         const scored: { opportunity_id: string; score: number; classification: string; score_breakdown: Record<string, number> }[] = [];
         for (const opp of allOpps) {
-            const result = scoreOpportunity(profile, opp);
+            const result = scoreOpportunityLeadMagnet(profile, opp);
             if (result) scored.push(result);
         }
 

@@ -1,15 +1,16 @@
 "use client";
 
-import { Globe, Search, Target, Zap, Loader2, CheckCircle2 } from "lucide-react";
+import { Globe, Search, Database, Target, Zap, Loader2, CheckCircle2 } from "lucide-react";
 import clsx from "clsx";
 
 interface AnalysisProgressStepperProps {
-    currentStep: number; // 0-3
+    currentStep: number; // 0-4
 }
 
 const steps = [
     { icon: Globe, label: "Crawling website", description: "Extracting company information..." },
     { icon: Search, label: "Analyzing services", description: "Identifying capabilities & certifications..." },
+    { icon: Database, label: "Enriching data", description: "Checking federal databases..." },
     { icon: Target, label: "Classifying industry", description: "Inferring NAICS codes..." },
     { icon: Zap, label: "Finding matches", description: "Scoring government opportunities..." },
 ];

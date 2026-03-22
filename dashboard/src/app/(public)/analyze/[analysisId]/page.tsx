@@ -1,13 +1,32 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
-    Zap, Building, MapPin, Users, Calendar, Target, Lock, ArrowRight, Shield,
-    CheckCircle2, Globe, Phone, Mail, Loader2, Briefcase
+    Zap, MapPin, Users, Calendar, Target, ArrowRight, Shield,
+    CheckCircle2, Globe, Phone, Mail, Loader2, Briefcase, TrendingUp,
+    Award, ChevronDown, ChevronUp, Clock, Unlock
 } from "lucide-react";
 import clsx from "clsx";
+import { LeadMagnetForm } from "@/components/LeadMagnetForm";
+
+interface CertRecommendation {
+    cert: string;
+    cert_label: string;
+    unlocked_count: number;
+    estimated_value: number;
+    sample_opps: { title: string; agency: string; set_aside_code: string }[];
+    difficulty: "easy" | "moderate" | "complex";
+    timeline: string;
+}
+
+interface EasyWin {
+    title: string;
+    description: string;
+    impact: "high" | "medium" | "low";
+    category: string;
+}
 
 interface AnalysisData {
     id: string;
@@ -43,14 +62,19 @@ interface AnalysisData {
         score_breakdown: Record<string, number>;
     }[];
     inferred_profile: Record<string, unknown>;
+    cert_recommendations: CertRecommendation[];
+    easy_wins: EasyWin[];
 }
 
 export default function AnalysisResultsPage() {
     const params = useParams();
-    const router = useRouter();
     const [data, setData] = useState<AnalysisData | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
+    const [showAllMatches, setShowAllMatches] = useState(false);
+    const [updatedMatches, setUpdatedMatches] = useState<AnalysisData["preview_matches"] | null>(null);
+    const [updatedCertRecs, setUpdatedCertRecs] = useState<CertRecommendation[] | null>(null);
+    const [updatedEasyWins, setUpdatedEasyWins] = useState<EasyWin[] | null>(null);
 
     const analysisId = params.analysisId as string;
 
@@ -89,12 +113,26 @@ export default function AnalysisResultsPage() {
     }
 
     const crawl = data.crawl_data || {};
-    const matches = data.preview_matches || [];
-    const visibleMatches = matches.slice(0, 3);
-    const blurredMatches = matches.slice(3);
+    const matches = updatedMatches || data.preview_matches || [];
+    const visibleMatches = showAllMatches ? matches : matches.slice(0, 5);
+    const hiddenCount = matches.length - 5;
     const naics = data.inferred_naics || [];
     const certs = crawl.certifications || [];
     const hasSam = !!data.sam_data && Object.keys(data.sam_data).length > 0;
+    const easyWins = updatedEasyWins || data.easy_wins || [];
+    const certRecs = updatedCertRecs || data.cert_recommendations || [];
+
+    const impactColors = {
+        high: "bg-red-50 text-red-700 border-red-200",
+        medium: "bg-amber-50 text-amber-700 border-amber-200",
+        low: "bg-blue-50 text-blue-700 border-blue-200",
+    };
+
+    const difficultyColors = {
+        easy: "bg-emerald-50 text-emerald-700 border-emerald-200",
+        moderate: "bg-amber-50 text-amber-700 border-amber-200",
+        complex: "bg-red-50 text-red-700 border-red-200",
+    };
 
     return (
         <div className="min-h-screen bg-stone-50">
@@ -134,11 +172,8 @@ export default function AnalysisResultsPage() {
                     </div>
 
                     <div className="p-5 sm:p-8 space-y-5">
-                        {/* Summary */}
                         {data.company_summary && (
-                            <p className="text-sm text-stone-600 leading-relaxed">
-                                {data.company_summary}
-                            </p>
+                            <p className="text-sm text-stone-600 leading-relaxed">{data.company_summary}</p>
                         )}
 
                         {/* Quick Stats */}
@@ -179,9 +214,7 @@ export default function AnalysisResultsPage() {
                                 <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-2">Detected Services</p>
                                 <div className="flex flex-wrap gap-1.5">
                                     {crawl.services.slice(0, 10).map((s, i) => (
-                                        <span key={i} className="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2.5 py-1 rounded-lg">
-                                            {s}
-                                        </span>
+                                        <span key={i} className="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2.5 py-1 rounded-lg">{s}</span>
                                     ))}
                                 </div>
                             </div>
@@ -204,7 +237,7 @@ export default function AnalysisResultsPage() {
                             </div>
                         )}
 
-                        {/* Contacts found */}
+                        {/* Contacts */}
                         {crawl.contacts && crawl.contacts.length > 0 && (
                             <div>
                                 <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-2">Contact Info Found</p>
@@ -239,38 +272,95 @@ export default function AnalysisResultsPage() {
                     </div>
                 </div>
 
-                {/* NAICS Classification */}
-                {naics.length > 0 && (
+                {/* Easy Wins Section */}
+                {easyWins.length > 0 && (
                     <div className="bg-white rounded-[28px] border border-stone-200 shadow-sm overflow-hidden">
                         <div className="bg-stone-50 border-b border-stone-100 px-5 sm:px-8 py-4">
                             <h2 className="font-typewriter font-bold text-base flex items-center">
-                                <Target className="w-4 h-4 mr-2 text-stone-400" /> Inferred NAICS Codes
+                                <TrendingUp className="w-4 h-4 mr-2 text-emerald-500" /> Quick Wins to Improve Your Position
                             </h2>
                         </div>
-                        <div className="p-5 sm:p-8 space-y-3">
-                            {naics.map((n) => (
-                                <div key={n.code} className="flex items-center gap-3">
-                                    <span className="font-mono text-sm font-bold bg-stone-100 px-2.5 py-1 rounded border border-stone-200 w-20 text-center flex-shrink-0">
-                                        {n.code}
-                                    </span>
+                        <div className="p-5 sm:p-8 grid gap-3">
+                            {easyWins.map((win, i) => (
+                                <div key={i} className="flex items-start gap-3 p-3 bg-stone-50 rounded-xl border border-stone-100">
+                                    <div className="flex-shrink-0 mt-0.5">
+                                        {win.category === "registration" ? <Shield className="w-5 h-5 text-red-500" /> :
+                                         win.category === "certifications" ? <Award className="w-5 h-5 text-amber-500" /> :
+                                         win.category === "website" ? <Globe className="w-5 h-5 text-blue-500" /> :
+                                         <TrendingUp className="w-5 h-5 text-emerald-500" />}
+                                    </div>
                                     <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-medium text-black truncate">{n.label}</p>
-                                        <div className="mt-1 h-1.5 bg-stone-100 rounded-full overflow-hidden">
-                                            <div
-                                                className={clsx(
-                                                    "h-full rounded-full transition-all",
-                                                    n.confidence >= 0.7 ? "bg-emerald-500" : n.confidence >= 0.4 ? "bg-amber-500" : "bg-stone-400"
-                                                )}
-                                                style={{ width: `${Math.round(n.confidence * 100)}%` }}
-                                            />
+                                        <div className="flex items-center gap-2 mb-0.5">
+                                            <p className="font-bold text-sm text-black">{win.title}</p>
+                                            <span className={clsx(
+                                                "text-[9px] font-typewriter font-bold px-2 py-0.5 rounded border uppercase",
+                                                impactColors[win.impact]
+                                            )}>
+                                                {win.impact}
+                                            </span>
+                                        </div>
+                                        <p className="text-xs text-stone-500 leading-relaxed">{win.description}</p>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Certification Recommendations */}
+                {certRecs.length > 0 && (
+                    <div className="bg-white rounded-[28px] border border-stone-200 shadow-sm overflow-hidden">
+                        <div className="bg-stone-50 border-b border-stone-100 px-5 sm:px-8 py-4">
+                            <h2 className="font-typewriter font-bold text-base flex items-center">
+                                <Unlock className="w-4 h-4 mr-2 text-blue-500" /> Certifications That Could Unlock Opportunities
+                            </h2>
+                        </div>
+                        <div className="p-5 sm:p-8 space-y-4">
+                            {certRecs.map((rec, i) => (
+                                <div key={i} className="border border-stone-200 rounded-xl p-4 hover:border-stone-300 transition-colors">
+                                    <div className="flex items-start justify-between mb-2">
+                                        <div>
+                                            <div className="flex items-center gap-2 mb-0.5">
+                                                <p className="font-bold text-sm text-black">{rec.cert_label}</p>
+                                                <span className={clsx(
+                                                    "text-[9px] font-typewriter font-bold px-2 py-0.5 rounded border uppercase",
+                                                    difficultyColors[rec.difficulty]
+                                                )}>
+                                                    {rec.difficulty}
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center gap-3 text-xs text-stone-500">
+                                                <span className="inline-flex items-center gap-1">
+                                                    <Clock className="w-3 h-3" /> {rec.timeline}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div className="text-right flex-shrink-0">
+                                            <p className="font-black text-lg text-emerald-600">+{rec.unlocked_count}</p>
+                                            <p className="text-[10px] font-typewriter text-stone-400 uppercase">new opps</p>
                                         </div>
                                     </div>
-                                    <span className={clsx(
-                                        "text-xs font-bold flex-shrink-0",
-                                        n.confidence >= 0.7 ? "text-emerald-600" : n.confidence >= 0.4 ? "text-amber-600" : "text-stone-500"
-                                    )}>
-                                        {Math.round(n.confidence * 100)}%
-                                    </span>
+
+                                    {rec.estimated_value > 0 && (
+                                        <p className="text-xs text-stone-500 mb-2">
+                                            Est. value: <span className="font-bold text-stone-700">${(rec.estimated_value / 1000000).toFixed(1)}M</span>
+                                        </p>
+                                    )}
+
+                                    {rec.sample_opps.length > 0 && (
+                                        <div className="space-y-1.5 mt-2 pt-2 border-t border-stone-100">
+                                            <p className="text-[10px] font-typewriter text-stone-400 uppercase">Sample opportunities:</p>
+                                            {rec.sample_opps.map((opp, j) => (
+                                                <div key={j} className="flex items-center gap-2 text-xs">
+                                                    <span className="text-[9px] font-typewriter font-bold bg-blue-50 text-blue-600 border border-blue-200 px-1.5 py-0.5 rounded">
+                                                        {opp.set_aside_code}
+                                                    </span>
+                                                    <span className="text-stone-700 truncate">{opp.title}</span>
+                                                    <span className="text-stone-400 flex-shrink-0 text-[10px]">{opp.agency}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             ))}
                         </div>
@@ -286,7 +376,6 @@ export default function AnalysisResultsPage() {
                         </span>
                     </h2>
 
-                    {/* Visible Matches */}
                     {visibleMatches.length > 0 ? (
                         <div className="space-y-3">
                             {visibleMatches.map((match) => (
@@ -355,46 +444,71 @@ export default function AnalysisResultsPage() {
                         </div>
                     )}
 
-                    {/* Blurred Matches */}
-                    {blurredMatches.length > 0 && (
-                        <div className="relative mt-3">
-                            <div className="space-y-3 select-none" style={{ filter: "blur(8px)", pointerEvents: "none" }}>
-                                {blurredMatches.map((match) => (
-                                    <div key={match.opportunity_id} className="bg-white border border-stone-200 rounded-2xl p-4 sm:p-5">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-12 h-12 rounded-xl border-2 bg-stone-50 border-stone-200 flex items-center justify-center">
-                                                <span className="font-bold text-sm text-stone-400">{Math.round(match.score * 100)}%</span>
-                                            </div>
-                                            <div>
-                                                <p className="font-bold text-sm text-black line-clamp-1">{match.title || "Government Opportunity"}</p>
-                                                <p className="text-xs text-stone-500">{match.agency || "Federal Agency"}</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-
-                            {/* Overlay CTA */}
-                            <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-b from-transparent via-white/60 to-white rounded-2xl">
-                                <div className="text-center">
-                                    <Lock className="w-8 h-8 text-stone-400 mx-auto mb-3" />
-                                    <p className="font-typewriter font-bold text-lg mb-1">
-                                        +{blurredMatches.length} More Matches Found
-                                    </p>
-                                    <p className="text-sm text-stone-500 mb-4">
-                                        Create a free account to unlock all matches
-                                    </p>
-                                    <Link
-                                        href={`/signup?analysis_id=${analysisId}`}
-                                        className="bg-black text-white px-6 py-3 rounded-full font-bold text-sm inline-flex items-center gap-2 hover:bg-stone-800 transition-all"
-                                    >
-                                        <Zap className="w-4 h-4" /> Create Free Account
-                                    </Link>
-                                </div>
-                            </div>
-                        </div>
+                    {/* See More Toggle */}
+                    {hiddenCount > 0 && (
+                        <button
+                            type="button"
+                            onClick={() => setShowAllMatches(!showAllMatches)}
+                            className="mt-3 w-full bg-stone-50 hover:bg-stone-100 border border-stone-200 rounded-2xl p-3 text-sm font-bold text-stone-600 flex items-center justify-center gap-2 transition-colors"
+                        >
+                            {showAllMatches ? (
+                                <>Show Less <ChevronUp className="w-4 h-4" /></>
+                            ) : (
+                                <>See {hiddenCount} More Matches <ChevronDown className="w-4 h-4" /></>
+                            )}
+                        </button>
                     )}
                 </div>
+
+                {/* NAICS Classification */}
+                {naics.length > 0 && (
+                    <div className="bg-white rounded-[28px] border border-stone-200 shadow-sm overflow-hidden">
+                        <div className="bg-stone-50 border-b border-stone-100 px-5 sm:px-8 py-4">
+                            <h2 className="font-typewriter font-bold text-base flex items-center">
+                                <Target className="w-4 h-4 mr-2 text-stone-400" /> Inferred NAICS Codes
+                            </h2>
+                        </div>
+                        <div className="p-5 sm:p-8 space-y-3">
+                            {naics.map((n) => (
+                                <div key={n.code} className="flex items-center gap-3">
+                                    <span className="font-mono text-sm font-bold bg-stone-100 px-2.5 py-1 rounded border border-stone-200 w-20 text-center flex-shrink-0">
+                                        {n.code}
+                                    </span>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium text-black truncate">{n.label}</p>
+                                        <div className="mt-1 h-1.5 bg-stone-100 rounded-full overflow-hidden">
+                                            <div
+                                                className={clsx(
+                                                    "h-full rounded-full transition-all",
+                                                    n.confidence >= 0.7 ? "bg-emerald-500" : n.confidence >= 0.4 ? "bg-amber-500" : "bg-stone-400"
+                                                )}
+                                                style={{ width: `${Math.round(n.confidence * 100)}%` }}
+                                            />
+                                        </div>
+                                    </div>
+                                    <span className={clsx(
+                                        "text-xs font-bold flex-shrink-0",
+                                        n.confidence >= 0.7 ? "text-emerald-600" : n.confidence >= 0.4 ? "text-amber-600" : "text-stone-500"
+                                    )}>
+                                        {Math.round(n.confidence * 100)}%
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Lead Magnet Mini-Form */}
+                <LeadMagnetForm
+                    analysisId={analysisId}
+                    inferredProfile={data.inferred_profile || {}}
+                    inferredNaics={naics}
+                    onUpdate={(updated) => {
+                        setUpdatedMatches(updated.updated_matches as AnalysisData["preview_matches"]);
+                        setUpdatedCertRecs(updated.cert_recommendations as CertRecommendation[]);
+                        setUpdatedEasyWins(updated.easy_wins as EasyWin[]);
+                    }}
+                />
 
                 {/* Bottom CTAs */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -404,8 +518,8 @@ export default function AnalysisResultsPage() {
                     >
                         <Zap className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />
                         <div>
-                            <p className="font-typewriter font-bold text-sm mb-1">Unlock Full Matches</p>
-                            <p className="text-xs text-stone-400">Create a free account to see all matches, get AI win strategies, and track your pipeline.</p>
+                            <p className="font-typewriter font-bold text-sm mb-1">Create Free Account</p>
+                            <p className="text-xs text-stone-400">Get full match details, AI win strategies, and track your pipeline.</p>
                         </div>
                     </Link>
 
@@ -417,8 +531,8 @@ export default function AnalysisResultsPage() {
                     >
                         <Shield className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
                         <div>
-                            <p className="font-typewriter font-bold text-sm mb-1 text-black">Get Capture Advisory</p>
-                            <p className="text-xs text-stone-500">Book a free strategy call. We&apos;ll review your opportunities and build a win plan.</p>
+                            <p className="font-typewriter font-bold text-sm mb-1 text-black">Book Strategy Call</p>
+                            <p className="text-xs text-stone-500">Free strategy call. We&apos;ll review opportunities and build a win plan.</p>
                         </div>
                     </a>
                 </div>
@@ -432,7 +546,7 @@ export default function AnalysisResultsPage() {
                         className="flex items-center justify-center gap-2 w-full bg-black text-white font-bold text-sm py-4 rounded-2xl hover:bg-stone-800 transition-all shadow-xl"
                     >
                         <CheckCircle2 className="w-4 h-4" />
-                        Create Free Account — Unlock All Matches
+                        Create Free Account — Unlock Full Dashboard
                     </Link>
                 </div>
             </div>

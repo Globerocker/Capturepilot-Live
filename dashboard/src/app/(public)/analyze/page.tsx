@@ -26,9 +26,10 @@ function AnalyzeContent() {
 
         // Animate progress steps on a timer while API call runs
         const stepTimers = [
-            setTimeout(() => setStep(1), 5000),
-            setTimeout(() => setStep(2), 12000),
-            setTimeout(() => setStep(3), 20000),
+            setTimeout(() => setStep(1), 4000),
+            setTimeout(() => setStep(2), 10000),
+            setTimeout(() => setStep(3), 16000),
+            setTimeout(() => setStep(4), 22000),
         ];
 
         // Call the API

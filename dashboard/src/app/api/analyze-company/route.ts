@@ -4,7 +4,8 @@ import { exec } from "child_process";
 import { promisify } from "util";
 import path from "path";
 import { classifyNaics } from "@/lib/naics-classifier";
-import { scoreOpportunity, type ProfileForScoring, type OpportunityForScoring } from "@/lib/match-scoring";
+import { scoreOpportunityLeadMagnet, type ProfileForScoring, type OpportunityForScoring } from "@/lib/match-scoring";
+import { generateCertRecommendations } from "@/lib/cert-recommendations";
 
 const execAsync = promisify(exec);
 
@@ -160,6 +161,128 @@ Certifications: ${certifications.map(c => c.type).join(", ")}`,
 }
 
 // ---------------------------------------------------------------------------
+// USASpending ENRICHMENT
+// ---------------------------------------------------------------------------
+async function lookupUsaSpending(companyName: string): Promise<{ award_count: number; total_value: number; agencies: string[]; naics_from_awards: string[] } | null> {
+    try {
+        const response = await fetch("https://api.usaspending.gov/api/v2/search/spending_by_award/", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                filters: {
+                    recipient_search_text: [companyName],
+                    time_period: [{ start_date: "2019-01-01", end_date: new Date().toISOString().split("T")[0] }],
+                },
+                fields: ["Award ID", "Recipient Name", "Award Amount", "Awarding Agency", "NAICS Code"],
+                limit: 50,
+                page: 1,
+                sort: "Award Amount",
+                order: "desc",
+            }),
+        });
+
+        if (!response.ok) return null;
+        const data = await response.json();
+        const results = (data.results || []) as Array<Record<string, unknown>>;
+        if (results.length === 0) return null;
+
+        const agencies = [...new Set(results.map(r => String(r["Awarding Agency"] || "")).filter(Boolean))];
+        const naicsCodes = [...new Set(results.map(r => String(r["NAICS Code"] || "")).filter(c => c.length >= 4))];
+        const totalValue = results.reduce((sum, r) => sum + (Number(r["Award Amount"]) || 0), 0);
+
+        return { award_count: results.length, total_value: totalValue, agencies, naics_from_awards: naicsCodes };
+    } catch {
+        return null;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// EASY WINS COMPUTATION
+// ---------------------------------------------------------------------------
+interface EasyWin {
+    title: string;
+    description: string;
+    impact: "high" | "medium" | "low";
+    category: string;
+}
+
+function computeEasyWins(
+    crawlData: Record<string, unknown>,
+    samData: Record<string, unknown> | null,
+    inferredNaics: { code: string; confidence: number }[],
+    tempProfile: ProfileForScoring,
+): EasyWin[] {
+    const wins: EasyWin[] = [];
+
+    // No SAM registration
+    if (!samData) {
+        wins.push({
+            title: "Register on SAM.gov",
+            description: "SAM.gov registration is required to bid on federal contracts. Free registration unlocks access to all government opportunities.",
+            impact: "high",
+            category: "registration",
+        });
+    }
+
+    // No certifications
+    if (!tempProfile.sba_certifications || tempProfile.sba_certifications.length === 0) {
+        wins.push({
+            title: "Explore SBA Certifications",
+            description: "SBA certifications like 8(a), HUBZone, or WOSB unlock set-aside contracts with less competition. Many have streamlined application processes.",
+            impact: "high",
+            category: "certifications",
+        });
+    }
+
+    // Low NAICS confidence
+    const avgConf = inferredNaics.length > 0
+        ? inferredNaics.reduce((s, n) => s + n.confidence, 0) / inferredNaics.length
+        : 0;
+    if (avgConf < 0.6 && inferredNaics.length > 0) {
+        wins.push({
+            title: "Verify Your Industry Codes",
+            description: "Your NAICS codes were inferred with low confidence. Confirming the right codes ensures you see the most relevant opportunities.",
+            impact: "medium",
+            category: "profile",
+        });
+    }
+
+    // Only 1 or no target states
+    if (tempProfile.target_states.length <= 1) {
+        wins.push({
+            title: "Expand Your Target States",
+            description: "Adding more target states significantly increases the number of matching opportunities. Many federal contracts allow remote or multi-state performance.",
+            impact: "medium",
+            category: "profile",
+        });
+    }
+
+    // No website contacts
+    const contacts = (crawlData.contacts as { email?: string; phone?: string }[]) || [];
+    if (contacts.length === 0) {
+        wins.push({
+            title: "Add Contact Info to Your Website",
+            description: "Government contracting officers look for easy-to-find contact information. Adding a clear contact page improves your credibility.",
+            impact: "low",
+            category: "website",
+        });
+    }
+
+    // No past performance detected
+    const pastClients = (crawlData.past_clients as string[]) || [];
+    if (pastClients.length === 0 && tempProfile.federal_awards_count === 0) {
+        wins.push({
+            title: "Highlight Past Performance",
+            description: "Even commercial or state/local contracts count. Add a past performance section to your website to strengthen your government contracting position.",
+            impact: "medium",
+            category: "website",
+        });
+    }
+
+    return wins.slice(0, 5);
+}
+
+// ---------------------------------------------------------------------------
 // MAIN HANDLER
 // ---------------------------------------------------------------------------
 export async function POST(request: NextRequest) {
@@ -241,6 +364,17 @@ export async function POST(request: NextRequest) {
             await sb.from("company_analyses").update({ sam_data: samData }).eq("id", analysisId);
         }
 
+        // Step 2.5: USASpending enrichment (if crawl data is thin)
+        let usaspendingData: { award_count: number; total_value: number; agencies: string[]; naics_from_awards: string[] } | null = null;
+        const crawlDescription = (crawlData.description as string) || "";
+        const crawlServices = (crawlData.services as string[]) || [];
+        if (crawlDescription.length < 100 && crawlServices.length < 3) {
+            usaspendingData = await lookupUsaSpending(companyName);
+            if (usaspendingData) {
+                crawlData.usaspending_data = usaspendingData;
+            }
+        }
+
         // Step 3: NAICS classification
         const description = (crawlData.description as string) || "";
         const services = (crawlData.services as string[]) || [];
@@ -269,9 +403,9 @@ export async function POST(request: NextRequest) {
                 ...detectedStates,
             ].filter((v, i, a) => a.indexOf(v) === i),
             revenue: null,
-            federal_awards_count: 0,
+            federal_awards_count: usaspendingData?.award_count || 0,
             target_psc_codes: [],
-            preferred_agencies: [],
+            preferred_agencies: usaspendingData?.agencies || [],
         };
 
         // Step 5: Score against opportunities
@@ -293,11 +427,10 @@ export async function POST(request: NextRequest) {
         const scoredMatches: { opportunity_id: string; title?: string; agency?: string; naics_code?: string; set_aside_code?: string; response_deadline?: string; score: number; classification: string; score_breakdown: Record<string, number> }[] = [];
 
         for (const opp of allOpps) {
-            const result = scoreOpportunity(tempProfile, opp);
+            const result = scoreOpportunityLeadMagnet(tempProfile, opp);
             if (result) {
                 scoredMatches.push({
                     ...result,
-                    // We'll enrich with opp details below
                 });
             }
         }
@@ -327,6 +460,36 @@ export async function POST(request: NextRequest) {
                 }
             }
         }
+
+        // Step 5.5: Certification recommendations
+        // Enrich allOpps with titles for sample opps in cert recs
+        const oppIdsForCerts = allOpps.slice(0, 500).map(o => o.id);
+        const oppTitleMap = new Map<string, string>();
+        if (oppIdsForCerts.length > 0) {
+            for (let i = 0; i < oppIdsForCerts.length; i += 100) {
+                const chunk = oppIdsForCerts.slice(i, i + 100);
+                const { data: titleBatch } = await sb
+                    .from("opportunities")
+                    .select("id, title")
+                    .in("id", chunk);
+                if (titleBatch) {
+                    for (const o of titleBatch) oppTitleMap.set(o.id, o.title);
+                }
+            }
+        }
+        const oppsWithTitles = allOpps.map(o => ({
+            ...o,
+            title: oppTitleMap.get(o.id) || undefined,
+        }));
+
+        const certRecommendations = generateCertRecommendations(
+            tempProfile.sba_certifications,
+            oppsWithTitles,
+            tempProfile.naics_codes,
+        );
+
+        // Step 5.6: Easy wins
+        const easyWins = computeEasyWins(crawlData, samData, inferredNaics, tempProfile);
 
         // Step 6: Generate company summary
         const summary = await generateSummary(companyName, description, services, certifications);
@@ -364,6 +527,8 @@ export async function POST(request: NextRequest) {
             inferred_profile: inferredProfile,
             inferred_naics: inferredNaics,
             crawl_data: crawlData,
+            cert_recommendations: certRecommendations,
+            easy_wins: easyWins,
         }).eq("id", analysisId);
 
         return NextResponse.json({
@@ -375,6 +540,8 @@ export async function POST(request: NextRequest) {
             inferred_naics: inferredNaics,
             preview_matches: topMatches,
             inferred_profile: inferredProfile,
+            cert_recommendations: certRecommendations,
+            easy_wins: easyWins,
             total_matches_found: scoredMatches.length,
         });
 

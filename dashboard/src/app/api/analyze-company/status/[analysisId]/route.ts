@@ -37,6 +37,8 @@ export async function GET(
         inferred_naics: data.inferred_naics,
         preview_matches: data.preview_matches,
         inferred_profile: data.inferred_profile,
+        cert_recommendations: data.cert_recommendations || [],
+        easy_wins: data.easy_wins || [],
         error_message: data.error_message,
         created_at: data.created_at,
     });

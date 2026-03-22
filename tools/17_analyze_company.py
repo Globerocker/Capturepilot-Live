@@ -33,7 +33,7 @@ except ImportError:
 # ---------------------------------------------------------------------------
 # CONSTANTS
 # ---------------------------------------------------------------------------
-MAX_PAGES = 5
+MAX_PAGES = 8
 FETCH_DELAY = 0.3  # seconds between page fetches
 MAX_RESPONSE_SIZE = 2 * 1024 * 1024  # 2MB per page
 REQUEST_TIMEOUT = 10  # seconds per request
@@ -59,6 +59,14 @@ PRIORITY_PAGES = [
     (r"portfolio", 4),
     (r"case.stud", 4),
     (r"product", 4),
+    (r"contract", 8),
+    (r"government", 8),
+    (r"federal", 8),
+    (r"past.perform", 7),
+    (r"certif", 7),
+    (r"award", 6),
+    (r"partner", 5),
+    (r"industr", 5),
 ]
 
 # Private IP ranges to block (SSRF prevention)
@@ -76,6 +84,20 @@ EMAIL_RE = re.compile(r'[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}')
 PHONE_RE = re.compile(r'(\+?1?[-.\s]?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4})')
 YEAR_RE = re.compile(r'(?:established|founded|since|est\.?)\s*(?:in\s+)?(\d{4})', re.IGNORECASE)
 EMPLOYEE_RE = re.compile(r'(\d+)\s*(?:\+\s*)?(?:employees?|team members?|staff|professionals?|people)', re.IGNORECASE)
+REVENUE_RE = re.compile(r'\$\s*(\d+(?:\.\d+)?)\s*(million|billion|M|B|K)\s*(?:in\s+)?(?:revenue|annual|sales)?', re.IGNORECASE)
+REVENUE_RE2 = re.compile(r'(\d+(?:\.\d+)?)\s*(million|billion)\s*(?:in\s+)?(?:revenue|dollar|sales|annual)', re.IGNORECASE)
+
+# Federal agencies to detect as past clients
+FEDERAL_AGENCIES = [
+    "GSA", "DoD", "Department of Defense", "Army", "Navy", "Air Force", "USAF",
+    "Marine Corps", "DHS", "Department of Homeland Security", "VA", "Veterans Affairs",
+    "HHS", "Health and Human Services", "DOE", "Department of Energy",
+    "DOT", "Department of Transportation", "EPA", "USDA", "Department of Agriculture",
+    "DOJ", "Department of Justice", "NASA", "FEMA", "FBI", "ICE", "CBP",
+    "USACE", "Corps of Engineers", "NIH", "CDC", "FAA", "Coast Guard",
+    "Social Security", "IRS", "Treasury", "State Department", "HUD",
+    "Interior", "Commerce", "Labor", "Education", "SBA",
+]
 ADDRESS_RE = re.compile(
     r'(\d{1,5}\s+[\w\s.]+(?:street|st|avenue|ave|road|rd|boulevard|blvd|drive|dr|lane|ln|way|court|ct|circle|place|pl)\.?\s*,?\s*[\w\s]+,?\s*[A-Z]{2}\s*\d{5})',
     re.IGNORECASE
@@ -449,6 +471,106 @@ def extract_leadership(texts, soups):
     return unique[:5]
 
 
+def extract_revenue_signals(texts):
+    """Extract revenue signals from text content."""
+    all_text = " ".join(texts)
+    multipliers = {"million": 1_000_000, "m": 1_000_000, "billion": 1_000_000_000, "b": 1_000_000_000, "k": 1_000}
+
+    for regex in [REVENUE_RE, REVENUE_RE2]:
+        for match in regex.finditer(all_text):
+            amount = float(match.group(1))
+            unit = match.group(2).lower()
+            mult = multipliers.get(unit, 1)
+            estimate = amount * mult
+            if 10_000 <= estimate <= 100_000_000_000:
+                return {"estimate": estimate, "source": "page_text"}
+    return None
+
+
+def extract_past_clients(texts):
+    """Detect mentions of federal agencies as past clients/partners."""
+    all_text = " ".join(texts)
+    found = set()
+
+    # Look for federal agency names in text
+    for agency in FEDERAL_AGENCIES:
+        if len(agency) <= 3:
+            # Short abbreviations need word boundaries
+            if re.search(r'\b' + re.escape(agency) + r'\b', all_text):
+                found.add(agency)
+        else:
+            if agency.lower() in all_text.lower():
+                found.add(agency)
+
+    # Also check near context keywords for relevance
+    context_keywords = ["client", "customer", "partner", "contract", "award", "past performance",
+                        "work with", "served", "supported", "provided"]
+    relevant = set()
+    for agency in found:
+        for kw in context_keywords:
+            # Check if agency and keyword appear within 200 chars of each other
+            agency_pos = all_text.lower().find(agency.lower())
+            kw_pos = all_text.lower().find(kw)
+            if agency_pos >= 0 and kw_pos >= 0 and abs(agency_pos - kw_pos) < 200:
+                relevant.add(agency)
+                break
+
+    # If no contextual matches, return all found (they likely are clients)
+    return list(relevant) if relevant else list(found)[:10]
+
+
+def fetch_linkedin_data(linkedin_url, session):
+    """Best-effort LinkedIn company page scrape. Returns enrichment data or None."""
+    if not linkedin_url:
+        return None
+    try:
+        resp = session.get(
+            linkedin_url,
+            timeout=5,
+            allow_redirects=True,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            },
+        )
+        if resp.status_code != 200:
+            return None
+
+        html = resp.content[:MAX_RESPONSE_SIZE].decode("utf-8", errors="replace")
+        if not HAS_BS4:
+            return None
+
+        soup = BeautifulSoup(html, "html.parser")
+
+        data = {}
+
+        # Try to get description from meta
+        meta_desc = soup.find("meta", attrs={"name": "description"})
+        if meta_desc and meta_desc.get("content"):
+            data["description"] = meta_desc["content"].strip()[:500]
+
+        og_desc = soup.find("meta", attrs={"property": "og:description"})
+        if og_desc and og_desc.get("content") and "description" not in data:
+            data["description"] = og_desc["content"].strip()[:500]
+
+        # Try to find employee count from page text
+        text = soup.get_text(separator=" ", strip=True)
+        emp_match = re.search(r'(\d[\d,]+)\s*(?:employees?|associates|workers)', text, re.IGNORECASE)
+        if emp_match:
+            count = int(emp_match.group(1).replace(",", ""))
+            if 1 <= count <= 500_000:
+                data["employee_count"] = count
+
+        # Industry from meta or text
+        industry_meta = soup.find("meta", attrs={"name": "industry"})
+        if industry_meta and industry_meta.get("content"):
+            data["industry"] = industry_meta["content"].strip()
+
+        return data if data else None
+
+    except Exception:
+        return None
+
+
 # ---------------------------------------------------------------------------
 # MAIN
 # ---------------------------------------------------------------------------
@@ -483,6 +605,9 @@ def main():
             "founding_year": None,
             "leadership": [],
             "social_links": {"linkedin": None, "facebook": None, "twitter": None},
+            "linkedin_data": None,
+            "revenue_signals": None,
+            "past_clients": [],
             "pages_crawled": [],
             "crawl_duration_ms": 0,
         },
@@ -544,6 +669,13 @@ def main():
         result["data"]["employee_signals"] = estimate_employees(all_texts)
         result["data"]["founding_year"] = extract_founding_year(all_texts)
         result["data"]["leadership"] = extract_leadership(all_texts, all_soups)
+        result["data"]["revenue_signals"] = extract_revenue_signals(all_texts)
+        result["data"]["past_clients"] = extract_past_clients(all_texts)
+
+        # LinkedIn enrichment (best-effort)
+        if social_links.get("linkedin"):
+            time.sleep(FETCH_DELAY)
+            result["data"]["linkedin_data"] = fetch_linkedin_data(social_links["linkedin"], session)
 
     except TimeoutError:
         result["errors"].append("Crawl timed out after 60 seconds")

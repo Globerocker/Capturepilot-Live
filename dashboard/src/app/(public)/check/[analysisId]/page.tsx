@@ -4,10 +4,28 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
-    Zap, Building, MapPin, Users, Calendar, Target,
-    ArrowRight, CheckCircle2, Globe, Phone, Mail, Loader2, Briefcase, Shield
+    Zap, MapPin, Users, Calendar, Target,
+    ArrowRight, Globe, Phone, Mail, Loader2, Briefcase, Shield,
+    TrendingUp, Award, ChevronDown, ChevronUp, Clock, Unlock
 } from "lucide-react";
 import clsx from "clsx";
+
+interface CertRecommendation {
+    cert: string;
+    cert_label: string;
+    unlocked_count: number;
+    estimated_value: number;
+    sample_opps: { title: string; agency: string; set_aside_code: string }[];
+    difficulty: "easy" | "moderate" | "complex";
+    timeline: string;
+}
+
+interface EasyWin {
+    title: string;
+    description: string;
+    impact: "high" | "medium" | "low";
+    category: string;
+}
 
 interface AnalysisData {
     id: string;
@@ -41,9 +59,10 @@ interface AnalysisData {
         score: number;
         classification: string;
         score_breakdown: Record<string, number>;
-        full?: boolean;
     }[];
     inferred_profile: Record<string, unknown>;
+    cert_recommendations: CertRecommendation[];
+    easy_wins: EasyWin[];
 }
 
 export default function CheckResultsPage() {
@@ -51,6 +70,7 @@ export default function CheckResultsPage() {
     const [data, setData] = useState<AnalysisData | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
+    const [showAllMatches, setShowAllMatches] = useState(false);
 
     const analysisId = params.analysisId as string;
 
@@ -90,9 +110,25 @@ export default function CheckResultsPage() {
 
     const crawl = data.crawl_data || {};
     const matches = data.preview_matches || [];
+    const visibleMatches = showAllMatches ? matches : matches.slice(0, 5);
+    const hiddenCount = matches.length - 5;
     const naics = data.inferred_naics || [];
     const certs = crawl.certifications || [];
     const hasSam = !!data.sam_data && Object.keys(data.sam_data).length > 0;
+    const easyWins = data.easy_wins || [];
+    const certRecs = data.cert_recommendations || [];
+
+    const impactColors = {
+        high: "bg-red-50 text-red-700 border-red-200",
+        medium: "bg-amber-50 text-amber-700 border-amber-200",
+        low: "bg-blue-50 text-blue-700 border-blue-200",
+    };
+
+    const difficultyColors = {
+        easy: "bg-emerald-50 text-emerald-700 border-emerald-200",
+        moderate: "bg-amber-50 text-amber-700 border-amber-200",
+        complex: "bg-red-50 text-red-700 border-red-200",
+    };
 
     return (
         <div className="min-h-screen bg-stone-50">
@@ -233,45 +269,102 @@ export default function CheckResultsPage() {
                     </div>
                 </div>
 
-                {/* NAICS Classification */}
-                {naics.length > 0 && (
+                {/* Easy Wins Section */}
+                {easyWins.length > 0 && (
                     <div className="bg-white rounded-[28px] border border-stone-200 shadow-sm overflow-hidden">
                         <div className="bg-stone-50 border-b border-stone-100 px-5 sm:px-8 py-4">
                             <h2 className="font-typewriter font-bold text-base flex items-center">
-                                <Target className="w-4 h-4 mr-2 text-stone-400" /> Inferred NAICS Codes
+                                <TrendingUp className="w-4 h-4 mr-2 text-emerald-500" /> Quick Wins to Improve Your Position
                             </h2>
                         </div>
-                        <div className="p-5 sm:p-8 space-y-3">
-                            {naics.map((n) => (
-                                <div key={n.code} className="flex items-center gap-3">
-                                    <span className="font-mono text-sm font-bold bg-stone-100 px-2.5 py-1 rounded border border-stone-200 w-20 text-center flex-shrink-0">
-                                        {n.code}
-                                    </span>
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-medium text-black truncate">{n.label}</p>
-                                        <div className="mt-1 h-1.5 bg-stone-100 rounded-full overflow-hidden">
-                                            <div
-                                                className={clsx(
-                                                    "h-full rounded-full transition-all",
-                                                    n.confidence >= 0.7 ? "bg-emerald-500" : n.confidence >= 0.4 ? "bg-amber-500" : "bg-stone-400"
-                                                )}
-                                                style={{ width: `${Math.round(n.confidence * 100)}%` }}
-                                            />
-                                        </div>
+                        <div className="p-5 sm:p-8 grid gap-3">
+                            {easyWins.map((win, i) => (
+                                <div key={i} className="flex items-start gap-3 p-3 bg-stone-50 rounded-xl border border-stone-100">
+                                    <div className="flex-shrink-0 mt-0.5">
+                                        {win.category === "registration" ? <Shield className="w-5 h-5 text-red-500" /> :
+                                         win.category === "certifications" ? <Award className="w-5 h-5 text-amber-500" /> :
+                                         win.category === "website" ? <Globe className="w-5 h-5 text-blue-500" /> :
+                                         <TrendingUp className="w-5 h-5 text-emerald-500" />}
                                     </div>
-                                    <span className={clsx(
-                                        "text-xs font-bold flex-shrink-0",
-                                        n.confidence >= 0.7 ? "text-emerald-600" : n.confidence >= 0.4 ? "text-amber-600" : "text-stone-500"
-                                    )}>
-                                        {Math.round(n.confidence * 100)}%
-                                    </span>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 mb-0.5">
+                                            <p className="font-bold text-sm text-black">{win.title}</p>
+                                            <span className={clsx(
+                                                "text-[9px] font-typewriter font-bold px-2 py-0.5 rounded border uppercase",
+                                                impactColors[win.impact]
+                                            )}>
+                                                {win.impact}
+                                            </span>
+                                        </div>
+                                        <p className="text-xs text-stone-500 leading-relaxed">{win.description}</p>
+                                    </div>
                                 </div>
                             ))}
                         </div>
                     </div>
                 )}
 
-                {/* ALL Matching Opportunities — No blur, no gate */}
+                {/* Certification Recommendations */}
+                {certRecs.length > 0 && (
+                    <div className="bg-white rounded-[28px] border border-stone-200 shadow-sm overflow-hidden">
+                        <div className="bg-stone-50 border-b border-stone-100 px-5 sm:px-8 py-4">
+                            <h2 className="font-typewriter font-bold text-base flex items-center">
+                                <Unlock className="w-4 h-4 mr-2 text-blue-500" /> Certifications That Could Unlock Opportunities
+                            </h2>
+                        </div>
+                        <div className="p-5 sm:p-8 space-y-4">
+                            {certRecs.map((rec, i) => (
+                                <div key={i} className="border border-stone-200 rounded-xl p-4 hover:border-stone-300 transition-colors">
+                                    <div className="flex items-start justify-between mb-2">
+                                        <div>
+                                            <div className="flex items-center gap-2 mb-0.5">
+                                                <p className="font-bold text-sm text-black">{rec.cert_label}</p>
+                                                <span className={clsx(
+                                                    "text-[9px] font-typewriter font-bold px-2 py-0.5 rounded border uppercase",
+                                                    difficultyColors[rec.difficulty]
+                                                )}>
+                                                    {rec.difficulty}
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center gap-3 text-xs text-stone-500">
+                                                <span className="inline-flex items-center gap-1">
+                                                    <Clock className="w-3 h-3" /> {rec.timeline}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div className="text-right flex-shrink-0">
+                                            <p className="font-black text-lg text-emerald-600">+{rec.unlocked_count}</p>
+                                            <p className="text-[10px] font-typewriter text-stone-400 uppercase">new opps</p>
+                                        </div>
+                                    </div>
+
+                                    {rec.estimated_value > 0 && (
+                                        <p className="text-xs text-stone-500 mb-2">
+                                            Est. value: <span className="font-bold text-stone-700">${(rec.estimated_value / 1000000).toFixed(1)}M</span>
+                                        </p>
+                                    )}
+
+                                    {rec.sample_opps.length > 0 && (
+                                        <div className="space-y-1.5 mt-2 pt-2 border-t border-stone-100">
+                                            <p className="text-[10px] font-typewriter text-stone-400 uppercase">Sample opportunities:</p>
+                                            {rec.sample_opps.map((opp, j) => (
+                                                <div key={j} className="flex items-center gap-2 text-xs">
+                                                    <span className="text-[9px] font-typewriter font-bold bg-blue-50 text-blue-600 border border-blue-200 px-1.5 py-0.5 rounded">
+                                                        {opp.set_aside_code}
+                                                    </span>
+                                                    <span className="text-stone-700 truncate">{opp.title}</span>
+                                                    <span className="text-stone-400 flex-shrink-0 text-[10px]">{opp.agency}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Matching Opportunities */}
                 <div>
                     <h2 className="font-typewriter font-bold text-lg flex items-center mb-4 px-1">
                         <Zap className="w-5 h-5 mr-2" /> Matching Government Opportunities
@@ -280,9 +373,9 @@ export default function CheckResultsPage() {
                         </span>
                     </h2>
 
-                    {matches.length > 0 ? (
+                    {visibleMatches.length > 0 ? (
                         <div className="space-y-3">
-                            {matches.map((match) => (
+                            {visibleMatches.map((match) => (
                                 <div key={match.opportunity_id} className="bg-white border border-stone-200 rounded-2xl p-4 sm:p-5 shadow-sm">
                                     <div className="flex items-start gap-3">
                                         <div className={clsx(
@@ -349,7 +442,60 @@ export default function CheckResultsPage() {
                             <p className="text-stone-400 text-sm">This company may not match any current federal opportunities.</p>
                         </div>
                     )}
+
+                    {/* See More Toggle */}
+                    {hiddenCount > 0 && (
+                        <button
+                            type="button"
+                            onClick={() => setShowAllMatches(!showAllMatches)}
+                            className="mt-3 w-full bg-stone-50 hover:bg-stone-100 border border-stone-200 rounded-2xl p-3 text-sm font-bold text-stone-600 flex items-center justify-center gap-2 transition-colors"
+                        >
+                            {showAllMatches ? (
+                                <>Show Less <ChevronUp className="w-4 h-4" /></>
+                            ) : (
+                                <>See {hiddenCount} More Matches <ChevronDown className="w-4 h-4" /></>
+                            )}
+                        </button>
+                    )}
                 </div>
+
+                {/* NAICS Classification */}
+                {naics.length > 0 && (
+                    <div className="bg-white rounded-[28px] border border-stone-200 shadow-sm overflow-hidden">
+                        <div className="bg-stone-50 border-b border-stone-100 px-5 sm:px-8 py-4">
+                            <h2 className="font-typewriter font-bold text-base flex items-center">
+                                <Target className="w-4 h-4 mr-2 text-stone-400" /> Inferred NAICS Codes
+                            </h2>
+                        </div>
+                        <div className="p-5 sm:p-8 space-y-3">
+                            {naics.map((n) => (
+                                <div key={n.code} className="flex items-center gap-3">
+                                    <span className="font-mono text-sm font-bold bg-stone-100 px-2.5 py-1 rounded border border-stone-200 w-20 text-center flex-shrink-0">
+                                        {n.code}
+                                    </span>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium text-black truncate">{n.label}</p>
+                                        <div className="mt-1 h-1.5 bg-stone-100 rounded-full overflow-hidden">
+                                            <div
+                                                className={clsx(
+                                                    "h-full rounded-full transition-all",
+                                                    n.confidence >= 0.7 ? "bg-emerald-500" : n.confidence >= 0.4 ? "bg-amber-500" : "bg-stone-400"
+                                                )}
+                                                style={{ width: `${Math.round(n.confidence * 100)}%` }}
+                                            />
+                                        </div>
+                                    </div>
+                                    <span className={clsx(
+                                        "text-xs font-bold flex-shrink-0",
+                                        n.confidence >= 0.7 ? "text-emerald-600" : n.confidence >= 0.4 ? "text-amber-600" : "text-stone-500"
+                                    )}>
+                                        {Math.round(n.confidence * 100)}%
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
 
                 {/* Bottom Actions */}
                 <div className="flex flex-col sm:flex-row gap-3 pt-4">
