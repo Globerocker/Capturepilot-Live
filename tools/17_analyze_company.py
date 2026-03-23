@@ -1,7 +1,9 @@
 """
+DEPRECATED: Replaced by dashboard/src/lib/crawler/ (TypeScript CheerioCrawler).
+Kept for reference and rollback. No longer called from route.ts.
+
 Tool 17: Company Website Analyzer for Lead Magnet
 Crawls a company website and extracts structured business data.
-Invoked via subprocess from /api/analyze-company
 
 Usage:
   python3 tools/17_analyze_company.py --company_name "Acme Services" --website "https://acme.com"

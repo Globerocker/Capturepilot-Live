@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  serverExternalPackages: ["@crawlee/cheerio", "@crawlee/core", "@crawlee/http", "@crawlee/basic", "got-scraping"],
   turbopack: {
     root: "/Users/andreschuler/Caturepilot 2.0/dashboard",
   },

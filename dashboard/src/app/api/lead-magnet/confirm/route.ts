@@ -16,9 +16,7 @@ export async function POST(request: NextRequest) {
         if (!analysis_id) {
             return NextResponse.json({ error: "analysis_id is required" }, { status: 400 });
         }
-        if (!email) {
-            return NextResponse.json({ error: "Email is required" }, { status: 400 });
-        }
+        // Email is optional — sales reps may not have it
 
         const sb = createClient(
             process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -157,13 +155,15 @@ export async function POST(request: NextRequest) {
         };
 
         // Save updates
-        await sb.from("company_analyses").update({
-            lead_email: email,
+        const updatePayload: Record<string, unknown> = {
             preview_matches: topMatches,
             inferred_profile: updatedProfile,
             cert_recommendations: certRecommendations,
             easy_wins: easyWins,
-        }).eq("id", analysis_id);
+        };
+        if (email) updatePayload.lead_email = email;
+
+        await sb.from("company_analyses").update(updatePayload).eq("id", analysis_id);
 
         return NextResponse.json({
             updated_matches: topMatches,

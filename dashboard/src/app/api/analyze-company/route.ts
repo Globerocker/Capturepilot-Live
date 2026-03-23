@@ -1,13 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { exec } from "child_process";
-import { promisify } from "util";
-import path from "path";
 import { classifyNaics } from "@/lib/naics-classifier";
 import { scoreOpportunityLeadMagnet, type ProfileForScoring, type OpportunityForScoring } from "@/lib/match-scoring";
 import { generateCertRecommendations } from "@/lib/cert-recommendations";
-
-const execAsync = promisify(exec);
+import { analyzeCompany } from "@/lib/crawler";
 
 export const maxDuration = 120;
 
@@ -370,16 +366,15 @@ export async function POST(request: NextRequest) {
 
         const analysisId = analysis.id;
 
-        // Step 1: Run Python crawler (deeper crawl with sitemap, legal pages, UEI detection)
+        // Step 1: Crawl company website with CheerioCrawler
         let crawlData: Record<string, unknown> = {};
         try {
-            const toolsDir = path.resolve(process.cwd(), "..", "tools");
-            const cmd = `python3 "${toolsDir}/17_analyze_company.py" --company_name "${companyName.replace(/"/g, '\\"')}" --website "${website.replace(/"/g, '\\"')}"`;
-
-            const { stdout } = await execAsync(cmd, { timeout: 80000 });
-            const result = JSON.parse(stdout.trim());
-            if (result.success && result.data) {
-                crawlData = result.data;
+            const crawlResult = await analyzeCompany(companyName, website);
+            if (crawlResult.success && crawlResult.data) {
+                crawlData = crawlResult.data as unknown as Record<string, unknown>;
+            }
+            if (crawlResult.errors.length > 0) {
+                console.warn("Crawl warnings:", crawlResult.errors);
             }
         } catch {
             // Crawler failed - continue with partial data
