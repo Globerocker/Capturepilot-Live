@@ -333,19 +333,21 @@ export async function POST(request: NextRequest) {
 
     try {
         const body = await request.json();
-        const companyName = sanitizeCompanyName(body.company_name || "");
+        let companyName = sanitizeCompanyName(body.company_name || "");
         const website = normalizeUrl(body.website || "");
         let uei = (body.uei || "").trim().toUpperCase();
 
-        // Validate inputs
-        if (!companyName || companyName.length < 2) {
-            return NextResponse.json({ error: "Company name is required" }, { status: 400 });
-        }
+        // Validate inputs — only website is required
         if (!isValidUrl(website)) {
             return NextResponse.json({ error: "Valid website URL is required" }, { status: 400 });
         }
 
         const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+
+        // Use domain as placeholder if no company name provided
+        if (!companyName) {
+            try { companyName = new URL(website).hostname.replace(/^www\./, ""); } catch { companyName = website; }
+        }
 
         // Insert analysis record
         const { data: analysis, error: insertError } = await sb
@@ -380,11 +382,17 @@ export async function POST(request: NextRequest) {
             // Crawler failed - continue with partial data
         }
 
-        // Step 1.5: Auto-detect UEI from crawl data if user didn't provide one
+        // Step 1.5: Auto-detect company name from crawled website
+        const crawledName = crawlData.company_name as string | undefined;
+        if (crawledName && crawledName.length > 1) {
+            companyName = crawledName;
+            await sb.from("company_analyses").update({ company_name: companyName }).eq("id", analysisId);
+        }
+
+        // Step 1.6: Auto-detect UEI from crawl data if user didn't provide one
         const detectedUei = crawlData.detected_uei as string | null;
         if (!uei && detectedUei && detectedUei.length === 12) {
             uei = detectedUei;
-            // Update the analysis record with the detected UEI
             await sb.from("company_analyses").update({ uei }).eq("id", analysisId);
         }
 

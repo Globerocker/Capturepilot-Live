@@ -20,6 +20,30 @@ function findAll(re: RegExp, text: string): RegExpMatchArray[] {
     return [...text.matchAll(copy)];
 }
 
+// ─── Company Name ──────────────────────────────────────────────────────────
+
+export function extractCompanyName(soups: CheerioAPI[]): string {
+    for (const $ of soups) {
+        // og:site_name is the cleanest source
+        const siteName = $('meta[property="og:site_name"]').attr("content");
+        if (siteName?.trim() && siteName.trim().length > 1 && siteName.trim().length < 80) {
+            return siteName.trim();
+        }
+    }
+    for (const $ of soups) {
+        // <title> tag, strip common suffixes like " | Home", " - Welcome"
+        const title = $("title").text().trim();
+        if (title && title.length > 1) {
+            const cleaned = title
+                .replace(/\s*[-–—|]\s*(home|welcome|main|official|website|site).*$/i, "")
+                .replace(/\s*[-–—|]\s*$/, "")
+                .trim();
+            if (cleaned.length > 1 && cleaned.length < 80) return cleaned;
+        }
+    }
+    return "";
+}
+
 // ─── Description ───────────────────────────────────────────────────────────
 
 export function extractDescription(soups: CheerioAPI[], texts: string[]): string {

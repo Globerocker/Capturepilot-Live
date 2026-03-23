@@ -18,6 +18,11 @@ function AnalyzeContent() {
     const website = searchParams.get("website") || "";
     const uei = searchParams.get("uei") || "";
 
+    // Display: company name if provided, otherwise domain
+    const displayName = companyName || (() => {
+        try { return new URL(website.startsWith("http") ? website : `https://${website}`).hostname.replace(/^www\./, ""); } catch { return website; }
+    })();
+
     // Poll status from DB for real progress updates
     const pollStatus = useCallback(() => {
         const id = analysisIdRef.current;
@@ -43,7 +48,7 @@ function AnalyzeContent() {
 
     useEffect(() => {
         if (startedRef.current) return;
-        if (!companyName || !website) {
+        if (!website) {
             router.push("/");
             return;
         }
@@ -149,7 +154,7 @@ function AnalyzeContent() {
                         <span className="font-typewriter font-bold text-lg">CapturePilot</span>
                     </div>
                     <h2 className="font-typewriter font-bold text-xl sm:text-2xl mb-2">
-                        Analyzing {companyName}
+                        Analyzing {displayName}
                     </h2>
                     <p className="text-sm text-stone-500">
                         Deep crawl in progress — this takes 30-90 seconds...

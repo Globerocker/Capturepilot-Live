@@ -10,6 +10,7 @@ export interface CrawlResult {
 }
 
 export interface CrawlData {
+    company_name: string;
     description: string;
     services: string[];
     locations: Array<{ address?: string; state?: string }>;
@@ -34,6 +35,7 @@ export interface CrawlData {
 
 export function emptyData(): CrawlData {
     return {
+        company_name: "",
         description: "",
         services: [],
         locations: [],

@@ -2,42 +2,47 @@
 
 import { useState, Suspense, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Zap, Building, Globe, Search, Loader2 } from "lucide-react";
+import { Zap, Globe, Loader2 } from "lucide-react";
 import { AnalysisProgressStepper } from "@/components/AnalysisProgressStepper";
 
 function CheckContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
-    const [companyName, setCompanyName] = useState("");
     const [website, setWebsite] = useState("");
-    const [uei, setUei] = useState("");
     const [running, setRunning] = useState(false);
     const [step, setStep] = useState(0);
     const [error, setError] = useState("");
+    const [displayName, setDisplayName] = useState("");
     const startedRef = useRef(false);
 
-    // If query params provided, auto-start analysis
-    const autoName = searchParams.get("company_name") || "";
+    // Auto-start if query params provided
     const autoWebsite = searchParams.get("website") || "";
     const autoUei = searchParams.get("uei") || "";
 
     useEffect(() => {
         if (startedRef.current) return;
-        if (autoName && autoWebsite) {
+        if (autoWebsite) {
             startedRef.current = true;
-            setCompanyName(autoName);
             setWebsite(autoWebsite);
-            setUei(autoUei);
-            runAnalysis(autoName, autoWebsite, autoUei);
+            runAnalysis(autoWebsite, autoUei);
         }
-    }, [autoName, autoWebsite, autoUei]);
+    }, [autoWebsite, autoUei]);
 
-    function runAnalysis(name: string, site: string, ueiVal: string) {
+    function getDomain(url: string): string {
+        try {
+            return new URL(url.startsWith("http") ? url : `https://${url}`).hostname.replace(/^www\./, "");
+        } catch { return url; }
+    }
+
+    function runAnalysis(site: string, ueiVal: string) {
+        let url = site.trim();
+        if (!/^https?:\/\//i.test(url)) url = "https://" + url;
+
         setRunning(true);
         setError("");
         setStep(0);
+        setDisplayName(getDomain(url));
 
-        // Timer-based fallback for progress steps (matches deeper crawl timing)
         const stepTimers = [
             setTimeout(() => setStep(prev => Math.max(prev, 1)), 15000),
             setTimeout(() => setStep(prev => Math.max(prev, 2)), 25000),
@@ -49,8 +54,7 @@ function CheckContent() {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-                company_name: name,
-                website: site,
+                website: url,
                 uei: ueiVal || undefined,
             }),
         })
@@ -80,10 +84,8 @@ function CheckContent() {
 
     function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
-        if (!companyName.trim() || !website.trim()) return;
-        let url = website.trim();
-        if (!/^https?:\/\//i.test(url)) url = "https://" + url;
-        runAnalysis(companyName.trim(), url, uei.trim());
+        if (!website.trim()) return;
+        runAnalysis(website.trim(), "");
     }
 
     if (running) {
@@ -96,9 +98,9 @@ function CheckContent() {
                             <span className="font-typewriter font-bold text-lg">CapturePilot</span>
                         </div>
                         <h2 className="font-typewriter font-bold text-xl sm:text-2xl mb-2">
-                            Analyzing {companyName}
+                            Analyzing {displayName}
                         </h2>
-                        <p className="text-sm text-stone-500">Deep crawl in progress — this takes 30-90 seconds...</p>
+                        <p className="text-sm text-stone-500">Crawling website & matching against federal opportunities...</p>
                     </div>
                     <AnalysisProgressStepper currentStep={step} />
                     {error && (
@@ -128,31 +130,14 @@ function CheckContent() {
                         Quick Lead Check
                     </h1>
                     <p className="text-sm text-stone-500">
-                        Enter a company&apos;s details to instantly find matching government contracts.
+                        Enter a company website — we&apos;ll find matching government contracts.
                     </p>
                 </div>
 
                 <form onSubmit={handleSubmit} className="bg-white rounded-[28px] border border-stone-200 shadow-sm p-6 sm:p-8 space-y-4">
                     <div>
                         <label className="block text-xs font-typewriter font-bold text-stone-500 uppercase tracking-widest mb-1.5">
-                            Company Name *
-                        </label>
-                        <div className="relative">
-                            <Building className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
-                            <input
-                                type="text"
-                                value={companyName}
-                                onChange={(e) => setCompanyName(e.target.value)}
-                                className="w-full pl-10 pr-4 py-3 rounded-xl border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-black/10 focus:border-stone-400"
-                                placeholder="Acme Services LLC"
-                                required
-                            />
-                        </div>
-                    </div>
-
-                    <div>
-                        <label className="block text-xs font-typewriter font-bold text-stone-500 uppercase tracking-widest mb-1.5">
-                            Website *
+                            Website
                         </label>
                         <div className="relative">
                             <Globe className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
@@ -160,26 +145,10 @@ function CheckContent() {
                                 type="text"
                                 value={website}
                                 onChange={(e) => setWebsite(e.target.value)}
-                                className="w-full pl-10 pr-4 py-3 rounded-xl border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-black/10 focus:border-stone-400"
-                                placeholder="www.acmeservices.com"
+                                className="w-full pl-10 pr-4 py-3.5 rounded-xl border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-black/10 focus:border-stone-400"
+                                placeholder="www.acmelogistics.com"
                                 required
-                            />
-                        </div>
-                    </div>
-
-                    <div>
-                        <label className="block text-xs font-typewriter font-bold text-stone-500 uppercase tracking-widest mb-1.5">
-                            UEI <span className="text-stone-300 normal-case">(optional)</span>
-                        </label>
-                        <div className="relative">
-                            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
-                            <input
-                                type="text"
-                                value={uei}
-                                onChange={(e) => setUei(e.target.value.toUpperCase())}
-                                className="w-full pl-10 pr-4 py-3 rounded-xl border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-black/10 focus:border-stone-400 font-mono"
-                                placeholder="ABC123DEF456"
-                                maxLength={12}
+                                autoFocus
                             />
                         </div>
                     </div>
@@ -199,7 +168,7 @@ function CheckContent() {
                 </form>
 
                 <p className="text-[10px] text-stone-400 text-center mt-4">
-                    Internal partner tool — all matches shown without gate.
+                    We&apos;ll automatically detect company name, location, and industry.
                 </p>
             </div>
         </div>

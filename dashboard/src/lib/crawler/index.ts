@@ -20,8 +20,8 @@ import {
 import { isPrivateIp, normalizeUrl } from "./ssrf";
 import { discoverSitemapUrls } from "./sitemap";
 import {
-    extractDescription, extractServices, extractContacts, extractLocations,
-    detectCertifications, estimateEmployees, extractFoundingYear,
+    extractCompanyName, extractDescription, extractServices, extractContacts,
+    extractLocations, detectCertifications, estimateEmployees, extractFoundingYear,
     extractLeadership, extractRevenueSignals, extractPastClients,
     detectUei, detectCageCode, extractLegalInfo, fetchLinkedInData,
 } from "./extractors";
@@ -242,6 +242,7 @@ export async function analyzeCompany(
         // ── Phase 4: Data extraction ──────────────────────────────────
         const soups = state.allHtmls.map(html => cheerio.load(html));
 
+        const detectedCompanyName = extractCompanyName(soups);
         const description = extractDescription(soups, state.allTexts);
         const services = extractServices(soups, state.allTexts);
         const { locations, states: detectedStates } = extractLocations(state.allTexts);
@@ -268,6 +269,7 @@ export async function analyzeCompany(
         return {
             success: true,
             data: {
+                company_name: detectedCompanyName,
                 description,
                 services,
                 locations,
