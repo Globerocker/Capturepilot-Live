@@ -64,6 +64,7 @@ interface AnalysisData {
     inferred_profile: Record<string, unknown>;
     cert_recommendations: CertRecommendation[];
     easy_wins: EasyWin[];
+    crawler_confidence?: number;
 }
 
 export default function CheckResultsPage() {
@@ -261,11 +262,23 @@ export default function CheckResultsPage() {
                         {crawl.leadership && crawl.leadership.length > 0 && (
                             <div>
                                 <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-2">Leadership</p>
-                                <div className="flex flex-wrap gap-2">
+                                <div className="space-y-2">
                                     {crawl.leadership.map((l, i) => (
-                                        <span key={i} className="text-xs bg-stone-50 text-stone-700 border border-stone-200 px-3 py-1.5 rounded-lg">
-                                            <span className="font-bold">{l.name}</span> — {l.title}
-                                        </span>
+                                        <div key={i} className="flex items-center gap-2 flex-wrap text-xs bg-stone-50 text-stone-700 border border-stone-200 px-3 py-2 rounded-lg">
+                                            <span className="font-bold">{l.name}</span>
+                                            <span className="text-stone-400">—</span>
+                                            <span>{l.title}</span>
+                                            {(l as { email?: string }).email && (
+                                                <span className="inline-flex items-center gap-1 text-blue-600">
+                                                    <Mail className="w-3 h-3" /> {(l as { email?: string }).email}
+                                                </span>
+                                            )}
+                                            {(l as { phone?: string }).phone && (
+                                                <span className="inline-flex items-center gap-1 text-stone-500">
+                                                    <Phone className="w-3 h-3" /> {(l as { phone?: string }).phone}
+                                                </span>
+                                            )}
+                                        </div>
                                     ))}
                                 </div>
                             </div>
@@ -278,6 +291,7 @@ export default function CheckResultsPage() {
                     analysisId={analysisId}
                     inferredProfile={data.inferred_profile || {}}
                     inferredNaics={naics}
+                    crawlerConfidence={data.crawler_confidence}
                     onUpdate={(updated) => {
                         setUpdatedMatches(updated.updated_matches as AnalysisData["preview_matches"]);
                         setUpdatedCertRecs(updated.cert_recommendations as CertRecommendation[]);

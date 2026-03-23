@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Mail, MapPin, CheckCircle2, Loader2, ChevronRight } from "lucide-react";
+import { Mail, MapPin, CheckCircle2, Loader2, ChevronRight, ChevronDown, Pencil } from "lucide-react";
 import clsx from "clsx";
 
 const US_STATES = [
@@ -25,6 +25,7 @@ interface LeadMagnetFormProps {
     analysisId: string;
     inferredProfile: Record<string, unknown>;
     inferredNaics: { code: string; label: string; confidence: number }[];
+    crawlerConfidence?: number;
     onUpdate?: (data: {
         updated_matches: unknown[];
         cert_recommendations: unknown[];
@@ -33,7 +34,10 @@ interface LeadMagnetFormProps {
     }) => void;
 }
 
-export function LeadMagnetForm({ analysisId, inferredProfile, inferredNaics, onUpdate }: LeadMagnetFormProps) {
+export function LeadMagnetForm({ analysisId, inferredProfile, inferredNaics, crawlerConfidence, onUpdate }: LeadMagnetFormProps) {
+    // Auto-collapse if crawler confidence is high enough
+    const autoConfirmed = (crawlerConfidence ?? 0) >= 0.6;
+    const [collapsed, setCollapsed] = useState(autoConfirmed);
     const [step, setStep] = useState(1);
     const [submitting, setSubmitting] = useState(false);
     const [submitted, setSubmitted] = useState(false);
@@ -117,13 +121,67 @@ export function LeadMagnetForm({ analysisId, inferredProfile, inferredNaics, onU
         );
     }
 
+    // Collapsed state: show summary of what was detected + edit button
+    if (collapsed) {
+        return (
+            <div className="bg-emerald-50 border border-emerald-200 rounded-[28px] overflow-hidden">
+                <div className="px-5 sm:px-8 py-4 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                        <h2 className="font-typewriter font-bold text-sm text-emerald-800">
+                            Profile Auto-Detected
+                        </h2>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => setCollapsed(false)}
+                        className="text-xs font-bold text-emerald-700 hover:text-emerald-900 flex items-center gap-1 bg-emerald-100 px-3 py-1.5 rounded-lg border border-emerald-200 hover:bg-emerald-200 transition-colors"
+                    >
+                        <Pencil className="w-3 h-3" /> Edit
+                    </button>
+                </div>
+                <div className="px-5 sm:px-8 pb-4">
+                    <div className="flex flex-wrap gap-2 text-xs">
+                        {companyName && (
+                            <span className="bg-white border border-emerald-200 px-2.5 py-1 rounded-lg text-emerald-700 font-medium">{companyName}</span>
+                        )}
+                        {state && (
+                            <span className="bg-white border border-emerald-200 px-2.5 py-1 rounded-lg text-emerald-700 font-medium">
+                                <MapPin className="w-3 h-3 inline mr-0.5" />{state}
+                            </span>
+                        )}
+                        {selectedNaics.slice(0, 3).map(code => (
+                            <span key={code} className="bg-white border border-emerald-200 px-2.5 py-1 rounded-lg text-emerald-700 font-mono font-bold">{code}</span>
+                        ))}
+                        {selectedCerts.slice(0, 2).map(cert => (
+                            <span key={cert} className="bg-white border border-emerald-200 px-2.5 py-1 rounded-lg text-emerald-700 font-bold">{cert}</span>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="bg-white rounded-[28px] border border-stone-200 shadow-sm overflow-hidden">
             <div className="bg-blue-50 border-b border-blue-100 px-5 sm:px-8 py-4">
-                <h2 className="font-typewriter font-bold text-base flex items-center text-blue-900">
-                    <CheckCircle2 className="w-4 h-4 mr-2 text-blue-500" /> Review What We Found
-                </h2>
-                <p className="text-xs text-blue-700 mt-0.5">We pre-filled this from your website. Confirm or correct for better matches.</p>
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h2 className="font-typewriter font-bold text-base flex items-center text-blue-900">
+                            <CheckCircle2 className="w-4 h-4 mr-2 text-blue-500" /> Review What We Found
+                        </h2>
+                        <p className="text-xs text-blue-700 mt-0.5">We pre-filled this from your website. Confirm or correct for better matches.</p>
+                    </div>
+                    {autoConfirmed && (
+                        <button
+                            type="button"
+                            onClick={() => setCollapsed(true)}
+                            className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                        >
+                            <ChevronDown className="w-3 h-3" /> Collapse
+                        </button>
+                    )}
+                </div>
             </div>
 
             <div className="p-5 sm:p-8">

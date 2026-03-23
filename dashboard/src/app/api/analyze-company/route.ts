@@ -9,7 +9,7 @@ import { generateCertRecommendations } from "@/lib/cert-recommendations";
 
 const execAsync = promisify(exec);
 
-export const maxDuration = 90;
+export const maxDuration = 120;
 
 const SAM_API_KEY = process.env.SAM_API_KEY || "";
 const SAM_ENTITY_URL = "https://api.sam.gov/entity-information/v3/entities";
@@ -197,6 +197,53 @@ async function lookupUsaSpending(companyName: string): Promise<{ award_count: nu
 }
 
 // ---------------------------------------------------------------------------
+// CRAWLER CONFIDENCE SCORE
+// ---------------------------------------------------------------------------
+function computeCrawlerConfidence(crawlData: Record<string, unknown>, samData: Record<string, unknown> | null): number {
+    let score = 0;
+    let total = 0;
+
+    // Description (weight: 2)
+    total += 2;
+    const desc = (crawlData.description as string) || "";
+    if (desc.length > 200) score += 2;
+    else if (desc.length > 50) score += 1;
+
+    // Services (weight: 2)
+    total += 2;
+    const services = (crawlData.services as string[]) || [];
+    if (services.length >= 5) score += 2;
+    else if (services.length >= 2) score += 1;
+
+    // State detection (weight: 1.5)
+    total += 1.5;
+    const states = (crawlData.detected_states as string[]) || [];
+    if (states.length >= 1) score += 1.5;
+
+    // Contacts (weight: 1)
+    total += 1;
+    const contacts = (crawlData.contacts as { email?: string; phone?: string }[]) || [];
+    if (contacts.some(c => c.email)) score += 0.5;
+    if (contacts.some(c => c.phone)) score += 0.5;
+
+    // Leadership (weight: 1)
+    total += 1;
+    const leadership = (crawlData.leadership as { name: string }[]) || [];
+    if (leadership.length >= 1) score += 1;
+
+    // Certifications (weight: 1)
+    total += 1;
+    const certs = (crawlData.certifications as { type: string }[]) || [];
+    if (certs.length >= 1) score += 1;
+
+    // SAM data (weight: 1.5)
+    total += 1.5;
+    if (samData) score += 1.5;
+
+    return Math.round((score / total) * 100) / 100;
+}
+
+// ---------------------------------------------------------------------------
 // EASY WINS COMPUTATION
 // ---------------------------------------------------------------------------
 interface EasyWin {
@@ -292,7 +339,7 @@ export async function POST(request: NextRequest) {
         const body = await request.json();
         const companyName = sanitizeCompanyName(body.company_name || "");
         const website = normalizeUrl(body.website || "");
-        const uei = (body.uei || "").trim().toUpperCase();
+        let uei = (body.uei || "").trim().toUpperCase();
 
         // Validate inputs
         if (!companyName || companyName.length < 2) {
@@ -323,13 +370,13 @@ export async function POST(request: NextRequest) {
 
         const analysisId = analysis.id;
 
-        // Step 1: Run Python crawler
+        // Step 1: Run Python crawler (deeper crawl with sitemap, legal pages, UEI detection)
         let crawlData: Record<string, unknown> = {};
         try {
             const toolsDir = path.resolve(process.cwd(), "..", "tools");
             const cmd = `python3 "${toolsDir}/17_analyze_company.py" --company_name "${companyName.replace(/"/g, '\\"')}" --website "${website.replace(/"/g, '\\"')}"`;
 
-            const { stdout } = await execAsync(cmd, { timeout: 65000 });
+            const { stdout } = await execAsync(cmd, { timeout: 80000 });
             const result = JSON.parse(stdout.trim());
             if (result.success && result.data) {
                 crawlData = result.data;
@@ -338,9 +385,17 @@ export async function POST(request: NextRequest) {
             // Crawler failed - continue with partial data
         }
 
-        await sb.from("company_analyses").update({ status: "classifying", crawl_data: crawlData }).eq("id", analysisId);
+        // Step 1.5: Auto-detect UEI from crawl data if user didn't provide one
+        const detectedUei = crawlData.detected_uei as string | null;
+        if (!uei && detectedUei && detectedUei.length === 12) {
+            uei = detectedUei;
+            // Update the analysis record with the detected UEI
+            await sb.from("company_analyses").update({ uei }).eq("id", analysisId);
+        }
 
-        // Step 2: SAM.gov lookup (if UEI provided)
+        await sb.from("company_analyses").update({ status: "enriching", crawl_data: crawlData }).eq("id", analysisId);
+
+        // Step 2: SAM.gov lookup (if UEI provided OR detected from website)
         let samData: Record<string, unknown> | null = null;
         if (uei && uei.length === 12) {
             samData = await lookupSamEntity(uei);
@@ -350,24 +405,26 @@ export async function POST(request: NextRequest) {
             await sb.from("company_analyses").update({ sam_data: samData }).eq("id", analysisId);
         }
 
-        // Step 2.5: USASpending enrichment (if crawl data is thin)
+        // Step 2.5: USASpending enrichment (always run for richer data)
         let usaspendingData: { award_count: number; total_value: number; agencies: string[]; naics_from_awards: string[] } | null = null;
-        const crawlDescription = (crawlData.description as string) || "";
-        const crawlServices = (crawlData.services as string[]) || [];
-        if (crawlDescription.length < 100 && crawlServices.length < 3) {
-            usaspendingData = await lookupUsaSpending(companyName);
-            if (usaspendingData) {
-                crawlData.usaspending_data = usaspendingData;
-            }
+        usaspendingData = await lookupUsaSpending(companyName);
+        if (usaspendingData) {
+            crawlData.usaspending_data = usaspendingData;
         }
+
+        await sb.from("company_analyses").update({ status: "classifying" }).eq("id", analysisId);
 
         // Step 3: NAICS classification
         const description = (crawlData.description as string) || "";
         const services = (crawlData.services as string[]) || [];
         const pageContent = (crawlData.pages_crawled as string[])?.join(" ") || "";
         const samNaics = samData ? (samData.naics_codes as string[]) : undefined;
+        // Include NAICS from USASpending awards
+        const usaNaics = usaspendingData?.naics_from_awards || [];
 
-        const inferredNaics = classifyNaics(description, services, pageContent, samNaics);
+        const inferredNaics = classifyNaics(description, services, pageContent,
+            samNaics ? [...samNaics, ...usaNaics].filter((v, i, a) => a.indexOf(v) === i) : usaNaics.length > 0 ? usaNaics : undefined
+        );
 
         await sb.from("company_analyses").update({ status: "scoring", inferred_naics: inferredNaics }).eq("id", analysisId);
 
@@ -484,26 +541,37 @@ export async function POST(request: NextRequest) {
         const contacts = (crawlData.contacts as { email?: string; phone?: string }[]) || [];
         const employeeSignals = crawlData.employee_signals as { estimate: number } | null;
         const foundingYear = crawlData.founding_year as number | null;
+        const leadership = (crawlData.leadership as { name: string; title: string; email?: string; phone?: string }[]) || [];
+
+        // Find primary contact person (CEO/owner) from leadership
+        const primaryLeader = leadership.find(l => {
+            const t = l.title.toLowerCase();
+            return ["ceo", "owner", "president", "founder"].some(k => t.includes(k));
+        }) || leadership[0];
 
         const inferredProfile: Record<string, unknown> = {
             company_name: samData?.company_name || companyName,
             dba_name: samData?.dba_name || null,
             website,
             uei: uei || null,
-            cage_code: samData?.cage_code || null,
+            cage_code: samData?.cage_code || (crawlData.detected_cage_code as string) || null,
             address_line_1: samData?.address_line_1 || null,
-            city: samData?.city || locations[0]?.state ? null : null,
+            city: samData?.city || null,
             state: samData?.state || detectedStates[0] || null,
             zip_code: samData?.zip_code || null,
-            phone: samData?.phone || contacts.find(c => c.phone)?.phone || null,
-            email: contacts.find(c => c.email)?.email || null,
+            phone: samData?.phone || primaryLeader?.phone || contacts.find(c => c.phone)?.phone || null,
+            email: primaryLeader?.email || contacts.find(c => c.email)?.email || null,
             naics_codes: inferredNaics.map(n => n.code),
             sba_certifications: tempProfile.sba_certifications,
             employee_count: employeeSignals?.estimate || null,
             years_in_business: foundingYear ? new Date().getFullYear() - foundingYear : null,
             has_bonding: certifications.some(c => c.type === "bonding"),
             target_states: tempProfile.target_states,
+            contact_person: primaryLeader ? { name: primaryLeader.name, title: primaryLeader.title, email: primaryLeader.email, phone: primaryLeader.phone } : null,
         };
+
+        // Compute crawler confidence score (0-1)
+        const crawlerConfidence = computeCrawlerConfidence(crawlData, samData);
 
         // Step 8: Save everything
         await sb.from("company_analyses").update({
@@ -529,6 +597,7 @@ export async function POST(request: NextRequest) {
             cert_recommendations: certRecommendations,
             easy_wins: easyWins,
             total_matches_found: scoredMatches.length,
+            crawler_confidence: crawlerConfidence,
         });
 
     } catch (error) {

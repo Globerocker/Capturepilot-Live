@@ -8,12 +8,24 @@ interface AnalysisProgressStepperProps {
 }
 
 const steps = [
-    { icon: Globe, label: "Crawling website", description: "Extracting company information..." },
-    { icon: Search, label: "Analyzing services", description: "Identifying capabilities & certifications..." },
-    { icon: Database, label: "Enriching data", description: "Checking federal databases..." },
+    { icon: Globe, label: "Crawling website", description: "Scanning pages, sitemap & legal info..." },
+    { icon: Database, label: "Enriching data", description: "Checking SAM.gov & federal databases..." },
     { icon: Target, label: "Classifying industry", description: "Inferring NAICS codes..." },
-    { icon: Zap, label: "Finding matches", description: "Scoring government opportunities..." },
+    { icon: Search, label: "Scoring matches", description: "Finding matching opportunities..." },
+    { icon: Zap, label: "Generating results", description: "Building recommendations & insights..." },
 ];
+
+// Map API status strings to step numbers
+export function statusToStep(status: string): number {
+    switch (status) {
+        case "crawling": return 0;
+        case "enriching": return 1;
+        case "classifying": return 2;
+        case "scoring": return 3;
+        case "complete": return 5; // All steps done
+        default: return 0;
+    }
+}
 
 export function AnalysisProgressStepper({ currentStep }: AnalysisProgressStepperProps) {
     return (

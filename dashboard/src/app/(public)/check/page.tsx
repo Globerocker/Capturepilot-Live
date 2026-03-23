@@ -37,11 +37,12 @@ function CheckContent() {
         setError("");
         setStep(0);
 
+        // Timer-based fallback for progress steps (matches deeper crawl timing)
         const stepTimers = [
-            setTimeout(() => setStep(1), 4000),
-            setTimeout(() => setStep(2), 10000),
-            setTimeout(() => setStep(3), 16000),
-            setTimeout(() => setStep(4), 22000),
+            setTimeout(() => setStep(prev => Math.max(prev, 1)), 15000),
+            setTimeout(() => setStep(prev => Math.max(prev, 2)), 25000),
+            setTimeout(() => setStep(prev => Math.max(prev, 3)), 35000),
+            setTimeout(() => setStep(prev => Math.max(prev, 4)), 45000),
         ];
 
         fetch("/api/analyze-company", {
@@ -63,6 +64,7 @@ function CheckContent() {
             .then((data) => {
                 stepTimers.forEach(clearTimeout);
                 if (data.analysis_id) {
+                    setStep(5);
                     router.push(`/check/${data.analysis_id}`);
                 } else {
                     setError("Analysis completed but no results returned.");
@@ -96,13 +98,13 @@ function CheckContent() {
                         <h2 className="font-typewriter font-bold text-xl sm:text-2xl mb-2">
                             Analyzing {companyName}
                         </h2>
-                        <p className="text-sm text-stone-500">This usually takes 30-60 seconds...</p>
+                        <p className="text-sm text-stone-500">Deep crawl in progress — this takes 30-90 seconds...</p>
                     </div>
                     <AnalysisProgressStepper currentStep={step} />
                     {error && (
                         <div className="mt-6 bg-red-50 border border-red-200 rounded-2xl p-4 text-center">
                             <p className="text-sm text-red-600 mb-3">{error}</p>
-                            <button onClick={() => { setRunning(false); setError(""); }} className="bg-black text-white px-5 py-2 rounded-xl text-sm font-bold">
+                            <button type="button" onClick={() => { setRunning(false); setError(""); }} className="bg-black text-white px-5 py-2 rounded-xl text-sm font-bold">
                                 Try Again
                             </button>
                         </div>

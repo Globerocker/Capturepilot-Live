@@ -8,7 +8,6 @@ Usage:
 
 Output: JSON to stdout with crawl results
 """
-import os
 import sys
 import re
 import json
@@ -33,13 +32,13 @@ except ImportError:
 # ---------------------------------------------------------------------------
 # CONSTANTS
 # ---------------------------------------------------------------------------
-MAX_PAGES = 8
-FETCH_DELAY = 0.3  # seconds between page fetches
+MAX_PAGES = 15
+FETCH_DELAY = 0.25  # seconds between page fetches
 MAX_RESPONSE_SIZE = 2 * 1024 * 1024  # 2MB per page
 REQUEST_TIMEOUT = 10  # seconds per request
-HARD_TIMEOUT = 60  # seconds total
+HARD_TIMEOUT = 75  # seconds total (raised for deeper crawl)
 
-USER_AGENT = "CapturePilot-Analyzer/1.0 (https://capturepilot.com; B2G company analysis)"
+USER_AGENT = "CapturePilot-Analyzer/2.0 (https://capturepilot.com; B2G company analysis)"
 
 # Pages to prioritize (URL path or anchor text patterns)
 PRIORITY_PAGES = [
@@ -49,9 +48,12 @@ PRIORITY_PAGES = [
     (r"what.we.do", 9),
     (r"solution", 8),
     (r"contact", 7),
-    (r"team", 6),
-    (r"leadership", 6),
+    (r"team", 7),
+    (r"leadership", 7),
     (r"staff", 6),
+    (r"our.people", 7),
+    (r"management", 6),
+    (r"executive", 7),
     (r"career", 5),
     (r"job", 5),
     (r"client", 4),
@@ -67,6 +69,19 @@ PRIORITY_PAGES = [
     (r"award", 6),
     (r"partner", 5),
     (r"industr", 5),
+    # Legal / Imprint pages (for registered agent, legal name, address, UEI)
+    (r"legal", 6),
+    (r"imprint", 6),
+    (r"impressum", 6),
+    (r"privacy", 3),
+    (r"terms", 3),
+    (r"compliance", 5),
+    (r"registration", 5),
+    (r"sam[.\-_]gov", 6),
+    (r"entity", 5),
+    (r"duns", 5),
+    (r"uei", 6),
+    (r"capability.statement", 9),
 ]
 
 # Private IP ranges to block (SSRF prevention)
@@ -86,6 +101,13 @@ YEAR_RE = re.compile(r'(?:established|founded|since|est\.?)\s*(?:in\s+)?(\d{4})'
 EMPLOYEE_RE = re.compile(r'(\d+)\s*(?:\+\s*)?(?:employees?|team members?|staff|professionals?|people)', re.IGNORECASE)
 REVENUE_RE = re.compile(r'\$\s*(\d+(?:\.\d+)?)\s*(million|billion|M|B|K)\s*(?:in\s+)?(?:revenue|annual|sales)?', re.IGNORECASE)
 REVENUE_RE2 = re.compile(r'(\d+(?:\.\d+)?)\s*(million|billion)\s*(?:in\s+)?(?:revenue|dollar|sales|annual)', re.IGNORECASE)
+
+# UEI detection: 12-character alphanumeric, near context words
+UEI_RE = re.compile(r'\b([A-Z0-9]{12})\b')
+UEI_CONTEXT_RE = re.compile(r'(?:UEI|unique\s+entity\s+id(?:entifier)?|SAM\.gov|sam\s+registration|entity\s+id|ueiSAM)', re.IGNORECASE)
+
+# DUNS detection (legacy, 9 digits)
+DUNS_RE = re.compile(r'\b(\d{9})\b')
 
 # Federal agencies to detect as past clients
 FEDERAL_AGENCIES = [
@@ -182,7 +204,7 @@ def fetch_page(url, session):
         )
         # Check content type
         ct = resp.headers.get("Content-Type", "")
-        if "text/html" not in ct and "text/plain" not in ct:
+        if "text/html" not in ct and "text/plain" not in ct and "text/xml" not in ct:
             return None, None
 
         # Check content length
@@ -196,8 +218,8 @@ def fetch_page(url, session):
 
         if HAS_BS4:
             soup = BeautifulSoup(html, "html.parser")
-            # Remove script, style, nav, footer elements
-            for tag in soup.find_all(["script", "style", "nav", "footer", "noscript", "iframe"]):
+            # Remove script, style, nav elements (keep footer - may have legal info)
+            for tag in soup.find_all(["script", "style", "noscript", "iframe"]):
                 tag.decompose()
             text = soup.get_text(separator=" ", strip=True)
         else:
@@ -211,14 +233,64 @@ def fetch_page(url, session):
         return None, None
 
 
-def discover_pages(base_url, soup):
+def fetch_sitemap(base_url, session):
+    """Try to discover pages from sitemap.xml or robots.txt sitemap reference."""
+    urls = []
+    parsed_base = urlparse(base_url)
+    base_domain = parsed_base.netloc.lower()
+
+    # Try sitemap.xml directly
+    sitemap_urls_to_try = [
+        f"{parsed_base.scheme}://{parsed_base.netloc}/sitemap.xml",
+        f"{parsed_base.scheme}://{parsed_base.netloc}/sitemap_index.xml",
+    ]
+
+    # Check robots.txt for sitemap references
+    try:
+        robots_url = f"{parsed_base.scheme}://{parsed_base.netloc}/robots.txt"
+        resp = session.get(robots_url, timeout=5, headers={"User-Agent": USER_AGENT})
+        if resp.status_code == 200:
+            for line in resp.text.splitlines():
+                if line.lower().startswith("sitemap:"):
+                    sitemap_url = line.split(":", 1)[1].strip()
+                    if sitemap_url not in sitemap_urls_to_try:
+                        sitemap_urls_to_try.insert(0, sitemap_url)
+    except Exception:
+        pass
+
+    for sitemap_url in sitemap_urls_to_try[:2]:  # Only try first 2
+        try:
+            resp = session.get(sitemap_url, timeout=5, headers={"User-Agent": USER_AGENT})
+            if resp.status_code != 200:
+                continue
+
+            content = resp.content[:MAX_RESPONSE_SIZE].decode("utf-8", errors="replace")
+
+            # Extract URLs from sitemap XML
+            loc_matches = re.findall(r'<loc>\s*(.*?)\s*</loc>', content, re.IGNORECASE)
+            for loc in loc_matches:
+                parsed_loc = urlparse(loc.strip())
+                if parsed_loc.netloc.lower() == base_domain:
+                    clean = loc.strip().split("#")[0].split("?")[0].rstrip("/")
+                    urls.append(clean)
+
+            if urls:
+                break  # Got URLs from first successful sitemap
+        except Exception:
+            continue
+
+    return list(set(urls))[:50]  # Dedupe, cap at 50
+
+
+def discover_pages(base_url, soup, existing_urls=None):
     """Find internal links worth crawling, scored by priority."""
     if not soup:
         return []
 
     parsed_base = urlparse(base_url)
     base_domain = parsed_base.netloc.lower()
-    seen = {base_url.rstrip("/")}
+    seen = set(existing_urls or [])
+    seen.add(base_url.rstrip("/"))
     candidates = []
 
     for a_tag in soup.find_all("a", href=True):
@@ -236,7 +308,7 @@ def discover_pages(base_url, soup):
             continue
         # Skip file downloads
         ext = parsed.path.rsplit(".", 1)[-1].lower() if "." in parsed.path else ""
-        if ext in ("pdf", "doc", "docx", "xls", "xlsx", "zip", "png", "jpg", "gif", "svg", "css", "js"):
+        if ext in ("pdf", "doc", "docx", "xls", "xlsx", "zip", "png", "jpg", "gif", "svg", "css", "js", "xml"):
             continue
 
         seen.add(abs_url)
@@ -248,12 +320,15 @@ def discover_pages(base_url, soup):
             if re.search(pattern, combined):
                 score = max(score, weight)
 
-        if score > 0:
-            candidates.append((score, abs_url))
+        # Give a minimum score of 1 for any internal page (allows deeper crawling)
+        if score == 0:
+            score = 1
 
-    # Sort by score descending, take top (MAX_PAGES - 1)
+        candidates.append((score, abs_url))
+
+    # Sort by score descending
     candidates.sort(key=lambda x: -x[0])
-    return [url for _, url in candidates[: MAX_PAGES - 1]]
+    return [(s, u) for s, u in candidates]
 
 
 # ---------------------------------------------------------------------------
@@ -437,29 +512,89 @@ def extract_founding_year(texts):
 
 
 def extract_leadership(texts, soups):
-    """Extract leadership names and titles."""
+    """Extract leadership names, titles, and associated contact info."""
     leaders = []
-    all_text = " ".join(texts).lower()
+    all_emails = set()
+    all_phones = set()
 
-    # Look for name+title patterns near title keywords
+    # Collect all emails and phones from text
+    all_text = " ".join(texts)
+    for match in EMAIL_RE.findall(all_text):
+        domain = match.split("@")[1].lower()
+        if domain not in JUNK_EMAIL_DOMAINS:
+            all_emails.add(match.lower())
+
+    for match in PHONE_RE.findall(all_text):
+        clean = re.sub(r'[^\d+]', '', match)
+        if len(clean) >= 10:
+            all_phones.add(match.strip())
+
     for soup in soups:
         if not soup:
             continue
-        for tag in soup.find_all(["div", "section", "article", "li"]):
+
+        # Method 1: Look for structured name+title patterns in divs, sections, cards
+        for tag in soup.find_all(["div", "section", "article", "li", "td", "span", "p"]):
             tag_text = tag.get_text(strip=True)
             tag_lower = tag_text.lower()
+
             for keyword in TITLE_KEYWORDS:
                 if keyword in tag_lower and len(tag_text) < 200:
-                    # Try to split name from title
-                    parts = re.split(r'[-–|,]', tag_text, maxsplit=1)
+                    # Try to split name from title with various separators
+                    parts = re.split(r'[-–—|,\n\r]', tag_text, maxsplit=1)
                     if len(parts) == 2:
                         name = parts[0].strip()
                         title = parts[1].strip()
                         if 3 < len(name) < 50 and 3 < len(title) < 60:
-                            leaders.append({"name": name, "title": title})
+                            leader = {"name": name, "title": title}
+                            # Check parent/sibling elements for associated contact info
+                            parent = tag.parent
+                            if parent:
+                                parent_text = parent.get_text(strip=True)
+                                # Find email near this person
+                                nearby_emails = EMAIL_RE.findall(parent_text)
+                                for em in nearby_emails:
+                                    if em.split("@")[1].lower() not in JUNK_EMAIL_DOMAINS:
+                                        leader["email"] = em.lower()
+                                        break
+                                # Find phone near this person
+                                nearby_phones = PHONE_RE.findall(parent_text)
+                                for ph in nearby_phones:
+                                    clean = re.sub(r'[^\d+]', '', ph)
+                                    if len(clean) >= 10:
+                                        leader["phone"] = ph.strip()
+                                        break
+                            leaders.append(leader)
                     break
 
-    # Deduplicate
+        # Method 2: Look for h3/h4 with name followed by p/span with title
+        for heading in soup.find_all(["h3", "h4", "h5"]):
+            heading_text = heading.get_text(strip=True)
+            if 3 < len(heading_text) < 50 and not any(c in heading_text.lower() for c in ["service", "about", "contact", "our", "meet"]):
+                # Check sibling elements for title
+                sibling = heading.find_next_sibling(["p", "span", "div"])
+                if sibling:
+                    sib_text = sibling.get_text(strip=True)
+                    sib_lower = sib_text.lower()
+                    for keyword in TITLE_KEYWORDS:
+                        if keyword in sib_lower and len(sib_text) < 80:
+                            leader = {"name": heading_text, "title": sib_text}
+                            # Check further siblings for contact
+                            contact_sib = sibling.find_next_sibling(["p", "span", "div", "a"])
+                            if contact_sib:
+                                cs_text = contact_sib.get_text(strip=True)
+                                em = EMAIL_RE.findall(cs_text)
+                                if em and em[0].split("@")[1].lower() not in JUNK_EMAIL_DOMAINS:
+                                    leader["email"] = em[0].lower()
+                                ph = PHONE_RE.findall(cs_text)
+                                if ph:
+                                    clean = re.sub(r'[^\d+]', '', ph[0])
+                                    if len(clean) >= 10:
+                                        leader["phone"] = ph[0].strip()
+                            leaders.append(leader)
+                            break
+
+    # Deduplicate by name
     seen = set()
     unique = []
     for l in leaders:
@@ -467,6 +602,21 @@ def extract_leadership(texts, soups):
         if key not in seen:
             seen.add(key)
             unique.append(l)
+
+    # If we have leaders but no contact info, try to assign emails heuristically
+    if unique and all_emails:
+        company_emails = [e for e in all_emails if not any(
+            generic in e for generic in ["info@", "contact@", "support@", "admin@", "sales@", "hello@", "office@"]
+        )]
+        # If there are personal-looking emails, try to match by first name
+        for leader in unique:
+            if "email" not in leader:
+                first_name = leader["name"].split()[0].lower() if leader["name"] else ""
+                for email in company_emails:
+                    local = email.split("@")[0].lower()
+                    if first_name and len(first_name) > 2 and first_name in local:
+                        leader["email"] = email
+                        break
 
     return unique[:5]
 
@@ -517,6 +667,89 @@ def extract_past_clients(texts):
 
     # If no contextual matches, return all found (they likely are clients)
     return list(relevant) if relevant else list(found)[:10]
+
+
+def detect_uei(texts, soups):
+    """Detect UEI (Unique Entity Identifier) from website content."""
+    all_text = " ".join(texts)
+
+    # Look for UEI in structured data first (schema.org, JSON-LD)
+    for soup in soups:
+        if not soup:
+            continue
+        for script in soup.find_all("script", {"type": "application/ld+json"}):
+            try:
+                ld_text = script.get_text(strip=True)
+                if "uei" in ld_text.lower():
+                    candidates = UEI_RE.findall(ld_text.upper())
+                    for c in candidates:
+                        if any(ch.isalpha() for ch in c) and any(ch.isdigit() for ch in c):
+                            return c
+            except Exception:
+                pass
+
+    # Scan page text: look for UEI context words near 12-char alphanumeric strings
+    # Split text into chunks around UEI context words
+    for match in UEI_CONTEXT_RE.finditer(all_text):
+        start = max(0, match.start() - 100)
+        end = min(len(all_text), match.end() + 100)
+        nearby_text = all_text[start:end].upper()
+
+        candidates = UEI_RE.findall(nearby_text)
+        for c in candidates:
+            # UEI must have mix of letters and digits, and not be a common word
+            if any(ch.isalpha() for ch in c) and any(ch.isdigit() for ch in c):
+                # Reject if it looks like a common pattern (all same char, etc.)
+                if len(set(c)) >= 4:
+                    return c
+
+    # Broader scan: look for "UEI:" or "UEI :" patterns in all text
+    uei_labeled = re.findall(r'UEI\s*[:#]\s*([A-Z0-9]{12})\b', all_text.upper())
+    for candidate in uei_labeled:
+        if any(ch.isalpha() for ch in candidate) and any(ch.isdigit() for ch in candidate):
+            return candidate
+
+    return None
+
+
+def detect_cage_code(texts):
+    """Detect CAGE code (5 alphanumeric characters) from text near context."""
+    all_text = " ".join(texts)
+    cage_context = re.compile(r'(?:CAGE|cage\s+code)\s*[:#]?\s*([A-Z0-9]{5})\b', re.IGNORECASE)
+
+    for match in cage_context.finditer(all_text):
+        candidate = match.group(1).upper()
+        if any(ch.isalpha() for ch in candidate) and any(ch.isdigit() for ch in candidate):
+            return candidate
+
+    return None
+
+
+def extract_legal_info(texts, soups):
+    """Extract legal information from legal/imprint/terms pages."""
+    legal_info = {}
+    all_text = " ".join(texts)
+
+    # Legal entity name (DBA, Registered As, Legal Name)
+    legal_name_re = re.compile(
+        r'(?:legal\s+name|registered\s+(?:as|name)|doing\s+business\s+as|DBA|d\.b\.a\.)\s*[:#]?\s*([A-Z][A-Za-z0-9\s&.,\'-]+)',
+        re.IGNORECASE
+    )
+    match = legal_name_re.search(all_text)
+    if match:
+        name = match.group(1).strip()
+        if 3 < len(name) < 100:
+            legal_info["legal_name"] = name
+
+    # Entity type (LLC, Inc, Corp, etc.)
+    entity_types = re.findall(
+        r'\b(LLC|L\.L\.C\.|Inc\.?|Incorporated|Corp\.?|Corporation|LP|LLP|S-Corp|C-Corp)\b',
+        all_text, re.IGNORECASE
+    )
+    if entity_types:
+        legal_info["entity_type"] = entity_types[0].upper().rstrip(".")
+
+    return legal_info
 
 
 def fetch_linkedin_data(linkedin_url, session):
@@ -608,8 +841,12 @@ def main():
             "linkedin_data": None,
             "revenue_signals": None,
             "past_clients": [],
+            "detected_uei": None,
+            "detected_cage_code": None,
+            "legal_info": {},
             "pages_crawled": [],
             "crawl_duration_ms": 0,
+            "crawl_depth": 0,
         },
         "errors": [],
     }
@@ -630,7 +867,7 @@ def main():
         session.headers.update({"User-Agent": USER_AGENT})
         session.max_redirects = 3
 
-        # Fetch homepage
+        # --------- Phase 1: Homepage ---------
         homepage_soup, homepage_text = fetch_page(website, session)
         if not homepage_text:
             result["success"] = False
@@ -641,19 +878,90 @@ def main():
 
         all_soups = [homepage_soup]
         all_texts = [homepage_text]
+        crawled_urls = {website}
         result["data"]["pages_crawled"].append(website)
 
-        # Discover and fetch subpages
-        subpages = discover_pages(website, homepage_soup)
-        for url in subpages:
+        # --------- Phase 2: Discover pages from homepage + sitemap ---------
+        # Get homepage links
+        homepage_candidates = discover_pages(website, homepage_soup, crawled_urls)
+
+        # Get sitemap URLs
+        sitemap_urls = fetch_sitemap(website, session)
+        sitemap_scored = []
+        for url in sitemap_urls:
+            if url in crawled_urls:
+                continue
+            path = urlparse(url).path.lower()
+            score = 0
+            for pattern, weight in PRIORITY_PAGES:
+                if re.search(pattern, path):
+                    score = max(score, weight)
+            if score > 0:
+                sitemap_scored.append((score, url))
+
+        # Merge homepage links and sitemap, dedupe, sort by score
+        all_candidates = {}
+        for score, url in homepage_candidates:
+            if url not in all_candidates or score > all_candidates[url]:
+                all_candidates[url] = score
+        for score, url in sitemap_scored:
+            if url not in all_candidates or score > all_candidates[url]:
+                all_candidates[url] = score
+
+        # Sort by score descending
+        sorted_candidates = sorted(all_candidates.items(), key=lambda x: -x[1])
+
+        # --------- Phase 3: Crawl top priority pages ---------
+        pages_budget = MAX_PAGES - 1  # Already crawled homepage
+        level1_crawled = []
+
+        for url, score in sorted_candidates:
+            if len(level1_crawled) >= pages_budget:
+                break
+            if time.time() - start_time > HARD_TIMEOUT - 15:
+                break
+
             time.sleep(FETCH_DELAY)
             soup, text = fetch_page(url, session)
             if text:
                 all_soups.append(soup)
                 all_texts.append(text)
+                crawled_urls.add(url)
                 result["data"]["pages_crawled"].append(url)
+                level1_crawled.append((url, soup))
 
-        # Extract data
+        result["data"]["crawl_depth"] = 1
+
+        # --------- Phase 4: Second-level discovery ---------
+        # Crawl links found on level-1 pages (for deeper sites)
+        remaining_budget = MAX_PAGES - len(crawled_urls)
+        if remaining_budget > 0 and time.time() - start_time < HARD_TIMEOUT - 20:
+            level2_candidates = {}
+            for url, soup in level1_crawled:
+                if soup:
+                    for score, sub_url in discover_pages(url, soup, crawled_urls):
+                        if sub_url not in level2_candidates or score > level2_candidates[sub_url]:
+                            level2_candidates[sub_url] = score
+
+            # Only crawl high-priority level-2 pages
+            level2_sorted = sorted(level2_candidates.items(), key=lambda x: -x[1])
+            level2_sorted = [(u, s) for u, s in level2_sorted if s >= 5]  # Only priority >= 5
+
+            for url, score in level2_sorted[:remaining_budget]:
+                if time.time() - start_time > HARD_TIMEOUT - 10:
+                    break
+                time.sleep(FETCH_DELAY)
+                soup, text = fetch_page(url, session)
+                if text:
+                    all_soups.append(soup)
+                    all_texts.append(text)
+                    crawled_urls.add(url)
+                    result["data"]["pages_crawled"].append(url)
+
+            if level2_sorted:
+                result["data"]["crawl_depth"] = 2
+
+        # --------- Phase 5: Extract all data ---------
         result["data"]["description"] = extract_description(all_soups, all_texts)
         result["data"]["services"] = extract_services(all_soups, all_texts)
 
@@ -672,13 +980,20 @@ def main():
         result["data"]["revenue_signals"] = extract_revenue_signals(all_texts)
         result["data"]["past_clients"] = extract_past_clients(all_texts)
 
+        # UEI & CAGE detection
+        result["data"]["detected_uei"] = detect_uei(all_texts, all_soups)
+        result["data"]["detected_cage_code"] = detect_cage_code(all_texts)
+
+        # Legal info extraction
+        result["data"]["legal_info"] = extract_legal_info(all_texts, all_soups)
+
         # LinkedIn enrichment (best-effort)
-        if social_links.get("linkedin"):
+        if social_links.get("linkedin") and time.time() - start_time < HARD_TIMEOUT - 5:
             time.sleep(FETCH_DELAY)
             result["data"]["linkedin_data"] = fetch_linkedin_data(social_links["linkedin"], session)
 
     except TimeoutError:
-        result["errors"].append("Crawl timed out after 60 seconds")
+        result["errors"].append(f"Crawl timed out after {HARD_TIMEOUT} seconds")
     except Exception as e:
         result["errors"].append(f"Crawl error: {str(e)}")
 
