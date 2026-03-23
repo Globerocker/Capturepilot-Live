@@ -93,6 +93,24 @@ async function lookupSamEntity(uei: string) {
         const govPoc = (pocs.governmentBusinessPOC || {}) as Record<string, unknown>;
         const elecPoc = (pocs.electronicBusinessPOC || {}) as Record<string, unknown>;
 
+        // Extract key account holder from SAM.gov POC data
+        const pocEntries: { name: string; title: string; email?: string; phone?: string }[] = [];
+        for (const [pocType, poc] of Object.entries(pocs)) {
+            if (!poc || typeof poc !== "object") continue;
+            const p = poc as Record<string, unknown>;
+            const firstName = String(p.firstName || "").trim();
+            const lastName = String(p.lastName || "").trim();
+            const fullName = [firstName, lastName].filter(Boolean).join(" ");
+            if (fullName.length < 3) continue;
+            const title = String(p.title || pocType.replace(/POC$/i, "").replace(/([A-Z])/g, " $1").trim() || "");
+            pocEntries.push({
+                name: fullName,
+                title,
+                email: String(p.USPhoneExtension ? "" : p.emailAddress || "").trim() || undefined,
+                phone: String(p.USPhoneNumber || "").trim() || undefined,
+            });
+        }
+
         return {
             uei: String(reg.ueiSAM || ""),
             cage_code: String(reg.cageCode || ""),
@@ -106,6 +124,7 @@ async function lookupSamEntity(uei: string) {
             phone: String(govPoc.USPhoneNumber || elecPoc.USPhoneNumber || ""),
             naics_codes: naicsCodes,
             sba_certifications: certs,
+            points_of_contact: pocEntries,
         };
     } catch {
         return null;

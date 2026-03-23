@@ -79,6 +79,7 @@ interface AnalysisData {
         phone?: string;
         naics_codes?: string[];
         sba_certifications?: string[];
+        points_of_contact?: { name: string; title: string; email?: string; phone?: string }[];
     } | null;
     inferred_naics: { code: string; label: string; confidence: number; matched_keywords: string[] }[];
     preview_matches: MatchData[];
@@ -345,7 +346,7 @@ export default function CheckResultsPage() {
     };
 
     const handleExportPdf = () => {
-        window.print();
+        window.open(`/api/prospects/pdf/${analysisId}`, "_blank");
     };
 
     const crawl = data.crawl_data || {};
@@ -360,7 +361,9 @@ export default function CheckResultsPage() {
     const profile = data.inferred_profile || {};
     const social = crawl.social_links || {};
     const leadership = crawl.leadership || [];
-    const contactPerson = profile.contact_person;
+    const samPocs = sam?.points_of_contact || [];
+    // Best key person: inferred contact_person > SAM.gov POC > crawler leadership
+    const contactPerson = profile.contact_person || samPocs[0] || leadership[0] || null;
     const uei = sam?.uei || profile.uei || null;
     const cageCode = sam?.cage_code || profile.cage_code || null;
 
@@ -515,11 +518,12 @@ export default function CheckResultsPage() {
                             </div>
                         )}
 
-                        {/* Key Contact / CEO */}
+                        {/* Key Account Holder */}
                         {(contactPerson || leadership.length > 0) && (
                             <div>
                                 <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-2">
-                                    <User className="w-3 h-3 inline mr-1" />Key Contact
+                                    <User className="w-3 h-3 inline mr-1" />Key Account Holder
+                                    {samPocs.length > 0 && <span className="ml-2 text-emerald-500">(SAM.gov)</span>}
                                 </p>
                                 {(() => {
                                     const person = contactPerson || leadership[0];
@@ -554,28 +558,37 @@ export default function CheckResultsPage() {
                                         </div>
                                     );
                                 })()}
-                                {/* Additional leadership */}
-                                {leadership.length > 1 && (
-                                    <div className="mt-2 space-y-1.5">
-                                        {leadership.slice(1, 4).map((l, i) => (
-                                            <div key={i} className="flex items-center gap-2 flex-wrap text-xs text-stone-600 px-3 py-1.5">
-                                                <span className="font-bold">{l.name}</span>
-                                                <span className="text-stone-400">—</span>
-                                                <span>{l.title}</span>
-                                                {l.email && (
-                                                    <a href={`mailto:${l.email}`} title={`Email ${l.name}`} className="text-blue-600 hover:underline inline-flex items-center gap-1 ml-1">
-                                                        <Mail className="w-3 h-3" /> <span className="sr-only">Email</span>
-                                                    </a>
-                                                )}
-                                                {l.phone && (
-                                                    <a href={`tel:${l.phone}`} title={`Call ${l.name}`} className="text-blue-600 hover:underline inline-flex items-center gap-1">
-                                                        <Phone className="w-3 h-3" /> <span className="sr-only">Call</span>
-                                                    </a>
-                                                )}
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
+                                {/* Additional contacts (SAM POCs + crawler leadership, deduplicated) */}
+                                {(() => {
+                                    const mainName = contactPerson?.name?.toLowerCase() || "";
+                                    const others = [
+                                        ...samPocs.filter(p => p.name.toLowerCase() !== mainName).map(p => ({ ...p, source: "SAM.gov" as const })),
+                                        ...leadership.filter(l => l.name.toLowerCase() !== mainName && !samPocs.some(s => s.name.toLowerCase() === l.name.toLowerCase())).map(l => ({ ...l, source: "Website" as const })),
+                                    ].slice(0, 3);
+                                    if (others.length === 0) return null;
+                                    return (
+                                        <div className="mt-2 space-y-1.5">
+                                            {others.map((l, i) => (
+                                                <div key={i} className="flex items-center gap-2 flex-wrap text-xs text-stone-600 px-3 py-1.5">
+                                                    <span className="font-bold">{l.name}</span>
+                                                    <span className="text-stone-400">—</span>
+                                                    <span>{l.title}</span>
+                                                    <span className="text-[9px] text-stone-300">({l.source})</span>
+                                                    {l.email && (
+                                                        <a href={`mailto:${l.email}`} title={`Email ${l.name}`} className="text-blue-600 hover:underline inline-flex items-center gap-1 ml-1">
+                                                            <Mail className="w-3 h-3" /> <span className="sr-only">Email</span>
+                                                        </a>
+                                                    )}
+                                                    {l.phone && (
+                                                        <a href={`tel:${l.phone}`} title={`Call ${l.name}`} className="text-blue-600 hover:underline inline-flex items-center gap-1">
+                                                            <Phone className="w-3 h-3" /> <span className="sr-only">Call</span>
+                                                        </a>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    );
+                                })()}
                             </div>
                         )}
 
