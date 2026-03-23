@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { Mail, MapPin, CheckCircle2, Loader2, Pencil, RefreshCw } from "lucide-react";
+import { useState, useMemo } from "react";
+import { Mail, MapPin, CheckCircle2, Loader2, Pencil, RefreshCw, Search, Plus } from "lucide-react";
 import clsx from "clsx";
+import { NAICS_CODES } from "@/lib/naics-codes";
 
 const US_STATES = [
     "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA",
@@ -35,12 +36,14 @@ interface LeadMagnetFormProps {
 }
 
 export function LeadMagnetForm({ analysisId, inferredProfile, inferredNaics, crawlerConfidence, onUpdate }: LeadMagnetFormProps) {
-    // Auto-collapse if crawler confidence is high enough
-    const autoConfirmed = (crawlerConfidence ?? 0) >= 0.6;
+    // Auto-collapse if crawler confidence is high enough AND we have NAICS
+    const autoConfirmed = (crawlerConfidence ?? 0) >= 0.6 && inferredNaics.length > 0;
     const [collapsed, setCollapsed] = useState(autoConfirmed);
     const [submitting, setSubmitting] = useState(false);
     const [submitted, setSubmitted] = useState(false);
     const [error, setError] = useState("");
+    const [naicsSearch, setNaicsSearch] = useState("");
+    const [showNaicsPicker, setShowNaicsPicker] = useState(inferredNaics.length === 0);
 
     // Pre-fill from inferred profile
     const [companyName, setCompanyName] = useState(
@@ -59,10 +62,32 @@ export function LeadMagnetForm({ analysisId, inferredProfile, inferredNaics, cra
         (inferredProfile.sba_certifications as string[]) || []
     );
 
+    // Build the full list of NAICS options: inferred first, then browsable catalog
+    const inferredCodes = new Set(inferredNaics.map(n => n.code));
+
+    // Filtered NAICS for the picker (search or popular)
+    const filteredNaics = useMemo(() => {
+        const q = naicsSearch.trim().toLowerCase();
+        if (!q) {
+            // Show popular codes not already in inferred list
+            return NAICS_CODES.filter(n => n.popular && !inferredCodes.has(n.code) && !selectedNaics.includes(n.code));
+        }
+        return NAICS_CODES.filter(n =>
+            !inferredCodes.has(n.code) &&
+            !selectedNaics.includes(n.code) &&
+            (n.code.includes(q) || n.label.toLowerCase().includes(q))
+        );
+    }, [naicsSearch, inferredCodes, selectedNaics]);
+
     function toggleNaics(code: string) {
         setSelectedNaics(prev =>
             prev.includes(code) ? prev.filter(c => c !== code) : [...prev, code]
         );
+    }
+
+    function addNaics(code: string) {
+        setSelectedNaics(prev => prev.includes(code) ? prev : [...prev, code]);
+        setNaicsSearch("");
     }
 
     function toggleCert(key: string) {
@@ -106,6 +131,14 @@ export function LeadMagnetForm({ analysisId, inferredProfile, inferredNaics, cra
         } finally {
             setSubmitting(false);
         }
+    }
+
+    // Get label for a NAICS code
+    function naicsLabel(code: string): string {
+        const inferred = inferredNaics.find(n => n.code === code);
+        if (inferred) return inferred.label;
+        const fromList = NAICS_CODES.find(n => n.code === code);
+        return fromList?.label || code;
     }
 
     if (submitted) {
@@ -221,31 +254,115 @@ export function LeadMagnetForm({ analysisId, inferredProfile, inferredNaics, cra
                     <label className="block text-xs font-typewriter font-bold text-stone-500 uppercase tracking-widest mb-1.5">
                         Industry Codes (NAICS) — select all that apply
                     </label>
-                    <div className="space-y-1.5">
-                        {inferredNaics.map(n => (
-                            <label key={n.code} className={clsx(
-                                "flex items-center gap-2.5 p-2.5 rounded-lg cursor-pointer border transition-colors",
-                                selectedNaics.includes(n.code) ? "bg-blue-50 border-blue-200" : "bg-white border-stone-100 hover:bg-stone-50"
-                            )}>
+
+                    {/* Selected NAICS chips (always visible) */}
+                    {selectedNaics.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mb-3">
+                            {selectedNaics.map(code => {
+                                const inf = inferredNaics.find(n => n.code === code);
+                                return (
+                                    <button
+                                        key={code}
+                                        type="button"
+                                        onClick={() => toggleNaics(code)}
+                                        className="flex items-center gap-1.5 bg-blue-50 text-blue-800 border border-blue-200 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors group"
+                                        title={`Click to remove ${code}`}
+                                    >
+                                        <span className="font-mono">{code}</span>
+                                        <span className="text-blue-600 group-hover:text-red-500">{naicsLabel(code)}</span>
+                                        {inf && (
+                                            <span className={clsx(
+                                                "text-[10px] px-1 py-0.5 rounded ml-0.5",
+                                                inf.confidence >= 0.7 ? "text-emerald-600 bg-emerald-50" :
+                                                inf.confidence >= 0.4 ? "text-amber-600 bg-amber-50" :
+                                                "text-stone-400 bg-stone-50"
+                                            )}>
+                                                {Math.round(inf.confidence * 100)}%
+                                            </span>
+                                        )}
+                                        <span className="text-stone-300 group-hover:text-red-400 text-[10px]">✕</span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    )}
+
+                    {/* Inferred NAICS checkboxes (only for unselected inferred codes) */}
+                    {inferredNaics.filter(n => !selectedNaics.includes(n.code)).length > 0 && (
+                        <div className="space-y-1.5 mb-3">
+                            <p className="text-[10px] text-stone-400 uppercase tracking-wider font-bold">Detected from website</p>
+                            {inferredNaics.filter(n => !selectedNaics.includes(n.code)).map(n => (
+                                <button
+                                    key={n.code}
+                                    type="button"
+                                    onClick={() => addNaics(n.code)}
+                                    className="flex items-center gap-2.5 p-2.5 rounded-lg cursor-pointer border border-stone-100 hover:bg-blue-50 hover:border-blue-200 transition-colors w-full text-left"
+                                >
+                                    <Plus className="w-3.5 h-3.5 text-stone-400" />
+                                    <span className="font-mono text-xs font-bold text-stone-500">{n.code}</span>
+                                    <span className="text-sm text-stone-700 flex-1">{n.label}</span>
+                                    <span className={clsx(
+                                        "text-[10px] font-typewriter font-bold px-1.5 py-0.5 rounded",
+                                        n.confidence >= 0.7 ? "text-emerald-600 bg-emerald-50" :
+                                        n.confidence >= 0.4 ? "text-amber-600 bg-amber-50" :
+                                        "text-stone-400 bg-stone-50"
+                                    )}>
+                                        {Math.round(n.confidence * 100)}%
+                                    </span>
+                                </button>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Add more NAICS — search picker */}
+                    {!showNaicsPicker && (
+                        <button
+                            type="button"
+                            onClick={() => setShowNaicsPicker(true)}
+                            className="text-xs text-blue-600 hover:text-blue-800 font-bold flex items-center gap-1"
+                        >
+                            <Plus className="w-3 h-3" /> Add more industry codes
+                        </button>
+                    )}
+
+                    {showNaicsPicker && (
+                        <div className="border border-stone-200 rounded-xl overflow-hidden">
+                            <div className="relative">
+                                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
                                 <input
-                                    type="checkbox"
-                                    checked={selectedNaics.includes(n.code)}
-                                    onChange={() => toggleNaics(n.code)}
-                                    className="w-4 h-4 rounded border-stone-300 text-black focus:ring-black"
+                                    type="text"
+                                    value={naicsSearch}
+                                    onChange={(e) => setNaicsSearch(e.target.value)}
+                                    placeholder="Search by code or industry name..."
+                                    className="w-full pl-9 pr-4 py-2.5 text-sm border-b border-stone-200 focus:outline-none focus:ring-2 focus:ring-blue-100"
                                 />
-                                <span className="font-mono text-xs font-bold text-stone-500">{n.code}</span>
-                                <span className="text-sm text-stone-700 flex-1">{n.label}</span>
-                                <span className={clsx(
-                                    "text-[10px] font-typewriter font-bold px-1.5 py-0.5 rounded",
-                                    n.confidence >= 0.7 ? "text-emerald-600 bg-emerald-50" :
-                                    n.confidence >= 0.4 ? "text-amber-600 bg-amber-50" :
-                                    "text-stone-400 bg-stone-50"
-                                )}>
-                                    {Math.round(n.confidence * 100)}%
-                                </span>
-                            </label>
-                        ))}
-                    </div>
+                            </div>
+                            <div className="max-h-48 overflow-y-auto">
+                                {filteredNaics.length === 0 ? (
+                                    <p className="text-xs text-stone-400 p-3 text-center">
+                                        {naicsSearch ? "No matching codes found" : "All popular codes already selected"}
+                                    </p>
+                                ) : (
+                                    filteredNaics.slice(0, 15).map(n => (
+                                        <button
+                                            key={n.code}
+                                            type="button"
+                                            onClick={() => addNaics(n.code)}
+                                            className="flex items-center gap-2.5 px-3 py-2 hover:bg-blue-50 transition-colors w-full text-left border-b border-stone-50 last:border-0"
+                                        >
+                                            <Plus className="w-3.5 h-3.5 text-blue-500" />
+                                            <span className="font-mono text-xs font-bold text-stone-500">{n.code}</span>
+                                            <span className="text-sm text-stone-700">{n.label}</span>
+                                        </button>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {selectedNaics.length === 0 && (
+                        <p className="text-xs text-amber-600 mt-2">Select at least one NAICS code to find matching opportunities.</p>
+                    )}
                 </div>
 
                 {/* SBA Certifications — compact inline chips */}
