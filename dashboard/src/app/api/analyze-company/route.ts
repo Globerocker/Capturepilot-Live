@@ -302,21 +302,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: "Valid website URL is required" }, { status: 400 });
         }
 
-        // Rate limiting: max 20 analyses per IP per hour
         const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-        const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-        const { count } = await sb
-            .from("company_analyses")
-            .select("id", { count: "exact", head: true })
-            .eq("ip_address", ip)
-            .gte("created_at", oneHourAgo);
-
-        if ((count || 0) >= 20) {
-            return NextResponse.json(
-                { error: "Rate limit exceeded. Please try again later." },
-                { status: 429 }
-            );
-        }
 
         // Insert analysis record
         const { data: analysis, error: insertError } = await sb
