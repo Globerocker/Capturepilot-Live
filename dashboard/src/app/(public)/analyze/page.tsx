@@ -10,41 +10,61 @@ function AnalyzeContent() {
     const searchParams = useSearchParams();
     const [step, setStep] = useState(0);
     const [error, setError] = useState("");
+    const [displayName, setDisplayName] = useState("");
     const startedRef = useRef(false);
-    const analysisIdRef = useRef<string | null>(null);
     const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     const companyName = searchParams.get("company_name") || "";
     const website = searchParams.get("website") || "";
     const uei = searchParams.get("uei") || "";
 
-    // Display: company name if provided, otherwise domain
-    const displayName = companyName || (() => {
-        try { return new URL(website.startsWith("http") ? website : `https://${website}`).hostname.replace(/^www\./, ""); } catch { return website; }
-    })();
+    function getDomain(url: string): string {
+        try { return new URL(url.startsWith("http") ? url : `https://${url}`).hostname.replace(/^www\./, ""); } catch { return url; }
+    }
 
-    // Poll status from DB for real progress updates
-    const pollStatus = useCallback(() => {
-        const id = analysisIdRef.current;
-        if (!id) return;
+    const stopPolling = useCallback(() => {
+        if (pollRef.current) {
+            clearInterval(pollRef.current);
+            pollRef.current = null;
+        }
+    }, []);
+
+    // Poll the status endpoint for real progress
+    const startPolling = useCallback((id: string) => {
+        stopPolling();
 
         pollRef.current = setInterval(async () => {
             try {
                 const res = await fetch(`/api/analyze-company/status/${id}`);
                 if (!res.ok) return;
                 const data = await res.json();
+
+                // Update display name when crawler detects it
+                if (data.company_name && data.company_name.length > 1) {
+                    const domain = getDomain(website);
+                    if (data.company_name !== domain) {
+                        setDisplayName(data.company_name);
+                    }
+                }
+
+                if (data.status === "error") {
+                    stopPolling();
+                    setError(data.error_message || "Analysis failed. Please try again.");
+                    return;
+                }
+
                 const newStep = statusToStep(data.status);
                 setStep(newStep);
 
                 if (data.status === "complete") {
-                    if (pollRef.current) clearInterval(pollRef.current);
+                    stopPolling();
                     router.push(`/analyze/${id}`);
                 }
             } catch {
-                // Ignore poll errors, the main API call will handle failures
+                // Ignore transient poll errors
             }
         }, 2000);
-    }, [router]);
+    }, [router, stopPolling, website]);
 
     useEffect(() => {
         if (startedRef.current) return;
@@ -53,18 +73,14 @@ function AnalyzeContent() {
             return;
         }
         startedRef.current = true;
+        setDisplayName(companyName || getDomain(website));
 
-        // Fallback timer: ensure at least step 0 shows immediately
-        const fallbackTimer = setTimeout(() => {
-            if (step === 0) setStep(0); // Keep at crawling
-        }, 1000);
-
-        // Call the API
+        // POST to API — returns analysis_id immediately, processes in background
         fetch("/api/analyze-company", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-                company_name: companyName,
+                company_name: companyName || undefined,
                 website,
                 uei: uei || undefined,
             }),
@@ -77,50 +93,19 @@ function AnalyzeContent() {
                 return res.json();
             })
             .then((data) => {
-                clearTimeout(fallbackTimer);
-                if (pollRef.current) clearInterval(pollRef.current);
                 if (data.analysis_id) {
-                    setStep(5); // All complete
-                    router.push(`/analyze/${data.analysis_id}`);
+                    startPolling(data.analysis_id);
                 } else {
-                    setError("Analysis completed but no results were returned.");
+                    setError("Failed to start analysis.");
                 }
             })
             .catch((err) => {
-                clearTimeout(fallbackTimer);
-                if (pollRef.current) clearInterval(pollRef.current);
                 setError(err.message || "Something went wrong. Please try again.");
             });
 
-        return () => {
-            clearTimeout(fallbackTimer);
-            if (pollRef.current) clearInterval(pollRef.current);
-        };
-    }, [companyName, website, uei, router, step, pollStatus]);
-
-    // Start polling once we have an analysis ID (from initial insert)
-    // We get the ID early since the API creates the record before starting the crawl
-    useEffect(() => {
-        if (!startedRef.current || analysisIdRef.current) return;
-
-        // Poll for any recent analysis for this company
-        const checkForId = async () => {
-            try {
-                // The main API call will return the ID when done.
-                // For now, use a timer-based fallback for the first ~15 seconds (crawl phase)
-                const timers = [
-                    setTimeout(() => setStep(prev => Math.max(prev, 1)), 15000), // enriching after 15s
-                    setTimeout(() => setStep(prev => Math.max(prev, 2)), 25000), // classifying after 25s
-                    setTimeout(() => setStep(prev => Math.max(prev, 3)), 35000), // scoring after 35s
-                    setTimeout(() => setStep(prev => Math.max(prev, 4)), 45000), // generating after 45s
-                ];
-                return () => timers.forEach(clearTimeout);
-            } catch {
-                // ignore
-            }
-        };
-        checkForId();
-    }, []);
+        return () => stopPolling();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [website]);
 
     if (error) {
         return (

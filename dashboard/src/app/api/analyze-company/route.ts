@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { classifyNaics } from "@/lib/naics-classifier";
 import { scoreOpportunityLeadMagnet, type ProfileForScoring, type OpportunityForScoring } from "@/lib/match-scoring";
@@ -34,6 +34,10 @@ function normalizeUrl(url: string): string {
         url = "https://" + url;
     }
     return url.replace(/\/+$/, "");
+}
+
+function makeDb() {
+    return createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 }
 
 // ---------------------------------------------------------------------------
@@ -103,6 +107,39 @@ async function lookupSamEntity(uei: string) {
             naics_codes: naicsCodes,
             sba_certifications: certs,
         };
+    } catch {
+        return null;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// SAM.gov COMPANY NAME SEARCH — find UEI by company name
+// ---------------------------------------------------------------------------
+async function searchSamByName(companyName: string): Promise<string | null> {
+    if (!SAM_API_KEY || !companyName || companyName.length < 3) return null;
+
+    try {
+        const params = new URLSearchParams({
+            legalBusinessName: companyName,
+            registrationStatus: "A",
+            includeSections: "entityRegistration",
+            api_key: SAM_API_KEY,
+        });
+
+        const response = await fetch(`${SAM_ENTITY_URL}?${params.toString()}`, {
+            headers: { "X-Api-Key": SAM_API_KEY },
+        });
+
+        if (!response.ok) return null;
+
+        const data = await response.json();
+        const entities = (data.entityData || []) as Array<Record<string, unknown>>;
+        if (entities.length === 0) return null;
+
+        // Return the UEI of the first (best) match
+        const reg = (entities[0].entityRegistration || {}) as Record<string, unknown>;
+        const uei = String(reg.ueiSAM || "");
+        return uei.length === 12 ? uei : null;
     } catch {
         return null;
     }
@@ -326,48 +363,14 @@ function computeEasyWins(
 }
 
 // ---------------------------------------------------------------------------
-// MAIN HANDLER
+// BACKGROUND PIPELINE — runs via after() once response is sent
 // ---------------------------------------------------------------------------
-export async function POST(request: NextRequest) {
-    const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+async function runAnalysisPipeline(analysisId: string, initialCompanyName: string, website: string, initialUei: string) {
+    const sb = makeDb();
+    let companyName = initialCompanyName;
+    let uei = initialUei;
 
     try {
-        const body = await request.json();
-        let companyName = sanitizeCompanyName(body.company_name || "");
-        const website = normalizeUrl(body.website || "");
-        let uei = (body.uei || "").trim().toUpperCase();
-
-        // Validate inputs — only website is required
-        if (!isValidUrl(website)) {
-            return NextResponse.json({ error: "Valid website URL is required" }, { status: 400 });
-        }
-
-        const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-
-        // Use domain as placeholder if no company name provided
-        if (!companyName) {
-            try { companyName = new URL(website).hostname.replace(/^www\./, ""); } catch { companyName = website; }
-        }
-
-        // Insert analysis record
-        const { data: analysis, error: insertError } = await sb
-            .from("company_analyses")
-            .insert({
-                company_name: companyName,
-                website,
-                uei: uei || null,
-                status: "crawling",
-                ip_address: ip,
-            })
-            .select("id")
-            .single();
-
-        if (insertError || !analysis) {
-            return NextResponse.json({ error: "Failed to create analysis" }, { status: 500 });
-        }
-
-        const analysisId = analysis.id;
-
         // Step 1: Crawl company website with CheerioCrawler
         let crawlData: Record<string, unknown> = {};
         try {
@@ -378,18 +381,18 @@ export async function POST(request: NextRequest) {
             if (crawlResult.errors.length > 0) {
                 console.warn("Crawl warnings:", crawlResult.errors);
             }
-        } catch {
-            // Crawler failed - continue with partial data
+        } catch (e) {
+            console.error("Crawler error:", e);
         }
 
-        // Step 1.5: Auto-detect company name from crawled website
+        // Auto-detect company name from crawled website
         const crawledName = crawlData.company_name as string | undefined;
         if (crawledName && crawledName.length > 1) {
             companyName = crawledName;
             await sb.from("company_analyses").update({ company_name: companyName }).eq("id", analysisId);
         }
 
-        // Step 1.6: Auto-detect UEI from crawl data if user didn't provide one
+        // Auto-detect UEI from crawl data if user didn't provide one
         const detectedUei = crawlData.detected_uei as string | null;
         if (!uei && detectedUei && detectedUei.length === 12) {
             uei = detectedUei;
@@ -398,17 +401,33 @@ export async function POST(request: NextRequest) {
 
         await sb.from("company_analyses").update({ status: "enriching", crawl_data: crawlData }).eq("id", analysisId);
 
-        // Step 2: SAM.gov lookup (if UEI provided OR detected from website)
+        // Step 2: SAM.gov lookup
+        // First try by UEI (if we have one from user input or crawl detection)
+        // If no UEI, search SAM.gov by company name to find their registration
         let samData: Record<string, unknown> | null = null;
         if (uei && uei.length === 12) {
             samData = await lookupSamEntity(uei);
         }
 
-        if (samData) {
-            await sb.from("company_analyses").update({ sam_data: samData }).eq("id", analysisId);
+        if (!samData && companyName.length >= 3) {
+            // Search SAM.gov by company name to discover their UEI
+            const discoveredUei = await searchSamByName(companyName);
+            if (discoveredUei) {
+                uei = discoveredUei;
+                samData = await lookupSamEntity(uei);
+                if (samData) {
+                    await sb.from("company_analyses").update({ uei }).eq("id", analysisId);
+                }
+            }
         }
 
-        // Step 2.5: USASpending enrichment (always run for richer data)
+        if (samData) {
+            // SAM.gov data provides authoritative company name and state
+            if (samData.company_name) companyName = samData.company_name as string;
+            await sb.from("company_analyses").update({ sam_data: samData, company_name: companyName }).eq("id", analysisId);
+        }
+
+        // USASpending enrichment
         let usaspendingData: { award_count: number; total_value: number; agencies: string[]; naics_from_awards: string[] } | null = null;
         usaspendingData = await lookupUsaSpending(companyName);
         if (usaspendingData) {
@@ -422,7 +441,6 @@ export async function POST(request: NextRequest) {
         const services = (crawlData.services as string[]) || [];
         const pageContent = (crawlData.all_page_text as string) || "";
         const samNaics = samData ? (samData.naics_codes as string[]) : undefined;
-        // Include NAICS from USASpending awards
         const usaNaics = usaspendingData?.naics_from_awards || [];
 
         const inferredNaics = classifyNaics(description, services, pageContent,
@@ -470,26 +488,24 @@ export async function POST(request: NextRequest) {
             offset += batchSize;
         }
 
-        const scoredMatches: { opportunity_id: string; title?: string; agency?: string; naics_code?: string; set_aside_code?: string; response_deadline?: string; score: number; classification: string; score_breakdown: Record<string, number> }[] = [];
+        const scoredMatches: { opportunity_id: string; title?: string; agency?: string; naics_code?: string; set_aside_code?: string; response_deadline?: string; notice_type?: string; award_amount?: number; notice_id?: string; place_of_performance_state?: string; description_url?: string; score: number; classification: string; score_breakdown: Record<string, number> }[] = [];
 
         for (const opp of allOpps) {
             const result = scoreOpportunityLeadMagnet(tempProfile, opp);
             if (result) {
-                scoredMatches.push({
-                    ...result,
-                });
+                scoredMatches.push({ ...result });
             }
         }
 
         scoredMatches.sort((a, b) => b.score - a.score);
-        const topMatches = scoredMatches.slice(0, 10);
+        const topMatches = scoredMatches.slice(0, 5);
 
-        // Enrich top matches with opportunity details
+        // Enrich top matches with full opportunity details
         if (topMatches.length > 0) {
             const oppIds = topMatches.map(m => m.opportunity_id);
             const { data: oppDetails } = await sb
                 .from("opportunities")
-                .select("id, title, agency, naics_code, set_aside_code, response_deadline, notice_type")
+                .select("id, title, agency, naics_code, set_aside_code, response_deadline, notice_type, award_amount, notice_id, place_of_performance_state, description")
                 .in("id", oppIds);
 
             if (oppDetails) {
@@ -502,13 +518,19 @@ export async function POST(request: NextRequest) {
                         match.naics_code = detail.naics_code;
                         match.set_aside_code = detail.set_aside_code;
                         match.response_deadline = detail.response_deadline;
+                        match.notice_type = detail.notice_type;
+                        match.award_amount = detail.award_amount;
+                        match.notice_id = detail.notice_id;
+                        match.place_of_performance_state = detail.place_of_performance_state;
+                        match.description_url = detail.description;
                     }
                 }
             }
         }
 
-        // Step 5.5: Certification recommendations
-        // Enrich allOpps with titles for sample opps in cert recs
+        await sb.from("company_analyses").update({ status: "generating" }).eq("id", analysisId);
+
+        // Certification recommendations
         const oppIdsForCerts = allOpps.slice(0, 500).map(o => o.id);
         const oppTitleMap = new Map<string, string>();
         if (oppIdsForCerts.length > 0) {
@@ -534,19 +556,18 @@ export async function POST(request: NextRequest) {
             tempProfile.naics_codes,
         );
 
-        // Step 5.6: Easy wins
+        // Easy wins
         const easyWins = computeEasyWins(crawlData, samData, inferredNaics, tempProfile);
 
-        // Step 6: Generate company summary
+        // Generate company summary
         const summary = await generateSummary(companyName, description, services, certifications);
 
-        // Step 7: Build inferred profile for onboarding pre-fill
+        // Build inferred profile for onboarding pre-fill
         const contacts = (crawlData.contacts as { email?: string; phone?: string }[]) || [];
         const employeeSignals = crawlData.employee_signals as { estimate: number } | null;
         const foundingYear = crawlData.founding_year as number | null;
         const leadership = (crawlData.leadership as { name: string; title: string; email?: string; phone?: string }[]) || [];
 
-        // Find primary contact person (CEO/owner) from leadership
         const primaryLeader = leadership.find(l => {
             const t = l.title.toLowerCase();
             return ["ceo", "owner", "president", "founder"].some(k => t.includes(k));
@@ -573,10 +594,7 @@ export async function POST(request: NextRequest) {
             contact_person: primaryLeader ? { name: primaryLeader.name, title: primaryLeader.title, email: primaryLeader.email, phone: primaryLeader.phone } : null,
         };
 
-        // Compute crawler confidence score (0-1)
-        const crawlerConfidence = computeCrawlerConfidence(crawlData, samData);
-
-        // Step 8: Save everything
+        // Save everything — mark complete
         await sb.from("company_analyses").update({
             status: "complete",
             company_summary: summary,
@@ -588,19 +606,67 @@ export async function POST(request: NextRequest) {
             easy_wins: easyWins,
         }).eq("id", analysisId);
 
+    } catch (error) {
+        console.error("Pipeline error:", error);
+        await sb.from("company_analyses").update({
+            status: "error",
+            error_message: (error as Error).message || "Pipeline failed",
+        }).eq("id", analysisId);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// MAIN HANDLER — returns analysis_id immediately, processes in background
+// ---------------------------------------------------------------------------
+export async function POST(request: NextRequest) {
+    const sb = makeDb();
+
+    try {
+        const body = await request.json();
+        let companyName = sanitizeCompanyName(body.company_name || "");
+        const website = normalizeUrl(body.website || "");
+        const uei = (body.uei || "").trim().toUpperCase();
+
+        if (!isValidUrl(website)) {
+            return NextResponse.json({ error: "Valid website URL is required" }, { status: 400 });
+        }
+
+        const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+
+        // Use domain as placeholder if no company name provided
+        if (!companyName) {
+            try { companyName = new URL(website).hostname.replace(/^www\./, ""); } catch { companyName = website; }
+        }
+
+        // Insert analysis record
+        const { data: analysis, error: insertError } = await sb
+            .from("company_analyses")
+            .insert({
+                company_name: companyName,
+                website,
+                uei: uei || null,
+                status: "crawling",
+                ip_address: ip,
+            })
+            .select("id")
+            .single();
+
+        if (insertError || !analysis) {
+            return NextResponse.json({ error: "Failed to create analysis" }, { status: 500 });
+        }
+
+        const analysisId = analysis.id;
+
+        // Run the full pipeline in the background after response is sent
+        after(async () => {
+            await runAnalysisPipeline(analysisId, companyName, website, uei);
+        });
+
+        // Return immediately with the analysis ID
         return NextResponse.json({
             success: true,
             analysis_id: analysisId,
-            company_summary: summary,
-            crawl_data: crawlData,
-            sam_data: samData,
-            inferred_naics: inferredNaics,
-            preview_matches: topMatches,
-            inferred_profile: inferredProfile,
-            cert_recommendations: certRecommendations,
-            easy_wins: easyWins,
-            total_matches_found: scoredMatches.length,
-            crawler_confidence: crawlerConfidence,
+            status: "crawling",
         });
 
     } catch (error) {

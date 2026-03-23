@@ -22,6 +22,7 @@ export function statusToStep(status: string): number {
         case "enriching": return 1;
         case "classifying": return 2;
         case "scoring": return 3;
+        case "generating": return 4;
         case "complete": return 5; // All steps done
         default: return 0;
     }

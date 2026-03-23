@@ -6,7 +6,7 @@ import Link from "next/link";
 import {
     Zap, MapPin, Users, Calendar, Target,
     ArrowRight, Globe, Phone, Mail, Loader2, Briefcase, Shield,
-    TrendingUp, Award, ChevronDown, ChevronUp, Clock, Unlock
+    TrendingUp, Award, ChevronDown, Clock, Unlock, ExternalLink, DollarSign
 } from "lucide-react";
 import clsx from "clsx";
 import { LeadMagnetForm } from "@/components/LeadMagnetForm";
@@ -26,6 +26,23 @@ interface EasyWin {
     description: string;
     impact: "high" | "medium" | "low";
     category: string;
+}
+
+interface MatchData {
+    opportunity_id: string;
+    title?: string;
+    agency?: string;
+    naics_code?: string;
+    set_aside_code?: string;
+    response_deadline?: string;
+    notice_type?: string;
+    award_amount?: number;
+    notice_id?: string;
+    place_of_performance_state?: string;
+    description_url?: string;
+    score: number;
+    classification: string;
+    score_breakdown: Record<string, number>;
 }
 
 interface AnalysisData {
@@ -49,22 +66,153 @@ interface AnalysisData {
     };
     sam_data: Record<string, unknown> | null;
     inferred_naics: { code: string; label: string; confidence: number; matched_keywords: string[] }[];
-    preview_matches: {
-        opportunity_id: string;
-        title?: string;
-        agency?: string;
-        naics_code?: string;
-        set_aside_code?: string;
-        response_deadline?: string;
-        notice_type?: string;
-        score: number;
-        classification: string;
-        score_breakdown: Record<string, number>;
-    }[];
+    preview_matches: MatchData[];
     inferred_profile: Record<string, unknown>;
     cert_recommendations: CertRecommendation[];
     easy_wins: EasyWin[];
     crawler_confidence?: number;
+}
+
+function MatchCard({ match, rank }: { match: MatchData; rank: number }) {
+    const [expanded, setExpanded] = useState(false);
+
+    const samUrl = match.notice_id
+        ? `https://sam.gov/opp/${match.notice_id}/view`
+        : null;
+
+    const formatCurrency = (amount: number) => {
+        if (amount >= 1_000_000) return `$${(amount / 1_000_000).toFixed(1)}M`;
+        if (amount >= 1_000) return `$${(amount / 1_000).toFixed(0)}K`;
+        return `$${amount.toLocaleString()}`;
+    };
+
+    return (
+        <div className="bg-white border border-stone-200 rounded-2xl shadow-sm overflow-hidden transition-all">
+            {/* Clickable header */}
+            <button
+                type="button"
+                onClick={() => setExpanded(!expanded)}
+                className="w-full text-left p-4 sm:p-5 flex items-start gap-3 hover:bg-stone-50/50 transition-colors"
+            >
+                {/* Score badge */}
+                <div className={clsx(
+                    "w-11 h-11 rounded-xl border-2 font-black font-typewriter text-sm flex items-center justify-center flex-shrink-0",
+                    match.score >= 0.70 ? "text-emerald-600 bg-emerald-50 border-emerald-200" :
+                    match.score >= 0.50 ? "text-amber-600 bg-amber-50 border-amber-200" :
+                    "text-blue-600 bg-blue-50 border-blue-200"
+                )}>
+                    {Math.round(match.score * 100)}
+                </div>
+
+                <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                        <span className="text-[9px] font-typewriter text-stone-400">#{rank}</span>
+                        <span className={clsx(
+                            "text-[9px] font-typewriter font-bold px-2 py-0.5 rounded uppercase tracking-widest border",
+                            match.classification === "HOT" ? "bg-red-50 text-red-600 border-red-200" :
+                            match.classification === "WARM" ? "bg-amber-50 text-amber-600 border-amber-200" :
+                            "bg-blue-50 text-blue-600 border-blue-200"
+                        )}>
+                            {match.classification}
+                        </span>
+                        {match.set_aside_code && (
+                            <span className="text-[9px] font-typewriter font-bold bg-blue-100 text-blue-600 border border-blue-200 px-2 py-0.5 rounded uppercase">
+                                {match.set_aside_code}
+                            </span>
+                        )}
+                        {match.award_amount && match.award_amount > 0 && (
+                            <span className="text-[9px] font-typewriter font-bold bg-emerald-50 text-emerald-600 border border-emerald-200 px-2 py-0.5 rounded">
+                                {formatCurrency(match.award_amount)}
+                            </span>
+                        )}
+                    </div>
+                    <p className="font-bold text-sm text-black line-clamp-2">{match.title || "Untitled Opportunity"}</p>
+                    <p className="text-xs text-stone-500 mt-0.5">{match.agency || "Federal Agency"}</p>
+                </div>
+
+                <ChevronDown className={clsx(
+                    "w-4 h-4 text-stone-400 flex-shrink-0 mt-1 transition-transform duration-200",
+                    expanded && "rotate-180"
+                )} />
+            </button>
+
+            {/* Expandable detail panel */}
+            {expanded && (
+                <div className="border-t border-stone-100 bg-stone-50/50 px-4 sm:px-5 py-4 space-y-3">
+                    {/* Key details grid */}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        {match.notice_type && (
+                            <div className="text-xs">
+                                <p className="text-[10px] font-typewriter text-stone-400 uppercase">Type</p>
+                                <p className="font-medium text-stone-700">{match.notice_type}</p>
+                            </div>
+                        )}
+                        {match.naics_code && (
+                            <div className="text-xs">
+                                <p className="text-[10px] font-typewriter text-stone-400 uppercase">NAICS</p>
+                                <p className="font-medium text-stone-700">{match.naics_code}</p>
+                            </div>
+                        )}
+                        {match.response_deadline && (
+                            <div className="text-xs">
+                                <p className="text-[10px] font-typewriter text-stone-400 uppercase">Deadline</p>
+                                <p className="font-medium text-stone-700">{new Date(match.response_deadline).toLocaleDateString()}</p>
+                            </div>
+                        )}
+                        {match.place_of_performance_state && (
+                            <div className="text-xs">
+                                <p className="text-[10px] font-typewriter text-stone-400 uppercase">Location</p>
+                                <p className="font-medium text-stone-700">{match.place_of_performance_state}</p>
+                            </div>
+                        )}
+                        {match.award_amount && match.award_amount > 0 && (
+                            <div className="text-xs">
+                                <p className="text-[10px] font-typewriter text-stone-400 uppercase">Est. Value</p>
+                                <p className="font-bold text-emerald-600">{formatCurrency(match.award_amount)}</p>
+                            </div>
+                        )}
+                        {match.set_aside_code && (
+                            <div className="text-xs">
+                                <p className="text-[10px] font-typewriter text-stone-400 uppercase">Set-Aside</p>
+                                <p className="font-medium text-stone-700">{match.set_aside_code}</p>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Score breakdown */}
+                    {match.score_breakdown && Object.keys(match.score_breakdown).length > 0 && (
+                        <div>
+                            <p className="text-[10px] font-typewriter text-stone-400 uppercase mb-1.5">Match Score Breakdown</p>
+                            <div className="flex gap-1.5 flex-wrap">
+                                {Object.entries(match.score_breakdown).map(([key, val]) => (
+                                    <span key={key} className={clsx(
+                                        "text-[9px] font-mono px-1.5 py-0.5 rounded border",
+                                        val >= 0.7 ? "bg-emerald-50 text-emerald-600 border-emerald-200" :
+                                        val >= 0.4 ? "bg-amber-50 text-amber-600 border-amber-200" :
+                                        "bg-stone-50 text-stone-400 border-stone-200"
+                                    )}>
+                                        {key}: {Math.round(val * 100)}%
+                                    </span>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* SAM.gov link */}
+                    {samUrl && (
+                        <a
+                            href={samUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:text-blue-800 bg-blue-50 border border-blue-200 px-3 py-2 rounded-xl transition-colors"
+                        >
+                            <ExternalLink className="w-3.5 h-3.5" /> View on SAM.gov
+                        </a>
+                    )}
+                </div>
+            )}
+        </div>
+    );
 }
 
 export default function CheckResultsPage() {
@@ -72,8 +220,7 @@ export default function CheckResultsPage() {
     const [data, setData] = useState<AnalysisData | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
-    const [showAllMatches, setShowAllMatches] = useState(false);
-    const [updatedMatches, setUpdatedMatches] = useState<AnalysisData["preview_matches"] | null>(null);
+    const [updatedMatches, setUpdatedMatches] = useState<MatchData[] | null>(null);
     const [updatedCertRecs, setUpdatedCertRecs] = useState<CertRecommendation[] | null>(null);
     const [updatedEasyWins, setUpdatedEasyWins] = useState<EasyWin[] | null>(null);
 
@@ -114,9 +261,7 @@ export default function CheckResultsPage() {
     }
 
     const crawl = data.crawl_data || {};
-    const matches = updatedMatches || data.preview_matches || [];
-    const visibleMatches = showAllMatches ? matches : matches.slice(0, 5);
-    const hiddenCount = matches.length - 5;
+    const matches = (updatedMatches || data.preview_matches || []).slice(0, 5);
     const naics = data.inferred_naics || [];
     const certs = crawl.certifications || [];
     const hasSam = !!data.sam_data && Object.keys(data.sam_data).length > 0;
@@ -268,16 +413,6 @@ export default function CheckResultsPage() {
                                             <span className="font-bold">{l.name}</span>
                                             <span className="text-stone-400">—</span>
                                             <span>{l.title}</span>
-                                            {(l as { email?: string }).email && (
-                                                <span className="inline-flex items-center gap-1 text-blue-600">
-                                                    <Mail className="w-3 h-3" /> {(l as { email?: string }).email}
-                                                </span>
-                                            )}
-                                            {(l as { phone?: string }).phone && (
-                                                <span className="inline-flex items-center gap-1 text-stone-500">
-                                                    <Phone className="w-3 h-3" /> {(l as { phone?: string }).phone}
-                                                </span>
-                                            )}
                                         </div>
                                     ))}
                                 </div>
@@ -293,11 +428,37 @@ export default function CheckResultsPage() {
                     inferredNaics={naics}
                     crawlerConfidence={data.crawler_confidence}
                     onUpdate={(updated) => {
-                        setUpdatedMatches(updated.updated_matches as AnalysisData["preview_matches"]);
+                        setUpdatedMatches(updated.updated_matches as MatchData[]);
                         setUpdatedCertRecs(updated.cert_recommendations as CertRecommendation[]);
                         setUpdatedEasyWins(updated.easy_wins as EasyWin[]);
                     }}
                 />
+
+                {/* Top 5 Matching Opportunities */}
+                <div>
+                    <h2 className="font-typewriter font-bold text-lg flex items-center mb-4 px-1">
+                        <Zap className="w-5 h-5 mr-2" /> Best Matching Opportunities
+                        {matches.length > 0 && (
+                            <span className="ml-3 text-sm font-sans font-medium bg-emerald-100 px-3 py-1 rounded-full text-emerald-700 border border-emerald-200">
+                                Top {matches.length}
+                            </span>
+                        )}
+                    </h2>
+
+                    {matches.length > 0 ? (
+                        <div className="space-y-3">
+                            {matches.map((match, i) => (
+                                <MatchCard key={match.opportunity_id} match={match} rank={i + 1} />
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="bg-stone-50 border border-stone-200 border-dashed rounded-2xl p-8 text-center">
+                            <Briefcase className="w-10 h-10 text-stone-300 mx-auto mb-3" />
+                            <p className="text-stone-500 font-typewriter mb-2">No matches found</p>
+                            <p className="text-stone-400 text-sm">This company may not match any current federal opportunities.</p>
+                        </div>
+                    )}
+                </div>
 
                 {/* Easy Wins Section */}
                 {easyWins.length > 0 && (
@@ -393,101 +554,6 @@ export default function CheckResultsPage() {
                         </div>
                     </div>
                 )}
-
-                {/* Matching Opportunities */}
-                <div>
-                    <h2 className="font-typewriter font-bold text-lg flex items-center mb-4 px-1">
-                        <Zap className="w-5 h-5 mr-2" /> Matching Government Opportunities
-                        <span className="ml-3 text-sm font-sans font-medium bg-emerald-100 px-3 py-1 rounded-full text-emerald-700 border border-emerald-200">
-                            {matches.length} found
-                        </span>
-                    </h2>
-
-                    {visibleMatches.length > 0 ? (
-                        <div className="space-y-3">
-                            {visibleMatches.map((match) => (
-                                <div key={match.opportunity_id} className="bg-white border border-stone-200 rounded-2xl p-4 sm:p-5 shadow-sm">
-                                    <div className="flex items-start gap-3">
-                                        <div className={clsx(
-                                            "w-12 h-12 rounded-xl border-2 font-black font-typewriter text-sm flex items-center justify-center flex-shrink-0",
-                                            match.score >= 0.70 ? "text-emerald-600 bg-emerald-50 border-emerald-200" :
-                                            match.score >= 0.50 ? "text-amber-600 bg-amber-50 border-amber-200" :
-                                            "text-blue-600 bg-blue-50 border-blue-200"
-                                        )}>
-                                            {Math.round(match.score * 100)}%
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-                                                <span className={clsx(
-                                                    "text-[9px] font-typewriter font-bold px-2 py-0.5 rounded uppercase tracking-widest border",
-                                                    match.classification === "HOT" ? "bg-red-50 text-red-600 border-red-200" :
-                                                    match.classification === "WARM" ? "bg-amber-50 text-amber-600 border-amber-200" :
-                                                    "bg-blue-50 text-blue-600 border-blue-200"
-                                                )}>
-                                                    {match.classification}
-                                                </span>
-                                                {match.set_aside_code && (
-                                                    <span className="text-[9px] font-typewriter font-bold bg-blue-100 text-blue-600 border border-blue-200 px-2 py-0.5 rounded uppercase">
-                                                        {match.set_aside_code}
-                                                    </span>
-                                                )}
-                                                {match.notice_type && (
-                                                    <span className="text-[9px] font-typewriter bg-stone-100 text-stone-500 border border-stone-200 px-2 py-0.5 rounded uppercase">
-                                                        {match.notice_type}
-                                                    </span>
-                                                )}
-                                            </div>
-                                            <p className="font-bold text-sm text-black line-clamp-2">{match.title || "Untitled Opportunity"}</p>
-                                            <p className="text-xs text-stone-500 mt-0.5">{match.agency || "Federal Agency"}</p>
-                                            {match.response_deadline && (
-                                                <p className="text-xs text-stone-400 mt-1">
-                                                    Deadline: {new Date(match.response_deadline).toLocaleDateString()}
-                                                </p>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {/* Score Breakdown */}
-                                    {match.score_breakdown && Object.keys(match.score_breakdown).length > 0 && (
-                                        <div className="flex gap-1.5 flex-wrap mt-3 pt-3 border-t border-stone-100">
-                                            {Object.entries(match.score_breakdown).map(([key, val]) => (
-                                                <span key={key} className={clsx(
-                                                    "text-[9px] font-mono px-1.5 py-0.5 rounded border",
-                                                    val >= 0.7 ? "bg-emerald-50 text-emerald-600 border-emerald-200" :
-                                                    val >= 0.4 ? "bg-amber-50 text-amber-600 border-amber-200" :
-                                                    "bg-stone-50 text-stone-400 border-stone-200"
-                                                )}>
-                                                    {key}: {Math.round(val * 100)}%
-                                                </span>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="bg-stone-50 border border-stone-200 border-dashed rounded-2xl p-8 text-center">
-                            <Briefcase className="w-10 h-10 text-stone-300 mx-auto mb-3" />
-                            <p className="text-stone-500 font-typewriter mb-2">No matches found</p>
-                            <p className="text-stone-400 text-sm">This company may not match any current federal opportunities.</p>
-                        </div>
-                    )}
-
-                    {/* See More Toggle */}
-                    {hiddenCount > 0 && (
-                        <button
-                            type="button"
-                            onClick={() => setShowAllMatches(!showAllMatches)}
-                            className="mt-3 w-full bg-stone-50 hover:bg-stone-100 border border-stone-200 rounded-2xl p-3 text-sm font-bold text-stone-600 flex items-center justify-center gap-2 transition-colors"
-                        >
-                            {showAllMatches ? (
-                                <>Show Less <ChevronUp className="w-4 h-4" /></>
-                            ) : (
-                                <>See {hiddenCount} More Matches <ChevronDown className="w-4 h-4" /></>
-                            )}
-                        </button>
-                    )}
-                </div>
 
                 {/* NAICS Classification */}
                 {naics.length > 0 && (

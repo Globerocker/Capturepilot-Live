@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, Suspense, useEffect, useRef } from "react";
+import { useState, Suspense, useEffect, useRef, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Zap, Globe, Loader2 } from "lucide-react";
-import { AnalysisProgressStepper } from "@/components/AnalysisProgressStepper";
+import { AnalysisProgressStepper, statusToStep } from "@/components/AnalysisProgressStepper";
 
 function CheckContent() {
     const router = useRouter();
@@ -14,10 +14,58 @@ function CheckContent() {
     const [error, setError] = useState("");
     const [displayName, setDisplayName] = useState("");
     const startedRef = useRef(false);
+    const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const analysisIdRef = useRef<string | null>(null);
 
     // Auto-start if query params provided
     const autoWebsite = searchParams.get("website") || "";
     const autoUei = searchParams.get("uei") || "";
+
+    const stopPolling = useCallback(() => {
+        if (pollRef.current) {
+            clearInterval(pollRef.current);
+            pollRef.current = null;
+        }
+    }, []);
+
+    // Poll the status endpoint for real progress
+    const startPolling = useCallback((id: string) => {
+        analysisIdRef.current = id;
+        stopPolling();
+
+        pollRef.current = setInterval(async () => {
+            try {
+                const res = await fetch(`/api/analyze-company/status/${id}`);
+                if (!res.ok) return;
+                const data = await res.json();
+
+                // Update display name when crawler detects it
+                if (data.company_name && data.company_name.length > 1) {
+                    const domain = getDomain(website || autoWebsite);
+                    // Only update if it's not just the domain placeholder
+                    if (data.company_name !== domain) {
+                        setDisplayName(data.company_name);
+                    }
+                }
+
+                if (data.status === "error") {
+                    stopPolling();
+                    setError(data.error_message || "Analysis failed. Please try again.");
+                    return;
+                }
+
+                const newStep = statusToStep(data.status);
+                setStep(newStep);
+
+                if (data.status === "complete") {
+                    stopPolling();
+                    router.push(`/check/${id}`);
+                }
+            } catch {
+                // Ignore transient poll errors
+            }
+        }, 2000);
+    }, [router, stopPolling, website, autoWebsite]);
 
     useEffect(() => {
         if (startedRef.current) return;
@@ -26,7 +74,13 @@ function CheckContent() {
             setWebsite(autoWebsite);
             runAnalysis(autoWebsite, autoUei);
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [autoWebsite, autoUei]);
+
+    // Cleanup on unmount
+    useEffect(() => {
+        return () => stopPolling();
+    }, [stopPolling]);
 
     function getDomain(url: string): string {
         try {
@@ -43,13 +97,7 @@ function CheckContent() {
         setStep(0);
         setDisplayName(getDomain(url));
 
-        const stepTimers = [
-            setTimeout(() => setStep(prev => Math.max(prev, 1)), 15000),
-            setTimeout(() => setStep(prev => Math.max(prev, 2)), 25000),
-            setTimeout(() => setStep(prev => Math.max(prev, 3)), 35000),
-            setTimeout(() => setStep(prev => Math.max(prev, 4)), 45000),
-        ];
-
+        // POST to API — returns analysis_id immediately, processes in background
         fetch("/api/analyze-company", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -66,17 +114,15 @@ function CheckContent() {
                 return res.json();
             })
             .then((data) => {
-                stepTimers.forEach(clearTimeout);
                 if (data.analysis_id) {
-                    setStep(5);
-                    router.push(`/check/${data.analysis_id}`);
+                    // Start polling for real progress
+                    startPolling(data.analysis_id);
                 } else {
-                    setError("Analysis completed but no results returned.");
+                    setError("Failed to start analysis.");
                     setRunning(false);
                 }
             })
             .catch((err) => {
-                stepTimers.forEach(clearTimeout);
                 setError(err.message || "Something went wrong.");
                 setRunning(false);
             });
@@ -106,7 +152,7 @@ function CheckContent() {
                     {error && (
                         <div className="mt-6 bg-red-50 border border-red-200 rounded-2xl p-4 text-center">
                             <p className="text-sm text-red-600 mb-3">{error}</p>
-                            <button type="button" onClick={() => { setRunning(false); setError(""); }} className="bg-black text-white px-5 py-2 rounded-xl text-sm font-bold">
+                            <button type="button" onClick={() => { setRunning(false); setError(""); stopPolling(); }} className="bg-black text-white px-5 py-2 rounded-xl text-sm font-bold">
                                 Try Again
                             </button>
                         </div>
