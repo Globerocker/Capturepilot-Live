@@ -119,11 +119,11 @@ export function LeadMagnetForm({ analysisId, inferredProfile, inferredNaics, onU
 
     return (
         <div className="bg-white rounded-[28px] border border-stone-200 shadow-sm overflow-hidden">
-            <div className="bg-stone-50 border-b border-stone-100 px-5 sm:px-8 py-4">
-                <h2 className="font-typewriter font-bold text-base flex items-center">
-                    <Mail className="w-4 h-4 mr-2 text-blue-500" /> Improve Your Results
+            <div className="bg-blue-50 border-b border-blue-100 px-5 sm:px-8 py-4">
+                <h2 className="font-typewriter font-bold text-base flex items-center text-blue-900">
+                    <CheckCircle2 className="w-4 h-4 mr-2 text-blue-500" /> Review What We Found
                 </h2>
-                <p className="text-xs text-stone-500 mt-0.5">Confirm your details for more accurate matching.</p>
+                <p className="text-xs text-blue-700 mt-0.5">We pre-filled this from your website. Confirm or correct for better matches.</p>
             </div>
 
             <div className="p-5 sm:p-8">

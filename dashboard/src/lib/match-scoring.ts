@@ -167,7 +167,11 @@ export function scoreOpportunityLeadMagnet(
 ): ScoredMatch | null {
     const W = LEAD_MAGNET_WEIGHTS;
 
+    // HARD GATE: NAICS must match at least at 4-digit level (0.6+)
+    // Without this, default scores from other factors let random opps through
     const naics = scoreNaics(profile.naics_codes || [], opp.naics_code);
+    if (naics < 0.3) return null; // Reject if not even a 3-digit NAICS prefix match
+
     const nt = scoreNoticeType(opp.notice_type);
     if (nt === null) return null;
     const dl = scoreDeadline(opp.response_deadline);
@@ -182,7 +186,7 @@ export function scoreOpportunityLeadMagnet(
         W.past_perf * pp + W.notice_type * nt +
         W.deadline * dl + W.cert_bonus * cb;
 
-    if (total < 0.20) return null;
+    if (total < 0.30) return null;
 
     return {
         opportunity_id: opp.id,

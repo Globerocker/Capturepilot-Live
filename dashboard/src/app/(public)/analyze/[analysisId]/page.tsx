@@ -272,6 +272,18 @@ export default function AnalysisResultsPage() {
                     </div>
                 </div>
 
+                {/* Review & Confirm — pre-filled by crawler */}
+                <LeadMagnetForm
+                    analysisId={analysisId}
+                    inferredProfile={data.inferred_profile || {}}
+                    inferredNaics={naics}
+                    onUpdate={(updated) => {
+                        setUpdatedMatches(updated.updated_matches as AnalysisData["preview_matches"]);
+                        setUpdatedCertRecs(updated.cert_recommendations as CertRecommendation[]);
+                        setUpdatedEasyWins(updated.easy_wins as EasyWin[]);
+                    }}
+                />
+
                 {/* Easy Wins Section */}
                 {easyWins.length > 0 && (
                     <div className="bg-white rounded-[28px] border border-stone-200 shadow-sm overflow-hidden">
@@ -497,18 +509,6 @@ export default function AnalysisResultsPage() {
                         </div>
                     </div>
                 )}
-
-                {/* Lead Magnet Mini-Form */}
-                <LeadMagnetForm
-                    analysisId={analysisId}
-                    inferredProfile={data.inferred_profile || {}}
-                    inferredNaics={naics}
-                    onUpdate={(updated) => {
-                        setUpdatedMatches(updated.updated_matches as AnalysisData["preview_matches"]);
-                        setUpdatedCertRecs(updated.cert_recommendations as CertRecommendation[]);
-                        setUpdatedEasyWins(updated.easy_wins as EasyWin[]);
-                    }}
-                />
 
                 {/* Bottom CTAs */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

@@ -9,6 +9,7 @@ import {
     TrendingUp, Award, ChevronDown, ChevronUp, Clock, Unlock
 } from "lucide-react";
 import clsx from "clsx";
+import { LeadMagnetForm } from "@/components/LeadMagnetForm";
 
 interface CertRecommendation {
     cert: string;
@@ -71,6 +72,9 @@ export default function CheckResultsPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [showAllMatches, setShowAllMatches] = useState(false);
+    const [updatedMatches, setUpdatedMatches] = useState<AnalysisData["preview_matches"] | null>(null);
+    const [updatedCertRecs, setUpdatedCertRecs] = useState<CertRecommendation[] | null>(null);
+    const [updatedEasyWins, setUpdatedEasyWins] = useState<EasyWin[] | null>(null);
 
     const analysisId = params.analysisId as string;
 
@@ -109,14 +113,14 @@ export default function CheckResultsPage() {
     }
 
     const crawl = data.crawl_data || {};
-    const matches = data.preview_matches || [];
+    const matches = updatedMatches || data.preview_matches || [];
     const visibleMatches = showAllMatches ? matches : matches.slice(0, 5);
     const hiddenCount = matches.length - 5;
     const naics = data.inferred_naics || [];
     const certs = crawl.certifications || [];
     const hasSam = !!data.sam_data && Object.keys(data.sam_data).length > 0;
-    const easyWins = data.easy_wins || [];
-    const certRecs = data.cert_recommendations || [];
+    const easyWins = updatedEasyWins || data.easy_wins || [];
+    const certRecs = updatedCertRecs || data.cert_recommendations || [];
 
     const impactColors = {
         high: "bg-red-50 text-red-700 border-red-200",
@@ -268,6 +272,18 @@ export default function CheckResultsPage() {
                         )}
                     </div>
                 </div>
+
+                {/* Review & Confirm — pre-filled by crawler */}
+                <LeadMagnetForm
+                    analysisId={analysisId}
+                    inferredProfile={data.inferred_profile || {}}
+                    inferredNaics={naics}
+                    onUpdate={(updated) => {
+                        setUpdatedMatches(updated.updated_matches as AnalysisData["preview_matches"]);
+                        setUpdatedCertRecs(updated.cert_recommendations as CertRecommendation[]);
+                        setUpdatedEasyWins(updated.easy_wins as EasyWin[]);
+                    }}
+                />
 
                 {/* Easy Wins Section */}
                 {easyWins.length > 0 && (

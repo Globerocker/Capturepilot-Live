@@ -144,13 +144,38 @@ const NAICS_KEYWORD_MAP: Record<string, KeywordEntry[]> = {
         { keywords: ["freight trucking", "trucking company"], weight: 3 },
         { keywords: ["local freight", "local trucking"], weight: 3 },
         { keywords: ["delivery services", "hauling"], weight: 2 },
-        { keywords: ["transportation", "logistics"], weight: 2 },
+        { keywords: ["truck fleet", "fleet trucking", "cdl driver"], weight: 2 },
+    ],
+    "484121": [
+        { keywords: ["long distance trucking", "long haul"], weight: 3 },
+        { keywords: ["over-the-road", "otr trucking"], weight: 3 },
+        { keywords: ["interstate freight", "cross-country freight"], weight: 2 },
+    ],
+    "488510": [
+        { keywords: ["freight forwarding", "freight forwarder"], weight: 3 },
+        { keywords: ["customs broker", "customs brokerage"], weight: 3 },
+        { keywords: ["freight broker", "freight brokerage"], weight: 3 },
+        { keywords: ["third-party logistics", "3pl"], weight: 3 },
+        { keywords: ["logistics provider", "logistics services", "logistics company"], weight: 2 },
+        { keywords: ["supply chain", "supply chain services"], weight: 2 },
+        { keywords: ["shipping services", "freight services"], weight: 2 },
     ],
     "493110": [
         { keywords: ["warehousing", "warehouse"], weight: 3 },
         { keywords: ["storage facility", "storage services"], weight: 3 },
         { keywords: ["distribution center", "fulfillment"], weight: 2 },
         { keywords: ["inventory management"], weight: 2 },
+    ],
+    "492110": [
+        { keywords: ["courier", "courier services"], weight: 3 },
+        { keywords: ["express delivery", "same-day delivery"], weight: 3 },
+        { keywords: ["messenger service", "parcel delivery"], weight: 2 },
+        { keywords: ["last mile delivery", "last-mile"], weight: 2 },
+    ],
+    "488490": [
+        { keywords: ["moving services", "moving company"], weight: 3 },
+        { keywords: ["relocation services", "household moving"], weight: 3 },
+        { keywords: ["freight packing", "crating services"], weight: 2 },
     ],
     "811310": [
         { keywords: ["machinery repair", "equipment repair"], weight: 3 },
@@ -244,7 +269,12 @@ export function classifyNaics(
             }
         }
 
-        if (totalWeight > 0) {
+        // Require at least 2 keyword groups matched OR 1 high-weight (3) keyword
+        // This prevents a single generic word like "transportation" from triggering a code
+        const hasStrongSignal = matchedKeywords.length >= 2 ||
+            entries.some(e => e.weight >= 3 && e.keywords.some(k => matchedKeywords.includes(k)));
+
+        if (totalWeight > 0 && hasStrongSignal) {
             const confidence = Math.min(totalWeight / maxWeight, 1.0);
             const naicsInfo = NAICS_CODES.find(n => n.code === code);
             results.push({
