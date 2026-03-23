@@ -159,32 +159,92 @@ export function extractContacts(
 
 // ─── Locations ─────────────────────────────────────────────────────────────
 
+// State abbreviations that are also common English words — only match in address context
+const AMBIGUOUS_STATES = new Set(["IN", "OR", "OH", "ME", "OK", "PA", "ID", "HI", "DE", "MD", "MA", "LA", "AL"]);
+
 export function extractLocations(
     texts: string[]
 ): { locations: Array<{ address?: string; state?: string }>; states: string[] } {
     const allText = texts.join(" ");
     const locations: Array<{ address?: string; state?: string }> = [];
+    const stateScores = new Map<string, number>();
 
+    // Method 1: Full addresses with embedded state (highest confidence)
     for (const m of findAll(ADDRESS_RE, allText)) {
         locations.push({ address: m[0].trim() });
+        // Extract state from the address match
+        const addrStateRe = new RegExp(`\\b(${STATE_RE_STR})\\s*\\d{5}`, "g");
+        const addrMatch = addrStateRe.exec(m[0]);
+        if (addrMatch && US_STATES.has(addrMatch[1])) {
+            stateScores.set(addrMatch[1], (stateScores.get(addrMatch[1]) || 0) + 10);
+        }
     }
 
-    const stateRe = new RegExp(`\\b(${STATE_RE_STR})\\b`, "g");
-    const states = new Set<string>();
-    for (const m of findAll(stateRe, allText)) {
-        if (US_STATES.has(m[1])) states.add(m[1]);
+    // Method 2: "City, ST" or "City, ST ZIP" pattern (high confidence)
+    const cityStateRe = new RegExp(`[A-Z][a-z]+(?:\\s+[A-Z][a-z]+)*\\s*,\\s*(${STATE_RE_STR})\\b(?:\\s*\\d{5})?`, "g");
+    for (const m of findAll(cityStateRe, allText)) {
+        if (US_STATES.has(m[1])) {
+            stateScores.set(m[1], (stateScores.get(m[1]) || 0) + 8);
+        }
     }
 
-    if (!locations.length && states.size) {
-        for (const state of [...states].slice(0, 3)) {
+    // Method 3: "STATE ZIP" pattern (high confidence)
+    const stateZipRe = new RegExp(`\\b(${STATE_RE_STR})\\s+\\d{5}\\b`, "g");
+    for (const m of findAll(stateZipRe, allText)) {
+        if (US_STATES.has(m[1])) {
+            stateScores.set(m[1], (stateScores.get(m[1]) || 0) + 7);
+        }
+    }
+
+    // Method 4: Standalone state codes (only for non-ambiguous states)
+    const standaloneRe = new RegExp(`\\b(${STATE_RE_STR})\\b`, "g");
+    for (const m of findAll(standaloneRe, allText)) {
+        const code = m[1];
+        if (!US_STATES.has(code)) continue;
+        if (AMBIGUOUS_STATES.has(code)) continue; // Skip ambiguous codes in standalone context
+        stateScores.set(code, (stateScores.get(code) || 0) + 2);
+    }
+
+    // Method 5: Full state names (medium-high confidence)
+    const STATE_NAMES: Record<string, string> = {
+        "Alabama": "AL", "Alaska": "AK", "Arizona": "AZ", "Arkansas": "AR",
+        "California": "CA", "Colorado": "CO", "Connecticut": "CT", "Delaware": "DE",
+        "Florida": "FL", "Georgia": "GA", "Hawaii": "HI", "Idaho": "ID",
+        "Illinois": "IL", "Indiana": "IN", "Iowa": "IA", "Kansas": "KS",
+        "Kentucky": "KY", "Louisiana": "LA", "Maine": "ME", "Maryland": "MD",
+        "Massachusetts": "MA", "Michigan": "MI", "Minnesota": "MN", "Mississippi": "MS",
+        "Missouri": "MO", "Montana": "MT", "Nebraska": "NE", "Nevada": "NV",
+        "New Hampshire": "NH", "New Jersey": "NJ", "New Mexico": "NM", "New York": "NY",
+        "North Carolina": "NC", "North Dakota": "ND", "Ohio": "OH", "Oklahoma": "OK",
+        "Oregon": "OR", "Pennsylvania": "PA", "Rhode Island": "RI", "South Carolina": "SC",
+        "South Dakota": "SD", "Tennessee": "TN", "Texas": "TX", "Utah": "UT",
+        "Vermont": "VT", "Virginia": "VA", "Washington": "WA", "West Virginia": "WV",
+        "Wisconsin": "WI", "Wyoming": "WY", "District of Columbia": "DC",
+    };
+    for (const [name, code] of Object.entries(STATE_NAMES)) {
+        const nameRe = new RegExp(`\\b${name}\\b`, "gi");
+        const matches = findAll(nameRe, allText);
+        if (matches.length > 0) {
+            stateScores.set(code, (stateScores.get(code) || 0) + 6 * matches.length);
+        }
+    }
+
+    // Only include states with sufficient confidence score (>= 5)
+    const states = [...stateScores.entries()]
+        .filter(([, score]) => score >= 5)
+        .sort((a, b) => b[1] - a[1])
+        .map(([code]) => code);
+
+    if (!locations.length && states.length) {
+        for (const state of states.slice(0, 3)) {
             locations.push({ state });
         }
     }
-    if (locations.length && states.size) {
-        locations[0].state = [...states][0];
+    if (locations.length && states.length) {
+        locations[0].state = states[0];
     }
 
-    return { locations: locations.slice(0, 5), states: [...states] };
+    return { locations: locations.slice(0, 5), states };
 }
 
 // ─── Certifications ────────────────────────────────────────────────────────

@@ -61,3 +61,22 @@
   border-color: rgb(16, 185, 129) !important;
   border-radius: 12px;
 }
+
+/* Print styles for PDF export */
+@media print {
+  body {
+    background: white !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  header, button, nav {
+    display: none !important;
+  }
+  [data-print-hide] {
+    display: none !important;
+  }
+  main {
+    max-width: 100% !important;
+    padding: 0 !important;
+  }
+}

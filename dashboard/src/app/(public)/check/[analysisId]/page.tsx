@@ -6,7 +6,8 @@ import Link from "next/link";
 import {
     Zap, MapPin, Users, Calendar, Target,
     ArrowRight, Globe, Phone, Mail, Loader2, Briefcase, Shield,
-    TrendingUp, Award, ChevronDown, Clock, Unlock, ExternalLink, DollarSign
+    TrendingUp, Award, ChevronDown, Clock, Unlock, ExternalLink, DollarSign,
+    Linkedin, Facebook, Twitter, Save, FileDown, CheckCircle2, User, Building2, Hash
 } from "lucide-react";
 import clsx from "clsx";
 import { LeadMagnetForm } from "@/components/LeadMagnetForm";
@@ -60,17 +61,69 @@ interface AnalysisData {
         certifications?: { type: string; confidence: number }[];
         employee_signals?: { estimate: number; source: string } | null;
         founding_year?: number | null;
-        leadership?: { name: string; title: string }[];
+        leadership?: { name: string; title: string; email?: string; phone?: string }[];
         social_links?: { linkedin?: string; facebook?: string; twitter?: string };
         pages_crawled?: string[];
+        revenue_signals?: { estimate: number; source: string } | null;
+        past_clients?: string[];
     };
-    sam_data: Record<string, unknown> | null;
+    sam_data: {
+        uei?: string;
+        cage_code?: string;
+        company_name?: string;
+        dba_name?: string;
+        state?: string;
+        city?: string;
+        address_line_1?: string;
+        zip_code?: string;
+        phone?: string;
+        naics_codes?: string[];
+        sba_certifications?: string[];
+    } | null;
     inferred_naics: { code: string; label: string; confidence: number; matched_keywords: string[] }[];
     preview_matches: MatchData[];
-    inferred_profile: Record<string, unknown>;
+    inferred_profile: {
+        company_name?: string;
+        dba_name?: string;
+        website?: string;
+        uei?: string;
+        cage_code?: string;
+        state?: string;
+        phone?: string;
+        email?: string;
+        contact_person?: { name: string; title: string; email?: string; phone?: string } | null;
+        [key: string]: unknown;
+    };
     cert_recommendations: CertRecommendation[];
     easy_wins: EasyWin[];
     crawler_confidence?: number;
+    is_saved?: boolean;
+}
+
+function getNextSteps(noticeType?: string): string[] {
+    const nt = (noticeType || "").toLowerCase();
+    if (nt.includes("sources sought") || nt.includes("rfi")) {
+        return [
+            "Prepare and submit a capability statement",
+            "Identify the Contracting Officer and make contact",
+            "Find potential teaming partners with past performance",
+        ];
+    }
+    if (nt.includes("presolicitation")) {
+        return [
+            "Research the incumbent contractor",
+            "Prepare a capability statement",
+            "Conduct a bid/no-bid analysis",
+            "Identify teaming partners",
+        ];
+    }
+    // Solicitation or combined
+    return [
+        "Review the Statement of Work (SOW)",
+        "Conduct a go/no-go analysis",
+        "Begin technical proposal draft",
+        "Develop competitive pricing strategy",
+    ];
 }
 
 function MatchCard({ match, rank }: { match: MatchData; rank: number }) {
@@ -198,6 +251,19 @@ function MatchCard({ match, rank }: { match: MatchData; rank: number }) {
                         </div>
                     )}
 
+                    {/* Potential next steps */}
+                    <div>
+                        <p className="text-[10px] font-typewriter text-stone-400 uppercase mb-1.5">Recommended Next Steps</p>
+                        <div className="space-y-1.5">
+                            {getNextSteps(match.notice_type).map((step, i) => (
+                                <div key={i} className="flex items-start gap-2 text-xs text-stone-600">
+                                    <span className="text-[9px] font-bold bg-black text-white w-4 h-4 rounded flex items-center justify-center flex-shrink-0 mt-0.5">{i + 1}</span>
+                                    <span>{step}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
                     {/* SAM.gov link */}
                     {samUrl && (
                         <a
@@ -223,6 +289,8 @@ export default function CheckResultsPage() {
     const [updatedMatches, setUpdatedMatches] = useState<MatchData[] | null>(null);
     const [updatedCertRecs, setUpdatedCertRecs] = useState<CertRecommendation[] | null>(null);
     const [updatedEasyWins, setUpdatedEasyWins] = useState<EasyWin[] | null>(null);
+    const [saved, setSaved] = useState(false);
+    const [saving, setSaving] = useState(false);
 
     const analysisId = params.analysisId as string;
 
@@ -260,6 +328,26 @@ export default function CheckResultsPage() {
         );
     }
 
+    // Set initial saved state from data
+    const isSaved = saved || data.is_saved;
+
+    const handleSave = async () => {
+        setSaving(true);
+        try {
+            const res = await fetch("/api/prospects/save", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ analysis_id: analysisId }),
+            });
+            if (res.ok) setSaved(true);
+        } catch { /* ignore */ }
+        setSaving(false);
+    };
+
+    const handleExportPdf = () => {
+        window.print();
+    };
+
     const crawl = data.crawl_data || {};
     const matches = (updatedMatches || data.preview_matches || []).slice(0, 5);
     const naics = data.inferred_naics || [];
@@ -267,6 +355,14 @@ export default function CheckResultsPage() {
     const hasSam = !!data.sam_data && Object.keys(data.sam_data).length > 0;
     const easyWins = updatedEasyWins || data.easy_wins || [];
     const certRecs = updatedCertRecs || data.cert_recommendations || [];
+
+    const sam = data.sam_data;
+    const profile = data.inferred_profile || {};
+    const social = crawl.social_links || {};
+    const leadership = crawl.leadership || [];
+    const contactPerson = profile.contact_person;
+    const uei = sam?.uei || profile.uei || null;
+    const cageCode = sam?.cage_code || profile.cage_code || null;
 
     const impactColors = {
         high: "bg-red-50 text-red-700 border-red-200",
@@ -301,20 +397,55 @@ export default function CheckResultsPage() {
                 {/* Company Profile Card */}
                 <div className="bg-white rounded-[28px] border border-stone-200 shadow-sm overflow-hidden">
                     <div className="bg-stone-50 border-b border-stone-100 px-5 sm:px-8 py-5 sm:py-6">
-                        <div className="flex items-start justify-between">
-                            <div>
+                        <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
                                 <h1 className="font-typewriter font-bold text-xl sm:text-2xl text-black mb-1">
                                     {data.company_name}
                                 </h1>
-                                <a href={data.website} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline inline-flex items-center gap-1">
-                                    <Globe className="w-3 h-3" /> {data.website.replace(/^https?:\/\//, "")}
-                                </a>
+                                <div className="flex items-center gap-3 flex-wrap">
+                                    <a href={data.website} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline inline-flex items-center gap-1">
+                                        <Globe className="w-3 h-3" /> {data.website.replace(/^https?:\/\//, "")}
+                                    </a>
+                                    {uei && (
+                                        <span className="text-[10px] font-typewriter font-bold bg-stone-100 text-stone-600 border border-stone-200 px-2 py-0.5 rounded inline-flex items-center gap-1">
+                                            <Hash className="w-3 h-3" /> UEI: {uei}
+                                        </span>
+                                    )}
+                                    {cageCode && (
+                                        <span className="text-[10px] font-typewriter font-bold bg-stone-100 text-stone-600 border border-stone-200 px-2 py-0.5 rounded inline-flex items-center gap-1">
+                                            <Building2 className="w-3 h-3" /> CAGE: {cageCode}
+                                        </span>
+                                    )}
+                                </div>
                             </div>
-                            {hasSam && (
-                                <span className="bg-emerald-50 text-emerald-700 text-[10px] font-typewriter font-bold px-3 py-1.5 rounded-lg border border-emerald-200">
-                                    SAM.gov Verified
-                                </span>
-                            )}
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                                {hasSam && (
+                                    <span className="bg-emerald-50 text-emerald-700 text-[10px] font-typewriter font-bold px-3 py-1.5 rounded-lg border border-emerald-200">
+                                        SAM.gov Verified
+                                    </span>
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={handleSave}
+                                    disabled={saving || !!isSaved}
+                                    className={clsx(
+                                        "text-[10px] font-typewriter font-bold px-3 py-1.5 rounded-lg border inline-flex items-center gap-1 transition-all",
+                                        isSaved
+                                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                            : "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
+                                    )}
+                                >
+                                    {isSaved ? <CheckCircle2 className="w-3 h-3" /> : <Save className="w-3 h-3" />}
+                                    {isSaved ? "Saved" : saving ? "Saving..." : "Save"}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleExportPdf}
+                                    className="text-[10px] font-typewriter font-bold px-3 py-1.5 rounded-lg border bg-stone-100 text-stone-600 border-stone-200 hover:bg-stone-200 inline-flex items-center gap-1 transition-all print:hidden"
+                                >
+                                    <FileDown className="w-3 h-3" /> Export
+                                </button>
+                            </div>
                         </div>
                     </div>
 
@@ -384,37 +515,107 @@ export default function CheckResultsPage() {
                             </div>
                         )}
 
-                        {/* Contacts */}
-                        {crawl.contacts && crawl.contacts.length > 0 && (
+                        {/* Key Contact / CEO */}
+                        {(contactPerson || leadership.length > 0) && (
+                            <div>
+                                <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-2">
+                                    <User className="w-3 h-3 inline mr-1" />Key Contact
+                                </p>
+                                {(() => {
+                                    const person = contactPerson || leadership[0];
+                                    if (!person) return null;
+                                    const email = person.email || crawl.contacts?.find(c => c.email)?.email;
+                                    const phone = person.phone || sam?.phone || crawl.contacts?.find(c => c.phone)?.phone;
+                                    return (
+                                        <div className="bg-stone-50 border border-stone-200 rounded-xl p-4">
+                                            <div className="flex items-start gap-3">
+                                                <div className="w-10 h-10 rounded-full bg-black text-white flex items-center justify-center font-bold text-sm flex-shrink-0">
+                                                    {person.name.charAt(0).toUpperCase()}
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <p className="font-bold text-sm text-black">{person.name}</p>
+                                                    <p className="text-xs text-stone-500">{person.title}</p>
+                                                    <div className="flex flex-wrap gap-2 mt-2">
+                                                        {email && (
+                                                            <a href={`mailto:${email}`} className="text-xs text-blue-600 hover:underline inline-flex items-center gap-1">
+                                                                <Mail className="w-3 h-3" /> {email}
+                                                            </a>
+                                                        )}
+                                                        {phone && (
+                                                            <a href={`tel:${phone}`} className="text-xs text-blue-600 hover:underline inline-flex items-center gap-1">
+                                                                <Phone className="w-3 h-3" /> {phone}
+                                                            </a>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
+                                {/* Additional leadership */}
+                                {leadership.length > 1 && (
+                                    <div className="mt-2 space-y-1.5">
+                                        {leadership.slice(1, 4).map((l, i) => (
+                                            <div key={i} className="flex items-center gap-2 flex-wrap text-xs text-stone-600 px-3 py-1.5">
+                                                <span className="font-bold">{l.name}</span>
+                                                <span className="text-stone-400">—</span>
+                                                <span>{l.title}</span>
+                                                {l.email && (
+                                                    <a href={`mailto:${l.email}`} title={`Email ${l.name}`} className="text-blue-600 hover:underline inline-flex items-center gap-1 ml-1">
+                                                        <Mail className="w-3 h-3" /> <span className="sr-only">Email</span>
+                                                    </a>
+                                                )}
+                                                {l.phone && (
+                                                    <a href={`tel:${l.phone}`} title={`Call ${l.name}`} className="text-blue-600 hover:underline inline-flex items-center gap-1">
+                                                        <Phone className="w-3 h-3" /> <span className="sr-only">Call</span>
+                                                    </a>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* General contact info (when no leadership found) */}
+                        {!contactPerson && leadership.length === 0 && crawl.contacts && crawl.contacts.length > 0 && (
                             <div>
                                 <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-2">Contact Info Found</p>
                                 <div className="flex flex-wrap gap-2">
                                     {crawl.contacts.filter(c => c.email).slice(0, 3).map((c, i) => (
-                                        <span key={`e${i}`} className="text-xs bg-stone-50 text-stone-600 border border-stone-200 px-2.5 py-1 rounded-lg inline-flex items-center gap-1">
+                                        <a key={`e${i}`} href={`mailto:${c.email}`} className="text-xs bg-stone-50 text-stone-600 border border-stone-200 px-2.5 py-1 rounded-lg inline-flex items-center gap-1 hover:border-blue-300 transition-colors">
                                             <Mail className="w-3 h-3" /> {c.email}
-                                        </span>
+                                        </a>
                                     ))}
                                     {crawl.contacts.filter(c => c.phone).slice(0, 2).map((c, i) => (
-                                        <span key={`p${i}`} className="text-xs bg-stone-50 text-stone-600 border border-stone-200 px-2.5 py-1 rounded-lg inline-flex items-center gap-1">
+                                        <a key={`p${i}`} href={`tel:${c.phone}`} className="text-xs bg-stone-50 text-stone-600 border border-stone-200 px-2.5 py-1 rounded-lg inline-flex items-center gap-1 hover:border-blue-300 transition-colors">
                                             <Phone className="w-3 h-3" /> {c.phone}
-                                        </span>
+                                        </a>
                                     ))}
                                 </div>
                             </div>
                         )}
 
-                        {/* Leadership */}
-                        {crawl.leadership && crawl.leadership.length > 0 && (
+                        {/* Social Media Profiles */}
+                        {(social.linkedin || social.facebook || social.twitter) && (
                             <div>
-                                <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-2">Leadership</p>
-                                <div className="space-y-2">
-                                    {crawl.leadership.map((l, i) => (
-                                        <div key={i} className="flex items-center gap-2 flex-wrap text-xs bg-stone-50 text-stone-700 border border-stone-200 px-3 py-2 rounded-lg">
-                                            <span className="font-bold">{l.name}</span>
-                                            <span className="text-stone-400">—</span>
-                                            <span>{l.title}</span>
-                                        </div>
-                                    ))}
+                                <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-2">Social Profiles</p>
+                                <div className="flex gap-2">
+                                    {social.linkedin && (
+                                        <a href={social.linkedin} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 px-3 py-2 rounded-xl hover:bg-blue-100 transition-colors">
+                                            <Linkedin className="w-4 h-4" /> LinkedIn
+                                        </a>
+                                    )}
+                                    {social.facebook && (
+                                        <a href={social.facebook} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 px-3 py-2 rounded-xl hover:bg-blue-100 transition-colors">
+                                            <Facebook className="w-4 h-4" /> Facebook
+                                        </a>
+                                    )}
+                                    {social.twitter && (
+                                        <a href={social.twitter} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs font-bold bg-stone-50 text-stone-700 border border-stone-200 px-3 py-2 rounded-xl hover:bg-stone-100 transition-colors">
+                                            <Twitter className="w-4 h-4" /> Twitter/X
+                                        </a>
+                                    )}
                                 </div>
                             </div>
                         )}

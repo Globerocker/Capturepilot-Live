@@ -64,6 +64,7 @@ export async function GET(
         cert_recommendations: data.cert_recommendations || [],
         easy_wins: data.easy_wins || [],
         crawler_confidence: crawlerConfidence,
+        is_saved: ((data.inferred_profile || {}) as Record<string, unknown>).is_saved === true,
         error_message: data.error_message,
         created_at: data.created_at,
     });
