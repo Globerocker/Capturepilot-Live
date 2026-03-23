@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Mail, MapPin, CheckCircle2, Loader2, ChevronRight, ChevronDown, Pencil } from "lucide-react";
+import { Mail, MapPin, CheckCircle2, Loader2, Pencil, RefreshCw } from "lucide-react";
 import clsx from "clsx";
 
 const US_STATES = [
@@ -12,13 +12,13 @@ const US_STATES = [
 ];
 
 const SBA_CERTS = [
-    { key: "8(a)", label: "8(a) Business Development" },
-    { key: "HUBZone", label: "HUBZone Certified" },
-    { key: "SDVOSB", label: "Service-Disabled Veteran-Owned SB" },
-    { key: "WOSB", label: "Women-Owned Small Business" },
-    { key: "EDWOSB", label: "Economically Disadvantaged WOSB" },
-    { key: "VOSB", label: "Veteran-Owned Small Business" },
-    { key: "SDB", label: "Small Disadvantaged Business" },
+    { key: "8(a)", label: "8(a)" },
+    { key: "HUBZone", label: "HUBZone" },
+    { key: "SDVOSB", label: "SDVOSB" },
+    { key: "WOSB", label: "WOSB" },
+    { key: "EDWOSB", label: "EDWOSB" },
+    { key: "VOSB", label: "VOSB" },
+    { key: "SDB", label: "SDB" },
 ];
 
 interface LeadMagnetFormProps {
@@ -38,7 +38,6 @@ export function LeadMagnetForm({ analysisId, inferredProfile, inferredNaics, cra
     // Auto-collapse if crawler confidence is high enough
     const autoConfirmed = (crawlerConfidence ?? 0) >= 0.6;
     const [collapsed, setCollapsed] = useState(autoConfirmed);
-    const [step, setStep] = useState(1);
     const [submitting, setSubmitting] = useState(false);
     const [submitted, setSubmitted] = useState(false);
     const [error, setError] = useState("");
@@ -59,7 +58,6 @@ export function LeadMagnetForm({ analysisId, inferredProfile, inferredNaics, cra
     const [selectedCerts, setSelectedCerts] = useState<string[]>(
         (inferredProfile.sba_certifications as string[]) || []
     );
-    const [noCerts, setNoCerts] = useState(false);
 
     function toggleNaics(code: string) {
         setSelectedNaics(prev =>
@@ -68,15 +66,14 @@ export function LeadMagnetForm({ analysisId, inferredProfile, inferredNaics, cra
     }
 
     function toggleCert(key: string) {
-        setNoCerts(false);
         setSelectedCerts(prev =>
             prev.includes(key) ? prev.filter(c => c !== key) : [...prev, key]
         );
     }
 
     async function handleSubmit() {
-        if (!email.trim()) {
-            setError("Email is required");
+        if (selectedNaics.length === 0) {
+            setError("Select at least one NAICS code");
             return;
         }
         setSubmitting(true);
@@ -88,11 +85,11 @@ export function LeadMagnetForm({ analysisId, inferredProfile, inferredNaics, cra
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     analysis_id: analysisId,
-                    email: email.trim(),
+                    email: email.trim() || undefined,
                     company_name: companyName.trim(),
                     state,
                     naics_codes: selectedNaics,
-                    sba_certifications: noCerts ? [] : selectedCerts,
+                    sba_certifications: selectedCerts,
                 }),
             });
 
@@ -113,10 +110,12 @@ export function LeadMagnetForm({ analysisId, inferredProfile, inferredNaics, cra
 
     if (submitted) {
         return (
-            <div className="bg-emerald-50 border border-emerald-200 rounded-[28px] p-6 sm:p-8 text-center">
-                <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto mb-3" />
-                <p className="font-typewriter font-bold text-base text-emerald-800 mb-1">Profile Updated</p>
-                <p className="text-sm text-emerald-600">Your matches have been refreshed with your confirmed information.</p>
+            <div className="bg-emerald-50 border border-emerald-200 rounded-[28px] p-5 sm:p-6 flex items-center gap-3">
+                <CheckCircle2 className="w-6 h-6 text-emerald-500 flex-shrink-0" />
+                <div>
+                    <p className="font-typewriter font-bold text-sm text-emerald-800">Matches Refreshed</p>
+                    <p className="text-xs text-emerald-600">Results updated with your confirmed profile.</p>
+                </div>
             </div>
         );
     }
@@ -137,7 +136,7 @@ export function LeadMagnetForm({ analysisId, inferredProfile, inferredNaics, cra
                         onClick={() => setCollapsed(false)}
                         className="text-xs font-bold text-emerald-700 hover:text-emerald-900 flex items-center gap-1 bg-emerald-100 px-3 py-1.5 rounded-lg border border-emerald-200 hover:bg-emerald-200 transition-colors"
                     >
-                        <Pencil className="w-3 h-3" /> Edit
+                        <Pencil className="w-3 h-3" /> Edit & Re-Match
                     </button>
                 </div>
                 <div className="px-5 sm:px-8 pb-4">
@@ -150,10 +149,10 @@ export function LeadMagnetForm({ analysisId, inferredProfile, inferredNaics, cra
                                 <MapPin className="w-3 h-3 inline mr-0.5" />{state}
                             </span>
                         )}
-                        {selectedNaics.slice(0, 3).map(code => (
+                        {selectedNaics.map(code => (
                             <span key={code} className="bg-white border border-emerald-200 px-2.5 py-1 rounded-lg text-emerald-700 font-mono font-bold">{code}</span>
                         ))}
-                        {selectedCerts.slice(0, 2).map(cert => (
+                        {selectedCerts.map(cert => (
                             <span key={cert} className="bg-white border border-emerald-200 px-2.5 py-1 rounded-lg text-emerald-700 font-bold">{cert}</span>
                         ))}
                     </div>
@@ -168,9 +167,9 @@ export function LeadMagnetForm({ analysisId, inferredProfile, inferredNaics, cra
                 <div className="flex items-center justify-between">
                     <div>
                         <h2 className="font-typewriter font-bold text-base flex items-center text-blue-900">
-                            <CheckCircle2 className="w-4 h-4 mr-2 text-blue-500" /> Review What We Found
+                            <CheckCircle2 className="w-4 h-4 mr-2 text-blue-500" /> Review & Refine
                         </h2>
-                        <p className="text-xs text-blue-700 mt-0.5">We pre-filled this from your website. Confirm or correct for better matches.</p>
+                        <p className="text-xs text-blue-700 mt-0.5">Correct NAICS codes and state for better matches.</p>
                     </div>
                     {autoConfirmed && (
                         <button
@@ -178,180 +177,133 @@ export function LeadMagnetForm({ analysisId, inferredProfile, inferredNaics, cra
                             onClick={() => setCollapsed(true)}
                             className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1"
                         >
-                            <ChevronDown className="w-3 h-3" /> Collapse
+                            Collapse
                         </button>
                     )}
                 </div>
             </div>
 
-            <div className="p-5 sm:p-8">
-                {/* Step indicator */}
-                <div className="flex items-center gap-2 mb-5">
-                    <div className={clsx(
-                        "w-7 h-7 rounded-full text-xs font-bold flex items-center justify-center",
-                        step === 1 ? "bg-black text-white" : "bg-emerald-500 text-white"
-                    )}>
-                        {step > 1 ? <CheckCircle2 className="w-4 h-4" /> : "1"}
+            <div className="p-5 sm:p-8 space-y-4">
+                {/* Row 1: Company Name + State side by side */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label className="block text-xs font-typewriter font-bold text-stone-500 uppercase tracking-widest mb-1.5">
+                            Company Name
+                        </label>
+                        <input
+                            type="text"
+                            value={companyName}
+                            onChange={(e) => setCompanyName(e.target.value)}
+                            placeholder="Acme Corp"
+                            className="w-full px-4 py-2.5 rounded-xl border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-black/10 focus:border-stone-400"
+                        />
                     </div>
-                    <div className="h-px flex-1 bg-stone-200" />
-                    <div className={clsx(
-                        "w-7 h-7 rounded-full text-xs font-bold flex items-center justify-center",
-                        step === 2 ? "bg-black text-white" : "bg-stone-200 text-stone-400"
-                    )}>
-                        2
+                    <div>
+                        <label className="block text-xs font-typewriter font-bold text-stone-500 uppercase tracking-widest mb-1.5">
+                            <MapPin className="w-3 h-3 inline mr-1" /> State
+                        </label>
+                        <select
+                            value={state}
+                            onChange={(e) => setState(e.target.value)}
+                            aria-label="State"
+                            className="w-full px-4 py-2.5 rounded-xl border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-black/10 focus:border-stone-400 bg-white"
+                        >
+                            <option value="">Select...</option>
+                            {US_STATES.map(s => (
+                                <option key={s} value={s}>{s}</option>
+                            ))}
+                        </select>
                     </div>
                 </div>
 
-                {step === 1 && (
-                    <div className="space-y-4">
-                        {/* Company Name */}
-                        <div>
-                            <label className="block text-xs font-typewriter font-bold text-stone-500 uppercase tracking-widest mb-1.5">
-                                Company Name
-                            </label>
-                            <input
-                                type="text"
-                                value={companyName}
-                                onChange={(e) => setCompanyName(e.target.value)}
-                                className="w-full px-4 py-2.5 rounded-xl border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-black/10 focus:border-stone-400"
-                            />
-                        </div>
-
-                        {/* State */}
-                        <div>
-                            <label className="block text-xs font-typewriter font-bold text-stone-500 uppercase tracking-widest mb-1.5">
-                                <MapPin className="w-3 h-3 inline mr-1" /> Primary State
-                            </label>
-                            <select
-                                value={state}
-                                onChange={(e) => setState(e.target.value)}
-                                className="w-full px-4 py-2.5 rounded-xl border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-black/10 focus:border-stone-400 bg-white"
-                            >
-                                <option value="">Select state...</option>
-                                {US_STATES.map(s => (
-                                    <option key={s} value={s}>{s}</option>
-                                ))}
-                            </select>
-                        </div>
-
-                        {/* NAICS Codes */}
-                        <div>
-                            <label className="block text-xs font-typewriter font-bold text-stone-500 uppercase tracking-widest mb-1.5">
-                                Industry Codes (NAICS)
-                            </label>
-                            <div className="space-y-1.5">
-                                {inferredNaics.map(n => (
-                                    <label key={n.code} className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-stone-50 cursor-pointer">
-                                        <input
-                                            type="checkbox"
-                                            checked={selectedNaics.includes(n.code)}
-                                            onChange={() => toggleNaics(n.code)}
-                                            className="w-4 h-4 rounded border-stone-300 text-black focus:ring-black"
-                                        />
-                                        <span className="font-mono text-xs font-bold text-stone-500">{n.code}</span>
-                                        <span className="text-sm text-stone-700">{n.label}</span>
-                                    </label>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* Email */}
-                        <div>
-                            <label className="block text-xs font-typewriter font-bold text-stone-500 uppercase tracking-widest mb-1.5">
-                                <Mail className="w-3 h-3 inline mr-1" /> Email Address *
-                            </label>
-                            <input
-                                type="email"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                className="w-full px-4 py-2.5 rounded-xl border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-black/10 focus:border-stone-400"
-                                placeholder="you@company.com"
-                                required
-                            />
-                        </div>
-
-                        <button
-                            type="button"
-                            onClick={() => setStep(2)}
-                            className="w-full bg-black text-white py-3 rounded-2xl font-bold text-sm hover:bg-stone-800 transition-all flex items-center justify-center gap-2"
-                        >
-                            Next: Certifications <ChevronRight className="w-4 h-4" />
-                        </button>
-                    </div>
-                )}
-
-                {step === 2 && (
-                    <div className="space-y-4">
-                        <div>
-                            <label className="block text-xs font-typewriter font-bold text-stone-500 uppercase tracking-widest mb-2">
-                                SBA Certifications
-                            </label>
-                            <div className="space-y-1.5">
-                                {SBA_CERTS.map(cert => (
-                                    <label key={cert.key} className={clsx(
-                                        "flex items-center gap-2.5 p-2.5 rounded-lg cursor-pointer border transition-colors",
-                                        selectedCerts.includes(cert.key) && !noCerts
-                                            ? "bg-blue-50 border-blue-200"
-                                            : "bg-white border-stone-100 hover:bg-stone-50"
-                                    )}>
-                                        <input
-                                            type="checkbox"
-                                            checked={selectedCerts.includes(cert.key) && !noCerts}
-                                            onChange={() => toggleCert(cert.key)}
-                                            disabled={noCerts}
-                                            className="w-4 h-4 rounded border-stone-300 text-black focus:ring-black"
-                                        />
-                                        <div>
-                                            <span className="text-sm font-bold text-stone-700">{cert.key}</span>
-                                            <span className="text-xs text-stone-500 ml-1.5">{cert.label}</span>
-                                        </div>
-                                    </label>
-                                ))}
-                            </div>
-
-                            <label className="flex items-center gap-2.5 p-2.5 rounded-lg cursor-pointer mt-2 border border-stone-100 hover:bg-stone-50">
+                {/* NAICS Codes — the key field */}
+                <div>
+                    <label className="block text-xs font-typewriter font-bold text-stone-500 uppercase tracking-widest mb-1.5">
+                        Industry Codes (NAICS) — select all that apply
+                    </label>
+                    <div className="space-y-1.5">
+                        {inferredNaics.map(n => (
+                            <label key={n.code} className={clsx(
+                                "flex items-center gap-2.5 p-2.5 rounded-lg cursor-pointer border transition-colors",
+                                selectedNaics.includes(n.code) ? "bg-blue-50 border-blue-200" : "bg-white border-stone-100 hover:bg-stone-50"
+                            )}>
                                 <input
                                     type="checkbox"
-                                    checked={noCerts}
-                                    onChange={() => {
-                                        setNoCerts(!noCerts);
-                                        if (!noCerts) setSelectedCerts([]);
-                                    }}
+                                    checked={selectedNaics.includes(n.code)}
+                                    onChange={() => toggleNaics(n.code)}
                                     className="w-4 h-4 rounded border-stone-300 text-black focus:ring-black"
                                 />
-                                <span className="text-sm text-stone-500">None of these</span>
+                                <span className="font-mono text-xs font-bold text-stone-500">{n.code}</span>
+                                <span className="text-sm text-stone-700 flex-1">{n.label}</span>
+                                <span className={clsx(
+                                    "text-[10px] font-typewriter font-bold px-1.5 py-0.5 rounded",
+                                    n.confidence >= 0.7 ? "text-emerald-600 bg-emerald-50" :
+                                    n.confidence >= 0.4 ? "text-amber-600 bg-amber-50" :
+                                    "text-stone-400 bg-stone-50"
+                                )}>
+                                    {Math.round(n.confidence * 100)}%
+                                </span>
                             </label>
-                        </div>
+                        ))}
+                    </div>
+                </div>
 
-                        {error && (
-                            <div className="bg-red-50 text-red-600 text-xs p-3 rounded-xl border border-red-200">
-                                {error}
-                            </div>
-                        )}
-
-                        <div className="flex gap-3">
+                {/* SBA Certifications — compact inline chips */}
+                <div>
+                    <label className="block text-xs font-typewriter font-bold text-stone-500 uppercase tracking-widest mb-1.5">
+                        SBA Certifications
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                        {SBA_CERTS.map(cert => (
                             <button
+                                key={cert.key}
                                 type="button"
-                                onClick={() => setStep(1)}
-                                className="flex-1 bg-stone-100 text-stone-700 py-3 rounded-2xl font-bold text-sm hover:bg-stone-200 transition-all"
-                            >
-                                Back
-                            </button>
-                            <button
-                                type="button"
-                                onClick={handleSubmit}
-                                disabled={submitting}
-                                className="flex-1 bg-black text-white py-3 rounded-2xl font-bold text-sm hover:bg-stone-800 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-                            >
-                                {submitting ? (
-                                    <><Loader2 className="w-4 h-4 animate-spin" /> Updating...</>
-                                ) : (
-                                    <><CheckCircle2 className="w-4 h-4" /> Get Better Matches</>
+                                onClick={() => toggleCert(cert.key)}
+                                className={clsx(
+                                    "text-xs font-bold px-3 py-1.5 rounded-lg border transition-colors",
+                                    selectedCerts.includes(cert.key)
+                                        ? "bg-blue-50 text-blue-700 border-blue-300"
+                                        : "bg-white text-stone-500 border-stone-200 hover:bg-stone-50"
                                 )}
+                            >
+                                {cert.label}
                             </button>
-                        </div>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Email — optional */}
+                <div>
+                    <label className="block text-xs font-typewriter font-bold text-stone-500 uppercase tracking-widest mb-1.5">
+                        <Mail className="w-3 h-3 inline mr-1" /> Email <span className="normal-case text-stone-300">(optional)</span>
+                    </label>
+                    <input
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="w-full px-4 py-2.5 rounded-xl border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-black/10 focus:border-stone-400"
+                        placeholder="you@company.com"
+                    />
+                </div>
+
+                {error && (
+                    <div className="bg-red-50 text-red-600 text-xs p-3 rounded-xl border border-red-200">
+                        {error}
                     </div>
                 )}
+
+                <button
+                    type="button"
+                    onClick={handleSubmit}
+                    disabled={submitting}
+                    className="w-full bg-black text-white py-3 rounded-2xl font-bold text-sm hover:bg-stone-800 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                    {submitting ? (
+                        <><Loader2 className="w-4 h-4 animate-spin" /> Re-scoring...</>
+                    ) : (
+                        <><RefreshCw className="w-4 h-4" /> Re-Match with These Settings</>
+                    )}
+                </button>
             </div>
         </div>
     );

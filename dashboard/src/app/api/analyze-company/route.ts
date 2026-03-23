@@ -417,7 +417,7 @@ export async function POST(request: NextRequest) {
         // Step 3: NAICS classification
         const description = (crawlData.description as string) || "";
         const services = (crawlData.services as string[]) || [];
-        const pageContent = (crawlData.pages_crawled as string[])?.join(" ") || "";
+        const pageContent = (crawlData.all_page_text as string) || "";
         const samNaics = samData ? (samData.naics_codes as string[]) : undefined;
         // Include NAICS from USASpending awards
         const usaNaics = usaspendingData?.naics_from_awards || [];

@@ -844,6 +844,7 @@ def main():
             "detected_uei": None,
             "detected_cage_code": None,
             "legal_info": {},
+            "all_page_text": "",
             "pages_crawled": [],
             "crawl_duration_ms": 0,
             "crawl_depth": 0,
@@ -986,6 +987,10 @@ def main():
 
         # Legal info extraction
         result["data"]["legal_info"] = extract_legal_info(all_texts, all_soups)
+
+        # Store combined page text for NAICS classification (capped at 10k chars)
+        combined_text = " ".join(all_texts)
+        result["data"]["all_page_text"] = combined_text[:10000]
 
         # LinkedIn enrichment (best-effort)
         if social_links.get("linkedin") and time.time() - start_time < HARD_TIMEOUT - 5:
