@@ -299,6 +299,36 @@ export function extractFoundingYear(texts: string[]): number | null {
 
 // ─── Leadership ────────────────────────────────────────────────────────────
 
+// Validate that a string looks like a real person's name (first + last, no junk)
+function isLikelyPersonName(name: string): boolean {
+    const words = name.split(/\s+/).filter(w => w.length > 0);
+    // Must have at least 2 words (first + last name)
+    if (words.length < 2 || words.length > 5) return false;
+    // Each word should start with an uppercase letter and be alphabetic
+    if (!words.every(w => /^[A-Z][a-zA-Z'-]+$/.test(w))) return false;
+    // Reject common non-name words
+    const junkNames = new Set(["our", "the", "and", "for", "with", "from", "your", "this", "that",
+        "all", "new", "top", "best", "more", "about", "home", "page", "site",
+        "ambient", "general", "commercial", "industrial", "professional", "custom"]);
+    if (words.some(w => junkNames.has(w.toLowerCase()))) return false;
+    // Name total length reasonable
+    if (name.length < 5 || name.length > 40) return false;
+    return true;
+}
+
+// Validate that a string looks like a real business title
+function isLikelyTitle(title: string): boolean {
+    const tl = title.toLowerCase();
+    // Must contain at least one recognized leadership keyword
+    const hasKeyword = TITLE_KEYWORDS.some(kw => tl.includes(kw));
+    if (!hasKeyword) return false;
+    // Should be short (a title, not a sentence)
+    if (title.length > 60 || title.length < 3) return false;
+    // Reject if it looks like a description/sentence (too many words)
+    if (title.split(/\s+/).length > 8) return false;
+    return true;
+}
+
 export function extractLeadership(
     texts: string[], soups: CheerioAPI[]
 ): Array<{ name: string; title: string; email?: string; phone?: string }> {
@@ -322,75 +352,67 @@ export function extractLeadership(
         // Method 1: Structured name+title in divs/sections
         $("div, section, article, li, td, span, p").each((_i, el) => {
             const tagText = $(el).text().trim();
-            const tagLower = tagText.toLowerCase();
+            if (tagText.length > 200 || tagText.length < 8) return;
 
-            for (const keyword of TITLE_KEYWORDS) {
-                if (tagLower.includes(keyword) && tagText.length < 200) {
-                    const parts = tagText.split(/[-–—|,\n\r]/);
-                    if (parts.length >= 2) {
-                        const name = parts[0].trim();
-                        const title = parts[1].trim();
-                        if (name.length > 3 && name.length < 50 && title.length > 3 && title.length < 60) {
-                            const leader: { name: string; title: string; email?: string; phone?: string } = { name, title };
-                            // Check parent for nearby contact info
-                            const parentEl = $(el).parent();
-                            if (parentEl.length) {
-                                const parentText = parentEl.text().trim();
-                                const nearbyEmails = findAll(EMAIL_RE, parentText);
-                                for (const em of nearbyEmails) {
-                                    if (!JUNK_EMAIL_DOMAINS.has(em[0].split("@")[1].toLowerCase())) {
-                                        leader.email = em[0].toLowerCase();
-                                        break;
-                                    }
-                                }
-                                const nearbyPhones = findAll(PHONE_RE, parentText);
-                                for (const ph of nearbyPhones) {
-                                    const clean = ph[1].replace(/[^\d+]/g, "");
-                                    if (clean.length >= 10) { leader.phone = ph[1].trim(); break; }
-                                }
-                            }
-                            leaders.push(leader);
-                        }
+            const parts = tagText.split(/[-–—|,\n\r]/);
+            if (parts.length < 2) return;
+
+            const name = parts[0].trim();
+            const title = parts[1].trim();
+
+            // Both parts must pass validation
+            if (!isLikelyPersonName(name)) return;
+            if (!isLikelyTitle(title)) return;
+
+            const leader: { name: string; title: string; email?: string; phone?: string } = { name, title };
+            // Check parent for nearby contact info
+            const parentEl = $(el).parent();
+            if (parentEl.length) {
+                const parentText = parentEl.text().trim();
+                const nearbyEmails = findAll(EMAIL_RE, parentText);
+                for (const em of nearbyEmails) {
+                    if (!JUNK_EMAIL_DOMAINS.has(em[0].split("@")[1].toLowerCase())) {
+                        leader.email = em[0].toLowerCase();
+                        break;
                     }
-                    break;
+                }
+                const nearbyPhones = findAll(PHONE_RE, parentText);
+                for (const ph of nearbyPhones) {
+                    const clean = ph[1].replace(/[^\d+]/g, "");
+                    if (clean.length >= 10) { leader.phone = ph[1].trim(); break; }
                 }
             }
+            leaders.push(leader);
         });
 
         // Method 2: h3/h4/h5 with name, followed by sibling with title
         $("h3, h4, h5").each((_i, el) => {
             const headingText = $(el).text().trim();
-            if (headingText.length <= 3 || headingText.length >= 50) return;
-            const skipWords = ["service", "about", "contact", "our", "meet"];
-            if (skipWords.some(w => headingText.toLowerCase().includes(w))) return;
+            if (!isLikelyPersonName(headingText)) return;
 
             const sibling = $(el).nextAll("p, span, div").first();
             if (!sibling.length) return;
             const sibText = sibling.text().trim();
-            const sibLower = sibText.toLowerCase();
 
-            for (const keyword of TITLE_KEYWORDS) {
-                if (sibLower.includes(keyword) && sibText.length < 80) {
-                    const leader: { name: string; title: string; email?: string; phone?: string } = {
-                        name: headingText, title: sibText
-                    };
-                    const contactSib = sibling.nextAll("p, span, div, a").first();
-                    if (contactSib.length) {
-                        const csText = contactSib.text().trim();
-                        const em = findAll(EMAIL_RE, csText);
-                        if (em.length && !JUNK_EMAIL_DOMAINS.has(em[0][0].split("@")[1].toLowerCase())) {
-                            leader.email = em[0][0].toLowerCase();
-                        }
-                        const ph = findAll(PHONE_RE, csText);
-                        if (ph.length) {
-                            const clean = ph[0][1].replace(/[^\d+]/g, "");
-                            if (clean.length >= 10) leader.phone = ph[0][1].trim();
-                        }
-                    }
-                    leaders.push(leader);
-                    return; // equivalent to break from inner loop + continue outer
+            if (!isLikelyTitle(sibText)) return;
+
+            const leader: { name: string; title: string; email?: string; phone?: string } = {
+                name: headingText, title: sibText
+            };
+            const contactSib = sibling.nextAll("p, span, div, a").first();
+            if (contactSib.length) {
+                const csText = contactSib.text().trim();
+                const em = findAll(EMAIL_RE, csText);
+                if (em.length && !JUNK_EMAIL_DOMAINS.has(em[0][0].split("@")[1].toLowerCase())) {
+                    leader.email = em[0][0].toLowerCase();
+                }
+                const ph = findAll(PHONE_RE, csText);
+                if (ph.length) {
+                    const clean = ph[0][1].replace(/[^\d+]/g, "");
+                    if (clean.length >= 10) leader.phone = ph[0][1].trim();
                 }
             }
+            leaders.push(leader);
         });
     }
 
@@ -403,9 +425,9 @@ export function extractLeadership(
         return true;
     });
 
-    // Heuristic email assignment if no contact info
+    // Heuristic email assignment if no contact info — only use personal emails
     if (unique.length && allEmails.size) {
-        const genericPrefixes = ["info@", "contact@", "support@", "admin@", "sales@", "hello@", "office@"];
+        const genericPrefixes = ["info@", "contact@", "support@", "admin@", "sales@", "hello@", "office@", "hr@", "jobs@", "careers@"];
         const personalEmails = [...allEmails].filter(e => !genericPrefixes.some(p => e.startsWith(p)));
 
         for (const leader of unique) {

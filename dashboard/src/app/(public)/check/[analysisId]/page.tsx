@@ -524,7 +524,9 @@ export default function CheckResultsPage() {
                                 {(() => {
                                     const person = contactPerson || leadership[0];
                                     if (!person) return null;
-                                    const email = person.email || crawl.contacts?.find(c => c.email)?.email;
+                                    const genericPrefixes = ["info@", "contact@", "support@", "admin@", "sales@", "hello@", "office@", "hr@"];
+                                    const personalContact = crawl.contacts?.find(c => c.email && !genericPrefixes.some(p => c.email!.startsWith(p)));
+                                    const email = person.email || personalContact?.email;
                                     const phone = person.phone || sam?.phone || crawl.contacts?.find(c => c.phone)?.phone;
                                     return (
                                         <div className="bg-stone-50 border border-stone-200 rounded-xl p-4">
