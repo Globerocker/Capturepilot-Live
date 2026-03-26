@@ -170,7 +170,7 @@ export function scoreOpportunityLeadMagnet(
     // HARD GATE: NAICS must match at least at 4-digit level (0.6+)
     // Without this, default scores from other factors let random opps through
     const naics = scoreNaics(profile.naics_codes || [], opp.naics_code);
-    if (naics < 0.3) return null; // Reject if not even a 3-digit NAICS prefix match
+    if (naics < 0.6) return null; // Reject if not even a 4-digit NAICS prefix match
 
     const nt = scoreNoticeType(opp.notice_type);
     if (nt === null) return null;

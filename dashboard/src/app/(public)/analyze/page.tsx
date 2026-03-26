@@ -68,12 +68,12 @@ function AnalyzeContent() {
 
     useEffect(() => {
         if (startedRef.current) return;
-        if (!website) {
+        if (!website && !uei) {
             router.push("/");
             return;
         }
         startedRef.current = true;
-        setDisplayName(companyName || getDomain(website));
+        setDisplayName(companyName || (website ? getDomain(website) : "") || uei);
 
         // POST to API — returns analysis_id immediately, processes in background
         fetch("/api/analyze-company", {
@@ -81,7 +81,7 @@ function AnalyzeContent() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 company_name: companyName || undefined,
-                website,
+                website: website || undefined,
                 uei: uei || undefined,
             }),
         })

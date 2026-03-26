@@ -9,6 +9,7 @@ function CheckContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const [website, setWebsite] = useState("");
+    const [uei, setUei] = useState("");
     const [running, setRunning] = useState(false);
     const [step, setStep] = useState(0);
     const [error, setError] = useState("");
@@ -131,7 +132,7 @@ function CheckContent() {
     function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
         if (!website.trim()) return;
-        runAnalysis(website.trim(), "");
+        runAnalysis(website.trim(), uei.trim().toUpperCase());
     }
 
     if (running) {
@@ -195,6 +196,22 @@ function CheckContent() {
                                 placeholder="www.acmelogistics.com"
                                 required
                                 autoFocus
+                            />
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-typewriter font-bold text-stone-500 uppercase tracking-widest mb-1.5">
+                            UEI (Optional)
+                        </label>
+                        <div className="relative">
+                            <input
+                                type="text"
+                                value={uei}
+                                onChange={(e) => setUei(e.target.value.toUpperCase())}
+                                className="w-full px-4 py-3.5 rounded-xl border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-black/10 focus:border-stone-400 font-mono"
+                                placeholder="ABC123456789"
+                                maxLength={12}
                             />
                         </div>
                     </div>

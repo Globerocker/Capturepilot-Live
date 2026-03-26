@@ -48,10 +48,9 @@ export default function LandingPage() {
         setLoading(true);
 
         // Navigate to analyze page with query params
-        const params = new URLSearchParams({
-            company_name: companyName.trim(),
-            website: url,
-        });
+        const params = new URLSearchParams();
+        if (companyName.trim()) params.set("company_name", companyName.trim());
+        if (url) params.set("website", url);
         if (uei.trim()) params.set("uei", uei.trim().toUpperCase());
 
         router.push(`/analyze?${params.toString()}`);

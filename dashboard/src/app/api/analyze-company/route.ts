@@ -384,24 +384,42 @@ function computeEasyWins(
 // ---------------------------------------------------------------------------
 // BACKGROUND PIPELINE — runs via after() once response is sent
 // ---------------------------------------------------------------------------
-async function runAnalysisPipeline(analysisId: string, initialCompanyName: string, website: string, initialUei: string) {
+async function runAnalysisPipeline(analysisId: string, initialCompanyName: string, initialWebsite: string, initialUei: string) {
     const sb = makeDb();
     let companyName = initialCompanyName;
+    let website = initialWebsite;
     let uei = initialUei;
 
     try {
-        // Step 1: Crawl company website with CheerioCrawler
+        // IF we have UEI, ALWAYS fetch SAM first to resolve authoritative info
+        let samData: Record<string, unknown> | null = null;
+        if (uei && uei.length === 12) {
+            samData = await lookupSamEntity(uei);
+            if (samData) {
+                companyName = (samData.company_name as string) || companyName;
+
+                await sb.from("company_analyses").update({ 
+                    sam_data: samData, 
+                    company_name: companyName,
+                    uei: uei
+                }).eq("id", analysisId);
+            }
+        }
+
+        // Step 1: Crawl company website with CheerioCrawler (if we have a website)
         let crawlData: Record<string, unknown> = {};
-        try {
-            const crawlResult = await analyzeCompany(companyName, website);
-            if (crawlResult.success && crawlResult.data) {
-                crawlData = crawlResult.data as unknown as Record<string, unknown>;
+        if (website) {
+            try {
+                const crawlResult = await analyzeCompany(companyName, website);
+                if (crawlResult.success && crawlResult.data) {
+                    crawlData = crawlResult.data as unknown as Record<string, unknown>;
+                }
+                if (crawlResult.errors.length > 0) {
+                    console.warn("Crawl warnings:", crawlResult.errors);
+                }
+            } catch (e) {
+                console.error("Crawler error:", e);
             }
-            if (crawlResult.errors.length > 0) {
-                console.warn("Crawl warnings:", crawlResult.errors);
-            }
-        } catch (e) {
-            console.error("Crawler error:", e);
         }
 
         // Auto-detect company name from crawled website
@@ -421,10 +439,9 @@ async function runAnalysisPipeline(analysisId: string, initialCompanyName: strin
         await sb.from("company_analyses").update({ status: "enriching", crawl_data: crawlData }).eq("id", analysisId);
 
         // Step 2: SAM.gov lookup
-        // First try by UEI (if we have one from user input or crawl detection)
+        // First try by UEI (if we have one from user input, crawl detection, or pre-fetched above)
         // If no UEI, search SAM.gov by company name to find their registration
-        let samData: Record<string, unknown> | null = null;
-        if (uei && uei.length === 12) {
+        if (!samData && uei && uei.length === 12) {
             samData = await lookupSamEntity(uei);
         }
 
