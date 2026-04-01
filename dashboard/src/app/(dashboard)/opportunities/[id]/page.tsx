@@ -130,8 +130,72 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
         opp.place_of_performance_city,
         opp.place_of_performance_state,
         opp.place_of_performance_zip,
-        opp.place_of_performance_country
     ].filter(Boolean).join(", ");
+
+    // Compute success probability from available data
+    const hasSetAside = !!opp.set_aside_code && !opp.set_aside_code.toLowerCase().includes("none");
+    const hasIncumbent = !!opp.incumbent_contractor_name;
+    const isSourcesSought = opp.sources_sought_flag || (opp.notice_type || "").toLowerCase().includes("sources sought");
+    const isActive = opp.status === "ACTIVE" || opp.status === "EXPIRING_SOON";
+    const daysToDeadline = opp.response_deadline ? Math.ceil((new Date(opp.response_deadline).getTime() - Date.now()) / 86400000) : null;
+
+    let successScore = 30; // base
+    if (hasSetAside) successScore += 20;
+    if (!hasIncumbent) successScore += 15;
+    if (isSourcesSought) successScore += 15;
+    if (daysToDeadline && daysToDeadline > 14) successScore += 10;
+    if (opp.veteran_relevance_flag) successScore += 5;
+    if (opp.small_business_relevance_flag) successScore += 5;
+    successScore = Math.min(95, successScore);
+    const successLabel = successScore >= 70 ? "HIGH" : successScore >= 50 ? "MEDIUM" : "LOW";
+    const successColor = successScore >= 70 ? "text-emerald-600" : successScore >= 50 ? "text-amber-600" : "text-red-600";
+
+    // Generate key points from available data
+    const keyPoints: string[] = [];
+    if (hasSetAside) keyPoints.push(`Set-aside: ${opp.set_aside_code} — limits competition to qualified small businesses`);
+    if (isSourcesSought) keyPoints.push("Sources Sought / RFI — early pipeline, respond with capability statement");
+    if (hasIncumbent) keyPoints.push(`Incumbent: ${opp.incumbent_contractor_name} — recompete, position against current contractor`);
+    if (!hasIncumbent && !isSourcesSought) keyPoints.push("No incumbent detected — open competition");
+    if (daysToDeadline && daysToDeadline > 0) keyPoints.push(`${daysToDeadline} days until deadline`);
+    else if (daysToDeadline !== null && daysToDeadline <= 0) keyPoints.push("Deadline has passed");
+    if (opp.naics_code) keyPoints.push(`NAICS: ${opp.naics_code}`);
+    if (locationString) keyPoints.push(`Location: ${locationString}`);
+    if (opp.veteran_relevance_flag) keyPoints.push("Veteran-owned business eligible");
+    if (opp.wosb_relevance_flag) keyPoints.push("Women-owned business eligible");
+
+    // Generate action items based on notice type
+    const actionItems: { text: string; priority: "high" | "medium" | "low" }[] = [];
+    if (isSourcesSought) {
+        actionItems.push({ text: "Prepare and submit a capability statement", priority: "high" });
+        actionItems.push({ text: "Identify the Contracting Officer and introduce your company", priority: "high" });
+        actionItems.push({ text: "Research teaming partners with relevant past performance", priority: "medium" });
+    } else if ((opp.notice_type || "").toLowerCase().includes("presol")) {
+        actionItems.push({ text: "Research the incumbent contractor", priority: "high" });
+        actionItems.push({ text: "Conduct a bid/no-bid analysis", priority: "high" });
+        actionItems.push({ text: "Prepare your capability statement", priority: "medium" });
+        actionItems.push({ text: "Identify potential teaming partners", priority: "medium" });
+    } else {
+        actionItems.push({ text: "Review the Statement of Work (SOW)", priority: "high" });
+        actionItems.push({ text: "Conduct go/no-go analysis", priority: "high" });
+        actionItems.push({ text: "Begin technical proposal draft", priority: "high" });
+        actionItems.push({ text: "Develop competitive pricing strategy", priority: "medium" });
+    }
+    if (contacts.length > 0) {
+        actionItems.push({ text: `Contact ${contacts[0].name} (${contacts[0].email || contacts[0].phone || "see details"})`, priority: "medium" });
+    }
+
+    // Status badge config
+    const statusBadge: Record<string, { color: string; label: string }> = {
+        ACTIVE: { color: "bg-emerald-100 text-emerald-700 border-emerald-200", label: "ACTIVE" },
+        EXPIRING_SOON: { color: "bg-red-100 text-red-700 border-red-200", label: "EXPIRING SOON" },
+        EXPIRED: { color: "bg-stone-200 text-stone-600 border-stone-300", label: "EXPIRED" },
+        MARKET_RESEARCH: { color: "bg-violet-100 text-violet-700 border-violet-200", label: "MARKET RESEARCH" },
+        INTELLIGENCE: { color: "bg-blue-100 text-blue-700 border-blue-200", label: "INTELLIGENCE" },
+        AWARDED: { color: "bg-amber-100 text-amber-700 border-amber-200", label: "AWARDED" },
+        SEARCH_SEED: { color: "bg-cyan-100 text-cyan-700 border-cyan-200", label: "FORECAST" },
+        DISCOVERED: { color: "bg-stone-100 text-stone-600 border-stone-200", label: "DISCOVERED" },
+    };
+    const badge = statusBadge[opp.status] || statusBadge.DISCOVERED;
 
     return (
         <div className="max-w-6xl mx-auto space-y-6 sm:space-y-10 animate-in fade-in duration-500 pb-16 px-1">
@@ -142,22 +206,99 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                     Back to Opportunities
                 </Link>
                 <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
-                    <span className="bg-stone-100 text-stone-800 font-bold font-typewriter text-[10px] sm:text-xs px-2 sm:px-3 py-1 sm:py-1.5 rounded-md border border-stone-200 uppercase tracking-wider shadow-sm">
-                        {opp.notice_id}
+                    <span className={clsx("font-bold font-typewriter text-[10px] sm:text-xs px-2 sm:px-3 py-1 sm:py-1.5 rounded-md border shadow-sm tracking-wider", badge.color)}>
+                        {badge.label}
                     </span>
                     <span className="bg-blue-50 text-blue-700 font-bold font-typewriter text-[10px] sm:text-xs px-2 sm:px-3 py-1 sm:py-1.5 rounded-md border border-blue-200 tracking-wider shadow-sm">
                         {opp.notice_type || "UNKNOWN TYPE"}
                     </span>
-                    {opp.is_archived && (
-                        <span className="bg-stone-800 text-stone-100 font-bold font-typewriter text-[10px] sm:text-xs px-2 sm:px-3 py-1 sm:py-1.5 rounded-md shadow-sm tracking-wider">
-                            ARCHIVED
+                    {opp.veteran_relevance_flag && (
+                        <span className="bg-emerald-50 text-emerald-700 font-bold font-typewriter text-[10px] sm:text-xs px-2 sm:px-3 py-1 sm:py-1.5 rounded-md border border-emerald-200 shadow-sm">
+                            VETERAN
                         </span>
                     )}
+                    {opp.wosb_relevance_flag && (
+                        <span className="bg-pink-50 text-pink-700 font-bold font-typewriter text-[10px] sm:text-xs px-2 sm:px-3 py-1 sm:py-1.5 rounded-md border border-pink-200 shadow-sm">
+                            WOSB
+                        </span>
+                    )}
+                    {opp.small_business_relevance_flag && !opp.veteran_relevance_flag && !opp.wosb_relevance_flag && (
+                        <span className="bg-blue-50 text-blue-700 font-bold font-typewriter text-[10px] sm:text-xs px-2 sm:px-3 py-1 sm:py-1.5 rounded-md border border-blue-200 shadow-sm">
+                            SMALL BIZ
+                        </span>
+                    )}
+                    <span className="bg-stone-100 text-stone-600 font-mono text-[10px] px-2 py-1 rounded-md border border-stone-200">
+                        {opp.notice_id?.substring(0, 12)}...
+                    </span>
                 </div>
                 <h1 className="text-2xl sm:text-4xl md:text-5xl font-bold tracking-tight text-stone-900 leading-tight mb-4 sm:mb-6">
                     {opp.title}
                 </h1>
             </header>
+
+            {/* Quick Summary Bar */}
+            <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-6">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6">
+                    <div className="text-center">
+                        <p className={clsx("text-3xl font-black", successColor)}>{successScore}%</p>
+                        <p className="text-[10px] font-typewriter text-stone-400 uppercase mt-1">Success Probability</p>
+                    </div>
+                    <div className="text-center">
+                        <p className="text-3xl font-black text-stone-800">{formattedValue}</p>
+                        <p className="text-[10px] font-typewriter text-stone-400 uppercase mt-1">Est. Value</p>
+                    </div>
+                    <div className="text-center">
+                        <p className={clsx("text-3xl font-black", daysToDeadline && daysToDeadline <= 7 ? "text-red-600" : daysToDeadline && daysToDeadline <= 14 ? "text-amber-600" : "text-stone-800")}>
+                            {daysToDeadline !== null ? (daysToDeadline > 0 ? `${daysToDeadline}d` : "Past") : "TBD"}
+                        </p>
+                        <p className="text-[10px] font-typewriter text-stone-400 uppercase mt-1">Deadline</p>
+                    </div>
+                    <div className="text-center">
+                        <p className="text-3xl font-black text-stone-800">{contacts.length}</p>
+                        <p className="text-[10px] font-typewriter text-stone-400 uppercase mt-1">Contacts</p>
+                    </div>
+                </div>
+            </div>
+
+            {/* Key Points + Action Items */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+                {/* Key Points */}
+                <div className="bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden">
+                    <div className="bg-stone-50 border-b border-stone-100 px-5 py-3">
+                        <h2 className="font-typewriter text-sm font-bold text-stone-800">Key Points</h2>
+                    </div>
+                    <div className="p-5 space-y-2">
+                        {keyPoints.map((point, i) => (
+                            <div key={i} className="flex items-start gap-2 text-sm text-stone-700">
+                                <span className="text-stone-400 mt-0.5">•</span>
+                                <span>{point}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Action Items */}
+                <div className="bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden">
+                    <div className="bg-stone-50 border-b border-stone-100 px-5 py-3">
+                        <h2 className="font-typewriter text-sm font-bold text-stone-800">Action Items</h2>
+                    </div>
+                    <div className="p-5 space-y-2">
+                        {actionItems.map((item, i) => (
+                            <div key={i} className="flex items-start gap-2 text-sm">
+                                <span className={clsx(
+                                    "text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase mt-0.5 flex-shrink-0",
+                                    item.priority === "high" ? "bg-red-50 text-red-600 border-red-200" :
+                                    item.priority === "medium" ? "bg-amber-50 text-amber-600 border-amber-200" :
+                                    "bg-stone-50 text-stone-500 border-stone-200"
+                                )}>
+                                    {item.priority}
+                                </span>
+                                <span className="text-stone-700">{item.text}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
 
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-8">
                 {/* Left Column: Data & Requirements */}
