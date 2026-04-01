@@ -2,6 +2,7 @@ import Sidebar from "@/components/layout/Sidebar";
 import UpgradeBanner from "@/components/UpgradeBanner";
 import LockScreen from "@/components/LockScreen";
 import FeedbackWidget from "@/components/FeedbackWidget";
+import { ReviewPrompt } from "@/components/ReviewPrompt";
 
 export default function DashboardLayout({
   children,
@@ -19,6 +20,7 @@ export default function DashboardLayout({
       </main>
       <LockScreen />
       <FeedbackWidget />
+      <ReviewPrompt />
     </div>
   );
 }
