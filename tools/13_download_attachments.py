@@ -321,7 +321,8 @@ def main():
             .select("id, resource_links, structured_requirements") \
             .neq("resource_links", "[]") \
             .not_.is_("resource_links", "null") \
-            .order("posted_date", desc=True) \
+            .eq("is_archived", False) \
+            .order("created_at", desc=True) \
             .range(offset, offset + batch - 1) \
             .execute()
 
