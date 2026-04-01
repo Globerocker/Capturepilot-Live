@@ -362,6 +362,15 @@ function OnboardPageContent() {
         setSaved(true);
         setSaving(false);
 
+        // Send welcome email in background
+        if (user?.email) {
+            fetch("/api/email/welcome", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email: user.email, company_name: form.company_name }),
+            }).catch(() => {});
+        }
+
         // Trigger match scoring in background
         setScoringMatches(true);
         try {

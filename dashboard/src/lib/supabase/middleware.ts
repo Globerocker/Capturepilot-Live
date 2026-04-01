@@ -43,7 +43,8 @@ export async function updateSession(request: NextRequest) {
     pathname.startsWith("/api/") ||
     pathname.startsWith("/_next/") ||
     pathname.startsWith("/analyze/") ||
-    pathname.startsWith("/check/");
+    pathname.startsWith("/check/") ||
+    pathname.startsWith("/admin/");  // Admin pages (internal use)
 
   // If user is not authenticated and trying to access a protected route
   if (!user && !isPublicRoute) {
@@ -52,35 +53,49 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // If authenticated user visits public pages, redirect to dashboard
+  // If authenticated user visits public pages, redirect based on account type
   if (user && (pathname === "/" || pathname === "/login" || pathname === "/signup")) {
+    // Check if consulting client → redirect to portal
+    const { data: profile } = await supabase
+      .from("user_profiles")
+      .select("account_type, onboarding_complete")
+      .eq("auth_user_id", user.id)
+      .single();
+
     const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
+    if (profile?.account_type === "consulting") {
+      url.pathname = "/portal";
+    } else {
+      url.pathname = "/dashboard";
+    }
     return NextResponse.redirect(url);
   }
 
-  // Onboarding gate: force authenticated users to complete onboarding
-  if (user && !isPublicRoute && pathname !== "/onboard") {
+  // Onboarding gate: force non-consulting users to complete onboarding
+  const isPortalRoute = pathname.startsWith("/portal");
+  if (user && !isPublicRoute && !isPortalRoute && pathname !== "/onboard") {
     const onboardingCookie = request.cookies.get("cp_onboarding_complete");
     if (onboardingCookie?.value !== "true") {
       const { data: profile } = await supabase
         .from("user_profiles")
-        .select("onboarding_complete")
+        .select("onboarding_complete, account_type")
         .eq("auth_user_id", user.id)
         .single();
 
-      if (!profile || !profile.onboarding_complete) {
+      // Consulting clients skip onboarding (admin did it for them)
+      if (profile?.account_type === "consulting") {
+        supabaseResponse.cookies.set("cp_onboarding_complete", "true", {
+          path: "/", maxAge: 86400 * 30, httpOnly: true, sameSite: "lax",
+        });
+      } else if (!profile || !profile.onboarding_complete) {
         const url = request.nextUrl.clone();
         url.pathname = "/onboard";
         return NextResponse.redirect(url);
+      } else {
+        supabaseResponse.cookies.set("cp_onboarding_complete", "true", {
+          path: "/", maxAge: 86400 * 30, httpOnly: true, sameSite: "lax",
+        });
       }
-
-      supabaseResponse.cookies.set("cp_onboarding_complete", "true", {
-        path: "/",
-        maxAge: 86400 * 30,
-        httpOnly: true,
-        sameSite: "lax",
-      });
     }
   }
 

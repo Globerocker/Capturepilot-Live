@@ -42,9 +42,14 @@ export async function GET(request: Request) {
 
         const { data: profile } = await supabase
           .from("user_profiles")
-          .select("onboarding_complete")
+          .select("onboarding_complete, account_type, company_name")
           .eq("auth_user_id", user.id)
           .single();
+
+        // Consulting clients go to /portal (skip onboarding)
+        if (profile?.account_type === "consulting") {
+          return NextResponse.redirect(`${origin}/portal`);
+        }
 
         if (!profile || !profile.onboarding_complete) {
           const onboardUrl = resolvedAnalysisId

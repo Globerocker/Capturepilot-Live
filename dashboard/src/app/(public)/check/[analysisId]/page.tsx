@@ -92,7 +92,7 @@ interface AnalysisData {
         state?: string;
         phone?: string;
         email?: string;
-        contact_person?: { name: string; title: string; email?: string; phone?: string } | null;
+        contact_person?: { name: string; title: string; email?: string; phone?: string; mobile_phone?: string; direct_phone?: string; linkedin_url?: string; source?: string } | null;
         [key: string]: unknown;
     };
     cert_recommendations: CertRecommendation[];
@@ -366,6 +366,13 @@ export default function CheckResultsPage() {
     const contactPerson = profile.contact_person || samPocs[0] || leadership[0] || null;
     const uei = sam?.uei || profile.uei || null;
     const cageCode = sam?.cage_code || profile.cage_code || null;
+    const govSpending = (profile as Record<string, unknown>).gov_spending as {
+        award_count: number; total_value: number; last_award_date: string | null;
+        last_award_title: string | null; last_award_amount: number | null;
+        last_award_agency: string | null; agencies: string[];
+        top_awards: { title: string; amount: number; agency: string; date: string }[];
+        searched_by: string;
+    } | null;
 
     const impactColors = {
         high: "bg-red-50 text-red-700 border-red-200",
@@ -377,6 +384,12 @@ export default function CheckResultsPage() {
         easy: "bg-emerald-50 text-emerald-700 border-emerald-200",
         moderate: "bg-amber-50 text-amber-700 border-amber-200",
         complex: "bg-red-50 text-red-700 border-red-200",
+    };
+
+    const fmtCurrency = (amount: number) => {
+        if (amount >= 1_000_000) return `$${(amount / 1_000_000).toFixed(1)}M`;
+        if (amount >= 1_000) return `$${(amount / 1_000).toFixed(0)}K`;
+        return `$${amount.toLocaleString()}`;
     };
 
     return (
@@ -532,6 +545,11 @@ export default function CheckResultsPage() {
                                     const personalContact = crawl.contacts?.find(c => c.email && !genericPrefixes.some(p => c.email!.startsWith(p)));
                                     const email = person.email || personalContact?.email;
                                     const phone = person.phone || sam?.phone || crawl.contacts?.find(c => c.phone)?.phone;
+                                    const cp = profile.contact_person;
+                                    const mobilePhone = cp?.mobile_phone;
+                                    const directPhone = cp?.direct_phone;
+                                    const linkedinUrl = cp?.linkedin_url;
+                                    const enrichSource = cp?.source;
                                     return (
                                         <div className="bg-stone-50 border border-stone-200 rounded-xl p-4">
                                             <div className="flex items-start gap-3">
@@ -539,7 +557,12 @@ export default function CheckResultsPage() {
                                                     {person.name.charAt(0).toUpperCase()}
                                                 </div>
                                                 <div className="min-w-0">
-                                                    <p className="font-bold text-sm text-black">{person.name}</p>
+                                                    <div className="flex items-center gap-2">
+                                                        <p className="font-bold text-sm text-black">{person.name}</p>
+                                                        {enrichSource === "apollo" && (
+                                                            <span className="text-[9px] font-typewriter font-bold bg-violet-50 text-violet-600 border border-violet-200 px-1.5 py-0.5 rounded">Apollo Verified</span>
+                                                        )}
+                                                    </div>
                                                     <p className="text-xs text-stone-500">{person.title}</p>
                                                     <div className="flex flex-wrap gap-2 mt-2">
                                                         {email && (
@@ -547,9 +570,24 @@ export default function CheckResultsPage() {
                                                                 <Mail className="w-3 h-3" /> {email}
                                                             </a>
                                                         )}
-                                                        {phone && (
+                                                        {mobilePhone && (
+                                                            <a href={`tel:${mobilePhone}`} className="text-xs text-emerald-600 hover:underline inline-flex items-center gap-1">
+                                                                <Phone className="w-3 h-3" /> {mobilePhone} <span className="text-[9px] text-emerald-400">(Mobile)</span>
+                                                            </a>
+                                                        )}
+                                                        {directPhone && !mobilePhone && (
+                                                            <a href={`tel:${directPhone}`} className="text-xs text-blue-600 hover:underline inline-flex items-center gap-1">
+                                                                <Phone className="w-3 h-3" /> {directPhone} <span className="text-[9px] text-stone-400">(Direct)</span>
+                                                            </a>
+                                                        )}
+                                                        {phone && !mobilePhone && !directPhone && (
                                                             <a href={`tel:${phone}`} className="text-xs text-blue-600 hover:underline inline-flex items-center gap-1">
                                                                 <Phone className="w-3 h-3" /> {phone}
+                                                            </a>
+                                                        )}
+                                                        {linkedinUrl && (
+                                                            <a href={linkedinUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline inline-flex items-center gap-1">
+                                                                <Linkedin className="w-3 h-3" /> LinkedIn
                                                             </a>
                                                         )}
                                                     </div>
@@ -607,6 +645,91 @@ export default function CheckResultsPage() {
                                             <Phone className="w-3 h-3" /> {c.phone}
                                         </a>
                                     ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Government Spending History */}
+                        {govSpending && govSpending.award_count > 0 && (
+                            <div>
+                                <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-2">
+                                    <DollarSign className="w-3 h-3 inline mr-1" />Federal Contract History
+                                    {govSpending.searched_by === "uei" && <span className="ml-2 text-emerald-500">(UEI verified)</span>}
+                                </p>
+                                <div className="bg-stone-50 border border-stone-200 rounded-xl p-4 space-y-3">
+                                    {/* Summary stats */}
+                                    <div className="grid grid-cols-3 gap-3">
+                                        <div className="text-center">
+                                            <p className="text-lg font-black text-stone-800">{govSpending.award_count}</p>
+                                            <p className="text-[9px] font-typewriter text-stone-400 uppercase">Awards</p>
+                                        </div>
+                                        <div className="text-center">
+                                            <p className="text-lg font-black text-emerald-600">{fmtCurrency(govSpending.total_value)}</p>
+                                            <p className="text-[9px] font-typewriter text-stone-400 uppercase">Total Value</p>
+                                        </div>
+                                        <div className="text-center">
+                                            <p className="text-lg font-black text-stone-800">{govSpending.agencies.length}</p>
+                                            <p className="text-[9px] font-typewriter text-stone-400 uppercase">Agencies</p>
+                                        </div>
+                                    </div>
+
+                                    {/* Last award */}
+                                    {govSpending.last_award_date && (
+                                        <div className="border-t border-stone-200 pt-3">
+                                            <p className="text-[9px] font-typewriter text-stone-400 uppercase mb-1">Most Recent Award</p>
+                                            <div className="flex items-start gap-2">
+                                                <Award className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-xs font-bold text-stone-700 leading-tight">
+                                                        {govSpending.last_award_title || "Award"}
+                                                    </p>
+                                                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                                        <span className="text-[10px] text-stone-500">
+                                                            <Calendar className="w-3 h-3 inline mr-0.5" />
+                                                            {new Date(govSpending.last_award_date).toLocaleDateString("en-US", { month: "short", year: "numeric" })}
+                                                        </span>
+                                                        {govSpending.last_award_amount && (
+                                                            <span className="text-[10px] font-bold text-emerald-600">
+                                                                {fmtCurrency(govSpending.last_award_amount)}
+                                                            </span>
+                                                        )}
+                                                        {govSpending.last_award_agency && (
+                                                            <span className="text-[10px] text-stone-400">{govSpending.last_award_agency}</span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Top awards */}
+                                    {govSpending.top_awards.length > 1 && (
+                                        <div className="border-t border-stone-200 pt-3">
+                                            <p className="text-[9px] font-typewriter text-stone-400 uppercase mb-2">Top Awards by Value</p>
+                                            <div className="space-y-1.5">
+                                                {govSpending.top_awards.slice(0, 3).map((award, i) => (
+                                                    <div key={i} className="flex items-center justify-between text-xs">
+                                                        <span className="text-stone-600 truncate flex-1 mr-2">{award.title || "Award"}</span>
+                                                        <span className="font-bold text-stone-800 flex-shrink-0">{fmtCurrency(award.amount)}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Agencies worked with */}
+                                    {govSpending.agencies.length > 0 && (
+                                        <div className="border-t border-stone-200 pt-3">
+                                            <p className="text-[9px] font-typewriter text-stone-400 uppercase mb-1.5">Agencies</p>
+                                            <div className="flex flex-wrap gap-1">
+                                                {govSpending.agencies.slice(0, 6).map((agency, i) => (
+                                                    <span key={i} className="text-[10px] bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-lg">
+                                                        {agency}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         )}

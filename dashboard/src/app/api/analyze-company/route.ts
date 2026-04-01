@@ -10,6 +10,7 @@ export const maxDuration = 120;
 const SAM_API_KEY = process.env.SAM_API_KEY || "";
 const SAM_ENTITY_URL = "https://api.sam.gov/entity-information/v3/entities";
 
+const APOLLO_API_KEY = process.env.APOLLO_API_KEY || "";
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY!;
 
@@ -213,22 +214,94 @@ Certifications: ${certifications.map(c => c.type).join(", ")}`,
 }
 
 // ---------------------------------------------------------------------------
-// USASpending ENRICHMENT
+// APOLLO PEOPLE ENRICHMENT — enrich decision-maker with mobile/direct email
 // ---------------------------------------------------------------------------
-async function lookupUsaSpending(companyName: string): Promise<{ award_count: number; total_value: number; agencies: string[]; naics_from_awards: string[] } | null> {
+async function enrichPersonApollo(
+    firstName: string,
+    lastName: string,
+    domain: string,
+    organizationName?: string,
+): Promise<{ mobile_phone?: string; direct_phone?: string; email?: string; linkedin_url?: string; title?: string } | null> {
+    if (!APOLLO_API_KEY || !firstName || !lastName) return null;
+
     try {
+        const payload: Record<string, unknown> = {
+            first_name: firstName,
+            last_name: lastName,
+        };
+        if (domain) payload.domain = domain.replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "");
+        if (organizationName) payload.organization_name = organizationName;
+
+        const res = await fetch("https://api.apollo.io/api/v1/people/match", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-Api-Key": APOLLO_API_KEY,
+            },
+            body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) {
+            console.warn(`Apollo people/match ${res.status}: ${res.statusText}`);
+            return null;
+        }
+
+        const data = await res.json();
+        const person = data.person;
+        if (!person) return null;
+
+        const phones = (person.phone_numbers || []) as Array<{ sanitized_number?: string; type?: string }>;
+        const mobile = phones.find(p => p.type === "mobile")?.sanitized_number;
+        const directPhone = phones.find(p => p.type === "work_direct" || p.type === "direct")?.sanitized_number;
+
+        return {
+            mobile_phone: mobile || undefined,
+            direct_phone: directPhone || (person.phone_number ? String(person.phone_number) : undefined),
+            email: person.email ? String(person.email) : undefined,
+            linkedin_url: person.linkedin_url ? String(person.linkedin_url) : undefined,
+            title: person.title ? String(person.title) : undefined,
+        };
+    } catch (e) {
+        console.warn("Apollo people enrichment error:", e);
+        return null;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// USASpending ENRICHMENT — enhanced with UEI-based lookup
+// ---------------------------------------------------------------------------
+interface UsaSpendingData {
+    award_count: number;
+    total_value: number;
+    agencies: string[];
+    naics_from_awards: string[];
+    last_award_date: string | null;
+    last_award_title: string | null;
+    last_award_amount: number | null;
+    last_award_agency: string | null;
+    top_awards: { title: string; amount: number; agency: string; date: string }[];
+    searched_by: "uei" | "name";
+}
+
+async function lookupUsaSpending(companyName: string, uei?: string): Promise<UsaSpendingData | null> {
+    try {
+        // Prefer UEI-based search (more precise) over name search
+        const searchText = uei && uei.length === 12 ? uei : companyName;
+        const searchedBy = uei && uei.length === 12 ? "uei" as const : "name" as const;
+
         const response = await fetch("https://api.usaspending.gov/api/v2/search/spending_by_award/", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 filters: {
-                    recipient_search_text: [companyName],
-                    time_period: [{ start_date: "2019-01-01", end_date: new Date().toISOString().split("T")[0] }],
+                    recipient_search_text: [searchText],
+                    time_period: [{ start_date: "2015-01-01", end_date: new Date().toISOString().split("T")[0] }],
+                    award_type_codes: ["A", "B", "C", "D", "IDV_A", "IDV_B", "IDV_B_A", "IDV_B_B", "IDV_B_C", "IDV_C", "IDV_D", "IDV_E"],
                 },
-                fields: ["Award ID", "Recipient Name", "Award Amount", "Awarding Agency", "NAICS Code"],
-                limit: 50,
+                fields: ["Award ID", "Recipient Name", "Award Amount", "Awarding Agency", "NAICS Code", "Start Date", "End Date", "Description"],
+                limit: 100,
                 page: 1,
-                sort: "Award Amount",
+                sort: "Start Date",
                 order: "desc",
             }),
         });
@@ -242,7 +315,35 @@ async function lookupUsaSpending(companyName: string): Promise<{ award_count: nu
         const naicsCodes = [...new Set(results.map(r => String(r["NAICS Code"] || "")).filter(c => c.length >= 4))];
         const totalValue = results.reduce((sum, r) => sum + (Number(r["Award Amount"]) || 0), 0);
 
-        return { award_count: results.length, total_value: totalValue, agencies, naics_from_awards: naicsCodes };
+        // Find the most recent award by start date
+        const sortedByDate = [...results].sort((a, b) => {
+            const da = String(a["Start Date"] || "");
+            const db = String(b["Start Date"] || "");
+            return db.localeCompare(da);
+        });
+        const lastAward = sortedByDate[0];
+
+        // Top awards by amount
+        const sortedByAmount = [...results].sort((a, b) => (Number(b["Award Amount"]) || 0) - (Number(a["Award Amount"]) || 0));
+        const topAwards = sortedByAmount.slice(0, 5).map(r => ({
+            title: String(r["Description"] || r["Award ID"] || "").substring(0, 120),
+            amount: Number(r["Award Amount"]) || 0,
+            agency: String(r["Awarding Agency"] || ""),
+            date: String(r["Start Date"] || ""),
+        }));
+
+        return {
+            award_count: results.length,
+            total_value: totalValue,
+            agencies,
+            naics_from_awards: naicsCodes,
+            last_award_date: String(lastAward?.["Start Date"] || "") || null,
+            last_award_title: String(lastAward?.["Description"] || "").substring(0, 120) || null,
+            last_award_amount: Number(lastAward?.["Award Amount"]) || null,
+            last_award_agency: String(lastAward?.["Awarding Agency"] || "") || null,
+            top_awards: topAwards,
+            searched_by: searchedBy,
+        };
     } catch {
         return null;
     }
@@ -384,7 +485,7 @@ function computeEasyWins(
 // ---------------------------------------------------------------------------
 // BACKGROUND PIPELINE — runs via after() once response is sent
 // ---------------------------------------------------------------------------
-async function runAnalysisPipeline(analysisId: string, initialCompanyName: string, initialWebsite: string, initialUei: string) {
+async function runAnalysisPipeline(analysisId: string, initialCompanyName: string, initialWebsite: string, initialUei: string, userProvidedName: boolean) {
     const sb = makeDb();
     let companyName = initialCompanyName;
     let website = initialWebsite;
@@ -422,9 +523,9 @@ async function runAnalysisPipeline(analysisId: string, initialCompanyName: strin
             }
         }
 
-        // Auto-detect company name from crawled website
+        // Auto-detect company name from crawled website — only if user didn't provide one
         const crawledName = crawlData.company_name as string | undefined;
-        if (crawledName && crawledName.length > 1) {
+        if (!userProvidedName && crawledName && crawledName.length > 1) {
             companyName = crawledName;
             await sb.from("company_analyses").update({ company_name: companyName }).eq("id", analysisId);
         }
@@ -463,9 +564,9 @@ async function runAnalysisPipeline(analysisId: string, initialCompanyName: strin
             await sb.from("company_analyses").update({ sam_data: samData, company_name: companyName }).eq("id", analysisId);
         }
 
-        // USASpending enrichment
-        let usaspendingData: { award_count: number; total_value: number; agencies: string[]; naics_from_awards: string[] } | null = null;
-        usaspendingData = await lookupUsaSpending(companyName);
+        // USASpending enrichment — prefer UEI-based lookup for precision
+        let usaspendingData: UsaSpendingData | null = null;
+        usaspendingData = await lookupUsaSpending(companyName, uei || undefined);
         if (usaspendingData) {
             crawlData.usaspending_data = usaspendingData;
         }
@@ -609,6 +710,20 @@ async function runAnalysisPipeline(analysisId: string, initialCompanyName: strin
             return ["ceo", "owner", "president", "founder"].some(k => t.includes(k));
         }) || leadership[0];
 
+        // Apollo People Enrichment — get mobile/direct phone for the decision-maker
+        const samPocs = samData ? (samData.points_of_contact as { name: string; title: string; email?: string; phone?: string }[]) || [] : [];
+        const decisionMaker = primaryLeader || samPocs[0] || null;
+        let apolloEnrichment: { mobile_phone?: string; direct_phone?: string; email?: string; linkedin_url?: string; title?: string } | null = null;
+
+        if (decisionMaker) {
+            const nameParts = decisionMaker.name.trim().split(/\s+/);
+            const firstName = nameParts[0] || "";
+            const lastName = nameParts.slice(1).join(" ") || "";
+            const domain = website.replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "");
+
+            apolloEnrichment = await enrichPersonApollo(firstName, lastName, domain, companyName);
+        }
+
         const inferredProfile: Record<string, unknown> = {
             company_name: samData?.company_name || companyName,
             dba_name: samData?.dba_name || null,
@@ -627,7 +742,28 @@ async function runAnalysisPipeline(analysisId: string, initialCompanyName: strin
             years_in_business: foundingYear ? new Date().getFullYear() - foundingYear : null,
             has_bonding: certifications.some(c => c.type === "bonding"),
             target_states: tempProfile.target_states,
-            contact_person: primaryLeader ? { name: primaryLeader.name, title: primaryLeader.title, email: primaryLeader.email, phone: primaryLeader.phone } : null,
+            contact_person: decisionMaker ? {
+                name: decisionMaker.name,
+                title: apolloEnrichment?.title || decisionMaker.title,
+                email: apolloEnrichment?.email || decisionMaker.email,
+                phone: decisionMaker.phone,
+                mobile_phone: apolloEnrichment?.mobile_phone || undefined,
+                direct_phone: apolloEnrichment?.direct_phone || undefined,
+                linkedin_url: apolloEnrichment?.linkedin_url || undefined,
+                source: apolloEnrichment ? "apollo" : (samPocs.length > 0 ? "sam_gov" : "website"),
+            } : null,
+            apollo_enrichment: apolloEnrichment,
+            gov_spending: usaspendingData ? {
+                award_count: usaspendingData.award_count,
+                total_value: usaspendingData.total_value,
+                last_award_date: usaspendingData.last_award_date,
+                last_award_title: usaspendingData.last_award_title,
+                last_award_amount: usaspendingData.last_award_amount,
+                last_award_agency: usaspendingData.last_award_agency,
+                agencies: usaspendingData.agencies,
+                top_awards: usaspendingData.top_awards,
+                searched_by: usaspendingData.searched_by,
+            } : null,
         };
 
         // Save everything — mark complete
@@ -669,6 +805,9 @@ export async function POST(request: NextRequest) {
 
         const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
 
+        // Track whether user explicitly provided a company name
+        const userProvidedName = companyName.length > 0;
+
         // Use domain as placeholder if no company name provided
         if (!companyName) {
             try { companyName = new URL(website).hostname.replace(/^www\./, ""); } catch { companyName = website; }
@@ -695,7 +834,7 @@ export async function POST(request: NextRequest) {
 
         // Run the full pipeline in the background after response is sent
         after(async () => {
-            await runAnalysisPipeline(analysisId, companyName, website, uei);
+            await runAnalysisPipeline(analysisId, companyName, website, uei, userProvidedName);
         });
 
         // Return immediately with the analysis ID
