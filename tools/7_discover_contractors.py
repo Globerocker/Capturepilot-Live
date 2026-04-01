@@ -38,9 +38,9 @@ SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
 SAM_API_KEY = os.getenv("SAM_API_KEY")
 SERPAPI_KEY = os.getenv("SERPAPI_KEY")
 
-# Budget caps
-SERPAPI_MONTHLY_AUTO_CAP = 80
-SERPAPI_MONTHLY_MANUAL_CAP = 20
+# Budget caps — SerpAPI/Google Local disabled (tool is for managing existing customers)
+SERPAPI_MONTHLY_AUTO_CAP = 0
+SERPAPI_MONTHLY_MANUAL_CAP = 0
 SAM_ENTITY_DELAY = 6  # seconds between SAM Entity API calls (10 req/min limit)
 
 # ---------------------------------------------------------------------------

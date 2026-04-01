@@ -13,6 +13,7 @@ function getSupabase() {
 // Set-aside codes that indicate veteran relevance
 const VETERAN_KEYWORDS = ["sdvosb", "vosb", "veteran", "service-disabled"];
 const SB_KEYWORDS = ["small business", "8(a)", "hubzone", "wosb", "women-owned", "small disadvantaged"];
+const WOSB_KEYWORDS = ["wosb", "women-owned", "woman-owned", "edwosb"];
 
 function detectFlags(op: Record<string, unknown>) {
     const setAside = String(op.typeOfSetAside || op.typeOfSetAsideDescription || "").toLowerCase();
@@ -21,9 +22,10 @@ function detectFlags(op: Record<string, unknown>) {
 
     const veteran = VETERAN_KEYWORDS.some(kw => setAside.includes(kw) || title.includes(kw));
     const smallBiz = setAside.length > 0 && !setAside.includes("none") && !setAside.includes("total");
+    const wosb = WOSB_KEYWORDS.some(kw => setAside.includes(kw) || title.includes(kw));
     const sourcesSought = noticeType === "r" || title.includes("sources sought") || title.includes("rfi") || title.includes("market research");
 
-    return { veteran, smallBiz, sourcesSought };
+    return { veteran, smallBiz, wosb, sourcesSought };
 }
 
 function computeStatus(op: Record<string, unknown>, ptype: string): string {
@@ -128,7 +130,7 @@ export async function GET(req: NextRequest) {
                 const payload = opps
                     .filter((o) => o.noticeId)
                     .map((o) => {
-                        const { veteran, smallBiz, sourcesSought } = detectFlags(o);
+                        const { veteran, smallBiz, wosb, sourcesSought } = detectFlags(o);
                         const status = computeStatus(o, ptype);
                         const naics = String(o.naicsCode || "");
                         const psc = String(o.classificationCode || "");
@@ -166,6 +168,7 @@ export async function GET(req: NextRequest) {
                             status,
                             veteran_relevance_flag: veteran,
                             small_business_relevance_flag: smallBiz,
+                            wosb_relevance_flag: wosb,
                             sources_sought_flag: sourcesSought,
                             last_crawled_at: new Date().toISOString(),
                             retention_protected: status === "AWARDED",
@@ -181,7 +184,7 @@ export async function GET(req: NextRequest) {
                 if (dbError) {
                     console.error(`DB Error for ${ptype}: ${dbError.message}`);
                     // Try without new columns as fallback (pre-migration compat)
-                    const NEW_COLS = ["sub_agency", "office", "estimated_value", "status", "veteran_relevance_flag", "small_business_relevance_flag", "sources_sought_flag", "last_crawled_at", "retention_protected", "retention_reason", "incumbent_contractor_name"];
+                    const NEW_COLS = ["sub_agency", "office", "estimated_value", "status", "veteran_relevance_flag", "small_business_relevance_flag", "wosb_relevance_flag", "sources_sought_flag", "last_crawled_at", "retention_protected", "retention_reason", "incumbent_contractor_name"];
                     const fallback = payload.map(row => {
                         const clean: Record<string, unknown> = {};
                         for (const [k, v] of Object.entries(row)) {

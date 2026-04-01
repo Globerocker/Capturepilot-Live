@@ -122,6 +122,20 @@ export async function POST(req: NextRequest) {
             metadata: { email, created_by: "admin" },
         });
 
+        // 4b. Auto-crawl opportunities for client's NAICS codes (fire and forget)
+        if (naics_codes && naics_codes.length > 0) {
+            const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://captiorpilot-v3.vercel.app";
+            fetch(`${baseUrl}/api/admin/crawl-opportunities`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    naics_codes,
+                    days_back: 90,
+                    user_profile_id: profileData.id,
+                }),
+            }).catch(() => {}); // fire and forget
+        }
+
         // 5. Send welcome email
         await sendConsultingWelcomeEmail(email, company_name, contact_name || "there", tempPassword);
 

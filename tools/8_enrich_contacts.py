@@ -46,7 +46,7 @@ load_env_file(os.path.join(_project_root, ".env"))
 SUPABASE_URL = os.getenv("SUPABASE_URL") or os.getenv("NEXT_PUBLIC_SUPABASE_URL")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
 APOLLO_API_KEY = os.getenv("APOLLO_API_KEY")
-SERPAPI_KEY = os.getenv("SERPAPI_KEY")
+SERPAPI_KEY = None  # Disabled — Google Business lookup not used (existing customers only)
 
 # Rate limits
 APOLLO_DELAY = 1.5       # seconds between Apollo calls (~40 req/min < 50 limit)

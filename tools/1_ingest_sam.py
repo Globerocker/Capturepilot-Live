@@ -65,14 +65,17 @@ PTYPE_LABELS = {
 # ---------------------------------------------------------------------------
 # Flag detection
 # ---------------------------------------------------------------------------
+WOSB_KEYWORDS = ["wosb", "women-owned", "woman-owned", "edwosb", "women owned"]
+
 def detect_flags(op):
-    """Detect veteran/SB relevance and sources sought flags from raw SAM data."""
+    """Detect veteran/SB/WOSB relevance and sources sought flags from raw SAM data."""
     set_aside_raw = (op.get("typeOfSetAside") or op.get("typeOfSetAsideDescription") or "").upper()
     notice_type = (op.get("type") or "").lower()
     title = (op.get("title") or "").lower()
 
     veteran = False
     small_biz = False
+    wosb = False
     sources_sought = False
 
     # Set-aside code matching
@@ -85,8 +88,11 @@ def detect_flags(op):
             small_biz = True
             break
 
-    # Keyword fallback in set-aside description
+    # WOSB detection
     set_aside_lower = set_aside_raw.lower()
+    wosb = any(kw in set_aside_lower or kw in title for kw in WOSB_KEYWORDS)
+
+    # Keyword fallback in set-aside description
     if not veteran:
         veteran = any(kw in set_aside_lower or kw in title for kw in VETERAN_KEYWORDS)
     if not small_biz:
@@ -98,7 +104,7 @@ def detect_flags(op):
     elif "sources sought" in title or "rfi" in title or "market research" in title:
         sources_sought = True
 
-    return veteran, small_biz, sources_sought
+    return veteran, small_biz, wosb, sources_sought
 
 def compute_status(op, ptype):
     """Compute lifecycle status based on notice type and deadline."""
@@ -114,7 +120,7 @@ def compute_status(op, ptype):
         return "SEARCH_SEED"
 
     # Sources Sought
-    _, _, is_sources_sought = detect_flags(op)
+    _, _, _, is_sources_sought = detect_flags(op)
     if is_sources_sought or ptype == "r":
         if deadline_str:
             try:
@@ -202,7 +208,7 @@ def fetch_and_upsert(supabase, posted_from, posted_to, ptypes, valid_naics=None,
                     if not notice_id:
                         continue
 
-                    veteran, small_biz, sources_sought = detect_flags(op)
+                    veteran, small_biz, wosb, sources_sought = detect_flags(op)
                     status = compute_status(op, ptype)
 
                     # Extract resource links
@@ -244,6 +250,7 @@ def fetch_and_upsert(supabase, posted_from, posted_to, ptypes, valid_naics=None,
                         "status": status,
                         "veteran_relevance_flag": veteran,
                         "small_business_relevance_flag": small_biz,
+                        "wosb_relevance_flag": wosb,
                         "sources_sought_flag": sources_sought,
                         "last_crawled_at": datetime.utcnow().isoformat(),
                         # Award data (from award notices)
@@ -274,6 +281,7 @@ def fetch_and_upsert(supabase, posted_from, posted_to, ptypes, valid_naics=None,
                         err_msg = str(db_err)
                         NEW_COLS = ("sub_agency", "office", "estimated_value", "status",
                                     "veteran_relevance_flag", "small_business_relevance_flag",
+                                    "wosb_relevance_flag",
                                     "sources_sought_flag", "last_crawled_at", "retention_protected",
                                     "retention_reason", "incumbent_contractor_name")
 
