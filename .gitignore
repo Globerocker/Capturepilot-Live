@@ -3,6 +3,7 @@ venv/
 venv2/
 .venv/
 .next/
+.mcp.json
 .env
 .env.local
 .vercel/
