@@ -34,6 +34,27 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const pathname = request.nextUrl.pathname;
+  const hostname = request.headers.get("host") || "";
+
+  // admin.capturepilot.com → only admin pages
+  const isAdminDomain = hostname.startsWith("admin.");
+  if (isAdminDomain) {
+    // Rewrite root to /admin/overview on admin subdomain
+    if (pathname === "/" || pathname === "/login") {
+      // Allow login page on admin domain
+      if (pathname === "/") {
+        const url = request.nextUrl.clone();
+        url.pathname = "/admin/overview";
+        return NextResponse.rewrite(url);
+      }
+    }
+    // Block non-admin routes on admin domain (except auth, api, static)
+    if (!pathname.startsWith("/admin") && !pathname.startsWith("/auth") && !pathname.startsWith("/api") && !pathname.startsWith("/_next") && !pathname.startsWith("/login")) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/admin/overview";
+      return NextResponse.redirect(url);
+    }
+  }
 
   // Public routes that don't require auth
   const publicRoutes = ["/", "/login", "/signup", "/pricing", "/auth/callback", "/analyze", "/check"];
@@ -44,7 +65,7 @@ export async function updateSession(request: NextRequest) {
     pathname.startsWith("/_next/") ||
     pathname.startsWith("/analyze/") ||
     pathname.startsWith("/check/") ||
-    pathname.startsWith("/admin/");  // Admin pages (internal use)
+    pathname.startsWith("/admin/");
 
   // If user is not authenticated and trying to access a protected route
   if (!user && !isPublicRoute) {
