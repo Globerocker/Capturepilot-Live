@@ -76,7 +76,6 @@ export async function updateSession(request: NextRequest) {
 
   // If authenticated user visits public pages, redirect based on account type
   if (user && (pathname === "/" || pathname === "/login" || pathname === "/signup")) {
-    // Check if consulting client → redirect to portal
     const { data: profile } = await supabase
       .from("user_profiles")
       .select("account_type, onboarding_complete")
@@ -84,17 +83,23 @@ export async function updateSession(request: NextRequest) {
       .single();
 
     const url = request.nextUrl.clone();
-    if (profile?.account_type === "consulting") {
+    if (profile?.account_type === "admin") {
+      url.pathname = "/admin/overview";
+    } else if (profile?.account_type === "consulting") {
       url.pathname = "/portal";
-    } else {
+    } else if (profile?.onboarding_complete) {
       url.pathname = "/dashboard";
+    } else {
+      url.pathname = "/onboard";
     }
     return NextResponse.redirect(url);
   }
 
-  // Onboarding gate: force non-consulting users to complete onboarding
+  // Onboarding gate: force self_service users to complete onboarding
+  // Skip for: admin, consulting, portal routes, public routes, onboarding itself
   const isPortalRoute = pathname.startsWith("/portal");
-  if (user && !isPublicRoute && !isPortalRoute && pathname !== "/onboard") {
+  const skipOnboarding = isPublicRoute || isPortalRoute || pathname === "/onboard";
+  if (user && !skipOnboarding) {
     const onboardingCookie = request.cookies.get("cp_onboarding_complete");
     if (onboardingCookie?.value !== "true") {
       const { data: profile } = await supabase
@@ -103,8 +108,8 @@ export async function updateSession(request: NextRequest) {
         .eq("auth_user_id", user.id)
         .single();
 
-      // Consulting clients skip onboarding (admin did it for them)
-      if (profile?.account_type === "consulting") {
+      // Admin + consulting clients skip onboarding
+      if (profile?.account_type === "consulting" || profile?.account_type === "admin") {
         supabaseResponse.cookies.set("cp_onboarding_complete", "true", {
           path: "/", maxAge: 86400 * 30, httpOnly: true, sameSite: "lax",
         });

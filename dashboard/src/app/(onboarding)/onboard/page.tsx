@@ -468,6 +468,17 @@ function OnboardPageContent() {
                 <p className="text-stone-500 mt-1 font-medium text-sm sm:text-base">
                     {step === 0 ? "Let\u2019s connect your business to federal opportunities." : "This takes about 3 minutes. We\u2019ll use this to find your best matches."}
                 </p>
+                <button
+                    type="button"
+                    onClick={async () => {
+                        const sb = createSupabaseClient();
+                        await sb.auth.signOut();
+                        window.location.href = "/login";
+                    }}
+                    className="absolute top-4 right-4 text-xs text-stone-400 hover:text-stone-700 font-typewriter"
+                >
+                    Sign Out
+                </button>
             </header>
 
             {/* Progress Bar (steps 1-4 only) */}
