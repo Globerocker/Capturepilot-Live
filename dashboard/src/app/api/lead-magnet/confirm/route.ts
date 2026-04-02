@@ -46,6 +46,29 @@ export async function POST(request: NextRequest) {
             preferred_agencies: [],
         };
 
+        // On-demand NAICS crawl: if we don't have enough opportunities for these NAICS,
+        // crawl SAM.gov in real-time before scoring
+        if (naics_codes && naics_codes.length > 0) {
+            const { count: existingCount } = await sb
+                .from("opportunities")
+                .select("id", { count: "exact", head: true })
+                .in("naics_code", naics_codes)
+                .eq("is_archived", false);
+
+            if ((existingCount || 0) < 10) {
+                // Not enough opportunities — trigger on-demand crawl
+                const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://app.capturepilot.com";
+                try {
+                    await fetch(`${baseUrl}/api/opportunities/search-naics`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ naics_codes, min_results: 10, days_back: 180, active_only: true }),
+                        signal: AbortSignal.timeout(90000),
+                    });
+                } catch { /* timeout ok — crawl still upserted to DB */ }
+            }
+        }
+
         // Load opportunities
         const allOpps: OpportunityForScoring[] = [];
         let offset = 0;

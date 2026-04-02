@@ -609,7 +609,30 @@ async function runAnalysisPipeline(analysisId: string, initialCompanyName: strin
             preferred_agencies: usaspendingData?.agencies || [],
         };
 
-        // Step 5: Score against opportunities
+        // Step 5: On-demand NAICS crawl if we lack coverage
+        const naicsCodesToCheck = inferredNaics.map(n => n.code).slice(0, 5);
+        if (naicsCodesToCheck.length > 0) {
+            const { count: naicsOppCount } = await sb
+                .from("opportunities")
+                .select("id", { count: "exact", head: true })
+                .in("naics_code", naicsCodesToCheck)
+                .eq("is_archived", false);
+
+            if ((naicsOppCount || 0) < 10) {
+                await sb.from("company_analyses").update({ status: "finding_opportunities" }).eq("id", analysisId);
+                try {
+                    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://app.capturepilot.com";
+                    await fetch(`${baseUrl}/api/opportunities/search-naics`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ naics_codes: naicsCodesToCheck, min_results: 10, days_back: 180 }),
+                        signal: AbortSignal.timeout(60000),
+                    });
+                } catch { /* timeout ok */ }
+            }
+        }
+
+        // Step 6: Score against opportunities
         const allOpps: OpportunityForScoring[] = [];
         let offset = 0;
         const batchSize = 1000;
