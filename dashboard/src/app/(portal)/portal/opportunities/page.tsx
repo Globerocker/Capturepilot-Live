@@ -19,6 +19,7 @@ interface Match {
     score: number;
     classification: string;
     is_saved: boolean;
+    score_breakdown: Record<string, number> | null;
     opportunity: {
         notice_id: string;
         title: string;
@@ -64,7 +65,7 @@ export default function PortalOpportunities() {
             const { data } = await supabase
                 .from("user_matches")
                 .select(`
-                    id, opportunity_id, score, classification, is_saved,
+                    id, opportunity_id, score, classification, is_saved, score_breakdown,
                     opportunity:opportunities!inner(
                         notice_id, title, agency, notice_type, naics_code,
                         set_aside_code, response_deadline, place_of_performance_state,
@@ -252,6 +253,22 @@ export default function PortalOpportunities() {
                                             </span>
                                         )}
                                     </div>
+
+                                    {/* Score Breakdown — why this matched */}
+                                    {m.score_breakdown && Object.keys(m.score_breakdown).length > 0 && (
+                                        <div className="flex gap-1 flex-wrap mt-1.5">
+                                            {Object.entries(m.score_breakdown).map(([key, val]) => (
+                                                <span key={key} className={clsx(
+                                                    "text-[9px] font-mono px-1.5 py-0.5 rounded border",
+                                                    val >= 0.7 ? "bg-emerald-50 text-emerald-600 border-emerald-200" :
+                                                    val >= 0.4 ? "bg-amber-50 text-amber-600 border-amber-200" :
+                                                    "bg-stone-50 text-stone-400 border-stone-200"
+                                                )}>
+                                                    {key}: {Math.round(val * 100)}%
+                                                </span>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* Actions */}

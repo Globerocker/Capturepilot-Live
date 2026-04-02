@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import {
-    Plus, Users, Mail, Phone, Globe, Hash, ChevronDown,
+    Plus, Users, Mail, Phone, Globe, Hash, ChevronDown, Search,
     ListTodo, FileText, Loader2, Building2, Send,
 } from "lucide-react";
 import clsx from "clsx";
@@ -33,6 +33,8 @@ export default function AdminClientsPage() {
     const [showCreate, setShowCreate] = useState(false);
     const [creating, setCreating] = useState(false);
     const [createResult, setCreateResult] = useState<string>("");
+    const [searchQuery, setSearchQuery] = useState("");
+    const [bulkSending, setBulkSending] = useState(false);
 
     // Create form
     const [form, setForm] = useState({
@@ -104,10 +106,37 @@ export default function AdminClientsPage() {
                         </h1>
                         <p className="text-sm text-stone-500 mt-1">{clients.length} active clients</p>
                     </div>
-                    <button type="button" onClick={() => setShowCreate(!showCreate)}
-                        className="bg-black text-white px-4 py-2 rounded-xl text-sm font-bold inline-flex items-center gap-1.5 hover:bg-stone-800 transition-colors">
-                        <Plus className="w-4 h-4" /> New Client
-                    </button>
+                    <div className="flex gap-2">
+                        <button type="button" onClick={async () => {
+                            if (!confirm(`Send opportunity update email to all ${clients.length} active clients?`)) return;
+                            setBulkSending(true);
+                            for (const c of clients.filter(cl => cl.client_status === "active")) {
+                                await fetch("/api/admin/send-update", {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({ user_profile_id: c.id, type: "opportunities" }),
+                                }).catch(() => {});
+                            }
+                            setBulkSending(false);
+                            setCreateResult(`Sent opportunity updates to ${clients.filter(c => c.client_status === "active").length} clients`);
+                        }}
+                        disabled={bulkSending}
+                        className="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-bold inline-flex items-center gap-1.5 hover:bg-blue-700 disabled:opacity-50">
+                            <Mail className="w-4 h-4" /> {bulkSending ? "Sending..." : "Bulk Email"}
+                        </button>
+                        <button type="button" onClick={() => setShowCreate(!showCreate)}
+                            className="bg-black text-white px-4 py-2 rounded-xl text-sm font-bold inline-flex items-center gap-1.5 hover:bg-stone-800 transition-colors">
+                            <Plus className="w-4 h-4" /> New Client
+                        </button>
+                    </div>
+                </div>
+
+                {/* Search */}
+                <div className="relative">
+                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+                    <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                        placeholder="Search by company name, email, or NAICS..."
+                        className="w-full pl-9 pr-3 py-2.5 border border-stone-300 rounded-xl text-sm focus:outline-none focus:border-black bg-white" />
                 </div>
 
                 {createResult && (
@@ -140,7 +169,11 @@ export default function AdminClientsPage() {
 
                 {/* Client List */}
                 <div className="space-y-3">
-                    {clients.map(client => (
+                    {clients.filter(c => {
+                        if (!searchQuery.trim()) return true;
+                        const q = searchQuery.toLowerCase();
+                        return c.company_name.toLowerCase().includes(q) || c.email.toLowerCase().includes(q) || (c.contact_name || "").toLowerCase().includes(q) || c.naics_codes.some(n => n.includes(q));
+                    }).map(client => (
                         <div key={client.id} className="bg-white border border-stone-200 rounded-2xl overflow-hidden">
                             <button type="button" onClick={() => setExpandedId(expandedId === client.id ? null : client.id)}
                                 className="w-full text-left p-5 flex items-center gap-4 hover:bg-stone-50/50 transition-colors">

@@ -232,6 +232,38 @@ export default function AdminProspectsPage() {
                                                 >
                                                     <ExternalLink className="w-3 h-3" /> Full Report
                                                 </Link>
+                                                <button
+                                                    type="button"
+                                                    onClick={async () => {
+                                                        const email = prospect.lead_email || prompt("Client email address:");
+                                                        if (!email) return;
+                                                        const profile = prospect.inferred_profile || {};
+                                                        const res = await fetch("/api/admin/clients", {
+                                                            method: "POST",
+                                                            headers: { "Content-Type": "application/json" },
+                                                            body: JSON.stringify({
+                                                                email,
+                                                                company_name: prospect.company_name,
+                                                                contact_name: (profile.contact_person as Record<string,string>)?.name || "",
+                                                                contact_phone: (profile.contact_person as Record<string,string>)?.phone || "",
+                                                                website: prospect.website,
+                                                                uei: prospect.uei || (profile.uei as string) || "",
+                                                                naics_codes: prospect.inferred_naics?.map(n => n.code) || [],
+                                                                state: (profile.state as string) || "",
+                                                                notes: `Converted from Quick Check analysis ${prospect.id}`,
+                                                            }),
+                                                        });
+                                                        const data = await res.json();
+                                                        if (data.success) {
+                                                            alert(`Client created! Temp password: ${data.temp_password}`);
+                                                        } else {
+                                                            alert(`Error: ${data.error}`);
+                                                        }
+                                                    }}
+                                                    className="text-[10px] font-typewriter font-bold px-3 py-1.5 rounded-lg border bg-emerald-600 text-white border-emerald-700 inline-flex items-center gap-1 hover:bg-emerald-700 transition-all"
+                                                >
+                                                    <Users className="w-3 h-3" /> Convert to Client
+                                                </button>
                                             </div>
 
                                             {/* Summary */}

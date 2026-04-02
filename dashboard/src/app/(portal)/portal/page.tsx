@@ -36,6 +36,7 @@ export default function PortalOverview() {
     const [tasks, setTasks] = useState<Task[]>([]);
     const [activity, setActivity] = useState<ActivityItem[]>([]);
     const [stats, setStats] = useState({ pendingTasks: 0, totalOpps: 0, docs: 0, competitors: 0 });
+    const [expiringOpps, setExpiringOpps] = useState<{ title: string; agency: string; deadline: string; score: number }[]>([]);
 
     useEffect(() => {
         (async () => {
@@ -62,6 +63,23 @@ export default function PortalOverview() {
 
             setTasks((tasksRes.data || []) as Task[]);
             setActivity((activityRes.data || []) as ActivityItem[]);
+
+            // Fetch expiring opportunities (deadline within 14 days)
+            const sevenDaysOut = new Date(Date.now() + 14 * 86400000).toISOString();
+            const { data: expiring } = await supabase
+                .from("user_matches")
+                .select("score, opportunity:opportunities!inner(title, agency, response_deadline)")
+                .eq("user_profile_id", prof.id)
+                .lt("opportunity.response_deadline", sevenDaysOut)
+                .gt("opportunity.response_deadline", new Date().toISOString())
+                .order("score", { ascending: false })
+                .limit(5);
+            if (expiring) {
+                setExpiringOpps(expiring.map((m: Record<string, unknown>) => {
+                    const opp = (Array.isArray(m.opportunity) ? m.opportunity[0] : m.opportunity) as Record<string, unknown>;
+                    return { title: String(opp?.title || ""), agency: String(opp?.agency || ""), deadline: String(opp?.response_deadline || ""), score: Number(m.score) };
+                }));
+            }
             setStats({
                 pendingTasks: (tasksRes.data || []).length,
                 totalOpps: oppsRes.count || 0,
@@ -128,6 +146,35 @@ export default function PortalOverview() {
                     <p className="text-xs text-stone-500">Competitors</p>
                 </Link>
             </div>
+
+            {/* Expiring Opportunities Alert */}
+            {expiringOpps.length > 0 && (
+                <div className="bg-red-50 border border-red-200 rounded-2xl overflow-hidden">
+                    <div className="px-5 py-3 border-b border-red-200 flex items-center gap-2">
+                        <Clock className="w-4 h-4 text-red-500" />
+                        <h2 className="font-bold text-sm text-red-800">Expiring Soon ({expiringOpps.length})</h2>
+                    </div>
+                    <div className="divide-y divide-red-100">
+                        {expiringOpps.map((opp, i) => {
+                            const daysLeft = Math.ceil((new Date(opp.deadline).getTime() - Date.now()) / 86400000);
+                            return (
+                                <div key={i} className="flex items-center gap-3 px-5 py-2.5">
+                                    <span className={clsx("text-xs font-black w-8 text-center",
+                                        daysLeft <= 3 ? "text-red-600" : daysLeft <= 7 ? "text-amber-600" : "text-stone-600"
+                                    )}>{daysLeft}d</span>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-xs font-medium text-red-900 truncate">{opp.title}</p>
+                                        <p className="text-[10px] text-red-600">{opp.agency}</p>
+                                    </div>
+                                    <span className="text-[10px] font-bold text-red-500">
+                                        {new Date(opp.deadline).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                                    </span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
 
             {/* Tasks requiring action */}
             {tasks.length > 0 && (

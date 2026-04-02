@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
-import { FileText, Upload, Loader2, Download, File } from "lucide-react";
+import { FileText, Upload, Loader2, Download, File, Trash2 } from "lucide-react";
 import clsx from "clsx";
 
 const supabase = createBrowserClient(
@@ -158,9 +158,18 @@ export default function PortalDocuments() {
                                 <span className="text-xs text-stone-400">{new Date(doc.created_at).toLocaleDateString()}</span>
                             </div>
                         </div>
-                        <a href={doc.file_url} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-blue-600 hover:text-blue-800 inline-flex items-center gap-1">
-                            <Download className="w-3.5 h-3.5" /> Download
-                        </a>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                            <a href={doc.file_url} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-blue-600 hover:text-blue-800 inline-flex items-center gap-1">
+                                <Download className="w-3.5 h-3.5" /> Download
+                            </a>
+                            <button type="button" title="Delete" onClick={async () => {
+                                if (!confirm("Delete this document?")) return;
+                                await supabase.from("client_documents").delete().eq("id", doc.id);
+                                setDocs(prev => prev.filter(d => d.id !== doc.id));
+                            }} className="text-xs text-stone-400 hover:text-red-600 p-1 rounded transition-colors">
+                                <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                        </div>
                     </div>
                 ))}
             </div>

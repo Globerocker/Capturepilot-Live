@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
 import {
     Zap, LayoutDashboard, ListTodo, Briefcase, FileText, Users,
-    LogOut, Loader2, Settings,
+    LogOut, Loader2, Settings, Menu, X,
 } from "lucide-react";
 import clsx from "clsx";
 
@@ -28,6 +28,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
     const pathname = usePathname();
     const [companyName, setCompanyName] = useState("");
     const [loading, setLoading] = useState(true);
+    const [mobileOpen, setMobileOpen] = useState(false);
 
     useEffect(() => {
         (async () => {
@@ -57,8 +58,21 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
 
     return (
         <div className="min-h-screen bg-stone-50 flex">
+            {/* Mobile menu button */}
+            <button type="button" onClick={() => setMobileOpen(!mobileOpen)}
+                className="lg:hidden fixed top-4 left-4 z-50 bg-white border border-stone-200 rounded-xl p-2 shadow-sm">
+                {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </button>
+
+            {/* Mobile overlay */}
+            {mobileOpen && <div className="lg:hidden fixed inset-0 bg-black/20 z-30" onClick={() => setMobileOpen(false)} />}
+
             {/* Sidebar */}
-            <aside className="w-64 bg-white border-r border-stone-200 flex flex-col">
+            <aside className={clsx(
+                "w-64 bg-white border-r border-stone-200 flex flex-col z-40",
+                "fixed lg:static inset-y-0 left-0 transition-transform duration-200",
+                mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+            )}>
                 <div className="p-5 border-b border-stone-100">
                     <Link href="/portal" className="flex items-center gap-2">
                         <Zap className="w-5 h-5 text-black" />
