@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
 import {
     Zap, LayoutDashboard, ListTodo, Briefcase, FileText, Users,
-    LogOut, Loader2,
+    LogOut, Loader2, Settings,
 } from "lucide-react";
 import clsx from "clsx";
 
@@ -21,6 +21,7 @@ const NAV_ITEMS = [
     { href: "/portal/opportunities", icon: Briefcase, label: "Opportunities" },
     { href: "/portal/documents", icon: FileText, label: "Documents" },
     { href: "/portal/competitors", icon: Users, label: "Competitors" },
+    { href: "/portal/settings", icon: Settings, label: "Settings" },
 ];
 
 export default function PortalLayout({ children }: { children: React.ReactNode }) {

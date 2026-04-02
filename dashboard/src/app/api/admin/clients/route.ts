@@ -175,30 +175,37 @@ export async function GET() {
             return NextResponse.json({ error: error.message }, { status: 500 });
         }
 
-        // Get task counts per client
+        // Get last login from auth users
+        const authIds = (data || []).map(c => c.auth_user_id).filter(Boolean);
+        const loginMap = new Map<string, string>();
+        if (authIds.length > 0) {
+            const { data: authUsers } = await admin.auth.admin.listUsers({ page: 1, perPage: 100 });
+            for (const u of authUsers?.users || []) {
+                if (u.last_sign_in_at) loginMap.set(u.id, u.last_sign_in_at);
+            }
+        }
+
+        // Get match counts + competitor counts
         const clientsWithStats = await Promise.all(
             (data || []).map(async (client) => {
-                const { count: totalTasks } = await admin
-                    .from("client_tasks")
-                    .select("id", { count: "exact", head: true })
-                    .eq("user_profile_id", client.id);
-
-                const { count: pendingTasks } = await admin
-                    .from("client_tasks")
-                    .select("id", { count: "exact", head: true })
-                    .eq("user_profile_id", client.id)
-                    .in("status", ["pending", "in_progress", "waiting_client"]);
-
-                const { count: docCount } = await admin
-                    .from("client_documents")
-                    .select("id", { count: "exact", head: true })
-                    .eq("user_profile_id", client.id);
+                const [taskRes, pendingRes, docRes, matchRes, compRes, activityRes] = await Promise.all([
+                    admin.from("client_tasks").select("id", { count: "exact", head: true }).eq("user_profile_id", client.id),
+                    admin.from("client_tasks").select("id", { count: "exact", head: true }).eq("user_profile_id", client.id).in("status", ["pending", "in_progress", "waiting_client"]),
+                    admin.from("client_documents").select("id", { count: "exact", head: true }).eq("user_profile_id", client.id),
+                    admin.from("user_matches").select("id", { count: "exact", head: true }).eq("user_profile_id", client.id),
+                    admin.from("client_competitors").select("id", { count: "exact", head: true }).eq("user_profile_id", client.id),
+                    admin.from("client_activity_log").select("id", { count: "exact", head: true }).eq("user_profile_id", client.id),
+                ]);
 
                 return {
                     ...client,
-                    total_tasks: totalTasks || 0,
-                    pending_tasks: pendingTasks || 0,
-                    document_count: docCount || 0,
+                    total_tasks: taskRes.count || 0,
+                    pending_tasks: pendingRes.count || 0,
+                    document_count: docRes.count || 0,
+                    match_count: matchRes.count || 0,
+                    competitor_count: compRes.count || 0,
+                    activity_count: activityRes.count || 0,
+                    last_login: loginMap.get(client.auth_user_id) || null,
                 };
             })
         );
@@ -207,5 +214,71 @@ export async function GET() {
     } catch (error) {
         console.error("List clients error:", error);
         return NextResponse.json({ error: (error as Error).message }, { status: 500 });
+    }
+}
+
+/**
+ * PATCH /api/admin/clients — Update an existing client
+ * Body: { user_profile_id, ...fields }
+ */
+export async function PATCH(req: NextRequest) {
+    try {
+        const body = await req.json();
+        const { user_profile_id, ...updates } = body;
+        if (!user_profile_id) return NextResponse.json({ error: "user_profile_id required" }, { status: 400 });
+
+        const admin = getAdmin();
+
+        // Whitelist allowed update fields
+        const allowed = ["company_name", "contact_name", "contact_phone", "email", "website",
+            "uei", "cage_code", "naics_codes", "sba_certifications", "state", "city",
+            "notes", "client_status", "account_type", "company_description",
+            "employee_count", "revenue", "target_states", "address_line_1", "zip_code"];
+
+        const safeUpdates: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(updates)) {
+            if (allowed.includes(k)) safeUpdates[k] = v;
+        }
+
+        if (Object.keys(safeUpdates).length === 0) {
+            return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
+        }
+
+        const { error } = await admin.from("user_profiles").update(safeUpdates).eq("id", user_profile_id);
+        if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+        await admin.from("client_activity_log").insert({
+            user_profile_id,
+            action: "client_updated",
+            description: `Updated: ${Object.keys(safeUpdates).join(", ")}`,
+            metadata: { fields: Object.keys(safeUpdates) },
+        });
+
+        return NextResponse.json({ success: true, updated: Object.keys(safeUpdates) });
+    } catch (e) {
+        return NextResponse.json({ error: (e as Error).message }, { status: 500 });
+    }
+}
+
+/**
+ * DELETE /api/admin/clients — Deactivate (not delete) a client
+ */
+export async function DELETE(req: NextRequest) {
+    try {
+        const { user_profile_id } = await req.json();
+        if (!user_profile_id) return NextResponse.json({ error: "user_profile_id required" }, { status: 400 });
+
+        const admin = getAdmin();
+        await admin.from("user_profiles").update({ client_status: "churned" }).eq("id", user_profile_id);
+
+        await admin.from("client_activity_log").insert({
+            user_profile_id,
+            action: "client_deactivated",
+            description: "Client status set to churned",
+        });
+
+        return NextResponse.json({ success: true });
+    } catch (e) {
+        return NextResponse.json({ error: (e as Error).message }, { status: 500 });
     }
 }
