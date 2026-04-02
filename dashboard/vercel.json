@@ -24,6 +24,14 @@
             "schedule": "0 6 * * *"
         },
         {
+            "path": "/api/cron/deep_enrich",
+            "schedule": "0 8 * * *"
+        },
+        {
+            "path": "/api/cron/notify_matches",
+            "schedule": "0 10 * * *"
+        },
+        {
             "path": "/api/cron/monthly_awards",
             "schedule": "0 0 1 * *"
         },

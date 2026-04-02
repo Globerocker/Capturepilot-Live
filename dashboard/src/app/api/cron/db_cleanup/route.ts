@@ -147,6 +147,19 @@ export async function GET(req: NextRequest) {
             stats.legacy_archived = ids.length;
         }
 
+        // 8. Stale match cleanup — remove matches for expired/archived opportunities
+        stats.stale_matches = 0;
+        const { data: staleMatches } = await supabase
+            .from("user_matches")
+            .select("id, opportunity:opportunities!inner(status)")
+            .in("opportunity.status", ["ARCHIVED", "DELETED"])
+            .limit(1000);
+        if (staleMatches?.length) {
+            const ids = staleMatches.map(m => m.id);
+            await supabase.from("user_matches").delete().in("id", ids);
+            stats.stale_matches = ids.length;
+        }
+
         console.log("Lifecycle Cleanup Complete:", stats);
         return NextResponse.json({ success: true, ...stats });
 
