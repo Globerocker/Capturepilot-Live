@@ -37,6 +37,19 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
                 window.location.href = "/login";
                 return;
             }
+
+            // 48h auto-logout: check when session started
+            const SESSION_MAX_MS = 48 * 60 * 60 * 1000; // 48 hours
+            const sessionStart = localStorage.getItem("cp_session_start");
+            if (!sessionStart) {
+                localStorage.setItem("cp_session_start", String(Date.now()));
+            } else if (Date.now() - Number(sessionStart) > SESSION_MAX_MS) {
+                localStorage.removeItem("cp_session_start");
+                await supabase.auth.signOut();
+                window.location.href = "/login";
+                return;
+            }
+
             const { data } = await supabase
                 .from("user_profiles")
                 .select("company_name, account_type")
