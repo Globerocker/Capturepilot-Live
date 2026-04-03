@@ -18,7 +18,7 @@ const supabase = createBrowserClient(
 const NAV_ITEMS = [
     { href: "/portal", icon: LayoutDashboard, label: "Overview" },
     { href: "/portal/tasks", icon: ListTodo, label: "Tasks" },
-    { href: "/portal/opportunities", icon: Briefcase, label: "Opportunities" },
+    { href: "/portal/opportunities", icon: Briefcase, label: "Matches" },
     { href: "/portal/documents", icon: FileText, label: "Documents" },
     { href: "/portal/competitors", icon: Users, label: "Competitors" },
     { href: "/portal/settings", icon: Settings, label: "Settings" },
