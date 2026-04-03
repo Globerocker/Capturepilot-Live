@@ -36,6 +36,11 @@ export async function updateSession(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const hostname = request.headers.get("host") || "";
 
+  // ─── Prevent browser back-button from showing cached auth pages ───
+  supabaseResponse.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  supabaseResponse.headers.set("Pragma", "no-cache");
+  supabaseResponse.headers.set("Expires", "0");
+
   // ─── Always-public routes (no auth needed) ───
   const isAlwaysPublic =
     pathname.startsWith("/auth/") ||

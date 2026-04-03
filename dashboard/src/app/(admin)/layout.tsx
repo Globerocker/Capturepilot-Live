@@ -92,7 +92,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     </Link>
                     <button
                         type="button"
-                        onClick={async () => { await supabase.auth.signOut(); window.location.href = "/login"; }}
+                        onClick={async () => {
+                            await supabase.auth.signOut({ scope: "global" });
+                            localStorage.clear();
+                            sessionStorage.clear();
+                            document.cookie.split(";").forEach(c => {
+                                document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+                            });
+                            window.location.replace("/login");
+                        }}
                         className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-stone-500 hover:bg-white/5 hover:text-red-400 w-full transition-colors"
                     >
                         <LogOut className="w-4 h-4" /> Sign Out

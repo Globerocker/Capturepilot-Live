@@ -123,8 +123,13 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
                     <button
                         type="button"
                         onClick={async () => {
-                            await supabase.auth.signOut();
-                            window.location.href = "/login";
+                            await supabase.auth.signOut({ scope: "global" });
+                            localStorage.clear();
+                            sessionStorage.clear();
+                            document.cookie.split(";").forEach(c => {
+                                document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+                            });
+                            window.location.replace("/login");
                         }}
                         className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-stone-500 hover:bg-stone-100 w-full transition-colors"
                     >

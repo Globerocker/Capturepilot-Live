@@ -21,8 +21,13 @@ export default function Sidebar() {
     ];
 
     const handleSignOut = async () => {
-        await supabase.auth.signOut();
-        router.push("/signup");
+        await supabase.auth.signOut({ scope: "global" });
+        localStorage.clear();
+        sessionStorage.clear();
+        document.cookie.split(";").forEach(c => {
+            document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+        });
+        window.location.replace("/login");
     };
 
     const handleLock = () => {
