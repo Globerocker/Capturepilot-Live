@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import {
-    Briefcase, ExternalLink, Loader2, Clock, MapPin, Star,
+    Briefcase, ExternalLink, Loader2, Clock, MapPin, Star, Layers,
     Filter, Search, ChevronDown, Shield, TrendingUp,
 } from "lucide-react";
 import clsx from "clsx";
@@ -143,10 +143,10 @@ export default function PortalOpportunities() {
         <div className="max-w-5xl space-y-5">
             <div>
                 <h1 className="text-2xl font-bold text-black font-typewriter flex items-center gap-2">
-                    <Briefcase className="w-6 h-6" /> Opportunities
+                    <Briefcase className="w-6 h-6" /> Your Matches
                 </h1>
                 <p className="text-sm text-stone-500 mt-1">
-                    {filtered.length} opportunities matched to your profile
+                    {filtered.length} matches found — showing best results for your profile
                 </p>
             </div>
 
@@ -273,6 +273,20 @@ export default function PortalOpportunities() {
 
                                 {/* Actions */}
                                 <div className="flex flex-col items-center gap-2 flex-shrink-0">
+                                    <button type="button" onClick={async () => {
+                                        if (!profileId) return;
+                                        await supabase.from("user_pursuits").upsert({
+                                            user_profile_id: profileId,
+                                            opportunity_id: m.opportunity_id,
+                                            stage: "discovered",
+                                            priority: m.score >= 0.6 ? "high" : "medium",
+                                        }, { onConflict: "user_profile_id,opportunity_id" });
+                                        toggleSave(m.id, false); // also save it
+                                    }}
+                                        title="Add to Pipeline"
+                                        className="p-2 rounded-lg text-stone-300 hover:text-emerald-600 hover:bg-emerald-50 transition-colors">
+                                        <Layers className="w-4 h-4" />
+                                    </button>
                                     <button type="button" onClick={() => toggleSave(m.id, m.is_saved)}
                                         title={m.is_saved ? "Unsave" : "Save"}
                                         className={clsx("p-2 rounded-lg transition-colors",
