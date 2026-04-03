@@ -106,9 +106,15 @@ export async function updateSession(request: NextRequest) {
   // ─── Onboarding page — always accessible when logged in ───
   if (pathname === "/onboard") return supabaseResponse;
 
-  // ─── Dashboard routes — need onboarding complete (self_service only) ───
-  if (accountType === "admin" || accountType === "consulting") {
-    // Admin and consulting skip onboarding entirely
+  // ─── Consulting clients: ALWAYS redirect to portal (never show SaaS dashboard) ───
+  if (accountType === "consulting" && !pathname.startsWith("/portal")) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/portal" + (pathname === "/dashboard" ? "" : pathname.replace(/^\/(dashboard|settings|matches|pipeline|opportunities|actions)/, ""));
+    return NextResponse.redirect(url);
+  }
+
+  // ─── Admin: skip onboarding entirely ───
+  if (accountType === "admin") {
     return supabaseResponse;
   }
 
