@@ -36,58 +36,63 @@ export async function updateSession(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const hostname = request.headers.get("host") || "";
 
-  // admin.capturepilot.com → only admin pages
-  const isAdminDomain = hostname.startsWith("admin.");
-  if (isAdminDomain) {
-    // Rewrite root to /admin/overview on admin subdomain
-    if (pathname === "/" || pathname === "/login") {
-      // Allow login page on admin domain
-      if (pathname === "/") {
-        const url = request.nextUrl.clone();
-        url.pathname = "/admin/overview";
-        return NextResponse.rewrite(url);
-      }
+  // ─── Always-public routes (no auth needed) ───
+  const isAlwaysPublic =
+    pathname.startsWith("/auth/") ||
+    pathname.startsWith("/api/") ||
+    pathname.startsWith("/_next/") ||
+    pathname.startsWith("/check") ||
+    pathname.startsWith("/analyze") ||
+    pathname === "/privacy" ||
+    pathname === "/terms";
+
+  if (isAlwaysPublic) return supabaseResponse;
+
+  // ─── Admin subdomain routing ───
+  if (hostname.startsWith("admin.")) {
+    if (pathname === "/") {
+      const url = request.nextUrl.clone();
+      url.pathname = "/admin/overview";
+      return NextResponse.rewrite(url);
     }
-    // Block non-admin routes on admin domain (except auth, api, static)
-    if (!pathname.startsWith("/admin") && !pathname.startsWith("/auth") && !pathname.startsWith("/api") && !pathname.startsWith("/_next") && !pathname.startsWith("/login")) {
+    if (!pathname.startsWith("/admin") && !pathname.startsWith("/login") && !pathname.startsWith("/auth") && !pathname.startsWith("/api") && !pathname.startsWith("/_next")) {
       const url = request.nextUrl.clone();
       url.pathname = "/admin/overview";
       return NextResponse.redirect(url);
     }
   }
 
-  // Public routes that don't require auth
-  const publicRoutes = ["/", "/login", "/signup", "/pricing", "/auth/callback", "/analyze", "/check"];
-  const isPublicRoute =
-    publicRoutes.includes(pathname) ||
-    pathname.startsWith("/auth/") ||
-    pathname.startsWith("/api/") ||
-    pathname.startsWith("/_next/") ||
-    pathname.startsWith("/analyze/") ||
-    pathname.startsWith("/check/") ||
-    pathname.startsWith("/admin/");
+  // ─── Admin pages — always accessible (no onboarding gate) ───
+  if (pathname.startsWith("/admin")) return supabaseResponse;
 
-  // If user is not authenticated and trying to access a protected route
-  if (!user && !isPublicRoute) {
+  // ─── Not logged in → send to login ───
+  if (!user) {
+    if (pathname === "/" || pathname === "/login" || pathname === "/signup" || pathname === "/pricing") {
+      return supabaseResponse; // let them see these pages
+    }
     const url = request.nextUrl.clone();
-    url.pathname = "/signup";
+    url.pathname = "/login";
     return NextResponse.redirect(url);
   }
 
-  // If authenticated user visits public pages, redirect based on account type
-  if (user && (pathname === "/" || pathname === "/login" || pathname === "/signup")) {
-    const { data: profile } = await supabase
-      .from("user_profiles")
-      .select("account_type, onboarding_complete")
-      .eq("auth_user_id", user.id)
-      .single();
+  // ─── Logged in: get profile once ───
+  const { data: profile } = await supabase
+    .from("user_profiles")
+    .select("account_type, onboarding_complete")
+    .eq("auth_user_id", user.id)
+    .single();
 
+  const accountType = profile?.account_type || "self_service";
+  const onboardingDone = profile?.onboarding_complete || false;
+
+  // ─── Root / login / signup → redirect to correct home ───
+  if (pathname === "/" || pathname === "/login" || pathname === "/signup") {
     const url = request.nextUrl.clone();
-    if (profile?.account_type === "admin") {
+    if (accountType === "admin") {
       url.pathname = "/admin/overview";
-    } else if (profile?.account_type === "consulting") {
+    } else if (accountType === "consulting") {
       url.pathname = "/portal";
-    } else if (profile?.onboarding_complete) {
+    } else if (onboardingDone) {
       url.pathname = "/dashboard";
     } else {
       url.pathname = "/onboard";
@@ -95,34 +100,23 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Onboarding gate: force self_service users to complete onboarding
-  // Skip for: admin, consulting, portal routes, public routes, onboarding itself
-  const isPortalRoute = pathname.startsWith("/portal");
-  const skipOnboarding = isPublicRoute || isPortalRoute || pathname === "/onboard";
-  if (user && !skipOnboarding) {
-    const onboardingCookie = request.cookies.get("cp_onboarding_complete");
-    if (onboardingCookie?.value !== "true") {
-      const { data: profile } = await supabase
-        .from("user_profiles")
-        .select("onboarding_complete, account_type")
-        .eq("auth_user_id", user.id)
-        .single();
+  // ─── Portal routes — consulting clients only, no onboarding gate ───
+  if (pathname.startsWith("/portal")) return supabaseResponse;
 
-      // Admin + consulting clients skip onboarding
-      if (profile?.account_type === "consulting" || profile?.account_type === "admin") {
-        supabaseResponse.cookies.set("cp_onboarding_complete", "true", {
-          path: "/", maxAge: 86400 * 30, httpOnly: true, sameSite: "lax",
-        });
-      } else if (!profile || !profile.onboarding_complete) {
-        const url = request.nextUrl.clone();
-        url.pathname = "/onboard";
-        return NextResponse.redirect(url);
-      } else {
-        supabaseResponse.cookies.set("cp_onboarding_complete", "true", {
-          path: "/", maxAge: 86400 * 30, httpOnly: true, sameSite: "lax",
-        });
-      }
-    }
+  // ─── Onboarding page — always accessible when logged in ───
+  if (pathname === "/onboard") return supabaseResponse;
+
+  // ─── Dashboard routes — need onboarding complete (self_service only) ───
+  if (accountType === "admin" || accountType === "consulting") {
+    // Admin and consulting skip onboarding entirely
+    return supabaseResponse;
+  }
+
+  // Self-service: check onboarding
+  if (!onboardingDone) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/onboard";
+    return NextResponse.redirect(url);
   }
 
   return supabaseResponse;
