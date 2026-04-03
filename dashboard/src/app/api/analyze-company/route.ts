@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse, after } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { classifyNaics } from "@/lib/naics-classifier";
+import { NAICS_CODES } from "@/lib/naics-codes";
 import { scoreOpportunityLeadMagnet, type ProfileForScoring, type OpportunityForScoring } from "@/lib/match-scoring";
 import { generateCertRecommendations } from "@/lib/cert-recommendations";
 import { analyzeCompany } from "@/lib/crawler";
@@ -211,6 +212,61 @@ Certifications: ${certifications.map(c => c.type).join(", ")}`,
     } catch {
         return description.substring(0, 500);
     }
+}
+
+// ---------------------------------------------------------------------------
+// INFER NAICS VIA OPENAI
+// ---------------------------------------------------------------------------
+async function inferNaicsOpenAI(
+    companyName: string,
+    description: string,
+    services: string[],
+    pageContent: string
+): Promise<string[]> {
+    const openaiKey = process.env.OPENAI_API_KEY;
+    if (!openaiKey) return [];
+
+    const text = `Company: ${companyName}\nDescription: ${description}\nServices: ${services.join(", ")}\nContent Text:\n${pageContent.substring(0, 3000)}`;
+
+    try {
+        const response = await fetch("https://api.openai.com/v1/chat/completions", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${openaiKey}`,
+            },
+            body: JSON.stringify({
+                model: "gpt-4o-mini",
+                messages: [
+                    {
+                        role: "system",
+                        content: `You are an expert government contracting assistant. Analyze the company profile and return a JSON array containing the 3-5 most relevant 6-digit NAICS codes for this business. Return ONLY a valid JSON array of strings (e.g. ["123456", "654321"]). Do not include code blocks or markdown.`
+                    },
+                    {
+                        role: "user",
+                        content: text
+                    }
+                ],
+                max_tokens: 150,
+                temperature: 0.1,
+            }),
+        });
+
+        if (!response.ok) return [];
+        const data = await response.json();
+        const content = data.choices?.[0]?.message?.content?.trim() || "[]";
+        
+        // Clean markdown backticks if returned anyway
+        const cleanContent = content.replace(/^```json\s*/i, "").replace(/```$/i, "").trim();
+        const parsed = JSON.parse(cleanContent);
+        if (Array.isArray(parsed)) {
+            return parsed.map(c => String(c).trim()).filter(c => c.length === 6);
+        }
+    } catch {
+        // fail silently
+        return [];
+    }
+    return [];
 }
 
 // ---------------------------------------------------------------------------
@@ -580,9 +636,27 @@ async function runAnalysisPipeline(analysisId: string, initialCompanyName: strin
         const samNaics = samData ? (samData.naics_codes as string[]) : undefined;
         const usaNaics = usaspendingData?.naics_from_awards || [];
 
-        const inferredNaics = classifyNaics(description, services, pageContent,
+        let inferredNaics = classifyNaics(description, services, pageContent,
             samNaics ? [...samNaics, ...usaNaics].filter((v, i, a) => a.indexOf(v) === i) : usaNaics.length > 0 ? usaNaics : undefined
         );
+
+        // Enhance with OpenAI if we have no authoritative SAM codes and the local keyword classifier logic was uncertain
+        if (!samNaics?.length && inferredNaics.length < 3 && process.env.OPENAI_API_KEY) {
+            const aiNaics = await inferNaicsOpenAI(companyName, description, services, pageContent);
+            if (aiNaics.length > 0) {
+                for (const code of aiNaics) {
+                    const naicsInfo = NAICS_CODES.find((n: { code: string; label: string }) => n.code === code);
+                    if (naicsInfo && !inferredNaics.some((x: { code: string }) => x.code === code)) {
+                        inferredNaics.push({
+                            code,
+                            label: naicsInfo.label,
+                            confidence: 0.85,
+                            matched_keywords: ["AI inferred analysis"]
+                        });
+                    }
+                }
+            }
+        }
 
         await sb.from("company_analyses").update({ status: "scoring", inferred_naics: inferredNaics }).eq("id", analysisId);
 
