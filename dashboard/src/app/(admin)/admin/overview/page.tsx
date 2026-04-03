@@ -84,8 +84,8 @@ export default function AdminOverview() {
                         <Link href="/admin/clients" className="bg-black text-white px-4 py-2 rounded-xl text-sm font-bold inline-flex items-center gap-1.5 hover:bg-stone-800">
                             <Users className="w-4 h-4" /> Clients
                         </Link>
-                        <Link href="/admin/prospects" className="bg-white text-stone-700 border border-stone-200 px-4 py-2 rounded-xl text-sm font-bold inline-flex items-center gap-1.5 hover:bg-stone-50">
-                            <Search className="w-4 h-4" /> Prospects
+                        <Link href="/admin/leads" className="bg-white text-stone-700 border border-stone-200 px-4 py-2 rounded-xl text-sm font-bold inline-flex items-center gap-1.5 hover:bg-stone-50">
+                            <Search className="w-4 h-4" /> Leads
                         </Link>
                         <Link href="/check" className="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-bold inline-flex items-center gap-1.5 hover:bg-blue-700">
                             <Eye className="w-4 h-4" /> Quick Check
@@ -113,7 +113,7 @@ export default function AdminOverview() {
                     <div className="bg-white border border-stone-200 rounded-2xl p-4">
                         <Briefcase className="w-4 h-4 text-violet-500 mb-1" />
                         <p className="text-2xl font-black">{totalMatches.toLocaleString()}</p>
-                        <p className="text-[10px] text-stone-500 uppercase font-typewriter">Matches</p>
+                        <p className="text-[10px] text-stone-500 uppercase font-typewriter">Total Scored</p>
                     </div>
                     <div className="bg-white border border-stone-200 rounded-2xl p-4">
                         <FileText className="w-4 h-4 text-cyan-500 mb-1" />
