@@ -34,20 +34,27 @@ export default function AdminOpportunities() {
     const [opps, setOpps] = useState<Opp[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
-    const [statusFilter, setStatusFilter] = useState("ACTIVE");
+    const [statusFilter, setStatusFilter] = useState("");
     const [naicsFilter, setNaicsFilter] = useState("");
+    const [setAsideFilter, setSetAsideFilter] = useState("");
     const [total, setTotal] = useState(0);
+    const [page, setPage] = useState(0);
+    const PAGE_SIZE = 50;
 
     const loadOpps = async () => {
         setLoading(true);
         let query = supabase.from("opportunities")
             .select("notice_id, title, agency, naics_code, set_aside_code, notice_type, response_deadline, estimated_value, place_of_performance_state, status, veteran_relevance_flag, small_business_relevance_flag, wosb_relevance_flag, sources_sought_flag", { count: "exact" })
-            .order("response_deadline", { ascending: false, nullsFirst: false })
-            .limit(100);
+            .order("posted_date", { ascending: false, nullsFirst: false })
+            .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
 
         if (statusFilter) query = query.eq("status", statusFilter);
         if (naicsFilter) query = query.eq("naics_code", naicsFilter);
         if (search) query = query.ilike("title", `%${search}%`);
+        if (setAsideFilter === "veteran") query = query.eq("veteran_relevance_flag", true);
+        else if (setAsideFilter === "wosb") query = query.eq("wosb_relevance_flag", true);
+        else if (setAsideFilter === "sb") query = query.eq("small_business_relevance_flag", true);
+        else if (setAsideFilter === "sources_sought") query = query.eq("sources_sought_flag", true);
 
         const { data, count } = await query;
         setOpps((data || []) as Opp[]);
@@ -55,7 +62,7 @@ export default function AdminOpportunities() {
         setLoading(false);
     };
 
-    useEffect(() => { loadOpps(); }, [statusFilter, naicsFilter]);
+    useEffect(() => { loadOpps(); }, [statusFilter, naicsFilter, setAsideFilter, page]);
 
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();
@@ -111,6 +118,25 @@ export default function AdminOpportunities() {
                 <input value={naicsFilter} onChange={e => setNaicsFilter(e.target.value)}
                     placeholder="NAICS code"
                     className="w-28 border border-stone-300 rounded-lg px-3 py-2 text-sm bg-white" />
+                <select value={setAsideFilter} onChange={e => setSetAsideFilter(e.target.value)}
+                    className="border border-stone-300 rounded-lg px-3 py-2 text-sm bg-white">
+                    <option value="">All Set-Asides</option>
+                    <option value="veteran">Veteran (SDVOSB/VOSB)</option>
+                    <option value="wosb">Women-Owned (WOSB)</option>
+                    <option value="sb">Small Business</option>
+                    <option value="sources_sought">Sources Sought</option>
+                </select>
+            </div>
+
+            {/* Pagination */}
+            <div className="flex items-center justify-between text-xs text-stone-500">
+                <span>Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} of {total.toLocaleString()}</span>
+                <div className="flex gap-2">
+                    <button type="button" onClick={() => setPage(Math.max(0, page - 1))} disabled={page === 0}
+                        className="px-3 py-1 border border-stone-300 rounded-lg disabled:opacity-30 hover:bg-stone-50">Prev</button>
+                    <button type="button" onClick={() => setPage(page + 1)} disabled={(page + 1) * PAGE_SIZE >= total}
+                        className="px-3 py-1 border border-stone-300 rounded-lg disabled:opacity-30 hover:bg-stone-50">Next</button>
+                </div>
             </div>
 
             {loading ? (

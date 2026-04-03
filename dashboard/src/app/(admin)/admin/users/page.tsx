@@ -25,6 +25,7 @@ export default function AdminUsers() {
     const [editingId, setEditingId] = useState<string | null>(null);
     const [newEmail, setNewEmail] = useState("");
     const [newPassword, setNewPassword] = useState("");
+    const [newAccountType, setNewAccountType] = useState("");
     const [message, setMessage] = useState("");
 
     const loadUsers = async () => {
@@ -47,10 +48,24 @@ export default function AdminUsers() {
             body: JSON.stringify(updates),
         });
         const data = await res.json();
-        setMessage(data.success ? `Updated: ${(data.updated || []).join(", ")}` : `Error: ${data.error}`);
+
+        // Also update account_type if changed
+        if (newAccountType) {
+            const user = users.find(u => u.auth_id === authId);
+            if (user?.profile?.id) {
+                await fetch("/api/admin/clients", {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ user_profile_id: user.profile.id, account_type: newAccountType }),
+                });
+            }
+        }
+
+        setMessage(data.success ? `Updated: ${(data.updated || []).join(", ")}${newAccountType ? " + account type" : ""}` : `Error: ${data.error}`);
         setEditingId(null);
         setNewEmail("");
         setNewPassword("");
+        setNewAccountType("");
         loadUsers();
     };
 
@@ -119,11 +134,17 @@ export default function AdminUsers() {
                                 </td>
                                 <td className="px-3">
                                     {editingId === u.auth_id ? (
-                                        <div className="flex gap-1.5">
+                                        <div className="flex gap-1.5 flex-wrap">
                                             <input value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="New email" className="w-32 border rounded px-2 py-1 text-xs" />
                                             <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="New pass" className="w-24 border rounded px-2 py-1 text-xs" />
+                                            <select title="Account Type" value={newAccountType} onChange={e => setNewAccountType(e.target.value)} className="border rounded px-2 py-1 text-xs">
+                                                <option value="">Account Type</option>
+                                                <option value="self_service">Self-Service</option>
+                                                <option value="consulting">Consulting</option>
+                                                <option value="admin">Admin</option>
+                                            </select>
                                             <button type="button" onClick={() => handleUpdate(u.auth_id)} className="text-xs bg-black text-white px-2 py-1 rounded font-bold">Save</button>
-                                            <button type="button" onClick={() => setEditingId(null)} className="text-xs text-stone-400">Cancel</button>
+                                            <button type="button" onClick={() => { setEditingId(null); setNewAccountType(""); }} className="text-xs text-stone-400">Cancel</button>
                                         </div>
                                     ) : (
                                         <div className="flex gap-1.5">
