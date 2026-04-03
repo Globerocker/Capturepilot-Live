@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import {
     Plus, Users, Mail, Phone, Globe, Hash, ChevronDown, Search,
     ListTodo, FileText, Loader2, Building2, Send,
@@ -175,14 +176,13 @@ export default function AdminClientsPage() {
                         return c.company_name.toLowerCase().includes(q) || c.email.toLowerCase().includes(q) || (c.contact_name || "").toLowerCase().includes(q) || c.naics_codes.some(n => n.includes(q));
                     }).map(client => (
                         <div key={client.id} className="bg-white border border-stone-200 rounded-2xl overflow-hidden">
-                            <button type="button" onClick={() => setExpandedId(expandedId === client.id ? null : client.id)}
-                                className="w-full text-left p-5 flex items-center gap-4 hover:bg-stone-50/50 transition-colors">
-                                <div className="w-10 h-10 rounded-full bg-black text-white flex items-center justify-center font-bold text-sm flex-shrink-0">
+                            <div className="w-full text-left p-5 flex items-center gap-4 hover:bg-stone-50/50 transition-colors">
+                                <Link href={`/admin/clients/${client.id}`} className="w-10 h-10 rounded-full bg-black text-white flex items-center justify-center font-bold text-sm flex-shrink-0 hover:bg-stone-800 transition-colors">
                                     {client.company_name.charAt(0).toUpperCase()}
-                                </div>
-                                <div className="flex-1 min-w-0">
+                                </Link>
+                                <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setExpandedId(expandedId === client.id ? null : client.id)}>
                                     <div className="flex items-center gap-2">
-                                        <h3 className="font-bold text-sm text-black">{client.company_name}</h3>
+                                        <Link href={`/admin/clients/${client.id}`} className="font-bold text-sm text-black hover:underline">{client.company_name}</Link>
                                         <span className={clsx("text-[10px] font-bold px-2 py-0.5 rounded border uppercase",
                                             client.client_status === "active" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
                                             "bg-stone-100 text-stone-500 border-stone-200"
@@ -197,8 +197,8 @@ export default function AdminClientsPage() {
                                     <span className="inline-flex items-center gap-1"><ListTodo className="w-3.5 h-3.5" /> {client.pending_tasks} tasks</span>
                                     <span className="inline-flex items-center gap-1"><FileText className="w-3.5 h-3.5" /> {client.document_count} docs</span>
                                 </div>
-                                <ChevronDown className={clsx("w-4 h-4 text-stone-400 transition-transform", expandedId === client.id && "rotate-180")} />
-                            </button>
+                                <ChevronDown className={clsx("w-4 h-4 text-stone-400 transition-transform cursor-pointer", expandedId === client.id && "rotate-180")} onClick={() => setExpandedId(expandedId === client.id ? null : client.id)} />
+                            </div>
 
                             {expandedId === client.id && (
                                 <div className="border-t border-stone-100 p-5 space-y-4">
@@ -223,13 +223,13 @@ export default function AdminClientsPage() {
                                                 <input value={taskForm.title} onChange={e => setTaskForm(f => ({ ...f, title: e.target.value }))} placeholder="Task title *" className="w-full border border-stone-300 rounded-xl px-3 py-2 text-sm" />
                                                 <textarea value={taskForm.description} onChange={e => setTaskForm(f => ({ ...f, description: e.target.value }))} placeholder="Description (make it crystal clear)..." className="w-full border border-stone-300 rounded-xl px-3 py-2 text-sm h-20" />
                                                 <div className="flex gap-2">
-                                                    <select value={taskForm.priority} onChange={e => setTaskForm(f => ({ ...f, priority: e.target.value }))} className="border border-stone-300 rounded-xl px-3 py-2 text-sm">
+                                                    <select title="Priority" value={taskForm.priority} onChange={e => setTaskForm(f => ({ ...f, priority: e.target.value }))} className="border border-stone-300 rounded-xl px-3 py-2 text-sm">
                                                         <option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="urgent">Urgent</option>
                                                     </select>
-                                                    <select value={taskForm.category} onChange={e => setTaskForm(f => ({ ...f, category: e.target.value }))} className="border border-stone-300 rounded-xl px-3 py-2 text-sm">
+                                                    <select title="Category" value={taskForm.category} onChange={e => setTaskForm(f => ({ ...f, category: e.target.value }))} className="border border-stone-300 rounded-xl px-3 py-2 text-sm">
                                                         <option value="general">General</option><option value="document">Document</option><option value="email_setup">Email Setup</option><option value="website">Website</option><option value="sam_registration">SAM.gov</option><option value="proposal">Proposal</option><option value="opportunity">Opportunity</option><option value="compliance">Compliance</option><option value="onboarding">Onboarding</option><option value="registration">Registration</option>
                                                     </select>
-                                                    <input type="date" value={taskForm.due_date} onChange={e => setTaskForm(f => ({ ...f, due_date: e.target.value }))} className="border border-stone-300 rounded-xl px-3 py-2 text-sm" />
+                                                    <input title="Due date" type="date" value={taskForm.due_date} onChange={e => setTaskForm(f => ({ ...f, due_date: e.target.value }))} className="border border-stone-300 rounded-xl px-3 py-2 text-sm" />
                                                 </div>
                                                 <div className="flex items-center gap-4">
                                                     <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={taskForm.notify} onChange={e => setTaskForm(f => ({ ...f, notify: e.target.checked }))} /> Send email notification</label>
