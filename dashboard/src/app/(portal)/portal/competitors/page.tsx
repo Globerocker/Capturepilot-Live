@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
-import { Users, Globe, ExternalLink, Loader2, ChevronDown, Award, Building2, Shield, TrendingUp } from "lucide-react";
+import { Users, Globe, ExternalLink, Loader2, ChevronDown, Shield, TrendingUp, Search } from "lucide-react";
 import clsx from "clsx";
 
 const supabase = createBrowserClient(
@@ -23,6 +23,27 @@ interface Competitor {
     federal_presence: string | null;
     crawl_data: Record<string, unknown> | null;
     last_analyzed_at: string | null;
+}
+
+function formatRevenue(raw: string | null): string {
+    if (!raw) return "?";
+    // If it's already a clean label like "$10M" just return it
+    if (raw.startsWith("$")) return raw;
+    // Try to parse numeric value
+    const num = parseFloat(raw.replace(/[^0-9.]/g, ""));
+    if (isNaN(num)) return raw;
+    if (num >= 1_000_000_000) return `$${(num / 1_000_000_000).toFixed(1)}B`;
+    if (num >= 1_000_000) return `$${(num / 1_000_000).toFixed(0)}M`;
+    if (num >= 1_000) return `$${(num / 1_000).toFixed(0)}K`;
+    return `$${num.toLocaleString()}`;
+}
+
+function formatEmployees(raw: string | null): string {
+    if (!raw) return "?";
+    const num = parseInt(raw.replace(/[^0-9]/g, ""), 10);
+    if (isNaN(num)) return raw;
+    if (num >= 10_000) return `${(num / 1_000).toFixed(0)}K+`;
+    return num.toLocaleString();
 }
 
 export default function PortalCompetitors() {
@@ -109,11 +130,16 @@ export default function PortalCompetitors() {
                                                 Fed: {comp.federal_presence}
                                             </span>
                                         )}
+                                        {comp.uei && (
+                                            <span className="text-[9px] font-mono bg-blue-50 text-blue-600 border border-blue-200 px-2 py-0.5 rounded">
+                                                UEI: {comp.uei}
+                                            </span>
+                                        )}
                                     </div>
                                     <p className="text-xs text-stone-500 mt-0.5 line-clamp-1">{comp.description || ""}</p>
                                     <div className="flex items-center gap-3 mt-1.5 text-xs text-stone-400">
-                                        {comp.employee_count && <span><Users className="w-3 h-3 inline mr-0.5" />{comp.employee_count}</span>}
-                                        {comp.revenue_estimate && <span><TrendingUp className="w-3 h-3 inline mr-0.5" />{comp.revenue_estimate}</span>}
+                                        {comp.employee_count && <span><Users className="w-3 h-3 inline mr-0.5" />{formatEmployees(comp.employee_count)} employees</span>}
+                                        {comp.revenue_estimate && <span><TrendingUp className="w-3 h-3 inline mr-0.5" />{formatRevenue(comp.revenue_estimate)}</span>}
                                         {comp.website && <span><Globe className="w-3 h-3 inline mr-0.5" />{comp.website.replace(/^https?:\/\//, "").replace(/\/$/, "")}</span>}
                                     </div>
                                 </div>
@@ -131,11 +157,11 @@ export default function PortalCompetitors() {
                                             <p className="text-[9px] text-stone-400 uppercase font-typewriter">Overlap</p>
                                         </div>
                                         <div className="bg-white rounded-xl border border-stone-200 p-3 text-center">
-                                            <p className="text-lg font-black text-stone-800">{comp.employee_count || "?"}</p>
+                                            <p className="text-lg font-black text-stone-800">{formatEmployees(comp.employee_count)}</p>
                                             <p className="text-[9px] text-stone-400 uppercase font-typewriter">Employees</p>
                                         </div>
                                         <div className="bg-white rounded-xl border border-stone-200 p-3 text-center">
-                                            <p className="text-lg font-black text-stone-800">{comp.revenue_estimate || "?"}</p>
+                                            <p className="text-lg font-black text-stone-800">{formatRevenue(comp.revenue_estimate)}</p>
                                             <p className="text-[9px] text-stone-400 uppercase font-typewriter">Revenue</p>
                                         </div>
                                         <div className="bg-white rounded-xl border border-stone-200 p-3 text-center">
@@ -143,6 +169,41 @@ export default function PortalCompetitors() {
                                             <p className="text-[9px] text-stone-400 uppercase font-typewriter">Fed Presence</p>
                                         </div>
                                     </div>
+
+                                    {/* UEI / Identifiers */}
+                                    {comp.uei && (
+                                        <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 flex items-center gap-3">
+                                            <Shield className="w-5 h-5 text-blue-500 flex-shrink-0" />
+                                            <div>
+                                                <p className="text-xs font-bold text-blue-800">SAM.gov Registered</p>
+                                                <p className="text-[10px] text-blue-600 font-mono">UEI: {comp.uei}</p>
+                                            </div>
+                                            <a href={`https://sam.gov/search/?q=${comp.uei}&index=ei`} target="_blank" rel="noopener noreferrer"
+                                                title="Look up on SAM.gov"
+                                                className="ml-auto text-xs font-bold text-blue-600 hover:text-blue-800 inline-flex items-center gap-1">
+                                                <ExternalLink className="w-3 h-3" /> SAM.gov
+                                            </a>
+                                            <a href={`https://www.usaspending.gov/search/?filters=${encodeURIComponent(JSON.stringify({ recipient_search_text: [comp.competitor_name] }))}`}
+                                                target="_blank" rel="noopener noreferrer" title="Look up on USASpending.gov"
+                                                className="text-xs font-bold text-blue-600 hover:text-blue-800 inline-flex items-center gap-1">
+                                                <ExternalLink className="w-3 h-3" /> USASpending
+                                            </a>
+                                        </div>
+                                    )}
+                                    {!comp.uei && (
+                                        <div className="bg-stone-50 border border-stone-200 rounded-xl p-3 flex items-center gap-3">
+                                            <Shield className="w-5 h-5 text-stone-400 flex-shrink-0" />
+                                            <div>
+                                                <p className="text-xs font-medium text-stone-600">No UEI on file</p>
+                                                <p className="text-[10px] text-stone-400">May not be registered on SAM.gov or pending verification</p>
+                                            </div>
+                                            <a href={`https://sam.gov/search/?q=${encodeURIComponent(comp.competitor_name)}&index=ei`}
+                                                target="_blank" rel="noopener noreferrer" title="Search SAM.gov"
+                                                className="ml-auto text-xs font-bold text-stone-500 hover:text-stone-700 inline-flex items-center gap-1">
+                                                <Search className="w-3 h-3" /> Search SAM
+                                            </a>
+                                        </div>
+                                    )}
 
                                     {/* Description */}
                                     {comp.description && (
@@ -191,17 +252,11 @@ export default function PortalCompetitors() {
                                     )}
 
                                     {/* Links */}
-                                    <div className="flex gap-2 pt-2 border-t border-stone-200">
+                                    <div className="flex gap-2 pt-2 border-t border-stone-200 flex-wrap">
                                         {comp.website && (
                                             <a href={comp.website.startsWith("http") ? comp.website : `https://${comp.website}`} target="_blank" rel="noopener noreferrer"
                                                 className="text-xs font-bold bg-white border border-stone-200 text-stone-700 px-3 py-1.5 rounded-lg hover:bg-stone-50 inline-flex items-center gap-1">
                                                 <Globe className="w-3 h-3" /> Website
-                                            </a>
-                                        )}
-                                        {comp.uei && (
-                                            <a href={`https://sam.gov/search/?q=${comp.uei}`} target="_blank" rel="noopener noreferrer"
-                                                className="text-xs font-bold bg-white border border-stone-200 text-blue-600 px-3 py-1.5 rounded-lg hover:bg-blue-50 inline-flex items-center gap-1">
-                                                <Shield className="w-3 h-3" /> SAM.gov
                                             </a>
                                         )}
                                         {social.linkedin && (

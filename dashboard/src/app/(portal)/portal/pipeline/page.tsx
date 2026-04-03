@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
-import { Layers, Loader2, ExternalLink, Clock, Plus } from "lucide-react";
+import { Layers, Loader2, ExternalLink, Clock, FileText } from "lucide-react";
 import clsx from "clsx";
 
 const supabase = createBrowserClient(
@@ -20,24 +20,38 @@ interface Pursuit {
         title: string;
         agency: string;
         notice_id: string;
+        notice_type: string;
         set_aside_code: string;
         response_deadline: string;
         naics_code: string;
+        status: string;
+        sources_sought_flag: boolean;
     };
 }
 
 const STAGES = [
-    { key: "discovered", label: "Discovered", color: "bg-stone-100 text-stone-600 border-stone-200" },
-    { key: "researching", label: "Researching", color: "bg-blue-50 text-blue-700 border-blue-200" },
-    { key: "preparing", label: "Preparing Bid", color: "bg-amber-50 text-amber-700 border-amber-200" },
-    { key: "submitted", label: "Submitted", color: "bg-violet-50 text-violet-700 border-violet-200" },
-    { key: "awarded", label: "Won", color: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-    { key: "lost", label: "Lost", color: "bg-red-50 text-red-600 border-red-200" },
+    { key: "discovered", label: "Discovered", color: "bg-stone-50", headerBg: "bg-stone-100", headerText: "text-stone-700", borderColor: "border-stone-200", dotColor: "bg-stone-400" },
+    { key: "researching", label: "Researching", color: "bg-blue-50/50", headerBg: "bg-blue-100", headerText: "text-blue-700", borderColor: "border-blue-200", dotColor: "bg-blue-500" },
+    { key: "preparing", label: "Preparing Bid", color: "bg-amber-50/50", headerBg: "bg-amber-100", headerText: "text-amber-700", borderColor: "border-amber-200", dotColor: "bg-amber-500" },
+    { key: "submitted", label: "Submitted", color: "bg-violet-50/50", headerBg: "bg-violet-100", headerText: "text-violet-700", borderColor: "border-violet-200", dotColor: "bg-violet-500" },
+    { key: "awarded", label: "Won", color: "bg-emerald-50/50", headerBg: "bg-emerald-100", headerText: "text-emerald-700", borderColor: "border-emerald-200", dotColor: "bg-emerald-500" },
+    { key: "lost", label: "Lost", color: "bg-red-50/50", headerBg: "bg-red-100", headerText: "text-red-600", borderColor: "border-red-200", dotColor: "bg-red-400" },
 ];
+
+const NOTICE_TYPE_LABELS: Record<string, { label: string; color: string }> = {
+    "Sources Sought": { label: "Sources Sought", color: "bg-purple-100 text-purple-700 border-purple-200" },
+    "Presolicitation": { label: "Pre-Solicitation", color: "bg-sky-100 text-sky-700 border-sky-200" },
+    "Solicitation": { label: "Solicitation", color: "bg-orange-100 text-orange-700 border-orange-200" },
+    "Combined Synopsis/Solicitation": { label: "Solicitation", color: "bg-orange-100 text-orange-700 border-orange-200" },
+    "Award Notice": { label: "Award", color: "bg-emerald-100 text-emerald-700 border-emerald-200" },
+};
+
+type FilterType = "all" | "sources_sought" | "presolicitation" | "solicitation";
 
 export default function PortalPipeline() {
     const [pursuits, setPursuits] = useState<Pursuit[]>([]);
     const [loading, setLoading] = useState(true);
+    const [filterType, setFilterType] = useState<FilterType>("all");
 
     useEffect(() => {
         (async () => {
@@ -50,7 +64,7 @@ export default function PortalPipeline() {
                 .from("user_pursuits")
                 .select(`
                     id, stage, priority, notes, created_at,
-                    opportunity:opportunities!inner(title, agency, notice_id, set_aside_code, response_deadline, naics_code)
+                    opportunity:opportunities!inner(title, agency, notice_id, notice_type, set_aside_code, response_deadline, naics_code, status, sources_sought_flag)
                 `)
                 .eq("user_profile_id", prof.id)
                 .order("created_at", { ascending: false });
@@ -62,78 +76,145 @@ export default function PortalPipeline() {
 
     if (loading) return <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-stone-400" /></div>;
 
+    // Filter out expired opportunities
+    const now = Date.now();
+    const activePursuits = pursuits.filter(p => {
+        const opp = (Array.isArray(p.opportunity) ? p.opportunity[0] : p.opportunity) as Pursuit["opportunity"];
+        if (!opp) return false;
+        const status = opp.status || "";
+        if (status === "EXPIRED" || status === "ARCHIVED") return false;
+        const deadline = opp.response_deadline ? new Date(opp.response_deadline).getTime() : 0;
+        if (deadline > 0 && deadline < now) return false;
+        return true;
+    });
+
+    // Apply solicitation type filter
+    const filtered = activePursuits.filter(p => {
+        if (filterType === "all") return true;
+        const opp = (Array.isArray(p.opportunity) ? p.opportunity[0] : p.opportunity) as Pursuit["opportunity"];
+        const nt = (opp?.notice_type || "").toLowerCase();
+        if (filterType === "sources_sought") return nt.includes("sources sought") || opp?.sources_sought_flag;
+        if (filterType === "presolicitation") return nt.includes("presolicitation");
+        if (filterType === "solicitation") return nt.includes("solicitation") && !nt.includes("presolicitation") && !nt.includes("sources sought");
+        return true;
+    });
+
     const byStage = STAGES.map(s => ({
         ...s,
-        items: pursuits.filter(p => p.stage === s.key),
+        items: filtered.filter(p => p.stage === s.key),
     })).filter(s => s.items.length > 0);
 
+    const totalActive = activePursuits.length;
+    const expiredCount = pursuits.length - activePursuits.length;
+
     return (
-        <div className="max-w-5xl space-y-6">
-            <div>
+        <div className="space-y-6">
+            <div className="max-w-5xl">
                 <h1 className="text-2xl font-bold text-black font-typewriter flex items-center gap-2">
                     <Layers className="w-6 h-6" /> Pipeline
                 </h1>
                 <p className="text-sm text-stone-500 mt-1">
-                    {pursuits.length} opportunities in your pipeline
+                    {totalActive} active opportunities in your pipeline
+                    {expiredCount > 0 && <span className="text-stone-400"> ({expiredCount} expired hidden)</span>}
                 </p>
+
+                {/* Solicitation type filters */}
+                <div className="flex gap-2 mt-4 flex-wrap">
+                    {([
+                        { key: "all", label: "All" },
+                        { key: "sources_sought", label: "Sources Sought" },
+                        { key: "presolicitation", label: "Pre-Solicitation" },
+                        { key: "solicitation", label: "Solicitation" },
+                    ] as const).map(f => (
+                        <button key={f.key} type="button" onClick={() => setFilterType(f.key)}
+                            className={clsx("text-xs font-bold px-3 py-1.5 rounded-lg border transition-colors",
+                                filterType === f.key ? "bg-black text-white border-black" : "bg-white text-stone-600 border-stone-200 hover:bg-stone-50"
+                            )}>
+                            {f.label}
+                        </button>
+                    ))}
+                </div>
             </div>
 
-            {pursuits.length === 0 && (
-                <div className="bg-white border border-stone-200 rounded-2xl p-12 text-center">
+            {filtered.length === 0 && (
+                <div className="bg-white border border-stone-200 rounded-2xl p-12 text-center max-w-5xl">
                     <Layers className="w-12 h-12 text-stone-300 mx-auto mb-4" />
-                    <p className="text-stone-500 text-sm mb-2">No opportunities in your pipeline yet.</p>
+                    <p className="text-stone-500 text-sm mb-2">
+                        {totalActive === 0 ? "No opportunities in your pipeline yet." : "No opportunities match this filter."}
+                    </p>
                     <p className="text-stone-400 text-xs">When our team starts pursuing opportunities for you, they&apos;ll appear here with their current status.</p>
                 </div>
             )}
 
-            {/* Kanban-style columns */}
+            {/* Horizontal Kanban board */}
             {byStage.length > 0 && (
-                <div className="space-y-6">
-                    {byStage.map(stage => (
-                        <div key={stage.key}>
-                            <div className="flex items-center gap-2 mb-3">
-                                <span className={clsx("text-xs font-bold px-3 py-1 rounded-lg border", stage.color)}>
-                                    {stage.label}
-                                </span>
-                                <span className="text-xs text-stone-400">{stage.items.length}</span>
-                            </div>
-                            <div className="space-y-2">
-                                {stage.items.map(p => {
-                                    const opp = (Array.isArray(p.opportunity) ? p.opportunity[0] : p.opportunity) as Pursuit["opportunity"];
-                                    const daysLeft = opp?.response_deadline ? Math.ceil((new Date(opp.response_deadline).getTime() - Date.now()) / 86400000) : null;
-                                    return (
-                                        <div key={p.id} className="bg-white border border-stone-200 rounded-xl p-4 hover:border-stone-300 transition-colors">
-                                            <div className="flex items-start justify-between gap-3">
-                                                <div className="flex-1 min-w-0">
-                                                    <h3 className="font-bold text-sm text-black line-clamp-2">{opp?.title || "Opportunity"}</h3>
-                                                    <p className="text-xs text-stone-500 mt-0.5">{opp?.agency || ""}</p>
-                                                    <div className="flex items-center gap-3 mt-2 flex-wrap">
-                                                        {opp?.naics_code && <span className="text-[10px] font-mono text-stone-400">NAICS: {opp.naics_code}</span>}
-                                                        {opp?.set_aside_code && <span className="text-[10px] text-blue-600">{opp.set_aside_code.substring(0, 30)}</span>}
-                                                        {daysLeft !== null && (
-                                                            <span className={clsx("text-[10px] font-medium inline-flex items-center gap-0.5",
-                                                                daysLeft <= 0 ? "text-red-500" : daysLeft <= 7 ? "text-red-600" : "text-stone-400"
-                                                            )}>
-                                                                <Clock className="w-3 h-3" />
-                                                                {daysLeft <= 0 ? "Expired" : `${daysLeft}d left`}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                    {p.notes && <p className="text-xs text-stone-500 mt-2 italic">{p.notes}</p>}
+                <div className="overflow-x-auto pb-4 -mx-4 px-4">
+                    <div className={clsx("flex gap-4", byStage.length >= 3 && "min-w-[900px]", byStage.length >= 4 && "min-w-[1200px]", byStage.length >= 5 && "min-w-[1500px]")}>
+                        {byStage.map(stage => (
+                            <div key={stage.key} className={clsx("flex-1 min-w-[280px] max-w-[340px] rounded-2xl border", stage.borderColor, stage.color)}>
+                                {/* Column header */}
+                                <div className={clsx("px-4 py-3 rounded-t-2xl flex items-center justify-between", stage.headerBg)}>
+                                    <div className="flex items-center gap-2">
+                                        <div className={clsx("w-2.5 h-2.5 rounded-full", stage.dotColor)} />
+                                        <span className={clsx("text-sm font-bold", stage.headerText)}>{stage.label}</span>
+                                    </div>
+                                    <span className={clsx("text-xs font-black w-6 h-6 rounded-full flex items-center justify-center", stage.headerBg, stage.headerText)}>
+                                        {stage.items.length}
+                                    </span>
+                                </div>
+
+                                {/* Cards */}
+                                <div className="p-2 space-y-2">
+                                    {stage.items.map(p => {
+                                        const opp = (Array.isArray(p.opportunity) ? p.opportunity[0] : p.opportunity) as Pursuit["opportunity"];
+                                        const daysLeft = opp?.response_deadline ? Math.ceil((new Date(opp.response_deadline).getTime() - Date.now()) / 86400000) : null;
+                                        const noticeInfo = NOTICE_TYPE_LABELS[opp?.notice_type || ""];
+
+                                        return (
+                                            <div key={p.id} className="bg-white rounded-xl p-3 border border-stone-100 shadow-sm hover:shadow-md transition-shadow">
+                                                <h3 className="font-bold text-xs text-black line-clamp-2 leading-snug">{opp?.title || "Opportunity"}</h3>
+                                                <p className="text-[10px] text-stone-500 mt-0.5 truncate">{opp?.agency || ""}</p>
+
+                                                <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                                                    {noticeInfo && (
+                                                        <span className={clsx("text-[9px] font-bold px-1.5 py-0.5 rounded border", noticeInfo.color)}>
+                                                            {noticeInfo.label}
+                                                        </span>
+                                                    )}
+                                                    {opp?.naics_code && (
+                                                        <span className="text-[9px] font-mono text-stone-400 bg-stone-50 px-1.5 py-0.5 rounded">
+                                                            {opp.naics_code}
+                                                        </span>
+                                                    )}
                                                 </div>
-                                                {opp?.notice_id && (
-                                                    <a href={`https://sam.gov/opp/${opp.notice_id}/view`} target="_blank" rel="noopener noreferrer"
-                                                        className="text-blue-600 hover:text-blue-800 flex-shrink-0">
-                                                        <ExternalLink className="w-4 h-4" />
-                                                    </a>
+
+                                                <div className="flex items-center justify-between mt-2 pt-2 border-t border-stone-50">
+                                                    {daysLeft !== null && (
+                                                        <span className={clsx("text-[10px] font-bold inline-flex items-center gap-0.5",
+                                                            daysLeft <= 7 ? "text-red-600" : daysLeft <= 30 ? "text-amber-600" : "text-emerald-600"
+                                                        )}>
+                                                            <Clock className="w-3 h-3" />
+                                                            {daysLeft}d left
+                                                        </span>
+                                                    )}
+                                                    {opp?.notice_id && (
+                                                        <a href={`https://sam.gov/opp/${opp.notice_id}/view`} target="_blank" rel="noopener noreferrer"
+                                                            title="View on SAM.gov" className="text-blue-500 hover:text-blue-700">
+                                                            <ExternalLink className="w-3.5 h-3.5" />
+                                                        </a>
+                                                    )}
+                                                </div>
+
+                                                {p.notes && (
+                                                    <p className="text-[10px] text-stone-400 mt-1.5 italic line-clamp-2">{p.notes}</p>
                                                 )}
                                             </div>
-                                        </div>
-                                    );
-                                })}
+                                        );
+                                    })}
+                                </div>
                             </div>
-                        </div>
-                    ))}
+                        ))}
+                    </div>
                 </div>
             )}
         </div>
