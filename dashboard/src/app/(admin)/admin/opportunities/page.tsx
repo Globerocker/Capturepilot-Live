@@ -34,7 +34,7 @@ export default function AdminOpportunities() {
     const [opps, setOpps] = useState<Opp[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
-    const [statusFilter, setStatusFilter] = useState("");
+    const [statusFilter, setStatusFilter] = useState("ACTIVE");
     const [naicsFilter, setNaicsFilter] = useState("");
     const [setAsideFilter, setSetAsideFilter] = useState("");
     const [total, setTotal] = useState(0);
@@ -87,7 +87,7 @@ export default function AdminOpportunities() {
     };
 
     return (
-        <div className="max-w-7xl space-y-5">
+        <div className="w-full space-y-5">
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-xl font-bold font-typewriter flex items-center gap-2">

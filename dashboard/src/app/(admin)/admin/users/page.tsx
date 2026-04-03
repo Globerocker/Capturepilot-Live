@@ -90,7 +90,7 @@ export default function AdminUsers() {
     if (loading) return <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-stone-400" /></div>;
 
     return (
-        <div className="max-w-5xl space-y-5">
+        <div className="w-full space-y-5">
             <h1 className="text-xl font-bold font-typewriter flex items-center gap-2">
                 <UserCog className="w-5 h-5" /> User Management
             </h1>

@@ -121,7 +121,7 @@ export default function AdminMatches() {
     if (loading) return <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-stone-400" /></div>;
 
     return (
-        <div className="max-w-7xl space-y-5">
+        <div className="w-full space-y-5">
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-xl font-bold font-typewriter flex items-center gap-2">
