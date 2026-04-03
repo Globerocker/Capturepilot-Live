@@ -76,39 +76,61 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: `Profile error: ${profileError.message}` }, { status: 500 });
         }
 
-        // 3. Create default onboarding tasks
+        // 3. Create default onboarding action items (10 standard tasks)
+        const pid = profileData.id;
         const defaultTasks = [
+            // HIGH PRIORITY — immediate needs
             {
-                user_profile_id: profileData.id,
-                title: "Provide company email credentials",
-                description: "We need a dedicated email account (e.g. govcontracts@yourcompany.com) to operate from on your behalf. Please create the email and share the login credentials securely.",
-                priority: "high",
-                category: "email_setup",
-                status: "waiting_client",
+                user_profile_id: pid, priority: "urgent", category: "sam_registration", status: "waiting_client",
+                title: "Verify or complete SAM.gov registration",
+                description: "SAM.gov registration is REQUIRED before you can bid on any federal contract. Check if your registration is active at sam.gov. If not registered, we will guide you through the process (takes 7-10 business days). Share your UEI number once registered.",
             },
             {
-                user_profile_id: profileData.id,
-                title: "Upload Capability Statement",
-                description: "Upload your company's capability statement (PDF). If you don't have one, we'll create one for you.",
-                priority: "high",
-                category: "document",
-                status: "waiting_client",
+                user_profile_id: pid, priority: "high", category: "email_setup", status: "waiting_client",
+                title: "Create a dedicated government contracting email",
+                description: "Create a dedicated email address for government contracting communications (e.g. govcontracts@yourcompany.com or federal@yourcompany.com). We will use this email to communicate with contracting officers on your behalf. Share the login credentials securely via the portal.",
             },
             {
-                user_profile_id: profileData.id,
-                title: "Verify SAM.gov registration",
-                description: "Confirm your SAM.gov registration is active and up to date. If not registered, we'll guide you through the process.",
-                priority: "high",
-                category: "sam_registration",
-                status: "pending",
+                user_profile_id: pid, priority: "high", category: "document", status: "waiting_client",
+                title: "Upload your Capability Statement",
+                description: "Upload your company capability statement (PDF, 1-2 pages). This is the #1 document contracting officers request. It should include: company overview, core competencies, past performance, NAICS codes, certifications, and contact info. If you don't have one, let us know and we'll create one for you.",
             },
             {
-                user_profile_id: profileData.id,
-                title: "Share website login credentials",
-                description: "We need access to your company website to optimize it for government contracting. Share your CMS/admin login securely.",
-                priority: "medium",
-                category: "website",
-                status: "waiting_client",
+                user_profile_id: pid, priority: "high", category: "website", status: "waiting_client",
+                title: "Share website admin login credentials",
+                description: "We need access to your company website to optimize it for government contracting. This includes adding past performance, certifications, NAICS codes, and government-focused content. Share your CMS/admin login (WordPress, Squarespace, Wix, etc.) securely via the portal.",
+            },
+            // MEDIUM PRIORITY — important but not blocking
+            {
+                user_profile_id: pid, priority: "medium", category: "document", status: "waiting_client",
+                title: "Provide past performance references",
+                description: "List 3-5 past projects (government or commercial) relevant to your target contracts. For each: client name, project description, contract value, dates, and a reference contact. Past performance is the #2 evaluation factor in government proposals.",
+            },
+            {
+                user_profile_id: pid, priority: "medium", category: "compliance", status: "waiting_client",
+                title: "Confirm insurance and bonding status",
+                description: "Many federal contracts require specific insurance (general liability, workers comp, professional liability) and bonding (bid bonds, performance bonds). Share your current coverage details and limits. If you need bonding, we can recommend surety companies.",
+            },
+            {
+                user_profile_id: pid, priority: "medium", category: "registration", status: "pending",
+                title: "Review and confirm NAICS codes",
+                description: "Review the NAICS codes we've assigned to your profile. These determine which opportunities you see. Confirm they accurately represent your services, or suggest additions. You can find your official codes on your SAM.gov registration.",
+            },
+            {
+                user_profile_id: pid, priority: "medium", category: "document", status: "waiting_client",
+                title: "Upload company logo (high resolution)",
+                description: "Upload your company logo in high resolution (PNG or SVG, minimum 500x500px). We'll use this for capability statements, proposals, and marketing materials.",
+            },
+            // LOWER PRIORITY — nice to have early
+            {
+                user_profile_id: pid, priority: "low", category: "general", status: "waiting_client",
+                title: "Share social media profiles",
+                description: "Share links to your company's LinkedIn, Facebook, Twitter/X, and any other social media profiles. Government contracting officers increasingly check social media as part of their evaluation. We may help optimize these profiles.",
+            },
+            {
+                user_profile_id: pid, priority: "low", category: "general", status: "waiting_client",
+                title: "Provide team bios for key personnel",
+                description: "Share brief bios (3-5 sentences) for key team members who would work on government contracts. Include: name, title, years of experience, relevant certifications, and notable projects. Key personnel bios are required in most proposals.",
             },
         ];
 

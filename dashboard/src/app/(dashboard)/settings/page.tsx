@@ -687,20 +687,40 @@ export default function SettingsPage() {
                 <h3 className="font-typewriter font-bold text-base sm:text-lg flex items-center mb-4">
                     <MapPin className="w-5 h-5 mr-2 text-stone-400" /> Target States
                 </h3>
-                <div id="target-states" className="flex flex-wrap gap-1.5 max-h-[150px] overflow-y-auto pr-1">
-                    {STATE_OPTIONS.map(s => (
-                        <button type="button" key={s} onClick={() => toggleArray("target_states", s)}
-                            className={clsx(
-                                "px-3 py-2 rounded-lg border text-xs font-mono font-bold transition-all min-w-[48px]",
-                                (profile.target_states || []).includes(s)
-                                    ? "bg-black text-white border-black"
-                                    : "bg-white text-stone-600 border-stone-200 hover:border-stone-400 active:bg-stone-100"
-                            )}>
-                            {s}
-                        </button>
-                    ))}
-                </div>
-                {(profile.target_states || []).length > 0 && (
+                {/* Nationwide toggle */}
+                <button type="button" onClick={() => {
+                    if ((profile.target_states || []).includes("NATIONWIDE")) {
+                        setProfile({ ...profile, target_states: [] });
+                    } else {
+                        setProfile({ ...profile, target_states: ["NATIONWIDE"] });
+                    }
+                    setSaved(false);
+                }} className={clsx(
+                    "w-full px-4 py-3 rounded-xl border-2 text-sm font-bold transition-all mb-3",
+                    (profile.target_states || []).includes("NATIONWIDE")
+                        ? "bg-emerald-50 text-emerald-700 border-emerald-400"
+                        : "bg-white text-stone-600 border-stone-200 hover:border-stone-400"
+                )}>
+                    {(profile.target_states || []).includes("NATIONWIDE") ? "✓ Nationwide — All 50 States" : "Select Nationwide (All States)"}
+                </button>
+
+                {/* Individual states — hidden when nationwide is selected */}
+                {!(profile.target_states || []).includes("NATIONWIDE") && (
+                    <div id="target-states" className="flex flex-wrap gap-1.5 max-h-[150px] overflow-y-auto pr-1">
+                        {STATE_OPTIONS.map(s => (
+                            <button type="button" key={s} onClick={() => toggleArray("target_states", s)}
+                                className={clsx(
+                                    "px-3 py-2 rounded-lg border text-xs font-mono font-bold transition-all min-w-[48px]",
+                                    (profile.target_states || []).includes(s)
+                                        ? "bg-black text-white border-black"
+                                        : "bg-white text-stone-600 border-stone-200 hover:border-stone-400 active:bg-stone-100"
+                                )}>
+                                {s}
+                            </button>
+                        ))}
+                    </div>
+                )}
+                {(profile.target_states || []).length > 0 && !(profile.target_states || []).includes("NATIONWIDE") && (
                     <p className="text-xs text-emerald-600 font-bold mt-2">{profile.target_states.length} states selected</p>
                 )}
             </section>
