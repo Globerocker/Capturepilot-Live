@@ -118,16 +118,21 @@ def score_set_aside(user_certs, opp_set_aside):
 
 def score_geo(user_state, user_target_states, opp_state):
     """Geographic alignment."""
+    target_states = user_target_states or []
+
+    # Nationwide: always full geo score
+    if "NATIONWIDE" in target_states:
+        return 1.0
+
     if not opp_state:
         return 0.3  # No location specified — neutral
 
-    target_states = user_target_states or []
     if opp_state in target_states:
         return 1.0  # Explicitly targeted
     if user_state and user_state == opp_state:
         return 0.8  # Home state
     if not target_states:
-        return 0.2  # No preferences set — nationwide default
+        return 0.2  # No preferences set
     return 0.0  # Outside target area
 
 

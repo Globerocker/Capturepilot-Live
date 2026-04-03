@@ -52,6 +52,8 @@ export function scoreSetAside(userCerts: string[], oppSetAside: string | null): 
 }
 
 export function scoreGeo(userState: string, targetStates: string[], oppState: string | null): number {
+    // Nationwide: always full geo score
+    if (targetStates?.includes("NATIONWIDE")) return 1.0;
     if (!oppState) return 0.3;
     if (targetStates?.includes(oppState)) return 1.0;
     if (userState && userState === oppState) return 0.8;
