@@ -5,7 +5,7 @@ import Link from "next/link";
 import {
     Zap, Globe, MapPin, Users, ExternalLink, Save, Search,
     Loader2, ChevronDown, Hash, Building2, Mail, Phone, User,
-    Linkedin, Calendar, Briefcase, Target, FileDown
+    Linkedin, Calendar, Briefcase, Target, FileDown, Send, MessageSquare
 } from "lucide-react";
 import clsx from "clsx";
 
@@ -264,6 +264,65 @@ export default function AdminProspectsPage() {
                                                 >
                                                     <Users className="w-3 h-3" /> Convert to Client
                                                 </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={async () => {
+                                                        const email = prospect.lead_email || prompt("Prospect email for outreach:");
+                                                        if (!email) return;
+                                                        const res = await fetch("/api/drafts/generate", {
+                                                            method: "POST",
+                                                            headers: { "Content-Type": "application/json" },
+                                                            body: JSON.stringify({
+                                                                company_name: prospect.company_name,
+                                                                email,
+                                                                naics_codes: prospect.inferred_naics?.map((n: { code: string }) => n.code) || [],
+                                                                matches: prospect.preview_matches?.slice(0, 3) || [],
+                                                                context: "prospect_outreach",
+                                                            }),
+                                                        });
+                                                        if (res.ok) {
+                                                            alert("AI outreach email drafted! Check the email drafts section.");
+                                                        } else {
+                                                            alert("Draft generation requires a user profile. Convert to client first.");
+                                                        }
+                                                    }}
+                                                    className="text-[10px] font-typewriter font-bold px-3 py-1.5 rounded-lg border bg-blue-600 text-white border-blue-700 inline-flex items-center gap-1 hover:bg-blue-700 transition-all"
+                                                >
+                                                    <Send className="w-3 h-3" /> AI Outreach Email
+                                                </button>
+                                            </div>
+
+                                            {/* Pipeline Status */}
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <span className="text-[10px] font-typewriter text-stone-400 uppercase">Status:</span>
+                                                {["New", "Contacted", "Interested", "Meeting Scheduled", "Proposal Sent", "Won", "Lost"].map(status => (
+                                                    <button
+                                                        key={status}
+                                                        type="button"
+                                                        onClick={async () => {
+                                                            // Store pipeline status in inferred_profile
+                                                            await fetch("/api/prospects/save", {
+                                                                method: "POST",
+                                                                headers: { "Content-Type": "application/json" },
+                                                                body: JSON.stringify({ analysis_id: prospect.id, pipeline_status: status }),
+                                                            });
+                                                            // Update local state
+                                                            setProspects(prev => prev.map(p =>
+                                                                p.id === prospect.id
+                                                                    ? { ...p, inferred_profile: { ...p.inferred_profile, pipeline_status: status } }
+                                                                    : p
+                                                            ));
+                                                        }}
+                                                        className={clsx(
+                                                            "text-[9px] font-bold px-2 py-0.5 rounded border transition-colors",
+                                                            (prospect.inferred_profile as Record<string, unknown>)?.pipeline_status === status
+                                                                ? "bg-black text-white border-black"
+                                                                : "bg-white text-stone-500 border-stone-200 hover:border-stone-400"
+                                                        )}
+                                                    >
+                                                        {status}
+                                                    </button>
+                                                ))}
                                             </div>
 
                                             {/* Summary */}

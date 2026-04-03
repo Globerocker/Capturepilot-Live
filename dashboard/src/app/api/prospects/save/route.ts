@@ -34,6 +34,11 @@ export async function POST(request: NextRequest) {
         const profile = (current.inferred_profile || {}) as Record<string, unknown>;
         profile.is_saved = true;
 
+        // Support pipeline_status update
+        if (body.pipeline_status) {
+            profile.pipeline_status = body.pipeline_status;
+        }
+
         const { error } = await sb
             .from("company_analyses")
             .update({ inferred_profile: profile })
