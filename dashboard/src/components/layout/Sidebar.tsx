@@ -18,11 +18,6 @@ export default function Sidebar() {
         { name: "My Matches", href: "/matches", icon: Zap },
         { name: "Pipeline", href: "/pipeline", icon: Layers },
         { name: "Opportunities", href: "/opportunities", icon: Target },
-        { name: "Action Items", href: "/actions", icon: CheckSquare },
-        { name: "Capture Intel", href: "/capture-intel", icon: Crosshair },
-        { name: "Letters", href: "/letters", icon: PenTool },
-        { name: "Analytics", href: "/analytics", icon: BarChart3 },
-        { name: "Billing", href: "/billing", icon: CreditCard },
     ];
 
     const handleSignOut = async () => {
