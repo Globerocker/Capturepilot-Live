@@ -145,6 +145,112 @@ export default function AdminTools() {
                 </div>
             </div>
 
+            {/* AI Document Analysis */}
+            <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+                <div className="bg-stone-50 border-b border-stone-100 px-5 py-3 flex items-center gap-2">
+                    <Zap className="w-4 h-4 text-stone-400" />
+                    <h2 className="font-bold text-sm">AI Document Analysis</h2>
+                </div>
+                <div className="p-5 space-y-3">
+                    <p className="text-xs text-stone-500">Analyze an opportunity using AI — extracts requirements, evaluation criteria, risks, and recommended actions.</p>
+                    <div className="flex gap-2">
+                        <input id="ai-notice-id" placeholder="Notice ID (from opportunity)" className="flex-1 border border-stone-300 rounded-lg px-3 py-2 text-sm font-mono" />
+                        <button type="button" onClick={async () => {
+                            const input = document.getElementById("ai-notice-id") as HTMLInputElement;
+                            if (!input?.value) return;
+                            setCrawlResult("");
+                            setCrawling(true);
+                            const res = await fetch("/api/ai/summarize-document", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ notice_id: input.value }),
+                            });
+                            const data = await res.json();
+                            setCrawling(false);
+                            setCrawlResult(data.success ? `Analysis complete: ${data.analysis?.executive_summary?.substring(0, 200)}` : `Error: ${data.error}`);
+                        }} disabled={crawling}
+                        className="bg-stone-900 text-white px-4 py-2 rounded-lg text-sm font-bold inline-flex items-center gap-1.5 disabled:opacity-50">
+                            {crawling ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+                            {crawling ? "Analyzing..." : "AI Analyze"}
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            {/* AI Proposal Generator */}
+            <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+                <div className="bg-stone-50 border-b border-stone-100 px-5 py-3 flex items-center gap-2">
+                    <Zap className="w-4 h-4 text-stone-400" />
+                    <h2 className="font-bold text-sm">AI Proposal Outline Generator</h2>
+                </div>
+                <div className="p-5 space-y-3">
+                    <p className="text-xs text-stone-500">Generate a tailored proposal outline for a specific opportunity + client profile.</p>
+                    <div className="flex gap-2">
+                        <input id="prop-notice-id" placeholder="Notice ID" className="flex-1 border border-stone-300 rounded-lg px-3 py-2 text-sm font-mono" />
+                        <input id="prop-profile-id" placeholder="Client Profile ID (optional)" className="flex-1 border border-stone-300 rounded-lg px-3 py-2 text-sm font-mono" />
+                        <button type="button" onClick={async () => {
+                            const noticeInput = document.getElementById("prop-notice-id") as HTMLInputElement;
+                            const profileInput = document.getElementById("prop-profile-id") as HTMLInputElement;
+                            if (!noticeInput?.value) return;
+                            setEnrichResult("");
+                            setEnriching(true);
+                            const res = await fetch("/api/ai/generate-proposal", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ notice_id: noticeInput.value, user_profile_id: profileInput?.value || undefined }),
+                            });
+                            const data = await res.json();
+                            setEnriching(false);
+                            setEnrichResult(data.success ? `Proposal outline generated: ${data.proposal?.proposal_title} (${data.proposal?.sections?.length} sections)` : `Error: ${data.error}`);
+                        }} disabled={enriching}
+                        className="bg-stone-900 text-white px-4 py-2 rounded-lg text-sm font-bold inline-flex items-center gap-1.5 disabled:opacity-50">
+                            {enriching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+                            {enriching ? "Generating..." : "Generate Proposal"}
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            {/* SBIR/STTR Grant Search */}
+            <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+                <div className="bg-stone-50 border-b border-stone-100 px-5 py-3 flex items-center gap-2">
+                    <Search className="w-4 h-4 text-stone-400" />
+                    <h2 className="font-bold text-sm">SBIR/STTR Grant Search</h2>
+                </div>
+                <div className="p-5 space-y-3">
+                    <p className="text-xs text-stone-500">Search SBIR.gov for Small Business Innovation Research and Technology Transfer grants.</p>
+                    <div className="flex gap-2">
+                        <input id="sbir-keywords" placeholder="Keywords (e.g. pipeline, cybersecurity)" className="flex-1 border border-stone-300 rounded-lg px-3 py-2 text-sm" />
+                        <select id="sbir-agency" title="Agency" className="border border-stone-300 rounded-lg px-3 py-2 text-sm">
+                            <option value="">All Agencies</option>
+                            <option value="DOD">DOD</option>
+                            <option value="DOE">DOE</option>
+                            <option value="NASA">NASA</option>
+                            <option value="NSF">NSF</option>
+                            <option value="HHS">HHS</option>
+                            <option value="USDA">USDA</option>
+                            <option value="EPA">EPA</option>
+                            <option value="DOT">DOT</option>
+                        </select>
+                        <button type="button" onClick={async () => {
+                            const kw = (document.getElementById("sbir-keywords") as HTMLInputElement)?.value;
+                            const ag = (document.getElementById("sbir-agency") as HTMLSelectElement)?.value;
+                            if (!kw) return;
+                            setEmailResult("");
+                            setSending(true);
+                            const res = await fetch(`/api/grants/sbir?keywords=${encodeURIComponent(kw)}&agency=${ag}&open=true`);
+                            const data = await res.json();
+                            setSending(false);
+                            setEmailResult(data.total ? `Found ${data.total} SBIR/STTR grants. View: ${data.search_url}` : data.error || "No results found");
+                        }} disabled={sending}
+                        className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold inline-flex items-center gap-1.5 disabled:opacity-50">
+                            {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                            {sending ? "Searching..." : "Search SBIR"}
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             {/* Cron Status */}
             <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
                 <div className="bg-stone-50 border-b border-stone-100 px-5 py-3">
