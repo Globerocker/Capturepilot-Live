@@ -61,8 +61,8 @@ export async function POST() {
         customer: customerId,
         mode: "subscription",
         line_items: [{ price: priceId, quantity: 1 }],
-        success_url: `${process.env.NEXT_PUBLIC_SUPABASE_URL ? "https://captiorpilot-v3.vercel.app" : "http://localhost:3000"}/billing?success=true`,
-        cancel_url: `${process.env.NEXT_PUBLIC_SUPABASE_URL ? "https://captiorpilot-v3.vercel.app" : "http://localhost:3000"}/billing?canceled=true`,
+        success_url: `${process.env.NEXT_PUBLIC_SUPABASE_URL ? "https://app.capturepilot.com" : "http://localhost:3000"}/billing?success=true`,
+        cancel_url: `${process.env.NEXT_PUBLIC_SUPABASE_URL ? "https://app.capturepilot.com" : "http://localhost:3000"}/billing?canceled=true`,
     });
 
     return NextResponse.json({ url: session.url });

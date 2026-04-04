@@ -324,7 +324,7 @@ export default function BillingPage() {
                                 </ul>
                                 <button
                                     type="button"
-                                    onClick={tier.name === "Enterprise" ? () => window.open("https://calendly.com/americurial/intro-call", "_blank") : handleUpgrade}
+                                    onClick={tier.name === "Enterprise" ? () => window.open("https://calendly.com/capturepilot/strategy-call", "_blank") : handleUpgrade}
                                     disabled={upgrading && tier.name !== "Enterprise"}
                                     className={clsx(
                                         "w-full py-2.5 rounded-full font-typewriter font-bold text-xs transition-all disabled:opacity-50",

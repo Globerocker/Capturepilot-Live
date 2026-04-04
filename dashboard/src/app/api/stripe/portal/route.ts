@@ -40,7 +40,7 @@ export async function POST() {
 
     const session = await stripe.billingPortal.sessions.create({
         customer: customerId,
-        return_url: `${process.env.NEXT_PUBLIC_SUPABASE_URL ? "https://captiorpilot-v3.vercel.app" : "http://localhost:3000"}/billing`,
+        return_url: `${process.env.NEXT_PUBLIC_SUPABASE_URL ? "https://app.capturepilot.com" : "http://localhost:3000"}/billing`,
     });
 
     return NextResponse.json({ url: session.url });

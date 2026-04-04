@@ -941,7 +941,7 @@ export default function CheckResultsPage() {
                         <Zap className="w-4 h-4" /> Run Another Check
                     </Link>
                     <a
-                        href="https://calendly.com/americurial/intro-call"
+                        href="https://calendly.com/capturepilot/strategy-call"
                         target="_blank"
                         rel="noopener noreferrer"
                         className="flex-1 bg-white border border-stone-200 rounded-2xl p-4 flex items-center justify-center gap-2 font-bold text-sm text-black hover:shadow-md transition-all"

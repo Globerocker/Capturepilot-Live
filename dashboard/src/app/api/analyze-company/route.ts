@@ -640,16 +640,26 @@ async function runAnalysisPipeline(analysisId: string, initialCompanyName: strin
             samNaics ? [...samNaics, ...usaNaics].filter((v, i, a) => a.indexOf(v) === i) : usaNaics.length > 0 ? usaNaics : undefined
         );
 
-        // Enhance with OpenAI if we have no authoritative SAM codes and the local keyword classifier logic was uncertain
-        if (!samNaics?.length && inferredNaics.length < 3 && process.env.OPENAI_API_KEY) {
+        // ALWAYS use OpenAI for NAICS inference (keyword map only covers 31 codes)
+        // This ensures companies in ANY industry get proper NAICS classification
+        if (process.env.OPENAI_API_KEY) {
             const aiNaics = await inferNaicsOpenAI(companyName, description, services, pageContent);
             if (aiNaics.length > 0) {
+                // Load valid codes from DB (892 codes) — not just the static 1021 in naics-codes.ts
+                let validDbCodes: Set<string> | null = null;
+                try {
+                    const { data: dbCodes } = await sb.from("naics_codes").select("code, industry_title");
+                    validDbCodes = new Set((dbCodes || []).map((r: { code: string }) => r.code));
+                } catch { /* fallback to static file */ }
+
                 for (const code of aiNaics) {
+                    // Accept if in DB OR in static file
+                    const inDb = validDbCodes?.has(code);
                     const naicsInfo = NAICS_CODES.find((n: { code: string; label: string }) => n.code === code);
-                    if (naicsInfo && !inferredNaics.some((x: { code: string }) => x.code === code)) {
+                    if ((inDb || naicsInfo) && !inferredNaics.some((x: { code: string }) => x.code === code)) {
                         inferredNaics.push({
                             code,
-                            label: naicsInfo.label,
+                            label: naicsInfo?.label || code,
                             confidence: 0.85,
                             matched_keywords: ["AI inferred analysis"]
                         });

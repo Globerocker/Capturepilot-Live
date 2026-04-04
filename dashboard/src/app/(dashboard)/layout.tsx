@@ -2,7 +2,7 @@ import Sidebar from "@/components/layout/Sidebar";
 import UpgradeBanner from "@/components/UpgradeBanner";
 import LockScreen from "@/components/LockScreen";
 import FeedbackWidget from "@/components/FeedbackWidget";
-import { ReviewPrompt } from "@/components/ReviewPrompt";
+// import { ReviewPrompt } from "@/components/ReviewPrompt"; // Disabled until Google Business Profile is set up
 
 export default function DashboardLayout({
   children,
@@ -20,7 +20,7 @@ export default function DashboardLayout({
       </main>
       <LockScreen />
       <FeedbackWidget />
-      <ReviewPrompt />
+      {/* <ReviewPrompt /> — disabled until Google Business Profile is set up */}
     </div>
   );
 }

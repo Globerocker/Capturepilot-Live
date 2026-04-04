@@ -146,7 +146,7 @@ export async function POST(req: NextRequest) {
 
         // 4b. Auto-crawl opportunities for client's NAICS codes (fire and forget)
         if (naics_codes && naics_codes.length > 0) {
-            const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://captiorpilot-v3.vercel.app";
+            const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://app.capturepilot.com";
             fetch(`${baseUrl}/api/admin/crawl-opportunities`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },

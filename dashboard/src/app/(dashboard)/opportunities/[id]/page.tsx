@@ -597,7 +597,7 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                     <EmailDraftPanel opportunityId={opp.id} opportunityTitle={opp.title} />
 
                     {/* Service CTA */}
-                    <a href="https://calendly.com/americurial/intro-call" target="_blank" rel="noopener noreferrer"
+                    <a href="https://calendly.com/capturepilot/strategy-call" target="_blank" rel="noopener noreferrer"
                         className="block bg-gradient-to-br from-blue-50 to-white rounded-2xl sm:rounded-3xl border border-blue-200 p-4 sm:p-6 hover:shadow-md transition-all group">
                         <div className="flex items-start gap-3">
                             <div className="w-9 h-9 rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0">

@@ -11,7 +11,7 @@ interface ServiceCTAProps {
     icon?: "phone" | "calendar";
 }
 
-const BOOKING_URL = "https://calendly.com/americurial/intro-call";
+const BOOKING_URL = "https://calendly.com/capturepilot/strategy-call";
 
 export default function ServiceCTA({ title, description, variant = "default", href, icon = "calendar" }: ServiceCTAProps) {
     const Icon = icon === "phone" ? Phone : Calendar;

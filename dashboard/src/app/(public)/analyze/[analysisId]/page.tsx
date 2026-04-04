@@ -538,7 +538,7 @@ export default function AnalysisResultsPage() {
                     </Link>
 
                     <a
-                        href="https://calendly.com/americurial/intro-call"
+                        href="https://calendly.com/capturepilot/strategy-call"
                         target="_blank"
                         rel="noopener noreferrer"
                         className="bg-white border border-stone-200 rounded-2xl p-5 sm:p-6 flex items-start gap-3 hover:shadow-md transition-all"

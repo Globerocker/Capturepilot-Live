@@ -12,7 +12,7 @@ function getResend(): Resend | null {
 }
 
 const FROM_EMAIL = process.env.FROM_EMAIL || "CapturePilot <noreply@capturepilot.com>";
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://captiorpilot-v3.vercel.app";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.capturepilot.com";
 
 // ─── Welcome Email ─────────────────────────────────────────────────
 export async function sendWelcomeEmail(to: string, companyName: string) {
