@@ -251,6 +251,105 @@ export default function AdminTools() {
                 </div>
             </div>
 
+            {/* AI Full Proposal Writer */}
+            <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+                <div className="bg-stone-50 border-b border-stone-100 px-5 py-3 flex items-center gap-2">
+                    <Zap className="w-4 h-4 text-stone-400" />
+                    <h2 className="font-bold text-sm">AI Full Proposal Writer</h2>
+                </div>
+                <div className="p-5 space-y-3">
+                    <p className="text-xs text-stone-500">Generate a complete multi-section proposal (Cover Letter, Executive Summary, Technical Approach, Past Performance, etc.)</p>
+                    <div className="flex gap-2">
+                        <input id="fw-notice" placeholder="Notice ID" className="flex-1 border border-stone-300 rounded-lg px-3 py-2 text-sm font-mono" />
+                        <input id="fw-profile" placeholder="Client Profile ID (optional)" className="flex-1 border border-stone-300 rounded-lg px-3 py-2 text-sm font-mono" />
+                        <button type="button" onClick={async () => {
+                            const nid = (document.getElementById("fw-notice") as HTMLInputElement)?.value;
+                            if (!nid) return;
+                            const pid = (document.getElementById("fw-profile") as HTMLInputElement)?.value;
+                            setCrawlResult(""); setCrawling(true);
+                            const res = await fetch("/api/ai/write-proposal", {
+                                method: "POST", headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ notice_id: nid, user_profile_id: pid || undefined }),
+                            });
+                            const data = await res.json();
+                            setCrawling(false);
+                            setCrawlResult(data.success ? `Proposal generated: ${data.sections?.length} sections, ${data.total_word_count} words (~${data.estimated_pages} pages)` : `Error: ${data.error}`);
+                        }} disabled={crawling}
+                        className="bg-stone-900 text-white px-4 py-2 rounded-lg text-sm font-bold inline-flex items-center gap-1.5 disabled:opacity-50">
+                            {crawling ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+                            {crawling ? "Writing..." : "Write Proposal"}
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            {/* Teaming Partner Search */}
+            <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+                <div className="bg-stone-50 border-b border-stone-100 px-5 py-3 flex items-center gap-2">
+                    <Search className="w-4 h-4 text-stone-400" />
+                    <h2 className="font-bold text-sm">Teaming Partner Search</h2>
+                </div>
+                <div className="p-5 space-y-3">
+                    <p className="text-xs text-stone-500">Find SAM-registered companies for teaming partnerships.</p>
+                    <div className="flex gap-2">
+                        <input id="tp-naics" placeholder="NAICS code" className="w-28 border border-stone-300 rounded-lg px-3 py-2 text-sm" />
+                        <input id="tp-state" placeholder="State (e.g. TX)" className="w-20 border border-stone-300 rounded-lg px-3 py-2 text-sm" />
+                        <select id="tp-cert" title="Certification" className="border border-stone-300 rounded-lg px-3 py-2 text-sm">
+                            <option value="">Any Cert</option>
+                            <option value="8A">8(a)</option>
+                            <option value="SDVOSB">SDVOSB</option>
+                            <option value="WOSB">WOSB</option>
+                            <option value="HUBZONE">HUBZone</option>
+                            <option value="VOSB">VOSB</option>
+                        </select>
+                        <button type="button" onClick={async () => {
+                            const naics = (document.getElementById("tp-naics") as HTMLInputElement)?.value;
+                            const state = (document.getElementById("tp-state") as HTMLInputElement)?.value;
+                            const cert = (document.getElementById("tp-cert") as HTMLSelectElement)?.value;
+                            if (!naics) return;
+                            setEnrichResult(""); setEnriching(true);
+                            const res = await fetch(`/api/partners/search?naics=${naics}&state=${state}&set_aside=${cert}`);
+                            const data = await res.json();
+                            setEnriching(false);
+                            setEnrichResult(data.success ? `Found ${data.total} potential partners` : `Error: ${data.error}`);
+                        }} disabled={enriching}
+                        className="bg-stone-900 text-white px-4 py-2 rounded-lg text-sm font-bold inline-flex items-center gap-1.5 disabled:opacity-50">
+                            {enriching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                            {enriching ? "Searching..." : "Find Partners"}
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            {/* IDIQ/Task Order Search */}
+            <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+                <div className="bg-stone-50 border-b border-stone-100 px-5 py-3 flex items-center gap-2">
+                    <Search className="w-4 h-4 text-stone-400" />
+                    <h2 className="font-bold text-sm">IDIQ / Contract Vehicle Search</h2>
+                </div>
+                <div className="p-5 space-y-3">
+                    <p className="text-xs text-stone-500">Find active IDIQ contracts and GWACs in a specific NAICS — getting on one means steady work.</p>
+                    <div className="flex gap-2">
+                        <input id="idiq-naics" placeholder="NAICS code" className="w-28 border border-stone-300 rounded-lg px-3 py-2 text-sm" />
+                        <input id="idiq-keyword" placeholder="Keyword (optional)" className="flex-1 border border-stone-300 rounded-lg px-3 py-2 text-sm" />
+                        <button type="button" onClick={async () => {
+                            const naics = (document.getElementById("idiq-naics") as HTMLInputElement)?.value;
+                            const kw = (document.getElementById("idiq-keyword") as HTMLInputElement)?.value;
+                            if (!naics && !kw) return;
+                            setEmailResult(""); setSending(true);
+                            const res = await fetch(`/api/idiq?naics=${naics}&keyword=${encodeURIComponent(kw || "")}`);
+                            const data = await res.json();
+                            setSending(false);
+                            setEmailResult(data.success ? `Found ${data.total} IDIQ contracts worth ${data.total_value ? "$" + (data.total_value / 1e6).toFixed(0) + "M" : "N/A"}` : `Error: ${data.error}`);
+                        }} disabled={sending}
+                        className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold inline-flex items-center gap-1.5 disabled:opacity-50">
+                            {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                            {sending ? "Searching..." : "Search IDIQs"}
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             {/* Cron Status */}
             <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
                 <div className="bg-stone-50 border-b border-stone-100 px-5 py-3">
