@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { sendConsultingWelcomeEmail } from "@/lib/email";
+import { notifyNewClient } from "@/lib/slack";
 
 function getAdmin() {
     return createClient(
@@ -158,8 +159,9 @@ export async function POST(req: NextRequest) {
             }).catch(() => {}); // fire and forget
         }
 
-        // 5. Send welcome email
+        // 5. Send welcome email + Slack notification
         await sendConsultingWelcomeEmail(email, company_name, contact_name || "there", tempPassword);
+        notifyNewClient(company_name, email).catch(() => {});
 
         return NextResponse.json({
             success: true,

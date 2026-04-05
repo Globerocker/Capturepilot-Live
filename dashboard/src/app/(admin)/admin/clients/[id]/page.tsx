@@ -10,6 +10,7 @@ import {
     AlertCircle, Plus, Send, ExternalLink, Layers,
 } from "lucide-react";
 import clsx from "clsx";
+import { MarketIntelligence } from "@/components/MarketIntelligence";
 
 const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -205,7 +206,7 @@ export default function ClientDetailPage() {
             </div>
 
             {/* Tab Content */}
-            {activeTab === "overview" && (
+            {activeTab === "overview" && (<>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {/* Edit Form */}
                     <div className="bg-white border border-stone-200 rounded-xl p-5 space-y-3">
@@ -270,7 +271,12 @@ export default function ClientDetailPage() {
                         </div>
                     </div>
                 </div>
-            )}
+
+                {/* Market Intelligence */}
+                {profile?.naics_codes && profile.naics_codes.length > 0 && (
+                    <MarketIntelligence naicsCodes={profile.naics_codes} companyName={profile.company_name} />
+                )}
+            </>)}
 
             {activeTab === "pipeline" && (
                 <div className="bg-white border border-stone-200 rounded-xl p-5">
