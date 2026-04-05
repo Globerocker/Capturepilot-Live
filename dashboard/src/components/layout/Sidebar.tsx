@@ -16,8 +16,8 @@ export default function Sidebar() {
     const navLinks = [
         { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
         { name: "My Matches", href: "/matches", icon: Zap },
-        { name: "Pipeline", href: "/pipeline", icon: Layers },
-        { name: "Opportunities", href: "/opportunities", icon: Target },
+        { name: "My Deals", href: "/pipeline", icon: Layers },
+        { name: "Browse All", href: "/opportunities", icon: Target },
     ];
 
     const handleSignOut = async () => {

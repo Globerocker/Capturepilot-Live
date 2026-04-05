@@ -160,7 +160,7 @@ export default function PursueButton({ opportunityId, noticeType }: PursueButton
                         </div>
                     </div>
                     <div className="flex gap-2">
-                        <Link href="/actions"
+                        <Link href="/pipeline"
                             className="inline-flex items-center bg-stone-100 text-stone-700 font-typewriter font-bold px-4 py-2.5 rounded-full hover:bg-stone-200 transition-all text-xs border border-stone-200">
                             Action Items <ArrowRight className="w-3 h-3 ml-1" />
                         </Link>

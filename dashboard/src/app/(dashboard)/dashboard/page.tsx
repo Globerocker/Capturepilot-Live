@@ -205,7 +205,7 @@ export default function UserDashboard() {
           highlight
         />
         <KpiCard
-          title="HOT Matches"
+          title="Strong Matches"
           value={hotMatchCount}
           subtitle="Strong profile alignment"
           icon={Trophy}
@@ -213,7 +213,7 @@ export default function UserDashboard() {
           color="emerald"
         />
         <KpiCard
-          title="Active Opps"
+          title="Available Contracts"
           value={opsCount.toLocaleString()}
           subtitle="Total federal opportunities"
           icon={Activity}
@@ -347,7 +347,7 @@ export default function UserDashboard() {
               <p className="text-xs text-stone-400">No opportunities in pipeline</p>
             )}
           </Link>
-          <Link href="/actions" className="bg-white rounded-[24px] sm:rounded-[32px] p-5 sm:p-6 border border-stone-200 shadow-sm hover:shadow-md hover:border-stone-300 transition-all">
+          <Link href="/pipeline" className="bg-white rounded-[24px] sm:rounded-[32px] p-5 sm:p-6 border border-stone-200 shadow-sm hover:shadow-md hover:border-stone-300 transition-all">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-typewriter font-bold text-base flex items-center">
                 <CheckSquare className="w-5 h-5 mr-2 text-stone-400" /> Action Items

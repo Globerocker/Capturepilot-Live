@@ -255,9 +255,9 @@ export default function MyMatchesPage() {
             <section className="flex flex-wrap gap-2 mb-4">
                 {([
                     { key: "ALL" as const, label: "All Matches", icon: Target },
-                    { key: "HOT" as const, label: "HOT", icon: Flame },
-                    { key: "WARM" as const, label: "WARM", icon: Trophy },
-                    { key: "COLD" as const, label: "COLD", icon: Shield },
+                    { key: "HOT" as const, label: "Strong Matches", icon: Flame },
+                    { key: "WARM" as const, label: "Good Matches", icon: Trophy },
+                    { key: "COLD" as const, label: "Possible Matches", icon: Shield },
                     { key: "SAVED" as const, label: "Saved", icon: Bookmark },
                 ]).map(tab => (
                     <button
@@ -448,12 +448,12 @@ export default function MyMatchesPage() {
                                             <span className={clsx(
                                                 "text-[9px] font-typewriter font-bold px-2 py-0.5 rounded uppercase tracking-widest border",
                                                 match.classification === "HOT"
-                                                    ? "bg-red-50 text-red-600 border-red-200"
+                                                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                                                     : match.classification === "WARM"
                                                     ? "bg-amber-50 text-amber-600 border-amber-200"
                                                     : "bg-blue-50 text-blue-600 border-blue-200"
                                             )}>
-                                                {match.classification}
+                                                {match.classification === "HOT" ? "Strong" : match.classification === "WARM" ? "Good" : "Possible"}
                                             </span>
                                             {opp.set_aside_code && (
                                                 <span className="text-[9px] font-typewriter font-bold bg-blue-100 text-blue-600 border border-blue-200 px-2 py-0.5 rounded uppercase">{opp.set_aside_code}</span>

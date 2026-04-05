@@ -17,12 +17,12 @@ const supabase = createBrowserClient(
 
 const NAV_ITEMS = [
     { href: "/portal", icon: LayoutDashboard, label: "Overview" },
-    { href: "/portal/opportunities", icon: Briefcase, label: "Matches" },
-    { href: "/portal/pipeline", icon: Layers, label: "Pipeline" },
-    { href: "/portal/tasks", icon: ListTodo, label: "Action Items" },
+    { href: "/portal/opportunities", icon: Briefcase, label: "My Matches" },
+    { href: "/portal/pipeline", icon: Layers, label: "My Deals" },
+    { href: "/portal/tasks", icon: ListTodo, label: "To-Do List" },
     { href: "/portal/competitors", icon: Users, label: "Competitors" },
     { href: "/portal/documents", icon: FileText, label: "Documents" },
-    { href: "/portal/settings", icon: Settings, label: "Settings" },
+    { href: "/portal/settings", icon: Settings, label: "Account" },
 ];
 
 export default function PortalLayout({ children }: { children: React.ReactNode }) {
