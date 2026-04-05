@@ -484,7 +484,7 @@ export default function MyMatchesPage() {
                                         </span>
 
                                         {/* Actions */}
-                                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <div className="flex items-center gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                                             {pursuedIds.has(opp.id) ? (
                                                 <span className="flex items-center gap-1 text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg text-[10px] font-bold">
                                                     <CheckCircle2 className="w-3 h-3" /> Pursuing
@@ -517,7 +517,7 @@ export default function MyMatchesPage() {
 
                                 {/* Score Breakdown (expandable on hover) */}
                                 {match.score_breakdown && (
-                                    <div className="hidden group-hover:flex mt-2 pt-2 border-t border-stone-100 gap-2 flex-wrap">
+                                    <div className="flex sm:hidden sm:group-hover:flex mt-2 pt-2 border-t border-stone-100 gap-2 flex-wrap">
                                         {Object.entries(match.score_breakdown)
                                             .filter(([k]) => k !== "total")
                                             .map(([key, val]) => (

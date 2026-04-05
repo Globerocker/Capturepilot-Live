@@ -199,7 +199,7 @@ export default function UserDashboard() {
         <KpiCard
           title="Your Matches"
           value={totalMatchCount}
-          subtitle={`${hotMatchCount} HOT, ${warmMatchCount} WARM`}
+          subtitle={`${hotMatchCount} strong, ${warmMatchCount} good`}
           icon={Target}
           href="/matches"
           highlight

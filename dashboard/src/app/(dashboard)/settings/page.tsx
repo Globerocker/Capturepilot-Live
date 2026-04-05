@@ -70,6 +70,7 @@ export default function SettingsPage() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
+    const [showAdvanced, setShowAdvanced] = useState(false);
     const [userEmail, setUserEmail] = useState("");
     const [profile, setProfile] = useState<Profile | null>(null);
     const [naicsSearch, setNaicsSearch] = useState("");
@@ -386,6 +387,18 @@ export default function SettingsPage() {
                 </div>
             </section>
 
+            {/* Advanced Settings Toggle */}
+            <button type="button" onClick={() => setShowAdvanced(!showAdvanced)}
+                className="w-full bg-stone-50 border border-stone-200 rounded-2xl p-4 text-left hover:bg-stone-100 transition-colors flex items-center justify-between">
+                <span className="text-sm font-bold text-stone-600">
+                    {showAdvanced ? "Hide Advanced Settings" : "Show Advanced Settings"}
+                </span>
+                <span className="text-xs text-stone-400">
+                    Capacity, PSC Codes, Clearances, Agency Preferences
+                </span>
+            </button>
+
+            {showAdvanced && (<>
             {/* Capacity & Experience */}
             <section className="bg-white rounded-[24px] sm:rounded-[32px] border border-stone-200 shadow-sm p-5 sm:p-7">
                 <h3 className="font-typewriter font-bold text-base sm:text-lg flex items-center mb-4">
@@ -681,6 +694,7 @@ export default function SettingsPage() {
                     </div>
                 </div>
             </section>
+            </>)}
 
             {/* Target States */}
             <section className="bg-white rounded-[24px] sm:rounded-[32px] border border-stone-200 shadow-sm p-5 sm:p-7">
