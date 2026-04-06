@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Activity, Target, Zap, ArrowRight, Loader2, Clock, Trophy, Search, Shield, BarChart3, Layers, CheckSquare, Phone, UserCheck } from "lucide-react";
 import ServiceCTA from "@/components/ui/ServiceCTA";
+import { MarketIntelligence } from "@/components/MarketIntelligence";
 import { Skeleton, SkeletonKpiCard } from "@/components/ui/Skeleton";
 import clsx from "clsx";
 import Link from "next/link";
@@ -472,6 +473,11 @@ export default function UserDashboard() {
           <p className="text-stone-400 text-xs">Improve your matches by refining your business details</p>
         </Link>
       </section>
+
+      {/* Market Intelligence */}
+      {profile && profile.naics_codes.length > 0 && (
+        <MarketIntelligence naicsCodes={profile.naics_codes} companyName={profile.company_name} />
+      )}
     </div>
   );
 }

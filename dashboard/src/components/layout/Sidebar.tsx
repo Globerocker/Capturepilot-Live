@@ -18,6 +18,7 @@ export default function Sidebar() {
         { name: "My Matches", href: "/matches", icon: Zap },
         { name: "My Deals", href: "/pipeline", icon: Layers },
         { name: "Browse All", href: "/opportunities", icon: Target },
+        { name: "Capability Statement", href: "/capability-statement", icon: Crosshair },
     ];
 
     const handleSignOut = async () => {

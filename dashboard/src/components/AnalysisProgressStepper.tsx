@@ -8,11 +8,11 @@ interface AnalysisProgressStepperProps {
 }
 
 const steps = [
-    { icon: Globe, label: "Crawling website", description: "Scanning pages, sitemap & legal info..." },
-    { icon: Database, label: "Enriching data", description: "Checking SAM.gov & federal databases..." },
-    { icon: Target, label: "Classifying industry", description: "Inferring NAICS codes..." },
-    { icon: Search, label: "Scoring matches", description: "Finding matching opportunities..." },
-    { icon: Zap, label: "Generating results", description: "Building recommendations & insights..." },
+    { icon: Globe, label: "Crawling website", description: "Scanning your website for services, certifications & contact info..." },
+    { icon: Database, label: "Enriching data", description: "Checking SAM.gov registration & federal award history..." },
+    { icon: Target, label: "Classifying industry", description: "Identifying your NAICS codes using AI..." },
+    { icon: Search, label: "Finding opportunities", description: "Searching SAM.gov for matching government contracts..." },
+    { icon: Zap, label: "Generating results", description: "Scoring matches & building your report..." },
 ];
 
 // Map API status strings to step numbers
@@ -21,6 +21,7 @@ export function statusToStep(status: string): number {
         case "crawling": return 0;
         case "enriching": return 1;
         case "classifying": return 2;
+        case "finding_opportunities": return 3;
         case "scoring": return 3;
         case "generating": return 4;
         case "complete": return 5; // All steps done
