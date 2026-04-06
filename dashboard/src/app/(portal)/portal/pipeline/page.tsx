@@ -1,5 +1,6 @@
 "use client";
 
+import { fmtCurrency } from "@/lib/display-helpers";
 import { useEffect, useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import { Layers, Loader2, ExternalLink, Clock, FileText, ChevronDown, Plus, MessageSquare, Save } from "lucide-react";

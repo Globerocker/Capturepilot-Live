@@ -1,5 +1,6 @@
 "use client";
 
+import { fmtCurrency } from "@/lib/display-helpers";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createBrowserClient } from "@supabase/ssr";

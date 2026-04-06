@@ -20,6 +20,8 @@ const NAV_ITEMS = [
     { href: "/portal/opportunities", icon: Briefcase, label: "My Matches" },
     { href: "/portal/pipeline", icon: Layers, label: "My Deals" },
     { href: "/portal/tasks", icon: ListTodo, label: "To-Do List" },
+    { href: "/portal/capability-statement", icon: FileText, label: "Capability Statement" },
+    { href: "/portal/partners", icon: Users, label: "Find Partners" },
     { href: "/portal/competitors", icon: Users, label: "Competitors" },
     { href: "/portal/documents", icon: FileText, label: "Documents" },
     { href: "/portal/settings", icon: Settings, label: "Account" },
