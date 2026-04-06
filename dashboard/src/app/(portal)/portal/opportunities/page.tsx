@@ -49,6 +49,9 @@ export default function PortalOpportunities() {
     const [searchQuery, setSearchQuery] = useState("");
     const [showFilters, setShowFilters] = useState(false);
     const [profileId, setProfileId] = useState("");
+    const [userCerts, setUserCerts] = useState<string[]>([]);
+    const [userNaics, setUserNaics] = useState<string[]>([]);
+    const [userStates, setUserStates] = useState<string[]>([]);
 
     useEffect(() => {
         (async () => {
@@ -57,11 +60,14 @@ export default function PortalOpportunities() {
 
             const { data: prof } = await supabase
                 .from("user_profiles")
-                .select("id")
+                .select("id, sba_certifications, naics_codes, target_states")
                 .eq("auth_user_id", user.id)
                 .single();
             if (!prof) return;
             setProfileId(prof.id);
+            setUserCerts((prof.sba_certifications || []) as string[]);
+            setUserNaics((prof.naics_codes || []) as string[]);
+            setUserStates((prof.target_states || []) as string[]);
 
             const { data } = await supabase
                 .from("user_matches")
@@ -164,6 +170,26 @@ export default function PortalOpportunities() {
                             className="w-full pl-9 pr-3 py-2.5 border border-stone-300 rounded-xl text-sm focus:outline-none focus:border-black"
                         />
                     </div>
+                    <button type="button" onClick={async () => {
+                        const name = prompt("Name this saved search:");
+                        if (!name || !profileId) return;
+                        await fetch("/api/saved-searches", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                                user_profile_id: profileId,
+                                name,
+                                filters: {
+                                    keywords: searchQuery || undefined,
+                                    status: filter !== "all" ? filter : undefined,
+                                },
+                            }),
+                        });
+                        alert(`Search "${name}" saved! You'll get email alerts for new matches.`);
+                    }}
+                        className="border border-stone-300 rounded-xl px-3 py-2 text-sm inline-flex items-center gap-1.5 hover:bg-stone-50 text-stone-600">
+                        <Star className="w-4 h-4" /> Save
+                    </button>
                     <button type="button" onClick={() => setShowFilters(!showFilters)}
                         className="border border-stone-300 rounded-xl px-3 py-2 text-sm inline-flex items-center gap-1.5 hover:bg-stone-50">
                         <Filter className="w-4 h-4" /> Filters <ChevronDown className={clsx("w-3 h-3 transition-transform", showFilters && "rotate-180")} />
@@ -233,6 +259,23 @@ export default function PortalOpportunities() {
                                         {opp.wosb_relevance_flag && <span className="text-[9px] font-bold bg-pink-50 text-pink-600 border border-pink-200 px-1.5 py-0.5 rounded">WOSB</span>}
                                         {opp.sources_sought_flag && <span className="text-[9px] font-bold bg-violet-50 text-violet-600 border border-violet-200 px-1.5 py-0.5 rounded"><TrendingUp className="w-3 h-3 inline" /> EARLY</span>}
                                         {value > 0 && <span className="text-[9px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-200 px-2 py-0.5 rounded">{fmtCurrency(value)}</span>}
+                                        {/* Eligibility Badge */}
+                                        {(() => {
+                                            const sa = (opp.set_aside_code || "").toLowerCase();
+                                            const isOpen = !sa || sa.includes("none") || sa.includes("full and open");
+                                            if (isOpen) return <span className="text-[9px] font-bold bg-stone-50 text-stone-500 border border-stone-200 px-1.5 py-0.5 rounded">Open</span>;
+                                            const certsLower = userCerts.map(c => c.toLowerCase());
+                                            const match =
+                                                (sa.includes("8(a)") && certsLower.some(c => c.includes("8(a)") || c.includes("8a"))) ||
+                                                (sa.includes("sdvosb") && certsLower.some(c => c.includes("sdvosb"))) ||
+                                                (sa.includes("wosb") && certsLower.some(c => c.includes("wosb") || c.includes("edwosb"))) ||
+                                                (sa.includes("hubzone") && certsLower.some(c => c.includes("hubzone"))) ||
+                                                (sa.includes("vosb") && certsLower.some(c => c.includes("vosb"))) ||
+                                                (sa.includes("small business") && userCerts.length > 0);
+                                            return match
+                                                ? <span className="text-[9px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded">✓ Eligible</span>
+                                                : <span className="text-[9px] font-bold bg-red-50 text-red-500 border border-red-200 px-1.5 py-0.5 rounded">Cert Needed</span>;
+                                        })()}
                                     </div>
 
                                     {/* Title + Agency */}
