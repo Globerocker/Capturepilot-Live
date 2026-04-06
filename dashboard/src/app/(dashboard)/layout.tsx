@@ -3,6 +3,7 @@ import UpgradeBanner from "@/components/UpgradeBanner";
 import LockScreen from "@/components/LockScreen";
 import FeedbackWidget from "@/components/FeedbackWidget";
 import GlobalToast from "@/components/GlobalToast";
+import SupportChat from "@/components/SupportChat";
 // import { ReviewPrompt } from "@/components/ReviewPrompt"; // Disabled until Google Business Profile is set up
 
 export default function DashboardLayout({
@@ -22,6 +23,7 @@ export default function DashboardLayout({
       <LockScreen />
       <FeedbackWidget />
       <GlobalToast />
+      <SupportChat />
       {/* <ReviewPrompt /> — disabled until Google Business Profile is set up */}
     </div>
   );

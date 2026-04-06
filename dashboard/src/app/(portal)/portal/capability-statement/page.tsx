@@ -171,33 +171,80 @@ export default function CapabilityStatementPage() {
                 )}
             </div>
 
-            {/* Step 2: Voice Input */}
-            <div className="bg-white border border-stone-200 rounded-2xl p-5">
-                <h2 className="font-bold text-sm flex items-center gap-2 mb-3">
+            {/* Step 2: Company Information Input */}
+            <div className="bg-white border border-stone-200 rounded-2xl p-5 space-y-4">
+                <h2 className="font-bold text-sm flex items-center gap-2">
                     <Mic className="w-4 h-4 text-stone-400" /> Step 2: Tell Us About Your Business
                 </h2>
-                <p className="text-xs text-stone-500 mb-3">
-                    Click the microphone and talk about: what your company does, your past projects, what makes you different, your team. We&apos;ll transcribe it and use it to write your capability statement.
+                <p className="text-xs text-stone-500">
+                    Choose how to provide information: record yourself talking, paste a transcript from a discovery call, or upload an MP3 recording.
                 </p>
 
-                <button type="button" onClick={toggleRecording} disabled={!recognition}
-                    className={clsx("w-full py-4 rounded-xl text-sm font-bold inline-flex items-center justify-center gap-2 transition-all",
-                        isRecording ? "bg-red-500 text-white animate-pulse" : "bg-stone-100 text-stone-700 hover:bg-stone-200 border border-stone-200"
-                    )}>
-                    {isRecording ? <><MicOff className="w-5 h-5" /> Stop Recording</> : <><Mic className="w-5 h-5" /> Start Recording</>}
-                </button>
+                {/* Three input methods */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {/* Option A: Voice Record */}
+                    <button type="button" onClick={toggleRecording} disabled={!recognition}
+                        className={clsx("py-4 rounded-xl text-sm font-bold inline-flex flex-col items-center justify-center gap-2 transition-all border",
+                            isRecording ? "bg-red-500 text-white border-red-500 animate-pulse" : "bg-stone-50 text-stone-700 hover:bg-stone-100 border-stone-200"
+                        )}>
+                        {isRecording ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
+                        {isRecording ? "Stop Recording" : "Record Now"}
+                        <span className="text-[10px] font-normal opacity-70">Talk about your company</span>
+                    </button>
 
-                {!recognition && (
-                    <p className="text-xs text-amber-600 mt-2">Voice recording is not supported in this browser. Use Chrome for best results.</p>
-                )}
+                    {/* Option B: Paste Transcript */}
+                    <button type="button" onClick={() => {
+                        const text = prompt("Paste your call transcript or notes here:");
+                        if (text) setTranscript(prev => (prev ? prev + "\n\n" : "") + text);
+                    }}
+                        className="py-4 rounded-xl text-sm font-bold inline-flex flex-col items-center justify-center gap-2 bg-stone-50 text-stone-700 hover:bg-stone-100 border border-stone-200 transition-all">
+                        <FileText className="w-6 h-6" />
+                        Paste Transcript
+                        <span className="text-[10px] font-normal opacity-70">From a discovery call</span>
+                    </button>
 
-                {transcript && (
-                    <div className="mt-3">
-                        <label className="text-[10px] font-typewriter text-stone-400 uppercase block mb-1">Transcribed Text (you can edit)</label>
-                        <textarea value={transcript} onChange={e => setTranscript(e.target.value)}
-                            className="w-full border border-stone-300 rounded-xl px-3 py-2 text-sm h-32 resize-none" />
-                    </div>
-                )}
+                    {/* Option C: Upload MP3 */}
+                    <label className="py-4 rounded-xl text-sm font-bold inline-flex flex-col items-center justify-center gap-2 bg-stone-50 text-stone-700 hover:bg-stone-100 border border-stone-200 transition-all cursor-pointer">
+                        <Download className="w-6 h-6" />
+                        Upload Audio
+                        <span className="text-[10px] font-normal opacity-70">MP3, WAV, M4A</span>
+                        <input type="file" accept="audio/*,.mp3,.wav,.m4a" className="hidden" onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            // Use OpenAI Whisper for transcription
+                            const formData = new FormData();
+                            formData.append("file", file);
+                            formData.append("model", "whisper-1");
+                            formData.append("language", "en");
+                            try {
+                                const res = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+                                    method: "POST",
+                                    headers: { "Authorization": `Bearer ${process.env.NEXT_PUBLIC_OPENAI_API_KEY || ""}` },
+                                    body: formData,
+                                });
+                                if (res.ok) {
+                                    const data = await res.json();
+                                    setTranscript(prev => (prev ? prev + "\n\n" : "") + data.text);
+                                } else {
+                                    // Fallback: if no client-side key, send to our API
+                                    alert("Audio uploaded. For transcription, paste the transcript text instead or use the record button.");
+                                }
+                            } catch {
+                                alert("Audio transcription requires OpenAI API. Please paste the transcript as text instead.");
+                            }
+                        }} />
+                    </label>
+                </div>
+
+                {/* Transcript display */}
+                <div>
+                    <label className="text-[10px] font-typewriter text-stone-400 uppercase block mb-1">
+                        Transcript / Notes {transcript ? `(${transcript.split(/\s+/).length} words)` : ""}
+                    </label>
+                    <textarea value={transcript} onChange={e => setTranscript(e.target.value)}
+                        placeholder="Your company description, capabilities, past projects, and differentiators will appear here. You can also type or paste directly..."
+                        className="w-full border border-stone-300 rounded-xl px-3 py-2 text-sm h-40 resize-none" />
+                </div>
             </div>
 
             {/* Step 3: Additional Details */}
