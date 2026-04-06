@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { createBrowserClient } from "@supabase/ssr";
 import {
     Briefcase, ExternalLink, Loader2, Clock, MapPin, Star, Layers,
@@ -234,7 +235,7 @@ export default function PortalOpportunities() {
                                     </div>
 
                                     {/* Title + Agency */}
-                                    <h3 className="font-bold text-sm text-black line-clamp-2">{opp.title}</h3>
+                                    <Link href={`/portal/opportunities/${m.opportunity_id}`} className="font-bold text-sm text-black line-clamp-2 hover:underline">{opp.title}</Link>
                                     <p className="text-xs text-stone-500 mt-0.5">{opp.agency || "Federal Agency"}</p>
 
                                     {/* Meta */}
