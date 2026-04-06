@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import Image from "next/image";
 import { LayoutDashboard, Target, Zap, Layers, CheckSquare, Settings, LogOut, Menu, X, BarChart3, Crosshair, CreditCard, PenTool, Lock } from "lucide-react";
 import clsx from "clsx";
 import { createSupabaseClient } from "@/lib/supabase/client";
@@ -45,9 +46,7 @@ export default function Sidebar() {
             {/* Logo */}
             <div className="px-6 lg:px-8 mb-8 lg:mb-12 flex items-center justify-between">
                 <div className="flex items-center space-x-3">
-                    <div className="w-9 h-9 rounded-xl bg-black flex items-center justify-center shadow-lg shadow-stone-300">
-                        <Zap className="h-4 w-4 text-white" />
-                    </div>
+                    <Image src="/logo.png" alt="CapturePilot" width={36} height={36} className="rounded-xl shadow-lg shadow-stone-300" />
                     <h1 className="text-xl font-bold font-typewriter tracking-tight">CapturePilot</h1>
                 </div>
                 <button
@@ -125,9 +124,7 @@ export default function Sidebar() {
             {/* Mobile header bar */}
             <div className="lg:hidden fixed top-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-b border-stone-200 px-4 h-14 flex items-center justify-between">
                 <div className="flex items-center space-x-2.5">
-                    <div className="w-8 h-8 rounded-lg bg-black flex items-center justify-center">
-                        <Zap className="h-3.5 w-3.5 text-white" />
-                    </div>
+                    <Image src="/logo.png" alt="CapturePilot" width={32} height={32} className="rounded-lg" />
                     <span className="text-base font-bold font-typewriter">CapturePilot</span>
                 </div>
                 <button

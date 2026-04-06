@@ -3,7 +3,8 @@
 import { useState, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Zap, ArrowRight, CheckCircle2, Loader2 } from "lucide-react";
+import Image from "next/image";
+import { ArrowRight, CheckCircle2, Loader2 } from "lucide-react";
 import { createSupabaseClient } from "@/lib/supabase/client";
 
 function SignupPageContent() {
@@ -68,9 +69,7 @@ function SignupPageContent() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="flex items-center justify-center space-x-3 mb-10">
-          <div className="w-10 h-10 rounded-xl bg-black flex items-center justify-center shadow-lg">
-            <Zap className="h-5 w-5 text-white" />
-          </div>
+          <Image src="/logo.png" alt="CapturePilot" width={40} height={40} className="rounded-xl shadow-lg" />
           <h1 className="text-2xl font-bold font-typewriter">CapturePilot</h1>
         </div>
 

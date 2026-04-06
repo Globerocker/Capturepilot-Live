@@ -4,8 +4,9 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
+import Image from "next/image";
 import {
-    Zap, LayoutDashboard, ListTodo, Briefcase, FileText, Users,
+    LayoutDashboard, ListTodo, Briefcase, FileText, Users,
     LogOut, Loader2, Settings, Menu, X, Layers,
 } from "lucide-react";
 import clsx from "clsx";
@@ -91,7 +92,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
             )}>
                 <div className="p-5 border-b border-stone-100">
                     <Link href="/portal" className="flex items-center gap-2">
-                        <Zap className="w-5 h-5 text-black" />
+                        <Image src="/logo.png" alt="CapturePilot" width={20} height={20} className="rounded" />
                         <span className="font-typewriter font-bold text-sm">CapturePilot</span>
                         <span className="text-[9px] font-typewriter bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full uppercase">Client</span>
                     </Link>

@@ -4,8 +4,9 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
+import Image from "next/image";
 import {
-    Zap, LayoutDashboard, Users, Briefcase, Target, UserCog,
+    LayoutDashboard, Users, Briefcase, Target, UserCog,
     Wrench, Settings, LogOut, Loader2, Search, ChevronDown,
     Menu, X, FileText, Bell,
 } from "lucide-react";
@@ -61,7 +62,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             )}>
                 <div className="p-4 border-b border-stone-800">
                     <Link href="/admin/overview" className="flex items-center gap-2">
-                        <Zap className="w-5 h-5 text-emerald-400" />
+                        <Image src="/logo.png" alt="CapturePilot" width={20} height={20} className="rounded" />
                         <span className="font-typewriter font-bold text-sm">CapturePilot</span>
                     </Link>
                     <p className="text-[10px] text-stone-500 font-typewriter mt-0.5 uppercase tracking-widest">Admin Console</p>
