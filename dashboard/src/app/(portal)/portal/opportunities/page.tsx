@@ -76,6 +76,7 @@ export default function PortalOpportunities() {
                     )
                 `)
                 .eq("user_profile_id", prof.id)
+                .in("opportunity.status", ["ACTIVE", "EXPIRING_SOON", "MARKET_RESEARCH", "DISCOVERED"])
                 .order("score", { ascending: false })
                 .limit(200);
 

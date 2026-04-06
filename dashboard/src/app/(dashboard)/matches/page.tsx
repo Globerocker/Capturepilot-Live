@@ -89,7 +89,8 @@ export default function MyMatchesPage() {
                 { count: "exact" }
             )
             .eq("user_profile_id", profileId)
-            .eq("is_dismissed", false);
+            .eq("is_dismissed", false)
+            .in("opportunities.status", ["ACTIVE", "EXPIRING_SOON", "MARKET_RESEARCH", "DISCOVERED"]);
 
         if (filter === "HOT") {
             query = query.eq("classification", "HOT");
