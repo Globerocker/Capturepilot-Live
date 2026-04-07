@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { createBrowserClient } from "@supabase/ssr";
-import { Users, Globe, ExternalLink, Loader2, ChevronDown, Shield, TrendingUp, Search } from "lucide-react";
+import { Users, Globe, ExternalLink, Loader2, ChevronDown, Shield, TrendingUp, Search, Plus, LinkIcon } from "lucide-react";
+import { AnalysisProgressStepper, statusToStep } from "@/components/AnalysisProgressStepper";
+import Link from "next/link";
 import clsx from "clsx";
 
 const supabase = createBrowserClient(
@@ -50,6 +52,37 @@ export default function PortalCompetitors() {
     const [competitors, setCompetitors] = useState<Competitor[]>([]);
     const [loading, setLoading] = useState(true);
     const [expandedId, setExpandedId] = useState<string | null>(null);
+    const [profileId, setProfileId] = useState<string | null>(null);
+
+    // Add competitor form state
+    const [showAddForm, setShowAddForm] = useState(false);
+    const [addUrl, setAddUrl] = useState("");
+    const [addUei, setAddUei] = useState("");
+    const [analyzing, setAnalyzing] = useState(false);
+    const [analysisStep, setAnalysisStep] = useState(0);
+    const [analysisError, setAnalysisError] = useState("");
+    const [analysisName, setAnalysisName] = useState("");
+    const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    const stopPolling = useCallback(() => {
+        if (pollRef.current) {
+            clearInterval(pollRef.current);
+            pollRef.current = null;
+        }
+    }, []);
+
+    useEffect(() => {
+        return () => stopPolling();
+    }, [stopPolling]);
+
+    const loadCompetitors = useCallback(async (profId: string) => {
+        const { data } = await supabase
+            .from("client_competitors")
+            .select("*")
+            .eq("user_profile_id", profId)
+            .order("overlap_score", { ascending: false });
+        setCompetitors((data || []) as Competitor[]);
+    }, []);
 
     useEffect(() => {
         (async () => {
@@ -57,17 +90,143 @@ export default function PortalCompetitors() {
             if (!user) return;
             const { data: prof } = await supabase.from("user_profiles").select("id").eq("auth_user_id", user.id).single();
             if (!prof) return;
-
-            const { data } = await supabase
-                .from("client_competitors")
-                .select("*")
-                .eq("user_profile_id", prof.id)
-                .order("overlap_score", { ascending: false });
-
-            setCompetitors((data || []) as Competitor[]);
+            setProfileId(prof.id);
+            await loadCompetitors(prof.id);
             setLoading(false);
         })();
-    }, []);
+    }, [loadCompetitors]);
+
+    function getDomain(url: string): string {
+        try {
+            return new URL(url.startsWith("http") ? url : `https://${url}`).hostname.replace(/^www\./, "");
+        } catch { return url; }
+    }
+
+    function startPolling(analysisId: string) {
+        stopPolling();
+        pollRef.current = setInterval(async () => {
+            try {
+                const res = await fetch(`/api/analyze-company/status/${analysisId}`);
+                if (!res.ok) return;
+                const data = await res.json();
+
+                if (data.company_name && data.company_name.length > 1) {
+                    setAnalysisName(data.company_name);
+                }
+
+                if (data.status === "error") {
+                    stopPolling();
+                    setAnalysisError(data.error_message || "Analysis failed. Please try again.");
+                    setAnalyzing(false);
+                    return;
+                }
+
+                const newStep = statusToStep(data.status);
+                setAnalysisStep(newStep);
+
+                if (data.status === "complete") {
+                    stopPolling();
+                    await saveCompetitorFromAnalysis(analysisId, data);
+                }
+            } catch {
+                // Ignore transient poll errors
+            }
+        }, 2000);
+    }
+
+    async function saveCompetitorFromAnalysis(analysisId: string, data: Record<string, unknown>) {
+        if (!profileId) return;
+
+        const crawlData = (data.crawl_data || {}) as Record<string, unknown>;
+        const samData = (data.sam_data || {}) as Record<string, unknown>;
+
+        const competitorName = (data.company_name as string) || analysisName || getDomain(addUrl);
+        const uei = (samData.uei as string) || addUei || null;
+        const description = (data.company_summary as string) || (crawlData.description as string) || null;
+        const inferredNaics = (data.inferred_naics as string[]) || [];
+        const employeeCount = (crawlData.employee_signals as string) || (crawlData.employee_count as string) || null;
+        const revenueEstimate = (crawlData.revenue_signals as string) || (crawlData.revenue_estimate as string) || null;
+
+        // Determine federal presence from SAM data
+        let federalPresence = "unknown";
+        if (samData && Object.keys(samData).length > 0) {
+            federalPresence = "strong";
+        } else if (uei) {
+            federalPresence = "moderate";
+        } else {
+            federalPresence = "none";
+        }
+
+        const { error } = await supabase.from("client_competitors").insert({
+            user_profile_id: profileId,
+            competitor_name: competitorName,
+            website: addUrl.startsWith("http") ? addUrl : `https://${addUrl}`,
+            uei,
+            description,
+            naics_codes: inferredNaics,
+            employee_count: employeeCount,
+            revenue_estimate: revenueEstimate,
+            federal_presence: federalPresence,
+            crawl_data: crawlData,
+            last_analyzed_at: new Date().toISOString(),
+            overlap_score: 0,
+        });
+
+        if (error) {
+            setAnalysisError("Failed to save competitor: " + error.message);
+        } else {
+            await loadCompetitors(profileId);
+            setAddUrl("");
+            setAddUei("");
+            setShowAddForm(false);
+        }
+
+        setAnalyzing(false);
+        setAnalysisStep(0);
+        setAnalysisName("");
+    }
+
+    function handleAddSubmit(e: React.FormEvent) {
+        e.preventDefault();
+        if (!addUrl.trim()) return;
+
+        let url = addUrl.trim();
+        if (!/^https?:\/\//i.test(url)) url = "https://" + url;
+        setAddUrl(url);
+
+        setAnalyzing(true);
+        setAnalysisError("");
+        setAnalysisStep(0);
+        setAnalysisName(getDomain(url));
+
+        fetch("/api/analyze-company", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                website: url,
+                uei: addUei.trim().toUpperCase() || undefined,
+            }),
+        })
+            .then(async (res) => {
+                if (!res.ok) {
+                    const d = await res.json().catch(() => ({}));
+                    throw new Error(d.error || `Analysis failed (${res.status})`);
+                }
+                return res.json();
+            })
+            .then((d) => {
+                if (d.analysis_id) {
+                    startPolling(d.analysis_id);
+                } else {
+                    setAnalysisError("Failed to start analysis.");
+                    setAnalyzing(false);
+                }
+            })
+            .catch((err) => {
+                setAnalysisError(err.message || "Something went wrong.");
+                setAnalyzing(false);
+            });
+    }
 
     if (loading) return <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-stone-400" /></div>;
 
@@ -86,14 +245,113 @@ export default function PortalCompetitors() {
                     <Users className="w-6 h-6" /> Competitive Landscape
                 </h1>
                 <p className="text-sm text-stone-500 mt-1">
-                    {competitors.length} competitors tracked. Our team monitors their activity weekly.
+                    {competitors.length} competitors tracked. Add competitors by website URL for instant analysis.
                 </p>
             </div>
 
-            {competitors.length === 0 && (
+            {/* Add Competitor Form */}
+            {!analyzing && (
+                <div className="bg-white border border-stone-200 rounded-2xl overflow-hidden">
+                    {!showAddForm ? (
+                        <button
+                            type="button"
+                            onClick={() => setShowAddForm(true)}
+                            className="w-full p-4 flex items-center justify-center gap-2 text-sm font-bold text-emerald-700 hover:bg-emerald-50/50 transition-colors"
+                        >
+                            <Plus className="w-4 h-4" /> Add Competitor
+                        </button>
+                    ) : (
+                        <form onSubmit={handleAddSubmit} className="p-5 space-y-4">
+                            <div className="flex items-center gap-2 mb-1">
+                                <Plus className="w-4 h-4 text-emerald-600" />
+                                <h3 className="text-sm font-bold text-black">Add New Competitor</h3>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                    <label className="text-[10px] font-typewriter text-stone-400 uppercase mb-1 block">
+                                        Company Website URL <span className="text-red-500">*</span>
+                                    </label>
+                                    <div className="relative">
+                                        <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
+                                        <input
+                                            type="text"
+                                            value={addUrl}
+                                            onChange={(e) => setAddUrl(e.target.value)}
+                                            placeholder="example.com"
+                                            required
+                                            className="w-full pl-10 pr-3 py-2.5 text-sm border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400"
+                                        />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-typewriter text-stone-400 uppercase mb-1 block">
+                                        UEI (optional)
+                                    </label>
+                                    <div className="relative">
+                                        <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
+                                        <input
+                                            type="text"
+                                            value={addUei}
+                                            onChange={(e) => setAddUei(e.target.value)}
+                                            placeholder="12-character UEI"
+                                            maxLength={12}
+                                            className="w-full pl-10 pr-3 py-2.5 text-sm border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400 font-mono uppercase"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                            {analysisError && (
+                                <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{analysisError}</p>
+                            )}
+                            <div className="flex items-center gap-2">
+                                <button
+                                    type="submit"
+                                    className="px-5 py-2.5 text-sm font-bold bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-colors inline-flex items-center gap-2"
+                                >
+                                    <Search className="w-4 h-4" /> Analyze Competitor
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => { setShowAddForm(false); setAnalysisError(""); }}
+                                    className="px-4 py-2.5 text-sm font-medium text-stone-500 hover:text-stone-700 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                            </div>
+                        </form>
+                    )}
+                </div>
+            )}
+
+            {/* Analysis in progress */}
+            {analyzing && (
+                <div className="bg-white border border-stone-200 rounded-2xl p-6">
+                    <div className="text-center mb-6">
+                        <h3 className="font-typewriter font-bold text-lg">Analyzing {analysisName}</h3>
+                        <p className="text-xs text-stone-500 mt-1">This typically takes 30-60 seconds</p>
+                    </div>
+                    <div className="max-w-md mx-auto">
+                        <AnalysisProgressStepper currentStep={analysisStep} />
+                    </div>
+                    {analysisError && (
+                        <div className="mt-4 text-center">
+                            <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 inline-block">{analysisError}</p>
+                            <button
+                                type="button"
+                                onClick={() => { setAnalyzing(false); setAnalysisError(""); }}
+                                className="block mx-auto mt-2 text-xs text-stone-500 hover:text-stone-700"
+                            >
+                                Try again
+                            </button>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {competitors.length === 0 && !analyzing && (
                 <div className="bg-white border border-stone-200 rounded-2xl p-12 text-center">
                     <Users className="w-12 h-12 text-stone-300 mx-auto mb-4" />
-                    <p className="text-stone-500 text-sm">Competitor profiles will appear here once our team completes the analysis.</p>
+                    <p className="text-stone-500 text-sm">No competitors tracked yet. Add a competitor above to get started.</p>
                 </div>
             )}
 
@@ -122,7 +380,13 @@ export default function PortalCompetitors() {
 
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2 flex-wrap">
-                                        <h3 className="font-bold text-sm text-black">{comp.competitor_name}</h3>
+                                        <Link
+                                            href={`/portal/competitors/${comp.id}`}
+                                            onClick={(e) => e.stopPropagation()}
+                                            className="font-bold text-sm text-black hover:text-emerald-700 hover:underline transition-colors"
+                                        >
+                                            {comp.competitor_name}
+                                        </Link>
                                         {comp.federal_presence && (
                                             <span className={clsx("text-[9px] font-bold px-2 py-0.5 rounded border uppercase",
                                                 presenceColors[comp.federal_presence] || presenceColors.unknown
@@ -253,6 +517,12 @@ export default function PortalCompetitors() {
 
                                     {/* Links */}
                                     <div className="flex gap-2 pt-2 border-t border-stone-200 flex-wrap">
+                                        <Link
+                                            href={`/portal/competitors/${comp.id}`}
+                                            className="text-xs font-bold bg-emerald-50 border border-emerald-200 text-emerald-700 px-3 py-1.5 rounded-lg hover:bg-emerald-100 inline-flex items-center gap-1"
+                                        >
+                                            <ExternalLink className="w-3 h-3" /> Full Profile
+                                        </Link>
                                         {comp.website && (
                                             <a href={comp.website.startsWith("http") ? comp.website : `https://${comp.website}`} target="_blank" rel="noopener noreferrer"
                                                 className="text-xs font-bold bg-white border border-stone-200 text-stone-700 px-3 py-1.5 rounded-lg hover:bg-stone-50 inline-flex items-center gap-1">
