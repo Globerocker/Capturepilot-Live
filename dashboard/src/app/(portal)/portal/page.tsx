@@ -208,7 +208,7 @@ export default function PortalOverview() {
                             {topOpps.map((opp, i) => (
                                 <div key={`top-${i}`} className="flex items-center gap-3 px-5 py-3">
                                     <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-blue-50 text-blue-600 text-xs font-black flex-shrink-0">
-                                        {opp.score}
+                                        {Math.round(Number(opp.score) * 100)}
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <p className="text-sm font-medium text-stone-800 truncate">{opp.title}</p>

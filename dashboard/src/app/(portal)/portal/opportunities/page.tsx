@@ -536,7 +536,7 @@ export default function PortalOpportunities() {
                                                     "text-blue-600 bg-blue-50 border-blue-200"
                                                 )}
                                             >
-                                                {Math.round(m.score * 100)}
+                                                {Math.round(m.score * 100)}<span className="text-[8px] font-medium opacity-60">/100</span>
                                             </div>
                                             <Tooltip text="HOT = strong match across NAICS, location, and eligibility. WARM = good potential but some factors don't align perfectly. COLD = worth monitoring but may not be a strong fit." icon={false}>
                                                 <span

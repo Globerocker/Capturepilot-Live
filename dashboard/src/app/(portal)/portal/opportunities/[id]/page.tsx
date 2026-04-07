@@ -616,7 +616,7 @@ export default function PortalOpportunityDetail() {
                         {matchScore !== null && (
                             <div className="flex items-center gap-2 text-sm text-stone-700 font-semibold">
                                 <BarChart3 className="w-4 h-4 text-stone-400" />
-                                Score: {matchScore}
+                                Score: {Math.round(matchScore * 100)}/100
                             </div>
                         )}
 
@@ -866,9 +866,9 @@ export default function PortalOpportunityDetail() {
                                             ? "bg-amber-50 text-amber-600 border-2 border-amber-200"
                                             : "bg-blue-50 text-blue-600 border-2 border-blue-200"
                                 )}>
-                                    {matchScore}
+                                    {Math.round(matchScore * 100)}
                                 </div>
-                                <p className="text-xs text-stone-400 mt-2 font-medium uppercase">{classification} Match</p>
+                                <p className="text-xs text-stone-400 mt-2 font-medium uppercase">{classification} Match &middot; {Math.round(matchScore * 100)}/100</p>
                             </div>
                             {scoreBreakdown && typeof scoreBreakdown === "object" && (
                                 <div className="space-y-2">
