@@ -5,6 +5,7 @@ import { createBrowserClient } from "@supabase/ssr";
 import {
     MessageSquare, Send, Loader2, CheckCheck, Check,
     Clock, Sparkles, HelpCircle, RefreshCw, ArrowDown,
+    Mic, MicOff, Paperclip,
 } from "lucide-react";
 import clsx from "clsx";
 
@@ -88,6 +89,64 @@ export default function PortalMessagesPage() {
     const [sending, setSending] = useState(false);
     const [draft, setDraft] = useState("");
     const [showScrollBtn, setShowScrollBtn] = useState(false);
+    const [recording, setRecording] = useState(false);
+    const [uploading, setUploading] = useState(false);
+    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Voice-to-text via Web Speech API
+    const toggleRecording = () => {
+        if (recording) {
+            setRecording(false);
+            if ((window as unknown as Record<string, unknown>)._recognition) {
+                ((window as unknown as Record<string, unknown>)._recognition as { stop: () => void }).stop();
+            }
+            return;
+        }
+        const SpeechRecognition = (window as unknown as Record<string, unknown>).SpeechRecognition || (window as unknown as Record<string, unknown>).webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            alert("Speech recognition is not supported in this browser. Try Chrome.");
+            return;
+        }
+        const recognition = new (SpeechRecognition as new () => {
+            continuous: boolean; interimResults: boolean; lang: string;
+            onresult: (e: { results: { transcript: string }[][] }) => void;
+            onerror: () => void; onend: () => void; start: () => void; stop: () => void;
+        })();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.lang = "en-US";
+        recognition.onresult = (e) => {
+            const transcript = Array.from(e.results).map((r) => r[0].transcript).join("");
+            setDraft(transcript);
+        };
+        recognition.onerror = () => setRecording(false);
+        recognition.onend = () => setRecording(false);
+        (window as unknown as Record<string, unknown>)._recognition = recognition;
+        recognition.start();
+        setRecording(true);
+    };
+
+    // File upload
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !profile) return;
+        setUploading(true);
+        const ext = file.name.split(".").pop();
+        const path = `messages/${profile.id}/${Date.now()}.${ext}`;
+        const { error: upErr } = await supabase.storage.from("client-docs").upload(path, file);
+        if (upErr) {
+            alert("Upload failed: " + upErr.message);
+            setUploading(false);
+            e.target.value = "";
+            return;
+        }
+        const { data: urlData } = supabase.storage.from("client-docs").getPublicUrl(path);
+        const msg = `📎 [${file.name}](${urlData.publicUrl})`;
+        await handleSend(msg);
+        setUploading(false);
+        e.target.value = "";
+    };
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -392,7 +451,39 @@ export default function PortalMessagesPage() {
 
             {/* Input Area */}
             <div className="flex-shrink-0 border-t border-stone-200 bg-white rounded-b-2xl pt-4 pb-2">
-                <div className="flex items-end gap-3">
+                {recording && (
+                    <div className="flex items-center gap-2 px-3 py-2 mb-2 bg-red-50 border border-red-200 rounded-xl text-xs text-red-600">
+                        <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                        Recording... speak now. Click mic again to stop.
+                    </div>
+                )}
+                <div className="flex items-end gap-2">
+                    {/* Attachment */}
+                    <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.txt,.csv" aria-label="Attach file" title="Attach file" />
+                    <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={uploading}
+                        className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-stone-400 hover:text-stone-600 hover:bg-stone-100 transition-colors"
+                        title="Attach file"
+                    >
+                        {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Paperclip className="w-4 h-4" />}
+                    </button>
+                    {/* Mic */}
+                    <button
+                        type="button"
+                        onClick={toggleRecording}
+                        className={clsx(
+                            "flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center transition-colors",
+                            recording
+                                ? "bg-red-100 text-red-600 hover:bg-red-200"
+                                : "text-stone-400 hover:text-stone-600 hover:bg-stone-100"
+                        )}
+                        title={recording ? "Stop recording" : "Voice input"}
+                    >
+                        {recording ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                    </button>
+                    {/* Text input */}
                     <div className="flex-1 relative">
                         <textarea
                             ref={textareaRef}
@@ -404,6 +495,7 @@ export default function PortalMessagesPage() {
                             className="w-full resize-none rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-stone-800 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400 transition-all"
                         />
                     </div>
+                    {/* Send */}
                     <button
                         type="button"
                         onClick={() => handleSend()}
@@ -415,15 +507,11 @@ export default function PortalMessagesPage() {
                                 : "bg-stone-100 text-stone-300 cursor-not-allowed"
                         )}
                     >
-                        {sending ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                            <Send className="w-4 h-4" />
-                        )}
+                        {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                     </button>
                 </div>
                 <p className="text-[10px] text-stone-400 mt-2 text-center">
-                    Press Enter to send, Shift+Enter for new line
+                    Enter to send · Shift+Enter for new line · 🎤 Voice · 📎 Attach
                 </p>
             </div>
         </div>
