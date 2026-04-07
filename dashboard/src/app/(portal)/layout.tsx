@@ -7,7 +7,7 @@ import { createBrowserClient } from "@supabase/ssr";
 import Image from "next/image";
 import {
     LayoutDashboard, ListTodo, Briefcase, FileText,
-    LogOut, Loader2, Settings, Menu, X, Layers,
+    LogOut, Loader2, Settings, Menu, X, Layers, FolderOpen,
 } from "lucide-react";
 import clsx from "clsx";
 
@@ -21,6 +21,7 @@ const NAV_ITEMS = [
     { href: "/portal/opportunities", icon: Briefcase, label: "Opportunities" },
     { href: "/portal/pipeline", icon: Layers, label: "Pipeline" },
     { href: "/portal/tasks", icon: ListTodo, label: "Tasks" },
+    { href: "/portal/documents", icon: FolderOpen, label: "Documents" },
     { href: "/portal/capability-statement", icon: FileText, label: "Capability Statement" },
     { href: "/portal/settings", icon: Settings, label: "Account" },
 ];
@@ -139,8 +140,10 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
             </aside>
 
             {/* Main Content */}
-            <main className="flex-1 p-6 sm:p-8 overflow-auto">
-                {children}
+            <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-auto">
+                <div className="w-full">
+                    {children}
+                </div>
             </main>
         </div>
     );
