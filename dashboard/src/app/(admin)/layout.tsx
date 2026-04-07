@@ -89,8 +89,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 </nav>
 
                 <div className="p-2 border-t border-stone-800">
-                    <Link href="/check" className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-stone-400 hover:bg-white/5 hover:text-white transition-colors">
-                        <FileText className="w-4 h-4" /> Quick Check
+                    <Link href="/admin/lead-check" className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-stone-400 hover:bg-white/5 hover:text-white transition-colors">
+                        <FileText className="w-4 h-4" /> Lead Check
                     </Link>
                     <button
                         type="button"

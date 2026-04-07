@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Wrench, Search, RefreshCw, Mail, Loader2, CheckCircle2, Zap, Download } from "lucide-react";
+import Link from "next/link";
+import { Wrench, Search, RefreshCw, Mail, Loader2, CheckCircle2, Zap, Download, ExternalLink } from "lucide-react";
 import clsx from "clsx";
 
 export default function AdminTools() {
@@ -19,18 +20,46 @@ export default function AdminTools() {
     const [sending, setSending] = useState(false);
     const [emailResult, setEmailResult] = useState<string>("");
 
+    // Dedicated state for AI Document Analysis
+    const [aiAnalyzing, setAiAnalyzing] = useState(false);
+    const [aiAnalyzeResult, setAiAnalyzeResult] = useState<string>("");
+
+    // Dedicated state for AI Proposal Generator
+    const [proposalGenerating, setProposalGenerating] = useState(false);
+    const [proposalResult, setProposalResult] = useState<string>("");
+
+    // Dedicated state for SBIR search
+    const [sbirSearching, setSbirSearching] = useState(false);
+    const [sbirResult, setSbirResult] = useState<string>("");
+
+    // Dedicated state for AI Full Proposal Writer
+    const [proposalWriting, setProposalWriting] = useState(false);
+    const [proposalWriteResult, setProposalWriteResult] = useState<string>("");
+
+    // Dedicated state for Teaming Partner Search
+    const [partnerSearching, setPartnerSearching] = useState(false);
+    const [partnerResult, setPartnerResult] = useState<string>("");
+
+    // Dedicated state for IDIQ search
+    const [idiqSearching, setIdiqSearching] = useState(false);
+    const [idiqResult, setIdiqResult] = useState<string>("");
+
     const handleCrawl = async () => {
         const codes = naicsCodes.split(",").map(s => s.trim()).filter(Boolean);
         if (codes.length === 0) return;
         setCrawling(true);
         setCrawlResult("");
-        const res = await fetch("/api/admin/crawl-opportunities", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ naics_codes: codes, days_back: parseInt(crawlDays) }),
-        });
-        const data = await res.json();
-        setCrawlResult(data.success ? `Crawled ${data.total_inserted} opportunities` : `Error: ${data.error}`);
+        try {
+            const res = await fetch("/api/admin/crawl-opportunities", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ naics_codes: codes, days_back: parseInt(crawlDays) }),
+            });
+            const data = await res.json();
+            setCrawlResult(data.success ? `Crawled ${data.total_inserted} opportunities` : `Error: ${data.error}`);
+        } catch (err: unknown) {
+            setCrawlResult(`Error: ${err instanceof Error ? err.message : "Network request failed"}`);
+        }
         setCrawling(false);
     };
 
@@ -38,13 +67,17 @@ export default function AdminTools() {
         if (!enrichProfileId) return;
         setEnriching(true);
         setEnrichResult("");
-        const res = await fetch("/api/admin/enrich-profile", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ user_profile_id: enrichProfileId }),
-        });
-        const data = await res.json();
-        setEnrichResult(data.success ? `Enriched: ${(data.sources || []).join(", ")}. Updated ${(data.fields_updated || []).length} fields.` : `Error: ${data.error}`);
+        try {
+            const res = await fetch("/api/admin/enrich-profile", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ user_profile_id: enrichProfileId }),
+            });
+            const data = await res.json();
+            setEnrichResult(data.success ? `Enriched: ${(data.sources || []).join(", ")}. Updated ${(data.fields_updated || []).length} fields.` : `Error: ${data.error}`);
+        } catch (err: unknown) {
+            setEnrichResult(`Error: ${err instanceof Error ? err.message : "Network request failed"}`);
+        }
         setEnriching(false);
     };
 
@@ -52,13 +85,17 @@ export default function AdminTools() {
         if (!emailProfileId) return;
         setSending(true);
         setEmailResult("");
-        const res = await fetch("/api/admin/send-update", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ user_profile_id: emailProfileId, type: emailType }),
-        });
-        const data = await res.json();
-        setEmailResult(data.success ? `Sent to ${data.sent_to}` : `Error: ${data.error}`);
+        try {
+            const res = await fetch("/api/admin/send-update", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ user_profile_id: emailProfileId, type: emailType }),
+            });
+            const data = await res.json();
+            setEmailResult(data.success ? `Sent to ${data.sent_to}` : `Error: ${data.error}`);
+        } catch (err: unknown) {
+            setEmailResult(`Error: ${err instanceof Error ? err.message : "Network request failed"}`);
+        }
         setSending(false);
     };
 
@@ -67,6 +104,20 @@ export default function AdminTools() {
             <h1 className="text-xl font-bold font-typewriter flex items-center gap-2">
                 <Wrench className="w-5 h-5" /> Admin Tools
             </h1>
+
+            {/* Quick Links */}
+            <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+                <div className="bg-stone-50 border-b border-stone-100 px-5 py-3">
+                    <h2 className="font-bold text-sm">Quick Links</h2>
+                </div>
+                <div className="p-5">
+                    <Link href="/admin/lead-check" className="inline-flex items-center gap-2 text-sm font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg px-4 py-2.5 transition-colors">
+                        <Search className="w-4 h-4" />
+                        Lead Check — Quick company analysis with Apollo enrichment
+                        <ExternalLink className="w-3.5 h-3.5" />
+                    </Link>
+                </div>
+            </div>
 
             {/* NAICS Crawler */}
             <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
@@ -158,22 +209,27 @@ export default function AdminTools() {
                         <button type="button" onClick={async () => {
                             const input = document.getElementById("ai-notice-id") as HTMLInputElement;
                             if (!input?.value) return;
-                            setCrawlResult("");
-                            setCrawling(true);
-                            const res = await fetch("/api/ai/summarize-document", {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ notice_id: input.value }),
-                            });
-                            const data = await res.json();
-                            setCrawling(false);
-                            setCrawlResult(data.success ? `Analysis complete: ${data.analysis?.executive_summary?.substring(0, 200)}` : `Error: ${data.error}`);
-                        }} disabled={crawling}
+                            setAiAnalyzeResult("");
+                            setAiAnalyzing(true);
+                            try {
+                                const res = await fetch("/api/ai/summarize-document", {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({ notice_id: input.value }),
+                                });
+                                const data = await res.json();
+                                setAiAnalyzeResult(data.success ? `Analysis complete: ${data.analysis?.executive_summary?.substring(0, 200)}` : `Error: ${data.error}`);
+                            } catch (err: unknown) {
+                                setAiAnalyzeResult(`Error: ${err instanceof Error ? err.message : "Network request failed"}`);
+                            }
+                            setAiAnalyzing(false);
+                        }} disabled={aiAnalyzing}
                         className="bg-stone-900 text-white px-4 py-2 rounded-lg text-sm font-bold inline-flex items-center gap-1.5 disabled:opacity-50">
-                            {crawling ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-                            {crawling ? "Analyzing..." : "AI Analyze"}
+                            {aiAnalyzing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+                            {aiAnalyzing ? "Analyzing..." : "AI Analyze"}
                         </button>
                     </div>
+                    {aiAnalyzeResult && <p className={clsx("text-xs font-medium", aiAnalyzeResult.startsWith("Error") ? "text-red-600" : "text-emerald-600")}>{aiAnalyzeResult}</p>}
                 </div>
             </div>
 
@@ -192,22 +248,27 @@ export default function AdminTools() {
                             const noticeInput = document.getElementById("prop-notice-id") as HTMLInputElement;
                             const profileInput = document.getElementById("prop-profile-id") as HTMLInputElement;
                             if (!noticeInput?.value) return;
-                            setEnrichResult("");
-                            setEnriching(true);
-                            const res = await fetch("/api/ai/generate-proposal", {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ notice_id: noticeInput.value, user_profile_id: profileInput?.value || undefined }),
-                            });
-                            const data = await res.json();
-                            setEnriching(false);
-                            setEnrichResult(data.success ? `Proposal outline generated: ${data.proposal?.proposal_title} (${data.proposal?.sections?.length} sections)` : `Error: ${data.error}`);
-                        }} disabled={enriching}
+                            setProposalResult("");
+                            setProposalGenerating(true);
+                            try {
+                                const res = await fetch("/api/ai/generate-proposal", {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({ notice_id: noticeInput.value, user_profile_id: profileInput?.value || undefined }),
+                                });
+                                const data = await res.json();
+                                setProposalResult(data.success ? `Proposal outline generated: ${data.proposal?.proposal_title} (${data.proposal?.sections?.length} sections)` : `Error: ${data.error}`);
+                            } catch (err: unknown) {
+                                setProposalResult(`Error: ${err instanceof Error ? err.message : "Network request failed"}`);
+                            }
+                            setProposalGenerating(false);
+                        }} disabled={proposalGenerating}
                         className="bg-stone-900 text-white px-4 py-2 rounded-lg text-sm font-bold inline-flex items-center gap-1.5 disabled:opacity-50">
-                            {enriching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-                            {enriching ? "Generating..." : "Generate Proposal"}
+                            {proposalGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+                            {proposalGenerating ? "Generating..." : "Generate Proposal"}
                         </button>
                     </div>
+                    {proposalResult && <p className={clsx("text-xs font-medium", proposalResult.startsWith("Error") ? "text-red-600" : "text-emerald-600")}>{proposalResult}</p>}
                 </div>
             </div>
 
@@ -236,18 +297,23 @@ export default function AdminTools() {
                             const kw = (document.getElementById("sbir-keywords") as HTMLInputElement)?.value;
                             const ag = (document.getElementById("sbir-agency") as HTMLSelectElement)?.value;
                             if (!kw) return;
-                            setEmailResult("");
-                            setSending(true);
-                            const res = await fetch(`/api/grants/sbir?keywords=${encodeURIComponent(kw)}&agency=${ag}&open=true`);
-                            const data = await res.json();
-                            setSending(false);
-                            setEmailResult(data.total ? `Found ${data.total} SBIR/STTR grants. View: ${data.search_url}` : data.error || "No results found");
-                        }} disabled={sending}
+                            setSbirResult("");
+                            setSbirSearching(true);
+                            try {
+                                const res = await fetch(`/api/grants/sbir?keywords=${encodeURIComponent(kw)}&agency=${ag}&open=true`);
+                                const data = await res.json();
+                                setSbirResult(data.total ? `Found ${data.total} SBIR/STTR grants. View: ${data.search_url}` : data.error || "No results found");
+                            } catch (err: unknown) {
+                                setSbirResult(`Error: ${err instanceof Error ? err.message : "Network request failed"}`);
+                            }
+                            setSbirSearching(false);
+                        }} disabled={sbirSearching}
                         className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold inline-flex items-center gap-1.5 disabled:opacity-50">
-                            {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-                            {sending ? "Searching..." : "Search SBIR"}
+                            {sbirSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                            {sbirSearching ? "Searching..." : "Search SBIR"}
                         </button>
                     </div>
+                    {sbirResult && <p className={clsx("text-xs font-medium", sbirResult.startsWith("Error") ? "text-red-600" : "text-emerald-600")}>{sbirResult}</p>}
                 </div>
             </div>
 
@@ -266,20 +332,25 @@ export default function AdminTools() {
                             const nid = (document.getElementById("fw-notice") as HTMLInputElement)?.value;
                             if (!nid) return;
                             const pid = (document.getElementById("fw-profile") as HTMLInputElement)?.value;
-                            setCrawlResult(""); setCrawling(true);
-                            const res = await fetch("/api/ai/write-proposal", {
-                                method: "POST", headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ notice_id: nid, user_profile_id: pid || undefined }),
-                            });
-                            const data = await res.json();
-                            setCrawling(false);
-                            setCrawlResult(data.success ? `Proposal generated: ${data.sections?.length} sections, ${data.total_word_count} words (~${data.estimated_pages} pages)` : `Error: ${data.error}`);
-                        }} disabled={crawling}
+                            setProposalWriteResult(""); setProposalWriting(true);
+                            try {
+                                const res = await fetch("/api/ai/write-proposal", {
+                                    method: "POST", headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({ notice_id: nid, user_profile_id: pid || undefined }),
+                                });
+                                const data = await res.json();
+                                setProposalWriteResult(data.success ? `Proposal generated: ${data.sections?.length} sections, ${data.total_word_count} words (~${data.estimated_pages} pages)` : `Error: ${data.error}`);
+                            } catch (err: unknown) {
+                                setProposalWriteResult(`Error: ${err instanceof Error ? err.message : "Network request failed"}`);
+                            }
+                            setProposalWriting(false);
+                        }} disabled={proposalWriting}
                         className="bg-stone-900 text-white px-4 py-2 rounded-lg text-sm font-bold inline-flex items-center gap-1.5 disabled:opacity-50">
-                            {crawling ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-                            {crawling ? "Writing..." : "Write Proposal"}
+                            {proposalWriting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+                            {proposalWriting ? "Writing..." : "Write Proposal"}
                         </button>
                     </div>
+                    {proposalWriteResult && <p className={clsx("text-xs font-medium", proposalWriteResult.startsWith("Error") ? "text-red-600" : "text-emerald-600")}>{proposalWriteResult}</p>}
                 </div>
             </div>
 
@@ -307,17 +378,22 @@ export default function AdminTools() {
                             const state = (document.getElementById("tp-state") as HTMLInputElement)?.value;
                             const cert = (document.getElementById("tp-cert") as HTMLSelectElement)?.value;
                             if (!naics) return;
-                            setEnrichResult(""); setEnriching(true);
-                            const res = await fetch(`/api/partners/search?naics=${naics}&state=${state}&set_aside=${cert}`);
-                            const data = await res.json();
-                            setEnriching(false);
-                            setEnrichResult(data.success ? `Found ${data.total} potential partners` : `Error: ${data.error}`);
-                        }} disabled={enriching}
+                            setPartnerResult(""); setPartnerSearching(true);
+                            try {
+                                const res = await fetch(`/api/partners/search?naics=${naics}&state=${state}&set_aside=${cert}`);
+                                const data = await res.json();
+                                setPartnerResult(data.success ? `Found ${data.total} potential partners` : `Error: ${data.error}`);
+                            } catch (err: unknown) {
+                                setPartnerResult(`Error: ${err instanceof Error ? err.message : "Network request failed"}`);
+                            }
+                            setPartnerSearching(false);
+                        }} disabled={partnerSearching}
                         className="bg-stone-900 text-white px-4 py-2 rounded-lg text-sm font-bold inline-flex items-center gap-1.5 disabled:opacity-50">
-                            {enriching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-                            {enriching ? "Searching..." : "Find Partners"}
+                            {partnerSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                            {partnerSearching ? "Searching..." : "Find Partners"}
                         </button>
                     </div>
+                    {partnerResult && <p className={clsx("text-xs font-medium", partnerResult.startsWith("Error") ? "text-red-600" : "text-emerald-600")}>{partnerResult}</p>}
                 </div>
             </div>
 
@@ -336,17 +412,22 @@ export default function AdminTools() {
                             const naics = (document.getElementById("idiq-naics") as HTMLInputElement)?.value;
                             const kw = (document.getElementById("idiq-keyword") as HTMLInputElement)?.value;
                             if (!naics && !kw) return;
-                            setEmailResult(""); setSending(true);
-                            const res = await fetch(`/api/idiq?naics=${naics}&keyword=${encodeURIComponent(kw || "")}`);
-                            const data = await res.json();
-                            setSending(false);
-                            setEmailResult(data.success ? `Found ${data.total} IDIQ contracts worth ${data.total_value ? "$" + (data.total_value / 1e6).toFixed(0) + "M" : "N/A"}` : `Error: ${data.error}`);
-                        }} disabled={sending}
+                            setIdiqResult(""); setIdiqSearching(true);
+                            try {
+                                const res = await fetch(`/api/idiq?naics=${naics}&keyword=${encodeURIComponent(kw || "")}`);
+                                const data = await res.json();
+                                setIdiqResult(data.success ? `Found ${data.total} IDIQ contracts worth ${data.total_value ? "$" + (data.total_value / 1e6).toFixed(0) + "M" : "N/A"}` : `Error: ${data.error}`);
+                            } catch (err: unknown) {
+                                setIdiqResult(`Error: ${err instanceof Error ? err.message : "Network request failed"}`);
+                            }
+                            setIdiqSearching(false);
+                        }} disabled={idiqSearching}
                         className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold inline-flex items-center gap-1.5 disabled:opacity-50">
-                            {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-                            {sending ? "Searching..." : "Search IDIQs"}
+                            {idiqSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                            {idiqSearching ? "Searching..." : "Search IDIQs"}
                         </button>
                     </div>
+                    {idiqResult && <p className={clsx("text-xs font-medium", idiqResult.startsWith("Error") ? "text-red-600" : "text-emerald-600")}>{idiqResult}</p>}
                 </div>
             </div>
 

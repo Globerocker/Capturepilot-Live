@@ -26,8 +26,6 @@ export default function PortalOpportunityDetail() {
     const [profileId, setProfileId] = useState("");
     const [eligibility, setEligibility] = useState<Record<string, unknown> | null>(null);
     const [eligLoading, setEligLoading] = useState(false);
-    const [proposalLoading, setProposalLoading] = useState(false);
-    const [proposal, setProposal] = useState<Record<string, unknown> | null>(null);
     const [aiSummary, setAiSummary] = useState<Record<string, unknown> | null>(null);
     const [aiLoading, setAiLoading] = useState(false);
 
@@ -73,19 +71,6 @@ export default function PortalOpportunityDetail() {
         const data = await res.json();
         if (data.success) setAiSummary(data.analysis);
         setAiLoading(false);
-    };
-
-    const generateProposal = async () => {
-        if (!opp?.notice_id) return;
-        setProposalLoading(true);
-        const res = await fetch("/api/ai/write-proposal", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ notice_id: opp.notice_id, user_profile_id: profileId }),
-        });
-        const data = await res.json();
-        if (data.success) setProposal(data);
-        setProposalLoading(false);
     };
 
     const addToPipeline = async () => {
@@ -188,11 +173,6 @@ export default function PortalOpportunityDetail() {
                     className="bg-white border border-stone-200 text-stone-700 px-4 py-2 rounded-xl text-sm font-bold inline-flex items-center gap-1.5 hover:bg-stone-50 disabled:opacity-50">
                     {aiLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
                     {aiLoading ? "Analyzing..." : "AI Analysis"}
-                </button>
-                <button type="button" onClick={generateProposal} disabled={proposalLoading}
-                    className="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-bold inline-flex items-center gap-1.5 hover:bg-blue-700 disabled:opacity-50">
-                    {proposalLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-                    {proposalLoading ? "Writing..." : "Generate Proposal"}
                 </button>
                 <a href={samUrl} target="_blank" rel="noopener noreferrer"
                     className="bg-white border border-stone-200 text-blue-600 px-4 py-2 rounded-xl text-sm font-bold inline-flex items-center gap-1.5 hover:bg-blue-50">
@@ -312,24 +292,11 @@ export default function PortalOpportunityDetail() {
                 </div>
             )}
 
-            {/* Generated Proposal */}
-            {proposal && (
-                <div className="bg-white border border-stone-200 rounded-2xl p-5 space-y-4">
-                    <div className="flex items-center justify-between">
-                        <h3 className="font-bold text-sm flex items-center gap-2"><FileText className="w-4 h-4 text-blue-500" /> Generated Proposal</h3>
-                        <span className="text-xs text-stone-400">{proposal.total_word_count} words · ~{proposal.estimated_pages} pages</span>
-                    </div>
-                    {(proposal.sections as Array<{ title: string; content: string; word_count: number }>)?.map((sec, i) => (
-                        <details key={i} className="border border-stone-100 rounded-xl">
-                            <summary className="px-4 py-3 cursor-pointer hover:bg-stone-50 text-sm font-bold flex items-center justify-between">
-                                {sec.title}
-                                <span className="text-[10px] text-stone-400 font-normal">{sec.word_count} words</span>
-                            </summary>
-                            <div className="px-4 pb-4 text-sm text-stone-700 leading-relaxed whitespace-pre-wrap">{sec.content}</div>
-                        </details>
-                    ))}
-                </div>
-            )}
+            {/* Consulting CTA */}
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-center">
+                <p className="text-sm text-emerald-800 font-medium">Our team is handling proposal preparation for your consulting engagement.</p>
+                <p className="text-xs text-emerald-600 mt-1">Check your Tasks for action items.</p>
+            </div>
 
             {/* Incumbent */}
             {opp.incumbent_contractor_name && (

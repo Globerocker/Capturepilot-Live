@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
 import Image from "next/image";
 import {
-    LayoutDashboard, ListTodo, Briefcase, FileText, Users,
+    LayoutDashboard, ListTodo, Briefcase, FileText,
     LogOut, Loader2, Settings, Menu, X, Layers,
 } from "lucide-react";
 import clsx from "clsx";
@@ -18,13 +18,10 @@ const supabase = createBrowserClient(
 
 const NAV_ITEMS = [
     { href: "/portal", icon: LayoutDashboard, label: "Overview" },
-    { href: "/portal/opportunities", icon: Briefcase, label: "My Matches" },
-    { href: "/portal/pipeline", icon: Layers, label: "My Deals" },
-    { href: "/portal/tasks", icon: ListTodo, label: "To-Do List" },
+    { href: "/portal/opportunities", icon: Briefcase, label: "Opportunities" },
+    { href: "/portal/pipeline", icon: Layers, label: "Pipeline" },
+    { href: "/portal/tasks", icon: ListTodo, label: "Tasks" },
     { href: "/portal/capability-statement", icon: FileText, label: "Capability Statement" },
-    { href: "/portal/partners", icon: Users, label: "Find Partners" },
-    { href: "/portal/competitors", icon: Users, label: "Competitors" },
-    { href: "/portal/documents", icon: FileText, label: "Documents" },
     { href: "/portal/settings", icon: Settings, label: "Account" },
 ];
 

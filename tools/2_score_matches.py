@@ -247,7 +247,7 @@ def chunk_list(lst, n):
 # MAIN SCORING ENGINE
 # ---------------------------------------------------------------------------
 
-def score_matches():
+def score_matches(single_user_id=None):
     if not all([SUPABASE_URL, SUPABASE_SERVICE_KEY]):
         print("Missing API keys in .env.")
         return
@@ -256,15 +256,20 @@ def score_matches():
     print("=" * 60)
     print("  Tool 2: User-Centric Opportunity Matching (Sprint 11)")
     print(f"  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    if single_user_id:
+        print(f"  Single-user mode: {single_user_id}")
     print("=" * 60)
 
     # --- Load user profiles (only onboarded users) ---
-    profiles_res = supabase.table("user_profiles").select(
+    query = supabase.table("user_profiles").select(
         "id, company_name, naics_codes, sba_certifications, state, "
         "target_states, employee_count, revenue, federal_awards_count, "
         "service_radius_miles, target_contract_types, "
         "target_psc_codes, preferred_agencies, contract_value_min, contract_value_max"
-    ).eq("onboarding_complete", True).execute()
+    ).eq("onboarding_complete", True)
+    if single_user_id:
+        query = query.eq("id", single_user_id)
+    profiles_res = query.execute()
 
     users = profiles_res.data or []
     if not users:
@@ -439,4 +444,8 @@ def score_matches():
 
 
 if __name__ == "__main__":
-    score_matches()
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--user", help="Score only this user_profile_id")
+    args = parser.parse_args()
+    score_matches(single_user_id=args.user)
