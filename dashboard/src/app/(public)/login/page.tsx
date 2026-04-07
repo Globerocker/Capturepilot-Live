@@ -12,6 +12,8 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
   const router = useRouter();
   const supabase = createSupabaseClient();
 
@@ -41,6 +43,24 @@ export default function LoginPage() {
     if (error) {
       setError(friendlyError(error.message));
       setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!email.trim()) {
+      setError("Please enter your email address first.");
+      return;
+    }
+    setResetLoading(true);
+    setError("");
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/auth/callback`,
+    });
+    setResetLoading(false);
+    if (error) {
+      setError(friendlyError(error.message));
+    } else {
+      setResetSent(true);
     }
   };
 
@@ -122,6 +142,7 @@ export default function LoginPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-4 py-3 rounded-xl border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-black/10 focus:border-stone-400"
                 placeholder="you@company.com"
+                required
               />
             </div>
             <div>
@@ -134,8 +155,26 @@ export default function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full px-4 py-3 rounded-xl border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-black/10 focus:border-stone-400"
                 placeholder="Your password"
+                required
               />
             </div>
+
+            <div className="flex justify-end -mt-1">
+              <button
+                type="button"
+                onClick={handleForgotPassword}
+                disabled={resetLoading}
+                className="text-xs text-stone-500 hover:text-stone-900 hover:underline transition-colors"
+              >
+                {resetLoading ? "Sending..." : "Forgot password?"}
+              </button>
+            </div>
+
+            {resetSent && (
+              <div className="bg-green-50 text-green-700 text-xs p-3 rounded-xl border border-green-200">
+                Check your email for a password reset link.
+              </div>
+            )}
 
             {error && (
               <div className="bg-red-50 text-red-600 text-xs p-3 rounded-xl border border-red-200">

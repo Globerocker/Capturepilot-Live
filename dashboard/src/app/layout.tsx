@@ -14,7 +14,10 @@ const courier = Courier_Prime({
 });
 
 export const metadata: Metadata = {
-  title: "CapturePilot - Government Contract Matching for Small Business",
+  title: {
+    default: "CapturePilot — Government Contract Matching for Small Business",
+    template: "%s | CapturePilot",
+  },
   description: "Find government contracts that fit your business. 15+ criteria matching engine built for Veteran-Owned and Small Businesses.",
 };
 

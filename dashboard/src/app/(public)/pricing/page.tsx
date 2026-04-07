@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
 
-/** Pricing lives on the marketing site — redirect to login */
+/** Pricing lives on the marketing site — redirect there */
 export default function PricingPage() {
-    const router = useRouter();
-    useEffect(() => { router.replace("/login"); }, [router]);
+    useEffect(() => {
+        window.location.href = "https://capturepilot.com/pricing";
+    }, []);
     return null;
 }

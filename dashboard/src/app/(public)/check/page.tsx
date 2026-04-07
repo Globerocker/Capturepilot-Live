@@ -2,7 +2,8 @@
 
 import { useState, Suspense, useEffect, useRef, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Zap, Globe, Loader2 } from "lucide-react";
+import { Globe, Loader2 } from "lucide-react";
+import Image from "next/image";
 import { AnalysisProgressStepper, statusToStep } from "@/components/AnalysisProgressStepper";
 
 function CheckContent() {
@@ -141,7 +142,7 @@ function CheckContent() {
                 <div className="max-w-md mx-auto w-full">
                     <div className="text-center mb-8">
                         <div className="flex items-center justify-center gap-2 mb-4">
-                            <Zap className="w-6 h-6 text-black" />
+                            <Image src="/logo.png" alt="CapturePilot" width={20} height={20} className="rounded" />
                             <span className="font-typewriter font-bold text-lg">CapturePilot</span>
                         </div>
                         <h2 className="font-typewriter font-bold text-xl sm:text-2xl mb-2">
@@ -168,9 +169,7 @@ function CheckContent() {
             <div className="w-full max-w-lg">
                 <div className="text-center mb-8">
                     <div className="flex items-center justify-center gap-2 mb-3">
-                        <div className="w-10 h-10 rounded-xl bg-black flex items-center justify-center">
-                            <Zap className="w-5 h-5 text-white" />
-                        </div>
+                        <Image src="/logo.png" alt="CapturePilot" width={40} height={40} className="rounded-xl shadow-lg" />
                         <span className="font-typewriter font-bold text-xl">CapturePilot</span>
                     </div>
                     <h1 className="font-typewriter font-bold text-2xl sm:text-3xl mb-2">
@@ -226,7 +225,7 @@ function CheckContent() {
                         type="submit"
                         className="w-full bg-black text-white py-3.5 rounded-2xl font-bold text-sm hover:bg-stone-800 transition-all flex items-center justify-center gap-2"
                     >
-                        <Zap className="w-4 h-4" /> Analyze & Find Matches
+                        <Image src="/logo.png" alt="CapturePilot" width={20} height={20} className="rounded" /> Analyze & Find Matches
                     </button>
                 </form>
 
