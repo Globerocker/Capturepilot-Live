@@ -1,14 +1,15 @@
 "use client";
 
-import { useEffect, useState, KeyboardEvent } from "react";
+import { useEffect, useState, KeyboardEvent, useMemo } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import {
     Settings, Save, Loader2, CheckCircle2, Key, Mail, Building2,
     X, Plus, ChevronDown, ChevronRight, Shield, MapPin,
     DollarSign, Truck, Wrench, User, Lock, BadgeCheck, Globe,
-    Phone, Hash, Award, Briefcase, AlertCircle
+    Phone, Hash, Award, Briefcase, AlertCircle, Search
 } from "lucide-react";
 import { Tooltip } from "@/components/Tooltip";
+import { getNaicsLabel, getNaicsDescription, NAICS_LABELS } from "@/lib/naics-labels";
 
 const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -124,6 +125,64 @@ function BadgeInput({ items, setItems, placeholder, validate }: {
                 className="border border-stone-300 hover:bg-stone-50 rounded-xl px-3 py-2.5 text-sm font-medium inline-flex items-center gap-1 transition-colors text-stone-600">
                 <Plus className="w-4 h-4" /> Add
             </button>
+        </div>
+    );
+}
+
+function NaicsSearchInput({ selectedCodes, onAdd }: { selectedCodes: string[]; onAdd: (code: string) => void }) {
+    const [query, setQuery] = useState("");
+    const [showList, setShowList] = useState(false);
+
+    const allEntries = useMemo(() => Object.entries(NAICS_LABELS), []);
+
+    const filtered = useMemo(() => {
+        if (!query.trim()) return allEntries.filter(([code]) => !selectedCodes.includes(code)).slice(0, 20);
+        const q = query.toLowerCase();
+        return allEntries
+            .filter(([code, desc]) => !selectedCodes.includes(code) && (code.includes(q) || desc.toLowerCase().includes(q)))
+            .slice(0, 20);
+    }, [query, selectedCodes, allEntries]);
+
+    const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === "Enter") {
+            e.preventDefault();
+            const trimmed = query.trim().toUpperCase();
+            if (/^\d{2,6}$/.test(trimmed)) {
+                onAdd(trimmed);
+                setQuery("");
+            }
+        }
+    };
+
+    return (
+        <div className="space-y-2">
+            <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
+                <input
+                    value={query}
+                    onChange={e => { setQuery(e.target.value); setShowList(true); }}
+                    onFocus={() => setShowList(true)}
+                    onKeyDown={handleKeyDown}
+                    placeholder="Search NAICS codes by number or description..."
+                    className="w-full pl-10 pr-3 border border-stone-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-black transition-colors"
+                />
+            </div>
+            {showList && filtered.length > 0 && (
+                <div className="border border-stone-200 rounded-xl bg-white max-h-48 overflow-y-auto divide-y divide-stone-100">
+                    {filtered.map(([code, desc]) => (
+                        <button
+                            key={code}
+                            type="button"
+                            onClick={() => { onAdd(code); setQuery(""); }}
+                            className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 transition-colors flex items-center gap-2"
+                        >
+                            <span className="font-mono font-bold text-blue-700 flex-shrink-0">{code}</span>
+                            <span className="text-stone-600 truncate">{desc}</span>
+                            <Plus className="w-3.5 h-3.5 text-stone-400 ml-auto flex-shrink-0" />
+                        </button>
+                    ))}
+                </div>
+            )}
         </div>
     );
 }
@@ -413,12 +472,30 @@ export default function PortalSettings() {
                     Your <Tooltip text="North American Industry Classification System. 6-digit codes that classify your business services. Government contracts are categorized by NAICS code — matching codes means you're eligible to bid.">NAICS codes</Tooltip> determine which federal opportunities match your profile. Add all codes you can compete under.
                     Changes take effect at the next match refresh.
                 </p>
-                <BadgeList items={naicsCodes}
-                    onRemove={code => setNaicsCodes(prev => prev.filter(c => c !== code))}
-                    color="bg-blue-50 text-blue-700 border border-blue-200" />
-                <BadgeInput items={naicsCodes} setItems={setNaicsCodes}
-                    placeholder="Type NAICS code (e.g. 561720) and press Enter"
-                    validate={val => /^\d{2,6}$/.test(val) ? val : null} />
+                {naicsCodes.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                        {naicsCodes.map(code => (
+                            <span key={code} title={getNaicsDescription(code)}
+                                className="bg-blue-50 text-blue-700 border border-blue-200 text-xs font-mono font-bold px-2.5 py-1 rounded-lg inline-flex items-center gap-1.5">
+                                {getNaicsLabel(code)}
+                                <button type="button" onClick={() => setNaicsCodes(prev => prev.filter(c => c !== code))}
+                                    title={`Remove ${code}`}
+                                    className="hover:text-red-600 transition-colors">
+                                    <X className="w-3 h-3" />
+                                </button>
+                            </span>
+                        ))}
+                    </div>
+                )}
+                {naicsCodes.length === 0 && (
+                    <p className="text-xs text-stone-400 italic py-1">None added yet</p>
+                )}
+                <NaicsSearchInput
+                    selectedCodes={naicsCodes}
+                    onAdd={(code) => {
+                        if (!naicsCodes.includes(code)) setNaicsCodes(prev => [...prev, code]);
+                    }}
+                />
                 {naicsCodes.length === 0 && (
                     <p className="text-xs text-amber-600 flex items-center gap-1.5">
                         <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
