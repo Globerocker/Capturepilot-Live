@@ -26,7 +26,7 @@ interface Message {
 
 interface UserProfile {
     id: string;
-    full_name: string | null;
+    contact_name: string | null;
     company_name: string | null;
 }
 
@@ -138,7 +138,7 @@ export default function PortalMessagesPage() {
 
             const { data: prof } = await supabase
                 .from("user_profiles")
-                .select("id, full_name, company_name")
+                .select("id, contact_name, company_name")
                 .eq("auth_user_id", user.id)
                 .single();
 
@@ -206,7 +206,7 @@ export default function PortalMessagesPage() {
         const newMsg: Partial<Message> = {
             user_profile_id: profile.id,
             sender_type: "client",
-            sender_name: profile.full_name || profile.company_name || "Client",
+            sender_name: profile.contact_name || profile.company_name || "Client",
             message: msg,
         };
 
@@ -288,7 +288,7 @@ export default function PortalMessagesPage() {
                                 <button
                                     key={qm.text}
                                     type="button"
-                                    onClick={() => handleSend(qm.text)}
+                                    onClick={() => { setDraft(qm.text); textareaRef.current?.focus(); }}
                                     className="flex items-center gap-3 px-4 py-3 bg-white border border-stone-200 rounded-xl text-sm text-stone-600 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 transition-all text-left group"
                                 >
                                     <qm.icon className="w-4 h-4 text-stone-400 group-hover:text-emerald-500 transition-colors flex-shrink-0" />
