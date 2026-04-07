@@ -531,23 +531,120 @@ export default function CheckResultsPage() {
                             </div>
                         )}
 
-                        {/* Public contact — only show company-level info, no personal data */}
-                        {sam?.phone && (
+                        {/* Key Account Holder */}
+                        {(contactPerson || leadership.length > 0) && (
                             <div>
                                 <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-2">
-                                    <Building2 className="w-3 h-3 inline mr-1" />Company Contact
+                                    <User className="w-3 h-3 inline mr-1" />Key Account Holder
+                                    {samPocs.length > 0 && <span className="ml-2 text-emerald-500">(SAM.gov)</span>}
                                 </p>
+                                {(() => {
+                                    const person = contactPerson || leadership[0];
+                                    if (!person) return null;
+                                    const genericPrefixes = ["info@", "contact@", "support@", "admin@", "sales@", "hello@", "office@", "hr@"];
+                                    const personalContact = crawl.contacts?.find(c => c.email && !genericPrefixes.some(p => c.email!.startsWith(p)));
+                                    const email = person.email || personalContact?.email;
+                                    const phone = person.phone || sam?.phone || crawl.contacts?.find(c => c.phone)?.phone;
+                                    const cp = profile.contact_person;
+                                    const mobilePhone = cp?.mobile_phone;
+                                    const directPhone = cp?.direct_phone;
+                                    const linkedinUrl = cp?.linkedin_url;
+                                    const enrichSource = cp?.source;
+                                    return (
+                                        <div className="bg-stone-50 border border-stone-200 rounded-xl p-4">
+                                            <div className="flex items-start gap-3">
+                                                <div className="w-10 h-10 rounded-full bg-black text-white flex items-center justify-center font-bold text-sm flex-shrink-0">
+                                                    {person.name.charAt(0).toUpperCase()}
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <div className="flex items-center gap-2">
+                                                        <p className="font-bold text-sm text-black">{person.name}</p>
+                                                        {enrichSource === "apollo" && (
+                                                            <span className="text-[9px] font-typewriter font-bold bg-violet-50 text-violet-600 border border-violet-200 px-1.5 py-0.5 rounded">Apollo Verified</span>
+                                                        )}
+                                                    </div>
+                                                    <p className="text-xs text-stone-500">{person.title}</p>
+                                                    <div className="flex flex-wrap gap-2 mt-2">
+                                                        {email && (
+                                                            <a href={`mailto:${email}`} className="text-xs text-blue-600 hover:underline inline-flex items-center gap-1">
+                                                                <Mail className="w-3 h-3" /> {email}
+                                                            </a>
+                                                        )}
+                                                        {mobilePhone && (
+                                                            <a href={`tel:${mobilePhone}`} className="text-xs text-emerald-600 hover:underline inline-flex items-center gap-1">
+                                                                <Phone className="w-3 h-3" /> {mobilePhone} <span className="text-[9px] text-emerald-400">(Mobile)</span>
+                                                            </a>
+                                                        )}
+                                                        {directPhone && !mobilePhone && (
+                                                            <a href={`tel:${directPhone}`} className="text-xs text-blue-600 hover:underline inline-flex items-center gap-1">
+                                                                <Phone className="w-3 h-3" /> {directPhone} <span className="text-[9px] text-stone-400">(Direct)</span>
+                                                            </a>
+                                                        )}
+                                                        {phone && !mobilePhone && !directPhone && (
+                                                            <a href={`tel:${phone}`} className="text-xs text-blue-600 hover:underline inline-flex items-center gap-1">
+                                                                <Phone className="w-3 h-3" /> {phone}
+                                                            </a>
+                                                        )}
+                                                        {linkedinUrl && (
+                                                            <a href={linkedinUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline inline-flex items-center gap-1">
+                                                                <Linkedin className="w-3 h-3" /> LinkedIn
+                                                            </a>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
+                                {/* Additional contacts (SAM POCs + crawler leadership, deduplicated) */}
+                                {(() => {
+                                    const mainName = contactPerson?.name?.toLowerCase() || "";
+                                    const others = [
+                                        ...samPocs.filter(p => p.name.toLowerCase() !== mainName).map(p => ({ ...p, source: "SAM.gov" as const })),
+                                        ...leadership.filter(l => l.name.toLowerCase() !== mainName && !samPocs.some(s => s.name.toLowerCase() === l.name.toLowerCase())).map(l => ({ ...l, source: "Website" as const })),
+                                    ].slice(0, 3);
+                                    if (others.length === 0) return null;
+                                    return (
+                                        <div className="mt-2 space-y-1.5">
+                                            {others.map((l, i) => (
+                                                <div key={i} className="flex items-center gap-2 flex-wrap text-xs text-stone-600 px-3 py-1.5">
+                                                    <span className="font-bold">{l.name}</span>
+                                                    <span className="text-stone-400">—</span>
+                                                    <span>{l.title}</span>
+                                                    <span className="text-[9px] text-stone-300">({l.source})</span>
+                                                    {l.email && (
+                                                        <a href={`mailto:${l.email}`} title={`Email ${l.name}`} className="text-blue-600 hover:underline inline-flex items-center gap-1 ml-1">
+                                                            <Mail className="w-3 h-3" /> <span className="sr-only">Email</span>
+                                                        </a>
+                                                    )}
+                                                    {l.phone && (
+                                                        <a href={`tel:${l.phone}`} title={`Call ${l.name}`} className="text-blue-600 hover:underline inline-flex items-center gap-1">
+                                                            <Phone className="w-3 h-3" /> <span className="sr-only">Call</span>
+                                                        </a>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    );
+                                })()}
+                            </div>
+                        )}
+
+                        {/* General contact info (when no leadership found) */}
+                        {!contactPerson && leadership.length === 0 && crawl.contacts && crawl.contacts.length > 0 && (
+                            <div>
+                                <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-2">Contact Info Found</p>
                                 <div className="flex flex-wrap gap-2">
-                                    {sam.phone && (
-                                        <span className="text-xs bg-stone-50 text-stone-600 border border-stone-200 px-2.5 py-1 rounded-lg inline-flex items-center gap-1">
-                                            <Phone className="w-3 h-3" /> {sam.phone}
-                                        </span>
-                                    )}
-                                    {data.website && (
-                                        <a href={data.website} target="_blank" rel="noopener noreferrer" className="text-xs bg-stone-50 text-stone-600 border border-stone-200 px-2.5 py-1 rounded-lg inline-flex items-center gap-1 hover:border-blue-300 transition-colors">
-                                            <Globe className="w-3 h-3" /> Website
+                                    {crawl.contacts.filter(c => c.email).slice(0, 3).map((c, i) => (
+                                        <a key={`e${i}`} href={`mailto:${c.email}`} className="text-xs bg-stone-50 text-stone-600 border border-stone-200 px-2.5 py-1 rounded-lg inline-flex items-center gap-1 hover:border-blue-300 transition-colors">
+                                            <Mail className="w-3 h-3" /> {c.email}
                                         </a>
-                                    )}
+                                    ))}
+                                    {crawl.contacts.filter(c => c.phone).slice(0, 2).map((c, i) => (
+                                        <a key={`p${i}`} href={`tel:${c.phone}`} className="text-xs bg-stone-50 text-stone-600 border border-stone-200 px-2.5 py-1 rounded-lg inline-flex items-center gap-1 hover:border-blue-300 transition-colors">
+                                            <Phone className="w-3 h-3" /> {c.phone}
+                                        </a>
+                                    ))}
                                 </div>
                             </div>
                         )}
@@ -637,23 +734,44 @@ export default function CheckResultsPage() {
                             </div>
                         )}
 
-                        {/* Social links hidden from public view — data still enriched in admin */}
+                        {/* Social Media Profiles */}
+                        {(social.linkedin || social.facebook || social.twitter) && (
+                            <div>
+                                <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-2">Social Profiles</p>
+                                <div className="flex gap-2">
+                                    {social.linkedin && (
+                                        <a href={social.linkedin} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 px-3 py-2 rounded-xl hover:bg-blue-100 transition-colors">
+                                            <Linkedin className="w-4 h-4" /> LinkedIn
+                                        </a>
+                                    )}
+                                    {social.facebook && (
+                                        <a href={social.facebook} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 px-3 py-2 rounded-xl hover:bg-blue-100 transition-colors">
+                                            <Facebook className="w-4 h-4" /> Facebook
+                                        </a>
+                                    )}
+                                    {social.twitter && (
+                                        <a href={social.twitter} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs font-bold bg-stone-50 text-stone-700 border border-stone-200 px-3 py-2 rounded-xl hover:bg-stone-100 transition-colors">
+                                            <Twitter className="w-4 h-4" /> Twitter/X
+                                        </a>
+                                    )}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
 
-                {/* CTA — public version replaces LeadMagnetForm */}
-                <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-6 text-center">
-                    <h3 className="font-typewriter font-bold text-lg mb-2">Want Help Winning These Contracts?</h3>
-                    <p className="text-sm text-stone-600 mb-4">Our team can handle the entire capture process — from matching to proposal to award.</p>
-                    <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                        <a href="https://meetings-na2.hubspot.com/americurial/intro-call" target="_blank" rel="noopener noreferrer" className="bg-black text-white px-6 py-3 rounded-xl font-bold text-sm hover:bg-stone-800 transition-colors inline-flex items-center justify-center gap-2">
-                            Book a Free Strategy Call <ArrowRight className="w-4 h-4" />
-                        </a>
-                        <a href="/signup" className="bg-white text-stone-700 px-6 py-3 rounded-xl font-bold text-sm border border-stone-200 hover:bg-stone-50 transition-colors inline-flex items-center justify-center gap-2">
-                            Start Free Trial
-                        </a>
-                    </div>
-                </div>
+                {/* Review & Confirm — pre-filled by crawler */}
+                <LeadMagnetForm
+                    analysisId={analysisId}
+                    inferredProfile={data.inferred_profile || {}}
+                    inferredNaics={naics}
+                    crawlerConfidence={data.crawler_confidence}
+                    onUpdate={(updated) => {
+                        setUpdatedMatches(updated.updated_matches as MatchData[]);
+                        setUpdatedCertRecs(updated.cert_recommendations as CertRecommendation[]);
+                        setUpdatedEasyWins(updated.easy_wins as EasyWin[]);
+                    }}
+                />
 
                 {/* Top 5 Matching Opportunities */}
                 <div>

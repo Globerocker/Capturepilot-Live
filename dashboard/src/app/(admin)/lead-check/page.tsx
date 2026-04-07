@@ -60,7 +60,7 @@ function CheckContent() {
 
                 if (data.status === "complete") {
                     stopPolling();
-                    router.push(`/check/${id}`);
+                    router.push(`/admin/lead-check/${id}`);
                 }
             } catch {
                 // Ignore transient poll errors
@@ -174,10 +174,10 @@ function CheckContent() {
                         <span className="font-typewriter font-bold text-xl">CapturePilot</span>
                     </div>
                     <h1 className="font-typewriter font-bold text-2xl sm:text-3xl mb-2">
-                        Quick Company Check
+                        Quick Lead Check
                     </h1>
                     <p className="text-sm text-stone-500">
-                        Enter your website — see your NAICS codes, SAM.gov status & matching opportunities.
+                        Enter a company website — we&apos;ll find matching government contracts.
                     </p>
                 </div>
 
