@@ -8,6 +8,7 @@ import Image from "next/image";
 import {
     LayoutDashboard, ListTodo, Briefcase, FileText,
     LogOut, Loader2, Settings, Menu, X, Layers, FolderOpen, Users,
+    MessageSquare,
 } from "lucide-react";
 import clsx from "clsx";
 
@@ -21,6 +22,7 @@ const NAV_ITEMS = [
     { href: "/portal/opportunities", icon: Briefcase, label: "Opportunities" },
     { href: "/portal/pipeline", icon: Layers, label: "Pipeline" },
     { href: "/portal/tasks", icon: ListTodo, label: "Tasks" },
+    { href: "/portal/messages", icon: MessageSquare, label: "Messages" },
     { href: "/portal/competitors", icon: Users, label: "Competitors" },
     { href: "/portal/documents", icon: FolderOpen, label: "Documents" },
     { href: "/portal/capability-statement", icon: FileText, label: "Capability Statement" },
@@ -32,6 +34,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
     const [companyName, setCompanyName] = useState("");
     const [loading, setLoading] = useState(true);
     const [mobileOpen, setMobileOpen] = useState(false);
+    const [unreadMessages, setUnreadMessages] = useState(0);
 
     useEffect(() => {
         (async () => {
@@ -59,9 +62,51 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
                 .eq("auth_user_id", user.id)
                 .single();
 
-            if (data) setCompanyName(data.company_name || "");
+            if (data) {
+                setCompanyName(data.company_name || "");
+
+                // Fetch unread message count
+                const { data: profile } = await supabase
+                    .from("user_profiles")
+                    .select("id")
+                    .eq("auth_user_id", user.id)
+                    .single();
+
+                if (profile) {
+                    const { count } = await supabase
+                        .from("client_messages")
+                        .select("id", { count: "exact", head: true })
+                        .eq("user_profile_id", profile.id)
+                        .eq("sender_type", "admin")
+                        .is("read_at", null);
+                    setUnreadMessages(count || 0);
+                }
+            }
             setLoading(false);
         })();
+    }, []);
+
+    // Poll unread count every 30 seconds
+    useEffect(() => {
+        const interval = setInterval(async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return;
+            const { data: profile } = await supabase
+                .from("user_profiles")
+                .select("id")
+                .eq("auth_user_id", user.id)
+                .single();
+            if (profile) {
+                const { count } = await supabase
+                    .from("client_messages")
+                    .select("id", { count: "exact", head: true })
+                    .eq("user_profile_id", profile.id)
+                    .eq("sender_type", "admin")
+                    .is("read_at", null);
+                setUnreadMessages(count || 0);
+            }
+        }, 30000);
+        return () => clearInterval(interval);
     }, []);
 
     if (loading) {
@@ -116,6 +161,11 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
                             >
                                 <item.icon className="w-4 h-4" />
                                 {item.label}
+                                {item.label === "Messages" && unreadMessages > 0 && (
+                                    <span className="ml-auto bg-emerald-500 text-white text-[10px] font-bold min-w-[18px] h-[18px] rounded-full flex items-center justify-center px-1">
+                                        {unreadMessages}
+                                    </span>
+                                )}
                             </Link>
                         );
                     })}

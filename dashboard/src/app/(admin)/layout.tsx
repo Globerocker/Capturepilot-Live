@@ -8,7 +8,7 @@ import Image from "next/image";
 import {
     LayoutDashboard, Users, Briefcase, Target, UserCog,
     Wrench, Settings, LogOut, Loader2, Search, ChevronDown,
-    Menu, X, FileText, Bell,
+    Menu, X, FileText, Bell, MessageSquare,
 } from "lucide-react";
 import clsx from "clsx";
 
@@ -24,6 +24,7 @@ const NAV = [
     { href: "/admin/leads", icon: Search, label: "Leads" },
     { href: "/admin/pipeline", icon: Target, label: "Sales Pipeline" },
     { href: "/admin/users", icon: UserCog, label: "Users" },
+    { href: "/admin/messages", icon: MessageSquare, label: "Messages" },
     { href: "/admin/tools", icon: Wrench, label: "Tools" },
     { href: "/admin/settings", icon: Settings, label: "Settings" },
 ];
@@ -32,13 +33,30 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     const pathname = usePathname();
     const [loading, setLoading] = useState(true);
     const [mobileOpen, setMobileOpen] = useState(false);
+    const [unreadMessages, setUnreadMessages] = useState(0);
+
+    const fetchUnread = async () => {
+        const { count } = await supabase
+            .from("client_messages")
+            .select("id", { count: "exact", head: true })
+            .eq("sender_type", "client")
+            .is("read_at", null);
+        setUnreadMessages(count || 0);
+    };
 
     useEffect(() => {
         (async () => {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) { window.location.href = "/login"; return; }
+            await fetchUnread();
             setLoading(false);
         })();
+    }, []);
+
+    // Poll unread count every 30 seconds
+    useEffect(() => {
+        const interval = setInterval(fetchUnread, 30000);
+        return () => clearInterval(interval);
     }, []);
 
     if (loading) {
@@ -83,6 +101,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                             >
                                 <item.icon className="w-4 h-4" />
                                 {item.label}
+                                {item.label === "Messages" && unreadMessages > 0 && (
+                                    <span className="ml-auto bg-emerald-500 text-white text-[10px] font-bold min-w-[18px] h-[18px] rounded-full flex items-center justify-center px-1">
+                                        {unreadMessages}
+                                    </span>
+                                )}
                             </Link>
                         );
                     })}
