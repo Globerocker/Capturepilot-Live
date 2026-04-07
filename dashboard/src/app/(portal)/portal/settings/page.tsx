@@ -8,6 +8,7 @@ import {
     DollarSign, Truck, Wrench, User, Lock, BadgeCheck, Globe,
     Phone, Hash, Award, Briefcase, AlertCircle
 } from "lucide-react";
+import { Tooltip } from "@/components/Tooltip";
 
 const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -22,22 +23,22 @@ const US_STATES = [
 ];
 
 const CERT_OPTIONS = [
-    { value: "SDVOSB", label: "SDVOSB (Service-Disabled Veteran-Owned)" },
-    { value: "VOSB", label: "VOSB (Veteran-Owned)" },
-    { value: "WOSB", label: "WOSB (Women-Owned)" },
-    { value: "EDWOSB", label: "EDWOSB (Economically Disadvantaged WOSB)" },
-    { value: "8(a)", label: "8(a) Business Development" },
-    { value: "HUBZone", label: "HUBZone Certified" },
-    { value: "SDB", label: "SDB (Small Disadvantaged Business)" },
-    { value: "Small Business", label: "Small Business" },
+    { value: "SDVOSB", label: "SDVOSB (Service-Disabled Veteran-Owned)", tip: "Service-Disabled Veteran-Owned Small Business. Set-aside contracts reserved for veterans with service-connected disabilities. Must be verified by SBA." },
+    { value: "VOSB", label: "VOSB (Veteran-Owned)", tip: "Veteran-Owned Small Business. Broader than SDVOSB — includes all veteran-owned businesses. VA-specific set-asides available." },
+    { value: "WOSB", label: "WOSB (Women-Owned)", tip: "Women-Owned Small Business. Contracts set aside for businesses at least 51% owned by women. Must be certified through SBA." },
+    { value: "EDWOSB", label: "EDWOSB (Economically Disadvantaged WOSB)", tip: "Economically Disadvantaged Women-Owned Small Business. Subcategory of WOSB for businesses in economically disadvantaged areas. More set-aside opportunities." },
+    { value: "8(a)", label: "8(a) Business Development", tip: "SBA 8(a) Business Development Program. 9-year program for socially/economically disadvantaged small businesses. Sole-source contracts up to $4.5M." },
+    { value: "HUBZone", label: "HUBZone Certified", tip: "Historically Underutilized Business Zone. Businesses in designated areas get contracting preferences. Must maintain 35% of employees in a HUBZone." },
+    { value: "SDB", label: "SDB (Small Disadvantaged Business)", tip: "Small Disadvantaged Business. Owned by socially/economically disadvantaged individuals. Price evaluation preference on some contracts." },
+    { value: "Small Business", label: "Small Business", tip: "Small Business set-aside. Based on SBA size standards for your NAICS code — typically by revenue or employee count." },
 ];
 
 const CONTRACT_TYPE_OPTIONS = [
-    { value: "FFP", label: "Firm Fixed Price (FFP)" },
-    { value: "T&M", label: "Time & Materials (T&M)" },
-    { value: "IDIQ", label: "Indefinite Delivery / Indefinite Quantity (IDIQ)" },
-    { value: "GWAC", label: "Government-Wide Acquisition Contract (GWAC)" },
-    { value: "BPA", label: "Blanket Purchase Agreement (BPA)" },
+    { value: "FFP", label: "Firm Fixed Price (FFP)", tip: "Firm Fixed Price. You bid a set price for the entire scope. Government pays that amount regardless of your actual costs. Lower risk for government, higher risk for you." },
+    { value: "T&M", label: "Time & Materials (T&M)", tip: "Time and Materials. Government pays for labor hours at agreed rates plus materials at cost. More flexible but requires detailed time tracking." },
+    { value: "IDIQ", label: "Indefinite Delivery / Indefinite Quantity (IDIQ)", tip: "Indefinite Delivery/Indefinite Quantity. Multi-year contract vehicles with task orders. Getting on an IDIQ means steady work over years." },
+    { value: "GWAC", label: "Government-Wide Acquisition Contract (GWAC)", tip: "Government-Wide Acquisition Contract. IT-focused IDIQ contracts usable by any federal agency. Major vehicles: ALLIANT 2, CIO-SP3, VETS 2." },
+    { value: "BPA", label: "Blanket Purchase Agreement (BPA)", tip: "Blanket Purchase Agreement. Simplified purchasing arrangement for recurring needs. Lower dollar values but easy to win and good for building past performance." },
 ];
 
 // --- Reusable Components ---
@@ -59,10 +60,12 @@ function SectionCard({ icon: Icon, title, defaultOpen = true, children }: {
     );
 }
 
-function Field({ label, children, span2 = false }: { label: string; children: React.ReactNode; span2?: boolean }) {
+function Field({ label, children, span2 = false, tooltip }: { label: string; children: React.ReactNode; span2?: boolean; tooltip?: string }) {
     return (
         <div className={span2 ? "sm:col-span-2" : ""}>
-            <label className="text-[10px] font-bold text-stone-400 uppercase tracking-wide block mb-1.5">{label}</label>
+            <label className="text-[10px] font-bold text-stone-400 uppercase tracking-wide block mb-1.5">
+                {tooltip ? <Tooltip text={tooltip}>{label}</Tooltip> : label}
+            </label>
             {children}
         </div>
     );
@@ -407,7 +410,7 @@ export default function PortalSettings() {
             {/* ===== Section 2: NAICS Codes ===== */}
             <SectionCard icon={Hash} title="NAICS Codes">
                 <p className="text-xs text-stone-500 -mt-1">
-                    Your NAICS codes determine which federal opportunities match your profile. Add all codes you can compete under.
+                    Your <Tooltip text="North American Industry Classification System. 6-digit codes that classify your business services. Government contracts are categorized by NAICS code — matching codes means you're eligible to bid.">NAICS codes</Tooltip> determine which federal opportunities match your profile. Add all codes you can compete under.
                     Changes take effect at the next match refresh.
                 </p>
                 <BadgeList items={naicsCodes}
@@ -450,7 +453,7 @@ export default function PortalSettings() {
             {/* ===== Section 4: Certifications & Set-Asides ===== */}
             <SectionCard icon={Award} title="Certifications & Set-Asides">
                 <p className="text-xs text-stone-500 -mt-1">
-                    Check all certifications your company currently holds. These affect opportunity matching, scoring, and which set-aside contracts you are eligible for.
+                    Check all certifications your company currently holds. These affect opportunity matching, scoring, and which <Tooltip text="Contracts reserved for specific business categories (veteran-owned, women-owned, small business, etc.). Less competition than full and open contracts.">set-aside</Tooltip> contracts you are eligible for.
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {CERT_OPTIONS.map(cert => (
@@ -463,7 +466,8 @@ export default function PortalSettings() {
                             <input type="checkbox" checked={certifications.includes(cert.value)}
                                 onChange={() => toggleCert(cert.value)}
                                 className="rounded accent-black w-4 h-4 flex-shrink-0" />
-                            <span className="text-sm font-medium">{cert.label}</span>
+                            <span className="text-sm font-medium flex-1">{cert.label}</span>
+                            <Tooltip text={cert.tip} />
                         </label>
                     ))}
                 </div>
@@ -486,7 +490,8 @@ export default function PortalSettings() {
                                     <input type="checkbox" checked={contractTypes.includes(ct.value)}
                                         onChange={() => toggleContractType(ct.value)}
                                         className="rounded accent-black w-4 h-4 flex-shrink-0" />
-                                    <span className="text-sm font-medium">{ct.label}</span>
+                                    <span className="text-sm font-medium flex-1">{ct.label}</span>
+                                    <Tooltip text={ct.tip} />
                                 </label>
                             ))}
                         </div>
@@ -526,7 +531,7 @@ export default function PortalSettings() {
 
                     {/* Prime or Sub */}
                     <div>
-                        <label className="text-[10px] font-bold text-stone-400 uppercase tracking-wide block mb-2">Prime or Subcontractor</label>
+                        <label className="text-[10px] font-bold text-stone-400 uppercase tracking-wide block mb-2"><Tooltip text="Prime contractor works directly with the government. Subcontractor works under a prime. Subcontracting is often easier to start with.">Prime or Subcontractor</Tooltip></label>
                         <div className="flex gap-2 flex-wrap">
                             {[
                                 { value: "prime", label: "Prime Only" },
@@ -557,9 +562,9 @@ export default function PortalSettings() {
                     {/* Toggle switches */}
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         {([
-                            { key: "has_bonding" as const, label: "Has Bonding", icon: Shield },
-                            { key: "has_fleet" as const, label: "Has Fleet", icon: Truck },
-                            { key: "has_municipal_exp" as const, label: "Municipal Experience", icon: Building2 },
+                            { key: "has_bonding" as const, label: "Has Bonding", icon: Shield, tip: "Performance and payment bonds required on many construction contracts. A guarantee that you'll complete the work. Requires financial qualification." },
+                            { key: "has_fleet" as const, label: "Has Fleet", icon: Truck, tip: "Company owns or leases vehicles and equipment for performing contract work on-site." },
+                            { key: "has_municipal_exp" as const, label: "Municipal Experience", icon: Building2, tip: "Experience working with state, county, or city governments. Relevant for contracts requiring local government experience." },
                         ]).map(toggle => (
                             <button key={toggle.key} type="button"
                                 onClick={() => set(toggle.key, !form[toggle.key])}
@@ -575,7 +580,8 @@ export default function PortalSettings() {
                                         form[toggle.key] ? "left-[18px]" : "left-0.5"
                                     }`} />
                                 </div>
-                                <span className="text-sm font-medium">{toggle.label}</span>
+                                <span className="text-sm font-medium flex-1">{toggle.label}</span>
+                                <Tooltip text={toggle.tip} />
                             </button>
                         ))}
                     </div>
@@ -586,7 +592,7 @@ export default function PortalSettings() {
                                 onChange={e => set("security_clearances", e.target.value)}
                                 className={inputClass} placeholder="e.g. Secret, Top Secret, Public Trust" />
                         </Field>
-                        <Field label="Service Radius (miles)">
+                        <Field label="Service Radius (miles)" tooltip="How far from your location you're willing to travel for work. Government contracts specify a place of performance.">
                             <input type="number" value={form.service_radius_miles}
                                 onChange={e => set("service_radius_miles", e.target.value)}
                                 className={inputClass} min={0} placeholder="e.g. 250" />

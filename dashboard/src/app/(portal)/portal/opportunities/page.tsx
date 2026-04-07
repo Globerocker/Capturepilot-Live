@@ -9,6 +9,7 @@ import {
     ArrowUpDown, Calendar,
 } from "lucide-react";
 import clsx from "clsx";
+import { Tooltip } from "@/components/Tooltip";
 
 const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -357,7 +358,7 @@ export default function PortalOpportunities() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                         {/* NAICS Code */}
                         <div>
-                            <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-1.5 block">NAICS Code</label>
+                            <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-1.5 block"><Tooltip text="North American Industry Classification System. 6-digit codes that classify your business services. Government contracts are categorized by NAICS code — matching codes means you're eligible to bid.">NAICS Code</Tooltip></label>
                             <select
                                 value={naicsFilter}
                                 onChange={e => setNaicsFilter(e.target.value)}
@@ -389,7 +390,7 @@ export default function PortalOpportunities() {
 
                         {/* Set-Aside */}
                         <div>
-                            <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-1.5 block">Set-Aside</label>
+                            <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-1.5 block"><Tooltip text="Contracts reserved for specific business categories (veteran-owned, women-owned, small business, etc.). Less competition than full and open contracts.">Set-Aside</Tooltip></label>
                             <select
                                 value={setAsideFilter}
                                 onChange={e => setSetAsideFilter(e.target.value)}
@@ -404,7 +405,7 @@ export default function PortalOpportunities() {
 
                         {/* Notice Type */}
                         <div>
-                            <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-1.5 block">Notice Type</label>
+                            <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-1.5 block"><Tooltip text="The type of notice on SAM.gov. Sources Sought = market research (best time to engage). Presolicitation = coming soon. Solicitation = active bid opportunity.">Notice Type</Tooltip></label>
                             <select
                                 value={noticeTypeFilter}
                                 onChange={e => setNoticeTypeFilter(e.target.value)}
@@ -537,16 +538,18 @@ export default function PortalOpportunities() {
                                             >
                                                 {Math.round(m.score * 100)}
                                             </div>
-                                            <span
-                                                className={clsx(
-                                                    "text-[9px] font-bold px-2 py-0.5 rounded uppercase border",
-                                                    m.classification === "HOT" ? "bg-red-50 text-red-600 border-red-200" :
-                                                    m.classification === "WARM" ? "bg-amber-50 text-amber-600 border-amber-200" :
-                                                    "bg-blue-50 text-blue-600 border-blue-200"
-                                                )}
-                                            >
-                                                {m.classification}
-                                            </span>
+                                            <Tooltip text="HOT = strong match across NAICS, location, and eligibility. WARM = good potential but some factors don't align perfectly. COLD = worth monitoring but may not be a strong fit." icon={false}>
+                                                <span
+                                                    className={clsx(
+                                                        "text-[9px] font-bold px-2 py-0.5 rounded uppercase border cursor-help",
+                                                        m.classification === "HOT" ? "bg-red-50 text-red-600 border-red-200" :
+                                                        m.classification === "WARM" ? "bg-amber-50 text-amber-600 border-amber-200" :
+                                                        "bg-blue-50 text-blue-600 border-blue-200"
+                                                    )}
+                                                >
+                                                    {m.classification}
+                                                </span>
+                                            </Tooltip>
                                         </div>
 
                                         {/* Content */}
@@ -554,9 +557,11 @@ export default function PortalOpportunities() {
                                             {/* Badges row */}
                                             <div className="flex items-center gap-1.5 flex-wrap mb-1.5">
                                                 {opp.naics_code && (
-                                                    <span className="text-[9px] font-bold bg-stone-100 text-stone-600 border border-stone-200 px-2 py-0.5 rounded font-mono">
-                                                        NAICS {opp.naics_code}
-                                                    </span>
+                                                    <Tooltip text="North American Industry Classification System. 6-digit codes that classify your business services. Matching codes means you're eligible to bid." icon={false}>
+                                                        <span className="text-[9px] font-bold bg-stone-100 text-stone-600 border border-stone-200 px-2 py-0.5 rounded font-mono cursor-help">
+                                                            NAICS {opp.naics_code}
+                                                        </span>
+                                                    </Tooltip>
                                                 )}
                                                 {opp.set_aside_code && !opp.set_aside_code.toLowerCase().includes("none") && (
                                                     <span

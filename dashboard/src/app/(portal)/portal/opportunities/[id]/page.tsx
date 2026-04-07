@@ -15,6 +15,7 @@ import {
     ShieldCheck, ShieldAlert, Minus, BookOpen, Users, Send,
 } from "lucide-react";
 import clsx from "clsx";
+import { Tooltip } from "@/components/Tooltip";
 import OpportunityDescription from "@/components/OpportunityDescription";
 import OpportunityAttachments from "@/components/OpportunityAttachments";
 
@@ -504,19 +505,35 @@ export default function PortalOpportunityDetail() {
                             {String(opp.status)}
                         </Badge>
                         {opp.notice_type && (
-                            <Badge variant={noticeTypeVariant(String(opp.notice_type))}>
-                                {String(opp.notice_type)}
-                            </Badge>
+                            <Tooltip text={
+                                String(opp.notice_type).toLowerCase().includes("sources sought")
+                                    ? "Government is researching the market before writing the RFP. Respond to signal interest and potentially shape the requirements. Highest chance of winning."
+                                    : String(opp.notice_type).toLowerCase().includes("presolicitation")
+                                        ? "Government plans to issue a solicitation soon. Prepare your team and start capture work now."
+                                        : String(opp.notice_type).toLowerCase().includes("solicitation")
+                                            ? "Active bid opportunity. You must respond by the deadline with a compliant proposal."
+                                            : String(opp.notice_type).toLowerCase().includes("award")
+                                                ? "The government has selected a winner for this contract. Review to understand the competitive landscape."
+                                                : "A notice published on SAM.gov describing a federal contracting opportunity or action."
+                            } icon={false}>
+                                <Badge variant={noticeTypeVariant(String(opp.notice_type))}>
+                                    {String(opp.notice_type)}
+                                </Badge>
+                            </Tooltip>
                         )}
                         {hasSetAside && (
-                            <Badge variant="amber">
-                                {String(opp.set_aside_code)}
-                            </Badge>
+                            <Tooltip text="Contracts reserved for specific business categories (veteran-owned, women-owned, small business, etc.). Less competition than full and open contracts." icon={false}>
+                                <Badge variant="amber">
+                                    {String(opp.set_aside_code)}
+                                </Badge>
+                            </Tooltip>
                         )}
                         {opp.naics_code && (
-                            <Badge variant="default">
-                                NAICS {String(opp.naics_code)}
-                            </Badge>
+                            <Tooltip text="North American Industry Classification System. 6-digit codes that classify your business services. Government contracts are categorized by NAICS code — matching codes means you're eligible to bid." icon={false}>
+                                <Badge variant="default">
+                                    NAICS {String(opp.naics_code)}
+                                </Badge>
+                            </Tooltip>
                         )}
                         {opp.psc_code && (
                             <Badge variant="default">
@@ -524,10 +541,12 @@ export default function PortalOpportunityDetail() {
                             </Badge>
                         )}
                         {classification && (
-                            <Badge variant={classificationVariant(classification)}>
-                                <Star className="w-3 h-3 mr-1" />
-                                {classification} MATCH
-                            </Badge>
+                            <Tooltip text="HOT = strong match across NAICS, location, and eligibility. WARM = good potential but some factors don't align perfectly. COLD = worth monitoring but may not be a strong fit." icon={false}>
+                                <Badge variant={classificationVariant(classification)}>
+                                    <Star className="w-3 h-3 mr-1" />
+                                    {classification} MATCH
+                                </Badge>
+                            </Tooltip>
                         )}
                         {opp.veteran_relevance_flag && <Badge variant="emerald">VETERAN</Badge>}
                         {opp.wosb_relevance_flag && <Badge variant="pink">WOSB</Badge>}
@@ -559,34 +578,38 @@ export default function PortalOpportunityDetail() {
                         </div>
 
                         {/* Deadline with countdown */}
-                        <div className={clsx(
-                            "flex items-center gap-2 text-sm font-semibold",
-                            dl.isPast ? "text-red-500" : dl.isUrgent ? "text-red-600" : "text-stone-700"
-                        )}>
-                            <Timer className={clsx("w-4 h-4", dl.isPast ? "text-red-400" : dl.isUrgent ? "text-red-500" : "text-stone-400")} />
-                            <span>
-                                {opp.response_deadline ? fmtDate(opp.response_deadline) : "No deadline"}
-                                {dl.label !== "TBD" && (
-                                    <span className={clsx(
-                                        "ml-1.5 text-xs font-bold px-2 py-0.5 rounded-full",
-                                        dl.isPast
-                                            ? "bg-red-100 text-red-600"
-                                            : dl.isUrgent
+                        <Tooltip text="Last date to submit your proposal. Submit at least 24 hours early — technical issues happen.">
+                            <div className={clsx(
+                                "flex items-center gap-2 text-sm font-semibold",
+                                dl.isPast ? "text-red-500" : dl.isUrgent ? "text-red-600" : "text-stone-700"
+                            )}>
+                                <Timer className={clsx("w-4 h-4", dl.isPast ? "text-red-400" : dl.isUrgent ? "text-red-500" : "text-stone-400")} />
+                                <span>
+                                    {opp.response_deadline ? fmtDate(opp.response_deadline) : "No deadline"}
+                                    {dl.label !== "TBD" && (
+                                        <span className={clsx(
+                                            "ml-1.5 text-xs font-bold px-2 py-0.5 rounded-full",
+                                            dl.isPast
                                                 ? "bg-red-100 text-red-600"
-                                                : "bg-emerald-100 text-emerald-700"
-                                    )}>
-                                        {dl.label}
-                                    </span>
-                                )}
-                            </span>
-                        </div>
+                                                : dl.isUrgent
+                                                    ? "bg-red-100 text-red-600"
+                                                    : "bg-emerald-100 text-emerald-700"
+                                        )}>
+                                            {dl.label}
+                                        </span>
+                                    )}
+                                </span>
+                            </div>
+                        </Tooltip>
 
                         {/* Value */}
                         {value > 0 && (
-                            <div className="flex items-center gap-2 text-sm text-stone-700 font-semibold">
-                                <DollarSign className="w-4 h-4 text-stone-400" />
-                                {fmtCurrency(value)}
-                            </div>
+                            <Tooltip text="Government's estimated contract value. May differ from the actual award amount.">
+                                <div className="flex items-center gap-2 text-sm text-stone-700 font-semibold">
+                                    <DollarSign className="w-4 h-4 text-stone-400" />
+                                    {fmtCurrency(value)}
+                                </div>
+                            </Tooltip>
                         )}
 
                         {/* Match score */}
