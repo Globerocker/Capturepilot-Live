@@ -716,20 +716,26 @@ async function runAnalysisPipeline(analysisId: string, initialCompanyName: strin
             }
         }
 
-        // Step 6: Score against opportunities
+        // Step 6: Score against opportunities — ONLY matching NAICS codes (not all 40K+)
+        const primaryNaics = inferredNaics.slice(0, 5).map(n => n.code);
         const allOpps: OpportunityForScoring[] = [];
-        let offset = 0;
-        const batchSize = 1000;
-        while (true) {
-            const { data: batch } = await sb
-                .from("opportunities")
-                .select("id, naics_code, psc_code, notice_type, agency, set_aside_code, place_of_performance_state, award_amount, response_deadline")
-                .eq("is_archived", false)
-                .range(offset, offset + batchSize - 1);
-            if (!batch || batch.length === 0) break;
-            allOpps.push(...(batch as unknown as OpportunityForScoring[]));
-            if (batch.length < batchSize) break;
-            offset += batchSize;
+
+        // Fetch opportunities that match the company's primary NAICS codes only
+        if (primaryNaics.length > 0) {
+            let offset = 0;
+            const batchSize = 1000;
+            while (true) {
+                const { data: batch } = await sb
+                    .from("opportunities")
+                    .select("id, naics_code, psc_code, notice_type, agency, set_aside_code, place_of_performance_state, award_amount, response_deadline")
+                    .eq("is_archived", false)
+                    .in("naics_code", primaryNaics)
+                    .range(offset, offset + batchSize - 1);
+                if (!batch || batch.length === 0) break;
+                allOpps.push(...(batch as unknown as OpportunityForScoring[]));
+                if (batch.length < batchSize) break;
+                offset += batchSize;
+            }
         }
 
         const scoredMatches: { opportunity_id: string; title?: string; agency?: string; naics_code?: string; set_aside_code?: string; response_deadline?: string; notice_type?: string; award_amount?: number; notice_id?: string; place_of_performance_state?: string; description_url?: string; score: number; classification: string; score_breakdown: Record<string, number> }[] = [];
