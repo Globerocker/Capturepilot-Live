@@ -325,6 +325,19 @@ function BillingPageContent() {
         </div>
       )}
 
+      {/* ---- Beta Banner ---- */}
+      <div className="bg-emerald-50 border-2 border-emerald-300 rounded-2xl p-5 sm:p-6 mb-8 text-center">
+        <p className="text-lg font-bold text-emerald-800 mb-1">
+          🚀 PUBLIC BETA — ALL FEATURES FREE
+        </p>
+        <p className="text-sm text-emerald-700 leading-relaxed">
+          You have full access to every Pro feature during our public beta.
+          <br className="hidden sm:block" />
+          Beta ends May 8, 2026. Beta users who provide feedback get{" "}
+          <span className="font-bold">$99/mo locked-in pricing</span> (50% off).
+        </p>
+      </div>
+
       {/* ---- Header ---- */}
       <header className="mb-8 text-center">
         <h2 className="text-2xl sm:text-3xl font-bold font-typewriter tracking-tighter text-black flex items-center justify-center">
@@ -559,23 +572,16 @@ function BillingPageContent() {
                   ))}
                 </ul>
 
-                <button
-                  type="button"
-                  onClick={() => handleUpgrade(interval)}
-                  disabled={upgrading}
-                  className="w-full py-3 rounded-full font-typewriter font-bold text-sm bg-emerald-600 text-white hover:bg-emerald-700 transition-all disabled:opacity-50 shadow-md"
+                <div
+                  className="w-full py-3 rounded-full font-typewriter font-bold text-sm bg-emerald-600 text-white text-center shadow-md cursor-default"
                 >
-                  {upgrading ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Redirecting...
-                    </span>
-                  ) : (
-                    "Start Free Trial"
-                  )}
-                </button>
-                <p className="text-[11px] text-stone-400 text-center mt-2.5">
-                  30-day free trial. Cancel anytime.
+                  <span className="flex items-center justify-center gap-2">
+                    <CheckCircle2 className="w-4 h-4" />
+                    You Have Full Access
+                  </span>
+                </div>
+                <p className="text-[11px] text-stone-500 text-center mt-2.5 font-medium">
+                  After beta: $199/mo or $99/mo with feedback discount
                 </p>
               </div>
             </div>

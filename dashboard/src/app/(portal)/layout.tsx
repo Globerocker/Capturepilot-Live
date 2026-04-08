@@ -194,8 +194,11 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
             </aside>
 
             {/* Main Content */}
-            <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-auto dot-grid-bg">
-                <div className="w-full">
+            <main className="flex-1 flex flex-col overflow-auto dot-grid-bg">
+                <div className="bg-emerald-600 text-white text-center py-2 px-4 text-xs font-medium flex-shrink-0">
+                    🚀 Public Beta — All features unlocked free until May 8, 2026
+                </div>
+                <div className="w-full flex-1 p-4 sm:p-6 lg:p-8">
                     {children}
                 </div>
             </main>
