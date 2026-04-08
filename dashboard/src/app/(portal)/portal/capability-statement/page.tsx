@@ -145,7 +145,7 @@ export default function CapabilityStatementPage() {
                             className="w-full border border-stone-300 rounded-xl px-3 py-2 text-sm" />
                     </div>
                     <button type="button" onClick={extractBrand} disabled={brandLoading || !website}
-                        className="bg-black text-white px-4 py-2 rounded-xl text-sm font-bold inline-flex items-center gap-1.5 disabled:opacity-50 h-[38px]">
+                        className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-sm font-bold inline-flex items-center gap-1.5 disabled:opacity-50 hover:bg-emerald-700 transition-all duration-200 h-[38px]">
                         {brandLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Globe className="w-4 h-4" />}
                         {brandLoading ? "Extracting..." : "Extract Brand"}
                     </button>
@@ -268,7 +268,7 @@ export default function CapabilityStatementPage() {
 
             {/* Generate Button */}
             <button type="button" onClick={generateStatement} disabled={generating || !profileId}
-                className="w-full bg-black text-white py-4 rounded-2xl text-sm font-bold inline-flex items-center justify-center gap-2 disabled:opacity-50 hover:bg-stone-800 transition-colors">
+                className="w-full bg-emerald-600 text-white py-4 rounded-2xl text-sm font-bold inline-flex items-center justify-center gap-2 disabled:opacity-50 hover:bg-emerald-700 transition-all duration-200">
                 {generating ? <><Loader2 className="w-5 h-5 animate-spin" /> Generating Your Capability Statement...</> : <><Zap className="w-5 h-5" /> Generate Capability Statement</>}
             </button>
 

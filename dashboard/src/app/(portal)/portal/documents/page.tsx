@@ -193,7 +193,7 @@ export default function PortalDocuments() {
                     </select>
                     <label className={clsx(
                         "px-4 py-2 rounded-xl text-sm font-bold cursor-pointer transition-colors inline-flex items-center gap-1.5",
-                        uploading ? "bg-stone-400 text-white cursor-not-allowed" : "bg-black text-white hover:bg-stone-800"
+                        uploading ? "bg-stone-400 text-white cursor-not-allowed" : "bg-emerald-600 text-white hover:bg-emerald-700"
                     )}>
                         <Upload className="w-4 h-4" />
                         {uploading ? "Uploading..." : "Choose File"}

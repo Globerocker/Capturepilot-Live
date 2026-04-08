@@ -105,12 +105,15 @@ export default function PortalTasksPage() {
     return (
         <div className="max-w-4xl space-y-6">
             <div className="flex items-center justify-between">
-                <h1 className="text-2xl font-bold text-black font-typewriter">Tasks</h1>
+                <div>
+                    <p className="text-stone-400 text-xs uppercase tracking-widest font-medium mb-1">Tasks</p>
+                    <h1 className="text-2xl font-bold text-stone-900 font-typewriter">Tasks</h1>
+                </div>
                 <div className="flex gap-2">
-                    <button type="button" onClick={() => setFilter("active")} className={clsx("text-xs font-bold px-3 py-1.5 rounded-lg border transition-colors", filter === "active" ? "bg-black text-white border-black" : "bg-white text-stone-600 border-stone-200 hover:bg-stone-50")}>
+                    <button type="button" onClick={() => setFilter("active")} className={clsx("text-xs font-bold px-3 py-1.5 rounded-lg border transition-all duration-200", filter === "active" ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-stone-600 border-stone-200 hover:border-emerald-300 hover:text-emerald-700")}>
                         Active ({activeCount})
                     </button>
-                    <button type="button" onClick={() => setFilter("completed")} className={clsx("text-xs font-bold px-3 py-1.5 rounded-lg border transition-colors", filter === "completed" ? "bg-black text-white border-black" : "bg-white text-stone-600 border-stone-200 hover:bg-stone-50")}>
+                    <button type="button" onClick={() => setFilter("completed")} className={clsx("text-xs font-bold px-3 py-1.5 rounded-lg border transition-all duration-200", filter === "completed" ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-stone-600 border-stone-200 hover:border-emerald-300 hover:text-emerald-700")}>
                         Completed ({completedCount})
                     </button>
                 </div>

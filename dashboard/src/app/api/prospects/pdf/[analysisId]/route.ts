@@ -4,11 +4,12 @@ import { jsPDF } from "jspdf";
 
 /**
  * GET /api/prospects/pdf/{analysisId}
- * Generates a clean 3-page PDF handout for a company analysis.
+ * Generates a premium 3-4 page PDF report — BCG/McKinsey consulting style.
  *
- * Page 1: Company Profile (name, UEI, CAGE, key contact, services, certs)
- * Page 2: Matching Opportunities (top 5 with details)
- * Page 3: Recommendations (NAICS, cert recs, easy wins, CTA)
+ * Page 1: Cover + Company Profile
+ * Page 2: Matching Federal Opportunities (top 5)
+ * Page 3: Strategic Recommendations
+ * Page 4 (or bottom of 3): CTA
  */
 export async function GET(
     _request: NextRequest,
@@ -31,6 +32,7 @@ export async function GET(
         return NextResponse.json({ error: "Analysis not found" }, { status: 404 });
     }
 
+    // ── Data extraction (preserved from original) ────────────────────────
     const crawl = (data.crawl_data || {}) as Record<string, unknown>;
     const sam = data.sam_data as Record<string, unknown> | null;
     const profile = (data.inferred_profile || {}) as Record<string, unknown>;
@@ -56,75 +58,45 @@ export async function GET(
     const summary = data.company_summary || "";
     const services = (crawl.services as string[]) || [];
     const certs = (crawl.certifications as { type: string; confidence: number }[]) || [];
-    const social = (crawl.social_links || {}) as Record<string, string>;
     const leadership = (crawl.leadership as { name: string; title: string; email?: string; phone?: string }[]) || [];
     const samPocs = (sam?.points_of_contact as { name: string; title: string; email?: string; phone?: string }[]) || [];
     const contactPerson = (profile.contact_person as { name: string; title: string; email?: string; phone?: string }) || null;
 
-    // ── Build PDF ─────────────────────────────────────────────────────────
+    // ── Color Palette ────────────────────────────────────────────────────
+    const C = {
+        primary:      [10, 10, 10] as [number, number, number],       // #0a0a0a
+        accent:       [5, 150, 105] as [number, number, number],      // #059669
+        accentLight:  [209, 250, 229] as [number, number, number],    // #d1fae5
+        textPrimary:  [28, 25, 23] as [number, number, number],       // #1c1917
+        textSecondary:[87, 83, 78] as [number, number, number],       // #57534e
+        textMuted:    [168, 162, 158] as [number, number, number],    // #a8a29e
+        cardBg:       [250, 250, 249] as [number, number, number],    // #fafaf9
+        border:       [231, 229, 228] as [number, number, number],    // #e7e5e4
+        white:        [255, 255, 255] as [number, number, number],
+        blue:         [37, 99, 235] as [number, number, number],      // #2563eb
+        red:          [220, 38, 38] as [number, number, number],
+        amber:        [217, 119, 6] as [number, number, number],
+    };
+
+    // ── Build PDF ────────────────────────────────────────────────────────
     const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
     const pageW = 210;
     const pageH = 297;
-    const margin = 18;
+    const margin = 20;
     const contentW = pageW - margin * 2;
     let y = 0;
+    let totalPages = 3;
 
-    const BLACK = "#000000";
-    const GRAY = "#57534e";
-    const LIGHT = "#a8a29e";
-    const ACCENT = "#059669";
-    const BLUE = "#2563eb";
+    const dateStr = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 
-    function drawHeader() {
-        doc.setFillColor(0, 0, 0);
-        doc.rect(0, 0, pageW, 12, "F");
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(8);
-        doc.setTextColor(255, 255, 255);
-        doc.text("CAPTUREPILOT", margin, 8);
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(7);
-        doc.text("Federal Opportunity Intelligence Report", pageW - margin, 8, { align: "right" });
+    function setColor(c: [number, number, number]) {
+        doc.setTextColor(c[0], c[1], c[2]);
     }
-
-    function drawFooter(pageNum: number) {
-        doc.setDrawColor(200, 200, 200);
-        doc.line(margin, pageH - 14, pageW - margin, pageH - 14);
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(7);
-        doc.setTextColor(168, 162, 158);
-        doc.text(`Generated ${new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`, margin, pageH - 9);
-        doc.text(`Page ${pageNum} of 3`, pageW - margin, pageH - 9, { align: "right" });
-        doc.text("app.capturepilot.com", pageW / 2, pageH - 9, { align: "center" });
+    function setFill(c: [number, number, number]) {
+        doc.setFillColor(c[0], c[1], c[2]);
     }
-
-    function sectionTitle(title: string) {
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(9);
-        doc.setTextColor(0, 0, 0);
-        doc.text(title.toUpperCase(), margin, y);
-        y += 1.5;
-        doc.setDrawColor(0, 0, 0);
-        doc.setLineWidth(0.5);
-        doc.line(margin, y, margin + 30, y);
-        y += 5;
-    }
-
-    function label(text: string) {
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(7);
-        doc.setTextColor(168, 162, 158);
-        doc.text(text.toUpperCase(), margin, y);
-        y += 3.5;
-    }
-
-    function bodyText(text: string, maxWidth?: number) {
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(9);
-        doc.setTextColor(87, 83, 78);
-        const lines = doc.splitTextToSize(text, maxWidth || contentW);
-        doc.text(lines, margin, y);
-        y += lines.length * 4;
+    function setDraw(c: [number, number, number]) {
+        doc.setDrawColor(c[0], c[1], c[2]);
     }
 
     function formatCurrency(amount: number): string {
@@ -133,365 +105,747 @@ export async function GET(
         return `$${amount.toLocaleString()}`;
     }
 
-    // ════════════════════════════════════════════════════════════════════════
-    // PAGE 1 — COMPANY PROFILE
-    // ════════════════════════════════════════════════════════════════════════
-    drawHeader();
-    y = 22;
+    // ── Page furniture ───────────────────────────────────────────────────
 
-    // Company name
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(20);
-    doc.setTextColor(0, 0, 0);
-    doc.text(companyName, margin, y);
-    y += 8;
+    function drawPageFooter(pageNum: number) {
+        // Thin separator
+        setDraw(C.border);
+        doc.setLineWidth(0.3);
+        doc.line(margin, pageH - 16, pageW - margin, pageH - 16);
 
-    // Website + IDs row
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.setTextColor(37, 99, 235);
-    doc.text(website.replace(/^https?:\/\//, ""), margin, y);
-    let idX = margin + 70;
-    doc.setTextColor(87, 83, 78);
-    if (uei) { doc.text(`UEI: ${uei}`, idX, y); idX += 45; }
-    if (cage) { doc.text(`CAGE: ${cage}`, idX, y); idX += 30; }
-    if (state) { doc.text(city ? `${city}, ${state}` : state, idX, y); }
-    y += 4;
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7);
+        setColor(C.textMuted);
+        doc.text(dateStr, margin, pageH - 11);
+        doc.text(`Page ${pageNum} of ${totalPages}`, pageW - margin, pageH - 11, { align: "right" });
+        doc.text("CONFIDENTIAL", pageW / 2, pageH - 11, { align: "center" });
 
-    // SAM badge
-    if (sam) {
-        doc.setFillColor(5, 150, 105);
-        doc.roundedRect(margin, y, 28, 5, 1, 1, "F");
+        // Bottom brand line
+        doc.setFontSize(6.5);
+        setColor(C.accent);
+        doc.text("capturepilot.com", margin, pageH - 7);
+        setColor(C.textMuted);
+        doc.text("Americurial LLC", pageW - margin, pageH - 7, { align: "right" });
+    }
+
+    /** Dark header bar for inner pages (pages 2+) */
+    function drawSectionHeader(title: string, subtitle?: string): number {
+        const barH = 32;
+        setFill(C.primary);
+        doc.rect(0, 0, pageW, barH, "F");
+
+        // Emerald accent line at bottom of bar
+        setFill(C.accent);
+        doc.rect(0, barH, pageW, 0.8, "F");
+
+        // CAPTUREPILOT top-left
         doc.setFont("helvetica", "bold");
         doc.setFontSize(7);
-        doc.setTextColor(255, 255, 255);
-        doc.text("SAM.gov Verified", margin + 2, y + 3.5);
-        y += 3;
-    }
-    y += 6;
+        setColor(C.accent);
+        doc.text("CAPTUREPILOT", margin, 8);
 
-    // Summary
-    if (summary) {
-        sectionTitle("Company Overview");
-        bodyText(summary);
+        // Report label top-right
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7);
+        setColor(C.textMuted);
+        doc.text("Federal Opportunity Intelligence Report", pageW - margin, 8, { align: "right" });
+
+        // Section title
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(18);
+        setColor(C.white);
+        doc.text(title, margin, 21);
+
+        if (subtitle) {
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(9);
+            setColor(C.textMuted);
+            doc.text(subtitle, margin, 27);
+        }
+
+        return barH + 6;
+    }
+
+    /** Section heading with emerald underline accent */
+    function drawSectionTitle(title: string) {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(11);
+        setColor(C.textPrimary);
+        doc.text(title.toUpperCase(), margin, y);
+        y += 2;
+        // Emerald accent line
+        setDraw(C.accent);
+        doc.setLineWidth(0.7);
+        doc.line(margin, y, margin + 35, y);
+        // Faint continuation line
+        setDraw(C.border);
+        doc.setLineWidth(0.2);
+        doc.line(margin + 35, y, pageW - margin, y);
+        y += 6;
+    }
+
+    /** Small subsection label */
+    function drawLabel(text: string) {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(7);
+        setColor(C.textMuted);
+        doc.text(text.toUpperCase(), margin, y);
         y += 4;
     }
 
-    // Key Account Holder
-    const keyPerson = contactPerson || samPocs[0] || leadership[0] || null;
-    if (keyPerson || samPocs.length > 0) {
-        sectionTitle("Key Account Holder");
+    /** Body paragraph text */
+    function drawBody(text: string, maxWidth?: number, indent?: number) {
+        const x = margin + (indent || 0);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(9);
+        setColor(C.textSecondary);
+        const lines = doc.splitTextToSize(text, maxWidth || contentW - (indent || 0));
+        doc.text(lines, x, y);
+        y += lines.length * 4.2;
+    }
 
-        if (keyPerson) {
-            doc.setFillColor(245, 245, 244);
-            doc.roundedRect(margin, y - 1, contentW, 16, 2, 2, "F");
+    /** Draw a pill/badge */
+    function drawPill(x: number, yPos: number, text: string, bgColor: [number, number, number], textColor: [number, number, number], outlined?: boolean): number {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(7);
+        const textW = doc.getTextWidth(text);
+        const pillW = textW + 7;
+        const pillH = 5.5;
 
+        if (outlined) {
+            setDraw(bgColor);
+            doc.setLineWidth(0.4);
+            doc.roundedRect(x, yPos, pillW, pillH, 2.5, 2.5, "S");
+        } else {
+            setFill(bgColor);
+            doc.roundedRect(x, yPos, pillW, pillH, 2.5, 2.5, "F");
+        }
+        setColor(outlined ? bgColor : textColor);
+        doc.text(text, x + 3.5, yPos + 3.8);
+        return pillW + 3;
+    }
+
+    /** Score circle badge */
+    function drawScoreCircle(x: number, yPos: number, score: number, classification: string): number {
+        const radius = 7;
+        const color: [number, number, number] =
+            classification === "HOT" ? C.accent :
+            classification === "WARM" ? C.amber :
+            C.blue;
+
+        // Outer ring
+        setFill(color);
+        doc.circle(x + radius, yPos + radius, radius, "F");
+
+        // Score text
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(10);
+        setColor(C.white);
+        doc.text(String(Math.round(score * 100)), x + radius, yPos + radius + 1, { align: "center" });
+
+        // Classification below circle
+        doc.setFontSize(5.5);
+        doc.setFont("helvetica", "bold");
+        setColor(color);
+        doc.text(classification, x + radius, yPos + radius * 2 + 3, { align: "center" });
+
+        return radius * 2 + 4;
+    }
+
+    /** Mini bar chart for score breakdown */
+    function drawScoreBar(x: number, yPos: number, label: string, value: number, maxW: number) {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(6);
+        setColor(C.textMuted);
+        doc.text(label, x, yPos + 2.5);
+
+        const barX = x + 20;
+        const barW = maxW - 24;
+        const barH = 3;
+
+        // Background track
+        setFill(C.border);
+        doc.roundedRect(barX, yPos, barW, barH, 1, 1, "F");
+
+        // Filled portion
+        const fillW = Math.max(barW * value, 1);
+        setFill(C.accent);
+        doc.roundedRect(barX, yPos, fillW, barH, 1, 1, "F");
+
+        // Percentage
+        doc.setFontSize(6);
+        setColor(C.textSecondary);
+        doc.text(`${Math.round(value * 100)}%`, barX + barW + 2, yPos + 2.5);
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // PAGE 1 — COVER + COMPANY PROFILE
+    // ════════════════════════════════════════════════════════════════════════
+
+    // Dark cover block (top ~78mm)
+    const coverH = 78;
+    setFill(C.primary);
+    doc.rect(0, 0, pageW, coverH, "F");
+
+    // Emerald accent line at bottom of cover
+    setFill(C.accent);
+    doc.rect(0, coverH, pageW, 1, "F");
+
+    // CAPTUREPILOT brand — top left
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    setColor(C.accent);
+    doc.text("CAPTUREPILOT", margin, 12);
+
+    // Report type — top right
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    setColor(C.textMuted);
+    doc.text("Federal Opportunity Intelligence Report", pageW - margin, 12, { align: "right" });
+
+    // Company name — big and centered
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(26);
+    setColor(C.white);
+    const nameLines = doc.splitTextToSize(companyName, contentW);
+    const nameStartY = nameLines.length > 1 ? 30 : 34;
+    doc.text(nameLines, pageW / 2, nameStartY, { align: "center" });
+
+    // Website in emerald below name
+    const postNameY = nameStartY + nameLines.length * 10;
+    if (website) {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(10);
+        setColor(C.accent);
+        doc.text(website.replace(/^https?:\/\//, ""), pageW / 2, postNameY, { align: "center" });
+    }
+
+    // SAM status badge
+    const badgeY = postNameY + 6;
+    if (sam) {
+        const badgeText = "SAM.gov Registered";
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(7.5);
+        const badgeW = doc.getTextWidth(badgeText) + 10;
+        const badgeX = (pageW - badgeW) / 2;
+        setFill(C.accent);
+        doc.roundedRect(badgeX, badgeY - 4, badgeW, 6.5, 3, 3, "F");
+        setColor(C.white);
+        doc.text(badgeText, pageW / 2, badgeY, { align: "center" });
+    } else {
+        const badgeText = "Not on SAM.gov";
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(7.5);
+        const badgeW = doc.getTextWidth(badgeText) + 10;
+        const badgeX = (pageW - badgeW) / 2;
+        setFill(C.red);
+        doc.roundedRect(badgeX, badgeY - 4, badgeW, 6.5, 3, 3, "F");
+        setColor(C.white);
+        doc.text(badgeText, pageW / 2, badgeY, { align: "center" });
+    }
+
+    // IDs row centered
+    const idsY = badgeY + 7;
+    const idParts: string[] = [];
+    if (uei) idParts.push(`UEI: ${uei}`);
+    if (cage) idParts.push(`CAGE: ${cage}`);
+    if (city && state) idParts.push(`${city}, ${state}`);
+    else if (state) idParts.push(state);
+
+    if (idParts.length > 0) {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+        setColor(C.textMuted);
+        doc.text(idParts.join("    |    "), pageW / 2, idsY, { align: "center" });
+    }
+
+    // Date at bottom of cover
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    setColor(C.textMuted);
+    doc.text(dateStr, pageW / 2, coverH - 5, { align: "center" });
+
+    // ── Below cover: Company content ─────────────────────────────────────
+    y = coverH + 10;
+
+    // Company Overview
+    if (summary) {
+        drawSectionTitle("Company Overview");
+        drawBody(summary);
+        y += 5;
+    }
+
+    // NAICS Codes as emerald-bordered pills
+    if (naics.length > 0) {
+        drawSectionTitle("NAICS Codes");
+        let pillX = margin;
+        let pillRow = y;
+        for (const n of naics.slice(0, 6)) {
+            const pillText = `${n.code} — ${n.label}`;
             doc.setFont("helvetica", "bold");
-            doc.setFontSize(11);
-            doc.setTextColor(0, 0, 0);
-            doc.text(keyPerson.name, margin + 4, y + 4);
+            doc.setFontSize(7);
+            const tw = doc.getTextWidth(pillText) + 8;
 
+            // Wrap to next row if needed
+            if (pillX + tw > pageW - margin) {
+                pillX = margin;
+                pillRow += 8;
+            }
+
+            // Emerald outlined pill
+            setDraw(C.accent);
+            doc.setLineWidth(0.4);
+            doc.roundedRect(pillX, pillRow - 3.5, tw, 6, 2.5, 2.5, "S");
+            setColor(C.textPrimary);
+            doc.text(pillText, pillX + 4, pillRow);
+
+            pillX += tw + 3;
+        }
+        y = pillRow + 10;
+    }
+
+    // Key Contact — gray card (public version: no email/phone from leadership)
+    const keyPerson = contactPerson || samPocs[0] || leadership[0] || null;
+    if (keyPerson) {
+        drawSectionTitle("Key Contact");
+
+        // Card background
+        setFill(C.cardBg);
+        setDraw(C.border);
+        doc.setLineWidth(0.3);
+        doc.roundedRect(margin, y - 2, contentW, 16, 3, 3, "FD");
+
+        // Left: emerald accent bar
+        setFill(C.accent);
+        doc.roundedRect(margin, y - 2, 1.5, 16, 0.7, 0.7, "F");
+
+        // Name
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(11);
+        setColor(C.textPrimary);
+        doc.text(keyPerson.name, margin + 6, y + 4);
+
+        // Title
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8.5);
+        setColor(C.textSecondary);
+        doc.text(keyPerson.title || "", margin + 6, y + 9);
+
+        // Right side: email (from SAM only, public record)
+        if (keyPerson.email) {
             doc.setFont("helvetica", "normal");
             doc.setFontSize(8);
-            doc.setTextColor(87, 83, 78);
-            doc.text(keyPerson.title, margin + 4, y + 9);
-
-            let contactX = margin + 80;
-            if (keyPerson.email) {
-                doc.setTextColor(37, 99, 235);
-                doc.text(keyPerson.email, contactX, y + 4);
-            }
-            if (keyPerson.phone) {
-                doc.setTextColor(87, 83, 78);
-                doc.text(keyPerson.phone, contactX, y + 9);
-            }
-            y += 18;
+            setColor(C.blue);
+            doc.text(keyPerson.email, pageW - margin - 5, y + 4, { align: "right" });
         }
-
-        // Additional POCs from SAM.gov
-        const otherPocs = samPocs.filter(p => !keyPerson || p.name !== keyPerson.name).slice(0, 2);
-        if (otherPocs.length > 0) {
+        if (keyPerson.phone) {
             doc.setFont("helvetica", "normal");
+            doc.setFontSize(8);
+            setColor(C.textSecondary);
+            doc.text(keyPerson.phone, pageW - margin - 5, y + 9, { align: "right" });
+        }
+
+        y += 20;
+    }
+
+    // Certifications as green check badges
+    if (certs.length > 0) {
+        drawSectionTitle("Certifications");
+        let certPillX = margin;
+        let certPillRow = y;
+        for (const c of certs) {
+            const certText = c.type;
+            doc.setFont("helvetica", "bold");
             doc.setFontSize(7);
-            doc.setTextColor(168, 162, 158);
-            doc.text("Additional contacts from SAM.gov:", margin, y);
-            y += 4;
-            for (const poc of otherPocs) {
-                doc.setFont("helvetica", "normal");
-                doc.setFontSize(8);
-                doc.setTextColor(87, 83, 78);
-                const line = `${poc.name} — ${poc.title}${poc.email ? ` | ${poc.email}` : ""}${poc.phone ? ` | ${poc.phone}` : ""}`;
-                doc.text(line, margin + 2, y);
-                y += 4;
+            const tw = doc.getTextWidth(certText) + 12;
+
+            if (certPillX + tw > pageW - margin) {
+                certPillX = margin;
+                certPillRow += 8;
             }
+
+            // Green filled pill
+            setFill(C.accentLight);
+            doc.roundedRect(certPillX, certPillRow - 3.5, tw, 6, 2.5, 2.5, "F");
+            setColor(C.accent);
+            doc.text(certText, certPillX + 4, certPillRow);
+
+            certPillX += tw + 3;
         }
-        y += 3;
+        y = certPillRow + 10;
     }
 
-    // Social Profiles
-    const socialEntries = Object.entries(social).filter(([, url]) => url);
-    if (socialEntries.length > 0) {
-        sectionTitle("Social Profiles");
+    // Services (compact, if space)
+    if (services.length > 0 && y < 250) {
+        drawSectionTitle("Detected Services");
         doc.setFont("helvetica", "normal");
         doc.setFontSize(8);
-        doc.setTextColor(37, 99, 235);
-        for (const [platform, url] of socialEntries) {
-            doc.text(`${platform.charAt(0).toUpperCase() + platform.slice(1)}: ${url}`, margin, y);
-            y += 4;
-        }
-        y += 3;
-    }
-
-    // Services
-    if (services.length > 0) {
-        sectionTitle("Detected Services");
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(8);
-        doc.setTextColor(87, 83, 78);
-        const svcText = services.slice(0, 12).join("  •  ");
+        setColor(C.textSecondary);
+        const svcText = services.slice(0, 10).join("  |  ");
         const svcLines = doc.splitTextToSize(svcText, contentW);
         doc.text(svcLines, margin, y);
-        y += svcLines.length * 3.5 + 3;
+        y += svcLines.length * 3.8 + 4;
     }
 
-    // Certifications
-    if (certs.length > 0) {
-        sectionTitle("Certification Signals");
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(8);
-        for (const c of certs) {
-            doc.setTextColor(5, 150, 105);
-            doc.text(`✓ ${c.type} (${Math.round(c.confidence * 100)}% confidence)`, margin, y);
-            y += 4;
-        }
-        y += 3;
-    }
-
-    // NAICS on page 1 if space
-    if (naics.length > 0 && y < 240) {
-        sectionTitle("Inferred NAICS Codes");
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(8);
-        for (const n of naics.slice(0, 5)) {
-            doc.setTextColor(0, 0, 0);
-            doc.setFont("helvetica", "bold");
-            doc.text(n.code, margin, y);
-            doc.setFont("helvetica", "normal");
-            doc.setTextColor(87, 83, 78);
-            doc.text(`${n.label} — ${Math.round(n.confidence * 100)}%`, margin + 20, y);
-            y += 4;
-        }
-    }
-
-    drawFooter(1);
+    drawPageFooter(1);
 
     // ════════════════════════════════════════════════════════════════════════
     // PAGE 2 — MATCHING OPPORTUNITIES
     // ════════════════════════════════════════════════════════════════════════
     doc.addPage();
-    drawHeader();
-    y = 22;
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(16);
-    doc.setTextColor(0, 0, 0);
-    doc.text("Matching Federal Opportunities", margin, y);
-    y += 4;
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    doc.setTextColor(168, 162, 158);
-    doc.text(`Top ${matches.length} matches for ${companyName}`, margin, y);
-    y += 8;
+    y = drawSectionHeader(
+        "Matching Federal Opportunities",
+        `Top ${Math.min(matches.length, 5)} matches identified for ${companyName}`
+    );
 
     if (matches.length === 0) {
+        y += 10;
         doc.setFont("helvetica", "normal");
-        doc.setFontSize(10);
-        doc.setTextColor(87, 83, 78);
+        doc.setFontSize(11);
+        setColor(C.textSecondary);
         doc.text("No matching opportunities found for this company profile.", margin, y);
+        y += 8;
+        doc.setFontSize(9);
+        doc.text("This may indicate the company needs to update their SAM.gov registration", margin, y);
+        y += 4;
+        doc.text("or expand their NAICS codes to match available federal opportunities.", margin, y);
     } else {
         for (let i = 0; i < Math.min(matches.length, 5); i++) {
             const m = matches[i];
-            if (y > 255) break; // Safety: don't overflow page
 
-            // Match card background
-            doc.setFillColor(250, 250, 249);
-            const cardH = 36;
-            doc.roundedRect(margin, y - 2, contentW, cardH, 2, 2, "F");
-
-            // Score badge
-            const scoreColor = m.score >= 0.7 ? [5, 150, 105] : m.score >= 0.5 ? [217, 119, 6] : [37, 99, 235];
-            doc.setFillColor(scoreColor[0], scoreColor[1], scoreColor[2]);
-            doc.roundedRect(margin + 2, y, 12, 10, 2, 2, "F");
-            doc.setFont("helvetica", "bold");
-            doc.setFontSize(10);
-            doc.setTextColor(255, 255, 255);
-            doc.text(String(Math.round(m.score * 100)), margin + 8, y + 7, { align: "center" });
-
-            // Title + agency
-            doc.setFont("helvetica", "bold");
-            doc.setFontSize(9);
-            doc.setTextColor(0, 0, 0);
-            const titleLines = doc.splitTextToSize(m.title || "Untitled Opportunity", contentW - 22);
-            doc.text(titleLines[0], margin + 17, y + 4);
-            if (titleLines.length > 1) doc.text(titleLines[1], margin + 17, y + 8);
-
-            doc.setFont("helvetica", "normal");
-            doc.setFontSize(7.5);
-            doc.setTextColor(87, 83, 78);
-            doc.text(m.agency || "Federal Agency", margin + 17, y + (titleLines.length > 1 ? 12 : 8));
-
-            // Details row
-            const detailY = y + 16;
-            let dx = margin + 4;
-            doc.setFontSize(7);
-
-            if (m.classification) {
-                doc.setFont("helvetica", "bold");
-                doc.setTextColor(m.classification === "HOT" ? 220 : 200, m.classification === "HOT" ? 38 : 119, m.classification === "HOT" ? 38 : 6);
-                doc.text(m.classification, dx, detailY);
-                dx += 14;
+            // Check if we need a new page
+            if (y > 240) {
+                drawPageFooter(2);
+                doc.addPage();
+                y = drawSectionHeader("Matching Federal Opportunities (cont.)", "");
+                totalPages = 4;
             }
+
+            // ── Opportunity card ─────────────────────────────────────────
+
+            // Calculate card height based on content
+            const hasBreakdown = m.score_breakdown && Object.keys(m.score_breakdown).length > 0;
+            const breakdownEntries = hasBreakdown ? Object.entries(m.score_breakdown!) : [];
+            const cardH = hasBreakdown ? 52 + (breakdownEntries.length * 4.5) : 48;
+
+            // Card background with subtle border
+            setFill(C.cardBg);
+            setDraw(C.border);
+            doc.setLineWidth(0.3);
+            doc.roundedRect(margin, y - 1, contentW, cardH, 3, 3, "FD");
+
+            // Left accent bar colored by classification
+            const accentBarColor: [number, number, number] =
+                m.classification === "HOT" ? C.accent :
+                m.classification === "WARM" ? C.amber :
+                C.blue;
+            setFill(accentBarColor);
+            doc.roundedRect(margin, y - 1, 1.5, cardH, 0.7, 0.7, "F");
+
+            // Score circle
+            const circleX = margin + 5;
+            const circleY = y + 2;
+            drawScoreCircle(circleX, circleY, m.score, m.classification);
+
+            // Title
+            const textStartX = margin + 24;
+            const titleMaxW = contentW - 28;
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(9.5);
+            setColor(C.textPrimary);
+            const titleLines = doc.splitTextToSize(m.title || "Untitled Opportunity", titleMaxW);
+            doc.text(titleLines[0], textStartX, y + 5);
+            if (titleLines.length > 1) {
+                doc.text(titleLines[1], textStartX, y + 9.5);
+            }
+
+            // Agency
+            const agencyY = y + (titleLines.length > 1 ? 14 : 9.5);
             doc.setFont("helvetica", "normal");
-            doc.setTextColor(87, 83, 78);
-            if (m.notice_type) { doc.text(m.notice_type, dx, detailY); dx += 32; }
-            if (m.naics_code) { doc.text(`NAICS: ${m.naics_code}`, dx, detailY); dx += 28; }
-            if (m.award_amount && m.award_amount > 0) { doc.text(`Est: ${formatCurrency(m.award_amount)}`, dx, detailY); dx += 22; }
-            if (m.set_aside_code) { doc.text(m.set_aside_code, dx, detailY); dx += 18; }
+            doc.setFontSize(8);
+            setColor(C.textMuted);
+            doc.text(m.agency || "Federal Agency", textStartX, agencyY);
+
+            // Tags row
+            let tagY = agencyY + 5;
+            let tagX = textStartX;
+
+            if (m.notice_type) {
+                tagX += drawPill(tagX, tagY - 3.5, m.notice_type, C.primary, C.white);
+            }
+            if (m.naics_code) {
+                tagX += drawPill(tagX, tagY - 3.5, `NAICS ${m.naics_code}`, C.accent, C.white, true);
+            }
+            if (m.set_aside_code) {
+                tagX += drawPill(tagX, tagY - 3.5, m.set_aside_code, C.accentLight, C.accent);
+            }
+            if (m.award_amount && m.award_amount > 0) {
+                tagX += drawPill(tagX, tagY - 3.5, formatCurrency(m.award_amount), C.accent, C.white);
+            }
             if (m.response_deadline) {
-                doc.text(`Due: ${new Date(m.response_deadline).toLocaleDateString()}`, dx, detailY);
+                const deadlineStr = `Due ${new Date(m.response_deadline).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
+                tagX += drawPill(tagX, tagY - 3.5, deadlineStr, C.border, C.textSecondary);
             }
 
-            // Score breakdown
-            if (m.score_breakdown) {
-                const breakdownY = y + 21;
-                let bx = margin + 4;
-                doc.setFontSize(6.5);
-                doc.setTextColor(168, 162, 158);
-                for (const [key, val] of Object.entries(m.score_breakdown)) {
-                    doc.text(`${key}: ${Math.round(val * 100)}%`, bx, breakdownY);
-                    bx += 22;
-                    if (bx > pageW - margin - 10) break;
+            tagY += 6;
+
+            // Score breakdown mini bars
+            if (hasBreakdown) {
+                tagY += 2;
+                const barStartX = textStartX;
+                const barMaxW = (contentW - 28) / 2 - 5;
+                let barIdx = 0;
+                for (const [key, val] of breakdownEntries) {
+                    const col = barIdx % 2;
+                    const row = Math.floor(barIdx / 2);
+                    const bx = barStartX + col * (barMaxW + 10);
+                    const by = tagY + row * 4.5;
+
+                    const prettyKey = key.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
+                    drawScoreBar(bx, by, prettyKey, val, barMaxW);
+                    barIdx++;
                 }
+                tagY += Math.ceil(breakdownEntries.length / 2) * 4.5 + 2;
             }
+
+            // Bottom row: SAM link + next steps
+            const bottomRowY = tagY + 2;
 
             // SAM.gov link
             if (m.notice_id) {
+                doc.setFont("helvetica", "normal");
                 doc.setFontSize(7);
-                doc.setTextColor(37, 99, 235);
-                doc.text(`sam.gov/opp/${m.notice_id}/view`, margin + 4, y + 26);
+                setColor(C.blue);
+                doc.text(`sam.gov/opp/${m.notice_id}/view`, textStartX, bottomRowY);
             }
 
-            // Next steps
+            // Next steps in italic
             const steps = getNextSteps(m.notice_type);
-            const stepsY = y + 30;
-            doc.setFontSize(6.5);
-            doc.setTextColor(168, 162, 158);
-            doc.text(`Next: ${steps[0]}`, margin + 4, stepsY);
+            doc.setFont("helvetica", "italic");
+            doc.setFontSize(7);
+            setColor(C.textMuted);
+            doc.text(`Next step: ${steps[0]}`, textStartX, bottomRowY + 4);
 
-            y += cardH + 4;
+            y += cardH + 5;
         }
     }
 
-    drawFooter(2);
+    drawPageFooter(2);
 
     // ════════════════════════════════════════════════════════════════════════
-    // PAGE 3 — RECOMMENDATIONS
+    // PAGE 3 — STRATEGIC RECOMMENDATIONS
     // ════════════════════════════════════════════════════════════════════════
     doc.addPage();
-    drawHeader();
-    y = 22;
+    y = drawSectionHeader("Strategic Recommendations", `Tailored action plan for ${companyName}`);
 
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(16);
-    doc.setTextColor(0, 0, 0);
-    doc.text("Recommendations", margin, y);
-    y += 10;
-
-    // Cert Recommendations
+    // ── Certifications to Pursue ─────────────────────────────────────────
     if (certRecs.length > 0) {
-        sectionTitle("Certifications to Pursue");
+        drawSectionTitle("Certifications to Pursue");
+
         for (const rec of certRecs.slice(0, 4)) {
-            if (y > 230) break;
-            doc.setFillColor(245, 245, 244);
-            doc.roundedRect(margin, y - 2, contentW, 14, 2, 2, "F");
+            if (y > 220) break;
 
+            const recCardH = 22;
+
+            // Card with left accent
+            setFill(C.cardBg);
+            setDraw(C.border);
+            doc.setLineWidth(0.3);
+            doc.roundedRect(margin, y - 2, contentW, recCardH, 3, 3, "FD");
+
+            // Left emerald accent
+            setFill(C.accent);
+            doc.roundedRect(margin, y - 2, 1.5, recCardH, 0.7, 0.7, "F");
+
+            // Cert name
             doc.setFont("helvetica", "bold");
-            doc.setFontSize(9);
-            doc.setTextColor(0, 0, 0);
-            doc.text(rec.cert_label, margin + 3, y + 3);
+            doc.setFontSize(10);
+            setColor(C.textPrimary);
+            doc.text(rec.cert_label, margin + 6, y + 4);
 
+            // Unlocked opps
             doc.setFont("helvetica", "normal");
-            doc.setFontSize(7.5);
-            doc.setTextColor(87, 83, 78);
-            doc.text(`+${rec.unlocked_count} new opportunities`, margin + 3, y + 8);
+            doc.setFontSize(8);
+            setColor(C.textSecondary);
+            doc.text(`Unlocks ${rec.unlocked_count} additional opportunities`, margin + 6, y + 10);
 
-            // Right side info
+            // Difficulty + timeline
+            doc.setFontSize(7);
+            setColor(C.textMuted);
+            doc.text(`${rec.difficulty} difficulty  |  ${rec.timeline}`, margin + 6, y + 15);
+
+            // Right side: estimated value in emerald
+            if (rec.estimated_value > 0) {
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(14);
+                setColor(C.accent);
+                doc.text(formatCurrency(rec.estimated_value), pageW - margin - 5, y + 6, { align: "right" });
+
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(7);
+                setColor(C.textMuted);
+                doc.text("est. contract value", pageW - margin - 5, y + 11, { align: "right" });
+            }
+
+            y += recCardH + 4;
+        }
+        y += 4;
+    }
+
+    // ── Quick Wins ───────────────────────────────────────────────────────
+    if (easyWins.length > 0 && y < 210) {
+        drawSectionTitle("Quick Wins");
+
+        for (let i = 0; i < Math.min(easyWins.length, 5); i++) {
+            if (y > 230) break;
+            const win = easyWins[i];
+
+            // Number circle
+            const numX = margin + 4;
+            const numY = y;
+            setFill(C.accent);
+            doc.circle(numX, numY, 3.5, "F");
             doc.setFont("helvetica", "bold");
             doc.setFontSize(8);
-            doc.setTextColor(5, 150, 105);
-            if (rec.estimated_value > 0) {
-                doc.text(formatCurrency(rec.estimated_value), pageW - margin - 3, y + 3, { align: "right" });
+            setColor(C.white);
+            doc.text(String(i + 1), numX, numY + 1, { align: "center" });
+
+            // Title + impact badge
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(9);
+            setColor(C.textPrimary);
+            doc.text(win.title, margin + 10, y + 1);
+
+            // Impact badge
+            const impactColor: [number, number, number] =
+                win.impact === "high" ? C.red :
+                win.impact === "medium" ? C.amber :
+                C.blue;
+            const impactText = win.impact.toUpperCase();
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(6);
+            const impactW = doc.getTextWidth(impactText) + 5;
+            const impactX = margin + 10 + doc.getTextWidth(win.title) + 4;
+
+            // Only draw if it fits on the line
+            if (impactX + impactW < pageW - margin) {
+                setFill(impactColor);
+                doc.roundedRect(impactX, y - 3, impactW, 5, 2, 2, "F");
+                setColor(C.white);
+                doc.text(impactText, impactX + 2.5, y + 0.5);
             }
-            doc.setFont("helvetica", "normal");
-            doc.setFontSize(7);
-            doc.setTextColor(168, 162, 158);
-            doc.text(`${rec.difficulty} • ${rec.timeline}`, pageW - margin - 3, y + 8, { align: "right" });
 
-            y += 16;
+            y += 5;
+
+            // Description
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(8);
+            setColor(C.textSecondary);
+            const descLines = doc.splitTextToSize(win.description, contentW - 12);
+            doc.text(descLines, margin + 10, y);
+            y += descLines.length * 3.5 + 5;
         }
         y += 3;
     }
 
-    // Easy Wins
-    if (easyWins.length > 0) {
-        sectionTitle("Quick Wins");
-        for (const win of easyWins.slice(0, 5)) {
-            if (y > 250) break;
-            const impactColor = win.impact === "high" ? [220, 38, 38] : win.impact === "medium" ? [217, 119, 6] : [37, 99, 235];
-            doc.setFont("helvetica", "bold");
-            doc.setFontSize(8.5);
-            doc.setTextColor(0, 0, 0);
-            doc.text(win.title, margin, y);
+    // ── Next Steps — 3-step process ──────────────────────────────────────
+    if (y < 220) {
+        drawSectionTitle("Recommended Next Steps");
 
-            doc.setFont("helvetica", "bold");
-            doc.setFontSize(6.5);
-            doc.setTextColor(impactColor[0], impactColor[1], impactColor[2]);
-            doc.text(win.impact.toUpperCase(), margin + doc.getTextWidth(win.title) + 3, y);
+        const nextStepsData = [
+            {
+                step: "1",
+                title: "Register & Verify",
+                desc: "Ensure SAM.gov registration is active, NAICS codes are comprehensive, and all certifications are current."
+            },
+            {
+                step: "2",
+                title: "Build Capture Pipeline",
+                desc: "Track the matched opportunities above, identify incumbents, and prepare capability statements for Sources Sought responses."
+            },
+            {
+                step: "3",
+                title: "Engage & Compete",
+                desc: "Contact contracting officers, attend industry days, build teaming relationships, and submit competitive proposals."
+            }
+        ];
 
-            y += 4;
+        for (const ns of nextStepsData) {
+            if (y > 245) break;
+
+            // Step number in dark circle
+            setFill(C.primary);
+            doc.circle(margin + 4, y, 4, "F");
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(9);
+            setColor(C.white);
+            doc.text(ns.step, margin + 4, y + 1, { align: "center" });
+
+            // Title
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(9.5);
+            setColor(C.textPrimary);
+            doc.text(ns.title, margin + 12, y + 1);
+
+            y += 5;
+
+            // Description
             doc.setFont("helvetica", "normal");
-            doc.setFontSize(7.5);
-            doc.setTextColor(87, 83, 78);
-            const descLines = doc.splitTextToSize(win.description, contentW);
-            doc.text(descLines, margin, y);
-            y += descLines.length * 3.5 + 4;
+            doc.setFontSize(8);
+            setColor(C.textSecondary);
+            const lines = doc.splitTextToSize(ns.desc, contentW - 14);
+            doc.text(lines, margin + 12, y);
+            y += lines.length * 3.5 + 5;
         }
-        y += 3;
     }
 
-    // Call to Action
-    if (y < 250) {
-        y = Math.max(y, 220);
-        doc.setFillColor(0, 0, 0);
-        doc.roundedRect(margin, y, contentW, 30, 3, 3, "F");
+    // ── CTA Card ─────────────────────────────────────────────────────────
+    // Position CTA at bottom of page
+    const ctaH = 38;
+    const ctaY = Math.max(y + 6, pageH - 58);
 
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(12);
-        doc.setTextColor(255, 255, 255);
-        doc.text("Ready to Win Federal Contracts?", pageW / 2, y + 10, { align: "center" });
+    // Full-width dark card
+    setFill(C.primary);
+    doc.roundedRect(margin, ctaY, contentW, ctaH, 4, 4, "F");
 
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(9);
-        doc.text("Book a free strategy call to discuss your opportunities.", pageW / 2, y + 17, { align: "center" });
+    // Emerald accent line at top of CTA
+    setFill(C.accent);
+    doc.roundedRect(margin + 20, ctaY, contentW - 40, 0.8, 0.4, 0.4, "F");
 
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(8);
-        doc.text("calendly.com/americurial/intro-call  |  app.capturepilot.com", pageW / 2, y + 24, { align: "center" });
-    }
+    // Main CTA text
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(15);
+    setColor(C.white);
+    doc.text("Ready to Win Federal Contracts?", pageW / 2, ctaY + 12, { align: "center" });
 
-    drawFooter(3);
+    // Sub text
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9.5);
+    setColor(C.textMuted);
+    doc.text("Book a free strategy call to discuss your opportunities", pageW / 2, ctaY + 19, { align: "center" });
 
-    // ── Return PDF ────────────────────────────────────────────────────────
+    // Links row
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+    setColor(C.accent);
+    doc.text("meetings-na2.hubspot.com/americurial/intro-call", pageW / 2, ctaY + 27, { align: "center" });
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    setColor(C.textMuted);
+    doc.text("capturepilot.com", pageW / 2 - 25, ctaY + 33, { align: "center" });
+
+    // Separator dot
+    setColor(C.textMuted);
+    doc.text("|", pageW / 2, ctaY + 33, { align: "center" });
+
+    doc.setFontSize(7.5);
+    setColor(C.textMuted);
+    doc.text("Americurial LLC", pageW / 2 + 25, ctaY + 33, { align: "center" });
+
+    drawPageFooter(totalPages);
+
+    // ── Return PDF ───────────────────────────────────────────────────────
     const pdfBuffer = Buffer.from(doc.output("arraybuffer"));
     const safeFilename = companyName.replace(/[^a-zA-Z0-9\s-]/g, "").replace(/\s+/g, "-");
 

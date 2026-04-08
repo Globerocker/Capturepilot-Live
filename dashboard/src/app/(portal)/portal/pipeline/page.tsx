@@ -575,10 +575,10 @@ export default function PortalPipeline() {
                                                                             type="button"
                                                                             onClick={(e) => { e.stopPropagation(); changePriority(p.id, pr.value); }}
                                                                             className={clsx(
-                                                                                "text-[10px] font-bold px-3 py-1.5 rounded-lg border transition-colors",
+                                                                                "text-[10px] font-bold px-3 py-1.5 rounded-lg border transition-all duration-200",
                                                                                 p.priority === pr.value
-                                                                                    ? "bg-black text-white border-black"
-                                                                                    : "bg-white text-stone-500 border-stone-200 hover:border-stone-400 hover:bg-stone-50"
+                                                                                    ? "bg-emerald-600 text-white border-emerald-600"
+                                                                                    : "bg-white text-stone-500 border-stone-200 hover:border-emerald-300 hover:text-emerald-700 hover:bg-emerald-50"
                                                                             )}
                                                                         >
                                                                             {pr.label}
@@ -608,7 +608,7 @@ export default function PortalPipeline() {
                                                                     onBlur={() => saveNotes(p.id)}
                                                                     onClick={e => e.stopPropagation()}
                                                                     placeholder="Add notes about this deal... (auto-saves on blur)"
-                                                                    className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-xs h-24 resize-none focus:outline-none focus:border-black bg-white"
+                                                                    className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2.5 text-xs h-24 resize-none focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all duration-200"
                                                                 />
                                                                 {isSaving && (
                                                                     <p className="text-[10px] text-stone-400 mt-1 inline-flex items-center gap-1">

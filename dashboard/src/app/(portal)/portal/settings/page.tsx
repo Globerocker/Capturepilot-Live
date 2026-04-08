@@ -49,11 +49,11 @@ function SectionCard({ icon: Icon, title, defaultOpen = true, children }: {
 }) {
     const [open, setOpen] = useState(defaultOpen);
     return (
-        <div className="bg-white border border-stone-200 rounded-2xl overflow-hidden">
+        <div className="bg-white border border-stone-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-200">
             <button type="button" onClick={() => setOpen(!open)}
-                className="w-full bg-stone-50 border-b border-stone-100 px-5 py-3.5 flex items-center gap-2.5 hover:bg-stone-100/70 transition-colors">
-                <Icon className="w-4 h-4 text-stone-400" />
-                <h2 className="font-bold text-sm text-stone-800 flex-1 text-left">{title}</h2>
+                className="w-full bg-stone-50 border-b border-stone-100 px-5 py-3.5 flex items-center gap-2.5 hover:bg-stone-100/70 transition-all duration-200">
+                <Icon className="w-4 h-4 text-emerald-500" />
+                <h2 className="text-stone-400 text-xs uppercase tracking-widest font-medium flex-1 text-left">{title}</h2>
                 {open ? <ChevronDown className="w-4 h-4 text-stone-400" /> : <ChevronRight className="w-4 h-4 text-stone-400" />}
             </button>
             {open && <div className="p-5 space-y-4">{children}</div>}
@@ -119,7 +119,7 @@ function BadgeInput({ items, setItems, placeholder, validate }: {
         <div className="flex gap-2">
             <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKeyDown}
                 placeholder={placeholder}
-                className="flex-1 border border-stone-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-black transition-colors" />
+                className="flex-1 border border-stone-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all duration-200" />
             <button type="button" onClick={addItem}
                 title="Add"
                 className="border border-stone-300 hover:bg-stone-50 rounded-xl px-3 py-2.5 text-sm font-medium inline-flex items-center gap-1 transition-colors text-stone-600">
@@ -164,7 +164,7 @@ function NaicsSearchInput({ selectedCodes, onAdd }: { selectedCodes: string[]; o
                     onFocus={() => setShowList(true)}
                     onKeyDown={handleKeyDown}
                     placeholder="Search NAICS codes by number or description..."
-                    className="w-full pl-10 pr-3 border border-stone-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-black transition-colors"
+                    className="w-full pl-10 pr-3 border border-stone-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all duration-200"
                 />
             </div>
             {showList && filtered.length > 0 && (
@@ -174,9 +174,9 @@ function NaicsSearchInput({ selectedCodes, onAdd }: { selectedCodes: string[]; o
                             key={code}
                             type="button"
                             onClick={() => { onAdd(code); setQuery(""); }}
-                            className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 transition-colors flex items-center gap-2"
+                            className="w-full text-left px-3 py-2 text-sm hover:bg-emerald-50 transition-all duration-200 flex items-center gap-2"
                         >
-                            <span className="font-mono font-bold text-blue-700 flex-shrink-0">{code}</span>
+                            <span className="font-mono font-bold text-emerald-700 flex-shrink-0">{code}</span>
                             <span className="text-stone-600 truncate">{desc}</span>
                             <Plus className="w-3.5 h-3.5 text-stone-400 ml-auto flex-shrink-0" />
                         </button>
@@ -187,7 +187,7 @@ function NaicsSearchInput({ selectedCodes, onAdd }: { selectedCodes: string[]; o
     );
 }
 
-const inputClass = "w-full border border-stone-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-black transition-colors";
+const inputClass = "w-full border border-stone-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all duration-200";
 const readOnlyClass = "w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm bg-stone-50 text-stone-500 cursor-not-allowed";
 
 function formatDollars(val: number | null): string {
@@ -373,11 +373,14 @@ export default function PortalSettings() {
         <div className="max-w-3xl space-y-5 pb-12">
             {/* Header + Top Save */}
             <div className="flex items-center justify-between flex-wrap gap-3">
-                <h1 className="text-2xl font-bold text-black flex items-center gap-2">
-                    <Settings className="w-6 h-6" /> Account Settings
-                </h1>
+                <div>
+                    <p className="text-stone-400 text-xs uppercase tracking-widest font-medium mb-1">Settings</p>
+                    <h1 className="text-2xl font-bold text-stone-900 flex items-center gap-2">
+                        <Settings className="w-6 h-6 text-emerald-500" /> Account Settings
+                    </h1>
+                </div>
                 <button type="button" onClick={handleSave} disabled={saving}
-                    className="bg-black text-white px-5 py-2.5 rounded-xl text-sm font-bold inline-flex items-center gap-2 disabled:opacity-50 hover:bg-stone-800 transition-colors shadow-sm">
+                    className="bg-emerald-600 text-white px-5 py-2.5 rounded-xl text-sm font-bold inline-flex items-center gap-2 disabled:opacity-50 hover:bg-emerald-700 transition-all duration-200 shadow-sm">
                     {saved ? <><CheckCircle2 className="w-4 h-4 text-emerald-400" /> Saved!</>
                         : saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</>
                         : <><Save className="w-4 h-4" /> Save Changes</>}
@@ -476,7 +479,7 @@ export default function PortalSettings() {
                     <div className="flex flex-wrap gap-1.5">
                         {naicsCodes.map(code => (
                             <span key={code} title={getNaicsDescription(code)}
-                                className="bg-blue-50 text-blue-700 border border-blue-200 text-xs font-mono font-bold px-2.5 py-1 rounded-lg inline-flex items-center gap-1.5">
+                                className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-mono font-bold px-2.5 py-1 rounded-full inline-flex items-center gap-1.5">
                                 {getNaicsLabel(code)}
                                 <button type="button" onClick={() => setNaicsCodes(prev => prev.filter(c => c !== code))}
                                     title={`Remove ${code}`}
@@ -535,14 +538,14 @@ export default function PortalSettings() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {CERT_OPTIONS.map(cert => (
                         <label key={cert.value}
-                            className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border cursor-pointer transition-all ${
+                            className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border cursor-pointer transition-all duration-200 ${
                                 certifications.includes(cert.value)
-                                    ? "bg-amber-50 border-amber-300 text-amber-900 shadow-sm"
+                                    ? "bg-emerald-50 border-emerald-300 text-emerald-900 shadow-sm"
                                     : "bg-white border-stone-200 hover:bg-stone-50 text-stone-700"
                             }`}>
                             <input type="checkbox" checked={certifications.includes(cert.value)}
                                 onChange={() => toggleCert(cert.value)}
-                                className="rounded accent-black w-4 h-4 flex-shrink-0" />
+                                className="rounded accent-emerald-600 w-4 h-4 flex-shrink-0" />
                             <span className="text-sm font-medium flex-1">{cert.label}</span>
                             <Tooltip text={cert.tip} />
                         </label>
@@ -559,14 +562,14 @@ export default function PortalSettings() {
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                             {CONTRACT_TYPE_OPTIONS.map(ct => (
                                 <label key={ct.value}
-                                    className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border cursor-pointer transition-all ${
+                                    className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border cursor-pointer transition-all duration-200 ${
                                         contractTypes.includes(ct.value)
-                                            ? "bg-violet-50 border-violet-300 text-violet-900 shadow-sm"
+                                            ? "bg-emerald-50 border-emerald-300 text-emerald-900 shadow-sm"
                                             : "bg-white border-stone-200 hover:bg-stone-50 text-stone-700"
                                     }`}>
                                     <input type="checkbox" checked={contractTypes.includes(ct.value)}
                                         onChange={() => toggleContractType(ct.value)}
-                                        className="rounded accent-black w-4 h-4 flex-shrink-0" />
+                                        className="rounded accent-emerald-600 w-4 h-4 flex-shrink-0" />
                                     <span className="text-sm font-medium flex-1">{ct.label}</span>
                                     <Tooltip text={ct.tip} />
                                 </label>
@@ -616,10 +619,10 @@ export default function PortalSettings() {
                                 { value: "both", label: "Both" },
                             ].map(opt => (
                                 <label key={opt.value}
-                                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border cursor-pointer transition-all text-sm font-medium ${
+                                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border cursor-pointer transition-all duration-200 text-sm font-medium ${
                                         form.prime_or_sub === opt.value
-                                            ? "bg-black text-white border-black shadow-sm"
-                                            : "bg-white border-stone-200 hover:bg-stone-50 text-stone-700"
+                                            ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
+                                            : "bg-white border-stone-200 hover:bg-emerald-50 hover:border-emerald-300 text-stone-700"
                                     }`}>
                                     <input type="radio" name="prime_or_sub" value={opt.value}
                                         checked={form.prime_or_sub === opt.value}
@@ -761,7 +764,7 @@ export default function PortalSettings() {
                                 "Email me when a deadline is approaching (7 days)",
                             ].map(label => (
                                 <label key={label} className="flex items-center gap-3 text-sm cursor-pointer py-0.5">
-                                    <input type="checkbox" defaultChecked className="rounded accent-black w-4 h-4" />
+                                    <input type="checkbox" defaultChecked className="rounded accent-emerald-600 w-4 h-4" />
                                     <span className="text-stone-700">{label}</span>
                                 </label>
                             ))}
@@ -773,7 +776,7 @@ export default function PortalSettings() {
             {/* Bottom Sticky Save Bar */}
             <div className="sticky bottom-4 flex justify-end pt-2">
                 <button type="button" onClick={handleSave} disabled={saving}
-                    className="bg-black text-white px-6 py-3 rounded-2xl text-sm font-bold inline-flex items-center gap-2 disabled:opacity-50 hover:bg-stone-800 transition-colors shadow-lg shadow-black/20">
+                    className="bg-emerald-600 text-white px-6 py-3 rounded-2xl text-sm font-bold inline-flex items-center gap-2 disabled:opacity-50 hover:bg-emerald-700 transition-all duration-200 shadow-lg shadow-emerald-600/20">
                     {saved ? <><CheckCircle2 className="w-4 h-4 text-emerald-400" /> All Changes Saved</>
                         : saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</>
                         : <><Save className="w-4 h-4" /> Save All Changes</>}

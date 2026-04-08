@@ -100,7 +100,7 @@ export default function PartnersPage() {
                     </div>
                 </div>
                 <button type="button" onClick={handleSearch} disabled={searching || (!naics && !keyword)}
-                    className="bg-black text-white px-6 py-2.5 rounded-xl text-sm font-bold inline-flex items-center gap-2 disabled:opacity-50 hover:bg-stone-800">
+                    className="bg-emerald-600 text-white px-6 py-2.5 rounded-xl text-sm font-bold inline-flex items-center gap-2 disabled:opacity-50 hover:bg-emerald-700 transition-all duration-200">
                     {searching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
                     {searching ? "Searching SAM.gov..." : "Search Partners"}
                 </button>
