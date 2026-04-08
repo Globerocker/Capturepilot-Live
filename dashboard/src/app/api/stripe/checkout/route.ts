@@ -8,7 +8,7 @@ function getStripe() {
     return new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: "2026-02-25.clover" });
 }
 
-export async function POST() {
+export async function POST(request: Request) {
     const stripe = getStripe();
     const cookieStore = await cookies();
     const sb = createServerClient(
@@ -21,6 +21,13 @@ export async function POST() {
     if (!user) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    // Get billing interval from request body
+    let interval: "monthly" | "yearly" = "monthly";
+    try {
+        const body = await request.json();
+        if (body.interval === "yearly") interval = "yearly";
+    } catch { /* default to monthly */ }
 
     const admin = createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -52,17 +59,28 @@ export async function POST() {
         await admin.from("user_profiles").update({ stripe_customer_id: customerId }).eq("id", p.id);
     }
 
-    const priceId = process.env.STRIPE_PRO_PRICE_ID;
+    // Select price based on interval
+    const priceId = interval === "yearly"
+        ? (process.env.STRIPE_PRICE_YEARLY || process.env.STRIPE_PRO_PRICE_ID)
+        : (process.env.STRIPE_PRICE_MONTHLY || process.env.STRIPE_PRO_PRICE_ID);
+
     if (!priceId) {
-        return NextResponse.json({ error: "STRIPE_PRO_PRICE_ID not configured" }, { status: 500 });
+        return NextResponse.json({ error: "Stripe price not configured" }, { status: 500 });
     }
+
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://app.capturepilot.com";
 
     const session = await stripe.checkout.sessions.create({
         customer: customerId,
         mode: "subscription",
         line_items: [{ price: priceId, quantity: 1 }],
-        success_url: `${process.env.NEXT_PUBLIC_SUPABASE_URL ? "https://app.capturepilot.com" : "http://localhost:3000"}/billing?success=true`,
-        cancel_url: `${process.env.NEXT_PUBLIC_SUPABASE_URL ? "https://app.capturepilot.com" : "http://localhost:3000"}/billing?canceled=true`,
+        subscription_data: {
+            trial_period_days: 30,
+            metadata: { user_profile_id: p.id as string, interval },
+        },
+        success_url: `${baseUrl}/billing?success=true`,
+        cancel_url: `${baseUrl}/billing?canceled=true`,
+        allow_promotion_codes: true,
     });
 
     return NextResponse.json({ url: session.url });

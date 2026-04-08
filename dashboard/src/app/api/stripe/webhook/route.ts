@@ -35,11 +35,20 @@ export async function POST(request: Request) {
         case "checkout.session.completed": {
             const session = event.data.object as Stripe.Checkout.Session;
             if (session.customer && session.subscription) {
+                // Get subscription to check trial end
+                const subscription = await stripe.subscriptions.retrieve(session.subscription as string);
+                const trialEnd = subscription.trial_end
+                    ? new Date(subscription.trial_end * 1000).toISOString()
+                    : null;
+
                 await admin
                     .from("user_profiles")
                     .update({
                         subscription_status: "active",
                         stripe_subscription_id: session.subscription as string,
+                        plan_tier: "pro",
+                        trial_ends_at: trialEnd,
+                        account_type: "self_service",
                     })
                     .eq("stripe_customer_id", session.customer as string);
             }
