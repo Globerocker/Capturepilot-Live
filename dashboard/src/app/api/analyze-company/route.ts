@@ -748,11 +748,13 @@ async function runAnalysisPipeline(analysisId: string, initialCompanyName: strin
         }
 
         scoredMatches.sort((a, b) => b.score - a.score);
-        const topMatches = scoredMatches.slice(0, 5);
+        // Take top 20 candidates (will deduplicate after enrichment with titles)
+        const topCandidates = scoredMatches.slice(0, 20);
 
-        // Enrich top matches with full opportunity details
-        if (topMatches.length > 0) {
-            const oppIds = topMatches.map(m => m.opportunity_id);
+        // Enrich candidates with full opportunity details, then deduplicate by title
+        let topMatches = topCandidates;
+        if (topCandidates.length > 0) {
+            const oppIds = topCandidates.map(m => m.opportunity_id);
             const { data: oppDetails } = await sb
                 .from("opportunities")
                 .select("id, title, agency, naics_code, set_aside_code, response_deadline, notice_type, award_amount, notice_id, place_of_performance_state, description")
@@ -777,6 +779,15 @@ async function runAnalysisPipeline(analysisId: string, initialCompanyName: strin
                 }
             }
         }
+
+        // Deduplicate by title — SAM.gov posts amendments with different notice_ids but same title
+        const seenTitles = new Set<string>();
+        topMatches = topCandidates.filter(m => {
+            const title = (m.title || "").toLowerCase().trim().replace(/\s+/g, " ").slice(0, 60);
+            if (!title || seenTitles.has(title)) return false;
+            seenTitles.add(title);
+            return true;
+        }).slice(0, 5);
 
         await sb.from("company_analyses").update({ status: "generating" }).eq("id", analysisId);
 
