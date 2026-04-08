@@ -161,7 +161,8 @@ export default function PortalOverview() {
         <div className="w-full space-y-6">
             {/* Welcome */}
             <div>
-                <h1 className="text-2xl font-bold text-black font-typewriter">
+                <p className="text-stone-400 text-xs uppercase tracking-widest font-medium mb-1">Overview</p>
+                <h1 className="text-2xl font-bold text-stone-900 font-typewriter">
                     Welcome, {(profile?.company_name as string) || (profile?.contact_name as string)}
                 </h1>
                 <p className="text-sm text-stone-500 mt-1">
@@ -171,24 +172,24 @@ export default function PortalOverview() {
 
             {/* Stats Grid */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                <Link href="/portal/opportunities" className="bg-white border border-stone-200 rounded-2xl p-4 hover:border-stone-300 transition-colors">
-                    <Briefcase className="w-5 h-5 text-blue-500 mb-2" />
-                    <p className="text-2xl font-black">{stats.matchedOpps}</p>
+                <Link href="/portal/opportunities" className="bg-white border border-stone-200 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all duration-200">
+                    <Briefcase className="w-5 h-5 text-emerald-500 mb-2" />
+                    <p className="text-2xl font-black text-emerald-600">{stats.matchedOpps}</p>
                     <p className="text-xs text-stone-500">Matched Opportunities</p>
                 </Link>
-                <Link href="/portal/pipeline" className="bg-white border border-stone-200 rounded-2xl p-4 hover:border-stone-300 transition-colors">
-                    <Layers className="w-5 h-5 text-violet-500 mb-2" />
-                    <p className="text-2xl font-black">{stats.pipelineDeals}</p>
+                <Link href="/portal/pipeline" className="bg-white border border-stone-200 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all duration-200">
+                    <Layers className="w-5 h-5 text-emerald-500 mb-2" />
+                    <p className="text-2xl font-black text-emerald-600">{stats.pipelineDeals}</p>
                     <p className="text-xs text-stone-500">Pipeline Deals</p>
                 </Link>
-                <Link href="/portal/tasks" className="bg-white border border-stone-200 rounded-2xl p-4 hover:border-stone-300 transition-colors">
-                    <ListTodo className="w-5 h-5 text-amber-500 mb-2" />
-                    <p className="text-2xl font-black">{stats.pendingTasks}</p>
+                <Link href="/portal/tasks" className="bg-white border border-stone-200 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all duration-200">
+                    <ListTodo className="w-5 h-5 text-emerald-500 mb-2" />
+                    <p className="text-2xl font-black text-emerald-600">{stats.pendingTasks}</p>
                     <p className="text-xs text-stone-500">Pending Tasks</p>
                 </Link>
-                <Link href="/portal/documents" className="bg-white border border-stone-200 rounded-2xl p-4 hover:border-stone-300 transition-colors">
+                <Link href="/portal/documents" className="bg-white border border-stone-200 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all duration-200">
                     <FileText className="w-5 h-5 text-emerald-500 mb-2" />
-                    <p className="text-2xl font-black">{stats.docs}</p>
+                    <p className="text-2xl font-black text-emerald-600">{stats.docs}</p>
                     <p className="text-xs text-stone-500">Documents</p>
                 </Link>
             </div>
@@ -197,17 +198,17 @@ export default function PortalOverview() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Top Opportunities by Score */}
                 {topOpps.length > 0 && (
-                    <div className="bg-white border border-stone-200 rounded-2xl overflow-hidden">
+                    <div className="bg-white border border-stone-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-200">
                         <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100">
-                            <h2 className="font-bold text-sm">Top Opportunities</h2>
-                            <Link href="/portal/opportunities" className="text-xs text-blue-600 hover:underline inline-flex items-center gap-1">
+                            <h2 className="text-stone-400 text-xs uppercase tracking-widest font-medium">Top Opportunities</h2>
+                            <Link href="/portal/opportunities" className="text-xs text-emerald-600 hover:text-emerald-700 inline-flex items-center gap-1">
                                 View all <ArrowRight className="w-3 h-3" />
                             </Link>
                         </div>
                         <div className="divide-y divide-stone-100">
                             {topOpps.map((opp, i) => (
                                 <div key={`top-${i}`} className="flex items-center gap-3 px-5 py-3">
-                                    <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-blue-50 text-blue-600 text-xs font-black flex-shrink-0">
+                                    <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 text-xs font-black flex-shrink-0">
                                         {Math.round(Number(opp.score) * 100)}
                                     </div>
                                     <div className="flex-1 min-w-0">
@@ -225,10 +226,10 @@ export default function PortalOverview() {
 
                 {/* Upcoming Deadlines */}
                 {upcomingDeadlines.length > 0 && (
-                    <div className="bg-white border border-stone-200 rounded-2xl overflow-hidden">
+                    <div className="bg-white border border-stone-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-200">
                         <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100">
-                            <h2 className="font-bold text-sm">Upcoming Deadlines</h2>
-                            <Link href="/portal/opportunities" className="text-xs text-blue-600 hover:underline inline-flex items-center gap-1">
+                            <h2 className="text-stone-400 text-xs uppercase tracking-widest font-medium">Upcoming Deadlines</h2>
+                            <Link href="/portal/opportunities" className="text-xs text-emerald-600 hover:text-emerald-700 inline-flex items-center gap-1">
                                 View all <ArrowRight className="w-3 h-3" />
                             </Link>
                         </div>
@@ -257,10 +258,10 @@ export default function PortalOverview() {
 
             {/* Recent Tasks */}
             {tasks.length > 0 && (
-                <div className="bg-white border border-stone-200 rounded-2xl overflow-hidden">
+                <div className="bg-white border border-stone-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-200">
                     <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100">
-                        <h2 className="font-bold text-sm">Recent Tasks</h2>
-                        <Link href="/portal/tasks" className="text-xs text-blue-600 hover:underline inline-flex items-center gap-1">
+                        <h2 className="text-stone-400 text-xs uppercase tracking-widest font-medium">Recent Tasks</h2>
+                        <Link href="/portal/tasks" className="text-xs text-emerald-600 hover:text-emerald-700 inline-flex items-center gap-1">
                             View all <ArrowRight className="w-3 h-3" />
                         </Link>
                     </div>

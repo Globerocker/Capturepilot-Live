@@ -286,8 +286,9 @@ export default function PortalPipeline() {
             {/* Header */}
             <div className="flex items-start justify-between gap-4 flex-wrap">
                 <div>
-                    <h1 className="text-2xl font-bold text-black flex items-center gap-2">
-                        <Layers className="w-6 h-6" /> Pipeline
+                    <p className="text-stone-400 text-xs uppercase tracking-widest font-medium mb-1">Pipeline</p>
+                    <h1 className="text-2xl font-bold text-stone-900 flex items-center gap-2">
+                        <Layers className="w-6 h-6 text-emerald-500" /> Pipeline
                     </h1>
                     <p className="text-sm text-stone-500 mt-1">
                         {activeCount} active deals, {pursuits.length} total
@@ -298,10 +299,10 @@ export default function PortalPipeline() {
                         type="button"
                         onClick={() => setShowAddSearch(!showAddSearch)}
                         className={clsx(
-                            "text-xs font-semibold px-3.5 py-2 rounded-xl border transition-colors inline-flex items-center gap-1.5",
+                            "text-xs font-semibold px-3.5 py-2 rounded-xl border transition-all duration-200 inline-flex items-center gap-1.5",
                             showAddSearch
-                                ? "bg-black text-white border-black"
-                                : "bg-white text-stone-600 border-stone-200 hover:border-stone-400"
+                                ? "bg-emerald-600 text-white border-emerald-600"
+                                : "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
                         )}
                     >
                         <Plus className="w-3.5 h-3.5" /> Add to Pipeline
@@ -345,7 +346,7 @@ export default function PortalPipeline() {
                             value={addSearchQuery}
                             onChange={e => searchOpportunities(e.target.value)}
                             placeholder="Search by opportunity title (min 3 characters)..."
-                            className="w-full pl-10 pr-4 py-2.5 border border-stone-200 rounded-xl text-sm focus:outline-none focus:border-black bg-white"
+                            className="w-full pl-10 pr-4 py-2.5 border border-stone-200 rounded-xl text-sm focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 bg-white transition-all duration-200"
                         />
                     </div>
                     {searchLoading && (
@@ -372,7 +373,7 @@ export default function PortalPipeline() {
                                                 type="button"
                                                 onClick={() => addToPipeline(r.id)}
                                                 disabled={addingOppId === r.id}
-                                                className="text-[10px] font-bold text-white bg-black px-2.5 py-1 rounded-lg hover:bg-stone-800 transition-colors whitespace-nowrap inline-flex items-center gap-1 disabled:opacity-50"
+                                                className="text-[10px] font-bold text-white bg-emerald-600 px-2.5 py-1 rounded-lg hover:bg-emerald-700 transition-all duration-200 whitespace-nowrap inline-flex items-center gap-1 disabled:opacity-50"
                                             >
                                                 {addingOppId === r.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
                                                 Add
@@ -399,7 +400,7 @@ export default function PortalPipeline() {
                     </p>
                     <Link
                         href="/portal/opportunities"
-                        className="text-xs font-semibold px-4 py-2 rounded-xl bg-black text-white hover:bg-stone-800 transition-colors inline-flex items-center gap-1.5"
+                        className="text-xs font-semibold px-4 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition-all duration-200 inline-flex items-center gap-1.5"
                     >
                         <ArrowRight className="w-3.5 h-3.5" /> Browse Opportunities
                     </Link>
@@ -552,10 +553,10 @@ export default function PortalPipeline() {
                                                                             type="button"
                                                                             onClick={(e) => { e.stopPropagation(); changeStage(p.id, s.key); }}
                                                                             className={clsx(
-                                                                                "text-[10px] font-bold px-2.5 py-1 rounded-lg border transition-colors",
+                                                                                "text-[10px] font-bold px-2.5 py-1 rounded-lg border transition-all duration-200",
                                                                                 p.stage === s.key
-                                                                                    ? "bg-black text-white border-black"
-                                                                                    : "bg-white text-stone-500 border-stone-200 hover:border-stone-400 hover:bg-stone-50"
+                                                                                    ? "bg-emerald-600 text-white border-emerald-600"
+                                                                                    : "bg-white text-stone-500 border-stone-200 hover:border-emerald-300 hover:text-emerald-700 hover:bg-emerald-50"
                                                                             )}
                                                                         >
                                                                             {s.label}

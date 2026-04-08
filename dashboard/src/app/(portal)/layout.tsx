@@ -121,31 +121,34 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
         <div className="min-h-screen bg-stone-50 flex">
             {/* Mobile menu button */}
             <button type="button" onClick={() => setMobileOpen(!mobileOpen)}
-                className="lg:hidden fixed top-4 left-4 z-50 bg-white border border-stone-200 rounded-xl p-2 shadow-sm">
+                className="lg:hidden fixed top-4 left-4 z-50 bg-stone-900 border border-stone-700 rounded-xl p-2 shadow-sm text-stone-300">
                 {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
 
             {/* Mobile overlay */}
-            {mobileOpen && <div className="lg:hidden fixed inset-0 bg-black/20 z-30" onClick={() => setMobileOpen(false)} />}
+            {mobileOpen && <div className="lg:hidden fixed inset-0 bg-black/30 backdrop-blur-sm z-30" onClick={() => setMobileOpen(false)} />}
 
             {/* Sidebar */}
             <aside className={clsx(
-                "w-64 bg-white border-r border-stone-200 flex flex-col z-40",
+                "w-64 bg-stone-950 flex flex-col z-40",
                 "fixed lg:static inset-y-0 left-0 transition-transform duration-200",
                 mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
             )}>
-                <div className="p-5 border-b border-stone-100">
+                {/* Emerald gradient line at top */}
+                <div className="h-0.5 bg-gradient-to-r from-emerald-500 via-emerald-400 to-transparent" />
+
+                <div className="p-5 border-b border-stone-800/60">
                     <Link href="/portal" className="flex items-center gap-2">
                         <Image src="/logo.png" alt="CapturePilot" width={20} height={20} className="rounded" />
-                        <span className="font-typewriter font-bold text-sm">CapturePilot</span>
-                        <span className="text-[9px] font-typewriter bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full uppercase">Client</span>
+                        <span className="font-typewriter font-semibold text-sm text-stone-200">CapturePilot</span>
+                        <span className="text-[9px] font-typewriter bg-emerald-500/15 text-emerald-400 px-2 py-0.5 rounded-full uppercase border border-emerald-500/20">Client</span>
                     </Link>
                     {companyName && (
-                        <p className="text-xs text-stone-500 mt-1 truncate">{companyName}</p>
+                        <p className="text-xs text-stone-500 mt-1.5 truncate">{companyName}</p>
                     )}
                 </div>
 
-                <nav className="flex-1 p-3 space-y-1">
+                <nav className="flex-1 p-3 space-y-0.5">
                     {NAV_ITEMS.map((item) => {
                         const isActive = pathname === item.href || (item.href !== "/portal" && pathname?.startsWith(item.href));
                         return (
@@ -153,13 +156,13 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
                                 key={item.href}
                                 href={item.href}
                                 className={clsx(
-                                    "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors",
+                                    "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200",
                                     isActive
-                                        ? "bg-black text-white"
-                                        : "text-stone-600 hover:bg-stone-100"
+                                        ? "bg-emerald-500/10 text-emerald-400 border-l-2 border-emerald-500"
+                                        : "text-stone-500 hover:bg-stone-800/50 hover:text-stone-300 border-l-2 border-transparent"
                                 )}
                             >
-                                <item.icon className="w-4 h-4" />
+                                <item.icon className={clsx("w-4 h-4", isActive ? "text-emerald-400" : "text-stone-500")} />
                                 {item.label}
                                 {item.label === "Messages" && unreadMessages > 0 && (
                                     <span className="ml-auto bg-emerald-500 text-white text-[10px] font-bold min-w-[18px] h-[18px] rounded-full flex items-center justify-center px-1">
@@ -171,7 +174,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
                     })}
                 </nav>
 
-                <div className="p-3 border-t border-stone-100">
+                <div className="p-3 border-t border-stone-800/60">
                     <button
                         type="button"
                         onClick={async () => {
@@ -183,7 +186,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
                             });
                             window.location.replace("/login");
                         }}
-                        className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-stone-500 hover:bg-stone-100 w-full transition-colors"
+                        className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-stone-500 hover:bg-stone-800/50 hover:text-red-400 w-full transition-all duration-200"
                     >
                         <LogOut className="w-4 h-4" /> Sign Out
                     </button>
@@ -191,7 +194,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
             </aside>
 
             {/* Main Content */}
-            <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-auto">
+            <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-auto dot-grid-bg">
                 <div className="w-full">
                     {children}
                 </div>

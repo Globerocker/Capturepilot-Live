@@ -305,8 +305,9 @@ export default function PortalOpportunities() {
             {/* Header */}
             <div className="flex items-start justify-between gap-4 flex-wrap">
                 <div>
-                    <h1 className="text-2xl font-bold text-black flex items-center gap-2">
-                        <Briefcase className="w-6 h-6" /> Opportunities
+                    <p className="text-stone-400 text-xs uppercase tracking-widest font-medium mb-1">Opportunities</p>
+                    <h1 className="text-2xl font-bold text-stone-900 flex items-center gap-2">
+                        <Briefcase className="w-6 h-6 text-emerald-500" /> Opportunities
                     </h1>
                     <p className="text-sm text-stone-500 mt-1">
                         Showing {filtered.length} of {matches.length} opportunities
@@ -317,10 +318,10 @@ export default function PortalOpportunities() {
                         type="button"
                         onClick={() => setFiltersOpen(!filtersOpen)}
                         className={clsx(
-                            "text-xs font-semibold px-3.5 py-2 rounded-xl border transition-colors inline-flex items-center gap-1.5",
+                            "text-xs font-semibold px-3.5 py-2 rounded-xl border transition-all duration-200 inline-flex items-center gap-1.5",
                             filtersOpen || hasActiveFilters
-                                ? "bg-black text-white border-black"
-                                : "bg-white text-stone-600 border-stone-200 hover:border-stone-400"
+                                ? "bg-emerald-600 text-white border-emerald-600"
+                                : "bg-white text-stone-600 border-stone-200 hover:border-emerald-300 hover:text-emerald-700"
                         )}
                     >
                         <Filter className="w-3.5 h-3.5" />
@@ -348,7 +349,7 @@ export default function PortalOpportunities() {
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
                     placeholder="Search by title, agency, or NAICS code..."
-                    className="w-full pl-10 pr-4 py-3 border border-stone-200 rounded-xl text-sm focus:outline-none focus:border-black bg-white shadow-sm"
+                    className="w-full pl-10 pr-4 py-3 border border-stone-200 rounded-xl text-sm focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 bg-white shadow-sm transition-all duration-200"
                 />
             </div>
 
@@ -363,7 +364,7 @@ export default function PortalOpportunities() {
                                 value={naicsFilter}
                                 onChange={e => setNaicsFilter(e.target.value)}
                                 aria-label="NAICS Code"
-                                className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-black bg-white"
+                                className="w-full border border-stone-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 bg-white transition-all duration-200"
                             >
                                 <option value="">All NAICS Codes</option>
                                 {userNaics.map(code => (
@@ -379,7 +380,7 @@ export default function PortalOpportunities() {
                                 value={agencyFilter}
                                 onChange={e => setAgencyFilter(e.target.value)}
                                 aria-label="Agency"
-                                className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-black bg-white"
+                                className="w-full border border-stone-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 bg-white transition-all duration-200"
                             >
                                 <option value="">All Agencies</option>
                                 {uniqueAgencies.map(ag => (
@@ -395,7 +396,7 @@ export default function PortalOpportunities() {
                                 value={setAsideFilter}
                                 onChange={e => setSetAsideFilter(e.target.value)}
                                 aria-label="Set-Aside"
-                                className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-black bg-white"
+                                className="w-full border border-stone-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 bg-white transition-all duration-200"
                             >
                                 {SET_ASIDE_OPTIONS.map(opt => (
                                     <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -410,7 +411,7 @@ export default function PortalOpportunities() {
                                 value={noticeTypeFilter}
                                 onChange={e => setNoticeTypeFilter(e.target.value)}
                                 aria-label="Notice Type"
-                                className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-black bg-white"
+                                className="w-full border border-stone-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 bg-white transition-all duration-200"
                             >
                                 {NOTICE_TYPE_OPTIONS.map(opt => (
                                     <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -426,7 +427,7 @@ export default function PortalOpportunities() {
                                 value={minValue}
                                 onChange={e => setMinValue(e.target.value)}
                                 placeholder="e.g. 100000"
-                                className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-black bg-white"
+                                className="w-full border border-stone-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 bg-white transition-all duration-200"
                             />
                         </div>
                         <div>
@@ -436,7 +437,7 @@ export default function PortalOpportunities() {
                                 value={maxValue}
                                 onChange={e => setMaxValue(e.target.value)}
                                 placeholder="e.g. 5000000"
-                                className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-black bg-white"
+                                className="w-full border border-stone-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 bg-white transition-all duration-200"
                             />
                         </div>
                     </div>
@@ -452,10 +453,10 @@ export default function PortalOpportunities() {
                                     type="button"
                                     onClick={() => setSortBy(opt.value)}
                                     className={clsx(
-                                        "text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors",
+                                        "text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all duration-200",
                                         sortBy === opt.value
-                                            ? "bg-black text-white border-black"
-                                            : "bg-white text-stone-500 border-stone-200 hover:border-stone-400"
+                                            ? "bg-emerald-600 text-white border-emerald-600"
+                                            : "bg-white text-stone-500 border-stone-200 hover:border-emerald-300 hover:text-emerald-700"
                                     )}
                                 >
                                     {opt.label}
@@ -661,9 +662,9 @@ export default function PortalOpportunities() {
                                                     <div
                                                         className={clsx(
                                                             "h-full rounded-full transition-all",
-                                                            m.score >= 0.70 ? "bg-emerald-500" :
-                                                            m.score >= 0.55 ? "bg-amber-500" :
-                                                            "bg-blue-500"
+                                                            m.score >= 0.70 ? "bg-gradient-to-r from-emerald-500 to-emerald-400" :
+                                                            m.score >= 0.55 ? "bg-gradient-to-r from-amber-500 to-amber-400" :
+                                                            "bg-gradient-to-r from-blue-500 to-blue-400"
                                                         )}
                                                         style={{ width: `${scorePercent}%` }}
                                                     />
@@ -679,10 +680,10 @@ export default function PortalOpportunities() {
                                                 onClick={() => addToPipeline(m)}
                                                 title="Add to Pipeline"
                                                 className={clsx(
-                                                    "p-2.5 rounded-xl transition-colors border",
+                                                    "p-2.5 rounded-xl transition-all duration-200 border",
                                                     pipelineAdded
-                                                        ? "text-emerald-600 bg-emerald-50 border-emerald-200"
-                                                        : "text-stone-300 hover:text-emerald-600 hover:bg-emerald-50 border-transparent hover:border-emerald-200"
+                                                        ? "text-emerald-700 bg-emerald-50 border-emerald-200"
+                                                        : "text-stone-300 hover:text-emerald-700 hover:bg-emerald-50 border-transparent hover:border-emerald-200"
                                                 )}
                                             >
                                                 <Layers className="w-4 h-4" />
@@ -754,10 +755,10 @@ export default function PortalOpportunities() {
                                                 type="button"
                                                 onClick={() => setPage(pageNum)}
                                                 className={clsx(
-                                                    "w-8 h-8 rounded-lg text-xs font-semibold transition-colors",
+                                                    "w-8 h-8 rounded-lg text-xs font-semibold transition-all duration-200",
                                                     pageNum === safePage
-                                                        ? "bg-black text-white"
-                                                        : "text-stone-500 hover:bg-stone-100"
+                                                        ? "bg-emerald-600 text-white"
+                                                        : "text-stone-500 hover:bg-emerald-50 hover:text-emerald-700"
                                                 )}
                                             >
                                                 {pageNum}

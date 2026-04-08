@@ -80,15 +80,15 @@ function Badge({ children, variant = "default", className = "" }: {
     const styles: Record<string, string> = {
         default: "bg-stone-100 text-stone-600 border-stone-200",
         green: "bg-emerald-50 text-emerald-700 border-emerald-200",
-        red: "bg-red-50 text-red-700 border-red-200",
-        amber: "bg-amber-50 text-amber-700 border-amber-200",
-        blue: "bg-blue-50 text-blue-700 border-blue-200",
+        red: "bg-red-50 text-red-600 border-red-200",
+        amber: "bg-amber-50 text-amber-600 border-amber-200",
+        blue: "bg-blue-50 text-blue-600 border-blue-200",
         violet: "bg-violet-50 text-violet-700 border-violet-200",
         pink: "bg-pink-50 text-pink-700 border-pink-200",
         emerald: "bg-emerald-100 text-emerald-800 border-emerald-300",
-        hot: "bg-red-600 text-white border-red-700",
-        warm: "bg-amber-500 text-white border-amber-600",
-        cold: "bg-blue-500 text-white border-blue-600",
+        hot: "bg-red-50 text-red-600 border-red-200",
+        warm: "bg-amber-50 text-amber-600 border-amber-200",
+        cold: "bg-blue-50 text-blue-600 border-blue-200",
     };
     return (
         <span className={clsx(
@@ -154,10 +154,10 @@ function Section({ title, icon: Icon, children, className = "", headerRight }: {
     headerRight?: React.ReactNode;
 }) {
     return (
-        <div className={clsx("bg-white border border-stone-200 rounded-2xl overflow-hidden shadow-sm", className)}>
+        <div className={clsx("bg-white border border-stone-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-200", className)}>
             <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100 bg-stone-50/50">
-                <h3 className="font-bold text-sm flex items-center gap-2.5 text-stone-800">
-                    <Icon className="w-4 h-4 text-stone-400" />
+                <h3 className="text-stone-400 text-xs uppercase tracking-widest font-medium flex items-center gap-2.5">
+                    <Icon className="w-4 h-4 text-emerald-500" />
                     {title}
                 </h3>
                 {headerRight}
@@ -647,7 +647,7 @@ export default function PortalOpportunityDetail() {
                                 "px-6 py-2.5 rounded-xl text-sm font-bold inline-flex items-center gap-2 transition-all duration-200",
                                 addedToPipeline
                                     ? "bg-emerald-600 text-white shadow-lg shadow-emerald-200"
-                                    : "bg-stone-900 text-white hover:bg-stone-800 shadow-lg shadow-stone-200"
+                                    : "bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-200"
                             )}
                         >
                             {addedToPipeline ? <CheckCircle2 className="w-4 h-4" /> : <Layers className="w-4 h-4" />}
@@ -692,7 +692,7 @@ export default function PortalOpportunityDetail() {
                     />
 
                     {/* ---- AI Analysis (AUTO-LOADED) ---- */}
-                    <div className="bg-stone-900 rounded-2xl overflow-hidden shadow-sm">
+                    <div className="bg-stone-900 rounded-2xl overflow-hidden shadow-sm border-l-4 border-emerald-500">
                         <div className="flex items-center justify-between px-6 py-5 border-b border-stone-800">
                             <div className="flex items-center gap-3">
                                 <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center">
@@ -828,16 +828,16 @@ export default function PortalOpportunityDetail() {
                                     onChange={(e) => setTaskNote(e.target.value)}
                                     placeholder="e.g. Can we put together a teaming arrangement for this? / What is our competitive position? / Please review the SOW..."
                                     rows={3}
-                                    className="w-full border border-stone-200 rounded-xl px-4 py-3 text-sm text-stone-800 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-stone-900/10 focus:border-stone-300 transition-colors resize-none"
+                                    className="w-full border border-stone-200 rounded-xl px-4 py-3 text-sm text-stone-800 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all duration-200 resize-none"
                                 />
                                 <button
                                     type="button"
                                     onClick={sendTaskNote}
                                     disabled={!taskNote.trim() || taskSending}
                                     className={clsx(
-                                        "px-5 py-2.5 rounded-xl text-sm font-bold inline-flex items-center gap-2 transition-all",
+                                        "px-5 py-2.5 rounded-xl text-sm font-bold inline-flex items-center gap-2 transition-all duration-200",
                                         taskNote.trim()
-                                            ? "bg-stone-900 text-white hover:bg-stone-800 shadow-sm"
+                                            ? "bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm"
                                             : "bg-stone-100 text-stone-400 cursor-not-allowed"
                                     )}
                                 >
@@ -1128,27 +1128,27 @@ export default function PortalOpportunityDetail() {
                                 href={samUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="flex items-center justify-between p-3 rounded-xl bg-stone-50 hover:bg-stone-100 transition-colors group"
+                                className="flex items-center justify-between p-3 rounded-xl bg-stone-50 border border-stone-200 hover:bg-emerald-50 hover:border-emerald-200 transition-all duration-200 group"
                             >
                                 <div className="flex items-center gap-2.5">
-                                    <Globe className="w-4 h-4 text-blue-500" />
+                                    <Globe className="w-4 h-4 text-emerald-500" />
                                     <span className="text-sm font-medium text-stone-700">SAM.gov Full Listing</span>
                                 </div>
-                                <ArrowUpRight className="w-3.5 h-3.5 text-stone-400 group-hover:text-stone-600 transition-colors" />
+                                <ArrowUpRight className="w-3.5 h-3.5 text-stone-400 group-hover:text-emerald-600 transition-colors" />
                             </a>
                             <Link
                                 href="/portal/tasks"
-                                className="flex items-center justify-between p-3 rounded-xl bg-stone-50 hover:bg-stone-100 transition-colors group"
+                                className="flex items-center justify-between p-3 rounded-xl bg-stone-50 border border-stone-200 hover:bg-emerald-50 hover:border-emerald-200 transition-all duration-200 group"
                             >
                                 <div className="flex items-center gap-2.5">
-                                    <FileText className="w-4 h-4 text-stone-500" />
+                                    <FileText className="w-4 h-4 text-emerald-500" />
                                     <span className="text-sm font-medium text-stone-700">Your Tasks</span>
                                 </div>
-                                <ArrowUpRight className="w-3.5 h-3.5 text-stone-400 group-hover:text-stone-600 transition-colors" />
+                                <ArrowUpRight className="w-3.5 h-3.5 text-stone-400 group-hover:text-emerald-600 transition-colors" />
                             </Link>
                             <Link
                                 href="/portal/opportunities"
-                                className="flex items-center justify-between p-3 rounded-xl bg-stone-50 hover:bg-stone-100 transition-colors group"
+                                className="flex items-center justify-between p-3 rounded-xl bg-stone-50 border border-stone-200 hover:bg-emerald-50 hover:border-emerald-200 transition-all duration-200 group"
                             >
                                 <div className="flex items-center gap-2.5">
                                     <Layers className="w-4 h-4 text-stone-500" />

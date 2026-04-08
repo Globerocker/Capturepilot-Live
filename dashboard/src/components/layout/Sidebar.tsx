@@ -43,24 +43,27 @@ export default function Sidebar() {
 
     const sidebarContent = (
         <>
+            {/* Emerald gradient line at top */}
+            <div className="h-0.5 bg-gradient-to-r from-emerald-500 via-emerald-400 to-transparent" />
+
             {/* Logo */}
-            <div className="px-6 lg:px-8 mb-8 lg:mb-12 flex items-center justify-between">
+            <div className="px-6 lg:px-8 mb-8 lg:mb-12 pt-5 flex items-center justify-between">
                 <div className="flex items-center space-x-3">
-                    <Image src="/logo.png" alt="CapturePilot" width={36} height={36} className="rounded-xl shadow-lg shadow-stone-300" />
-                    <h1 className="text-xl font-bold font-typewriter tracking-tight">CapturePilot</h1>
+                    <Image src="/logo.png" alt="CapturePilot" width={36} height={36} className="rounded-xl" />
+                    <h1 className="text-xl font-semibold font-typewriter tracking-tight text-stone-200">CapturePilot</h1>
                 </div>
                 <button
                     type="button"
                     title="Close menu"
                     onClick={() => setMobileOpen(false)}
-                    className="lg:hidden p-2 -mr-2 text-stone-400 hover:text-stone-900"
+                    className="lg:hidden p-2 -mr-2 text-stone-500 hover:text-stone-300"
                 >
                     <X className="h-5 w-5" />
                 </button>
             </div>
 
             {/* Navigation */}
-            <nav className="flex-1 px-3 lg:px-4 space-y-1.5">
+            <nav className="flex-1 px-3 lg:px-4 space-y-0.5">
                 {navLinks.map((link) => {
                     const Icon = link.icon;
                     const isActive = pathname.startsWith(link.href);
@@ -71,13 +74,13 @@ export default function Sidebar() {
                             href={link.href}
                             onClick={handleNavClick}
                             className={clsx(
-                                "flex items-center space-x-3 px-4 py-3.5 lg:py-3 rounded-2xl transition-all duration-300 font-medium text-sm",
+                                "flex items-center space-x-3 px-4 py-3.5 lg:py-3 rounded-2xl transition-all duration-200 font-medium text-sm",
                                 isActive
-                                    ? "bg-black text-white shadow-lg shadow-stone-400/30"
-                                    : "text-stone-500 hover:bg-stone-100 hover:text-stone-900 active:bg-stone-200"
+                                    ? "bg-emerald-500/10 text-emerald-400 border-l-2 border-emerald-500"
+                                    : "text-stone-500 hover:bg-stone-800/50 hover:text-stone-300 border-l-2 border-transparent"
                             )}
                         >
-                            <Icon className="h-5 w-5" />
+                            <Icon className={clsx("h-5 w-5", isActive ? "text-emerald-400" : "text-stone-500")} />
                             <span className="font-typewriter">{link.name}</span>
                         </Link>
                     );
@@ -85,24 +88,24 @@ export default function Sidebar() {
             </nav>
 
             {/* Bottom links */}
-            <div className="px-3 lg:px-4 mt-auto space-y-1">
+            <div className="px-3 lg:px-4 mt-auto space-y-0.5 border-t border-stone-800/60 pt-3">
                 <Link
                     href="/settings"
                     onClick={handleNavClick}
                     className={clsx(
                         "flex items-center space-x-3 px-4 py-3.5 lg:py-3 rounded-2xl transition-all duration-200 text-sm",
                         pathname.startsWith("/settings")
-                            ? "bg-black text-white shadow-lg shadow-stone-400/30"
-                            : "text-stone-500 hover:bg-stone-100 hover:text-stone-900"
+                            ? "bg-emerald-500/10 text-emerald-400 border-l-2 border-emerald-500"
+                            : "text-stone-500 hover:bg-stone-800/50 hover:text-stone-300 border-l-2 border-transparent"
                     )}
                 >
-                    <Settings className="h-5 w-5" />
+                    <Settings className={clsx("h-5 w-5", pathname.startsWith("/settings") ? "text-emerald-400" : "text-stone-500")} />
                     <span className="font-typewriter font-medium">Settings</span>
                 </Link>
                 <button
                     type="button"
                     onClick={handleLock}
-                    className="w-full flex items-center space-x-3 px-4 py-3.5 lg:py-3 rounded-2xl text-stone-400 hover:bg-amber-50 hover:text-amber-600 transition-all duration-200 text-sm"
+                    className="w-full flex items-center space-x-3 px-4 py-3.5 lg:py-3 rounded-2xl text-stone-500 hover:bg-stone-800/50 hover:text-amber-400 transition-all duration-200 text-sm border-l-2 border-transparent"
                 >
                     <Lock className="h-5 w-5" />
                     <span className="font-typewriter font-medium">Lock</span>
@@ -110,7 +113,7 @@ export default function Sidebar() {
                 <button
                     type="button"
                     onClick={handleSignOut}
-                    className="w-full flex items-center space-x-3 px-4 py-3.5 lg:py-3 rounded-2xl text-stone-400 hover:bg-red-50 hover:text-red-600 transition-all duration-200 text-sm"
+                    className="w-full flex items-center space-x-3 px-4 py-3.5 lg:py-3 rounded-2xl text-stone-500 hover:bg-stone-800/50 hover:text-red-400 transition-all duration-200 text-sm border-l-2 border-transparent"
                 >
                     <LogOut className="h-5 w-5" />
                     <span className="font-typewriter font-medium">Sign Out</span>
@@ -122,16 +125,16 @@ export default function Sidebar() {
     return (
         <>
             {/* Mobile header bar */}
-            <div className="lg:hidden fixed top-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-b border-stone-200 px-4 h-14 flex items-center justify-between">
+            <div className="lg:hidden fixed top-0 left-0 right-0 z-40 bg-stone-950/95 backdrop-blur-md border-b border-stone-800 px-4 h-14 flex items-center justify-between">
                 <div className="flex items-center space-x-2.5">
                     <Image src="/logo.png" alt="CapturePilot" width={32} height={32} className="rounded-lg" />
-                    <span className="text-base font-bold font-typewriter">CapturePilot</span>
+                    <span className="text-base font-semibold font-typewriter text-stone-200">CapturePilot</span>
                 </div>
                 <button
                     type="button"
                     title="Open menu"
                     onClick={() => setMobileOpen(true)}
-                    className="p-2 -mr-1 text-stone-600 hover:text-stone-900"
+                    className="p-2 -mr-1 text-stone-400 hover:text-stone-200"
                 >
                     <Menu className="h-5 w-5" />
                 </button>
@@ -140,7 +143,7 @@ export default function Sidebar() {
             {/* Mobile overlay */}
             {mobileOpen && (
                 <div
-                    className="lg:hidden fixed inset-0 z-50 bg-black/30 backdrop-blur-sm"
+                    className="lg:hidden fixed inset-0 z-50 bg-black/40 backdrop-blur-sm"
                     onClick={() => setMobileOpen(false)}
                 />
             )}
@@ -148,7 +151,7 @@ export default function Sidebar() {
             {/* Mobile slide-out sidebar */}
             <div
                 className={clsx(
-                    "lg:hidden fixed top-0 left-0 bottom-0 z-50 w-72 bg-white flex flex-col pt-6 pb-6 shadow-2xl transition-transform duration-300 ease-in-out",
+                    "lg:hidden fixed top-0 left-0 bottom-0 z-50 w-72 bg-stone-950 flex flex-col pb-6 shadow-2xl transition-transform duration-300 ease-in-out",
                     mobileOpen ? "translate-x-0" : "-translate-x-full"
                 )}
             >
@@ -156,7 +159,7 @@ export default function Sidebar() {
             </div>
 
             {/* Desktop sidebar */}
-            <aside className="hidden lg:flex w-64 flex-shrink-0 bg-gradient-to-b from-white via-white to-stone-50 border-r border-stone-200 h-screen sticky top-0 flex-col pt-6 pb-6 shadow-sm rounded-r-[40px]">
+            <aside className="hidden lg:flex w-64 flex-shrink-0 bg-stone-950 h-screen sticky top-0 flex-col pb-6">
                 {sidebarContent}
             </aside>
         </>

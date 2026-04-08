@@ -32,6 +32,12 @@
   animation-fill-mode: both;
 }
 
+/* Dot grid background pattern */
+.dot-grid-bg {
+  background-image: radial-gradient(circle, #e7e5e4 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
 /* Premium card hover lift */
 .hover-lift {
   transition: transform 0.3s ease, box-shadow 0.3s ease;
@@ -41,9 +47,20 @@
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
 }
 
-/* Focus ring for accessibility */
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Selection color — emerald */
+::selection {
+  background-color: rgba(16, 185, 129, 0.2);
+  color: inherit;
+}
+
+/* Focus ring for accessibility — emerald */
 *:focus-visible {
-  outline: 2px solid #000;
+  outline: 2px solid #10b981;
   outline-offset: 2px;
   border-radius: 8px;
 }
@@ -122,12 +139,12 @@
 
 /* Input field */
 .input-field {
-  @apply w-full border border-stone-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-black focus:ring-1 focus:ring-black transition-colors;
+  @apply w-full border border-stone-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-colors;
 }
 
 /* Button variants */
 .btn-primary {
-  @apply bg-black text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-stone-800 transition-colors inline-flex items-center gap-1.5 disabled:opacity-50;
+  @apply bg-emerald-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-emerald-700 transition-colors inline-flex items-center gap-1.5 disabled:opacity-50;
 }
 .btn-secondary {
   @apply bg-white text-stone-700 border border-stone-200 px-4 py-2 rounded-xl text-sm font-bold hover:bg-stone-50 transition-colors inline-flex items-center gap-1.5;
@@ -155,5 +172,5 @@ select, input[type="text"], input[type="email"], input[type="password"], input[t
   @apply transition-colors duration-150;
 }
 select:focus, input:focus, textarea:focus {
-  @apply border-black ring-1 ring-black outline-none;
+  @apply border-emerald-500 ring-2 ring-emerald-500/20 outline-none;
 }
