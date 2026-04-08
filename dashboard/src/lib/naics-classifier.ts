@@ -230,9 +230,10 @@ const NAICS_KEYWORD_MAP: Record<string, KeywordEntry[]> = {
         { keywords: ["network administration", "system administration"], weight: 2 },
     ],
     "541614": [
-        { keywords: ["process design", "logistics consulting"], weight: 3 },
-        { keywords: ["supply chain management", "supply chain consulting"], weight: 3 },
-        { keywords: ["operations consulting"], weight: 2 },
+        { keywords: ["logistics consulting", "logistics consultant"], weight: 3 },
+        { keywords: ["supply chain consulting", "supply chain management consulting"], weight: 3 },
+        { keywords: ["process improvement consulting", "process design consulting"], weight: 2 },
+        { keywords: ["operations consulting", "operations management consulting"], weight: 2 },
     ],
     "541620": [
         { keywords: ["environmental consulting"], weight: 3 },
@@ -304,7 +305,34 @@ export function classifyNaics(
         }
     }
 
+    // ── Disambiguation: suppress consulting codes when operational codes are stronger ──
+    // If the company actually DOES freight/trucking/construction/janitorial etc,
+    // don't also suggest the "consulting" version of that industry
+    const operationalCodes = new Set(results.filter(r => r.confidence >= 0.3).map(r => r.code));
+    const suppressMap: Record<string, string[]> = {
+        // If freight/trucking codes found, suppress logistics consulting
+        "484110": ["541614"], "484121": ["541614"], "484122": ["541614"],
+        "488510": ["541614"], "488490": ["541614"], "488190": ["541614"],
+        // If construction codes found, suppress engineering/management consulting
+        "236220": ["541611", "541618"], "237130": ["541611"],
+        "238210": ["541611"], "238910": ["541611"],
+        // If janitorial found, suppress facility consulting
+        "561720": ["541611", "541618"],
+        // If IT services found, suppress IT consulting
+        "541512": ["541611", "541618"],
+    };
+    const codesToSuppress = new Set<string>();
+    for (const code of operationalCodes) {
+        const suppressList = suppressMap[code];
+        if (suppressList) {
+            for (const s of suppressList) codesToSuppress.add(s);
+        }
+    }
+    const filtered = codesToSuppress.size > 0
+        ? results.filter(r => !codesToSuppress.has(r.code) || r.confidence >= 0.9)
+        : results;
+
     // Sort by confidence, return top 5
-    results.sort((a, b) => b.confidence - a.confidence);
-    return results.slice(0, 5);
+    filtered.sort((a, b) => b.confidence - a.confidence);
+    return filtered.slice(0, 5);
 }
