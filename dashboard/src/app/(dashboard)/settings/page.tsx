@@ -1,7 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Settings, User, Bell, Building, MapPin, Shield, Loader2, CheckCircle2, ArrowLeft, Phone, Calendar, UserCheck, Search, AlertCircle, Briefcase, Truck, ShieldCheck } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import {
+    Settings, User, Bell, Building, MapPin, Shield, Loader2, CheckCircle2,
+    Phone, Calendar, UserCheck, Search, AlertCircle, Briefcase, Truck,
+    ShieldCheck, CreditCard, Receipt, ExternalLink, Download, Eye,
+    Lock, AlertTriangle, Trash2, X, ChevronDown, ChevronUp,
+} from "lucide-react";
 import ServiceCTA from "@/components/ui/ServiceCTA";
 import { createSupabaseClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
@@ -14,6 +19,10 @@ import { PSC_CODES } from "@/lib/psc-codes";
 import { FEDERAL_AGENCIES } from "@/lib/federal-agencies";
 
 const supabase = createSupabaseClient();
+
+/* ------------------------------------------------------------------ */
+/*  Constants                                                         */
+/* ------------------------------------------------------------------ */
 
 const CERT_OPTIONS = [
     { value: "8(a)", label: "8(a)" },
@@ -30,6 +39,10 @@ const STATE_OPTIONS = [
     "MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC",
     "SD","TN","TX","UT","VT","VA","WA","WV","WI","WY","DC","PR","GU","VI"
 ];
+
+/* ------------------------------------------------------------------ */
+/*  Types                                                             */
+/* ------------------------------------------------------------------ */
 
 interface Profile {
     company_name: string;
@@ -63,10 +76,128 @@ interface Profile {
     prime_or_sub: string;
     plan_tier: string;
     notification_preferences: { email: boolean; frequency: string };
+    account_type: string;
+    created_at: string;
+    contact_name: string | null;
 }
+
+interface SubscriptionData {
+    id: string;
+    status: string;
+    plan_name: string;
+    interval: string;
+    interval_count: number;
+    unit_amount: number;
+    currency: string;
+    current_period_start: number;
+    current_period_end: number;
+    cancel_at_period_end: boolean;
+    cancel_at: number | null;
+    canceled_at: number | null;
+    trial_start: number | null;
+    trial_end: number | null;
+    payment_method: {
+        brand: string | null;
+        last4: string | null;
+        exp_month: number | null;
+        exp_year: number | null;
+    } | null;
+    created: number;
+}
+
+interface Invoice {
+    id: string;
+    number: string | null;
+    status: string | null;
+    amount: number;
+    currency: string;
+    created: number;
+    period_start: number;
+    period_end: number;
+    pdf_url: string | null;
+    hosted_url: string | null;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Helpers                                                           */
+/* ------------------------------------------------------------------ */
+
+function formatDate(ts: number): string {
+    return new Date(ts * 1000).toLocaleDateString("en-US", {
+        month: "short", day: "numeric", year: "numeric",
+    });
+}
+
+function formatDateLong(ts: number): string {
+    return new Date(ts * 1000).toLocaleDateString("en-US", {
+        month: "long", day: "numeric", year: "numeric",
+    });
+}
+
+function formatCurrency(amount: number, currency = "usd"): string {
+    return new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: currency.toUpperCase(),
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2,
+    }).format(amount);
+}
+
+function capitalize(s: string): string {
+    return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Sub-components                                                    */
+/* ------------------------------------------------------------------ */
+
+function SubscriptionStatusBadge({ status }: { status: string }) {
+    const map: Record<string, { bg: string; text: string; label: string }> = {
+        active:   { bg: "bg-emerald-100", text: "text-emerald-700", label: "Active" },
+        trialing: { bg: "bg-blue-100",    text: "text-blue-700",    label: "Trial" },
+        past_due: { bg: "bg-amber-100",   text: "text-amber-700",   label: "Past Due" },
+        canceled: { bg: "bg-red-100",     text: "text-red-700",     label: "Canceled" },
+        free:     { bg: "bg-stone-100",   text: "text-stone-600",   label: "Free" },
+        incomplete:       { bg: "bg-amber-100",   text: "text-amber-700",   label: "Incomplete" },
+        incomplete_expired: { bg: "bg-red-100", text: "text-red-700", label: "Expired" },
+        unpaid:   { bg: "bg-red-100",     text: "text-red-700",     label: "Unpaid" },
+    };
+    const s = map[status] || map.free;
+    return (
+        <span className={clsx(s.bg, s.text, "px-3 py-1 rounded-full text-xs font-typewriter font-bold uppercase")}>
+            {s.label}
+        </span>
+    );
+}
+
+function InvoiceStatusBadge({ status }: { status: string | null }) {
+    const map: Record<string, { bg: string; text: string; label: string }> = {
+        paid:       { bg: "bg-emerald-50 border-emerald-200", text: "text-emerald-700", label: "Paid" },
+        open:       { bg: "bg-amber-50 border-amber-200",     text: "text-amber-700",   label: "Open" },
+        draft:      { bg: "bg-stone-50 border-stone-200",     text: "text-stone-500",   label: "Draft" },
+        void:       { bg: "bg-red-50 border-red-200",         text: "text-red-600",     label: "Void" },
+        uncollectible: { bg: "bg-red-50 border-red-200",      text: "text-red-600",     label: "Uncollectible" },
+    };
+    const s = map[status || "draft"] || map.draft;
+    return (
+        <span className={clsx(s.bg, s.text, "border px-2.5 py-0.5 rounded-full text-[10px] font-typewriter font-bold uppercase")}>
+            {s.label}
+        </span>
+    );
+}
+
+function SkeletonBlock({ className }: { className?: string }) {
+    return <div className={clsx("animate-pulse bg-stone-100 rounded-lg", className)} />;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Main Component                                                    */
+/* ------------------------------------------------------------------ */
 
 export default function SettingsPage() {
     const router = useRouter();
+
+    // Core profile state
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
@@ -77,6 +208,28 @@ export default function SettingsPage() {
     const [pscSearch, setPscSearch] = useState("");
     const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
+    // Subscription & billing state
+    const [subscription, setSubscription] = useState<SubscriptionData | null>(null);
+    const [subLoading, setSubLoading] = useState(true);
+    const [invoices, setInvoices] = useState<Invoice[]>([]);
+    const [invoicesLoading, setInvoicesLoading] = useState(true);
+    const [portalLoading, setPortalLoading] = useState(false);
+
+    // Password state
+    const [newPassword, setNewPassword] = useState("");
+    const [confirmPassword, setConfirmPassword] = useState("");
+    const [passwordSaving, setPasswordSaving] = useState(false);
+    const [passwordMsg, setPasswordMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+    // Delete account state
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [deleteConfirmText, setDeleteConfirmText] = useState("");
+    const [deleting, setDeleting] = useState(false);
+
+    // Section collapse state
+    const [invoicesExpanded, setInvoicesExpanded] = useState(true);
+
+    /* ---- Load profile ---- */
     useEffect(() => {
         async function load() {
             const { data: { user } } = await supabase.auth.getUser();
@@ -97,7 +250,43 @@ export default function SettingsPage() {
         load();
     }, [router]);
 
-    // Scroll to hash field and pulse highlight
+    /* ---- Load subscription details ---- */
+    useEffect(() => {
+        async function loadSubscription() {
+            try {
+                const res = await fetch("/api/stripe/subscription");
+                if (res.ok) {
+                    const data = await res.json();
+                    setSubscription(data.subscription || null);
+                }
+            } catch {
+                // Silently fail — subscription section will show fallback
+            } finally {
+                setSubLoading(false);
+            }
+        }
+        loadSubscription();
+    }, []);
+
+    /* ---- Load invoices ---- */
+    useEffect(() => {
+        async function loadInvoices() {
+            try {
+                const res = await fetch("/api/stripe/invoices");
+                if (res.ok) {
+                    const data = await res.json();
+                    setInvoices(data.invoices || []);
+                }
+            } catch {
+                // Silently fail
+            } finally {
+                setInvoicesLoading(false);
+            }
+        }
+        loadInvoices();
+    }, []);
+
+    /* ---- Scroll to hash ---- */
     useEffect(() => {
         if (loading || !profile) return;
         const hash = window.location.hash?.replace("#", "");
@@ -113,6 +302,7 @@ export default function SettingsPage() {
         return () => clearTimeout(timeout);
     }, [loading, profile]);
 
+    /* ---- Profile helpers ---- */
     const updateProfile = (key: string, value: unknown) => {
         if (!profile) return;
         setProfile({ ...profile, [key]: value });
@@ -158,6 +348,8 @@ export default function SettingsPage() {
                 zip_code: profile.zip_code,
                 website: profile.website,
                 phone: profile.phone,
+                email: profile.email,
+                contact_name: profile.contact_name,
                 naics_codes: profile.naics_codes || [],
                 sba_certifications: profile.sba_certifications || [],
                 employee_count: profile.employee_count,
@@ -188,6 +380,95 @@ export default function SettingsPage() {
         setSaving(false);
     };
 
+    /* ---- Stripe portal ---- */
+    const openStripePortal = useCallback(async () => {
+        setPortalLoading(true);
+        try {
+            const res = await fetch("/api/stripe/portal", { method: "POST" });
+            const data = await res.json();
+            if (data.url) {
+                window.location.href = data.url;
+            } else {
+                setPortalLoading(false);
+            }
+        } catch {
+            setPortalLoading(false);
+        }
+    }, []);
+
+    /* ---- Password update ---- */
+    const handlePasswordUpdate = async () => {
+        setPasswordMsg(null);
+        if (newPassword.length < 8) {
+            setPasswordMsg({ type: "error", text: "Password must be at least 8 characters." });
+            return;
+        }
+        if (newPassword !== confirmPassword) {
+            setPasswordMsg({ type: "error", text: "Passwords do not match." });
+            return;
+        }
+        setPasswordSaving(true);
+        const { error } = await supabase.auth.updateUser({ password: newPassword });
+        if (error) {
+            setPasswordMsg({ type: "error", text: error.message });
+        } else {
+            setPasswordMsg({ type: "success", text: "Password updated successfully." });
+            setNewPassword("");
+            setConfirmPassword("");
+        }
+        setPasswordSaving(false);
+    };
+
+    /* ---- Delete account ---- */
+    const handleDeleteAccount = async () => {
+        if (deleteConfirmText !== "DELETE") return;
+        setDeleting(true);
+        try {
+            const res = await fetch("/api/admin/delete-account", { method: "POST" });
+            if (res.ok) {
+                await supabase.auth.signOut();
+                router.push("/login");
+            } else {
+                alert("Failed to delete account. Please contact support.");
+                setDeleting(false);
+            }
+        } catch {
+            alert("Failed to delete account. Please contact support.");
+            setDeleting(false);
+        }
+    };
+
+    /* ---- Derived values ---- */
+    const accountTypeBadge = () => {
+        if (!profile) return { label: "Free", bg: "bg-stone-100", text: "text-stone-600" };
+        const tier = profile.plan_tier || "free";
+        const accountType = profile.account_type || "self_service";
+        if (accountType === "consulting") return { label: "Consulting", bg: "bg-emerald-100", text: "text-emerald-700" };
+        if (tier === "pro" || subscription?.status === "active" || subscription?.status === "trialing") return { label: "Pro", bg: "bg-emerald-100", text: "text-emerald-700" };
+        if (tier === "free_beta") return { label: "Free Beta", bg: "bg-blue-100", text: "text-blue-700" };
+        return { label: "Free", bg: "bg-stone-100", text: "text-stone-600" };
+    };
+
+    const badge = accountTypeBadge();
+
+    const memberSince = profile?.created_at
+        ? new Date(profile.created_at).toLocaleDateString("en-US", { month: "long", year: "numeric" })
+        : null;
+
+    // Trial days remaining
+    const trialDaysLeft = subscription?.trial_end
+        ? Math.max(0, Math.ceil((subscription.trial_end * 1000 - Date.now()) / (1000 * 60 * 60 * 24)))
+        : null;
+
+    const trialTotalDays = subscription?.trial_start && subscription?.trial_end
+        ? Math.max(1, Math.ceil((subscription.trial_end - subscription.trial_start) / (60 * 60 * 24)))
+        : null;
+
+    const trialProgress = trialDaysLeft !== null && trialTotalDays !== null
+        ? Math.max(0, Math.min(100, ((trialTotalDays - trialDaysLeft) / trialTotalDays) * 100))
+        : null;
+
+    /* ---- Loading state ---- */
     if (loading) {
         return (
             <div className="flex justify-center items-center min-h-[400px]">
@@ -207,18 +488,24 @@ export default function SettingsPage() {
         );
     }
 
+    /* ================================================================ */
+    /*  RENDER                                                          */
+    /* ================================================================ */
+
     return (
-        <div className="max-w-3xl mx-auto space-y-6 animate-in fade-in duration-500 pb-12 px-1">
+        <div className="max-w-3xl mx-auto space-y-6 animate-in fade-in duration-500 pb-16 px-1">
+            {/* ---- Header ---- */}
             <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
                 <div>
                     <h2 className="text-2xl sm:text-3xl font-bold font-typewriter tracking-tighter text-black flex items-center">
                         <Settings className="mr-3 w-6 h-6 sm:w-8 sm:h-8" /> Settings
                     </h2>
                     <p className="text-stone-500 mt-1 font-medium text-sm">
-                        Manage your business profile and preferences
+                        Manage your account, subscription, and business profile
                     </p>
                 </div>
                 <button
+                    type="button"
                     onClick={handleSave}
                     disabled={saving}
                     className={clsx(
@@ -232,88 +519,359 @@ export default function SettingsPage() {
                 </button>
             </header>
 
-            {/* Account */}
-            <section className="bg-white rounded-[24px] sm:rounded-[32px] border border-stone-200 shadow-sm p-5 sm:p-7">
-                <h3 className="font-typewriter font-bold text-base sm:text-lg flex items-center mb-4">
-                    <User className="w-5 h-5 mr-2 text-stone-400" /> Account
-                </h3>
-                <div className="space-y-3">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 py-3 border-b border-stone-100">
-                        <div>
-                            <p className="font-medium text-sm">Email</p>
-                            <p className="text-xs text-stone-400">From your Google account</p>
+            {/* ================================================================ */}
+            {/*  SECTION 1: Account Overview                                     */}
+            {/* ================================================================ */}
+            <section id="account" className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
+                <p className="text-stone-400 text-xs uppercase tracking-widest font-typewriter font-bold mb-4">Account Overview</p>
+                <div className="space-y-0">
+                    {/* Email */}
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 py-3.5 border-b border-stone-100">
+                        <div className="flex items-center gap-2">
+                            <User className="w-4 h-4 text-stone-400" />
+                            <div>
+                                <p className="font-medium text-sm">Email</p>
+                                <p className="text-[11px] text-stone-400">Your login email address</p>
+                            </div>
                         </div>
                         <p className="text-sm font-mono text-stone-600">{userEmail}</p>
                     </div>
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 py-3">
-                        <div>
-                            <p className="font-medium text-sm">Plan</p>
-                            <p className="text-xs text-stone-400">Your current subscription</p>
+
+                    {/* Company Name */}
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 py-3.5 border-b border-stone-100">
+                        <div className="flex items-center gap-2">
+                            <Building className="w-4 h-4 text-stone-400" />
+                            <div>
+                                <p className="font-medium text-sm">Company</p>
+                                <p className="text-[11px] text-stone-400">Your business entity name</p>
+                            </div>
                         </div>
-                        <div className="flex items-center gap-2 self-start sm:self-auto">
-                            <span className="text-xs font-typewriter font-bold bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full uppercase">
-                                {profile.plan_tier === "free_beta" ? "Free Beta" : profile.plan_tier}
-                            </span>
-                        </div>
+                        <p className="text-sm font-medium text-stone-700">{profile.company_name || "Not set"}</p>
                     </div>
+
+                    {/* Account Type */}
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 py-3.5 border-b border-stone-100">
+                        <div className="flex items-center gap-2">
+                            <CreditCard className="w-4 h-4 text-stone-400" />
+                            <div>
+                                <p className="font-medium text-sm">Plan</p>
+                                <p className="text-[11px] text-stone-400">Your current subscription tier</p>
+                            </div>
+                        </div>
+                        <span className={clsx(badge.bg, badge.text, "px-3 py-1 rounded-full text-xs font-typewriter font-bold uppercase")}>
+                            {badge.label}
+                        </span>
+                    </div>
+
+                    {/* Member Since */}
+                    {memberSince && (
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 py-3.5">
+                            <div className="flex items-center gap-2">
+                                <Calendar className="w-4 h-4 text-stone-400" />
+                                <div>
+                                    <p className="font-medium text-sm">Member Since</p>
+                                    <p className="text-[11px] text-stone-400">When you joined CapturePilot</p>
+                                </div>
+                            </div>
+                            <p className="text-sm text-stone-600">{memberSince}</p>
+                        </div>
+                    )}
                 </div>
             </section>
 
-            {/* Profile Completeness */}
-            {(() => {
-                const checks: [boolean, string][] = [
-                    [!!profile.company_name, "Company Name"],
-                    [!!profile.uei, "UEI"],
-                    [!!profile.cage_code, "CAGE Code"],
-                    [(profile.naics_codes?.length || 0) > 0, "NAICS Codes"],
-                    [(profile.sba_certifications?.length || 0) > 0, "SBA Certifications"],
-                    [!!profile.state, "State"],
-                    [(profile.target_states?.length || 0) > 0, "Target States"],
-                    [!!profile.website, "Website"],
-                    [!!profile.phone, "Phone"],
-                    [!!profile.employee_count, "Employee Count"],
-                    [!!profile.years_in_business, "Years in Business"],
-                    [(profile.federal_awards_count || 0) > 0, "Past Federal Awards"],
-                ];
-                const completed = checks.filter(([ok]) => ok).length;
-                const score = Math.round((completed / checks.length) * 100);
-                const missing = checks.filter(([ok]) => !ok).map(([, label]) => label);
+            {/* ================================================================ */}
+            {/*  SECTION 2: Subscription Management                              */}
+            {/* ================================================================ */}
+            <section id="subscription" className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
+                <p className="text-stone-400 text-xs uppercase tracking-widest font-typewriter font-bold mb-4">Subscription</p>
 
-                return (
-                    <section className="bg-white rounded-[24px] sm:rounded-[32px] border border-stone-200 shadow-sm p-5 sm:p-7">
-                        <div className="flex items-center justify-between mb-3">
-                            <h3 className="font-typewriter font-bold text-base sm:text-lg flex items-center">
-                                <UserCheck className="w-5 h-5 mr-2 text-stone-400" /> Profile Strength
-                            </h3>
-                            <span className={clsx("text-lg font-black font-typewriter",
-                                score >= 80 ? "text-emerald-600" : score >= 50 ? "text-amber-600" : "text-red-600"
-                            )}>{score}%</span>
+                {subLoading ? (
+                    <div className="space-y-4">
+                        <SkeletonBlock className="h-6 w-48" />
+                        <SkeletonBlock className="h-4 w-72" />
+                        <SkeletonBlock className="h-4 w-56" />
+                        <SkeletonBlock className="h-10 w-40 mt-2" />
+                    </div>
+                ) : subscription ? (
+                    <div className="space-y-4">
+                        {/* Plan name + status */}
+                        <div className="flex items-start justify-between">
+                            <div>
+                                <h3 className="text-xl font-bold text-stone-900">{subscription.plan_name}</h3>
+                                <p className="text-xs text-stone-500 mt-0.5">
+                                    {subscription.interval === "year"
+                                        ? `${formatCurrency(subscription.unit_amount)}/yr`
+                                        : `${formatCurrency(subscription.unit_amount)}/mo`}
+                                    {subscription.interval === "year" && (
+                                        <span className="ml-2 text-emerald-600 font-bold">Save 20%</span>
+                                    )}
+                                </p>
+                            </div>
+                            <SubscriptionStatusBadge status={subscription.status} />
                         </div>
-                        <div className="w-full bg-stone-200 rounded-full h-2.5 mb-3">
-                            <div className={clsx("rounded-full h-2.5 transition-all duration-500",
-                                score >= 80 ? "bg-emerald-500" : score >= 50 ? "bg-amber-500" : "bg-red-500"
-                            )} style={{ width: `${score}%` }} />
-                        </div>
-                        {missing.length > 0 ? (
-                            <div className="flex flex-wrap gap-1.5">
-                                {missing.map(m => (
-                                    <span key={m} className="text-[10px] font-typewriter bg-red-50 text-red-600 border border-red-200 px-2 py-0.5 rounded">
-                                        {m}
+
+                        {/* Trial countdown */}
+                        {subscription.status === "trialing" && trialDaysLeft !== null && (
+                            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                                <div className="flex items-center justify-between mb-2">
+                                    <p className="text-sm text-blue-800 font-medium">
+                                        {trialDaysLeft} day{trialDaysLeft !== 1 ? "s" : ""} remaining in trial
+                                    </p>
+                                    <span className="text-xs text-blue-600 font-typewriter font-bold">
+                                        {trialDaysLeft}/{trialTotalDays}
                                     </span>
+                                </div>
+                                {trialProgress !== null && (
+                                    <div className="w-full bg-blue-200 rounded-full h-2">
+                                        <div
+                                            className="bg-blue-500 rounded-full h-2 transition-all duration-500"
+                                            style={{ width: `${trialProgress}%` }}
+                                        />
+                                    </div>
+                                )}
+                                <p className="text-xs text-blue-600 mt-2">
+                                    Trial ends {subscription.trial_end ? formatDateLong(subscription.trial_end) : ""}.
+                                    Full Pro features are unlocked.
+                                </p>
+                            </div>
+                        )}
+
+                        {/* Past due warning */}
+                        {subscription.status === "past_due" && (
+                            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <AlertTriangle className="w-4 h-4 text-amber-600" />
+                                    <span className="text-sm font-bold text-amber-800">Payment failed</span>
+                                </div>
+                                <p className="text-xs text-amber-700">
+                                    Please update your payment method to avoid losing access.
+                                </p>
+                            </div>
+                        )}
+
+                        {/* Cancellation notice */}
+                        {subscription.cancel_at_period_end && (
+                            <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <AlertTriangle className="w-4 h-4 text-red-500" />
+                                    <span className="text-sm font-bold text-red-800">Cancellation scheduled</span>
+                                </div>
+                                <p className="text-xs text-red-700">
+                                    Your subscription will end on {formatDateLong(subscription.current_period_end)}.
+                                    You can reactivate anytime before then.
+                                </p>
+                            </div>
+                        )}
+
+                        {/* Period & payment info */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div className="bg-stone-50 rounded-xl p-3.5">
+                                <p className="text-[10px] text-stone-400 uppercase tracking-widest font-typewriter mb-1">Current Period</p>
+                                <p className="text-sm font-medium text-stone-700">
+                                    {formatDate(subscription.current_period_start)} &mdash; {formatDate(subscription.current_period_end)}
+                                </p>
+                            </div>
+                            <div className="bg-stone-50 rounded-xl p-3.5">
+                                <p className="text-[10px] text-stone-400 uppercase tracking-widest font-typewriter mb-1">Next Billing Date</p>
+                                <p className="text-sm font-medium text-stone-700">
+                                    {subscription.cancel_at_period_end
+                                        ? "N/A (canceling)"
+                                        : formatDateLong(subscription.current_period_end)}
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Payment method */}
+                        {subscription.payment_method && (
+                            <div className="bg-stone-50 rounded-xl p-3.5">
+                                <p className="text-[10px] text-stone-400 uppercase tracking-widest font-typewriter mb-1">Payment Method</p>
+                                <div className="flex items-center gap-2">
+                                    <CreditCard className="w-4 h-4 text-stone-500" />
+                                    <p className="text-sm font-medium text-stone-700">
+                                        {capitalize(subscription.payment_method.brand || "Card")} ending in {subscription.payment_method.last4}
+                                    </p>
+                                    {subscription.payment_method.exp_month && subscription.payment_method.exp_year && (
+                                        <span className="text-xs text-stone-400 ml-1">
+                                            Exp {String(subscription.payment_method.exp_month).padStart(2, "0")}/{subscription.payment_method.exp_year}
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Action buttons */}
+                        <div className="flex flex-wrap gap-2 pt-1">
+                            <button
+                                type="button"
+                                onClick={openStripePortal}
+                                disabled={portalLoading}
+                                className="inline-flex items-center bg-black text-white font-typewriter font-bold px-5 py-2.5 rounded-full text-xs hover:bg-stone-800 transition-all disabled:opacity-50"
+                            >
+                                {portalLoading ? <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" /> : <ExternalLink className="w-3.5 h-3.5 mr-2" />}
+                                Change Plan
+                            </button>
+                            <button
+                                type="button"
+                                onClick={openStripePortal}
+                                disabled={portalLoading}
+                                className="inline-flex items-center bg-white text-stone-700 font-typewriter font-bold px-5 py-2.5 rounded-full text-xs border border-stone-200 hover:bg-stone-50 transition-all disabled:opacity-50"
+                            >
+                                {portalLoading ? <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" /> : <CreditCard className="w-3.5 h-3.5 mr-2" />}
+                                Update Payment Method
+                            </button>
+                            <button
+                                type="button"
+                                onClick={openStripePortal}
+                                disabled={portalLoading}
+                                className="inline-flex items-center bg-white text-red-600 font-typewriter font-bold px-5 py-2.5 rounded-full text-xs border border-red-200 hover:bg-red-50 transition-all disabled:opacity-50"
+                            >
+                                {portalLoading ? <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" /> : <X className="w-3.5 h-3.5 mr-2" />}
+                                Cancel Subscription
+                            </button>
+                        </div>
+                    </div>
+                ) : (
+                    /* No active subscription */
+                    <div className="space-y-4">
+                        <div className="flex items-start justify-between">
+                            <div>
+                                <h3 className="text-xl font-bold text-stone-900">
+                                    {profile.plan_tier === "free_beta" ? "Free Beta" : "Free Plan"}
+                                </h3>
+                                <p className="text-xs text-stone-500 mt-0.5">
+                                    {profile.plan_tier === "free_beta"
+                                        ? "Full Pro features during public beta"
+                                        : "Basic features included"}
+                                </p>
+                            </div>
+                            <SubscriptionStatusBadge status="free" />
+                        </div>
+                        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
+                            <p className="text-sm text-emerald-800 font-medium">Upgrade to Pro</p>
+                            <p className="text-xs text-emerald-700 mt-1">
+                                Get unlimited matches, AI proposals, pipeline tools, and more.
+                                Starting at $199/mo with a 30-day free trial.
+                            </p>
+                        </div>
+                        <Link
+                            href="/billing"
+                            className="inline-flex items-center bg-emerald-600 text-white font-typewriter font-bold px-5 py-2.5 rounded-full text-xs hover:bg-emerald-700 transition-all"
+                        >
+                            <CreditCard className="w-3.5 h-3.5 mr-2" />
+                            View Plans & Upgrade
+                        </Link>
+                    </div>
+                )}
+            </section>
+
+            {/* ================================================================ */}
+            {/*  SECTION 3: Invoices & Billing History                           */}
+            {/* ================================================================ */}
+            <section id="invoices" className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
+                <button
+                    type="button"
+                    onClick={() => setInvoicesExpanded(!invoicesExpanded)}
+                    className="w-full flex items-center justify-between"
+                >
+                    <p className="text-stone-400 text-xs uppercase tracking-widest font-typewriter font-bold">
+                        Invoices & Billing History
+                    </p>
+                    {invoicesExpanded
+                        ? <ChevronUp className="w-4 h-4 text-stone-400" />
+                        : <ChevronDown className="w-4 h-4 text-stone-400" />
+                    }
+                </button>
+
+                {invoicesExpanded && (
+                    <div className="mt-4">
+                        {invoicesLoading ? (
+                            <div className="space-y-3">
+                                {[...Array(4)].map((_, i) => (
+                                    <SkeletonBlock key={i} className="h-12 w-full" />
                                 ))}
                             </div>
+                        ) : invoices.length === 0 ? (
+                            <div className="text-center py-8">
+                                <Receipt className="w-8 h-8 text-stone-300 mx-auto mb-2" />
+                                <p className="text-sm text-stone-500">No invoices yet</p>
+                                <p className="text-xs text-stone-400 mt-1">
+                                    Invoices will appear here once you subscribe to a paid plan.
+                                </p>
+                            </div>
                         ) : (
-                            <p className="text-xs text-emerald-600 font-bold">Your profile is complete. You are getting the best possible matches.</p>
+                            <div className="overflow-x-auto -mx-2 sm:mx-0">
+                                <table className="w-full text-sm">
+                                    <thead>
+                                        <tr className="border-b border-stone-200">
+                                            <th className="text-left text-[10px] text-stone-400 uppercase tracking-widest font-typewriter font-bold py-2 px-2">Date</th>
+                                            <th className="text-left text-[10px] text-stone-400 uppercase tracking-widest font-typewriter font-bold py-2 px-2">Invoice #</th>
+                                            <th className="text-right text-[10px] text-stone-400 uppercase tracking-widest font-typewriter font-bold py-2 px-2">Amount</th>
+                                            <th className="text-center text-[10px] text-stone-400 uppercase tracking-widest font-typewriter font-bold py-2 px-2">Status</th>
+                                            <th className="text-right text-[10px] text-stone-400 uppercase tracking-widest font-typewriter font-bold py-2 px-2">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {invoices.map((inv, idx) => (
+                                            <tr
+                                                key={inv.id}
+                                                className={clsx(
+                                                    "border-b border-stone-100 last:border-0 hover:bg-stone-50 transition-colors",
+                                                    idx % 2 === 1 && "bg-stone-50/50"
+                                                )}
+                                            >
+                                                <td className="py-3 px-2 text-stone-700 whitespace-nowrap">
+                                                    {formatDate(inv.created)}
+                                                </td>
+                                                <td className="py-3 px-2 text-stone-600 font-mono text-xs">
+                                                    {inv.number || "---"}
+                                                </td>
+                                                <td className="py-3 px-2 text-right text-stone-800 font-medium tabular-nums">
+                                                    {formatCurrency(inv.amount, inv.currency)}
+                                                </td>
+                                                <td className="py-3 px-2 text-center">
+                                                    <InvoiceStatusBadge status={inv.status} />
+                                                </td>
+                                                <td className="py-3 px-2 text-right">
+                                                    <div className="flex items-center justify-end gap-1.5">
+                                                        {inv.pdf_url && (
+                                                            <a
+                                                                href={inv.pdf_url}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                title="Download PDF"
+                                                                className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-stone-500 hover:text-stone-700 hover:bg-stone-100 transition-all"
+                                                            >
+                                                                <Download className="w-3.5 h-3.5" />
+                                                            </a>
+                                                        )}
+                                                        {inv.hosted_url && (
+                                                            <a
+                                                                href={inv.hosted_url}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                title="View invoice"
+                                                                className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-stone-500 hover:text-stone-700 hover:bg-stone-100 transition-all"
+                                                            >
+                                                                <Eye className="w-3.5 h-3.5" />
+                                                            </a>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
                         )}
-                    </section>
-                );
-            })()}
+                    </div>
+                )}
+            </section>
 
-            {/* Company Info */}
-            <section className="bg-white rounded-[24px] sm:rounded-[32px] border border-stone-200 shadow-sm p-5 sm:p-7">
-                <h3 className="font-typewriter font-bold text-base sm:text-lg flex items-center mb-4">
-                    <Building className="w-5 h-5 mr-2 text-stone-400" /> Company Info
-                </h3>
+            {/* ================================================================ */}
+            {/*  SECTION 4: Profile Settings                                     */}
+            {/* ================================================================ */}
+            <section id="profile" className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
+                <p className="text-stone-400 text-xs uppercase tracking-widest font-typewriter font-bold mb-4">Profile Settings</p>
                 <div className="space-y-4">
                     <div>
                         <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">Company Name</label>
@@ -322,7 +880,38 @@ export default function SettingsPage() {
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">UEI <span className="text-stone-400 normal-case">(12 alphanumeric)</span> <InfoTooltip text="Unique Entity Identifier — your 12-character code assigned when you register on SAM.gov. Required for all federal contracts." /></label>
+                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">Contact Name</label>
+                            <input type="text" placeholder="Full Name" value={profile.contact_name || ""} onChange={(e) => updateProfile("contact_name", e.target.value)}
+                                className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" />
+                        </div>
+                        <div>
+                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">Contact Email</label>
+                            <input type="email" placeholder="contact@company.com" value={profile.email || ""} onChange={(e) => updateProfile("email", e.target.value)}
+                                className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" />
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">Phone</label>
+                            <input id="phone" type="tel" placeholder="(555) 123-4567" value={profile.phone || ""} onChange={(e) => updateProfile("phone", e.target.value)}
+                                className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" />
+                        </div>
+                        <div>
+                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">Website</label>
+                            <input id="website" type="text" placeholder="www.example.com" value={profile.website || ""} onChange={(e) => updateProfile("website", e.target.value)}
+                                className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" />
+                        </div>
+                    </div>
+
+                    {/* DBA + Registration */}
+                    <div>
+                        <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">DBA Name <span className="text-stone-400 normal-case">(optional)</span></label>
+                        <input type="text" placeholder="Doing Business As" value={profile.dba_name || ""} onChange={(e) => updateProfile("dba_name", e.target.value)}
+                            className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" />
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">UEI <span className="text-stone-400 normal-case">(12 alphanumeric)</span> <InfoTooltip text="Unique Entity Identifier -- your 12-character code assigned when you register on SAM.gov. Required for all federal contracts." /></label>
                             <input id="uei" type="text" placeholder="e.g. ABC123DEF456" maxLength={12} value={profile.uei || ""}
                                 onChange={(e) => { updateProfile("uei", e.target.value.replace(/[^A-Za-z0-9]/g, "")); setValidationErrors(prev => ({ ...prev, uei: "" })); }}
                                 className={clsx("w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm font-mono uppercase",
@@ -330,7 +919,7 @@ export default function SettingsPage() {
                             {validationErrors.uei && <p className="text-xs text-red-500 mt-1 flex items-center"><AlertCircle className="w-3 h-3 mr-1" />{validationErrors.uei}</p>}
                         </div>
                         <div>
-                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">CAGE Code <span className="text-stone-400 normal-case">(5 alphanumeric)</span> <InfoTooltip text="Commercial and Government Entity Code — a 5-character ID assigned by the Department of Defense during SAM.gov registration." /></label>
+                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">CAGE Code <span className="text-stone-400 normal-case">(5 alphanumeric)</span> <InfoTooltip text="Commercial and Government Entity Code -- a 5-character ID assigned by the Department of Defense during SAM.gov registration." /></label>
                             <input id="cage-code" type="text" placeholder="e.g. 7ABC1" maxLength={5} value={profile.cage_code || ""}
                                 onChange={(e) => { updateProfile("cage_code", e.target.value.replace(/[^A-Za-z0-9]/g, "")); setValidationErrors(prev => ({ ...prev, cage_code: "" })); }}
                                 className={clsx("w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm font-mono uppercase",
@@ -338,6 +927,8 @@ export default function SettingsPage() {
                             {validationErrors.cage_code && <p className="text-xs text-red-500 mt-1 flex items-center"><AlertCircle className="w-3 h-3 mr-1" />{validationErrors.cage_code}</p>}
                         </div>
                     </div>
+
+                    {/* Address */}
                     <div>
                         <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">Street Address</label>
                         <AddressAutocomplete
@@ -372,22 +963,75 @@ export default function SettingsPage() {
                                 className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm font-mono" />
                         </div>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">Website</label>
-                            <input id="website" type="text" placeholder="www.example.com" value={profile.website || ""} onChange={(e) => updateProfile("website", e.target.value)}
-                                className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" />
-                        </div>
-                        <div>
-                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">Phone</label>
-                            <input id="phone" type="tel" placeholder="(555) 123-4567" value={profile.phone || ""} onChange={(e) => updateProfile("phone", e.target.value)}
-                                className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" />
-                        </div>
-                    </div>
+
+                    {/* Save Profile Button */}
+                    <button
+                        type="button"
+                        onClick={handleSave}
+                        disabled={saving}
+                        className={clsx(
+                            "flex items-center px-6 py-2.5 rounded-full font-bold text-sm transition-all shadow-sm mt-2",
+                            saved ? "bg-emerald-600 text-white" : "bg-black text-white hover:bg-stone-800 active:bg-stone-700"
+                        )}
+                    >
+                        {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Saving...</> :
+                         saved ? <><CheckCircle2 className="w-4 h-4 mr-2" /> Saved</> :
+                         "Save Profile"}
+                    </button>
                 </div>
             </section>
 
-            {/* Advanced Settings Toggle */}
+            {/* ---- Profile Completeness ---- */}
+            {(() => {
+                const checks: [boolean, string][] = [
+                    [!!profile.company_name, "Company Name"],
+                    [!!profile.uei, "UEI"],
+                    [!!profile.cage_code, "CAGE Code"],
+                    [(profile.naics_codes?.length || 0) > 0, "NAICS Codes"],
+                    [(profile.sba_certifications?.length || 0) > 0, "SBA Certifications"],
+                    [!!profile.state, "State"],
+                    [(profile.target_states?.length || 0) > 0, "Target States"],
+                    [!!profile.website, "Website"],
+                    [!!profile.phone, "Phone"],
+                    [!!profile.employee_count, "Employee Count"],
+                    [!!profile.years_in_business, "Years in Business"],
+                    [(profile.federal_awards_count || 0) > 0, "Past Federal Awards"],
+                ];
+                const completed = checks.filter(([ok]) => ok).length;
+                const score = Math.round((completed / checks.length) * 100);
+                const missing = checks.filter(([ok]) => !ok).map(([, label]) => label);
+
+                return (
+                    <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
+                        <div className="flex items-center justify-between mb-3">
+                            <h3 className="font-typewriter font-bold text-base sm:text-lg flex items-center">
+                                <UserCheck className="w-5 h-5 mr-2 text-stone-400" /> Profile Strength
+                            </h3>
+                            <span className={clsx("text-lg font-black font-typewriter",
+                                score >= 80 ? "text-emerald-600" : score >= 50 ? "text-amber-600" : "text-red-600"
+                            )}>{score}%</span>
+                        </div>
+                        <div className="w-full bg-stone-200 rounded-full h-2.5 mb-3">
+                            <div className={clsx("rounded-full h-2.5 transition-all duration-500",
+                                score >= 80 ? "bg-emerald-500" : score >= 50 ? "bg-amber-500" : "bg-red-500"
+                            )} style={{ width: `${score}%` }} />
+                        </div>
+                        {missing.length > 0 ? (
+                            <div className="flex flex-wrap gap-1.5">
+                                {missing.map(m => (
+                                    <span key={m} className="text-[10px] font-typewriter bg-red-50 text-red-600 border border-red-200 px-2 py-0.5 rounded">
+                                        {m}
+                                    </span>
+                                ))}
+                            </div>
+                        ) : (
+                            <p className="text-xs text-emerald-600 font-bold">Your profile is complete. You are getting the best possible matches.</p>
+                        )}
+                    </section>
+                );
+            })()}
+
+            {/* ---- Advanced Settings Toggle ---- */}
             <button type="button" onClick={() => setShowAdvanced(!showAdvanced)}
                 className="w-full bg-stone-50 border border-stone-200 rounded-2xl p-4 text-left hover:bg-stone-100 transition-colors flex items-center justify-between">
                 <span className="text-sm font-bold text-stone-600">
@@ -400,7 +1044,7 @@ export default function SettingsPage() {
 
             {showAdvanced && (<>
             {/* Capacity & Experience */}
-            <section className="bg-white rounded-[24px] sm:rounded-[32px] border border-stone-200 shadow-sm p-5 sm:p-7">
+            <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
                 <h3 className="font-typewriter font-bold text-base sm:text-lg flex items-center mb-4">
                     <Briefcase className="w-5 h-5 mr-2 text-stone-400" /> Capacity & Experience
                 </h3>
@@ -490,13 +1134,13 @@ export default function SettingsPage() {
             </section>
 
             {/* Industry */}
-            <section className="bg-white rounded-[24px] sm:rounded-[32px] border border-stone-200 shadow-sm p-5 sm:p-7">
+            <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
                 <h3 className="font-typewriter font-bold text-base sm:text-lg flex items-center mb-4">
                     <Shield className="w-5 h-5 mr-2 text-stone-400" /> Industry & Certifications
                 </h3>
                 <div className="space-y-4">
                     <div>
-                        <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">NAICS Codes <InfoTooltip text="North American Industry Classification System — codes that describe your industry. The government uses these to categorize opportunities by service/product type." /></label>
+                        <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">NAICS Codes <InfoTooltip text="North American Industry Classification System -- codes that describe your industry. The government uses these to categorize opportunities by service/product type." /></label>
                         <div className="relative mb-2">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
                             <input id="naics-codes" type="text" placeholder="Search by code or name..." value={naicsSearch} onChange={(e) => setNaicsSearch(e.target.value)}
@@ -505,7 +1149,6 @@ export default function SettingsPage() {
                         {(profile.naics_codes || []).length > 0 && (
                             <div className="flex flex-wrap gap-1.5 mb-2">
                                 {(profile.naics_codes || []).map(code => {
-                                    const match = NAICS_CODES.find(n => n.code === code);
                                     return (
                                         <button type="button" key={code} onClick={() => toggleArray("naics_codes", code)}
                                             className="flex items-center bg-black text-white px-2.5 py-1 rounded-full text-xs font-typewriter gap-1">
@@ -558,7 +1201,7 @@ export default function SettingsPage() {
             </section>
 
             {/* PSC Codes & Clearances */}
-            <section className="bg-white rounded-[24px] sm:rounded-[32px] border border-stone-200 shadow-sm p-5 sm:p-7">
+            <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
                 <h3 className="font-typewriter font-bold text-base sm:text-lg flex items-center mb-4">
                     <Shield className="w-5 h-5 mr-2 text-stone-400" /> Service Codes & Clearances
                 </h3>
@@ -623,7 +1266,7 @@ export default function SettingsPage() {
             </section>
 
             {/* Preferred Agencies & Contract Preferences */}
-            <section className="bg-white rounded-[24px] sm:rounded-[32px] border border-stone-200 shadow-sm p-5 sm:p-7">
+            <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
                 <h3 className="font-typewriter font-bold text-base sm:text-lg flex items-center mb-4">
                     <Building className="w-5 h-5 mr-2 text-stone-400" /> Targeting Preferences
                 </h3>
@@ -697,11 +1340,10 @@ export default function SettingsPage() {
             </>)}
 
             {/* Target States */}
-            <section className="bg-white rounded-[24px] sm:rounded-[32px] border border-stone-200 shadow-sm p-5 sm:p-7">
+            <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
                 <h3 className="font-typewriter font-bold text-base sm:text-lg flex items-center mb-4">
                     <MapPin className="w-5 h-5 mr-2 text-stone-400" /> Target States
                 </h3>
-                {/* Nationwide toggle */}
                 <button type="button" onClick={() => {
                     if ((profile.target_states || []).includes("NATIONWIDE")) {
                         setProfile({ ...profile, target_states: [] });
@@ -715,10 +1357,9 @@ export default function SettingsPage() {
                         ? "bg-emerald-50 text-emerald-700 border-emerald-400"
                         : "bg-white text-stone-600 border-stone-200 hover:border-stone-400"
                 )}>
-                    {(profile.target_states || []).includes("NATIONWIDE") ? "✓ Nationwide — All 50 States" : "Select Nationwide (All States)"}
+                    {(profile.target_states || []).includes("NATIONWIDE") ? "Nationwide -- All 50 States" : "Select Nationwide (All States)"}
                 </button>
 
-                {/* Individual states — hidden when nationwide is selected */}
                 {!(profile.target_states || []).includes("NATIONWIDE") && (
                     <div id="target-states" className="flex flex-wrap gap-1.5 max-h-[150px] overflow-y-auto pr-1">
                         {STATE_OPTIONS.map(s => (
@@ -740,7 +1381,7 @@ export default function SettingsPage() {
             </section>
 
             {/* Notifications */}
-            <section className="bg-white rounded-[24px] sm:rounded-[32px] border border-stone-200 shadow-sm p-5 sm:p-7">
+            <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
                 <h3 className="font-typewriter font-bold text-base sm:text-lg flex items-center mb-4">
                     <Bell className="w-5 h-5 mr-2 text-stone-400" /> Notifications
                 </h3>
@@ -780,8 +1421,69 @@ export default function SettingsPage() {
                 </div>
             </section>
 
+            {/* ================================================================ */}
+            {/*  SECTION 5: Password                                             */}
+            {/* ================================================================ */}
+            <section id="password" className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
+                <p className="text-stone-400 text-xs uppercase tracking-widest font-typewriter font-bold mb-4">Password</p>
+                <div className="space-y-4">
+                    <p className="text-xs text-stone-500">
+                        Set or update your account password. If you signed up with Google, you can add a password for email-based login.
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">New Password</label>
+                            <div className="relative">
+                                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
+                                <input
+                                    type="password"
+                                    placeholder="Min. 8 characters"
+                                    value={newPassword}
+                                    onChange={(e) => setNewPassword(e.target.value)}
+                                    className="w-full pl-9 pr-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm"
+                                />
+                            </div>
+                        </div>
+                        <div>
+                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">Confirm Password</label>
+                            <div className="relative">
+                                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
+                                <input
+                                    type="password"
+                                    placeholder="Repeat password"
+                                    value={confirmPassword}
+                                    onChange={(e) => setConfirmPassword(e.target.value)}
+                                    className="w-full pl-9 pr-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm"
+                                />
+                            </div>
+                        </div>
+                    </div>
+                    {passwordMsg && (
+                        <div className={clsx(
+                            "flex items-center gap-2 text-sm px-4 py-2.5 rounded-xl",
+                            passwordMsg.type === "success" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-red-50 text-red-700 border border-red-200"
+                        )}>
+                            {passwordMsg.type === "success"
+                                ? <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+                                : <AlertCircle className="w-4 h-4 flex-shrink-0" />}
+                            {passwordMsg.text}
+                        </div>
+                    )}
+                    <button
+                        type="button"
+                        onClick={handlePasswordUpdate}
+                        disabled={passwordSaving || !newPassword}
+                        className="inline-flex items-center bg-black text-white font-typewriter font-bold px-5 py-2.5 rounded-full text-xs hover:bg-stone-800 transition-all disabled:opacity-50"
+                    >
+                        {passwordSaving
+                            ? <><Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" /> Updating...</>
+                            : <><Lock className="w-3.5 h-3.5 mr-2" /> Update Password</>}
+                    </button>
+                </div>
+            </section>
+
             {/* Google Login */}
-            <section className="bg-white rounded-[24px] sm:rounded-[32px] border border-stone-200 shadow-sm p-5 sm:p-7">
+            <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
                 <h3 className="font-typewriter font-bold text-base sm:text-lg flex items-center mb-2">
                     Quick Login
                 </h3>
@@ -799,6 +1501,29 @@ export default function SettingsPage() {
                 </button>
             </section>
 
+            {/* ================================================================ */}
+            {/*  SECTION 6: Danger Zone                                          */}
+            {/* ================================================================ */}
+            <section id="danger-zone" className="bg-white rounded-2xl border border-red-200 shadow-sm p-5 sm:p-7">
+                <p className="text-red-500 text-xs uppercase tracking-widest font-typewriter font-bold mb-4">Danger Zone</p>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div>
+                        <p className="font-medium text-sm text-stone-800">Delete Account</p>
+                        <p className="text-xs text-stone-500 mt-0.5">
+                            Permanently delete your account and all associated data. This action cannot be undone.
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => setShowDeleteModal(true)}
+                        className="inline-flex items-center bg-white text-red-600 font-typewriter font-bold px-5 py-2.5 rounded-full text-xs border border-red-200 hover:bg-red-50 transition-all self-start sm:self-auto"
+                    >
+                        <Trash2 className="w-3.5 h-3.5 mr-2" />
+                        Delete Account
+                    </button>
+                </div>
+            </section>
+
             {/* Service CTA */}
             <ServiceCTA
                 title="Need help with your GovCon profile?"
@@ -806,9 +1531,83 @@ export default function SettingsPage() {
                 variant="default"
             />
 
+            {/* ---- Delete Account Modal ---- */}
+            {showDeleteModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    {/* Backdrop */}
+                    <div
+                        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+                        onClick={() => { setShowDeleteModal(false); setDeleteConfirmText(""); }}
+                    />
+                    {/* Modal */}
+                    <div className="relative bg-white rounded-2xl shadow-2xl border border-red-200 max-w-md w-full p-6 animate-in zoom-in-95 duration-200">
+                        <button
+                            type="button"
+                            title="Close"
+                            onClick={() => { setShowDeleteModal(false); setDeleteConfirmText(""); }}
+                            className="absolute top-4 right-4 text-stone-400 hover:text-stone-600"
+                        >
+                            <X className="w-5 h-5" />
+                        </button>
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                                <AlertTriangle className="w-5 h-5 text-red-600" />
+                            </div>
+                            <div>
+                                <h3 className="font-bold text-lg text-stone-900">Delete Account</h3>
+                                <p className="text-xs text-stone-500">This action is permanent and irreversible.</p>
+                            </div>
+                        </div>
+                        <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-4">
+                            <p className="text-sm text-red-800">
+                                Deleting your account will permanently remove:
+                            </p>
+                            <ul className="text-xs text-red-700 mt-2 space-y-1 list-disc list-inside">
+                                <li>Your profile and all business information</li>
+                                <li>All opportunity matches and pipeline data</li>
+                                <li>Saved documents and proposals</li>
+                                <li>Your subscription (if active)</li>
+                            </ul>
+                        </div>
+                        <div className="mb-4">
+                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">
+                                Type DELETE to confirm
+                            </label>
+                            <input
+                                type="text"
+                                value={deleteConfirmText}
+                                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                                placeholder="DELETE"
+                                className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none text-sm font-mono uppercase"
+                            />
+                        </div>
+                        <div className="flex gap-3">
+                            <button
+                                type="button"
+                                onClick={() => { setShowDeleteModal(false); setDeleteConfirmText(""); }}
+                                className="flex-1 px-4 py-2.5 rounded-full text-sm font-bold bg-stone-100 text-stone-700 hover:bg-stone-200 transition-all"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleDeleteAccount}
+                                disabled={deleteConfirmText !== "DELETE" || deleting}
+                                className="flex-1 px-4 py-2.5 rounded-full text-sm font-bold bg-red-600 text-white hover:bg-red-700 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center"
+                            >
+                                {deleting
+                                    ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Deleting...</>
+                                    : <><Trash2 className="w-4 h-4 mr-2" /> Delete Permanently</>}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Save Button (Mobile sticky) */}
             <div className="sm:hidden fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-md border-t border-stone-200 z-40">
                 <button
+                    type="button"
                     onClick={handleSave}
                     disabled={saving}
                     className={clsx(
