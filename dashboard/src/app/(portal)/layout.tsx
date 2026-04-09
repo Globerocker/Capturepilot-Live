@@ -140,8 +140,8 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
                 <div className="p-5 border-b border-stone-800/60">
                     <Link href="/portal" className="flex items-center gap-2">
                         <Image src="/logo.png" alt="CapturePilot" width={20} height={20} className="rounded" />
-                        <span className="font-typewriter font-semibold text-sm text-stone-200">CapturePilot</span>
-                        <span className="text-[9px] font-typewriter bg-emerald-500/15 text-emerald-400 px-2 py-0.5 rounded-full uppercase border border-emerald-500/20">Client</span>
+                        <span className="font-semibold text-sm text-stone-200">CapturePilot</span>
+                        <span className="text-[9px] bg-emerald-500/15 text-emerald-400 px-2 py-0.5 rounded-full uppercase border border-emerald-500/20">Client</span>
                     </Link>
                     {companyName && (
                         <p className="text-xs text-stone-500 mt-1.5 truncate">{companyName}</p>

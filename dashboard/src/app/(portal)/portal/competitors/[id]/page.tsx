@@ -442,7 +442,7 @@ export default function CompetitorDetail() {
 
                     {/* Info */}
                     <div className="flex-1 min-w-0">
-                        <h1 className="text-2xl sm:text-3xl font-black text-black font-typewriter leading-tight">
+                        <h1 className="text-2xl sm:text-3xl font-bold text-stone-900 leading-tight">
                             {comp.competitor_name}
                         </h1>
 
@@ -547,7 +547,7 @@ export default function CompetitorDetail() {
                 COMPETITIVE ANALYSIS
             ================================================================ */}
             <div className="bg-white border border-stone-200 rounded-2xl p-6 sm:p-8">
-                <h2 className="text-lg font-black text-black font-typewriter flex items-center gap-2 mb-6">
+                <h2 className="text-lg font-bold text-stone-900 flex items-center gap-2 mb-6">
                     <Target className="w-5 h-5" /> Competitive Analysis
                 </h2>
 
@@ -603,7 +603,7 @@ export default function CompetitorDetail() {
                 PAST AWARDS
             ================================================================ */}
             <div className="bg-white border border-stone-200 rounded-2xl p-6 sm:p-8">
-                <h2 className="text-lg font-black text-black font-typewriter flex items-center gap-2 mb-4">
+                <h2 className="text-lg font-bold text-stone-900 flex items-center gap-2 mb-4">
                     <Award className="w-5 h-5" /> Past Awards
                 </h2>
 
@@ -612,10 +612,10 @@ export default function CompetitorDetail() {
                         <table className="w-full text-left">
                             <thead>
                                 <tr className="border-b border-stone-200">
-                                    <th className="text-[10px] font-typewriter text-stone-400 uppercase pb-2 pr-4">Award</th>
-                                    <th className="text-[10px] font-typewriter text-stone-400 uppercase pb-2 pr-4">Agency</th>
-                                    <th className="text-[10px] font-typewriter text-stone-400 uppercase pb-2 pr-4">Value</th>
-                                    <th className="text-[10px] font-typewriter text-stone-400 uppercase pb-2">Date</th>
+                                    <th className="text-[10px] text-stone-400 uppercase pb-2 pr-4">Award</th>
+                                    <th className="text-[10px] text-stone-400 uppercase pb-2 pr-4">Agency</th>
+                                    <th className="text-[10px] text-stone-400 uppercase pb-2 pr-4">Value</th>
+                                    <th className="text-[10px] text-stone-400 uppercase pb-2">Date</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -669,7 +669,7 @@ export default function CompetitorDetail() {
                 FEDERAL PRESENCE
             ================================================================ */}
             <div className="bg-white border border-stone-200 rounded-2xl p-6 sm:p-8">
-                <h2 className="text-lg font-black text-black font-typewriter flex items-center gap-2 mb-4">
+                <h2 className="text-lg font-bold text-stone-900 flex items-center gap-2 mb-4">
                     <Shield className="w-5 h-5" /> Federal Presence
                 </h2>
 
@@ -766,7 +766,7 @@ export default function CompetitorDetail() {
                 CONTACT INFORMATION
             ================================================================ */}
             <div className="bg-white border border-stone-200 rounded-2xl p-6 sm:p-8">
-                <h2 className="text-lg font-black text-black font-typewriter flex items-center gap-2 mb-4">
+                <h2 className="text-lg font-bold text-stone-900 flex items-center gap-2 mb-4">
                     <Building2 className="w-5 h-5" /> Contact Information
                 </h2>
 
@@ -774,7 +774,7 @@ export default function CompetitorDetail() {
                     {/* Leadership */}
                     {leadership.length > 0 && (
                         <div className="bg-stone-50 border border-stone-200 rounded-xl p-4">
-                            <h3 className="text-[10px] font-typewriter text-stone-400 uppercase mb-2">Leadership</h3>
+                            <h3 className="text-[10px] text-stone-400 uppercase mb-2">Leadership</h3>
                             <div className="space-y-2">
                                 {leadership.map((l, i) => (
                                     <div key={i} className="text-xs text-stone-700">
@@ -789,7 +789,7 @@ export default function CompetitorDetail() {
                     {/* Contact details */}
                     {(contacts.length > 0 || comp.website) && (
                         <div className="bg-stone-50 border border-stone-200 rounded-xl p-4">
-                            <h3 className="text-[10px] font-typewriter text-stone-400 uppercase mb-2">Contact Details</h3>
+                            <h3 className="text-[10px] text-stone-400 uppercase mb-2">Contact Details</h3>
                             <div className="space-y-2">
                                 {contacts.map((c, i) => (
                                     <div key={i} className="text-xs text-stone-600 space-y-0.5">
@@ -827,7 +827,7 @@ export default function CompetitorDetail() {
                     {/* Social links */}
                     {Object.keys(social).length > 0 && (
                         <div className="bg-stone-50 border border-stone-200 rounded-xl p-4">
-                            <h3 className="text-[10px] font-typewriter text-stone-400 uppercase mb-2">Social Links</h3>
+                            <h3 className="text-[10px] text-stone-400 uppercase mb-2">Social Links</h3>
                             <div className="space-y-2">
                                 {Object.entries(social).map(([platform, url]) => (
                                     <a
@@ -859,7 +859,7 @@ export default function CompetitorDetail() {
             ================================================================ */}
             {comp.naics_codes && comp.naics_codes.length > 0 && userNaics.length > 0 && (
                 <div className="bg-white border border-stone-200 rounded-2xl p-6 sm:p-8">
-                    <h2 className="text-lg font-black text-black font-typewriter flex items-center gap-2 mb-2">
+                    <h2 className="text-lg font-bold text-stone-900 flex items-center gap-2 mb-2">
                         <Target className="w-5 h-5" /> NAICS Overlap
                     </h2>
                     <p className="text-xs text-stone-500 mb-4">
@@ -891,7 +891,7 @@ export default function CompetitorDetail() {
             ================================================================ */}
             {comp.description && (
                 <div className="bg-white border border-stone-200 rounded-2xl p-6 sm:p-8">
-                    <h2 className="text-lg font-black text-black font-typewriter mb-3">About</h2>
+                    <h2 className="text-lg font-bold text-stone-900 mb-3">About</h2>
                     <p className="text-sm text-stone-600 leading-relaxed whitespace-pre-line">{comp.description}</p>
                 </div>
             )}
@@ -899,7 +899,7 @@ export default function CompetitorDetail() {
             {/* Services */}
             {services.length > 0 && (
                 <div className="bg-white border border-stone-200 rounded-2xl p-6 sm:p-8">
-                    <h2 className="text-lg font-black text-black font-typewriter flex items-center gap-2 mb-4">
+                    <h2 className="text-lg font-bold text-stone-900 flex items-center gap-2 mb-4">
                         <Briefcase className="w-5 h-5" /> Services & Capabilities
                     </h2>
                     <div className="flex flex-wrap gap-2">
@@ -916,7 +916,7 @@ export default function CompetitorDetail() {
                 ACTIONS
             ================================================================ */}
             <div className="bg-white border border-stone-200 rounded-2xl p-6 sm:p-8">
-                <h2 className="text-lg font-black text-black font-typewriter mb-4">Actions</h2>
+                <h2 className="text-lg font-bold text-stone-900 mb-4">Actions</h2>
                 <div className="flex flex-wrap gap-3">
                     {comp.website && !reanalyzing && (
                         <button

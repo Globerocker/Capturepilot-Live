@@ -2,7 +2,8 @@
 
 import { useState, Suspense, useEffect, useRef, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Zap, Globe, Loader2 } from "lucide-react";
+import { Globe, Loader2, Sparkles } from "lucide-react";
+import Image from "next/image";
 import { AnalysisProgressStepper, statusToStep } from "@/components/AnalysisProgressStepper";
 
 function CheckContent() {
@@ -141,10 +142,10 @@ function CheckContent() {
                 <div className="max-w-md mx-auto w-full">
                     <div className="text-center mb-8">
                         <div className="flex items-center justify-center gap-2 mb-4">
-                            <Zap className="w-6 h-6 text-black" />
-                            <span className="font-typewriter font-bold text-lg">CapturePilot</span>
+                            <Image src="/logo.png" alt="CP" width={24} height={24} className="rounded" />
+                            <span className="font-bold text-lg">CapturePilot</span>
                         </div>
-                        <h2 className="font-typewriter font-bold text-xl sm:text-2xl mb-2">
+                        <h2 className="font-bold text-xl sm:text-2xl mb-2">
                             Analyzing {displayName}
                         </h2>
                         <p className="text-sm text-stone-500">Crawling website & matching against federal opportunities...</p>
@@ -169,11 +170,11 @@ function CheckContent() {
                 <div className="text-center mb-8">
                     <div className="flex items-center justify-center gap-2 mb-3">
                         <div className="w-10 h-10 rounded-xl bg-black flex items-center justify-center">
-                            <Zap className="w-5 h-5 text-white" />
+                            <Image src="/logo.png" alt="CP" width={20} height={20} className="rounded" />
                         </div>
-                        <span className="font-typewriter font-bold text-xl">CapturePilot</span>
+                        <span className="font-bold text-xl">CapturePilot</span>
                     </div>
-                    <h1 className="font-typewriter font-bold text-2xl sm:text-3xl mb-2">
+                    <h1 className="font-bold text-2xl sm:text-3xl mb-2">
                         Quick Lead Check
                     </h1>
                     <p className="text-sm text-stone-500">
@@ -183,7 +184,7 @@ function CheckContent() {
 
                 <form onSubmit={handleSubmit} className="bg-white rounded-[28px] border border-stone-200 shadow-sm p-6 sm:p-8 space-y-4">
                     <div>
-                        <label className="block text-xs font-typewriter font-bold text-stone-500 uppercase tracking-widest mb-1.5">
+                        <label className="block text-xs font-bold text-stone-500 uppercase tracking-widest mb-1.5">
                             Website
                         </label>
                         <div className="relative">
@@ -201,7 +202,7 @@ function CheckContent() {
                     </div>
 
                     <div>
-                        <label className="block text-xs font-typewriter font-bold text-stone-500 uppercase tracking-widest mb-1.5">
+                        <label className="block text-xs font-bold text-stone-500 uppercase tracking-widest mb-1.5">
                             UEI (Optional)
                         </label>
                         <div className="relative">
@@ -226,7 +227,7 @@ function CheckContent() {
                         type="submit"
                         className="w-full bg-black text-white py-3.5 rounded-2xl font-bold text-sm hover:bg-stone-800 transition-all flex items-center justify-center gap-2"
                     >
-                        <Zap className="w-4 h-4" /> Analyze & Find Matches
+                        <Sparkles className="w-4 h-4" /> Analyze & Find Matches
                     </button>
                 </form>
 

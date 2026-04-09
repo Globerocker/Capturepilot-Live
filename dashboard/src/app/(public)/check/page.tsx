@@ -143,9 +143,9 @@ function CheckContent() {
                     <div className="text-center mb-8">
                         <div className="flex items-center justify-center gap-2 mb-4">
                             <Image src="/logo.png" alt="CapturePilot" width={20} height={20} className="rounded" />
-                            <span className="font-typewriter font-bold text-lg">CapturePilot</span>
+                            <span className="font-bold text-lg">CapturePilot</span>
                         </div>
-                        <h2 className="font-typewriter font-bold text-xl sm:text-2xl mb-2">
+                        <h2 className="font-bold text-xl sm:text-2xl mb-2">
                             Analyzing {displayName}
                         </h2>
                         <p className="text-sm text-stone-500">Crawling website & matching against federal opportunities...</p>
@@ -170,9 +170,9 @@ function CheckContent() {
                 <div className="text-center mb-8">
                     <div className="flex items-center justify-center gap-2 mb-3">
                         <Image src="/logo.png" alt="CapturePilot" width={40} height={40} className="rounded-xl shadow-lg" />
-                        <span className="font-typewriter font-bold text-xl">CapturePilot</span>
+                        <span className="font-bold text-xl">CapturePilot</span>
                     </div>
-                    <h1 className="font-typewriter font-bold text-2xl sm:text-3xl mb-2">
+                    <h1 className="font-bold text-2xl sm:text-3xl mb-2">
                         Quick Company Check
                     </h1>
                     <p className="text-sm text-stone-500">
@@ -182,7 +182,7 @@ function CheckContent() {
 
                 <form onSubmit={handleSubmit} className="bg-white rounded-[28px] border border-stone-200 shadow-sm p-6 sm:p-8 space-y-4">
                     <div>
-                        <label className="block text-xs font-typewriter font-bold text-stone-500 uppercase tracking-widest mb-1.5">
+                        <label className="block text-xs font-bold text-stone-500 uppercase tracking-widest mb-1.5">
                             Website
                         </label>
                         <div className="relative">
@@ -200,7 +200,7 @@ function CheckContent() {
                     </div>
 
                     <div>
-                        <label className="block text-xs font-typewriter font-bold text-stone-500 uppercase tracking-widest mb-1.5">
+                        <label className="block text-xs font-bold text-stone-500 uppercase tracking-widest mb-1.5">
                             UEI (Optional)
                         </label>
                         <div className="relative">

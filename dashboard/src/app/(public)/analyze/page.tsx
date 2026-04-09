@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useRef, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Zap } from "lucide-react";
+import { AlertCircle, Sparkles } from "lucide-react";
+import Image from "next/image";
 import { AnalysisProgressStepper, statusToStep } from "@/components/AnalysisProgressStepper";
 
 function AnalyzeContent() {
@@ -113,9 +114,9 @@ function AnalyzeContent() {
                 <div className="max-w-md mx-auto text-center">
                     <div className="bg-white rounded-[32px] border border-stone-200 shadow-lg p-8 sm:p-10">
                         <div className="w-12 h-12 rounded-2xl bg-red-100 flex items-center justify-center mx-auto mb-4">
-                            <Zap className="w-6 h-6 text-red-500" />
+                            <AlertCircle className="w-6 h-6 text-red-500" />
                         </div>
-                        <h2 className="font-typewriter font-bold text-lg mb-2">Analysis Failed</h2>
+                        <h2 className="font-bold text-lg mb-2">Analysis Failed</h2>
                         <p className="text-sm text-stone-500 mb-6">{error}</p>
                         <button
                             type="button"
@@ -135,10 +136,10 @@ function AnalyzeContent() {
             <div className="max-w-md mx-auto w-full">
                 <div className="text-center mb-8">
                     <div className="flex items-center justify-center gap-2 mb-4">
-                        <Zap className="w-6 h-6 text-black" />
-                        <span className="font-typewriter font-bold text-lg">CapturePilot</span>
+                        <Image src="/logo.png" alt="CP" width={24} height={24} className="rounded" />
+                        <span className="font-bold text-lg">CapturePilot</span>
                     </div>
-                    <h2 className="font-typewriter font-bold text-xl sm:text-2xl mb-2">
+                    <h2 className="font-bold text-xl sm:text-2xl mb-2">
                         Analyzing {displayName}
                     </h2>
                     <p className="text-sm text-stone-500">
@@ -161,8 +162,8 @@ export default function AnalyzePage() {
         <Suspense fallback={
             <div className="min-h-screen bg-stone-50 flex items-center justify-center">
                 <div className="text-center">
-                    <Zap className="w-8 h-8 text-stone-300 mx-auto mb-3 animate-pulse" />
-                    <p className="text-stone-500 font-typewriter">Loading...</p>
+                    <Sparkles className="w-8 h-8 text-stone-300 mx-auto mb-3 animate-pulse" />
+                    <p className="text-stone-500">Loading...</p>
                 </div>
             </div>
         }>

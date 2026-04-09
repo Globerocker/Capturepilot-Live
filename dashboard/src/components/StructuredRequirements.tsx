@@ -132,12 +132,12 @@ export default function StructuredRequirements({ dbRequirements, noticeId }: Pro
     return (
         <div className="bg-white rounded-2xl sm:rounded-3xl border border-stone-200 shadow-sm overflow-hidden">
             <div className="bg-stone-50 border-b border-stone-100 px-4 sm:px-8 py-4 sm:py-5 flex items-center justify-between">
-                <h2 className="font-typewriter text-base sm:text-lg font-bold flex items-center text-stone-800">
+                <h2 className="text-base sm:text-lg font-bold flex items-center text-stone-800">
                     <Briefcase className="w-5 h-5 mr-2 sm:mr-3 text-stone-400" /> Structured Requirements
                 </h2>
                 {loading && <Loader2 className="w-4 h-4 animate-spin text-stone-400" />}
                 {isExtracted && (
-                    <span className="text-[10px] font-typewriter text-blue-600 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                    <span className="text-[10px] text-blue-600 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full uppercase tracking-wider">
                         Auto-Extracted
                     </span>
                 )}
@@ -146,52 +146,52 @@ export default function StructuredRequirements({ dbRequirements, noticeId }: Pro
             <div className="p-4 sm:p-8">
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-6 mb-6 sm:mb-8">
                     <div className="bg-stone-50 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-stone-100">
-                        <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1.5">Min Workforce</p>
+                        <p className="text-[10px] text-stone-400 uppercase tracking-widest mb-1.5">Min Workforce</p>
                         <p className="font-bold text-stone-800 text-lg">{reqs.min_workforce ? `${reqs.min_workforce}+` : "Not Spec."}</p>
                     </div>
                     <div className="bg-stone-50 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-stone-100">
-                        <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1.5">Years Experience</p>
+                        <p className="text-[10px] text-stone-400 uppercase tracking-widest mb-1.5">Years Experience</p>
                         <p className="font-bold text-stone-800 text-lg">{reqs.years_experience ? `${reqs.years_experience} Years` : "Not Spec."}</p>
                     </div>
                     <div className="bg-stone-50 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-stone-100">
-                        <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1.5">Bonding</p>
+                        <p className="text-[10px] text-stone-400 uppercase tracking-widest mb-1.5">Bonding</p>
                         <p className="font-bold text-stone-800 text-lg">{reqs.bonding_req || "Not Spec."}</p>
                     </div>
                     <div className="bg-stone-50 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-stone-100">
-                        <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1.5">Performance Period</p>
+                        <p className="text-[10px] text-stone-400 uppercase tracking-widest mb-1.5">Performance Period</p>
                         <p className="font-bold text-stone-800">{reqs.performance_period || "Not Spec."}</p>
                     </div>
                     {(reqs.clearance_level || reqs.insurance_req) && (
                         <>
                             {reqs.clearance_level && (
                                 <div className="bg-stone-50 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-stone-100">
-                                    <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1.5">Security Clearance</p>
+                                    <p className="text-[10px] text-stone-400 uppercase tracking-widest mb-1.5">Security Clearance</p>
                                     <p className="font-bold text-stone-800">{reqs.clearance_level}</p>
                                 </div>
                             )}
                             {reqs.insurance_req && (
                                 <div className="bg-stone-50 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-stone-100">
-                                    <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1.5">Insurance</p>
+                                    <p className="text-[10px] text-stone-400 uppercase tracking-widest mb-1.5">Insurance</p>
                                     <p className="font-bold text-stone-800">{reqs.insurance_req}</p>
                                 </div>
                             )}
                         </>
                     )}
                     <div className="bg-stone-50 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-stone-100 md:col-span-2">
-                        <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1.5">Equipment Required</p>
+                        <p className="text-[10px] text-stone-400 uppercase tracking-widest mb-1.5">Equipment Required</p>
                         <p className="font-medium text-stone-800 text-sm line-clamp-2">{reqs.equipment_req || "None specified."}</p>
                     </div>
                 </div>
 
                 <div className="space-y-6">
                     <div>
-                        <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-2">Required Certifications</p>
+                        <p className="text-[10px] text-stone-400 uppercase tracking-widest mb-2">Required Certifications</p>
                         <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100 text-blue-900 text-sm">
                             {reqs.certifications || "None specified in notice."}
                         </div>
                     </div>
                     <div>
-                        <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-2">Evaluation Criteria Summary</p>
+                        <p className="text-[10px] text-stone-400 uppercase tracking-widest mb-2">Evaluation Criteria Summary</p>
                         <div className="prose prose-sm prose-stone max-w-none text-stone-700">
                             {reqs.eval_criteria_summary ? (
                                 <p>{reqs.eval_criteria_summary}</p>

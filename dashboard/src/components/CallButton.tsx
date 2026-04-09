@@ -135,7 +135,7 @@ export default function CallButton({ opportunityId, contactPhone, contactName }:
                         <Phone className="w-4 h-4 text-emerald-600" />
                     </div>
                     <div className="flex-1">
-                        <p className="font-typewriter font-bold text-sm text-stone-900 mb-1">
+                        <p className="font-bold text-sm text-stone-900 mb-1">
                             Call & Transcribe
                         </p>
                         <p className="text-xs text-emerald-700 leading-relaxed mb-3">
@@ -146,7 +146,7 @@ export default function CallButton({ opportunityId, contactPhone, contactName }:
                             {contactPhone && (
                                 <a
                                     href={`tel:${contactPhone.replace(/[^\d+]/g, "")}`}
-                                    className="inline-flex items-center bg-emerald-600 text-white font-typewriter font-bold px-4 py-2 rounded-full text-xs hover:bg-emerald-700 transition-all"
+                                    className="inline-flex items-center bg-emerald-600 text-white font-bold px-4 py-2 rounded-full text-xs hover:bg-emerald-700 transition-all"
                                 >
                                     <Phone className="w-3 h-3 mr-1.5" />
                                     Call {contactPhone}
@@ -157,7 +157,7 @@ export default function CallButton({ opportunityId, contactPhone, contactName }:
                                 <button
                                     type="button"
                                     onClick={startRecording}
-                                    className="inline-flex items-center bg-black text-white font-typewriter font-bold px-4 py-2 rounded-full text-xs hover:bg-stone-800 transition-all"
+                                    className="inline-flex items-center bg-black text-white font-bold px-4 py-2 rounded-full text-xs hover:bg-stone-800 transition-all"
                                 >
                                     <Mic className="w-3 h-3 mr-1.5" />
                                     {hasRecorded ? "Resume Transcription" : "Start Transcription"}
@@ -168,7 +168,7 @@ export default function CallButton({ opportunityId, contactPhone, contactName }:
                                 <button
                                     type="button"
                                     onClick={stopRecording}
-                                    className="inline-flex items-center bg-red-600 text-white font-typewriter font-bold px-4 py-2 rounded-full text-xs hover:bg-red-700 transition-all animate-pulse"
+                                    className="inline-flex items-center bg-red-600 text-white font-bold px-4 py-2 rounded-full text-xs hover:bg-red-700 transition-all animate-pulse"
                                 >
                                     <MicOff className="w-3 h-3 mr-1.5" />
                                     Stop ({formatTime(seconds)})
@@ -179,7 +179,7 @@ export default function CallButton({ opportunityId, contactPhone, contactName }:
                                 <button
                                     type="button"
                                     onClick={() => setShowPanel(!showPanel)}
-                                    className="inline-flex items-center bg-stone-100 text-stone-700 font-typewriter font-bold px-4 py-2 rounded-full text-xs hover:bg-stone-200 transition-all border border-stone-200"
+                                    className="inline-flex items-center bg-stone-100 text-stone-700 font-bold px-4 py-2 rounded-full text-xs hover:bg-stone-200 transition-all border border-stone-200"
                                 >
                                     {showPanel ? <ChevronUp className="w-3 h-3 mr-1.5" /> : <ChevronDown className="w-3 h-3 mr-1.5" />}
                                     {showPanel ? "Hide Notes" : hasRecorded ? "View Notes" : "Add Notes"}
@@ -198,7 +198,7 @@ export default function CallButton({ opportunityId, contactPhone, contactName }:
             {showPanel && (
                 <div className="border-t border-emerald-100 p-4 sm:p-6 space-y-3 bg-white">
                     {isRecording && (
-                        <div className="flex items-center gap-2 text-xs text-red-600 font-typewriter font-bold">
+                        <div className="flex items-center gap-2 text-xs text-red-600 font-bold">
                             <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
                             Recording... <Clock className="w-3 h-3 ml-1" /> {formatTime(seconds)}
                         </div>
@@ -206,7 +206,7 @@ export default function CallButton({ opportunityId, contactPhone, contactName }:
 
                     {transcription && (
                         <div>
-                            <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1">Transcription</p>
+                            <p className="text-[10px] text-stone-400 uppercase tracking-widest mb-1">Transcription</p>
                             <div className="text-sm text-stone-700 bg-stone-50 rounded-xl p-3 border border-stone-100 max-h-40 overflow-y-auto whitespace-pre-wrap">
                                 {transcription}
                             </div>
@@ -214,7 +214,7 @@ export default function CallButton({ opportunityId, contactPhone, contactName }:
                     )}
 
                     <div>
-                        <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1">Notes</p>
+                        <p className="text-[10px] text-stone-400 uppercase tracking-widest mb-1">Notes</p>
                         <textarea
                             value={notes}
                             onChange={(e) => setNotes(e.target.value)}
@@ -228,13 +228,13 @@ export default function CallButton({ opportunityId, contactPhone, contactName }:
                             type="button"
                             onClick={saveCallLog}
                             disabled={saving || (!transcription && !notes)}
-                            className="inline-flex items-center bg-black text-white font-typewriter font-bold px-4 py-2 rounded-full text-xs hover:bg-stone-800 transition-all disabled:opacity-50"
+                            className="inline-flex items-center bg-black text-white font-bold px-4 py-2 rounded-full text-xs hover:bg-stone-800 transition-all disabled:opacity-50"
                         >
                             {saving ? <Loader2 className="w-3 h-3 mr-1.5 animate-spin" /> : <Save className="w-3 h-3 mr-1.5" />}
                             {saving ? "Saving..." : "Save Call Log"}
                         </button>
                     ) : (
-                        <p className="text-xs font-typewriter text-emerald-600 font-bold">Call log saved successfully.</p>
+                        <p className="text-xs text-emerald-600 font-bold">Call log saved successfully.</p>
                     )}
                 </div>
             )}

@@ -6,7 +6,7 @@ import {
   Target,
   FileText,
   MessageSquare,
-  Zap,
+  Sparkles,
   CheckCircle2,
   XCircle,
   AlertCircle,
@@ -488,7 +488,7 @@ export default function TDIPresentationPage() {
                   color: "emerald",
                 },
                 {
-                  icon: Zap,
+                  icon: Sparkles,
                   title: "TD&I Executes",
                   desc: "Technical delivery & performance",
                   color: "blue",

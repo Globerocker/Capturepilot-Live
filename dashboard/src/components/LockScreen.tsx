@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { createSupabaseClient } from "@/lib/supabase/client";
-import { Zap, Lock, Loader2, LogOut } from "lucide-react";
+import { Lock, Loader2, LogOut } from "lucide-react";
+import Image from "next/image";
 
 const supabase = createSupabaseClient();
 
@@ -74,9 +75,9 @@ export default function LockScreen() {
         <div className="fixed inset-0 z-[60] bg-stone-900/80 backdrop-blur-md flex items-center justify-center p-6">
             <div className="w-full max-w-sm bg-white rounded-[32px] p-8 shadow-2xl text-center animate-in fade-in zoom-in-95 duration-300">
                 <div className="w-14 h-14 rounded-2xl bg-black flex items-center justify-center mx-auto mb-5">
-                    <Zap className="h-6 w-6 text-white" />
+                    <Image src="/logo.png" alt="CP" width={24} height={24} className="rounded" />
                 </div>
-                <h2 className="text-xl font-bold font-typewriter mb-1">Session Locked</h2>
+                <h2 className="text-xl font-bold mb-1">Session Locked</h2>
                 <p className="text-sm text-stone-500 mb-6">
                     Enter your password to unlock
                 </p>
@@ -105,7 +106,7 @@ export default function LockScreen() {
                     <button
                         type="submit"
                         disabled={unlocking || !password.trim()}
-                        className="w-full bg-black text-white py-3 rounded-full font-typewriter font-bold text-sm hover:bg-stone-800 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                        className="w-full bg-black text-white py-3 rounded-full font-bold text-sm hover:bg-stone-800 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                     >
                         {unlocking ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
                         {unlocking ? "Unlocking..." : "Unlock"}

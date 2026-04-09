@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseClient } from "@/lib/supabase/client";
-import { Loader2, Zap, Search, X, ChevronLeft, ChevronRight, Trophy, Clock, Shield, Target, ArrowRight, Bookmark, EyeOff, Flame, ChevronUp, ChevronDown, Filter, CheckCircle2 } from "lucide-react";
+import { Loader2, Sparkles, Search, X, ChevronLeft, ChevronRight, Trophy, Clock, Shield, Target, ArrowRight, Bookmark, EyeOff, Flame, ChevronUp, ChevronDown, Filter, CheckCircle2 } from "lucide-react";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { createPursuit } from "@/lib/pursue-utils";
 import { Skeleton, SkeletonMatchCard } from "@/components/ui/Skeleton";
@@ -226,7 +226,7 @@ export default function MyMatchesPage() {
     return (
         <div className="max-w-5xl mx-auto pb-12 animate-in fade-in duration-500 px-1">
             <header className="mb-6">
-                <h2 className="text-2xl sm:text-3xl font-bold font-typewriter tracking-tighter text-black flex items-center">
+                <h2 className="text-2xl sm:text-3xl font-bold tracking-tighter text-black flex items-center">
                     <Target className="mr-2 sm:mr-3 w-6 h-6 sm:w-8 sm:h-8" /> Opportunities
                     <span className="ml-3 text-sm font-sans font-medium bg-stone-100 px-3 py-1 rounded-full text-stone-500 border border-stone-200">
                         {totalCount.toLocaleString()}
@@ -246,7 +246,7 @@ export default function MyMatchesPage() {
                         {generatingMatches ? (
                             <><Loader2 className="w-3 h-3 mr-1.5 animate-spin" /> Scoring...</>
                         ) : (
-                            <><Zap className="w-3 h-3 mr-1.5" /> Refresh Matches</>
+                            <><Sparkles className="w-3 h-3 mr-1.5" /> Refresh Matches</>
                         )}
                     </button>
                 </div>
@@ -266,7 +266,7 @@ export default function MyMatchesPage() {
                         key={tab.key}
                         onClick={() => { setFilter(tab.key); setPage(1); }}
                         className={clsx(
-                            "text-xs font-bold font-typewriter uppercase tracking-widest px-3 sm:px-4 py-2 rounded-full transition-all shadow-sm border flex items-center",
+                            "text-xs font-bold uppercase tracking-widest px-3 sm:px-4 py-2 rounded-full transition-all shadow-sm border flex items-center",
                             filter === tab.key ? "bg-black text-white border-black" : "bg-white text-stone-600 border-stone-200 hover:bg-stone-100 active:bg-stone-200"
                         )}
                     >
@@ -278,7 +278,7 @@ export default function MyMatchesPage() {
 
             {/* Sort Bar */}
             <section className="flex flex-wrap items-center gap-2 mb-3">
-                <span className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mr-1">Sort by</span>
+                <span className="text-[10px] text-stone-400 uppercase tracking-widest mr-1">Sort by</span>
                 {([
                     { key: "score" as const, label: "Score" },
                     { key: "deadline" as const, label: "Deadline" },
@@ -298,7 +298,7 @@ export default function MyMatchesPage() {
                             setPage(1);
                         }}
                         className={clsx(
-                            "text-xs font-typewriter font-bold px-3 py-1.5 rounded-full border transition-all flex items-center",
+                            "text-xs font-bold px-3 py-1.5 rounded-full border transition-all flex items-center",
                             sortBy === opt.key ? "bg-black text-white border-black" : "bg-white text-stone-500 border-stone-200 hover:bg-stone-100"
                         )}
                     >
@@ -310,7 +310,7 @@ export default function MyMatchesPage() {
                     type="button"
                     onClick={() => setShowFilters(!showFilters)}
                     className={clsx(
-                        "text-xs font-typewriter font-bold px-3 py-1.5 rounded-full border transition-all flex items-center ml-auto",
+                        "text-xs font-bold px-3 py-1.5 rounded-full border transition-all flex items-center ml-auto",
                         showFilters ? "bg-black text-white border-black" : "bg-white text-stone-500 border-stone-200 hover:bg-stone-100"
                     )}
                 >
@@ -323,7 +323,7 @@ export default function MyMatchesPage() {
             {showFilters && (
                 <section className="bg-white border border-stone-200 rounded-2xl p-4 flex flex-wrap gap-4 mb-4 animate-in slide-in-from-top-2 duration-300">
                     <div className="flex-1 min-w-[150px]">
-                        <p className="text-[10px] font-typewriter text-stone-500 uppercase mb-2">Notice Type</p>
+                        <p className="text-[10px] text-stone-500 uppercase mb-2">Notice Type</p>
                         <select title="Notice Type" className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black" value={filterNoticeType} onChange={(e) => { setFilterNoticeType(e.target.value); setPage(1); }}>
                             <option value="">All Types</option>
                             <option value="Sources Sought">Sources Sought</option>
@@ -333,7 +333,7 @@ export default function MyMatchesPage() {
                         </select>
                     </div>
                     <div className="flex-1 min-w-[120px]">
-                        <p className="text-[10px] font-typewriter text-stone-500 uppercase mb-2">Set-Aside</p>
+                        <p className="text-[10px] text-stone-500 uppercase mb-2">Set-Aside</p>
                         <select title="Set-Aside" className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black" value={filterSetAside} onChange={(e) => { setFilterSetAside(e.target.value); setPage(1); }}>
                             <option value="">All</option>
                             <option value="SBA">Small Business</option>
@@ -344,7 +344,7 @@ export default function MyMatchesPage() {
                         </select>
                     </div>
                     <div className="flex-1 min-w-[100px]">
-                        <p className="text-[10px] font-typewriter text-stone-500 uppercase mb-2">State</p>
+                        <p className="text-[10px] text-stone-500 uppercase mb-2">State</p>
                         <select title="State" className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black" value={filterState} onChange={(e) => { setFilterState(e.target.value); setPage(1); }}>
                             <option value="">All</option>
                             {["AL","AK","AZ","AR","CA","CO","CT","DC","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"].map(s => (
@@ -353,7 +353,7 @@ export default function MyMatchesPage() {
                         </select>
                     </div>
                     {(filterNoticeType || filterSetAside || filterState) && (
-                        <button type="button" onClick={() => { setFilterNoticeType(""); setFilterSetAside(""); setFilterState(""); setPage(1); }} className="self-end px-3 py-2 text-xs font-bold font-typewriter text-red-600 bg-red-50 border border-red-200 rounded-full hover:bg-red-100">
+                        <button type="button" onClick={() => { setFilterNoticeType(""); setFilterSetAside(""); setFilterState(""); setPage(1); }} className="self-end px-3 py-2 text-xs font-bold text-red-600 bg-red-50 border border-red-200 rounded-full hover:bg-red-100">
                             Clear
                         </button>
                     )}
@@ -366,7 +366,7 @@ export default function MyMatchesPage() {
                 <input
                     type="text"
                     placeholder="Search by title or agency..."
-                    className="bg-transparent border-none outline-none w-full text-stone-700 font-typewriter text-sm"
+                    className="bg-transparent border-none outline-none w-full text-stone-700 text-sm"
                     value={searchInput}
                     onChange={(e) => setSearchInput(e.target.value)}
                     onKeyDown={(e) => { if (e.key === "Enter") { setPage(1); setActiveSearch(searchInput); } }}
@@ -384,19 +384,19 @@ export default function MyMatchesPage() {
                     {filter === "SAVED" ? (
                         <>
                             <Bookmark className="w-10 h-10 text-stone-300 mx-auto mb-3" />
-                            <p className="text-stone-500 font-typewriter mb-2">No saved matches yet.</p>
+                            <p className="text-stone-500 mb-2">No saved matches yet.</p>
                             <p className="text-stone-400 text-sm">Click the bookmark icon on any match to save it for later.</p>
                         </>
                     ) : filter === "COLD" ? (
                         <>
                             <Shield className="w-10 h-10 text-blue-300 mx-auto mb-3" />
-                            <p className="text-stone-500 font-typewriter mb-2">No COLD matches found.</p>
+                            <p className="text-stone-500 mb-2">No COLD matches found.</p>
                             <p className="text-stone-400 text-sm">COLD matches (30-49% alignment) show opportunities with partial profile fit. Try generating matches to populate this list.</p>
                         </>
                     ) : (
                         <>
-                            <Zap className="w-10 h-10 text-stone-300 mx-auto mb-3" />
-                            <p className="text-stone-500 font-typewriter mb-2">No matches found yet</p>
+                            <Sparkles className="w-10 h-10 text-stone-300 mx-auto mb-3" />
+                            <p className="text-stone-500 mb-2">No matches found yet</p>
                             <p className="text-stone-400 text-sm mb-4">
                                 Generate matches based on your profile, or update your profile to improve results.
                             </p>
@@ -414,7 +414,7 @@ export default function MyMatchesPage() {
                                         </>
                                     ) : (
                                         <>
-                                            <Zap className="w-3.5 h-3.5 mr-2" />
+                                            <Sparkles className="w-3.5 h-3.5 mr-2" />
                                             Generate Matches
                                         </>
                                     )}
@@ -439,7 +439,7 @@ export default function MyMatchesPage() {
                             <div key={match.id} className="bg-white border border-stone-200 hover:border-stone-300 rounded-xl sm:rounded-2xl p-3 sm:p-4 transition-all shadow-sm group">
                                 <div className="flex flex-col sm:flex-row sm:items-center gap-2">
                                     {/* Score Badge */}
-                                    <div className={clsx("flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 rounded-xl border-2 font-black font-typewriter text-sm sm:text-base flex-shrink-0", getScoreColor(match.score))}>
+                                    <div className={clsx("flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 rounded-xl border-2 font-black text-sm sm:text-base flex-shrink-0", getScoreColor(match.score))}>
                                         {scorePercent}%
                                     </div>
 
@@ -447,7 +447,7 @@ export default function MyMatchesPage() {
                                     <Link href={`/opportunities/${opp.id}`} className="flex-1 min-w-0">
                                         <div className="flex items-center gap-1.5 mb-1 flex-wrap">
                                             <span className={clsx(
-                                                "text-[9px] font-typewriter font-bold px-2 py-0.5 rounded uppercase tracking-widest border",
+                                                "text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-widest border",
                                                 match.classification === "HOT"
                                                     ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                                                     : match.classification === "WARM"
@@ -457,15 +457,15 @@ export default function MyMatchesPage() {
                                                 {match.classification === "HOT" ? "Strong" : match.classification === "WARM" ? "Good" : "Possible"}
                                             </span>
                                             {opp.set_aside_code && (
-                                                <span className="text-[9px] font-typewriter font-bold bg-blue-100 text-blue-600 border border-blue-200 px-2 py-0.5 rounded uppercase">{opp.set_aside_code}</span>
+                                                <span className="text-[9px] font-bold bg-blue-100 text-blue-600 border border-blue-200 px-2 py-0.5 rounded uppercase">{opp.set_aside_code}</span>
                                             )}
                                             {opp.notice_type && (
-                                                <span className={clsx("text-[9px] font-typewriter px-2 py-0.5 rounded border uppercase tracking-widest", getNoticeColor(opp.notice_type))}>
+                                                <span className={clsx("text-[9px] px-2 py-0.5 rounded border uppercase tracking-widest", getNoticeColor(opp.notice_type))}>
                                                     {opp.notice_type}
                                                 </span>
                                             )}
                                             {formatCurrency(opp.award_amount) && (
-                                                <span className="text-[9px] font-typewriter font-bold bg-emerald-50 text-emerald-600 border border-emerald-200 px-2 py-0.5 rounded">
+                                                <span className="text-[9px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-200 px-2 py-0.5 rounded">
                                                     {formatCurrency(opp.award_amount)}
                                                 </span>
                                             )}
@@ -495,7 +495,7 @@ export default function MyMatchesPage() {
                                                     onClick={(e) => { e.preventDefault(); handlePursue(opp.id, opp.notice_type); }}
                                                     disabled={pursuingIds.has(opp.id)}
                                                     className="p-1.5 rounded-lg text-stone-400 hover:text-black hover:bg-stone-100 transition-colors disabled:opacity-50">
-                                                    {pursuingIds.has(opp.id) ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+                                                    {pursuingIds.has(opp.id) ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
                                                 </button>
                                             )}
                                             <button type="button" title={match.is_saved ? "Unsave" : "Save"}
@@ -543,7 +543,7 @@ export default function MyMatchesPage() {
             {/* Pagination */}
             {totalPages > 1 && (
                 <div className="mt-6 flex flex-col sm:flex-row items-center justify-between px-1 gap-3">
-                    <p className="text-xs text-stone-500 font-typewriter">
+                    <p className="text-xs text-stone-500">
                         Page {page} of {totalPages} ({totalCount.toLocaleString()} total)
                     </p>
                     <div className="flex items-center space-x-2">

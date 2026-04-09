@@ -58,7 +58,7 @@ export default function Sidebar() {
             <div className="px-6 lg:px-8 mb-8 lg:mb-12 pt-5 flex items-center justify-between">
                 <div className="flex items-center space-x-3">
                     <Image src="/logo.png" alt="CapturePilot" width={36} height={36} className="rounded-xl" />
-                    <h1 className="text-xl font-semibold font-typewriter tracking-tight text-stone-200">CapturePilot</h1>
+                    <h1 className="text-xl font-semibold tracking-tight text-stone-200">CapturePilot</h1>
                 </div>
                 <button
                     type="button"
@@ -89,7 +89,7 @@ export default function Sidebar() {
                             )}
                         >
                             <Icon className={clsx("h-5 w-5", isActive ? "text-emerald-400" : "text-stone-500")} />
-                            <span className="font-typewriter">{link.name}</span>
+                            <span className="font-medium">{link.name}</span>
                         </Link>
                     );
                 })}
@@ -113,7 +113,7 @@ export default function Sidebar() {
                             )}
                         >
                             <Icon className={clsx("h-5 w-5", isActive ? "text-emerald-400" : "text-stone-500")} />
-                            <span className="font-typewriter font-medium">{link.name}</span>
+                            <span className="font-medium">{link.name}</span>
                         </Link>
                     );
                 })}
@@ -123,7 +123,7 @@ export default function Sidebar() {
                     className="w-full flex items-center space-x-3 px-4 py-3.5 lg:py-3 rounded-2xl text-stone-500 hover:bg-stone-800/50 hover:text-amber-400 transition-all duration-200 text-sm border-l-2 border-transparent"
                 >
                     <Lock className="h-5 w-5" />
-                    <span className="font-typewriter font-medium">Lock</span>
+                    <span className="font-medium">Lock</span>
                 </button>
                 <button
                     type="button"
@@ -131,7 +131,7 @@ export default function Sidebar() {
                     className="w-full flex items-center space-x-3 px-4 py-3.5 lg:py-3 rounded-2xl text-stone-500 hover:bg-stone-800/50 hover:text-red-400 transition-all duration-200 text-sm border-l-2 border-transparent"
                 >
                     <LogOut className="h-5 w-5" />
-                    <span className="font-typewriter font-medium">Sign Out</span>
+                    <span className="font-medium">Sign Out</span>
                 </button>
             </div>
         </>
@@ -143,7 +143,7 @@ export default function Sidebar() {
             <div className="lg:hidden fixed top-0 left-0 right-0 z-40 bg-stone-950/95 backdrop-blur-md border-b border-stone-800 px-4 h-14 flex items-center justify-between">
                 <div className="flex items-center space-x-2.5">
                     <Image src="/logo.png" alt="CapturePilot" width={32} height={32} className="rounded-lg" />
-                    <span className="text-base font-semibold font-typewriter text-stone-200">CapturePilot</span>
+                    <span className="text-base font-semibold text-stone-200">CapturePilot</span>
                 </div>
                 <button
                     type="button"

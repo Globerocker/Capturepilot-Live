@@ -74,7 +74,7 @@ export default function EmailDraftPanel({ opportunityId, opportunityTitle }: { o
                         <Mail className="w-4 h-4 text-purple-600" />
                     </div>
                     <div className="flex-1">
-                        <p className="font-typewriter font-bold text-sm text-stone-900 mb-1">
+                        <p className="font-bold text-sm text-stone-900 mb-1">
                             AI Email Drafts
                         </p>
                         <p className="text-xs text-purple-700 leading-relaxed mb-3">
@@ -85,7 +85,7 @@ export default function EmailDraftPanel({ opportunityId, opportunityTitle }: { o
                             type="button"
                             onClick={generate}
                             disabled={loading}
-                            className="inline-flex items-center bg-black text-white font-typewriter font-bold px-4 py-2 rounded-full text-xs hover:bg-stone-800 transition-all disabled:opacity-50"
+                            className="inline-flex items-center bg-black text-white font-bold px-4 py-2 rounded-full text-xs hover:bg-stone-800 transition-all disabled:opacity-50"
                         >
                             {loading ? <Loader2 className="w-3 h-3 mr-2 animate-spin" /> : <Mail className="w-3 h-3 mr-2" />}
                             {loading ? "Generating..." : "Generate Drafts"}
@@ -101,10 +101,10 @@ export default function EmailDraftPanel({ opportunityId, opportunityTitle }: { o
     return (
         <div className="bg-white rounded-2xl sm:rounded-3xl border border-stone-200 shadow-sm overflow-hidden">
             <div className="bg-purple-50 border-b border-purple-100 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between">
-                <h3 className="font-typewriter text-[15px] font-bold flex items-center text-stone-800">
+                <h3 className="text-[15px] font-bold flex items-center text-stone-800">
                     <Mail className="w-4 h-4 mr-2 text-purple-500" /> Email Drafts
                 </h3>
-                <button type="button" onClick={generate} disabled={loading} className="text-[10px] font-typewriter text-purple-600 hover:text-purple-800 font-bold">
+                <button type="button" onClick={generate} disabled={loading} className="text-[10px] text-purple-600 hover:text-purple-800 font-bold">
                     {loading ? "Regenerating..." : "Regenerate"}
                 </button>
             </div>
@@ -117,7 +117,7 @@ export default function EmailDraftPanel({ opportunityId, opportunityTitle }: { o
                         key={d.strategy}
                         onClick={() => setActiveTab(i)}
                         className={clsx(
-                            "flex-1 text-[10px] font-typewriter font-bold uppercase tracking-widest px-2 py-2.5 transition-all border-b-2",
+                            "flex-1 text-[10px] font-bold uppercase tracking-widest px-2 py-2.5 transition-all border-b-2",
                             activeTab === i
                                 ? "text-black border-black bg-stone-50"
                                 : "text-stone-400 border-transparent hover:text-stone-600"
@@ -131,12 +131,12 @@ export default function EmailDraftPanel({ opportunityId, opportunityTitle }: { o
             {/* Draft Content */}
             <div className="p-4 sm:p-6 space-y-3">
                 <div>
-                    <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1">Subject</p>
+                    <p className="text-[10px] text-stone-400 uppercase tracking-widest mb-1">Subject</p>
                     <p className="text-sm font-bold text-stone-900">{current.subject}</p>
                 </div>
                 <div>
                     <div className="flex items-center justify-between mb-1">
-                        <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest">Body</p>
+                        <p className="text-[10px] text-stone-400 uppercase tracking-widest">Body</p>
                         <button
                             type="button"
                             onClick={() => {
@@ -150,7 +150,7 @@ export default function EmailDraftPanel({ opportunityId, opportunityTitle }: { o
                                 setEditMode(!editMode);
                             }}
                             className={clsx(
-                                "text-[10px] font-typewriter font-bold flex items-center gap-1",
+                                "text-[10px] font-bold flex items-center gap-1",
                                 editMode ? "text-emerald-600" : "text-stone-500 hover:text-black"
                             )}
                         >
@@ -172,11 +172,11 @@ export default function EmailDraftPanel({ opportunityId, opportunityTitle }: { o
 
                 {/* Actions */}
                 <div className="flex gap-2 pt-1">
-                    <button type="button" onClick={copyToClipboard} className="flex-1 inline-flex items-center justify-center text-xs font-bold font-typewriter bg-stone-100 border border-stone-200 py-2 rounded-full hover:bg-stone-200 transition-all">
+                    <button type="button" onClick={copyToClipboard} className="flex-1 inline-flex items-center justify-center text-xs font-bold bg-stone-100 border border-stone-200 py-2 rounded-full hover:bg-stone-200 transition-all">
                         {copied ? <Check className="w-3 h-3 mr-1.5 text-emerald-600" /> : <Copy className="w-3 h-3 mr-1.5" />}
                         {copied ? "Copied!" : "Copy"}
                     </button>
-                    <button type="button" onClick={openInEmail} className="flex-1 inline-flex items-center justify-center text-xs font-bold font-typewriter bg-black text-white py-2 rounded-full hover:bg-stone-800 transition-all">
+                    <button type="button" onClick={openInEmail} className="flex-1 inline-flex items-center justify-center text-xs font-bold bg-black text-white py-2 rounded-full hover:bg-stone-800 transition-all">
                         <ExternalLink className="w-3 h-3 mr-1.5" />
                         Open in Email
                     </button>

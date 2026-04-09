@@ -86,11 +86,11 @@ export default function LoginPage() {
         {/* Logo */}
         <div className="flex items-center justify-center space-x-3 mb-10">
           <Image src="/logo.png" alt="CapturePilot" width={40} height={40} className="rounded-xl shadow-lg" />
-          <h1 className="text-2xl font-bold font-typewriter">CapturePilot</h1>
+          <h1 className="text-2xl font-bold">CapturePilot</h1>
         </div>
 
         <div className="bg-white rounded-[32px] p-8 border border-stone-200 shadow-sm">
-          <h2 className="text-xl font-bold font-typewriter text-center mb-2">
+          <h2 className="text-xl font-bold text-center mb-2">
             Welcome Back
           </h2>
           <p className="text-sm text-stone-500 text-center mb-8">
@@ -133,7 +133,7 @@ export default function LoginPage() {
           {/* Email/Password */}
           <form onSubmit={handleEmailLogin} className="space-y-4">
             <div>
-              <label className="block text-xs font-typewriter font-medium text-stone-500 mb-1.5">
+              <label className="block text-xs font-medium text-stone-500 mb-1.5">
                 Email
               </label>
               <input
@@ -146,7 +146,7 @@ export default function LoginPage() {
               />
             </div>
             <div>
-              <label className="block text-xs font-typewriter font-medium text-stone-500 mb-1.5">
+              <label className="block text-xs font-medium text-stone-500 mb-1.5">
                 Password
               </label>
               <input

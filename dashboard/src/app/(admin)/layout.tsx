@@ -20,8 +20,9 @@ const supabase = createBrowserClient(
 const NAV = [
     { href: "/admin/overview", icon: LayoutDashboard, label: "Dashboard" },
     { href: "/admin/clients", icon: Users, label: "Clients" },
+    { href: "/admin/lead-check", icon: Search, label: "Lead Check" },
     { href: "/admin/opportunities", icon: Briefcase, label: "Opportunities" },
-    { href: "/admin/leads", icon: Search, label: "Leads" },
+    { href: "/admin/leads", icon: FileText, label: "Leads" },
     { href: "/admin/pipeline", icon: Target, label: "Sales Pipeline" },
     { href: "/admin/users", icon: UserCog, label: "Users" },
     { href: "/admin/messages", icon: MessageSquare, label: "Messages" },
@@ -81,9 +82,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 <div className="p-4 border-b border-stone-800">
                     <Link href="/admin/overview" className="flex items-center gap-2">
                         <Image src="/logo.png" alt="CapturePilot" width={20} height={20} className="rounded" />
-                        <span className="font-typewriter font-bold text-sm">CapturePilot</span>
+                        <span className="font-bold text-sm">CapturePilot</span>
                     </Link>
-                    <p className="text-[10px] text-stone-500 font-typewriter mt-0.5 uppercase tracking-widest">Admin Console</p>
+                    <p className="text-[10px] text-stone-500 mt-0.5 uppercase tracking-widest">Admin Console</p>
                 </div>
 
                 <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto">
@@ -112,9 +113,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 </nav>
 
                 <div className="p-2 border-t border-stone-800">
-                    <Link href="/admin/lead-check" className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-stone-400 hover:bg-white/5 hover:text-white transition-colors">
-                        <FileText className="w-4 h-4" /> Lead Check
-                    </Link>
                     <button
                         type="button"
                         onClick={async () => {

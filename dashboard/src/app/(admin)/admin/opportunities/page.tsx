@@ -91,7 +91,7 @@ export default function AdminOpportunities() {
         <div className="w-full space-y-5">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-xl font-bold font-typewriter flex items-center gap-2">
+                    <h1 className="text-xl font-bold flex items-center gap-2">
                         <Briefcase className="w-5 h-5" /> Opportunities
                     </h1>
                     <p className="text-sm text-stone-500">{total.toLocaleString()} total</p>
@@ -147,7 +147,7 @@ export default function AdminOpportunities() {
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                             <thead>
-                                <tr className="border-b border-stone-100 text-[10px] font-typewriter text-stone-400 uppercase">
+                                <tr className="border-b border-stone-100 text-[10px] text-stone-400 uppercase">
                                     <th className="text-left px-4 py-2.5">Opportunity</th>
                                     <th className="text-center px-3 py-2.5">Status</th>
                                     <th className="text-center px-3 py-2.5">NAICS</th>

@@ -5,7 +5,7 @@ import { Settings, Database, Globe, Key, Server } from "lucide-react";
 export default function AdminSettings() {
     return (
         <div className="w-full space-y-6">
-            <h1 className="text-xl font-bold font-typewriter flex items-center gap-2">
+            <h1 className="text-xl font-bold flex items-center gap-2">
                 <Settings className="w-5 h-5" /> System Settings
             </h1>
 

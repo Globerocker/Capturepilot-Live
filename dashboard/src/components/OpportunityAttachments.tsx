@@ -85,7 +85,7 @@ export default function OpportunityAttachments({ noticeId, resourceLinks, defaul
                 onClick={() => setCollapsed(!collapsed)}
                 className="w-full bg-stone-50 border-b border-stone-100 px-4 sm:px-8 py-4 sm:py-5 flex items-center justify-between hover:bg-stone-100 transition-colors"
             >
-                <h2 className="font-typewriter text-base sm:text-lg font-bold flex items-center text-stone-800">
+                <h2 className="text-base sm:text-lg font-bold flex items-center text-stone-800">
                     <Paperclip className="w-5 h-5 mr-2 sm:mr-3 text-stone-400" /> Attachments & Documents
                     {!loading && allLinks.length > 0 && (
                         <span className="ml-2 text-xs font-normal text-stone-400">({allLinks.length})</span>

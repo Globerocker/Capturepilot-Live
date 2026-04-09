@@ -83,7 +83,7 @@ export default function OpportunityDescription({ noticeId, currentDescription, d
         return (
             <div className="bg-white rounded-2xl sm:rounded-3xl border border-stone-200 shadow-sm overflow-hidden">
                 <div className="bg-stone-50 border-b border-stone-100 px-4 sm:px-8 py-4 sm:py-5">
-                    <h2 className="font-typewriter text-base sm:text-lg font-bold flex items-center text-stone-800">
+                    <h2 className="text-base sm:text-lg font-bold flex items-center text-stone-800">
                         <FileText className="w-5 h-5 mr-2 sm:mr-3 text-stone-400" /> Description
                     </h2>
                 </div>
@@ -99,7 +99,7 @@ export default function OpportunityDescription({ noticeId, currentDescription, d
         return (
             <div className="bg-white rounded-2xl sm:rounded-3xl border border-stone-200 shadow-sm overflow-hidden">
                 <div className="bg-stone-50 border-b border-stone-100 px-4 sm:px-8 py-4 sm:py-5">
-                    <h2 className="font-typewriter text-base sm:text-lg font-bold flex items-center text-stone-800">
+                    <h2 className="text-base sm:text-lg font-bold flex items-center text-stone-800">
                         <FileText className="w-5 h-5 mr-2 sm:mr-3 text-stone-400" /> Description
                     </h2>
                 </div>
@@ -132,7 +132,7 @@ export default function OpportunityDescription({ noticeId, currentDescription, d
                 onClick={() => setCollapsed(!collapsed)}
                 className="w-full bg-stone-50 border-b border-stone-100 px-4 sm:px-8 py-4 sm:py-5 flex items-center justify-between hover:bg-stone-100 transition-colors"
             >
-                <h2 className="font-typewriter text-base sm:text-lg font-bold flex items-center text-stone-800">
+                <h2 className="text-base sm:text-lg font-bold flex items-center text-stone-800">
                     <FileText className="w-5 h-5 mr-2 sm:mr-3 text-stone-400" /> Description
                 </h2>
                 <ChevronDown className={clsx("w-5 h-5 text-stone-400 transition-transform duration-200", !collapsed && "rotate-180")} />

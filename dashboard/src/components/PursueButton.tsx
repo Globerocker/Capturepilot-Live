@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { createSupabaseClient } from "@/lib/supabase/client";
-import { Zap, Loader2, CheckCircle2, Layers, ArrowRight } from "lucide-react";
+import { Sparkles, Loader2, CheckCircle2, Layers, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import clsx from "clsx";
 
@@ -153,7 +153,7 @@ export default function PursueButton({ opportunityId, noticeType }: PursueButton
                         <div>
                             <p className="font-bold text-sm">You&apos;re pursuing this opportunity</p>
                             <div className="flex items-center gap-2 mt-1">
-                                <span className={clsx("text-[10px] font-typewriter font-bold uppercase tracking-widest px-2 py-0.5 rounded-full border", stageInfo.color)}>
+                                <span className={clsx("text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full border", stageInfo.color)}>
                                     {stageInfo.label}
                                 </span>
                             </div>
@@ -161,11 +161,11 @@ export default function PursueButton({ opportunityId, noticeType }: PursueButton
                     </div>
                     <div className="flex gap-2">
                         <Link href="/pipeline"
-                            className="inline-flex items-center bg-stone-100 text-stone-700 font-typewriter font-bold px-4 py-2.5 rounded-full hover:bg-stone-200 transition-all text-xs border border-stone-200">
+                            className="inline-flex items-center bg-stone-100 text-stone-700 font-bold px-4 py-2.5 rounded-full hover:bg-stone-200 transition-all text-xs border border-stone-200">
                             Action Items <ArrowRight className="w-3 h-3 ml-1" />
                         </Link>
                         <Link href="/pipeline"
-                            className="inline-flex items-center bg-black text-white font-typewriter font-bold px-4 py-2.5 rounded-full hover:bg-stone-800 transition-all text-xs">
+                            className="inline-flex items-center bg-black text-white font-bold px-4 py-2.5 rounded-full hover:bg-stone-800 transition-all text-xs">
                             <Layers className="w-3 h-3 mr-1" /> Pipeline
                         </Link>
                     </div>
@@ -177,7 +177,7 @@ export default function PursueButton({ opportunityId, noticeType }: PursueButton
     return (
         <div className="bg-white border border-stone-200 rounded-2xl sm:rounded-3xl p-6 sm:p-10 text-center shadow-sm relative overflow-hidden">
             <div className="absolute left-0 top-0 bottom-0 w-2 bg-gradient-to-b from-blue-400 to-emerald-400"></div>
-            <h2 className="text-xl sm:text-2xl font-bold font-typewriter text-stone-900 mb-3 sm:mb-4">Interested in this opportunity?</h2>
+            <h2 className="text-xl sm:text-2xl font-bold text-stone-900 mb-3 sm:mb-4">Interested in this opportunity?</h2>
             <p className="text-stone-500 max-w-2xl mx-auto mb-6 sm:mb-8 text-sm sm:text-base">
                 Add it to your pipeline and get guided action items to help you pursue it step by step.
             </p>
@@ -185,12 +185,12 @@ export default function PursueButton({ opportunityId, noticeType }: PursueButton
                 type="button"
                 onClick={startPursuing}
                 disabled={pursuing}
-                className="inline-flex items-center justify-center bg-black text-white font-typewriter font-bold px-6 sm:px-10 py-3.5 sm:py-4 rounded-full hover:bg-stone-800 transition-all shadow-lg disabled:opacity-50"
+                className="inline-flex items-center justify-center bg-black text-white font-bold px-6 sm:px-10 py-3.5 sm:py-4 rounded-full hover:bg-stone-800 transition-all shadow-lg disabled:opacity-50"
             >
                 {pursuing ? (
                     <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Adding...</>
                 ) : (
-                    <><Zap className="w-4 h-4 mr-2 text-emerald-400" /> Start Pursuing</>
+                    <><Sparkles className="w-4 h-4 mr-2 text-emerald-400" /> Start Pursuing</>
                 )}
             </button>
         </div>

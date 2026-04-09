@@ -70,7 +70,7 @@ export default function AdminSalesPipeline() {
     return (
         <div className="w-full space-y-5">
             <div>
-                <h1 className="text-xl font-bold font-typewriter flex items-center gap-2">
+                <h1 className="text-xl font-bold flex items-center gap-2">
                     <Target className="w-5 h-5" /> Sales Pipeline
                 </h1>
                 <p className="text-sm text-stone-500">{totalActive} active leads, {leads.length} total</p>

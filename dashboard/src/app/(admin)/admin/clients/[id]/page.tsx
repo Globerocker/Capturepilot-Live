@@ -153,7 +153,7 @@ export default function ClientDetailPage() {
             <div className="flex items-center gap-4">
                 <Link href="/admin/clients" className="text-stone-400 hover:text-stone-600"><ArrowLeft className="w-5 h-5" /></Link>
                 <div className="flex-1">
-                    <h1 className="text-xl font-bold font-typewriter">{profile.company_name}</h1>
+                    <h1 className="text-xl font-bold">{profile.company_name}</h1>
                     <div className="flex items-center gap-3 text-xs text-stone-500 mt-0.5">
                         {profile.contact_name && <span>{profile.contact_name}</span>}
                         {profile.email && <span className="inline-flex items-center gap-0.5"><Mail className="w-3 h-3" />{profile.email}</span>}
@@ -228,14 +228,14 @@ export default function ClientDetailPage() {
                                 ["revenue", "Revenue"],
                             ].map(([key, label]) => (
                                 <div key={key}>
-                                    <label className="text-[9px] font-typewriter text-stone-400 uppercase">{label}</label>
+                                    <label className="text-[9px] text-stone-400 uppercase">{label}</label>
                                     <input title={label} value={form[key] || ""} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
                                         className="w-full border border-stone-200 rounded-lg px-2.5 py-1.5 text-xs mt-0.5" />
                                 </div>
                             ))}
                         </div>
                         <div>
-                            <label className="text-[9px] font-typewriter text-stone-400 uppercase">Internal Notes</label>
+                            <label className="text-[9px] text-stone-400 uppercase">Internal Notes</label>
                             <textarea title="Internal Notes" value={form.notes || ""} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
                                 className="w-full border border-stone-200 rounded-lg px-2.5 py-1.5 text-xs mt-0.5 h-20 resize-none" />
                         </div>

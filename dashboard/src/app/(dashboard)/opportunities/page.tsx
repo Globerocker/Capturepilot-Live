@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseClient } from "@/lib/supabase/client";
-import { Search, Filter, Loader2, LayoutGrid, List, Download, X, Building, Target, FileText, Link as LinkIcon, Sparkles, ChevronLeft, ChevronRight, Flame, ChevronUp, ChevronDown, Sprout, Leaf, Sun, Award, Trophy, Zap, Layers, CheckCircle2 } from "lucide-react";
+import { Search, Filter, Loader2, LayoutGrid, List, Download, X, Building, Target, FileText, Link as LinkIcon, Sparkles, ChevronLeft, ChevronRight, Flame, ChevronUp, ChevronDown, Sprout, Leaf, Sun, Award, Trophy, Layers, CheckCircle2 } from "lucide-react";
 import clsx from "clsx";
 import Link from "next/link";
 import { createPursuit, getUserProfileId } from "@/lib/pursue-utils";
@@ -306,7 +306,7 @@ export default function OpportunitiesPage() {
                 <div className="animate-in fade-in duration-500 flex flex-col">
                     <header className="flex flex-col md:flex-row md:items-end justify-between mb-6 sm:mb-8 space-y-3 md:space-y-0">
                         <div>
-                            <h2 className="text-2xl sm:text-3xl font-bold font-typewriter tracking-tighter text-black flex items-center">
+                            <h2 className="text-2xl sm:text-3xl font-bold tracking-tighter text-black flex items-center">
                                 Opportunities
                                 <span className="ml-3 sm:ml-4 text-xs sm:text-sm font-sans font-medium bg-stone-100 px-2.5 sm:px-3 py-1 rounded-full text-stone-500 border border-stone-200">
                                     {totalCount.toLocaleString()}
@@ -328,12 +328,12 @@ export default function OpportunitiesPage() {
 
                             <button type="button" title="Filters" onClick={() => setShowFilters(!showFilters)} className={clsx("flex items-center space-x-2 px-4 py-2.5 rounded-full border transition-all text-sm font-medium", showFilters ? "bg-black text-white border-black" : "bg-white text-stone-700 border-stone-200 hover:border-black")}>
                                 <Filter className="w-4 h-4" />
-                                <span className="font-typewriter">Filters</span>
+                                <span className="font-medium">Filters</span>
                             </button>
 
                             <button type="button" title="Export" onClick={handleExport} className="flex items-center space-x-2 bg-stone-100 text-black px-4 py-2.5 rounded-full border border-stone-200 hover:border-stone-300 hover:bg-stone-200 transition-all text-sm font-bold">
                                 <Download className="w-4 h-4" />
-                                <span className="font-typewriter hidden sm:inline">Export</span>
+                                <span className="hidden sm:inline">Export</span>
                             </button>
                         </div>
                     </header>
@@ -353,7 +353,7 @@ export default function OpportunitiesPage() {
                                     key={tab.key}
                                     onClick={() => { setQuickFilter(tab.key); setPage(1); }}
                                     className={clsx(
-                                        "text-xs font-bold font-typewriter uppercase tracking-widest px-4 py-2 rounded-full transition-all shadow-sm border flex items-center",
+                                        "text-xs font-bold uppercase tracking-widest px-4 py-2 rounded-full transition-all shadow-sm border flex items-center",
                                         quickFilter === tab.key ? "bg-black text-white border-black" : "bg-white text-stone-600 border-stone-200 hover:bg-stone-100"
                                     )}
                                 >
@@ -363,7 +363,7 @@ export default function OpportunitiesPage() {
                             ))}
                         </div>
 
-                        <div className="flex items-center gap-3 text-xs text-stone-500 font-typewriter">
+                        <div className="flex items-center gap-3 text-xs text-stone-500">
                             <span>Sort by column headers</span>
                         </div>
                     </section>
@@ -372,7 +372,7 @@ export default function OpportunitiesPage() {
                     {showFilters && (
                         <section className="bg-white border border-stone-200 rounded-2xl p-4 flex flex-wrap gap-4 mb-6 animate-in slide-in-from-top-2 duration-300">
                             <div className="flex-1 min-w-[180px]">
-                                <p className="text-[10px] font-typewriter text-stone-500 uppercase mb-2">Agency</p>
+                                <p className="text-[10px] text-stone-500 uppercase mb-2">Agency</p>
                                 <input
                                     type="text"
                                     placeholder="e.g. Defense"
@@ -382,7 +382,7 @@ export default function OpportunitiesPage() {
                                 />
                             </div>
                             <div className="flex-1 min-w-[150px]">
-                                <p className="text-[10px] font-typewriter text-stone-500 uppercase mb-2">Notice Type</p>
+                                <p className="text-[10px] text-stone-500 uppercase mb-2">Notice Type</p>
                                 <select
                                     title="Notice Type"
                                     className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-black"
@@ -398,7 +398,7 @@ export default function OpportunitiesPage() {
                                 </select>
                             </div>
                             <div className="flex-1 min-w-[120px]">
-                                <p className="text-[10px] font-typewriter text-stone-500 uppercase mb-2">NAICS</p>
+                                <p className="text-[10px] text-stone-500 uppercase mb-2">NAICS</p>
                                 <input
                                     type="text"
                                     placeholder="e.g. 561720"
@@ -408,7 +408,7 @@ export default function OpportunitiesPage() {
                                 />
                             </div>
                             <div className="flex-1 min-w-[120px]">
-                                <p className="text-[10px] font-typewriter text-stone-500 uppercase mb-2">State</p>
+                                <p className="text-[10px] text-stone-500 uppercase mb-2">State</p>
                                 <select
                                     title="State"
                                     className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-black"
@@ -422,7 +422,7 @@ export default function OpportunitiesPage() {
                                 </select>
                             </div>
                             <div className="flex-1 min-w-[120px]">
-                                <p className="text-[10px] font-typewriter text-stone-500 uppercase mb-2">Set-Aside</p>
+                                <p className="text-[10px] text-stone-500 uppercase mb-2">Set-Aside</p>
                                 <select
                                     title="Set-Aside"
                                     className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-black"
@@ -441,7 +441,7 @@ export default function OpportunitiesPage() {
                                 <button
                                     type="button"
                                     onClick={() => { setFilterAgency(""); setFilterType(""); setFilterNaics(""); setFilterState(""); setFilterSetAside(""); setPage(1); }}
-                                    className="self-end px-4 py-2 text-xs font-bold font-typewriter text-red-600 bg-red-50 border border-red-200 rounded-full hover:bg-red-100"
+                                    className="self-end px-4 py-2 text-xs font-bold text-red-600 bg-red-50 border border-red-200 rounded-full hover:bg-red-100"
                                 >
                                     Clear All
                                 </button>
@@ -455,7 +455,7 @@ export default function OpportunitiesPage() {
                         <input
                             type="text"
                             placeholder="Search by title, description, notice ID, or agency..."
-                            className="bg-transparent border-none outline-none w-full text-stone-700 font-typewriter text-sm"
+                            className="bg-transparent border-none outline-none w-full text-stone-700 text-sm"
                             value={searchInput}
                             onChange={(e) => setSearchInput(e.target.value)}
                             onKeyDown={handleSearchKeyDown}
@@ -471,7 +471,7 @@ export default function OpportunitiesPage() {
                         <div className="bg-white rounded-[32px] border border-stone-200 shadow-sm overflow-hidden mb-6">
                             <table className="w-full text-left border-collapse">
                                 <thead>
-                                    <tr className="bg-stone-50 border-b border-stone-200 text-stone-500 text-[10px] font-typewriter uppercase tracking-wider">
+                                    <tr className="bg-stone-50 border-b border-stone-200 text-stone-500 text-[10px] uppercase tracking-wider">
                                         <th className="py-4 px-5 font-bold">Posted</th>
                                         <th className="py-4 px-5 font-bold">Title / Agency</th>
                                         <th className="py-4 px-5 font-bold">Type</th>
@@ -497,7 +497,7 @@ export default function OpportunitiesPage() {
                                 <div className="bg-white rounded-[32px] border border-stone-200 shadow-sm overflow-hidden mb-6 flex-shrink-0">
                                     <table className="w-full text-left border-collapse">
                                         <thead>
-                                            <tr className="bg-stone-50 border-b border-stone-200 text-stone-500 text-[10px] font-typewriter uppercase tracking-wider">
+                                            <tr className="bg-stone-50 border-b border-stone-200 text-stone-500 text-[10px] uppercase tracking-wider">
                                                 <th className="py-4 px-5 font-bold cursor-pointer hover:text-black select-none" onClick={() => handleColumnSort("posted_date")}>Posted <SortIndicator col="posted_date" /></th>
                                                 <th className="py-4 px-5 font-bold">Title / Agency</th>
                                                 <th className="py-4 px-5 font-bold cursor-pointer hover:text-black select-none" onClick={() => handleColumnSort("notice_type")}>Type <SortIndicator col="notice_type" /></th>
@@ -523,7 +523,7 @@ export default function OpportunitiesPage() {
                                                         </td>
                                                         <td className="py-3.5 px-5">
                                                             <span className={clsx(
-                                                                "font-typewriter text-[9px] px-2 py-1 rounded border uppercase tracking-widest whitespace-nowrap",
+                                                                "text-[9px] px-2 py-1 rounded border uppercase tracking-widest whitespace-nowrap",
                                                                 typeName === "Sources Sought" ? "bg-emerald-100 text-emerald-700 border-emerald-200" :
                                                                 typeName === "Presolicitation" ? "bg-blue-100 text-blue-700 border-blue-200" :
                                                                 "bg-stone-100 text-stone-600 border-stone-200"
@@ -543,7 +543,7 @@ export default function OpportunitiesPage() {
                                                             {(() => {
                                                                 const win = getWinability(op);
                                                                 return (
-                                                                    <span className={clsx("text-[9px] font-typewriter px-2 py-1 rounded border uppercase tracking-widest whitespace-nowrap", win.color)}>
+                                                                    <span className={clsx("text-[9px] px-2 py-1 rounded border uppercase tracking-widest whitespace-nowrap", win.color)}>
                                                                         {win.label}
                                                                     </span>
                                                                 );
@@ -583,7 +583,7 @@ export default function OpportunitiesPage() {
                                                     <div>
                                                         <div className="flex justify-between items-start mb-3">
                                                             <span className={clsx(
-                                                                "font-typewriter text-[9px] px-2 py-1 rounded border uppercase tracking-widest",
+                                                                "text-[9px] px-2 py-1 rounded border uppercase tracking-widest",
                                                                 typeName === "Sources Sought" ? "bg-emerald-100 text-emerald-700 border-emerald-200" :
                                                                 typeName === "Presolicitation" ? "bg-blue-100 text-blue-700 border-blue-200" :
                                                                 "bg-stone-100 text-stone-600 border-stone-200"
@@ -594,7 +594,7 @@ export default function OpportunitiesPage() {
                                                                 {(() => {
                                                                     const win = getWinability(op);
                                                                     return (
-                                                                        <span className={clsx("text-[9px] font-typewriter px-2 py-0.5 rounded border uppercase tracking-widest", win.color)}>
+                                                                        <span className={clsx("text-[9px] px-2 py-0.5 rounded border uppercase tracking-widest", win.color)}>
                                                                             Win: {win.label}
                                                                         </span>
                                                                     );
@@ -630,14 +630,14 @@ export default function OpportunitiesPage() {
 
                             {opportunities.length === 0 && !loading && (
                                 <div className="bg-stone-50 border border-stone-200 border-dashed rounded-[32px] p-12 text-center mt-auto mb-auto">
-                                    <p className="text-stone-500 font-typewriter">No opportunities match the criteria.</p>
+                                    <p className="text-stone-500">No opportunities match the criteria.</p>
                                 </div>
                             )}
 
                             {/* Pagination */}
                             {totalPages > 1 && (
                                 <div className="mt-auto pt-6 flex flex-col md:flex-row items-center justify-between px-2 gap-4">
-                                    <p className="text-xs text-stone-500 font-typewriter">
+                                    <p className="text-xs text-stone-500">
                                         Showing {((page - 1) * pageSize) + 1} to {Math.min(page * pageSize, totalCount)} of {totalCount.toLocaleString()} results
                                     </p>
                                     <div className="flex items-center space-x-2">
@@ -661,7 +661,7 @@ export default function OpportunitiesPage() {
                 <div className="fixed inset-0 z-50 lg:relative lg:inset-auto lg:z-auto w-full lg:w-1/2 xl:w-1/3 h-full lg:h-[calc(100vh-80px)] xl:h-[calc(100vh-120px)] lg:sticky lg:top-[40px] xl:top-[60px] bg-white lg:border lg:border-stone-200 shadow-2xl lg:rounded-[40px] flex flex-col overflow-hidden animate-in slide-in-from-right-16 duration-300">
                     <div className="p-6 border-b border-stone-100 flex justify-between items-center bg-stone-50/50 flex-shrink-0">
                         <div className="flex items-center space-x-2">
-                            <span className="bg-black text-white font-typewriter text-[10px] px-2 py-1 rounded uppercase tracking-wider">
+                            <span className="bg-black text-white text-[10px] px-2 py-1 rounded uppercase tracking-wider">
                                 Active View
                             </span>
                             <span className="font-mono text-stone-400 text-xs">{selectedOpportunity.notice_id?.slice(0, 16)}</span>
@@ -679,7 +679,7 @@ export default function OpportunitiesPage() {
                     <div className="overflow-y-auto flex-1 p-6 custom-scrollbar space-y-6">
                         {/* Title & Agency */}
                         <div>
-                            <h2 className="text-xl font-bold font-typewriter tracking-tight text-black leading-tight mb-3">
+                            <h2 className="text-xl font-bold tracking-tight text-black leading-tight mb-3">
                                 {selectedOpportunity.title}
                             </h2>
                             <div className="flex items-center space-x-3">
@@ -720,40 +720,40 @@ export default function OpportunitiesPage() {
                         <div className="grid grid-cols-2 gap-3">
                             {selectedOpportunity.posted_date && (
                                 <div className="bg-stone-50 border border-stone-200 p-3 rounded-xl">
-                                    <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1">Posted</p>
+                                    <p className="text-[10px] text-stone-400 uppercase tracking-widest mb-1">Posted</p>
                                     <p className="font-bold text-sm">{new Date(selectedOpportunity.posted_date).toLocaleDateString()}</p>
                                 </div>
                             )}
                             <div className="bg-stone-50 border border-stone-200 p-3 rounded-xl">
-                                <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1">NAICS</p>
+                                <p className="text-[10px] text-stone-400 uppercase tracking-widest mb-1">NAICS</p>
                                 <p className="font-mono font-bold text-sm">{selectedOpportunity.naics_code || "---"}</p>
                             </div>
                             <div className="bg-stone-50 border border-stone-200 p-3 rounded-xl">
-                                <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1">Notice Type</p>
-                                <p className="font-typewriter font-bold text-xs pt-0.5">
+                                <p className="text-[10px] text-stone-400 uppercase tracking-widest mb-1">Notice Type</p>
+                                <p className="font-bold text-xs pt-0.5">
                                     {selectedOpportunity.notice_type || selectedOpportunity.opportunity_types?.name || "N/A"}
                                 </p>
                             </div>
                             <div className="bg-stone-50 border border-stone-200 p-3 rounded-xl">
-                                <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1">Set-Aside</p>
-                                <p className="font-typewriter font-bold text-xs pt-0.5">
+                                <p className="text-[10px] text-stone-400 uppercase tracking-widest mb-1">Set-Aside</p>
+                                <p className="font-bold text-xs pt-0.5">
                                     {selectedOpportunity.set_aside_code || selectedOpportunity.set_asides?.code || "Unrestricted"}
                                 </p>
                             </div>
                             <div className="bg-stone-50 border border-stone-200 p-3 rounded-xl border-l-4 border-l-stone-800">
-                                <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1">Deadline</p>
+                                <p className="text-[10px] text-stone-400 uppercase tracking-widest mb-1">Deadline</p>
                                 <p className="font-bold text-sm text-black">
                                     {selectedOpportunity.response_deadline ? new Date(selectedOpportunity.response_deadline).toLocaleDateString() : "TBD"}
                                 </p>
                             </div>
                             {selectedOpportunity.place_of_performance_state && (
                                 <div className="bg-stone-50 border border-stone-200 p-3 rounded-xl">
-                                    <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1">Location</p>
+                                    <p className="text-[10px] text-stone-400 uppercase tracking-widest mb-1">Location</p>
                                     <p className="font-bold text-sm">{[selectedOpportunity.place_of_performance_city, selectedOpportunity.place_of_performance_state].filter(Boolean).join(", ")}</p>
                                 </div>
                             )}
                             <div className="bg-green-50 border border-green-200 p-3 rounded-xl">
-                                <p className="text-[10px] font-typewriter text-green-600 uppercase tracking-widest mb-1">
+                                <p className="text-[10px] text-green-600 uppercase tracking-widest mb-1">
                                     {selectedOpportunity.award_amount ? "Contract Value" : "Est. Value"}
                                 </p>
                                 <p className="font-mono font-bold text-sm text-green-800">
@@ -776,7 +776,7 @@ export default function OpportunitiesPage() {
                         {/* Incumbent Info */}
                         {selectedOpportunity.incumbent_contractor_name && (
                             <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl">
-                                <p className="text-[10px] font-typewriter text-amber-600 uppercase tracking-widest mb-1">Incumbent Contractor</p>
+                                <p className="text-[10px] text-amber-600 uppercase tracking-widest mb-1">Incumbent Contractor</p>
                                 <p className="font-bold text-sm text-amber-900">{selectedOpportunity.incumbent_contractor_name}</p>
                             </div>
                         )}
@@ -784,7 +784,7 @@ export default function OpportunitiesPage() {
                         {/* Description */}
                         {selectedOpportunity.description && (
                             <div className="border border-stone-200 rounded-2xl p-5 bg-white shadow-sm">
-                                <h4 className="font-typewriter font-bold text-xs mb-4 flex items-center text-stone-800 uppercase tracking-wider">
+                                <h4 className="font-bold text-xs mb-4 flex items-center text-stone-800 uppercase tracking-wider">
                                     <FileText className="w-4 h-4 mr-2" /> Description
                                 </h4>
                                 <div className="text-sm text-stone-600 max-h-48 overflow-y-auto whitespace-pre-wrap font-sans">
@@ -798,7 +798,7 @@ export default function OpportunitiesPage() {
                                 href={selectedOpportunity.link}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="flex items-center justify-center space-x-2 text-sm font-bold font-typewriter bg-stone-100 border border-stone-200 w-full py-4 rounded-full hover:bg-stone-200 hover:border-stone-300 transition-all text-black"
+                                className="flex items-center justify-center space-x-2 text-sm font-bold bg-stone-100 border border-stone-200 w-full py-4 rounded-full hover:bg-stone-200 hover:border-stone-300 transition-all text-black"
                             >
                                 <LinkIcon className="w-4 h-4" />
                                 <span>View on SAM.gov</span>
@@ -814,7 +814,7 @@ export default function OpportunitiesPage() {
                                     <CheckCircle2 className="w-4 h-4 text-emerald-500" />
                                     <span className="text-sm font-bold text-stone-700">In your pipeline</span>
                                 </div>
-                                <Link href="/pipeline" className="inline-flex items-center bg-black text-white font-typewriter font-bold px-4 py-2.5 rounded-full text-xs hover:bg-stone-800 transition-all">
+                                <Link href="/pipeline" className="inline-flex items-center bg-black text-white font-bold px-4 py-2.5 rounded-full text-xs hover:bg-stone-800 transition-all">
                                     <Layers className="w-3 h-3 mr-1.5" /> View Pipeline
                                 </Link>
                             </div>
@@ -823,7 +823,7 @@ export default function OpportunitiesPage() {
                                 <button
                                     type="button"
                                     onClick={() => router.push(`/opportunities/${selectedOpportunity.id}`)}
-                                    className="flex-1 inline-flex items-center justify-center bg-stone-100 text-stone-700 font-typewriter font-bold px-4 py-3 rounded-full text-xs hover:bg-stone-200 transition-all border border-stone-200"
+                                    className="flex-1 inline-flex items-center justify-center bg-stone-100 text-stone-700 font-bold px-4 py-3 rounded-full text-xs hover:bg-stone-200 transition-all border border-stone-200"
                                 >
                                     View Details
                                 </button>
@@ -840,12 +840,12 @@ export default function OpportunitiesPage() {
                                         );
                                         setPursuitStatus(result.success ? "pursued" : "none");
                                     }}
-                                    className="flex-1 inline-flex items-center justify-center bg-black text-white font-typewriter font-bold px-4 py-3 rounded-full text-xs hover:bg-stone-800 transition-all disabled:opacity-50"
+                                    className="flex-1 inline-flex items-center justify-center bg-black text-white font-bold px-4 py-3 rounded-full text-xs hover:bg-stone-800 transition-all disabled:opacity-50"
                                 >
                                     {pursuitStatus === "pursuing" ? (
                                         <><Loader2 className="w-3 h-3 mr-1.5 animate-spin" /> Adding...</>
                                     ) : (
-                                        <><Zap className="w-3 h-3 mr-1.5 text-emerald-400" /> Start Pursuing</>
+                                        <><Sparkles className="w-3 h-3 mr-1.5 text-emerald-400" /> Start Pursuing</>
                                     )}
                                 </button>
                             </div>

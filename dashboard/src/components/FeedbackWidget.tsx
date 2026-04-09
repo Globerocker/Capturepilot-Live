@@ -139,7 +139,7 @@ export default function FeedbackWidget() {
             {open && (
                 <div className="fixed bottom-20 right-5 z-50 w-80 bg-white rounded-2xl border border-stone-200 shadow-2xl overflow-hidden animate-in slide-in-from-bottom-4 duration-300">
                     <div className="bg-stone-50 border-b border-stone-100 px-5 py-4">
-                        <h3 className="font-typewriter font-bold text-sm text-stone-900">
+                        <h3 className="font-bold text-sm text-stone-900">
                             {mode === "menu" ? "Send Feedback" : mode === "beta" ? "Beta Survey" : "Send Feedback"}
                         </h3>
                         <p className="text-[11px] text-stone-500 mt-0.5">
@@ -152,7 +152,7 @@ export default function FeedbackWidget() {
                     {sent ? (
                         <div className="p-8 text-center">
                             <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto mb-3" />
-                            <p className="font-typewriter font-bold text-sm text-stone-900">Thank you!</p>
+                            <p className="font-bold text-sm text-stone-900">Thank you!</p>
                             <p className="text-xs text-stone-500 mt-1">
                                 {mode === "beta"
                                     ? "Your beta feedback is recorded. $99/mo pricing locked in!"
@@ -208,7 +208,7 @@ export default function FeedbackWidget() {
                                             type="button"
                                             onClick={() => setType(ft.value)}
                                             className={clsx(
-                                                "flex-1 flex flex-col items-center gap-1 py-2 px-2 rounded-xl border text-[10px] font-typewriter font-bold transition-all",
+                                                "flex-1 flex flex-col items-center gap-1 py-2 px-2 rounded-xl border text-[10px] font-bold transition-all",
                                                 type === ft.value
                                                     ? ft.color + " ring-2 ring-black/10"
                                                     : "text-stone-400 bg-white border-stone-200 hover:border-stone-300"
@@ -240,7 +240,7 @@ export default function FeedbackWidget() {
                                 type="button"
                                 onClick={handleQuickSubmit}
                                 disabled={sending || !message.trim()}
-                                className="w-full bg-black text-white py-2.5 rounded-xl font-typewriter font-bold text-xs hover:bg-stone-800 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                                className="w-full bg-black text-white py-2.5 rounded-xl font-bold text-xs hover:bg-stone-800 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                             >
                                 {sending ? (
                                     <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Sending...</>
@@ -314,7 +314,7 @@ export default function FeedbackWidget() {
                                         type="button"
                                         onClick={() => setWouldRecommend(true)}
                                         className={clsx(
-                                            "flex-1 py-2 rounded-xl border text-xs font-typewriter font-bold transition-all",
+                                            "flex-1 py-2 rounded-xl border text-xs font-bold transition-all",
                                             wouldRecommend === true
                                                 ? "bg-emerald-50 border-emerald-300 text-emerald-700 ring-2 ring-emerald-200"
                                                 : "bg-white border-stone-200 text-stone-500 hover:border-stone-300"
@@ -326,7 +326,7 @@ export default function FeedbackWidget() {
                                         type="button"
                                         onClick={() => setWouldRecommend(false)}
                                         className={clsx(
-                                            "flex-1 py-2 rounded-xl border text-xs font-typewriter font-bold transition-all",
+                                            "flex-1 py-2 rounded-xl border text-xs font-bold transition-all",
                                             wouldRecommend === false
                                                 ? "bg-red-50 border-red-300 text-red-700 ring-2 ring-red-200"
                                                 : "bg-white border-stone-200 text-stone-500 hover:border-stone-300"
@@ -342,7 +342,7 @@ export default function FeedbackWidget() {
                                 type="button"
                                 onClick={handleBetaSubmit}
                                 disabled={sending || rating === 0}
-                                className="w-full bg-emerald-600 text-white py-2.5 rounded-xl font-typewriter font-bold text-xs hover:bg-emerald-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                                className="w-full bg-emerald-600 text-white py-2.5 rounded-xl font-bold text-xs hover:bg-emerald-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                             >
                                 {sending ? (
                                     <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Submitting...</>

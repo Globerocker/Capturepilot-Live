@@ -91,7 +91,7 @@ export default function AdminUsers() {
 
     return (
         <div className="w-full space-y-5">
-            <h1 className="text-xl font-bold font-typewriter flex items-center gap-2">
+            <h1 className="text-xl font-bold flex items-center gap-2">
                 <UserCog className="w-5 h-5" /> User Management
             </h1>
 
@@ -100,7 +100,7 @@ export default function AdminUsers() {
             <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
                 <table className="w-full text-sm">
                     <thead>
-                        <tr className="border-b border-stone-100 text-[10px] font-typewriter text-stone-400 uppercase">
+                        <tr className="border-b border-stone-100 text-[10px] text-stone-400 uppercase">
                             <th className="text-left px-4 py-2.5">User</th>
                             <th className="text-center px-3 py-2.5">Type</th>
                             <th className="text-center px-3 py-2.5">Status</th>

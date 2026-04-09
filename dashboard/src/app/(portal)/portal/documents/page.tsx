@@ -155,7 +155,7 @@ export default function PortalDocuments() {
         <div className="max-w-4xl space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold text-black font-typewriter flex items-center gap-2">
+                    <h1 className="text-2xl font-bold text-stone-900 flex items-center gap-2">
                         <FileText className="w-6 h-6" /> Documents
                     </h1>
                     <p className="text-sm text-stone-500 mt-1">Upload and manage your B2G documents.</p>

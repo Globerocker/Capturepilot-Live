@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 import { createSupabaseClient } from "@/lib/supabase/client";
 import {
-    Mic, MicOff, Loader2, FileText, Palette, Download, Zap,
+    Mic, MicOff, Loader2, FileText, Palette, Download, Sparkles,
     CheckCircle2, Globe, ChevronDown,
 } from "lucide-react";
 import clsx from "clsx";
@@ -124,7 +124,7 @@ export default function CapabilityStatementPage() {
     return (
         <div className="max-w-4xl mx-auto space-y-6">
             <div>
-                <h1 className="text-2xl font-bold font-typewriter flex items-center gap-2">
+                <h1 className="text-2xl font-bold flex items-center gap-2">
                     <FileText className="w-6 h-6" /> Capability Statement Builder
                 </h1>
                 <p className="text-sm text-stone-500 mt-1">
@@ -140,7 +140,7 @@ export default function CapabilityStatementPage() {
                 </h2>
                 <div className="flex gap-3 items-end">
                     <div className="flex-1">
-                        <label className="text-[10px] font-typewriter text-stone-400 uppercase block mb-1">Website</label>
+                        <label className="text-[10px] text-stone-400 uppercase block mb-1">Website</label>
                         <input value={website} onChange={e => setWebsite(e.target.value)} placeholder="yourcompany.com"
                             className="w-full border border-stone-300 rounded-xl px-3 py-2 text-sm" />
                     </div>
@@ -238,7 +238,7 @@ export default function CapabilityStatementPage() {
 
                 {/* Transcript display */}
                 <div>
-                    <label className="text-[10px] font-typewriter text-stone-400 uppercase block mb-1">
+                    <label className="text-[10px] text-stone-400 uppercase block mb-1">
                         Transcript / Notes {transcript ? `(${transcript.split(/\s+/).length} words)` : ""}
                     </label>
                     <textarea value={transcript} onChange={e => setTranscript(e.target.value)}
@@ -253,13 +253,13 @@ export default function CapabilityStatementPage() {
                     <FileText className="w-4 h-4 text-stone-400" /> Step 3: Additional Details (Optional)
                 </h2>
                 <div>
-                    <label className="text-[10px] font-typewriter text-stone-400 uppercase block mb-1">Past Projects & Performance</label>
+                    <label className="text-[10px] text-stone-400 uppercase block mb-1">Past Projects & Performance</label>
                     <textarea value={pastProjects} onChange={e => setPastProjects(e.target.value)}
                         placeholder="Describe 2-3 relevant projects you've completed. Include: client, scope, value, results..."
                         className="w-full border border-stone-300 rounded-xl px-3 py-2 text-sm h-24 resize-none" />
                 </div>
                 <div>
-                    <label className="text-[10px] font-typewriter text-stone-400 uppercase block mb-1">What Makes You Different?</label>
+                    <label className="text-[10px] text-stone-400 uppercase block mb-1">What Makes You Different?</label>
                     <textarea value={differentiators} onChange={e => setDifferentiators(e.target.value)}
                         placeholder="What sets you apart? Special equipment, certifications, response time, quality, safety record..."
                         className="w-full border border-stone-300 rounded-xl px-3 py-2 text-sm h-20 resize-none" />
@@ -269,7 +269,7 @@ export default function CapabilityStatementPage() {
             {/* Generate Button */}
             <button type="button" onClick={generateStatement} disabled={generating || !profileId}
                 className="w-full bg-emerald-600 text-white py-4 rounded-2xl text-sm font-bold inline-flex items-center justify-center gap-2 disabled:opacity-50 hover:bg-emerald-700 transition-all duration-200">
-                {generating ? <><Loader2 className="w-5 h-5 animate-spin" /> Generating Your Capability Statement...</> : <><Zap className="w-5 h-5" /> Generate Capability Statement</>}
+                {generating ? <><Loader2 className="w-5 h-5 animate-spin" /> Generating Your Capability Statement...</> : <><Sparkles className="w-5 h-5" /> Generate Capability Statement</>}
             </button>
 
             {/* Result */}

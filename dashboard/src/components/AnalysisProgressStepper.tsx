@@ -1,6 +1,6 @@
 "use client";
 
-import { Globe, Search, Database, Target, Zap, Loader2, CheckCircle2 } from "lucide-react";
+import { Globe, Search, Database, Target, Sparkles, Loader2, CheckCircle2 } from "lucide-react";
 import clsx from "clsx";
 
 interface AnalysisProgressStepperProps {
@@ -12,7 +12,7 @@ const steps = [
     { icon: Database, label: "Enriching data", description: "Checking SAM.gov registration & federal award history..." },
     { icon: Target, label: "Classifying industry", description: "Identifying your NAICS codes using AI..." },
     { icon: Search, label: "Finding opportunities", description: "Searching SAM.gov for matching government contracts..." },
-    { icon: Zap, label: "Generating results", description: "Scoring matches & building your report..." },
+    { icon: Sparkles, label: "Generating results", description: "Scoring matches & building your report..." },
 ];
 
 // Map API status strings to step numbers
@@ -63,7 +63,7 @@ export function AnalysisProgressStepper({ currentStep }: AnalysisProgressStepper
                         </div>
                         <div>
                             <p className={clsx(
-                                "font-typewriter font-bold text-sm",
+                                "font-bold text-sm",
                                 isActive && "text-black",
                                 isComplete && "text-emerald-700",
                                 isPending && "text-stone-400"

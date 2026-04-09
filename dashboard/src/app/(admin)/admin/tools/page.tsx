@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Wrench, Search, RefreshCw, Mail, Loader2, CheckCircle2, Zap, Download, ExternalLink } from "lucide-react";
+import { Wrench, Search, RefreshCw, Mail, Loader2, CheckCircle2, Sparkles, Download, ExternalLink } from "lucide-react";
 import clsx from "clsx";
 
 export default function AdminTools() {
@@ -101,7 +101,7 @@ export default function AdminTools() {
 
     return (
         <div className="w-full space-y-6">
-            <h1 className="text-xl font-bold font-typewriter flex items-center gap-2">
+            <h1 className="text-xl font-bold flex items-center gap-2">
                 <Wrench className="w-5 h-5" /> Admin Tools
             </h1>
 
@@ -150,7 +150,7 @@ export default function AdminTools() {
             {/* Profile Enrichment */}
             <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
                 <div className="bg-stone-50 border-b border-stone-100 px-5 py-3 flex items-center gap-2">
-                    <Zap className="w-4 h-4 text-stone-400" />
+                    <Sparkles className="w-4 h-4 text-stone-400" />
                     <h2 className="font-bold text-sm">Profile Enrichment</h2>
                 </div>
                 <div className="p-5 space-y-3">
@@ -199,7 +199,7 @@ export default function AdminTools() {
             {/* AI Document Analysis */}
             <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
                 <div className="bg-stone-50 border-b border-stone-100 px-5 py-3 flex items-center gap-2">
-                    <Zap className="w-4 h-4 text-stone-400" />
+                    <Sparkles className="w-4 h-4 text-stone-400" />
                     <h2 className="font-bold text-sm">AI Document Analysis</h2>
                 </div>
                 <div className="p-5 space-y-3">
@@ -225,7 +225,7 @@ export default function AdminTools() {
                             setAiAnalyzing(false);
                         }} disabled={aiAnalyzing}
                         className="bg-stone-900 text-white px-4 py-2 rounded-lg text-sm font-bold inline-flex items-center gap-1.5 disabled:opacity-50">
-                            {aiAnalyzing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+                            {aiAnalyzing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
                             {aiAnalyzing ? "Analyzing..." : "AI Analyze"}
                         </button>
                     </div>
@@ -236,7 +236,7 @@ export default function AdminTools() {
             {/* AI Proposal Generator */}
             <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
                 <div className="bg-stone-50 border-b border-stone-100 px-5 py-3 flex items-center gap-2">
-                    <Zap className="w-4 h-4 text-stone-400" />
+                    <Sparkles className="w-4 h-4 text-stone-400" />
                     <h2 className="font-bold text-sm">AI Proposal Outline Generator</h2>
                 </div>
                 <div className="p-5 space-y-3">
@@ -264,7 +264,7 @@ export default function AdminTools() {
                             setProposalGenerating(false);
                         }} disabled={proposalGenerating}
                         className="bg-stone-900 text-white px-4 py-2 rounded-lg text-sm font-bold inline-flex items-center gap-1.5 disabled:opacity-50">
-                            {proposalGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+                            {proposalGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
                             {proposalGenerating ? "Generating..." : "Generate Proposal"}
                         </button>
                     </div>
@@ -320,7 +320,7 @@ export default function AdminTools() {
             {/* AI Full Proposal Writer */}
             <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
                 <div className="bg-stone-50 border-b border-stone-100 px-5 py-3 flex items-center gap-2">
-                    <Zap className="w-4 h-4 text-stone-400" />
+                    <Sparkles className="w-4 h-4 text-stone-400" />
                     <h2 className="font-bold text-sm">AI Full Proposal Writer</h2>
                 </div>
                 <div className="p-5 space-y-3">
@@ -346,7 +346,7 @@ export default function AdminTools() {
                             setProposalWriting(false);
                         }} disabled={proposalWriting}
                         className="bg-stone-900 text-white px-4 py-2 rounded-lg text-sm font-bold inline-flex items-center gap-1.5 disabled:opacity-50">
-                            {proposalWriting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+                            {proposalWriting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
                             {proposalWriting ? "Writing..." : "Write Proposal"}
                         </button>
                     </div>

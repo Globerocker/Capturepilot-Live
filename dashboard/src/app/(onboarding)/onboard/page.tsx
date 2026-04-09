@@ -4,9 +4,10 @@ import { useState, useEffect, Suspense } from "react";
 import { createSupabaseClient } from "@/lib/supabase/client";
 import {
     Building, MapPin, Target, ShieldCheck, Briefcase, Truck,
-    ArrowRight, ArrowLeft, CheckCircle2, Loader2, Zap, Search, X, ExternalLink
+    ArrowRight, ArrowLeft, CheckCircle2, Loader2, Search, X, ExternalLink
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Image from "next/image";
 import clsx from "clsx";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { NAICS_CODES, searchNaics } from "@/lib/naics-codes";
@@ -421,7 +422,7 @@ function OnboardPageContent() {
             <div className="text-center animate-in fade-in duration-500 py-4 sm:py-8">
                 <div className="bg-white rounded-[32px] sm:rounded-[40px] border border-stone-200 shadow-sm p-8 sm:p-12">
                     <CheckCircle2 className="w-14 h-14 sm:w-16 sm:h-16 text-emerald-500 mx-auto mb-6" />
-                    <h2 className="text-2xl sm:text-3xl font-bold font-typewriter tracking-tighter text-black mb-3">You&apos;re All Set!</h2>
+                    <h2 className="text-2xl sm:text-3xl font-bold tracking-tighter text-black mb-3">You&apos;re All Set!</h2>
                     <p className="text-stone-500 font-medium mb-2">
                         <span className="font-bold text-black">{form.company_name}</span> is now in the system.
                     </p>
@@ -445,7 +446,7 @@ function OnboardPageContent() {
                     )}
                     <button
                         onClick={() => router.push("/dashboard")}
-                        className="inline-flex items-center bg-black text-white font-typewriter font-bold px-8 py-4 rounded-full hover:bg-stone-800 transition-all shadow-lg text-sm"
+                        className="inline-flex items-center bg-black text-white font-bold px-8 py-4 rounded-full hover:bg-stone-800 transition-all shadow-lg text-sm"
                     >
                         Go to Dashboard <ArrowRight className="w-4 h-4 ml-2" />
                     </button>
@@ -459,9 +460,9 @@ function OnboardPageContent() {
             <header className="mb-6 sm:mb-8 text-center">
                 <div className="flex items-center justify-center space-x-3 mb-3">
                     <div className="w-10 h-10 rounded-xl bg-black flex items-center justify-center">
-                        <Zap className="h-5 w-5 text-white" />
+                        <Image src="/logo.png" alt="CP" width={20} height={20} className="rounded" />
                     </div>
-                    <h2 className="text-2xl sm:text-3xl font-bold font-typewriter tracking-tighter text-black">
+                    <h2 className="text-2xl sm:text-3xl font-bold tracking-tighter text-black">
                         {step === 0 ? "Welcome to CapturePilot" : "Tell Us About Your Business"}
                     </h2>
                 </div>
@@ -475,7 +476,7 @@ function OnboardPageContent() {
                         await sb.auth.signOut();
                         window.location.href = "/login";
                     }}
-                    className="absolute top-4 right-4 text-xs text-stone-400 hover:text-stone-700 font-typewriter"
+                    className="absolute top-4 right-4 text-xs text-stone-400 hover:text-stone-700"
                 >
                     Sign Out
                 </button>
@@ -492,7 +493,7 @@ function OnboardPageContent() {
                             { n: 4, label: "Targets" },
                         ].map(s => (
                             <button type="button" key={s.n} onClick={() => { if (s.n <= step) setStep(s.n); }} className={clsx(
-                                "flex items-center text-xs font-typewriter uppercase tracking-widest transition-colors",
+                                "flex items-center text-xs uppercase tracking-widest transition-colors",
                                 step === s.n ? "text-black font-bold" : step > s.n ? "text-emerald-600 cursor-pointer" : "text-stone-400 cursor-default"
                             )}>
                                 <span className={clsx(
@@ -517,7 +518,7 @@ function OnboardPageContent() {
                 {step === 0 && (
                     <div className="space-y-6 animate-in fade-in duration-300">
                         <div className="text-center">
-                            <h3 className="font-typewriter font-bold text-lg sm:text-xl mb-2">Are you registered on SAM.gov?</h3>
+                            <h3 className="font-bold text-lg sm:text-xl mb-2">Are you registered on SAM.gov?</h3>
                             <p className="text-stone-500 text-sm">
                                 If you&apos;re registered, we can auto-fill your company information.
                             </p>
@@ -541,12 +542,12 @@ function OnboardPageContent() {
                                 {/* Search mode tabs */}
                                 <div className="flex gap-2 justify-center">
                                     <button type="button" onClick={() => { setSearchMode("uei"); setSamError(""); setSamResults([]); }}
-                                        className={clsx("px-4 py-2 rounded-full text-xs font-typewriter font-bold uppercase tracking-wider transition-all",
+                                        className={clsx("px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all",
                                             searchMode === "uei" ? "bg-black text-white" : "bg-stone-100 text-stone-600 hover:bg-stone-200")}>
                                         Search by UEI
                                     </button>
                                     <button type="button" onClick={() => { setSearchMode("name"); setSamError(""); setSamResults([]); }}
-                                        className={clsx("px-4 py-2 rounded-full text-xs font-typewriter font-bold uppercase tracking-wider transition-all",
+                                        className={clsx("px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all",
                                             searchMode === "name" ? "bg-black text-white" : "bg-stone-100 text-stone-600 hover:bg-stone-200")}>
                                         Search by Name
                                     </button>
@@ -554,7 +555,7 @@ function OnboardPageContent() {
 
                                 {searchMode === "uei" && (
                                     <div>
-                                        <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">
+                                        <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">
                                             Unique Entity Identifier (UEI)
                                             <InfoTooltip text="Your 12-character alphanumeric code assigned when you register on SAM.gov. Find it at SAM.gov under your entity registration." />
                                         </label>
@@ -575,7 +576,7 @@ function OnboardPageContent() {
 
                                 {searchMode === "name" && (
                                     <div>
-                                        <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">Company Name</label>
+                                        <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">Company Name</label>
                                         <div className="flex gap-2">
                                             <input type="text" value={nameInput} onChange={(e) => setNameInput(e.target.value)}
                                                 className="flex-1 px-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm"
@@ -597,7 +598,7 @@ function OnboardPageContent() {
                                 {/* Search results list */}
                                 {samResults.length > 0 && (
                                     <div className="space-y-2">
-                                        <p className="text-xs font-typewriter text-stone-500 uppercase tracking-widest">Select your entity:</p>
+                                        <p className="text-xs text-stone-500 uppercase tracking-widest">Select your entity:</p>
                                         {samResults.map((entity, i) => (
                                             <button key={i} type="button" onClick={() => populateFromSam(entity)}
                                                 className="w-full text-left bg-stone-50 hover:bg-stone-100 border border-stone-200 hover:border-stone-300 rounded-xl p-4 transition-all">
@@ -639,7 +640,7 @@ function OnboardPageContent() {
                     <div className="space-y-5 animate-in fade-in duration-300">
                         <div className="flex items-center mb-4">
                             <Building className="w-5 h-5 sm:w-6 sm:h-6 mr-3 text-stone-400" />
-                            <h3 className="font-typewriter font-bold text-lg sm:text-xl">Company Information</h3>
+                            <h3 className="font-bold text-lg sm:text-xl">Company Information</h3>
                         </div>
 
                         {samPopulated && (
@@ -650,12 +651,12 @@ function OnboardPageContent() {
                         )}
 
                         <div>
-                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">Company Name *</label>
+                            <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">Company Name *</label>
                             <input type="text" value={form.company_name} onChange={(e) => updateForm("company_name", e.target.value)}
                                 className="w-full px-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm font-medium" placeholder="Legal Business Name" />
                         </div>
                         <div>
-                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">
+                            <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">
                                 DBA Name
                                 <InfoTooltip text="Doing Business As -- the trade name your company operates under if different from your legal business name." />
                             </label>
@@ -664,7 +665,7 @@ function OnboardPageContent() {
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
-                                <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">
+                                <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">
                                     UEI
                                     <InfoTooltip text="Your Unique Entity Identifier -- a 12-character alphanumeric code assigned when you register on SAM.gov." />
                                 </label>
@@ -676,7 +677,7 @@ function OnboardPageContent() {
                                 {form.uei && !ueiValidation.valid && <p className="text-red-600 text-xs mt-1">{ueiValidation.error}</p>}
                             </div>
                             <div>
-                                <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">
+                                <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">
                                     CAGE Code
                                     <InfoTooltip text="Commercial and Government Entity Code -- a 5-character identifier assigned by the Department of Defense during SAM.gov registration." />
                                 </label>
@@ -689,7 +690,7 @@ function OnboardPageContent() {
                             </div>
                         </div>
                         <div>
-                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">Street Address *</label>
+                            <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">Street Address *</label>
                             <AddressAutocomplete
                                 value={form.address_line_1}
                                 onChange={(val) => updateForm("address_line_1", val)}
@@ -708,12 +709,12 @@ function OnboardPageContent() {
                         </div>
                         <div className="grid grid-cols-3 gap-3">
                             <div>
-                                <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">City *</label>
+                                <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">City *</label>
                                 <input type="text" value={form.city} onChange={(e) => updateForm("city", e.target.value)}
                                     className="w-full px-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" placeholder="City" />
                             </div>
                             <div>
-                                <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">State *</label>
+                                <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">State *</label>
                                 <select title="State" value={form.state} onChange={(e) => updateForm("state", e.target.value)}
                                     className="w-full px-3 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm bg-white">
                                     <option value="">--</option>
@@ -721,18 +722,18 @@ function OnboardPageContent() {
                                 </select>
                             </div>
                             <div>
-                                <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">ZIP *</label>
+                                <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">ZIP *</label>
                                 <input type="text" value={form.zip_code} onChange={(e) => updateForm("zip_code", e.target.value)}
                                     className="w-full px-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm font-mono" placeholder="ZIP" />
                             </div>
                         </div>
                         <div>
-                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">Website</label>
+                            <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">Website</label>
                             <input type="text" value={form.website} onChange={(e) => updateForm("website", e.target.value)}
                                 className="w-full px-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" placeholder="www.example.com" />
                         </div>
                         <div>
-                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">Phone</label>
+                            <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">Phone</label>
                             <input type="tel" value={form.phone} onChange={(e) => updateForm("phone", e.target.value)}
                                 className="w-full px-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" placeholder="(555) 123-4567" />
                         </div>
@@ -744,11 +745,11 @@ function OnboardPageContent() {
                     <div className="space-y-6 animate-in fade-in duration-300">
                         <div className="flex items-center mb-4">
                             <Target className="w-5 h-5 sm:w-6 sm:h-6 mr-3 text-stone-400" />
-                            <h3 className="font-typewriter font-bold text-lg sm:text-xl">Industry & Certifications</h3>
+                            <h3 className="font-bold text-lg sm:text-xl">Industry & Certifications</h3>
                         </div>
 
                         <div>
-                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">
+                            <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">
                                 NAICS Codes *
                                 <InfoTooltip text="North American Industry Classification System codes that describe your industry. Select at least one that matches the services or products you offer." />
                             </label>
@@ -796,7 +797,7 @@ function OnboardPageContent() {
                                         <span className="font-mono text-xs mr-2 opacity-70">{n.code}</span>
                                         <span className="font-medium">{n.label}</span>
                                         {samPopulated && form.naics_codes.includes(n.code) && (
-                                            <span className="ml-auto text-[9px] bg-emerald-400/20 text-emerald-200 px-1.5 py-0.5 rounded font-typewriter">SAM</span>
+                                            <span className="ml-auto text-[9px] bg-emerald-400/20 text-emerald-200 px-1.5 py-0.5 rounded">SAM</span>
                                         )}
                                     </button>
                                 ))}
@@ -807,7 +808,7 @@ function OnboardPageContent() {
                         </div>
 
                         <div>
-                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-3">
+                            <label className="text-xs text-stone-500 uppercase tracking-widest block mb-3">
                                 SBA Certifications
                                 <InfoTooltip text="Small Business Administration certifications that may qualify you for set-aside contracts reserved for specific business categories." />
                             </label>
@@ -815,7 +816,7 @@ function OnboardPageContent() {
                                 {CERT_OPTIONS.map(c => (
                                     <button type="button" key={c.value} onClick={() => toggleArray("sba_certifications", c.value)}
                                         className={clsx(
-                                            "px-3 sm:px-4 py-2.5 rounded-full border text-xs font-typewriter font-bold uppercase tracking-wider transition-all",
+                                            "px-3 sm:px-4 py-2.5 rounded-full border text-xs font-bold uppercase tracking-wider transition-all",
                                             form.sba_certifications.includes(c.value)
                                                 ? "bg-black text-white border-black"
                                                 : "bg-white text-stone-600 border-stone-200 hover:border-stone-400 active:bg-stone-100"
@@ -829,7 +830,7 @@ function OnboardPageContent() {
 
                         {/* PSC Codes */}
                         <div>
-                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">
+                            <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">
                                 Product/Service Codes (PSC)
                                 <InfoTooltip text="PSC codes describe the specific products or services you provide. These help match you to the right opportunities beyond NAICS." />
                             </label>
@@ -881,7 +882,7 @@ function OnboardPageContent() {
 
                         {/* Security Clearances */}
                         <div>
-                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-3">
+                            <label className="text-xs text-stone-500 uppercase tracking-widest block mb-3">
                                 Security Clearances
                                 <InfoTooltip text="If your company holds security clearances, select them here. Many DoD and intelligence contracts require specific clearance levels." />
                             </label>
@@ -889,7 +890,7 @@ function OnboardPageContent() {
                                 {CLEARANCE_OPTIONS.map(c => (
                                     <button type="button" key={c.value} onClick={() => toggleArray("security_clearances", c.value)}
                                         className={clsx(
-                                            "px-3 sm:px-4 py-2.5 rounded-full border text-xs font-typewriter font-bold uppercase tracking-wider transition-all",
+                                            "px-3 sm:px-4 py-2.5 rounded-full border text-xs font-bold uppercase tracking-wider transition-all",
                                             form.security_clearances.includes(c.value)
                                                 ? "bg-black text-white border-black"
                                                 : "bg-white text-stone-600 border-stone-200 hover:border-stone-400 active:bg-stone-100"
@@ -908,19 +909,19 @@ function OnboardPageContent() {
                     <div className="space-y-5 animate-in fade-in duration-300">
                         <div className="flex items-center mb-4">
                             <Briefcase className="w-5 h-5 sm:w-6 sm:h-6 mr-3 text-stone-400" />
-                            <h3 className="font-typewriter font-bold text-lg sm:text-xl">Capacity & Experience</h3>
+                            <h3 className="font-bold text-lg sm:text-xl">Capacity & Experience</h3>
                         </div>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
-                                <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">Employee Count *</label>
+                                <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">Employee Count *</label>
                                 <select title="Employee Count" value={form.employee_count} onChange={(e) => updateForm("employee_count", e.target.value)}
                                     className="w-full px-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm bg-white">
                                     {EMPLOYEE_RANGES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                                 </select>
                             </div>
                             <div>
-                                <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">Annual Revenue *</label>
+                                <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">Annual Revenue *</label>
                                 <select title="Annual Revenue" value={form.revenue} onChange={(e) => updateForm("revenue", e.target.value)}
                                     className="w-full px-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm bg-white">
                                     {REVENUE_RANGES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
@@ -930,25 +931,25 @@ function OnboardPageContent() {
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
-                                <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">Years in Business *</label>
+                                <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">Years in Business *</label>
                                 <input type="number" min={0} max={200} value={form.years_in_business} onChange={(e) => { const v = e.target.value ? String(Math.min(parseInt(e.target.value), 200)) : ""; updateForm("years_in_business", v); }}
                                     className="w-full px-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" placeholder="e.g. 12" />
                             </div>
                             <div>
-                                <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">Service Radius (miles)</label>
+                                <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">Service Radius (miles)</label>
                                 <input type="number" value={form.service_radius_miles} onChange={(e) => updateForm("service_radius_miles", e.target.value)}
                                     className="w-full px-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" placeholder="50" />
                             </div>
                         </div>
 
                         <div>
-                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">Past Federal Awards</label>
+                            <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">Past Federal Awards</label>
                             <input type="number" value={form.federal_awards_count} onChange={(e) => updateForm("federal_awards_count", e.target.value)}
                                 className="w-full px-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" placeholder="Number of past federal contracts (0 if none)" />
                         </div>
 
                         <div>
-                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-3">Operational Capabilities</label>
+                            <label className="text-xs text-stone-500 uppercase tracking-widest block mb-3">Operational Capabilities</label>
                             <div className="flex flex-wrap gap-2 sm:gap-3">
                                 <button type="button" onClick={() => updateForm("has_bonding", !form.has_bonding)}
                                     className={clsx("flex items-center px-4 py-3 rounded-xl border text-sm transition-all",
@@ -978,16 +979,16 @@ function OnboardPageContent() {
                     <div className="space-y-6 animate-in fade-in duration-300">
                         <div className="flex items-center mb-4">
                             <MapPin className="w-5 h-5 sm:w-6 sm:h-6 mr-3 text-stone-400" />
-                            <h3 className="font-typewriter font-bold text-lg sm:text-xl">Target Preferences</h3>
+                            <h3 className="font-bold text-lg sm:text-xl">Target Preferences</h3>
                         </div>
 
                         <div>
-                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-3">Contract Types of Interest</label>
+                            <label className="text-xs text-stone-500 uppercase tracking-widest block mb-3">Contract Types of Interest</label>
                             <div className="flex flex-wrap gap-2">
                                 {CONTRACT_TARGETS.map(ct => (
                                     <button type="button" key={ct.value} onClick={() => toggleArray("target_contract_types", ct.value)}
                                         className={clsx(
-                                            "px-3 sm:px-4 py-2.5 rounded-full border text-xs font-typewriter font-bold transition-all",
+                                            "px-3 sm:px-4 py-2.5 rounded-full border text-xs font-bold transition-all",
                                             form.target_contract_types.includes(ct.value)
                                                 ? "bg-black text-white border-black"
                                                 : "bg-white text-stone-600 border-stone-200 hover:border-stone-400 active:bg-stone-100"
@@ -1001,7 +1002,7 @@ function OnboardPageContent() {
 
                         {/* Preferred Agencies */}
                         <div>
-                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-3">
+                            <label className="text-xs text-stone-500 uppercase tracking-widest block mb-3">
                                 Preferred Agencies
                                 <InfoTooltip text="Select federal agencies you want to work with. This helps prioritize opportunities from agencies you're targeting." />
                             </label>
@@ -1009,7 +1010,7 @@ function OnboardPageContent() {
                                 {FEDERAL_AGENCIES.filter(a => a.popular).map(a => (
                                     <button type="button" key={a.code} onClick={() => toggleArray("preferred_agencies", a.code)}
                                         className={clsx(
-                                            "px-3 py-2 rounded-lg border text-xs font-typewriter font-bold transition-all",
+                                            "px-3 py-2 rounded-lg border text-xs font-bold transition-all",
                                             form.preferred_agencies.includes(a.code)
                                                 ? "bg-black text-white border-black"
                                                 : "bg-white text-stone-600 border-stone-200 hover:border-stone-400 active:bg-stone-100"
@@ -1026,7 +1027,7 @@ function OnboardPageContent() {
                         {/* Contract Value Range */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
-                                <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">
+                                <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">
                                     Min Contract Value
                                     <InfoTooltip text="Minimum contract value you're interested in. Helps filter out contracts that are too small." />
                                 </label>
@@ -1036,7 +1037,7 @@ function OnboardPageContent() {
                                 </select>
                             </div>
                             <div>
-                                <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">
+                                <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">
                                     Max Contract Value
                                 </label>
                                 <select title="Max Contract Value" value={form.contract_value_max} onChange={(e) => updateForm("contract_value_max", e.target.value)}
@@ -1048,7 +1049,7 @@ function OnboardPageContent() {
 
                         {/* Prime vs Sub */}
                         <div>
-                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-3">
+                            <label className="text-xs text-stone-500 uppercase tracking-widest block mb-3">
                                 Role Preference
                                 <InfoTooltip text="Do you want to bid as a prime contractor, subcontractor, or both? Primes lead the contract; subs support a prime." />
                             </label>
@@ -1072,7 +1073,7 @@ function OnboardPageContent() {
                         </div>
 
                         <div>
-                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-3">Target States (where you can perform work) *</label>
+                            <label className="text-xs text-stone-500 uppercase tracking-widest block mb-3">Target States (where you can perform work) *</label>
                             <div className="flex flex-wrap gap-1.5 max-h-[180px] overflow-y-auto pr-1">
                                 {STATE_OPTIONS.map(s => (
                                     <button type="button" key={s} onClick={() => toggleArray("target_states", s)}

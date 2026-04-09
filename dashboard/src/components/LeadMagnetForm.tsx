@@ -146,7 +146,7 @@ export function LeadMagnetForm({ analysisId, inferredProfile, inferredNaics, cra
             <div className="bg-emerald-50 border border-emerald-200 rounded-[28px] p-5 sm:p-6 flex items-center gap-3">
                 <CheckCircle2 className="w-6 h-6 text-emerald-500 flex-shrink-0" />
                 <div>
-                    <p className="font-typewriter font-bold text-sm text-emerald-800">Matches Refreshed</p>
+                    <p className="font-bold text-sm text-emerald-800">Matches Refreshed</p>
                     <p className="text-xs text-emerald-600">Results updated with your confirmed profile.</p>
                 </div>
             </div>
@@ -160,7 +160,7 @@ export function LeadMagnetForm({ analysisId, inferredProfile, inferredNaics, cra
                 <div className="px-5 sm:px-8 py-4 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                         <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                        <h2 className="font-typewriter font-bold text-sm text-emerald-800">
+                        <h2 className="font-bold text-sm text-emerald-800">
                             Profile Auto-Detected
                         </h2>
                     </div>
@@ -199,7 +199,7 @@ export function LeadMagnetForm({ analysisId, inferredProfile, inferredNaics, cra
             <div className="bg-blue-50 border-b border-blue-100 px-5 sm:px-8 py-4">
                 <div className="flex items-center justify-between">
                     <div>
-                        <h2 className="font-typewriter font-bold text-base flex items-center text-blue-900">
+                        <h2 className="font-bold text-base flex items-center text-blue-900">
                             <CheckCircle2 className="w-4 h-4 mr-2 text-blue-500" /> Review & Refine
                         </h2>
                         <p className="text-xs text-blue-700 mt-0.5">Correct NAICS codes and state for better matches.</p>
@@ -220,7 +220,7 @@ export function LeadMagnetForm({ analysisId, inferredProfile, inferredNaics, cra
                 {/* Row 1: Company Name + State side by side */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                        <label className="block text-xs font-typewriter font-bold text-stone-500 uppercase tracking-widest mb-1.5">
+                        <label className="block text-xs font-bold text-stone-500 uppercase tracking-widest mb-1.5">
                             Company Name
                         </label>
                         <input
@@ -232,7 +232,7 @@ export function LeadMagnetForm({ analysisId, inferredProfile, inferredNaics, cra
                         />
                     </div>
                     <div>
-                        <label className="block text-xs font-typewriter font-bold text-stone-500 uppercase tracking-widest mb-1.5">
+                        <label className="block text-xs font-bold text-stone-500 uppercase tracking-widest mb-1.5">
                             <MapPin className="w-3 h-3 inline mr-1" /> State
                         </label>
                         <select
@@ -251,7 +251,7 @@ export function LeadMagnetForm({ analysisId, inferredProfile, inferredNaics, cra
 
                 {/* NAICS Codes — the key field */}
                 <div>
-                    <label className="block text-xs font-typewriter font-bold text-stone-500 uppercase tracking-widest mb-1.5">
+                    <label className="block text-xs font-bold text-stone-500 uppercase tracking-widest mb-1.5">
                         Industry Codes (NAICS) — select all that apply
                     </label>
 
@@ -302,7 +302,7 @@ export function LeadMagnetForm({ analysisId, inferredProfile, inferredNaics, cra
                                     <span className="font-mono text-xs font-bold text-stone-500">{n.code}</span>
                                     <span className="text-sm text-stone-700 flex-1">{n.label}</span>
                                     <span className={clsx(
-                                        "text-[10px] font-typewriter font-bold px-1.5 py-0.5 rounded",
+                                        "text-[10px] font-bold px-1.5 py-0.5 rounded",
                                         n.confidence >= 0.7 ? "text-emerald-600 bg-emerald-50" :
                                         n.confidence >= 0.4 ? "text-amber-600 bg-amber-50" :
                                         "text-stone-400 bg-stone-50"
@@ -367,7 +367,7 @@ export function LeadMagnetForm({ analysisId, inferredProfile, inferredNaics, cra
 
                 {/* SBA Certifications — compact inline chips */}
                 <div>
-                    <label className="block text-xs font-typewriter font-bold text-stone-500 uppercase tracking-widest mb-1.5">
+                    <label className="block text-xs font-bold text-stone-500 uppercase tracking-widest mb-1.5">
                         SBA Certifications
                     </label>
                     <div className="flex flex-wrap gap-2">
@@ -391,7 +391,7 @@ export function LeadMagnetForm({ analysisId, inferredProfile, inferredNaics, cra
 
                 {/* Email — optional */}
                 <div>
-                    <label className="block text-xs font-typewriter font-bold text-stone-500 uppercase tracking-widest mb-1.5">
+                    <label className="block text-xs font-bold text-stone-500 uppercase tracking-widest mb-1.5">
                         <Mail className="w-3 h-3 inline mr-1" /> Email <span className="normal-case text-stone-300">(optional)</span>
                     </label>
                     <input

@@ -20,7 +20,7 @@ export default function ServiceCTA({ title, description, variant = "default", hr
     if (variant === "inline") {
         return (
             <a href={link} target="_blank" rel="noopener noreferrer"
-                className="flex items-center gap-2 text-xs font-typewriter font-bold text-blue-600 hover:text-blue-800 transition-colors group">
+                className="flex items-center gap-2 text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors group">
                 <Icon className="w-3.5 h-3.5" />
                 <span className="group-hover:underline">{title}</span>
                 <ArrowRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -47,7 +47,7 @@ export default function ServiceCTA({ title, description, variant = "default", hr
                 </div>
                 <div className="flex-1 min-w-0">
                     <p className={clsx(
-                        "font-typewriter font-bold text-sm mb-0.5 flex items-center gap-1.5",
+                        "font-bold text-sm mb-0.5 flex items-center gap-1.5",
                         variant === "dark" ? "text-white" : "text-stone-900"
                     )}>
                         {title}

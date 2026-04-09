@@ -141,13 +141,13 @@ export default function IntelligencePage() {
         return (
             <div className="max-w-5xl mx-auto space-y-6 animate-in fade-in duration-500 px-1">
                 <header>
-                    <h2 className="text-2xl sm:text-3xl font-bold font-typewriter tracking-tighter text-black flex items-center">
+                    <h2 className="text-2xl sm:text-3xl font-bold tracking-tighter text-black flex items-center">
                         <BarChart3 className="mr-2 sm:mr-3 w-6 h-6 sm:w-8 sm:h-8" /> Market Intelligence
                     </h2>
                 </header>
                 <div className="bg-stone-50 border border-stone-200 border-dashed rounded-2xl p-12 text-center">
                     <BarChart3 className="w-12 h-12 text-stone-300 mx-auto mb-4" />
-                    <p className="text-stone-500 font-typewriter text-sm mb-2">No NAICS codes configured</p>
+                    <p className="text-stone-500 text-sm mb-2">No NAICS codes configured</p>
                     <p className="text-stone-400 text-xs mb-4">Add your NAICS codes in Settings to see market intelligence for your industry sectors.</p>
                     <a href="/settings" className="bg-black text-white px-5 py-2.5 rounded-full text-sm font-bold inline-flex items-center gap-2">
                         Go to Settings
@@ -160,7 +160,7 @@ export default function IntelligencePage() {
     return (
         <div className="max-w-5xl mx-auto space-y-6 animate-in fade-in duration-500 px-1">
             <header>
-                <h2 className="text-2xl sm:text-3xl font-bold font-typewriter tracking-tighter text-black flex items-center">
+                <h2 className="text-2xl sm:text-3xl font-bold tracking-tighter text-black flex items-center">
                     <BarChart3 className="mr-2 sm:mr-3 w-6 h-6 sm:w-8 sm:h-8" /> Market Intelligence
                 </h2>
                 <p className="text-stone-500 mt-1 font-medium text-sm">
@@ -191,7 +191,7 @@ export default function IntelligencePage() {
             {currentData?.loading && (
                 <div className="bg-white border border-stone-200 rounded-2xl p-12 text-center">
                     <Loader2 className="w-8 h-8 animate-spin text-emerald-500 mx-auto mb-3" />
-                    <p className="text-sm text-stone-500 font-typewriter">Fetching market data for NAICS {selectedNaics}...</p>
+                    <p className="text-sm text-stone-500">Fetching market data for NAICS {selectedNaics}...</p>
                     <p className="text-xs text-stone-400 mt-1">Querying USASpending.gov</p>
                 </div>
             )}
@@ -215,36 +215,36 @@ export default function IntelligencePage() {
                             <div className="flex items-center justify-between mb-2">
                                 <DollarSign className="w-5 h-5 text-emerald-500" />
                             </div>
-                            <p className="text-2xl font-black font-typewriter tracking-tighter">{formatCurrency(currentData.summary.total_spend_returned)}</p>
-                            <p className="text-[10px] text-stone-400 uppercase font-typewriter mt-0.5">Total Spend (3yr)</p>
+                            <p className="text-2xl font-black tracking-tighter">{formatCurrency(currentData.summary.total_spend_returned)}</p>
+                            <p className="text-[10px] text-stone-400 uppercase mt-0.5">Total Spend (3yr)</p>
                         </div>
                         <div className="bg-white border border-stone-200 rounded-2xl p-4 shadow-sm">
                             <div className="flex items-center justify-between mb-2">
                                 <TrendingUp className="w-5 h-5 text-blue-500" />
                             </div>
-                            <p className="text-2xl font-black font-typewriter tracking-tighter">{formatCurrency(currentData.summary.avg_award_size)}</p>
-                            <p className="text-[10px] text-stone-400 uppercase font-typewriter mt-0.5">Avg Award Size</p>
+                            <p className="text-2xl font-black tracking-tighter">{formatCurrency(currentData.summary.avg_award_size)}</p>
+                            <p className="text-[10px] text-stone-400 uppercase mt-0.5">Avg Award Size</p>
                         </div>
                         <div className="bg-white border border-stone-200 rounded-2xl p-4 shadow-sm">
                             <div className="flex items-center justify-between mb-2">
                                 <Building2 className="w-5 h-5 text-amber-500" />
                             </div>
-                            <p className="text-2xl font-black font-typewriter tracking-tighter">{currentData.summary.total_awards_returned}</p>
-                            <p className="text-[10px] text-stone-400 uppercase font-typewriter mt-0.5">Awards Found</p>
+                            <p className="text-2xl font-black tracking-tighter">{currentData.summary.total_awards_returned}</p>
+                            <p className="text-[10px] text-stone-400 uppercase mt-0.5">Awards Found</p>
                         </div>
                         <div className="bg-white border border-stone-200 rounded-2xl p-4 shadow-sm">
                             <div className="flex items-center justify-between mb-2">
                                 <Users className="w-5 h-5 text-purple-500" />
                             </div>
-                            <p className="text-2xl font-black font-typewriter tracking-tighter">{currentData.summary.unique_incumbents}</p>
-                            <p className="text-[10px] text-stone-400 uppercase font-typewriter mt-0.5">Unique Contractors</p>
+                            <p className="text-2xl font-black tracking-tighter">{currentData.summary.unique_incumbents}</p>
+                            <p className="text-[10px] text-stone-400 uppercase mt-0.5">Unique Contractors</p>
                         </div>
                     </div>
 
                     {/* Spending by Year Bar Chart */}
                     {currentData.spending_by_year.length > 0 && (
                         <div className="bg-white border border-stone-200 rounded-2xl p-5 shadow-sm">
-                            <h3 className="font-typewriter font-bold text-base mb-4 flex items-center gap-2">
+                            <h3 className="font-bold text-base mb-4 flex items-center gap-2">
                                 <TrendingUp className="w-5 h-5 text-stone-400" /> Federal Spending by Fiscal Year
                             </h3>
                             <div className="space-y-3">
@@ -276,7 +276,7 @@ export default function IntelligencePage() {
                     {/* Top Recipients / Agencies */}
                     {currentData.top_recipients.length > 0 && (
                         <div className="bg-white border border-stone-200 rounded-2xl p-5 shadow-sm">
-                            <h3 className="font-typewriter font-bold text-base mb-4 flex items-center gap-2">
+                            <h3 className="font-bold text-base mb-4 flex items-center gap-2">
                                 <Building2 className="w-5 h-5 text-stone-400" /> Top Contractors in NAICS {selectedNaics}
                             </h3>
                             <div className="space-y-2">
@@ -299,7 +299,7 @@ export default function IntelligencePage() {
                     {/* Incumbents */}
                     {currentData.incumbents.length > 0 && (
                         <div className="bg-white border border-stone-200 rounded-2xl p-5 shadow-sm">
-                            <h3 className="font-typewriter font-bold text-base mb-4 flex items-center gap-2">
+                            <h3 className="font-bold text-base mb-4 flex items-center gap-2">
                                 <Users className="w-5 h-5 text-stone-400" /> Known Incumbents
                             </h3>
                             <div className="space-y-1.5">

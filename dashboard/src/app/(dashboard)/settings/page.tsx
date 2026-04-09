@@ -164,7 +164,7 @@ function SubscriptionStatusBadge({ status }: { status: string }) {
     };
     const s = map[status] || map.free;
     return (
-        <span className={clsx(s.bg, s.text, "px-3 py-1 rounded-full text-xs font-typewriter font-bold uppercase")}>
+        <span className={clsx(s.bg, s.text, "px-3 py-1 rounded-full text-xs font-bold uppercase")}>
             {s.label}
         </span>
     );
@@ -180,7 +180,7 @@ function InvoiceStatusBadge({ status }: { status: string | null }) {
     };
     const s = map[status || "draft"] || map.draft;
     return (
-        <span className={clsx(s.bg, s.text, "border px-2.5 py-0.5 rounded-full text-[10px] font-typewriter font-bold uppercase")}>
+        <span className={clsx(s.bg, s.text, "border px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase")}>
             {s.label}
         </span>
     );
@@ -497,7 +497,7 @@ export default function SettingsPage() {
             {/* ---- Header ---- */}
             <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
                 <div>
-                    <h2 className="text-2xl sm:text-3xl font-bold font-typewriter tracking-tighter text-black flex items-center">
+                    <h2 className="text-2xl sm:text-3xl font-bold tracking-tighter text-black flex items-center">
                         <Settings className="mr-3 w-6 h-6 sm:w-8 sm:h-8" /> Settings
                     </h2>
                     <p className="text-stone-500 mt-1 font-medium text-sm">
@@ -523,7 +523,7 @@ export default function SettingsPage() {
             {/*  SECTION 1: Account Overview                                     */}
             {/* ================================================================ */}
             <section id="account" className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
-                <p className="text-stone-400 text-xs uppercase tracking-widest font-typewriter font-bold mb-4">Account Overview</p>
+                <p className="text-stone-400 text-xs uppercase tracking-widest font-bold mb-4">Account Overview</p>
                 <div className="space-y-0">
                     {/* Email */}
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 py-3.5 border-b border-stone-100">
@@ -558,7 +558,7 @@ export default function SettingsPage() {
                                 <p className="text-[11px] text-stone-400">Your current subscription tier</p>
                             </div>
                         </div>
-                        <span className={clsx(badge.bg, badge.text, "px-3 py-1 rounded-full text-xs font-typewriter font-bold uppercase")}>
+                        <span className={clsx(badge.bg, badge.text, "px-3 py-1 rounded-full text-xs font-bold uppercase")}>
                             {badge.label}
                         </span>
                     </div>
@@ -583,7 +583,7 @@ export default function SettingsPage() {
             {/*  SECTION 2: Subscription Management                              */}
             {/* ================================================================ */}
             <section id="subscription" className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
-                <p className="text-stone-400 text-xs uppercase tracking-widest font-typewriter font-bold mb-4">Subscription</p>
+                <p className="text-stone-400 text-xs uppercase tracking-widest font-bold mb-4">Subscription</p>
 
                 {subLoading ? (
                     <div className="space-y-4">
@@ -617,7 +617,7 @@ export default function SettingsPage() {
                                     <p className="text-sm text-blue-800 font-medium">
                                         {trialDaysLeft} day{trialDaysLeft !== 1 ? "s" : ""} remaining in trial
                                     </p>
-                                    <span className="text-xs text-blue-600 font-typewriter font-bold">
+                                    <span className="text-xs text-blue-600 font-bold">
                                         {trialDaysLeft}/{trialTotalDays}
                                     </span>
                                 </div>
@@ -666,13 +666,13 @@ export default function SettingsPage() {
                         {/* Period & payment info */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div className="bg-stone-50 rounded-xl p-3.5">
-                                <p className="text-[10px] text-stone-400 uppercase tracking-widest font-typewriter mb-1">Current Period</p>
+                                <p className="text-[10px] text-stone-400 uppercase tracking-widest mb-1">Current Period</p>
                                 <p className="text-sm font-medium text-stone-700">
                                     {formatDate(subscription.current_period_start)} &mdash; {formatDate(subscription.current_period_end)}
                                 </p>
                             </div>
                             <div className="bg-stone-50 rounded-xl p-3.5">
-                                <p className="text-[10px] text-stone-400 uppercase tracking-widest font-typewriter mb-1">Next Billing Date</p>
+                                <p className="text-[10px] text-stone-400 uppercase tracking-widest mb-1">Next Billing Date</p>
                                 <p className="text-sm font-medium text-stone-700">
                                     {subscription.cancel_at_period_end
                                         ? "N/A (canceling)"
@@ -684,7 +684,7 @@ export default function SettingsPage() {
                         {/* Payment method */}
                         {subscription.payment_method && (
                             <div className="bg-stone-50 rounded-xl p-3.5">
-                                <p className="text-[10px] text-stone-400 uppercase tracking-widest font-typewriter mb-1">Payment Method</p>
+                                <p className="text-[10px] text-stone-400 uppercase tracking-widest mb-1">Payment Method</p>
                                 <div className="flex items-center gap-2">
                                     <CreditCard className="w-4 h-4 text-stone-500" />
                                     <p className="text-sm font-medium text-stone-700">
@@ -705,7 +705,7 @@ export default function SettingsPage() {
                                 type="button"
                                 onClick={openStripePortal}
                                 disabled={portalLoading}
-                                className="inline-flex items-center bg-black text-white font-typewriter font-bold px-5 py-2.5 rounded-full text-xs hover:bg-stone-800 transition-all disabled:opacity-50"
+                                className="inline-flex items-center bg-black text-white font-bold px-5 py-2.5 rounded-full text-xs hover:bg-stone-800 transition-all disabled:opacity-50"
                             >
                                 {portalLoading ? <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" /> : <ExternalLink className="w-3.5 h-3.5 mr-2" />}
                                 Change Plan
@@ -714,7 +714,7 @@ export default function SettingsPage() {
                                 type="button"
                                 onClick={openStripePortal}
                                 disabled={portalLoading}
-                                className="inline-flex items-center bg-white text-stone-700 font-typewriter font-bold px-5 py-2.5 rounded-full text-xs border border-stone-200 hover:bg-stone-50 transition-all disabled:opacity-50"
+                                className="inline-flex items-center bg-white text-stone-700 font-bold px-5 py-2.5 rounded-full text-xs border border-stone-200 hover:bg-stone-50 transition-all disabled:opacity-50"
                             >
                                 {portalLoading ? <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" /> : <CreditCard className="w-3.5 h-3.5 mr-2" />}
                                 Update Payment Method
@@ -723,7 +723,7 @@ export default function SettingsPage() {
                                 type="button"
                                 onClick={openStripePortal}
                                 disabled={portalLoading}
-                                className="inline-flex items-center bg-white text-red-600 font-typewriter font-bold px-5 py-2.5 rounded-full text-xs border border-red-200 hover:bg-red-50 transition-all disabled:opacity-50"
+                                className="inline-flex items-center bg-white text-red-600 font-bold px-5 py-2.5 rounded-full text-xs border border-red-200 hover:bg-red-50 transition-all disabled:opacity-50"
                             >
                                 {portalLoading ? <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" /> : <X className="w-3.5 h-3.5 mr-2" />}
                                 Cancel Subscription
@@ -755,7 +755,7 @@ export default function SettingsPage() {
                         </div>
                         <Link
                             href="/billing"
-                            className="inline-flex items-center bg-emerald-600 text-white font-typewriter font-bold px-5 py-2.5 rounded-full text-xs hover:bg-emerald-700 transition-all"
+                            className="inline-flex items-center bg-emerald-600 text-white font-bold px-5 py-2.5 rounded-full text-xs hover:bg-emerald-700 transition-all"
                         >
                             <CreditCard className="w-3.5 h-3.5 mr-2" />
                             View Plans & Upgrade
@@ -773,7 +773,7 @@ export default function SettingsPage() {
                     onClick={() => setInvoicesExpanded(!invoicesExpanded)}
                     className="w-full flex items-center justify-between"
                 >
-                    <p className="text-stone-400 text-xs uppercase tracking-widest font-typewriter font-bold">
+                    <p className="text-stone-400 text-xs uppercase tracking-widest font-bold">
                         Invoices & Billing History
                     </p>
                     {invoicesExpanded
@@ -803,11 +803,11 @@ export default function SettingsPage() {
                                 <table className="w-full text-sm">
                                     <thead>
                                         <tr className="border-b border-stone-200">
-                                            <th className="text-left text-[10px] text-stone-400 uppercase tracking-widest font-typewriter font-bold py-2 px-2">Date</th>
-                                            <th className="text-left text-[10px] text-stone-400 uppercase tracking-widest font-typewriter font-bold py-2 px-2">Invoice #</th>
-                                            <th className="text-right text-[10px] text-stone-400 uppercase tracking-widest font-typewriter font-bold py-2 px-2">Amount</th>
-                                            <th className="text-center text-[10px] text-stone-400 uppercase tracking-widest font-typewriter font-bold py-2 px-2">Status</th>
-                                            <th className="text-right text-[10px] text-stone-400 uppercase tracking-widest font-typewriter font-bold py-2 px-2">Actions</th>
+                                            <th className="text-left text-[10px] text-stone-400 uppercase tracking-widest font-bold py-2 px-2">Date</th>
+                                            <th className="text-left text-[10px] text-stone-400 uppercase tracking-widest font-bold py-2 px-2">Invoice #</th>
+                                            <th className="text-right text-[10px] text-stone-400 uppercase tracking-widest font-bold py-2 px-2">Amount</th>
+                                            <th className="text-center text-[10px] text-stone-400 uppercase tracking-widest font-bold py-2 px-2">Status</th>
+                                            <th className="text-right text-[10px] text-stone-400 uppercase tracking-widest font-bold py-2 px-2">Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -871,33 +871,33 @@ export default function SettingsPage() {
             {/*  SECTION 4: Profile Settings                                     */}
             {/* ================================================================ */}
             <section id="profile" className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
-                <p className="text-stone-400 text-xs uppercase tracking-widest font-typewriter font-bold mb-4">Profile Settings</p>
+                <p className="text-stone-400 text-xs uppercase tracking-widest font-bold mb-4">Profile Settings</p>
                 <div className="space-y-4">
                     <div>
-                        <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">Company Name</label>
+                        <label className="text-xs text-stone-500 uppercase tracking-widest block mb-1.5">Company Name</label>
                         <input id="company-name" type="text" placeholder="Legal Business Name" value={profile.company_name || ""} onChange={(e) => updateProfile("company_name", e.target.value)}
                             className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" />
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">Contact Name</label>
+                            <label className="text-xs text-stone-500 uppercase tracking-widest block mb-1.5">Contact Name</label>
                             <input type="text" placeholder="Full Name" value={profile.contact_name || ""} onChange={(e) => updateProfile("contact_name", e.target.value)}
                                 className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" />
                         </div>
                         <div>
-                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">Contact Email</label>
+                            <label className="text-xs text-stone-500 uppercase tracking-widest block mb-1.5">Contact Email</label>
                             <input type="email" placeholder="contact@company.com" value={profile.email || ""} onChange={(e) => updateProfile("email", e.target.value)}
                                 className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" />
                         </div>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">Phone</label>
+                            <label className="text-xs text-stone-500 uppercase tracking-widest block mb-1.5">Phone</label>
                             <input id="phone" type="tel" placeholder="(555) 123-4567" value={profile.phone || ""} onChange={(e) => updateProfile("phone", e.target.value)}
                                 className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" />
                         </div>
                         <div>
-                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">Website</label>
+                            <label className="text-xs text-stone-500 uppercase tracking-widest block mb-1.5">Website</label>
                             <input id="website" type="text" placeholder="www.example.com" value={profile.website || ""} onChange={(e) => updateProfile("website", e.target.value)}
                                 className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" />
                         </div>
@@ -905,13 +905,13 @@ export default function SettingsPage() {
 
                     {/* DBA + Registration */}
                     <div>
-                        <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">DBA Name <span className="text-stone-400 normal-case">(optional)</span></label>
+                        <label className="text-xs text-stone-500 uppercase tracking-widest block mb-1.5">DBA Name <span className="text-stone-400 normal-case">(optional)</span></label>
                         <input type="text" placeholder="Doing Business As" value={profile.dba_name || ""} onChange={(e) => updateProfile("dba_name", e.target.value)}
                             className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" />
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">UEI <span className="text-stone-400 normal-case">(12 alphanumeric)</span> <InfoTooltip text="Unique Entity Identifier -- your 12-character code assigned when you register on SAM.gov. Required for all federal contracts." /></label>
+                            <label className="text-xs text-stone-500 uppercase tracking-widest block mb-1.5">UEI <span className="text-stone-400 normal-case">(12 alphanumeric)</span> <InfoTooltip text="Unique Entity Identifier -- your 12-character code assigned when you register on SAM.gov. Required for all federal contracts." /></label>
                             <input id="uei" type="text" placeholder="e.g. ABC123DEF456" maxLength={12} value={profile.uei || ""}
                                 onChange={(e) => { updateProfile("uei", e.target.value.replace(/[^A-Za-z0-9]/g, "")); setValidationErrors(prev => ({ ...prev, uei: "" })); }}
                                 className={clsx("w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm font-mono uppercase",
@@ -919,7 +919,7 @@ export default function SettingsPage() {
                             {validationErrors.uei && <p className="text-xs text-red-500 mt-1 flex items-center"><AlertCircle className="w-3 h-3 mr-1" />{validationErrors.uei}</p>}
                         </div>
                         <div>
-                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">CAGE Code <span className="text-stone-400 normal-case">(5 alphanumeric)</span> <InfoTooltip text="Commercial and Government Entity Code -- a 5-character ID assigned by the Department of Defense during SAM.gov registration." /></label>
+                            <label className="text-xs text-stone-500 uppercase tracking-widest block mb-1.5">CAGE Code <span className="text-stone-400 normal-case">(5 alphanumeric)</span> <InfoTooltip text="Commercial and Government Entity Code -- a 5-character ID assigned by the Department of Defense during SAM.gov registration." /></label>
                             <input id="cage-code" type="text" placeholder="e.g. 7ABC1" maxLength={5} value={profile.cage_code || ""}
                                 onChange={(e) => { updateProfile("cage_code", e.target.value.replace(/[^A-Za-z0-9]/g, "")); setValidationErrors(prev => ({ ...prev, cage_code: "" })); }}
                                 className={clsx("w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm font-mono uppercase",
@@ -930,7 +930,7 @@ export default function SettingsPage() {
 
                     {/* Address */}
                     <div>
-                        <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">Street Address</label>
+                        <label className="text-xs text-stone-500 uppercase tracking-widest block mb-1.5">Street Address</label>
                         <AddressAutocomplete
                             value={profile.address_line_1 || ""}
                             onChange={(val) => updateProfile("address_line_1", val)}
@@ -945,12 +945,12 @@ export default function SettingsPage() {
                     </div>
                     <div className="grid grid-cols-3 gap-3">
                         <div>
-                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">City</label>
+                            <label className="text-xs text-stone-500 uppercase tracking-widest block mb-1.5">City</label>
                             <input type="text" placeholder="City" value={profile.city || ""} onChange={(e) => updateProfile("city", e.target.value)}
                                 className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" />
                         </div>
                         <div>
-                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">State</label>
+                            <label className="text-xs text-stone-500 uppercase tracking-widest block mb-1.5">State</label>
                             <select id="state" title="State" value={profile.state || ""} onChange={(e) => updateProfile("state", e.target.value)}
                                 className="w-full px-3 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm bg-white">
                                 <option value="">--</option>
@@ -958,7 +958,7 @@ export default function SettingsPage() {
                             </select>
                         </div>
                         <div>
-                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">ZIP</label>
+                            <label className="text-xs text-stone-500 uppercase tracking-widest block mb-1.5">ZIP</label>
                             <input type="text" placeholder="ZIP" value={profile.zip_code || ""} onChange={(e) => updateProfile("zip_code", e.target.value)}
                                 className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm font-mono" />
                         </div>
@@ -1004,10 +1004,10 @@ export default function SettingsPage() {
                 return (
                     <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
                         <div className="flex items-center justify-between mb-3">
-                            <h3 className="font-typewriter font-bold text-base sm:text-lg flex items-center">
+                            <h3 className="font-bold text-base sm:text-lg flex items-center">
                                 <UserCheck className="w-5 h-5 mr-2 text-stone-400" /> Profile Strength
                             </h3>
-                            <span className={clsx("text-lg font-black font-typewriter",
+                            <span className={clsx("text-lg font-black",
                                 score >= 80 ? "text-emerald-600" : score >= 50 ? "text-amber-600" : "text-red-600"
                             )}>{score}%</span>
                         </div>
@@ -1019,7 +1019,7 @@ export default function SettingsPage() {
                         {missing.length > 0 ? (
                             <div className="flex flex-wrap gap-1.5">
                                 {missing.map(m => (
-                                    <span key={m} className="text-[10px] font-typewriter bg-red-50 text-red-600 border border-red-200 px-2 py-0.5 rounded">
+                                    <span key={m} className="text-[10px] bg-red-50 text-red-600 border border-red-200 px-2 py-0.5 rounded">
                                         {m}
                                     </span>
                                 ))}
@@ -1045,13 +1045,13 @@ export default function SettingsPage() {
             {showAdvanced && (<>
             {/* Capacity & Experience */}
             <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
-                <h3 className="font-typewriter font-bold text-base sm:text-lg flex items-center mb-4">
+                <h3 className="font-bold text-base sm:text-lg flex items-center mb-4">
                     <Briefcase className="w-5 h-5 mr-2 text-stone-400" /> Capacity & Experience
                 </h3>
                 <div className="space-y-4">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">Employee Count</label>
+                            <label className="text-xs text-stone-500 uppercase tracking-widest block mb-1.5">Employee Count</label>
                             <select id="employee-count" title="Employee Count" value={profile.employee_count || ""} onChange={(e) => updateProfile("employee_count", e.target.value ? parseInt(e.target.value) : null)}
                                 className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm bg-white">
                                 <option value="">Select range...</option>
@@ -1064,7 +1064,7 @@ export default function SettingsPage() {
                             </select>
                         </div>
                         <div>
-                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">Annual Revenue</label>
+                            <label className="text-xs text-stone-500 uppercase tracking-widest block mb-1.5">Annual Revenue</label>
                             <select title="Annual Revenue" value={profile.revenue || ""} onChange={(e) => updateProfile("revenue", e.target.value ? parseInt(e.target.value) : null)}
                                 className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm bg-white">
                                 <option value="">Select range...</option>
@@ -1080,26 +1080,26 @@ export default function SettingsPage() {
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">Years in Business</label>
+                            <label className="text-xs text-stone-500 uppercase tracking-widest block mb-1.5">Years in Business</label>
                             <input id="years-in-business" type="number" min={0} max={200} placeholder="e.g. 5" value={profile.years_in_business && profile.years_in_business > 200 ? "" : (profile.years_in_business ?? "")} onChange={(e) => { const v = e.target.value ? Math.min(parseInt(e.target.value), 200) : null; updateProfile("years_in_business", v); }}
                                 className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" />
                         </div>
                         <div>
-                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">Past Federal Awards</label>
+                            <label className="text-xs text-stone-500 uppercase tracking-widest block mb-1.5">Past Federal Awards</label>
                             <input id="past-federal-awards" type="number" min={0} placeholder="Number of past federal contracts (0 if none)" value={profile.federal_awards_count ?? ""} onChange={(e) => updateProfile("federal_awards_count", e.target.value ? parseInt(e.target.value) : 0)}
                                 className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" />
                         </div>
                     </div>
                     <div>
-                        <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">Service Radius</label>
+                        <label className="text-xs text-stone-500 uppercase tracking-widest block mb-1.5">Service Radius</label>
                         <div className="relative">
                             <input type="number" min={0} placeholder="miles" value={profile.service_radius_miles ?? ""} onChange={(e) => updateProfile("service_radius_miles", e.target.value ? parseInt(e.target.value) : null)}
                                 className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm pr-16" />
-                            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-stone-400 font-typewriter">miles</span>
+                            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-stone-400">miles</span>
                         </div>
                     </div>
                     <div>
-                        <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">Operational Capabilities</label>
+                        <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">Operational Capabilities</label>
                         <div className="flex flex-wrap gap-2">
                             <button type="button" onClick={() => updateProfile("has_bonding", !profile.has_bonding)}
                                 className={clsx(
@@ -1135,12 +1135,12 @@ export default function SettingsPage() {
 
             {/* Industry */}
             <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
-                <h3 className="font-typewriter font-bold text-base sm:text-lg flex items-center mb-4">
+                <h3 className="font-bold text-base sm:text-lg flex items-center mb-4">
                     <Shield className="w-5 h-5 mr-2 text-stone-400" /> Industry & Certifications
                 </h3>
                 <div className="space-y-4">
                     <div>
-                        <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">NAICS Codes <InfoTooltip text="North American Industry Classification System -- codes that describe your industry. The government uses these to categorize opportunities by service/product type." /></label>
+                        <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">NAICS Codes <InfoTooltip text="North American Industry Classification System -- codes that describe your industry. The government uses these to categorize opportunities by service/product type." /></label>
                         <div className="relative mb-2">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
                             <input id="naics-codes" type="text" placeholder="Search by code or name..." value={naicsSearch} onChange={(e) => setNaicsSearch(e.target.value)}
@@ -1151,7 +1151,7 @@ export default function SettingsPage() {
                                 {(profile.naics_codes || []).map(code => {
                                     return (
                                         <button type="button" key={code} onClick={() => toggleArray("naics_codes", code)}
-                                            className="flex items-center bg-black text-white px-2.5 py-1 rounded-full text-xs font-typewriter gap-1">
+                                            className="flex items-center bg-black text-white px-2.5 py-1 rounded-full text-xs gap-1">
                                             <span>{code}</span>
                                             <span className="opacity-60">&times;</span>
                                         </button>
@@ -1182,12 +1182,12 @@ export default function SettingsPage() {
                         {!naicsSearch && <p className="text-[10px] text-stone-400 mt-1.5">Showing popular codes. Search to find more.</p>}
                     </div>
                     <div>
-                        <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">SBA Certifications <InfoTooltip text="Small Business Administration certifications that qualify you for set-aside contracts reserved for specific business categories (8(a), HUBZone, SDVOSB, WOSB, etc.)." /></label>
+                        <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">SBA Certifications <InfoTooltip text="Small Business Administration certifications that qualify you for set-aside contracts reserved for specific business categories (8(a), HUBZone, SDVOSB, WOSB, etc.)." /></label>
                         <div id="sba-certifications" className="flex flex-wrap gap-2">
                             {CERT_OPTIONS.map(c => (
                                 <button type="button" key={c.value} onClick={() => toggleArray("sba_certifications", c.value)}
                                     className={clsx(
-                                        "px-3 py-2 rounded-full border text-xs font-typewriter font-bold uppercase transition-all",
+                                        "px-3 py-2 rounded-full border text-xs font-bold uppercase transition-all",
                                         (profile.sba_certifications || []).includes(c.value)
                                             ? "bg-black text-white border-black"
                                             : "bg-white text-stone-600 border-stone-200 hover:border-stone-400 active:bg-stone-100"
@@ -1202,12 +1202,12 @@ export default function SettingsPage() {
 
             {/* PSC Codes & Clearances */}
             <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
-                <h3 className="font-typewriter font-bold text-base sm:text-lg flex items-center mb-4">
+                <h3 className="font-bold text-base sm:text-lg flex items-center mb-4">
                     <Shield className="w-5 h-5 mr-2 text-stone-400" /> Service Codes & Clearances
                 </h3>
                 <div className="space-y-4">
                     <div>
-                        <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">Product/Service Codes (PSC) <InfoTooltip text="PSC codes describe the specific products or services you provide to the government. These help match you to opportunities beyond NAICS." /></label>
+                        <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">Product/Service Codes (PSC) <InfoTooltip text="PSC codes describe the specific products or services you provide to the government. These help match you to opportunities beyond NAICS." /></label>
                         <div className="relative mb-2">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
                             <input type="text" placeholder="Search PSC codes..." value={pscSearch} onChange={(e) => setPscSearch(e.target.value)}
@@ -1217,7 +1217,7 @@ export default function SettingsPage() {
                             <div className="flex flex-wrap gap-1.5 mb-2">
                                 {(profile.target_psc_codes || []).map(code => (
                                     <button type="button" key={code} title={`Remove ${code}`} onClick={() => toggleArray("target_psc_codes", code)}
-                                        className="flex items-center bg-black text-white px-2.5 py-1 rounded-full text-xs font-typewriter gap-1">
+                                        className="flex items-center bg-black text-white px-2.5 py-1 rounded-full text-xs gap-1">
                                         <span>{code}</span>
                                         <span className="opacity-60">&times;</span>
                                     </button>
@@ -1247,12 +1247,12 @@ export default function SettingsPage() {
                         {!pscSearch && <p className="text-[10px] text-stone-400 mt-1.5">Showing popular codes. Search to find more.</p>}
                     </div>
                     <div>
-                        <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">Security Clearances</label>
+                        <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">Security Clearances</label>
                         <div className="flex flex-wrap gap-2">
                             {["Confidential", "Secret", "Top Secret", "TS/SCI"].map(c => (
                                 <button type="button" key={c} onClick={() => toggleArray("security_clearances", c)}
                                     className={clsx(
-                                        "px-3 py-2 rounded-full border text-xs font-typewriter font-bold uppercase transition-all",
+                                        "px-3 py-2 rounded-full border text-xs font-bold uppercase transition-all",
                                         (profile.security_clearances || []).includes(c)
                                             ? "bg-black text-white border-black"
                                             : "bg-white text-stone-600 border-stone-200 hover:border-stone-400 active:bg-stone-100"
@@ -1267,17 +1267,17 @@ export default function SettingsPage() {
 
             {/* Preferred Agencies & Contract Preferences */}
             <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
-                <h3 className="font-typewriter font-bold text-base sm:text-lg flex items-center mb-4">
+                <h3 className="font-bold text-base sm:text-lg flex items-center mb-4">
                     <Building className="w-5 h-5 mr-2 text-stone-400" /> Targeting Preferences
                 </h3>
                 <div className="space-y-4">
                     <div>
-                        <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">Preferred Agencies</label>
+                        <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">Preferred Agencies</label>
                         <div className="flex flex-wrap gap-1.5">
                             {FEDERAL_AGENCIES.filter(a => a.popular).map(a => (
                                 <button type="button" key={a.code} onClick={() => toggleArray("preferred_agencies", a.code)}
                                     className={clsx(
-                                        "px-3 py-2 rounded-lg border text-xs font-typewriter font-bold transition-all",
+                                        "px-3 py-2 rounded-lg border text-xs font-bold transition-all",
                                         (profile.preferred_agencies || []).includes(a.code)
                                             ? "bg-black text-white border-black"
                                             : "bg-white text-stone-600 border-stone-200 hover:border-stone-400 active:bg-stone-100"
@@ -1289,7 +1289,7 @@ export default function SettingsPage() {
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">Min Contract Value</label>
+                            <label className="text-xs text-stone-500 uppercase tracking-widest block mb-1.5">Min Contract Value</label>
                             <select title="Min Contract Value" value={profile.contract_value_min || ""} onChange={(e) => updateProfile("contract_value_min", e.target.value ? parseFloat(e.target.value) : null)}
                                 className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm bg-white">
                                 <option value="">No preference</option>
@@ -1302,7 +1302,7 @@ export default function SettingsPage() {
                             </select>
                         </div>
                         <div>
-                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">Max Contract Value</label>
+                            <label className="text-xs text-stone-500 uppercase tracking-widest block mb-1.5">Max Contract Value</label>
                             <select title="Max Contract Value" value={profile.contract_value_max || ""} onChange={(e) => updateProfile("contract_value_max", e.target.value ? parseFloat(e.target.value) : null)}
                                 className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm bg-white">
                                 <option value="">No preference</option>
@@ -1316,7 +1316,7 @@ export default function SettingsPage() {
                         </div>
                     </div>
                     <div>
-                        <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-2">Role Preference</label>
+                        <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">Role Preference</label>
                         <div className="flex gap-2">
                             {[
                                 { value: "prime", label: "Prime Only" },
@@ -1341,7 +1341,7 @@ export default function SettingsPage() {
 
             {/* Target States */}
             <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
-                <h3 className="font-typewriter font-bold text-base sm:text-lg flex items-center mb-4">
+                <h3 className="font-bold text-base sm:text-lg flex items-center mb-4">
                     <MapPin className="w-5 h-5 mr-2 text-stone-400" /> Target States
                 </h3>
                 <button type="button" onClick={() => {
@@ -1382,7 +1382,7 @@ export default function SettingsPage() {
 
             {/* Notifications */}
             <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
-                <h3 className="font-typewriter font-bold text-base sm:text-lg flex items-center mb-4">
+                <h3 className="font-bold text-base sm:text-lg flex items-center mb-4">
                     <Bell className="w-5 h-5 mr-2 text-stone-400" /> Notifications
                 </h3>
                 <div className="space-y-4">
@@ -1425,14 +1425,14 @@ export default function SettingsPage() {
             {/*  SECTION 5: Password                                             */}
             {/* ================================================================ */}
             <section id="password" className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
-                <p className="text-stone-400 text-xs uppercase tracking-widest font-typewriter font-bold mb-4">Password</p>
+                <p className="text-stone-400 text-xs uppercase tracking-widest font-bold mb-4">Password</p>
                 <div className="space-y-4">
                     <p className="text-xs text-stone-500">
                         Set or update your account password. If you signed up with Google, you can add a password for email-based login.
                     </p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">New Password</label>
+                            <label className="text-xs text-stone-500 uppercase tracking-widest block mb-1.5">New Password</label>
                             <div className="relative">
                                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
                                 <input
@@ -1445,7 +1445,7 @@ export default function SettingsPage() {
                             </div>
                         </div>
                         <div>
-                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">Confirm Password</label>
+                            <label className="text-xs text-stone-500 uppercase tracking-widest block mb-1.5">Confirm Password</label>
                             <div className="relative">
                                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
                                 <input
@@ -1473,7 +1473,7 @@ export default function SettingsPage() {
                         type="button"
                         onClick={handlePasswordUpdate}
                         disabled={passwordSaving || !newPassword}
-                        className="inline-flex items-center bg-black text-white font-typewriter font-bold px-5 py-2.5 rounded-full text-xs hover:bg-stone-800 transition-all disabled:opacity-50"
+                        className="inline-flex items-center bg-black text-white font-bold px-5 py-2.5 rounded-full text-xs hover:bg-stone-800 transition-all disabled:opacity-50"
                     >
                         {passwordSaving
                             ? <><Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" /> Updating...</>
@@ -1484,7 +1484,7 @@ export default function SettingsPage() {
 
             {/* Google Login */}
             <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
-                <h3 className="font-typewriter font-bold text-base sm:text-lg flex items-center mb-2">
+                <h3 className="font-bold text-base sm:text-lg flex items-center mb-2">
                     Quick Login
                 </h3>
                 <p className="text-xs text-stone-500 mb-4">Link your Google account for one-click login next time.</p>
@@ -1505,7 +1505,7 @@ export default function SettingsPage() {
             {/*  SECTION 6: Danger Zone                                          */}
             {/* ================================================================ */}
             <section id="danger-zone" className="bg-white rounded-2xl border border-red-200 shadow-sm p-5 sm:p-7">
-                <p className="text-red-500 text-xs uppercase tracking-widest font-typewriter font-bold mb-4">Danger Zone</p>
+                <p className="text-red-500 text-xs uppercase tracking-widest font-bold mb-4">Danger Zone</p>
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                     <div>
                         <p className="font-medium text-sm text-stone-800">Delete Account</p>
@@ -1516,7 +1516,7 @@ export default function SettingsPage() {
                     <button
                         type="button"
                         onClick={() => setShowDeleteModal(true)}
-                        className="inline-flex items-center bg-white text-red-600 font-typewriter font-bold px-5 py-2.5 rounded-full text-xs border border-red-200 hover:bg-red-50 transition-all self-start sm:self-auto"
+                        className="inline-flex items-center bg-white text-red-600 font-bold px-5 py-2.5 rounded-full text-xs border border-red-200 hover:bg-red-50 transition-all self-start sm:self-auto"
                     >
                         <Trash2 className="w-3.5 h-3.5 mr-2" />
                         Delete Account
@@ -1570,7 +1570,7 @@ export default function SettingsPage() {
                             </ul>
                         </div>
                         <div className="mb-4">
-                            <label className="text-xs font-typewriter text-stone-500 uppercase tracking-widest block mb-1.5">
+                            <label className="text-xs text-stone-500 uppercase tracking-widest block mb-1.5">
                                 Type DELETE to confirm
                             </label>
                             <input

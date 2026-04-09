@@ -124,7 +124,7 @@ export default function AdminMatches() {
         <div className="w-full space-y-5">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-xl font-bold font-typewriter flex items-center gap-2">
+                    <h1 className="text-xl font-bold flex items-center gap-2">
                         <Target className="w-5 h-5" /> Match Overview
                     </h1>
                     <p className="text-sm text-stone-500">{clients.reduce((s, c) => s + c.total_matches, 0).toLocaleString()} total matches across {clients.length} clients</p>
@@ -169,7 +169,7 @@ export default function AdminMatches() {
                         <div className="overflow-x-auto max-h-96 overflow-y-auto">
                             <table className="w-full text-sm">
                                 <thead className="sticky top-0 bg-stone-50">
-                                    <tr className="border-b border-stone-100 text-[10px] font-typewriter text-stone-400 uppercase">
+                                    <tr className="border-b border-stone-100 text-[10px] text-stone-400 uppercase">
                                         <th className="text-center px-3 py-2">Score</th>
                                         <th className="text-center px-3 py-2">Class</th>
                                         <th className="text-left px-3 py-2">Opportunity</th>

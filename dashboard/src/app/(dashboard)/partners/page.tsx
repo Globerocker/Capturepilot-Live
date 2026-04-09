@@ -60,7 +60,7 @@ export default function PartnersPage() {
     return (
         <div className="max-w-5xl mx-auto space-y-6">
             <div>
-                <h1 className="text-2xl font-bold font-typewriter flex items-center gap-2">
+                <h1 className="text-2xl font-bold flex items-center gap-2">
                     <Users className="w-6 h-6" /> Find Teaming Partners
                 </h1>
                 <p className="text-sm text-stone-500 mt-1">
@@ -72,17 +72,17 @@ export default function PartnersPage() {
             <div className="bg-white border border-stone-200 rounded-2xl p-5 space-y-4">
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     <div>
-                        <label className="text-[10px] font-typewriter text-stone-400 uppercase block mb-1">NAICS Code</label>
+                        <label className="text-[10px] text-stone-400 uppercase block mb-1">NAICS Code</label>
                         <input value={naics} onChange={e => setNaics(e.target.value)} placeholder="e.g. 237110"
                             className="w-full border border-stone-300 rounded-xl px-3 py-2 text-sm" />
                     </div>
                     <div>
-                        <label className="text-[10px] font-typewriter text-stone-400 uppercase block mb-1">State</label>
+                        <label className="text-[10px] text-stone-400 uppercase block mb-1">State</label>
                         <input value={state} onChange={e => setState(e.target.value)} placeholder="e.g. TX"
                             className="w-full border border-stone-300 rounded-xl px-3 py-2 text-sm" />
                     </div>
                     <div>
-                        <label className="text-[10px] font-typewriter text-stone-400 uppercase block mb-1">Certification</label>
+                        <label className="text-[10px] text-stone-400 uppercase block mb-1">Certification</label>
                         <select title="Certification" value={cert} onChange={e => setCert(e.target.value)}
                             className="w-full border border-stone-300 rounded-xl px-3 py-2 text-sm">
                             <option value="">Any</option>
@@ -94,7 +94,7 @@ export default function PartnersPage() {
                         </select>
                     </div>
                     <div>
-                        <label className="text-[10px] font-typewriter text-stone-400 uppercase block mb-1">Company Name</label>
+                        <label className="text-[10px] text-stone-400 uppercase block mb-1">Company Name</label>
                         <input value={keyword} onChange={e => setKeyword(e.target.value)} placeholder="Search by name"
                             className="w-full border border-stone-300 rounded-xl px-3 py-2 text-sm" />
                     </div>

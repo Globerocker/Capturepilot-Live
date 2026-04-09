@@ -3,10 +3,11 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
-    Zap, Globe, MapPin, Users, ExternalLink, Save, Search,
+    Globe, MapPin, Users, ExternalLink, Save, Search,
     Loader2, ChevronDown, Hash, Building2, Mail, Phone, User,
     Linkedin, Calendar, Briefcase, Target, FileDown, Send, MessageSquare
 } from "lucide-react";
+import Image from "next/image";
 import clsx from "clsx";
 
 interface Prospect {
@@ -78,10 +79,10 @@ export default function AdminProspectsPage() {
                 <div className="max-w-7xl mx-auto flex items-center justify-between">
                     <div className="flex items-center gap-3">
                         <Link href="/check" className="flex items-center gap-2">
-                            <Zap className="w-5 h-5 text-black" />
-                            <span className="font-typewriter font-bold text-base">CapturePilot</span>
+                            <Image src="/logo.png" alt="CP" width={20} height={20} className="rounded" />
+                            <span className="font-bold text-base">CapturePilot</span>
                         </Link>
-                        <span className="text-[9px] font-typewriter bg-black text-white px-2 py-0.5 rounded-full uppercase">Admin</span>
+                        <span className="text-[9px] bg-black text-white px-2 py-0.5 rounded-full uppercase">Admin</span>
                     </div>
                     <div className="flex items-center gap-2 text-xs text-stone-500">
                         <Briefcase className="w-4 h-4" />
@@ -98,7 +99,7 @@ export default function AdminProspectsPage() {
                             type="button"
                             onClick={() => setFilter("all")}
                             className={clsx(
-                                "text-xs font-typewriter font-bold px-4 py-2 rounded-xl border transition-all",
+                                "text-xs font-bold px-4 py-2 rounded-xl border transition-all",
                                 filter === "all" ? "bg-black text-white border-black" : "bg-white text-stone-600 border-stone-200 hover:border-stone-300"
                             )}
                         >
@@ -108,7 +109,7 @@ export default function AdminProspectsPage() {
                             type="button"
                             onClick={() => setFilter("saved")}
                             className={clsx(
-                                "text-xs font-typewriter font-bold px-4 py-2 rounded-xl border transition-all inline-flex items-center gap-1",
+                                "text-xs font-bold px-4 py-2 rounded-xl border transition-all inline-flex items-center gap-1",
                                 filter === "saved" ? "bg-black text-white border-black" : "bg-white text-stone-600 border-stone-200 hover:border-stone-300"
                             )}
                         >
@@ -135,7 +136,7 @@ export default function AdminProspectsPage() {
                 ) : filtered.length === 0 ? (
                     <div className="bg-white rounded-2xl border border-stone-200 border-dashed p-12 text-center">
                         <Briefcase className="w-10 h-10 text-stone-300 mx-auto mb-3" />
-                        <p className="text-stone-500 font-typewriter">No prospects found</p>
+                        <p className="text-stone-500">No prospects found</p>
                     </div>
                 ) : (
                     <div className="space-y-3">
@@ -162,7 +163,7 @@ export default function AdminProspectsPage() {
                                     >
                                         {/* Score */}
                                         <div className={clsx(
-                                            "w-10 h-10 rounded-xl border-2 font-black font-typewriter text-sm flex items-center justify-center flex-shrink-0",
+                                            "w-10 h-10 rounded-xl border-2 font-black text-sm flex items-center justify-center flex-shrink-0",
                                             bestScore >= 0.70 ? "text-emerald-600 bg-emerald-50 border-emerald-200" :
                                             bestScore >= 0.50 ? "text-amber-600 bg-amber-50 border-amber-200" :
                                             bestScore > 0 ? "text-blue-600 bg-blue-50 border-blue-200" :
@@ -175,13 +176,13 @@ export default function AdminProspectsPage() {
                                             <div className="flex items-center gap-2 flex-wrap mb-0.5">
                                                 <p className="font-bold text-sm text-black truncate">{prospect.company_name}</p>
                                                 {prospect.is_saved && (
-                                                    <span className="text-[9px] font-typewriter font-bold bg-blue-50 text-blue-600 border border-blue-200 px-1.5 py-0.5 rounded">SAVED</span>
+                                                    <span className="text-[9px] font-bold bg-blue-50 text-blue-600 border border-blue-200 px-1.5 py-0.5 rounded">SAVED</span>
                                                 )}
                                                 {sam && (
-                                                    <span className="text-[9px] font-typewriter font-bold bg-emerald-50 text-emerald-600 border border-emerald-200 px-1.5 py-0.5 rounded">SAM</span>
+                                                    <span className="text-[9px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-200 px-1.5 py-0.5 rounded">SAM</span>
                                                 )}
                                                 {prospect.status === "error" && (
-                                                    <span className="text-[9px] font-typewriter font-bold bg-red-50 text-red-600 border border-red-200 px-1.5 py-0.5 rounded">ERROR</span>
+                                                    <span className="text-[9px] font-bold bg-red-50 text-red-600 border border-red-200 px-1.5 py-0.5 rounded">ERROR</span>
                                                 )}
                                             </div>
                                             <div className="flex items-center gap-3 text-xs text-stone-500">
@@ -218,7 +219,7 @@ export default function AdminProspectsPage() {
                                                     type="button"
                                                     onClick={() => toggleSave(prospect.id, prospect.is_saved)}
                                                     className={clsx(
-                                                        "text-[10px] font-typewriter font-bold px-3 py-1.5 rounded-lg border inline-flex items-center gap-1 transition-all",
+                                                        "text-[10px] font-bold px-3 py-1.5 rounded-lg border inline-flex items-center gap-1 transition-all",
                                                         prospect.is_saved
                                                             ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                                                             : "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
@@ -228,7 +229,7 @@ export default function AdminProspectsPage() {
                                                 </button>
                                                 <Link
                                                     href={`/check/${prospect.id}`}
-                                                    className="text-[10px] font-typewriter font-bold px-3 py-1.5 rounded-lg border bg-black text-white border-black inline-flex items-center gap-1 hover:bg-stone-800 transition-all"
+                                                    className="text-[10px] font-bold px-3 py-1.5 rounded-lg border bg-black text-white border-black inline-flex items-center gap-1 hover:bg-stone-800 transition-all"
                                                 >
                                                     <ExternalLink className="w-3 h-3" /> Full Report
                                                 </Link>
@@ -260,7 +261,7 @@ export default function AdminProspectsPage() {
                                                             alert(`Error: ${data.error}`);
                                                         }
                                                     }}
-                                                    className="text-[10px] font-typewriter font-bold px-3 py-1.5 rounded-lg border bg-emerald-600 text-white border-emerald-700 inline-flex items-center gap-1 hover:bg-emerald-700 transition-all"
+                                                    className="text-[10px] font-bold px-3 py-1.5 rounded-lg border bg-emerald-600 text-white border-emerald-700 inline-flex items-center gap-1 hover:bg-emerald-700 transition-all"
                                                 >
                                                     <Users className="w-3 h-3" /> Convert to Client
                                                 </button>
@@ -286,7 +287,7 @@ export default function AdminProspectsPage() {
                                                             alert("Draft generation requires a user profile. Convert to client first.");
                                                         }
                                                     }}
-                                                    className="text-[10px] font-typewriter font-bold px-3 py-1.5 rounded-lg border bg-blue-600 text-white border-blue-700 inline-flex items-center gap-1 hover:bg-blue-700 transition-all"
+                                                    className="text-[10px] font-bold px-3 py-1.5 rounded-lg border bg-blue-600 text-white border-blue-700 inline-flex items-center gap-1 hover:bg-blue-700 transition-all"
                                                 >
                                                     <Send className="w-3 h-3" /> AI Outreach Email
                                                 </button>
@@ -294,7 +295,7 @@ export default function AdminProspectsPage() {
 
                                             {/* Pipeline Status */}
                                             <div className="flex items-center gap-2 mb-2">
-                                                <span className="text-[10px] font-typewriter text-stone-400 uppercase">Status:</span>
+                                                <span className="text-[10px] text-stone-400 uppercase">Status:</span>
                                                 {["New", "Contacted", "Interested", "Meeting Scheduled", "Proposal Sent", "Won", "Lost"].map(status => (
                                                     <button
                                                         key={status}
@@ -334,25 +335,25 @@ export default function AdminProspectsPage() {
                                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                                                 {uei && (
                                                     <div className="text-xs">
-                                                        <p className="text-[10px] font-typewriter text-stone-400 uppercase">UEI</p>
+                                                        <p className="text-[10px] text-stone-400 uppercase">UEI</p>
                                                         <p className="font-mono font-bold text-stone-700">{uei}</p>
                                                     </div>
                                                 )}
                                                 {cage && (
                                                     <div className="text-xs">
-                                                        <p className="text-[10px] font-typewriter text-stone-400 uppercase">CAGE</p>
+                                                        <p className="text-[10px] text-stone-400 uppercase">CAGE</p>
                                                         <p className="font-mono font-bold text-stone-700">{cage}</p>
                                                     </div>
                                                 )}
                                                 {state && (
                                                     <div className="text-xs">
-                                                        <p className="text-[10px] font-typewriter text-stone-400 uppercase">State</p>
+                                                        <p className="text-[10px] text-stone-400 uppercase">State</p>
                                                         <p className="font-bold text-stone-700">{state}</p>
                                                     </div>
                                                 )}
                                                 {prospect.lead_email && (
                                                     <div className="text-xs">
-                                                        <p className="text-[10px] font-typewriter text-stone-400 uppercase">Email</p>
+                                                        <p className="text-[10px] text-stone-400 uppercase">Email</p>
                                                         <p className="font-bold text-stone-700">{prospect.lead_email}</p>
                                                     </div>
                                                 )}
@@ -388,7 +389,7 @@ export default function AdminProspectsPage() {
                                             {/* NAICS */}
                                             {prospect.inferred_naics?.length > 0 && (
                                                 <div>
-                                                    <p className="text-[10px] font-typewriter text-stone-400 uppercase mb-1">NAICS Codes</p>
+                                                    <p className="text-[10px] text-stone-400 uppercase mb-1">NAICS Codes</p>
                                                     <div className="flex gap-1.5 flex-wrap">
                                                         {prospect.inferred_naics.slice(0, 5).map(n => (
                                                             <span key={n.code} className="text-[10px] font-mono bg-stone-100 text-stone-600 border border-stone-200 px-2 py-0.5 rounded">
@@ -402,7 +403,7 @@ export default function AdminProspectsPage() {
                                             {/* Top matches */}
                                             {prospect.preview_matches?.length > 0 && (
                                                 <div>
-                                                    <p className="text-[10px] font-typewriter text-stone-400 uppercase mb-1">Top Matches</p>
+                                                    <p className="text-[10px] text-stone-400 uppercase mb-1">Top Matches</p>
                                                     <div className="space-y-1.5">
                                                         {prospect.preview_matches.slice(0, 3).map((m, i) => (
                                                             <div key={i} className="flex items-center gap-2 text-xs bg-white border border-stone-200 rounded-lg px-3 py-2">

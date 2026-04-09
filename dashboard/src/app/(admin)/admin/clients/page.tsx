@@ -102,7 +102,7 @@ export default function AdminClientsPage() {
             <div className="w-full space-y-6">
                 <div className="flex items-center justify-between">
                     <div>
-                        <h1 className="text-2xl font-bold text-black font-typewriter flex items-center gap-2">
+                        <h1 className="text-2xl font-bold text-stone-900 flex items-center gap-2">
                             <Users className="w-6 h-6" /> Consulting Clients
                         </h1>
                         <p className="text-sm text-stone-500 mt-1">{clients.length} active clients</p>
@@ -203,18 +203,18 @@ export default function AdminClientsPage() {
                             {expandedId === client.id && (
                                 <div className="border-t border-stone-100 p-5 space-y-4">
                                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                                        {client.website && <div><p className="text-stone-400 uppercase font-typewriter">Website</p><a href={client.website} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline inline-flex items-center gap-1"><Globe className="w-3 h-3" />{client.website.replace(/^https?:\/\//, "")}</a></div>}
-                                        {client.uei && <div><p className="text-stone-400 uppercase font-typewriter">UEI</p><p className="font-bold inline-flex items-center gap-1"><Hash className="w-3 h-3" />{client.uei}</p></div>}
-                                        {client.contact_phone && <div><p className="text-stone-400 uppercase font-typewriter">Phone</p><p className="inline-flex items-center gap-1"><Phone className="w-3 h-3" />{client.contact_phone}</p></div>}
-                                        {client.state && <div><p className="text-stone-400 uppercase font-typewriter">State</p><p className="inline-flex items-center gap-1"><Building2 className="w-3 h-3" />{client.state}</p></div>}
+                                        {client.website && <div><p className="text-stone-400 uppercase">Website</p><a href={client.website} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline inline-flex items-center gap-1"><Globe className="w-3 h-3" />{client.website.replace(/^https?:\/\//, "")}</a></div>}
+                                        {client.uei && <div><p className="text-stone-400 uppercase">UEI</p><p className="font-bold inline-flex items-center gap-1"><Hash className="w-3 h-3" />{client.uei}</p></div>}
+                                        {client.contact_phone && <div><p className="text-stone-400 uppercase">Phone</p><p className="inline-flex items-center gap-1"><Phone className="w-3 h-3" />{client.contact_phone}</p></div>}
+                                        {client.state && <div><p className="text-stone-400 uppercase">State</p><p className="inline-flex items-center gap-1"><Building2 className="w-3 h-3" />{client.state}</p></div>}
                                     </div>
                                     {client.naics_codes.length > 0 && (
                                         <div>
-                                            <p className="text-[10px] text-stone-400 uppercase font-typewriter mb-1">NAICS Codes</p>
+                                            <p className="text-[10px] text-stone-400 uppercase mb-1">NAICS Codes</p>
                                             <div className="flex flex-wrap gap-1">{client.naics_codes.map((c, i) => <span key={i} className="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded">{c}</span>)}</div>
                                         </div>
                                     )}
-                                    {client.notes && <div><p className="text-[10px] text-stone-400 uppercase font-typewriter mb-1">Notes</p><p className="text-xs text-stone-600">{client.notes}</p></div>}
+                                    {client.notes && <div><p className="text-[10px] text-stone-400 uppercase mb-1">Notes</p><p className="text-xs text-stone-600">{client.notes}</p></div>}
 
                                     {/* Add Task */}
                                     <div className="border-t border-stone-100 pt-4">

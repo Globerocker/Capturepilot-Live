@@ -242,7 +242,7 @@ export default function CompetitorsPage() {
     return (
         <div className="max-w-5xl mx-auto space-y-6 animate-in fade-in duration-500 px-1">
             <header>
-                <h2 className="text-2xl sm:text-3xl font-bold font-typewriter tracking-tighter text-black flex items-center">
+                <h2 className="text-2xl sm:text-3xl font-bold tracking-tighter text-black flex items-center">
                     <Shield className="mr-2 sm:mr-3 w-6 h-6 sm:w-8 sm:h-8" /> Competitors
                     <span className="ml-3 text-sm font-sans font-medium bg-stone-100 px-3 py-1 rounded-full text-stone-500 border border-stone-200">
                         {competitors.length}
@@ -272,7 +272,7 @@ export default function CompetitorsPage() {
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div>
-                                    <label className="text-[10px] font-typewriter text-stone-400 uppercase mb-1 block">
+                                    <label className="text-[10px] text-stone-400 uppercase mb-1 block">
                                         Company Website URL <span className="text-red-500">*</span>
                                     </label>
                                     <div className="relative">
@@ -288,7 +288,7 @@ export default function CompetitorsPage() {
                                     </div>
                                 </div>
                                 <div>
-                                    <label className="text-[10px] font-typewriter text-stone-400 uppercase mb-1 block">
+                                    <label className="text-[10px] text-stone-400 uppercase mb-1 block">
                                         UEI (optional)
                                     </label>
                                     <div className="relative">
@@ -331,7 +331,7 @@ export default function CompetitorsPage() {
             {analyzing && (
                 <div className="bg-white border border-stone-200 rounded-2xl p-6">
                     <div className="text-center mb-6">
-                        <h3 className="font-typewriter font-bold text-lg">Analyzing {analysisName}</h3>
+                        <h3 className="font-bold text-lg">Analyzing {analysisName}</h3>
                         <p className="text-xs text-stone-500 mt-1">This typically takes 30-60 seconds</p>
                     </div>
                     <div className="max-w-md mx-auto">
@@ -355,7 +355,7 @@ export default function CompetitorsPage() {
             {competitors.length === 0 && !analyzing && (
                 <div className="bg-stone-50 border border-stone-200 border-dashed rounded-2xl p-12 text-center">
                     <Shield className="w-12 h-12 text-stone-300 mx-auto mb-4" />
-                    <p className="text-stone-500 font-typewriter text-sm mb-2">No competitors tracked yet</p>
+                    <p className="text-stone-500 text-sm mb-2">No competitors tracked yet</p>
                     <p className="text-stone-400 text-xs">Add a competitor above to analyze their federal presence, NAICS overlap, and more.</p>
                 </div>
             )}
@@ -415,19 +415,19 @@ export default function CompetitorsPage() {
                                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                                         <div className="bg-white rounded-xl border border-stone-200 p-3 text-center">
                                             <p className="text-lg font-black text-stone-800">{comp.overlap_score}%</p>
-                                            <p className="text-[9px] text-stone-400 uppercase font-typewriter">Overlap</p>
+                                            <p className="text-[9px] text-stone-400 uppercase">Overlap</p>
                                         </div>
                                         <div className="bg-white rounded-xl border border-stone-200 p-3 text-center">
                                             <p className="text-lg font-black text-stone-800">{formatEmployees(comp.employee_count)}</p>
-                                            <p className="text-[9px] text-stone-400 uppercase font-typewriter">Employees</p>
+                                            <p className="text-[9px] text-stone-400 uppercase">Employees</p>
                                         </div>
                                         <div className="bg-white rounded-xl border border-stone-200 p-3 text-center">
                                             <p className="text-lg font-black text-stone-800">{formatRevenue(comp.revenue_estimate)}</p>
-                                            <p className="text-[9px] text-stone-400 uppercase font-typewriter">Revenue</p>
+                                            <p className="text-[9px] text-stone-400 uppercase">Revenue</p>
                                         </div>
                                         <div className="bg-white rounded-xl border border-stone-200 p-3 text-center">
                                             <p className="text-lg font-black text-stone-800 capitalize">{comp.federal_presence || "?"}</p>
-                                            <p className="text-[9px] text-stone-400 uppercase font-typewriter">Fed Presence</p>
+                                            <p className="text-[9px] text-stone-400 uppercase">Fed Presence</p>
                                         </div>
                                     </div>
 
@@ -457,14 +457,14 @@ export default function CompetitorsPage() {
 
                                     {comp.description && (
                                         <div>
-                                            <p className="text-[10px] font-typewriter text-stone-400 uppercase mb-1">About</p>
+                                            <p className="text-[10px] text-stone-400 uppercase mb-1">About</p>
                                             <p className="text-sm text-stone-600 leading-relaxed">{comp.description}</p>
                                         </div>
                                     )}
 
                                     {services.length > 0 && (
                                         <div>
-                                            <p className="text-[10px] font-typewriter text-stone-400 uppercase mb-1.5">Services</p>
+                                            <p className="text-[10px] text-stone-400 uppercase mb-1.5">Services</p>
                                             <div className="flex flex-wrap gap-1.5">
                                                 {services.slice(0, 8).map((s, i) => (
                                                     <span key={i} className="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-lg">{s}</span>
@@ -475,7 +475,7 @@ export default function CompetitorsPage() {
 
                                     {leadership.length > 0 && (
                                         <div>
-                                            <p className="text-[10px] font-typewriter text-stone-400 uppercase mb-1.5">Leadership</p>
+                                            <p className="text-[10px] text-stone-400 uppercase mb-1.5">Leadership</p>
                                             <div className="space-y-1">
                                                 {leadership.slice(0, 3).map((l, i) => (
                                                     <div key={i} className="text-xs text-stone-600">
@@ -488,7 +488,7 @@ export default function CompetitorsPage() {
 
                                     {comp.naics_codes && comp.naics_codes.length > 0 && (
                                         <div>
-                                            <p className="text-[10px] font-typewriter text-stone-400 uppercase mb-1.5">NAICS Codes</p>
+                                            <p className="text-[10px] text-stone-400 uppercase mb-1.5">NAICS Codes</p>
                                             <div className="flex flex-wrap gap-1">
                                                 {comp.naics_codes.map((c, i) => (
                                                     <span key={i} className="text-[10px] font-mono bg-stone-100 text-stone-600 border border-stone-200 px-2 py-0.5 rounded">{c}</span>

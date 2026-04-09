@@ -162,7 +162,7 @@ export default function PortalOverview() {
             {/* Welcome */}
             <div>
                 <p className="text-stone-400 text-xs uppercase tracking-widest font-medium mb-1">Overview</p>
-                <h1 className="text-2xl font-bold text-stone-900 font-typewriter">
+                <h1 className="text-2xl font-bold text-stone-900">
                     Welcome, {(profile?.company_name as string) || (profile?.contact_name as string)}
                 </h1>
                 <p className="text-sm text-stone-500 mt-1">

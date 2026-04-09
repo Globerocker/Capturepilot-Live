@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createSupabaseClient } from "@/lib/supabase/client";
-import { AlertTriangle, Zap, Loader2 } from "lucide-react";
+import { AlertTriangle, Sparkles, Loader2 } from "lucide-react";
 import Link from "next/link";
 
 const supabase = createSupabaseClient();
@@ -66,7 +66,7 @@ export default function UpgradeBanner() {
         }`}>
             <div className="flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-                <span className="font-typewriter font-bold text-xs sm:text-sm">
+                <span className="font-bold text-xs sm:text-sm">
                     {isExpired && "Your free trial has expired."}
                     {isExpiringSoon && `Your trial expires in ${daysLeft} day${daysLeft !== 1 ? "s" : ""}.`}
                     {isPastDue && "Payment failed. Update your payment method."}
@@ -75,13 +75,13 @@ export default function UpgradeBanner() {
             </div>
             <Link
                 href="/billing"
-                className={`inline-flex items-center font-typewriter font-bold text-xs px-4 py-1.5 rounded-full transition-all flex-shrink-0 ${
+                className={`inline-flex items-center font-bold text-xs px-4 py-1.5 rounded-full transition-all flex-shrink-0 ${
                     isExpired || isPastDue
                         ? "bg-white text-red-600 hover:bg-red-50"
                         : "bg-white text-amber-600 hover:bg-amber-50"
                 }`}
             >
-                <Zap className="w-3 h-3 mr-1" />
+                <Sparkles className="w-3 h-3 mr-1" />
                 {isExpired || status === "canceled" ? "Upgrade" : isPastDue ? "Fix Payment" : "Upgrade Now"}
             </Link>
         </div>

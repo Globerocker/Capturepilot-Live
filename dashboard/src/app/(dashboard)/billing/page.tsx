@@ -140,7 +140,7 @@ function StatusBadge({ status }: { status: string }) {
       className={clsx(
         s.bg,
         s.text,
-        "px-3 py-1 rounded-full text-xs font-typewriter font-bold uppercase"
+        "px-3 py-1 rounded-full text-xs font-bold uppercase"
       )}
     >
       {s.label}
@@ -340,7 +340,7 @@ function BillingPageContent() {
 
       {/* ---- Header ---- */}
       <header className="mb-8 text-center">
-        <h2 className="text-2xl sm:text-3xl font-bold font-typewriter tracking-tighter text-black flex items-center justify-center">
+        <h2 className="text-2xl sm:text-3xl font-bold tracking-tighter text-black flex items-center justify-center">
           <CreditCard className="mr-2 sm:mr-3 w-6 h-6 sm:w-8 sm:h-8" />
           Billing &amp; Plans
         </h2>
@@ -355,7 +355,7 @@ function BillingPageContent() {
         <div className="bg-white rounded-2xl border border-emerald-200 shadow-sm p-6 sm:p-8 mb-8">
           <div className="flex items-start justify-between mb-4">
             <div>
-              <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1">
+              <p className="text-[10px] text-stone-400 uppercase tracking-widest mb-1">
                 Your Plan
               </p>
               <h3 className="text-2xl font-bold text-stone-900">Pro</h3>
@@ -422,7 +422,7 @@ function BillingPageContent() {
               type="button"
               onClick={handleManage}
               disabled={managingPortal}
-              className="inline-flex items-center bg-stone-100 text-stone-700 font-typewriter font-bold px-6 py-3 rounded-full text-sm hover:bg-stone-200 transition-all border border-stone-200 disabled:opacity-50"
+              className="inline-flex items-center bg-stone-100 text-stone-700 font-bold px-6 py-3 rounded-full text-sm hover:bg-stone-200 transition-all border border-stone-200 disabled:opacity-50"
             >
               {managingPortal ? (
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -440,12 +440,12 @@ function BillingPageContent() {
         <div className="bg-white rounded-2xl border border-emerald-200 shadow-sm p-6 sm:p-8 mb-8">
           <div className="flex items-start justify-between mb-4">
             <div>
-              <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-1">
+              <p className="text-[10px] text-stone-400 uppercase tracking-widest mb-1">
                 Your Plan
               </p>
               <h3 className="text-2xl font-bold text-stone-900">Consulting</h3>
             </div>
-            <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-xs font-typewriter font-bold uppercase">
+            <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-xs font-bold uppercase">
               Managed
             </span>
           </div>
@@ -473,7 +473,7 @@ function BillingPageContent() {
               type="button"
               onClick={() => setInterval("monthly")}
               className={clsx(
-                "px-5 py-2 rounded-full text-sm font-typewriter font-bold transition-all",
+                "px-5 py-2 rounded-full text-sm font-bold transition-all",
                 interval === "monthly"
                   ? "bg-emerald-600 text-white shadow-md"
                   : "bg-stone-100 text-stone-600 hover:bg-stone-200 border border-stone-200"
@@ -485,7 +485,7 @@ function BillingPageContent() {
               type="button"
               onClick={() => setInterval("yearly")}
               className={clsx(
-                "px-5 py-2 rounded-full text-sm font-typewriter font-bold transition-all",
+                "px-5 py-2 rounded-full text-sm font-bold transition-all",
                 interval === "yearly"
                   ? "bg-emerald-600 text-white shadow-md"
                   : "bg-stone-100 text-stone-600 hover:bg-stone-200 border border-stone-200"
@@ -504,7 +504,7 @@ function BillingPageContent() {
             {/* ---------- Free Card ---------- */}
             <div className="rounded-2xl border border-stone-200 bg-white shadow-sm flex flex-col overflow-hidden">
               <div className="p-6 flex-1 flex flex-col">
-                <p className="font-typewriter font-bold text-xs uppercase tracking-wider text-stone-500 mb-2">
+                <p className="font-bold text-xs uppercase tracking-wider text-stone-500 mb-2">
                   Free
                 </p>
                 <div className="mb-1">
@@ -525,7 +525,7 @@ function BillingPageContent() {
                 </ul>
 
                 {billing.subscriptionStatus === "free" && (
-                  <div className="w-full py-2.5 rounded-full font-typewriter font-bold text-xs text-center bg-stone-100 text-stone-400 border border-stone-200">
+                  <div className="w-full py-2.5 rounded-full font-bold text-xs text-center bg-stone-100 text-stone-400 border border-stone-200">
                     Current Plan
                   </div>
                 )}
@@ -535,11 +535,11 @@ function BillingPageContent() {
             {/* ---------- Pro Card ---------- */}
             <div className="rounded-2xl border-2 border-emerald-500 bg-white shadow-xl flex flex-col overflow-hidden relative">
               {/* Most Popular badge */}
-              <div className="absolute top-0 right-0 bg-emerald-500 text-white text-[10px] font-typewriter font-bold px-3 py-1 rounded-bl-xl flex items-center gap-1">
+              <div className="absolute top-0 right-0 bg-emerald-500 text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl flex items-center gap-1">
                 <Star className="w-3 h-3" /> MOST POPULAR
               </div>
               <div className="p-6 flex-1 flex flex-col">
-                <p className="font-typewriter font-bold text-xs uppercase tracking-wider text-emerald-600 mb-2">
+                <p className="font-bold text-xs uppercase tracking-wider text-emerald-600 mb-2">
                   Pro
                 </p>
                 <div className="mb-1">
@@ -553,7 +553,7 @@ function BillingPageContent() {
                     <span className="text-xs text-stone-500">
                       ${yearlyTotal.toLocaleString()}/yr
                     </span>
-                    <span className="bg-emerald-100 text-emerald-700 text-[10px] font-typewriter font-bold px-2 py-0.5 rounded-full">
+                    <span className="bg-emerald-100 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
                       SAVE 20%
                     </span>
                   </div>
@@ -573,7 +573,7 @@ function BillingPageContent() {
                 </ul>
 
                 <div
-                  className="w-full py-3 rounded-full font-typewriter font-bold text-sm bg-emerald-600 text-white text-center shadow-md cursor-default"
+                  className="w-full py-3 rounded-full font-bold text-sm bg-emerald-600 text-white text-center shadow-md cursor-default"
                 >
                   <span className="flex items-center justify-center gap-2">
                     <CheckCircle2 className="w-4 h-4" />
@@ -589,11 +589,11 @@ function BillingPageContent() {
             {/* ---------- Consulting Card ---------- */}
             <div className="rounded-2xl border border-stone-200 bg-white shadow-sm flex flex-col overflow-hidden relative">
               {/* Done-For-You badge */}
-              <div className="absolute top-0 right-0 bg-stone-800 text-white text-[10px] font-typewriter font-bold px-3 py-1 rounded-bl-xl">
+              <div className="absolute top-0 right-0 bg-stone-800 text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl">
                 DONE-FOR-YOU
               </div>
               <div className="p-6 flex-1 flex flex-col">
-                <p className="font-typewriter font-bold text-xs uppercase tracking-wider text-stone-500 mb-2">
+                <p className="font-bold text-xs uppercase tracking-wider text-stone-500 mb-2">
                   Consulting
                 </p>
                 <div className="mb-1">
@@ -620,7 +620,7 @@ function BillingPageContent() {
                   href="https://meetings-na2.hubspot.com/americurial/intro-call"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="w-full py-3 rounded-full font-typewriter font-bold text-sm bg-stone-900 text-white hover:bg-stone-800 transition-all text-center flex items-center justify-center gap-2"
+                  className="w-full py-3 rounded-full font-bold text-sm bg-stone-900 text-white hover:bg-stone-800 transition-all text-center flex items-center justify-center gap-2"
                 >
                   <Phone className="w-4 h-4" />
                   Book Qualification Call
@@ -636,7 +636,7 @@ function BillingPageContent() {
 
       {/* ---- FAQ Section ---- */}
       <div className="max-w-2xl mx-auto mt-4">
-        <h3 className="font-typewriter font-bold text-sm uppercase tracking-widest text-stone-500 text-center mb-6">
+        <h3 className="font-bold text-sm uppercase tracking-widest text-stone-500 text-center mb-6">
           Frequently Asked Questions
         </h3>
         <div className="bg-white rounded-2xl border border-stone-200 shadow-sm px-6">

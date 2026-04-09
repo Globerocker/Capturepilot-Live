@@ -230,7 +230,7 @@ export default function PipelinePage() {
         <div className="max-w-5xl mx-auto pb-12 animate-in fade-in duration-500 px-1">
             <header className="mb-6">
                 <div className="flex items-center justify-between">
-                    <h2 className="text-2xl sm:text-3xl font-bold font-typewriter tracking-tighter text-black flex items-center">
+                    <h2 className="text-2xl sm:text-3xl font-bold tracking-tighter text-black flex items-center">
                         <Layers className="mr-2 sm:mr-3 w-6 h-6 sm:w-8 sm:h-8" /> Pipeline
                         <span className="ml-3 text-sm font-sans font-medium bg-stone-100 px-3 py-1 rounded-full text-stone-500 border border-stone-200">
                             {pursuits.length}
@@ -239,7 +239,7 @@ export default function PipelinePage() {
                     <button
                         type="button"
                         onClick={() => setShowCustomDeal(true)}
-                        className="inline-flex items-center bg-black text-white font-typewriter font-bold px-4 py-2 rounded-full hover:bg-stone-800 transition-all text-xs"
+                        className="inline-flex items-center bg-black text-white font-bold px-4 py-2 rounded-full hover:bg-stone-800 transition-all text-xs"
                     >
                         <Plus className="w-3.5 h-3.5 mr-1.5" /> Add Deal
                     </button>
@@ -254,40 +254,40 @@ export default function PipelinePage() {
                 <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
                     <div className="bg-white rounded-[24px] w-full max-w-md p-6 shadow-xl animate-in fade-in zoom-in-95 duration-200">
                         <div className="flex items-center justify-between mb-4">
-                            <h3 className="font-typewriter font-bold text-lg">Create Custom Deal</h3>
+                            <h3 className="font-bold text-lg">Create Custom Deal</h3>
                             <button type="button" title="Close" onClick={() => setShowCustomDeal(false)} className="p-1.5 text-stone-400 hover:text-black rounded-lg hover:bg-stone-100">
                                 <X className="w-4 h-4" />
                             </button>
                         </div>
                         <div className="space-y-3">
                             <div>
-                                <label className="block text-xs font-typewriter font-medium text-stone-500 mb-1">Title *</label>
+                                <label className="block text-xs font-medium text-stone-500 mb-1">Title *</label>
                                 <input type="text" value={customDeal.title} onChange={(e) => setCustomDeal(d => ({ ...d, title: e.target.value }))}
                                     placeholder="e.g. Building Maintenance - Fort Belvoir"
                                     className="w-full px-3 py-2.5 border border-stone-200 rounded-xl text-sm focus:ring-2 focus:ring-black focus:border-transparent outline-none" />
                             </div>
                             <div>
-                                <label className="block text-xs font-typewriter font-medium text-stone-500 mb-1">Agency</label>
+                                <label className="block text-xs font-medium text-stone-500 mb-1">Agency</label>
                                 <input type="text" value={customDeal.agency} onChange={(e) => setCustomDeal(d => ({ ...d, agency: e.target.value }))}
                                     placeholder="e.g. Department of Defense"
                                     className="w-full px-3 py-2.5 border border-stone-200 rounded-xl text-sm focus:ring-2 focus:ring-black focus:border-transparent outline-none" />
                             </div>
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
-                                    <label className="block text-xs font-typewriter font-medium text-stone-500 mb-1">NAICS Code</label>
+                                    <label className="block text-xs font-medium text-stone-500 mb-1">NAICS Code</label>
                                     <input type="text" value={customDeal.naics_code} onChange={(e) => setCustomDeal(d => ({ ...d, naics_code: e.target.value }))}
                                         placeholder="e.g. 561720"
                                         className="w-full px-3 py-2.5 border border-stone-200 rounded-xl text-sm focus:ring-2 focus:ring-black focus:border-transparent outline-none" />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-typewriter font-medium text-stone-500 mb-1">Est. Value ($)</label>
+                                    <label className="block text-xs font-medium text-stone-500 mb-1">Est. Value ($)</label>
                                     <input type="number" value={customDeal.estimated_value} onChange={(e) => setCustomDeal(d => ({ ...d, estimated_value: e.target.value }))}
                                         placeholder="e.g. 250000"
                                         className="w-full px-3 py-2.5 border border-stone-200 rounded-xl text-sm focus:ring-2 focus:ring-black focus:border-transparent outline-none" />
                                 </div>
                             </div>
                             <div>
-                                <label className="block text-xs font-typewriter font-medium text-stone-500 mb-1">Notes</label>
+                                <label className="block text-xs font-medium text-stone-500 mb-1">Notes</label>
                                 <textarea value={customDeal.notes} onChange={(e) => setCustomDeal(d => ({ ...d, notes: e.target.value }))}
                                     rows={2} placeholder="Any notes about this opportunity..."
                                     className="w-full px-3 py-2.5 border border-stone-200 rounded-xl text-sm focus:ring-2 focus:ring-black focus:border-transparent outline-none resize-none" />
@@ -311,7 +311,7 @@ export default function PipelinePage() {
                 <div className="space-y-4">
                     <div className="bg-white border border-stone-200 border-dashed rounded-[24px] sm:rounded-[32px] p-8 sm:p-12 text-center shadow-sm">
                         <Search className="w-12 h-12 text-stone-300 mx-auto mb-4" />
-                        <h3 className="font-typewriter font-bold text-lg mb-2">No opportunities in your pipeline</h3>
+                        <h3 className="font-bold text-lg mb-2">No opportunities in your pipeline</h3>
                         <p className="text-stone-500 text-sm mb-2 max-w-md mx-auto">
                             Add opportunities you want to pursue, or create a custom deal to track.
                         </p>
@@ -322,11 +322,11 @@ export default function PipelinePage() {
                         </div>
                         <div className="flex items-center justify-center gap-3 flex-wrap">
                             <Link href="/opportunities"
-                                className="inline-flex items-center bg-black text-white font-typewriter font-bold px-6 py-3 rounded-full hover:bg-stone-800 transition-all text-sm">
+                                className="inline-flex items-center bg-black text-white font-bold px-6 py-3 rounded-full hover:bg-stone-800 transition-all text-sm">
                                 <Target className="w-4 h-4 mr-2" /> Browse Opportunities
                             </Link>
                             <button type="button" onClick={() => setShowCustomDeal(true)}
-                                className="inline-flex items-center bg-white text-stone-700 border border-stone-200 font-typewriter font-bold px-6 py-3 rounded-full hover:bg-stone-50 transition-all text-sm">
+                                className="inline-flex items-center bg-white text-stone-700 border border-stone-200 font-bold px-6 py-3 rounded-full hover:bg-stone-50 transition-all text-sm">
                                 <Plus className="w-4 h-4 mr-2" /> Create Custom Deal
                             </button>
                         </div>
@@ -341,14 +341,14 @@ export default function PipelinePage() {
                 <>
                     {/* Sort + Summary Bar */}
                     <div className="flex flex-wrap items-center gap-2 mb-3">
-                        <span className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mr-1">Sort by</span>
+                        <span className="text-[10px] text-stone-400 uppercase tracking-widest mr-1">Sort by</span>
                         {([
                             { key: "deadline" as const, label: "Deadline" },
                             { key: "value" as const, label: "Value" },
                             { key: "priority" as const, label: "Priority" },
                         ]).map(opt => (
                             <button type="button" key={opt.key} onClick={() => setPipelineSort(opt.key)}
-                                className={clsx("text-xs font-typewriter font-bold px-3 py-1.5 rounded-full border transition-all",
+                                className={clsx("text-xs font-bold px-3 py-1.5 rounded-full border transition-all",
                                     pipelineSort === opt.key ? "bg-black text-white border-black" : "bg-white text-stone-500 border-stone-200 hover:bg-stone-100"
                                 )}>
                                 {opt.label}
@@ -356,12 +356,12 @@ export default function PipelinePage() {
                         ))}
                     </div>
                     <div className="flex flex-wrap items-center gap-3 mb-4">
-                        <div className="bg-white border border-stone-200 rounded-xl px-3 sm:px-4 py-2 text-xs font-typewriter">
+                        <div className="bg-white border border-stone-200 rounded-xl px-3 sm:px-4 py-2 text-xs">
                             <span className="font-bold text-black">{activePursuits}</span>
                             <span className="text-stone-500"> active</span>
                         </div>
                         {totalValue > 0 && (
-                            <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-3 sm:px-4 py-2 text-xs font-typewriter flex items-center">
+                            <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-3 sm:px-4 py-2 text-xs flex items-center">
                                 <DollarSign className="w-3 h-3 mr-1 text-emerald-600" />
                                 <span className="font-bold text-emerald-700">
                                     {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(totalValue)}
@@ -397,7 +397,7 @@ export default function PipelinePage() {
                                         className="w-full flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 hover:bg-stone-50 transition-colors"
                                     >
                                         <div className="flex items-center gap-2 sm:gap-3">
-                                            <span className={clsx("text-[10px] sm:text-xs font-typewriter font-bold uppercase tracking-widest px-2.5 py-1 rounded-full border", stage.color)}>
+                                            <span className={clsx("text-[10px] sm:text-xs font-bold uppercase tracking-widest px-2.5 py-1 rounded-full border", stage.color)}>
                                                 {stage.label}
                                             </span>
                                             <InfoTooltip text={STAGE_TOOLTIPS[stage.key] || ""} />
@@ -431,12 +431,12 @@ export default function PipelinePage() {
                                                                             <span className="font-mono text-[10px] bg-stone-100 px-2 py-0.5 rounded text-stone-600 border border-stone-200">{opp.naics_code}</span>
                                                                         )}
                                                                         {opp?.award_amount && (
-                                                                            <span className="text-[10px] font-typewriter font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded border border-emerald-200">
+                                                                            <span className="text-[10px] font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded border border-emerald-200">
                                                                                 {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(opp.award_amount!)}
                                                                             </span>
                                                                         )}
                                                                         {winProb && (
-                                                                            <span className={clsx("text-[10px] font-typewriter font-bold px-2 py-0.5 rounded border",
+                                                                            <span className={clsx("text-[10px] font-bold px-2 py-0.5 rounded border",
                                                                                 winProb === "HIGH" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
                                                                                 winProb === "MEDIUM" ? "bg-amber-50 text-amber-700 border-amber-200" :
                                                                                 "bg-red-50 text-red-700 border-red-200"
@@ -445,7 +445,7 @@ export default function PipelinePage() {
                                                                             </span>
                                                                         )}
                                                                         {deadlineInfo && (
-                                                                            <span className={clsx("text-[10px] font-typewriter font-bold flex items-center gap-1", deadlineInfo.color)}>
+                                                                            <span className={clsx("text-[10px] font-bold flex items-center gap-1", deadlineInfo.color)}>
                                                                                 <Clock className="w-3 h-3" />
                                                                                 {deadlineInfo.label}
                                                                             </span>
@@ -458,7 +458,7 @@ export default function PipelinePage() {
                                                                             title="Move to stage"
                                                                             value=""
                                                                             onChange={(e) => { if (e.target.value) updateStage(pursuit.id, e.target.value); }}
-                                                                            className="text-xs bg-stone-100 border border-stone-200 rounded-lg px-2 py-1.5 font-typewriter font-bold cursor-pointer hover:bg-stone-200 transition-colors"
+                                                                            className="text-xs bg-stone-100 border border-stone-200 rounded-lg px-2 py-1.5 font-bold cursor-pointer hover:bg-stone-200 transition-colors"
                                                                         >
                                                                             <option value="">Move to...</option>
                                                                             {nextStages.map(ns => (

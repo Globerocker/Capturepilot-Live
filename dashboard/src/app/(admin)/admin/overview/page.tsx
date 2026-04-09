@@ -75,20 +75,20 @@ export default function AdminOverview() {
                 {/* Header */}
                 <div className="flex items-center justify-between">
                     <div>
-                        <h1 className="text-2xl font-bold text-black font-typewriter flex items-center gap-2">
-                            <BarChart3 className="w-6 h-6" /> Admin Dashboard
+                        <p className="text-stone-400 text-xs uppercase tracking-widest font-medium mb-2">Admin Console</p>
+                        <h1 className="text-2xl font-bold text-stone-900 flex items-center gap-2">
+                            <BarChart3 className="w-6 h-6" /> Dashboard
                         </h1>
-                        <p className="text-sm text-stone-500 mt-1">CapturePilot Consulting Management</p>
                     </div>
                     <div className="flex gap-2">
                         <Link href="/admin/clients" className="bg-black text-white px-4 py-2 rounded-xl text-sm font-bold inline-flex items-center gap-1.5 hover:bg-stone-800">
                             <Users className="w-4 h-4" /> Clients
                         </Link>
-                        <Link href="/admin/leads" className="bg-white text-stone-700 border border-stone-200 px-4 py-2 rounded-xl text-sm font-bold inline-flex items-center gap-1.5 hover:bg-stone-50">
-                            <Search className="w-4 h-4" /> Leads
+                        <Link href="/admin/lead-check" className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-sm font-bold inline-flex items-center gap-1.5 hover:bg-emerald-700">
+                            <Search className="w-4 h-4" /> Lead Check
                         </Link>
-                        <Link href="/check" className="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-bold inline-flex items-center gap-1.5 hover:bg-blue-700">
-                            <Eye className="w-4 h-4" /> Quick Check
+                        <Link href="/admin/leads" className="bg-white text-stone-700 border border-stone-200 px-4 py-2 rounded-xl text-sm font-bold inline-flex items-center gap-1.5 hover:bg-stone-50">
+                            <Eye className="w-4 h-4" /> Leads
                         </Link>
                     </div>
                 </div>
@@ -98,32 +98,32 @@ export default function AdminOverview() {
                     <div className="bg-white border border-stone-200 rounded-2xl p-4">
                         <Users className="w-4 h-4 text-blue-500 mb-1" />
                         <p className="text-2xl font-black">{clients.length}</p>
-                        <p className="text-[10px] text-stone-500 uppercase font-typewriter">Clients</p>
+                        <p className="text-[10px] text-stone-500 uppercase">Clients</p>
                     </div>
                     <div className="bg-white border border-stone-200 rounded-2xl p-4">
                         <UserPlus className="w-4 h-4 text-emerald-500 mb-1" />
                         <p className="text-2xl font-black">{activeClients.length}</p>
-                        <p className="text-[10px] text-stone-500 uppercase font-typewriter">Active</p>
+                        <p className="text-[10px] text-stone-500 uppercase">Active</p>
                     </div>
                     <div className="bg-white border border-stone-200 rounded-2xl p-4">
                         <ListTodo className="w-4 h-4 text-amber-500 mb-1" />
                         <p className="text-2xl font-black">{totalTasks}</p>
-                        <p className="text-[10px] text-stone-500 uppercase font-typewriter">Pending Tasks</p>
+                        <p className="text-[10px] text-stone-500 uppercase">Pending Tasks</p>
                     </div>
                     <div className="bg-white border border-stone-200 rounded-2xl p-4">
                         <Briefcase className="w-4 h-4 text-violet-500 mb-1" />
                         <p className="text-2xl font-black">{totalMatches.toLocaleString()}</p>
-                        <p className="text-[10px] text-stone-500 uppercase font-typewriter">Total Scored</p>
+                        <p className="text-[10px] text-stone-500 uppercase">Total Scored</p>
                     </div>
                     <div className="bg-white border border-stone-200 rounded-2xl p-4">
                         <FileText className="w-4 h-4 text-cyan-500 mb-1" />
                         <p className="text-2xl font-black">{totalDocs}</p>
-                        <p className="text-[10px] text-stone-500 uppercase font-typewriter">Documents</p>
+                        <p className="text-[10px] text-stone-500 uppercase">Documents</p>
                     </div>
                     <div className="bg-white border border-stone-200 rounded-2xl p-4">
                         <Activity className="w-4 h-4 text-emerald-500 mb-1" />
                         <p className="text-2xl font-black">{recentlyActive.length}</p>
-                        <p className="text-[10px] text-stone-500 uppercase font-typewriter">Active 7d</p>
+                        <p className="text-[10px] text-stone-500 uppercase">Active 7d</p>
                     </div>
                 </div>
 
@@ -187,7 +187,7 @@ export default function AdminOverview() {
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                             <thead>
-                                <tr className="border-b border-stone-100 text-[10px] font-typewriter text-stone-400 uppercase">
+                                <tr className="border-b border-stone-100 text-[10px] text-stone-400 uppercase">
                                     <th className="text-left px-5 py-2.5">Client</th>
                                     <th className="text-center px-3 py-2.5">Status</th>
                                     <th className="text-center px-3 py-2.5">Last Login</th>

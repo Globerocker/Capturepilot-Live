@@ -4,11 +4,12 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
-    Zap, MapPin, Users, Calendar, Target,
+    MapPin, Users, Calendar, Target, Search, Sparkles,
     ArrowRight, Globe, Phone, Mail, Loader2, Briefcase, Shield,
     TrendingUp, Award, ChevronDown, Clock, Unlock, ExternalLink, DollarSign,
     Linkedin, Facebook, Twitter, Save, FileDown, CheckCircle2, User, Building2, Hash
 } from "lucide-react";
+import Image from "next/image";
 import clsx from "clsx";
 import { LeadMagnetForm } from "@/components/LeadMagnetForm";
 
@@ -150,7 +151,7 @@ function MatchCard({ match, rank }: { match: MatchData; rank: number }) {
             >
                 {/* Score badge */}
                 <div className={clsx(
-                    "w-11 h-11 rounded-xl border-2 font-black font-typewriter text-sm flex items-center justify-center flex-shrink-0",
+                    "w-11 h-11 rounded-xl border-2 font-black text-sm flex items-center justify-center flex-shrink-0",
                     match.score >= 0.70 ? "text-emerald-600 bg-emerald-50 border-emerald-200" :
                     match.score >= 0.50 ? "text-amber-600 bg-amber-50 border-amber-200" :
                     "text-blue-600 bg-blue-50 border-blue-200"
@@ -160,9 +161,9 @@ function MatchCard({ match, rank }: { match: MatchData; rank: number }) {
 
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-                        <span className="text-[9px] font-typewriter text-stone-400">#{rank}</span>
+                        <span className="text-[9px] text-stone-400">#{rank}</span>
                         <span className={clsx(
-                            "text-[9px] font-typewriter font-bold px-2 py-0.5 rounded uppercase tracking-widest border",
+                            "text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-widest border",
                             match.classification === "HOT" ? "bg-red-50 text-red-600 border-red-200" :
                             match.classification === "WARM" ? "bg-amber-50 text-amber-600 border-amber-200" :
                             "bg-blue-50 text-blue-600 border-blue-200"
@@ -170,12 +171,12 @@ function MatchCard({ match, rank }: { match: MatchData; rank: number }) {
                             {match.classification}
                         </span>
                         {match.set_aside_code && (
-                            <span className="text-[9px] font-typewriter font-bold bg-blue-100 text-blue-600 border border-blue-200 px-2 py-0.5 rounded uppercase">
+                            <span className="text-[9px] font-bold bg-blue-100 text-blue-600 border border-blue-200 px-2 py-0.5 rounded uppercase">
                                 {match.set_aside_code}
                             </span>
                         )}
                         {match.award_amount && match.award_amount > 0 && (
-                            <span className="text-[9px] font-typewriter font-bold bg-emerald-50 text-emerald-600 border border-emerald-200 px-2 py-0.5 rounded">
+                            <span className="text-[9px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-200 px-2 py-0.5 rounded">
                                 {formatCurrency(match.award_amount)}
                             </span>
                         )}
@@ -197,37 +198,37 @@ function MatchCard({ match, rank }: { match: MatchData; rank: number }) {
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                         {match.notice_type && (
                             <div className="text-xs">
-                                <p className="text-[10px] font-typewriter text-stone-400 uppercase">Type</p>
+                                <p className="text-[10px] text-stone-400 uppercase">Type</p>
                                 <p className="font-medium text-stone-700">{match.notice_type}</p>
                             </div>
                         )}
                         {match.naics_code && (
                             <div className="text-xs">
-                                <p className="text-[10px] font-typewriter text-stone-400 uppercase">NAICS</p>
+                                <p className="text-[10px] text-stone-400 uppercase">NAICS</p>
                                 <p className="font-medium text-stone-700">{match.naics_code}</p>
                             </div>
                         )}
                         {match.response_deadline && (
                             <div className="text-xs">
-                                <p className="text-[10px] font-typewriter text-stone-400 uppercase">Deadline</p>
+                                <p className="text-[10px] text-stone-400 uppercase">Deadline</p>
                                 <p className="font-medium text-stone-700">{new Date(match.response_deadline).toLocaleDateString()}</p>
                             </div>
                         )}
                         {match.place_of_performance_state && (
                             <div className="text-xs">
-                                <p className="text-[10px] font-typewriter text-stone-400 uppercase">Location</p>
+                                <p className="text-[10px] text-stone-400 uppercase">Location</p>
                                 <p className="font-medium text-stone-700">{match.place_of_performance_state}</p>
                             </div>
                         )}
                         {match.award_amount && match.award_amount > 0 && (
                             <div className="text-xs">
-                                <p className="text-[10px] font-typewriter text-stone-400 uppercase">Est. Value</p>
+                                <p className="text-[10px] text-stone-400 uppercase">Est. Value</p>
                                 <p className="font-bold text-emerald-600">{formatCurrency(match.award_amount)}</p>
                             </div>
                         )}
                         {match.set_aside_code && (
                             <div className="text-xs">
-                                <p className="text-[10px] font-typewriter text-stone-400 uppercase">Set-Aside</p>
+                                <p className="text-[10px] text-stone-400 uppercase">Set-Aside</p>
                                 <p className="font-medium text-stone-700">{match.set_aside_code}</p>
                             </div>
                         )}
@@ -236,7 +237,7 @@ function MatchCard({ match, rank }: { match: MatchData; rank: number }) {
                     {/* Score breakdown */}
                     {match.score_breakdown && Object.keys(match.score_breakdown).length > 0 && (
                         <div>
-                            <p className="text-[10px] font-typewriter text-stone-400 uppercase mb-1.5">Match Score Breakdown</p>
+                            <p className="text-[10px] text-stone-400 uppercase mb-1.5">Match Score Breakdown</p>
                             <div className="flex gap-1.5 flex-wrap">
                                 {Object.entries(match.score_breakdown).map(([key, val]) => (
                                     <span key={key} className={clsx(
@@ -254,7 +255,7 @@ function MatchCard({ match, rank }: { match: MatchData; rank: number }) {
 
                     {/* Potential next steps */}
                     <div>
-                        <p className="text-[10px] font-typewriter text-stone-400 uppercase mb-1.5">Recommended Next Steps</p>
+                        <p className="text-[10px] text-stone-400 uppercase mb-1.5">Recommended Next Steps</p>
                         <div className="space-y-1.5">
                             {getNextSteps(match.notice_type).map((step, i) => (
                                 <div key={i} className="flex items-start gap-2 text-xs text-stone-600">
@@ -396,13 +397,13 @@ export default function CheckResultsPage() {
         <div className="min-h-screen bg-stone-50">
             {/* Header */}
             <header className="px-4 sm:px-6 py-4 flex items-center justify-between max-w-6xl mx-auto">
-                <Link href="/check" className="flex items-center space-x-2">
-                    <Zap className="w-5 h-5 text-black" />
-                    <span className="font-typewriter font-bold text-base">CapturePilot</span>
-                    <span className="text-[9px] font-typewriter bg-stone-200 text-stone-600 px-2 py-0.5 rounded-full uppercase">Partner</span>
+                <Link href="/admin/lead-check" className="flex items-center space-x-2">
+                    <Image src="/logo.png" alt="CP" width={20} height={20} className="rounded" />
+                    <span className="font-bold text-base">CapturePilot</span>
+                    <span className="text-[9px] bg-black text-white px-2 py-0.5 rounded-full uppercase">Admin</span>
                 </Link>
                 <Link
-                    href="/check"
+                    href="/admin/lead-check"
                     className="bg-black text-white px-4 py-2 rounded-full text-xs font-bold inline-flex items-center gap-1.5"
                 >
                     New Check <ArrowRight className="w-3 h-3" />
@@ -415,7 +416,7 @@ export default function CheckResultsPage() {
                     <div className="bg-stone-50 border-b border-stone-100 px-5 sm:px-8 py-5 sm:py-6">
                         <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
-                                <h1 className="font-typewriter font-bold text-xl sm:text-2xl text-black mb-1">
+                                <h1 className="font-bold text-xl sm:text-2xl text-black mb-1">
                                     {data.company_name}
                                 </h1>
                                 <div className="flex items-center gap-3 flex-wrap">
@@ -423,12 +424,12 @@ export default function CheckResultsPage() {
                                         <Globe className="w-3 h-3" /> {data.website.replace(/^https?:\/\//, "")}
                                     </a>
                                     {uei && (
-                                        <span className="text-[10px] font-typewriter font-bold bg-stone-100 text-stone-600 border border-stone-200 px-2 py-0.5 rounded inline-flex items-center gap-1">
+                                        <span className="text-[10px] font-bold bg-stone-100 text-stone-600 border border-stone-200 px-2 py-0.5 rounded inline-flex items-center gap-1">
                                             <Hash className="w-3 h-3" /> UEI: {uei}
                                         </span>
                                     )}
                                     {cageCode && (
-                                        <span className="text-[10px] font-typewriter font-bold bg-stone-100 text-stone-600 border border-stone-200 px-2 py-0.5 rounded inline-flex items-center gap-1">
+                                        <span className="text-[10px] font-bold bg-stone-100 text-stone-600 border border-stone-200 px-2 py-0.5 rounded inline-flex items-center gap-1">
                                             <Building2 className="w-3 h-3" /> CAGE: {cageCode}
                                         </span>
                                     )}
@@ -436,7 +437,7 @@ export default function CheckResultsPage() {
                             </div>
                             <div className="flex items-center gap-2 flex-shrink-0">
                                 {hasSam && (
-                                    <span className="bg-emerald-50 text-emerald-700 text-[10px] font-typewriter font-bold px-3 py-1.5 rounded-lg border border-emerald-200">
+                                    <span className="bg-emerald-50 text-emerald-700 text-[10px] font-bold px-3 py-1.5 rounded-lg border border-emerald-200">
                                         SAM.gov Verified
                                     </span>
                                 )}
@@ -445,7 +446,7 @@ export default function CheckResultsPage() {
                                     onClick={handleSave}
                                     disabled={saving || !!isSaved}
                                     className={clsx(
-                                        "text-[10px] font-typewriter font-bold px-3 py-1.5 rounded-lg border inline-flex items-center gap-1 transition-all",
+                                        "text-[10px] font-bold px-3 py-1.5 rounded-lg border inline-flex items-center gap-1 transition-all",
                                         isSaved
                                             ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                                             : "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
@@ -457,7 +458,7 @@ export default function CheckResultsPage() {
                                 <button
                                     type="button"
                                     onClick={handleExportPdf}
-                                    className="text-[10px] font-typewriter font-bold px-3 py-1.5 rounded-lg border bg-stone-100 text-stone-600 border-stone-200 hover:bg-stone-200 inline-flex items-center gap-1 transition-all print:hidden"
+                                    className="text-[10px] font-bold px-3 py-1.5 rounded-lg border bg-stone-100 text-stone-600 border-stone-200 hover:bg-stone-200 inline-flex items-center gap-1 transition-all print:hidden"
                                 >
                                     <FileDown className="w-3 h-3" /> Export
                                 </button>
@@ -475,28 +476,28 @@ export default function CheckResultsPage() {
                             {crawl.detected_states?.[0] && (
                                 <div className="bg-stone-50 border border-stone-200 rounded-xl p-3">
                                     <MapPin className="w-4 h-4 text-stone-400 mb-1" />
-                                    <p className="text-[10px] font-typewriter text-stone-400 uppercase">Location</p>
+                                    <p className="text-[10px] text-stone-400 uppercase">Location</p>
                                     <p className="font-bold text-sm">{crawl.detected_states.join(", ")}</p>
                                 </div>
                             )}
                             {crawl.employee_signals && (
                                 <div className="bg-stone-50 border border-stone-200 rounded-xl p-3">
                                     <Users className="w-4 h-4 text-stone-400 mb-1" />
-                                    <p className="text-[10px] font-typewriter text-stone-400 uppercase">Employees</p>
+                                    <p className="text-[10px] text-stone-400 uppercase">Employees</p>
                                     <p className="font-bold text-sm">~{crawl.employee_signals.estimate}</p>
                                 </div>
                             )}
                             {crawl.founding_year && (
                                 <div className="bg-stone-50 border border-stone-200 rounded-xl p-3">
                                     <Calendar className="w-4 h-4 text-stone-400 mb-1" />
-                                    <p className="text-[10px] font-typewriter text-stone-400 uppercase">Est.</p>
+                                    <p className="text-[10px] text-stone-400 uppercase">Est.</p>
                                     <p className="font-bold text-sm">{crawl.founding_year} ({new Date().getFullYear() - crawl.founding_year} yrs)</p>
                                 </div>
                             )}
                             {crawl.pages_crawled && (
                                 <div className="bg-stone-50 border border-stone-200 rounded-xl p-3">
                                     <Globe className="w-4 h-4 text-stone-400 mb-1" />
-                                    <p className="text-[10px] font-typewriter text-stone-400 uppercase">Pages Analyzed</p>
+                                    <p className="text-[10px] text-stone-400 uppercase">Pages Analyzed</p>
                                     <p className="font-bold text-sm">{crawl.pages_crawled.length}</p>
                                 </div>
                             )}
@@ -505,7 +506,7 @@ export default function CheckResultsPage() {
                         {/* Services */}
                         {crawl.services && crawl.services.length > 0 && (
                             <div>
-                                <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-2">Detected Services</p>
+                                <p className="text-[10px] text-stone-400 uppercase tracking-widest mb-2">Detected Services</p>
                                 <div className="flex flex-wrap gap-1.5">
                                     {crawl.services.slice(0, 10).map((s, i) => (
                                         <span key={i} className="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2.5 py-1 rounded-lg">{s}</span>
@@ -517,7 +518,7 @@ export default function CheckResultsPage() {
                         {/* Certifications */}
                         {certs.length > 0 && (
                             <div>
-                                <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-2">Certification Signals</p>
+                                <p className="text-[10px] text-stone-400 uppercase tracking-widest mb-2">Certification Signals</p>
                                 <div className="flex flex-wrap gap-1.5">
                                     {certs.map((c, i) => (
                                         <span key={i} className={clsx(
@@ -534,7 +535,7 @@ export default function CheckResultsPage() {
                         {/* Key Account Holder */}
                         {(contactPerson || leadership.length > 0) && (
                             <div>
-                                <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-2">
+                                <p className="text-[10px] text-stone-400 uppercase tracking-widest mb-2">
                                     <User className="w-3 h-3 inline mr-1" />Key Account Holder
                                     {samPocs.length > 0 && <span className="ml-2 text-emerald-500">(SAM.gov)</span>}
                                 </p>
@@ -560,7 +561,7 @@ export default function CheckResultsPage() {
                                                     <div className="flex items-center gap-2">
                                                         <p className="font-bold text-sm text-black">{person.name}</p>
                                                         {enrichSource === "apollo" && (
-                                                            <span className="text-[9px] font-typewriter font-bold bg-violet-50 text-violet-600 border border-violet-200 px-1.5 py-0.5 rounded">Apollo Verified</span>
+                                                            <span className="text-[9px] font-bold bg-violet-50 text-violet-600 border border-violet-200 px-1.5 py-0.5 rounded">Apollo Verified</span>
                                                         )}
                                                     </div>
                                                     <p className="text-xs text-stone-500">{person.title}</p>
@@ -633,7 +634,7 @@ export default function CheckResultsPage() {
                         {/* General contact info (when no leadership found) */}
                         {!contactPerson && leadership.length === 0 && crawl.contacts && crawl.contacts.length > 0 && (
                             <div>
-                                <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-2">Contact Info Found</p>
+                                <p className="text-[10px] text-stone-400 uppercase tracking-widest mb-2">Contact Info Found</p>
                                 <div className="flex flex-wrap gap-2">
                                     {crawl.contacts.filter(c => c.email).slice(0, 3).map((c, i) => (
                                         <a key={`e${i}`} href={`mailto:${c.email}`} className="text-xs bg-stone-50 text-stone-600 border border-stone-200 px-2.5 py-1 rounded-lg inline-flex items-center gap-1 hover:border-blue-300 transition-colors">
@@ -652,7 +653,7 @@ export default function CheckResultsPage() {
                         {/* Government Spending History */}
                         {govSpending && govSpending.award_count > 0 && (
                             <div>
-                                <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-2">
+                                <p className="text-[10px] text-stone-400 uppercase tracking-widest mb-2">
                                     <DollarSign className="w-3 h-3 inline mr-1" />Federal Contract History
                                     {govSpending.searched_by === "uei" && <span className="ml-2 text-emerald-500">(UEI verified)</span>}
                                 </p>
@@ -661,22 +662,22 @@ export default function CheckResultsPage() {
                                     <div className="grid grid-cols-3 gap-3">
                                         <div className="text-center">
                                             <p className="text-lg font-black text-stone-800">{govSpending.award_count}</p>
-                                            <p className="text-[9px] font-typewriter text-stone-400 uppercase">Awards</p>
+                                            <p className="text-[9px] text-stone-400 uppercase">Awards</p>
                                         </div>
                                         <div className="text-center">
                                             <p className="text-lg font-black text-emerald-600">{fmtCurrency(govSpending.total_value)}</p>
-                                            <p className="text-[9px] font-typewriter text-stone-400 uppercase">Total Value</p>
+                                            <p className="text-[9px] text-stone-400 uppercase">Total Value</p>
                                         </div>
                                         <div className="text-center">
                                             <p className="text-lg font-black text-stone-800">{govSpending.agencies.length}</p>
-                                            <p className="text-[9px] font-typewriter text-stone-400 uppercase">Agencies</p>
+                                            <p className="text-[9px] text-stone-400 uppercase">Agencies</p>
                                         </div>
                                     </div>
 
                                     {/* Last award */}
                                     {govSpending.last_award_date && (
                                         <div className="border-t border-stone-200 pt-3">
-                                            <p className="text-[9px] font-typewriter text-stone-400 uppercase mb-1">Most Recent Award</p>
+                                            <p className="text-[9px] text-stone-400 uppercase mb-1">Most Recent Award</p>
                                             <div className="flex items-start gap-2">
                                                 <Award className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
                                                 <div className="flex-1 min-w-0">
@@ -705,7 +706,7 @@ export default function CheckResultsPage() {
                                     {/* Top awards */}
                                     {govSpending.top_awards.length > 1 && (
                                         <div className="border-t border-stone-200 pt-3">
-                                            <p className="text-[9px] font-typewriter text-stone-400 uppercase mb-2">Top Awards by Value</p>
+                                            <p className="text-[9px] text-stone-400 uppercase mb-2">Top Awards by Value</p>
                                             <div className="space-y-1.5">
                                                 {govSpending.top_awards.slice(0, 3).map((award, i) => (
                                                     <div key={i} className="flex items-center justify-between text-xs">
@@ -720,7 +721,7 @@ export default function CheckResultsPage() {
                                     {/* Agencies worked with */}
                                     {govSpending.agencies.length > 0 && (
                                         <div className="border-t border-stone-200 pt-3">
-                                            <p className="text-[9px] font-typewriter text-stone-400 uppercase mb-1.5">Agencies</p>
+                                            <p className="text-[9px] text-stone-400 uppercase mb-1.5">Agencies</p>
                                             <div className="flex flex-wrap gap-1">
                                                 {govSpending.agencies.slice(0, 6).map((agency, i) => (
                                                     <span key={i} className="text-[10px] bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-lg">
@@ -737,7 +738,7 @@ export default function CheckResultsPage() {
                         {/* Social Media Profiles */}
                         {(social.linkedin || social.facebook || social.twitter) && (
                             <div>
-                                <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-2">Social Profiles</p>
+                                <p className="text-[10px] text-stone-400 uppercase tracking-widest mb-2">Social Profiles</p>
                                 <div className="flex gap-2">
                                     {social.linkedin && (
                                         <a href={social.linkedin} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 px-3 py-2 rounded-xl hover:bg-blue-100 transition-colors">
@@ -775,8 +776,8 @@ export default function CheckResultsPage() {
 
                 {/* Top 5 Matching Opportunities */}
                 <div>
-                    <h2 className="font-typewriter font-bold text-lg flex items-center mb-4 px-1">
-                        <Zap className="w-5 h-5 mr-2" /> Best Matching Opportunities
+                    <h2 className="font-bold text-lg flex items-center mb-4 px-1">
+                        <Target className="w-5 h-5 mr-2" /> Best Matching Opportunities
                         {matches.length > 0 && (
                             <span className="ml-3 text-sm font-sans font-medium bg-emerald-100 px-3 py-1 rounded-full text-emerald-700 border border-emerald-200">
                                 Top {matches.length}
@@ -793,7 +794,7 @@ export default function CheckResultsPage() {
                     ) : (
                         <div className="bg-stone-50 border border-stone-200 border-dashed rounded-2xl p-8 text-center">
                             <Briefcase className="w-10 h-10 text-stone-300 mx-auto mb-3" />
-                            <p className="text-stone-500 font-typewriter mb-2">No matches found</p>
+                            <p className="text-stone-500 mb-2">No matches found</p>
                             <p className="text-stone-400 text-sm">This company may not match any current federal opportunities.</p>
                         </div>
                     )}
@@ -803,7 +804,7 @@ export default function CheckResultsPage() {
                 {easyWins.length > 0 && (
                     <div className="bg-white rounded-[28px] border border-stone-200 shadow-sm overflow-hidden">
                         <div className="bg-stone-50 border-b border-stone-100 px-5 sm:px-8 py-4">
-                            <h2 className="font-typewriter font-bold text-base flex items-center">
+                            <h2 className="font-bold text-base flex items-center">
                                 <TrendingUp className="w-4 h-4 mr-2 text-emerald-500" /> Quick Wins to Improve Your Position
                             </h2>
                         </div>
@@ -820,7 +821,7 @@ export default function CheckResultsPage() {
                                         <div className="flex items-center gap-2 mb-0.5">
                                             <p className="font-bold text-sm text-black">{win.title}</p>
                                             <span className={clsx(
-                                                "text-[9px] font-typewriter font-bold px-2 py-0.5 rounded border uppercase",
+                                                "text-[9px] font-bold px-2 py-0.5 rounded border uppercase",
                                                 impactColors[win.impact]
                                             )}>
                                                 {win.impact}
@@ -838,7 +839,7 @@ export default function CheckResultsPage() {
                 {certRecs.length > 0 && (
                     <div className="bg-white rounded-[28px] border border-stone-200 shadow-sm overflow-hidden">
                         <div className="bg-stone-50 border-b border-stone-100 px-5 sm:px-8 py-4">
-                            <h2 className="font-typewriter font-bold text-base flex items-center">
+                            <h2 className="font-bold text-base flex items-center">
                                 <Unlock className="w-4 h-4 mr-2 text-blue-500" /> Certifications That Could Unlock Opportunities
                             </h2>
                         </div>
@@ -850,7 +851,7 @@ export default function CheckResultsPage() {
                                             <div className="flex items-center gap-2 mb-0.5">
                                                 <p className="font-bold text-sm text-black">{rec.cert_label}</p>
                                                 <span className={clsx(
-                                                    "text-[9px] font-typewriter font-bold px-2 py-0.5 rounded border uppercase",
+                                                    "text-[9px] font-bold px-2 py-0.5 rounded border uppercase",
                                                     difficultyColors[rec.difficulty]
                                                 )}>
                                                     {rec.difficulty}
@@ -864,7 +865,7 @@ export default function CheckResultsPage() {
                                         </div>
                                         <div className="text-right flex-shrink-0">
                                             <p className="font-black text-lg text-emerald-600">+{rec.unlocked_count}</p>
-                                            <p className="text-[10px] font-typewriter text-stone-400 uppercase">new opps</p>
+                                            <p className="text-[10px] text-stone-400 uppercase">new opps</p>
                                         </div>
                                     </div>
 
@@ -876,10 +877,10 @@ export default function CheckResultsPage() {
 
                                     {rec.sample_opps.length > 0 && (
                                         <div className="space-y-1.5 mt-2 pt-2 border-t border-stone-100">
-                                            <p className="text-[10px] font-typewriter text-stone-400 uppercase">Sample opportunities:</p>
+                                            <p className="text-[10px] text-stone-400 uppercase">Sample opportunities:</p>
                                             {rec.sample_opps.map((opp, j) => (
                                                 <div key={j} className="flex items-center gap-2 text-xs">
-                                                    <span className="text-[9px] font-typewriter font-bold bg-blue-50 text-blue-600 border border-blue-200 px-1.5 py-0.5 rounded">
+                                                    <span className="text-[9px] font-bold bg-blue-50 text-blue-600 border border-blue-200 px-1.5 py-0.5 rounded">
                                                         {opp.set_aside_code}
                                                     </span>
                                                     <span className="text-stone-700 truncate">{opp.title}</span>
@@ -898,7 +899,7 @@ export default function CheckResultsPage() {
                 {naics.length > 0 && (
                     <div className="bg-white rounded-[28px] border border-stone-200 shadow-sm overflow-hidden">
                         <div className="bg-stone-50 border-b border-stone-100 px-5 sm:px-8 py-4">
-                            <h2 className="font-typewriter font-bold text-base flex items-center">
+                            <h2 className="font-bold text-base flex items-center">
                                 <Target className="w-4 h-4 mr-2 text-stone-400" /> Inferred NAICS Codes
                             </h2>
                         </div>
@@ -935,10 +936,10 @@ export default function CheckResultsPage() {
                 {/* Bottom Actions */}
                 <div className="flex flex-col sm:flex-row gap-3 pt-4">
                     <Link
-                        href="/check"
+                        href="/admin/lead-check"
                         className="flex-1 bg-black text-white rounded-2xl p-4 flex items-center justify-center gap-2 font-bold text-sm hover:bg-stone-800 transition-all"
                     >
-                        <Zap className="w-4 h-4" /> Run Another Check
+                        <Search className="w-4 h-4" /> Run Another Check
                     </Link>
                     <a
                         href="https://calendly.com/capturepilot/strategy-call"

@@ -231,7 +231,7 @@ export default function ProposalsPage() {
     return (
         <div className="max-w-5xl mx-auto space-y-6 animate-in fade-in duration-500 px-1">
             <header>
-                <h2 className="text-2xl sm:text-3xl font-bold font-typewriter tracking-tighter text-black flex items-center">
+                <h2 className="text-2xl sm:text-3xl font-bold tracking-tighter text-black flex items-center">
                     <FileText className="mr-2 sm:mr-3 w-6 h-6 sm:w-8 sm:h-8" /> AI Proposals
                     <span className="ml-3 text-sm font-sans font-medium bg-stone-100 px-3 py-1 rounded-full text-stone-500 border border-stone-200">
                         {drafts.length}
@@ -257,14 +257,14 @@ export default function ProposalsPage() {
             {showNewForm && !generating && (
                 <div className="bg-white border border-stone-200 rounded-2xl p-6 space-y-4">
                     <div className="flex items-center justify-between">
-                        <h3 className="font-typewriter font-bold text-base flex items-center gap-2">
+                        <h3 className="font-bold text-base flex items-center gap-2">
                             <Plus className="w-4 h-4 text-emerald-600" /> New Proposal Draft
                         </h3>
                         <button type="button" onClick={() => { setShowNewForm(false); setGenError(""); }} className="text-xs text-stone-400 hover:text-stone-600">Cancel</button>
                     </div>
 
                     <div>
-                        <label className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-2 block">
+                        <label className="text-[10px] text-stone-400 uppercase tracking-widest mb-2 block">
                             Notice ID (from SAM.gov)
                         </label>
                         <input
@@ -279,7 +279,7 @@ export default function ProposalsPage() {
                     {/* Quick-select from matches */}
                     {recentMatches.length > 0 && (
                         <div>
-                            <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-2">Or select from your top matches</p>
+                            <p className="text-[10px] text-stone-400 uppercase tracking-widest mb-2">Or select from your top matches</p>
                             <div className="space-y-1.5 max-h-48 overflow-y-auto">
                                 {recentMatches.map((m) => (
                                     <button
@@ -322,7 +322,7 @@ export default function ProposalsPage() {
             {generating && (
                 <div className="bg-white border border-stone-200 rounded-2xl p-8 text-center">
                     <Loader2 className="w-8 h-8 animate-spin text-emerald-500 mx-auto mb-3" />
-                    <h3 className="font-typewriter font-bold text-base mb-1">Writing Your Proposal</h3>
+                    <h3 className="font-bold text-base mb-1">Writing Your Proposal</h3>
                     <p className="text-xs text-stone-500">{genProgress}</p>
                     <p className="text-[10px] text-stone-400 mt-2">Generating cover letter, executive summary, technical approach, and more...</p>
                     {genError && (
@@ -340,7 +340,7 @@ export default function ProposalsPage() {
                     <input
                         type="text"
                         placeholder="Search proposals..."
-                        className="bg-transparent border-none outline-none w-full text-stone-700 font-typewriter text-sm"
+                        className="bg-transparent border-none outline-none w-full text-stone-700 text-sm"
                         value={searchInput}
                         onChange={(e) => setSearchInput(e.target.value)}
                     />
@@ -392,7 +392,7 @@ export default function ProposalsPage() {
                 !generating && !showNewForm && (
                     <div className="bg-stone-50 border border-stone-200 border-dashed rounded-2xl p-12 text-center">
                         <FileText className="w-12 h-12 text-stone-300 mx-auto mb-4" />
-                        <p className="text-stone-500 font-typewriter text-sm mb-2">No proposals generated yet</p>
+                        <p className="text-stone-500 text-sm mb-2">No proposals generated yet</p>
                         <p className="text-stone-400 text-xs mb-4">Click "Start New Proposal" above to draft your first AI-powered proposal.</p>
                     </div>
                 )

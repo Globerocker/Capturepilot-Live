@@ -85,36 +85,36 @@ export function MarketIntelligence({ naicsCodes, companyName }: { naicsCodes: st
             <div className="bg-white border border-stone-200 rounded-2xl p-5">
                 <h3 className="font-bold text-sm flex items-center gap-2 mb-4">
                     <BarChart3 className="w-4 h-4 text-stone-400" /> Market Intelligence
-                    <span className="text-[9px] text-stone-400 font-typewriter uppercase ml-auto">Source: USASpending.gov</span>
+                    <span className="text-[9px] text-stone-400 uppercase ml-auto">Source: USASpending.gov</span>
                 </h3>
 
                 {/* KPI Row */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
                     <div className="bg-stone-50 rounded-xl p-3 text-center">
                         <p className="text-xl font-black text-emerald-600">{fmtCurrency(summary.total_spend)}</p>
-                        <p className="text-[9px] text-stone-400 uppercase font-typewriter">Total Market (5yr)</p>
+                        <p className="text-[9px] text-stone-400 uppercase">Total Market (5yr)</p>
                     </div>
                     <div className="bg-stone-50 rounded-xl p-3 text-center">
                         <p className="text-xl font-black">{fmtCurrency(summary.avg_yearly_spend)}</p>
-                        <p className="text-[9px] text-stone-400 uppercase font-typewriter">Avg/Year</p>
+                        <p className="text-[9px] text-stone-400 uppercase">Avg/Year</p>
                     </div>
                     <div className="bg-stone-50 rounded-xl p-3 text-center">
                         <p className={clsx("text-xl font-black inline-flex items-center gap-1", trendColor)}>
                             <TrendIcon className="w-4 h-4" />
                             {Math.abs(summary.yoy_growth_pct)}%
                         </p>
-                        <p className="text-[9px] text-stone-400 uppercase font-typewriter">YoY Growth</p>
+                        <p className="text-[9px] text-stone-400 uppercase">YoY Growth</p>
                     </div>
                     <div className="bg-stone-50 rounded-xl p-3 text-center">
                         <p className={clsx("text-xl font-black", trendColor)}>{summary.market_trend}</p>
-                        <p className="text-[9px] text-stone-400 uppercase font-typewriter">Trend</p>
+                        <p className="text-[9px] text-stone-400 uppercase">Trend</p>
                     </div>
                 </div>
 
                 {/* Spending Trend Chart (simple bar chart) */}
                 {yearly_spend.length > 0 && (
                     <div>
-                        <p className="text-[10px] font-typewriter text-stone-400 uppercase mb-2">Annual Federal Spending</p>
+                        <p className="text-[10px] text-stone-400 uppercase mb-2">Annual Federal Spending</p>
                         <div className="flex items-end gap-1 h-24">
                             {yearly_spend.map((y, i) => (
                                 <div key={i} className="flex-1 flex flex-col items-center gap-1">

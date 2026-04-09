@@ -4,10 +4,11 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
-    Zap, MapPin, Users, Calendar, Target, ArrowRight, Shield,
+    MapPin, Users, Calendar, Target, ArrowRight, Shield, Sparkles,
     CheckCircle2, Globe, Phone, Mail, Loader2, Briefcase, TrendingUp,
     Award, ChevronDown, ChevronUp, Clock, Unlock
 } from "lucide-react";
+import Image from "next/image";
 import clsx from "clsx";
 import { LeadMagnetForm } from "@/components/LeadMagnetForm";
 
@@ -140,8 +141,8 @@ export default function AnalysisResultsPage() {
             {/* Header */}
             <header className="px-4 sm:px-6 py-4 flex items-center justify-between max-w-6xl mx-auto">
                 <Link href="/" className="flex items-center space-x-2">
-                    <Zap className="w-5 h-5 text-black" />
-                    <span className="font-typewriter font-bold text-base">CapturePilot</span>
+                    <Image src="/logo.png" alt="CP" width={20} height={20} className="rounded" />
+                    <span className="font-bold text-base">CapturePilot</span>
                 </Link>
                 <Link
                     href={`/signup?analysis_id=${analysisId}`}
@@ -157,7 +158,7 @@ export default function AnalysisResultsPage() {
                     <div className="bg-stone-50 border-b border-stone-100 px-5 sm:px-8 py-5 sm:py-6">
                         <div className="flex items-start justify-between">
                             <div>
-                                <h1 className="font-typewriter font-bold text-xl sm:text-2xl text-black mb-1">
+                                <h1 className="font-bold text-xl sm:text-2xl text-black mb-1">
                                     {data.company_name}
                                 </h1>
                                 <a href={data.website} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline inline-flex items-center gap-1">
@@ -165,7 +166,7 @@ export default function AnalysisResultsPage() {
                                 </a>
                             </div>
                             {hasSam && (
-                                <span className="bg-emerald-50 text-emerald-700 text-[10px] font-typewriter font-bold px-3 py-1.5 rounded-lg border border-emerald-200">
+                                <span className="bg-emerald-50 text-emerald-700 text-[10px] font-bold px-3 py-1.5 rounded-lg border border-emerald-200">
                                     SAM.gov Verified
                                 </span>
                             )}
@@ -182,28 +183,28 @@ export default function AnalysisResultsPage() {
                             {crawl.detected_states?.[0] && (
                                 <div className="bg-stone-50 border border-stone-200 rounded-xl p-3">
                                     <MapPin className="w-4 h-4 text-stone-400 mb-1" />
-                                    <p className="text-[10px] font-typewriter text-stone-400 uppercase">Location</p>
+                                    <p className="text-[10px] text-stone-400 uppercase">Location</p>
                                     <p className="font-bold text-sm">{crawl.detected_states.join(", ")}</p>
                                 </div>
                             )}
                             {crawl.employee_signals && (
                                 <div className="bg-stone-50 border border-stone-200 rounded-xl p-3">
                                     <Users className="w-4 h-4 text-stone-400 mb-1" />
-                                    <p className="text-[10px] font-typewriter text-stone-400 uppercase">Employees</p>
+                                    <p className="text-[10px] text-stone-400 uppercase">Employees</p>
                                     <p className="font-bold text-sm">~{crawl.employee_signals.estimate}</p>
                                 </div>
                             )}
                             {crawl.founding_year && (
                                 <div className="bg-stone-50 border border-stone-200 rounded-xl p-3">
                                     <Calendar className="w-4 h-4 text-stone-400 mb-1" />
-                                    <p className="text-[10px] font-typewriter text-stone-400 uppercase">Est.</p>
+                                    <p className="text-[10px] text-stone-400 uppercase">Est.</p>
                                     <p className="font-bold text-sm">{crawl.founding_year} ({new Date().getFullYear() - crawl.founding_year} yrs)</p>
                                 </div>
                             )}
                             {crawl.pages_crawled && (
                                 <div className="bg-stone-50 border border-stone-200 rounded-xl p-3">
                                     <Globe className="w-4 h-4 text-stone-400 mb-1" />
-                                    <p className="text-[10px] font-typewriter text-stone-400 uppercase">Pages Analyzed</p>
+                                    <p className="text-[10px] text-stone-400 uppercase">Pages Analyzed</p>
                                     <p className="font-bold text-sm">{crawl.pages_crawled.length}</p>
                                 </div>
                             )}
@@ -212,7 +213,7 @@ export default function AnalysisResultsPage() {
                         {/* Services */}
                         {crawl.services && crawl.services.length > 0 && (
                             <div>
-                                <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-2">Detected Services</p>
+                                <p className="text-[10px] text-stone-400 uppercase tracking-widest mb-2">Detected Services</p>
                                 <div className="flex flex-wrap gap-1.5">
                                     {crawl.services.slice(0, 10).map((s, i) => (
                                         <span key={i} className="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2.5 py-1 rounded-lg">{s}</span>
@@ -224,7 +225,7 @@ export default function AnalysisResultsPage() {
                         {/* Certifications */}
                         {certs.length > 0 && (
                             <div>
-                                <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-2">Certification Signals</p>
+                                <p className="text-[10px] text-stone-400 uppercase tracking-widest mb-2">Certification Signals</p>
                                 <div className="flex flex-wrap gap-1.5">
                                     {certs.map((c, i) => (
                                         <span key={i} className={clsx(
@@ -241,7 +242,7 @@ export default function AnalysisResultsPage() {
                         {/* Contacts */}
                         {crawl.contacts && crawl.contacts.length > 0 && (
                             <div>
-                                <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-2">Contact Info Found</p>
+                                <p className="text-[10px] text-stone-400 uppercase tracking-widest mb-2">Contact Info Found</p>
                                 <div className="flex flex-wrap gap-2">
                                     {crawl.contacts.filter(c => c.email).slice(0, 3).map((c, i) => (
                                         <span key={`e${i}`} className="text-xs bg-stone-50 text-stone-600 border border-stone-200 px-2.5 py-1 rounded-lg inline-flex items-center gap-1">
@@ -260,7 +261,7 @@ export default function AnalysisResultsPage() {
                         {/* Leadership */}
                         {crawl.leadership && crawl.leadership.length > 0 && (
                             <div>
-                                <p className="text-[10px] font-typewriter text-stone-400 uppercase tracking-widest mb-2">Leadership</p>
+                                <p className="text-[10px] text-stone-400 uppercase tracking-widest mb-2">Leadership</p>
                                 <div className="space-y-2">
                                     {crawl.leadership.map((l, i) => (
                                         <div key={i} className="flex items-center gap-2 flex-wrap text-xs bg-stone-50 text-stone-700 border border-stone-200 px-3 py-2 rounded-lg">
@@ -302,7 +303,7 @@ export default function AnalysisResultsPage() {
                 {easyWins.length > 0 && (
                     <div className="bg-white rounded-[28px] border border-stone-200 shadow-sm overflow-hidden">
                         <div className="bg-stone-50 border-b border-stone-100 px-5 sm:px-8 py-4">
-                            <h2 className="font-typewriter font-bold text-base flex items-center">
+                            <h2 className="font-bold text-base flex items-center">
                                 <TrendingUp className="w-4 h-4 mr-2 text-emerald-500" /> Quick Wins to Improve Your Position
                             </h2>
                         </div>
@@ -319,7 +320,7 @@ export default function AnalysisResultsPage() {
                                         <div className="flex items-center gap-2 mb-0.5">
                                             <p className="font-bold text-sm text-black">{win.title}</p>
                                             <span className={clsx(
-                                                "text-[9px] font-typewriter font-bold px-2 py-0.5 rounded border uppercase",
+                                                "text-[9px] font-bold px-2 py-0.5 rounded border uppercase",
                                                 impactColors[win.impact]
                                             )}>
                                                 {win.impact}
@@ -337,7 +338,7 @@ export default function AnalysisResultsPage() {
                 {certRecs.length > 0 && (
                     <div className="bg-white rounded-[28px] border border-stone-200 shadow-sm overflow-hidden">
                         <div className="bg-stone-50 border-b border-stone-100 px-5 sm:px-8 py-4">
-                            <h2 className="font-typewriter font-bold text-base flex items-center">
+                            <h2 className="font-bold text-base flex items-center">
                                 <Unlock className="w-4 h-4 mr-2 text-blue-500" /> Certifications That Could Unlock Opportunities
                             </h2>
                         </div>
@@ -349,7 +350,7 @@ export default function AnalysisResultsPage() {
                                             <div className="flex items-center gap-2 mb-0.5">
                                                 <p className="font-bold text-sm text-black">{rec.cert_label}</p>
                                                 <span className={clsx(
-                                                    "text-[9px] font-typewriter font-bold px-2 py-0.5 rounded border uppercase",
+                                                    "text-[9px] font-bold px-2 py-0.5 rounded border uppercase",
                                                     difficultyColors[rec.difficulty]
                                                 )}>
                                                     {rec.difficulty}
@@ -363,7 +364,7 @@ export default function AnalysisResultsPage() {
                                         </div>
                                         <div className="text-right flex-shrink-0">
                                             <p className="font-black text-lg text-emerald-600">+{rec.unlocked_count}</p>
-                                            <p className="text-[10px] font-typewriter text-stone-400 uppercase">new opps</p>
+                                            <p className="text-[10px] text-stone-400 uppercase">new opps</p>
                                         </div>
                                     </div>
 
@@ -375,10 +376,10 @@ export default function AnalysisResultsPage() {
 
                                     {rec.sample_opps.length > 0 && (
                                         <div className="space-y-1.5 mt-2 pt-2 border-t border-stone-100">
-                                            <p className="text-[10px] font-typewriter text-stone-400 uppercase">Sample opportunities:</p>
+                                            <p className="text-[10px] text-stone-400 uppercase">Sample opportunities:</p>
                                             {rec.sample_opps.map((opp, j) => (
                                                 <div key={j} className="flex items-center gap-2 text-xs">
-                                                    <span className="text-[9px] font-typewriter font-bold bg-blue-50 text-blue-600 border border-blue-200 px-1.5 py-0.5 rounded">
+                                                    <span className="text-[9px] font-bold bg-blue-50 text-blue-600 border border-blue-200 px-1.5 py-0.5 rounded">
                                                         {opp.set_aside_code}
                                                     </span>
                                                     <span className="text-stone-700 truncate">{opp.title}</span>
@@ -395,8 +396,8 @@ export default function AnalysisResultsPage() {
 
                 {/* Matching Opportunities */}
                 <div>
-                    <h2 className="font-typewriter font-bold text-lg flex items-center mb-4 px-1">
-                        <Zap className="w-5 h-5 mr-2" /> Matching Government Opportunities
+                    <h2 className="font-bold text-lg flex items-center mb-4 px-1">
+                        <Target className="w-5 h-5 mr-2" /> Matching Government Opportunities
                         <span className="ml-3 text-sm font-sans font-medium bg-stone-100 px-3 py-1 rounded-full text-stone-500 border border-stone-200">
                             {matches.length} found
                         </span>
@@ -408,7 +409,7 @@ export default function AnalysisResultsPage() {
                                 <div key={match.opportunity_id} className="bg-white border border-stone-200 rounded-2xl p-4 sm:p-5 shadow-sm">
                                     <div className="flex items-start gap-3">
                                         <div className={clsx(
-                                            "w-12 h-12 rounded-xl border-2 font-black font-typewriter text-sm flex items-center justify-center flex-shrink-0",
+                                            "w-12 h-12 rounded-xl border-2 font-black text-sm flex items-center justify-center flex-shrink-0",
                                             match.score >= 0.70 ? "text-emerald-600 bg-emerald-50 border-emerald-200" :
                                             match.score >= 0.50 ? "text-amber-600 bg-amber-50 border-amber-200" :
                                             "text-blue-600 bg-blue-50 border-blue-200"
@@ -418,7 +419,7 @@ export default function AnalysisResultsPage() {
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-1.5 mb-1 flex-wrap">
                                                 <span className={clsx(
-                                                    "text-[9px] font-typewriter font-bold px-2 py-0.5 rounded uppercase tracking-widest border",
+                                                    "text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-widest border",
                                                     match.classification === "HOT" ? "bg-red-50 text-red-600 border-red-200" :
                                                     match.classification === "WARM" ? "bg-amber-50 text-amber-600 border-amber-200" :
                                                     "bg-blue-50 text-blue-600 border-blue-200"
@@ -426,12 +427,12 @@ export default function AnalysisResultsPage() {
                                                     {match.classification}
                                                 </span>
                                                 {match.set_aside_code && (
-                                                    <span className="text-[9px] font-typewriter font-bold bg-blue-100 text-blue-600 border border-blue-200 px-2 py-0.5 rounded uppercase">
+                                                    <span className="text-[9px] font-bold bg-blue-100 text-blue-600 border border-blue-200 px-2 py-0.5 rounded uppercase">
                                                         {match.set_aside_code}
                                                     </span>
                                                 )}
                                                 {match.notice_type && (
-                                                    <span className="text-[9px] font-typewriter bg-stone-100 text-stone-500 border border-stone-200 px-2 py-0.5 rounded uppercase">
+                                                    <span className="text-[9px] bg-stone-100 text-stone-500 border border-stone-200 px-2 py-0.5 rounded uppercase">
                                                         {match.notice_type}
                                                     </span>
                                                 )}
@@ -465,7 +466,7 @@ export default function AnalysisResultsPage() {
                     ) : (
                         <div className="bg-stone-50 border border-stone-200 border-dashed rounded-2xl p-8 text-center">
                             <Briefcase className="w-10 h-10 text-stone-300 mx-auto mb-3" />
-                            <p className="text-stone-500 font-typewriter mb-2">No matches found yet</p>
+                            <p className="text-stone-500 mb-2">No matches found yet</p>
                             <p className="text-stone-400 text-sm">Create an account and complete your profile for better matching.</p>
                         </div>
                     )}
@@ -490,7 +491,7 @@ export default function AnalysisResultsPage() {
                 {naics.length > 0 && (
                     <div className="bg-white rounded-[28px] border border-stone-200 shadow-sm overflow-hidden">
                         <div className="bg-stone-50 border-b border-stone-100 px-5 sm:px-8 py-4">
-                            <h2 className="font-typewriter font-bold text-base flex items-center">
+                            <h2 className="font-bold text-base flex items-center">
                                 <Target className="w-4 h-4 mr-2 text-stone-400" /> Inferred NAICS Codes
                             </h2>
                         </div>
@@ -530,9 +531,9 @@ export default function AnalysisResultsPage() {
                         href={`/signup?analysis_id=${analysisId}`}
                         className="bg-black text-white rounded-2xl p-5 sm:p-6 flex items-start gap-3 hover:bg-stone-800 transition-all"
                     >
-                        <Zap className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />
+                        <Sparkles className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />
                         <div>
-                            <p className="font-typewriter font-bold text-sm mb-1">Create Free Account</p>
+                            <p className="font-bold text-sm mb-1">Create Free Account</p>
                             <p className="text-xs text-stone-400">Get full match details, AI win strategies, and track your pipeline.</p>
                         </div>
                     </Link>
@@ -545,7 +546,7 @@ export default function AnalysisResultsPage() {
                     >
                         <Shield className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
                         <div>
-                            <p className="font-typewriter font-bold text-sm mb-1 text-black">Book Strategy Call</p>
+                            <p className="font-bold text-sm mb-1 text-black">Book Strategy Call</p>
                             <p className="text-xs text-stone-500">Free strategy call. We&apos;ll review opportunities and build a win plan.</p>
                         </div>
                     </a>
