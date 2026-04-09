@@ -19,7 +19,7 @@ export default function DashboardLayout({
           🚀 Public Beta — All features unlocked free until May 8, 2026. Give feedback to lock in $99/mo pricing.
         </div>
         <UpgradeBanner />
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 lg:rounded-l-[40px] bg-gradient-to-br from-stone-100 via-stone-50 to-stone-100 lg:my-2 lg:mr-2 lg:border lg:border-stone-200/80 lg:shadow-inner">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 lg:rounded-l-[40px] bg-gradient-to-br from-stone-100 via-stone-50 to-stone-100 lg:my-2 lg:mr-2 lg:border lg:border-stone-200/80 lg:shadow-inner dot-grid-bg">
           {children}
         </div>
       </main>

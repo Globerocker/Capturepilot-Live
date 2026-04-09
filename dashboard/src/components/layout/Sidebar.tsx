@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import Image from "next/image";
-import { LayoutDashboard, Target, Zap, Layers, CheckSquare, Settings, LogOut, Menu, X, BarChart3, Crosshair, CreditCard, PenTool, Lock } from "lucide-react";
+import { LayoutDashboard, Target, Layers, FileText, BarChart3, Mic, Users, Shield, CreditCard, Settings, LogOut, Menu, X, Lock } from "lucide-react";
 import clsx from "clsx";
 import { createSupabaseClient } from "@/lib/supabase/client";
 
@@ -16,10 +16,18 @@ export default function Sidebar() {
 
     const navLinks = [
         { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-        { name: "My Matches", href: "/matches", icon: Zap },
-        { name: "My Deals", href: "/pipeline", icon: Layers },
-        { name: "Browse All", href: "/opportunities", icon: Target },
-        { name: "Find Partners", href: "/partners", icon: Crosshair },
+        { name: "Opportunities", href: "/matches", icon: Target },
+        { name: "Pipeline", href: "/pipeline", icon: Layers },
+        { name: "AI Proposals", href: "/proposals", icon: FileText },
+        { name: "Market Intel", href: "/intelligence", icon: BarChart3 },
+        { name: "Cap Statement", href: "/capability-statement", icon: Mic },
+        { name: "Partners", href: "/partners", icon: Users },
+        { name: "Competitors", href: "/competitors", icon: Shield },
+    ];
+
+    const bottomLinks = [
+        { name: "Billing", href: "/billing", icon: CreditCard },
+        { name: "Settings", href: "/settings", icon: Settings },
     ];
 
     const handleSignOut = async () => {
@@ -89,19 +97,26 @@ export default function Sidebar() {
 
             {/* Bottom links */}
             <div className="px-3 lg:px-4 mt-auto space-y-0.5 border-t border-stone-800/60 pt-3">
-                <Link
-                    href="/settings"
-                    onClick={handleNavClick}
-                    className={clsx(
-                        "flex items-center space-x-3 px-4 py-3.5 lg:py-3 rounded-2xl transition-all duration-200 text-sm",
-                        pathname.startsWith("/settings")
-                            ? "bg-emerald-500/10 text-emerald-400 border-l-2 border-emerald-500"
-                            : "text-stone-500 hover:bg-stone-800/50 hover:text-stone-300 border-l-2 border-transparent"
-                    )}
-                >
-                    <Settings className={clsx("h-5 w-5", pathname.startsWith("/settings") ? "text-emerald-400" : "text-stone-500")} />
-                    <span className="font-typewriter font-medium">Settings</span>
-                </Link>
+                {bottomLinks.map((link) => {
+                    const Icon = link.icon;
+                    const isActive = pathname.startsWith(link.href);
+                    return (
+                        <Link
+                            key={link.name}
+                            href={link.href}
+                            onClick={handleNavClick}
+                            className={clsx(
+                                "flex items-center space-x-3 px-4 py-3.5 lg:py-3 rounded-2xl transition-all duration-200 text-sm",
+                                isActive
+                                    ? "bg-emerald-500/10 text-emerald-400 border-l-2 border-emerald-500"
+                                    : "text-stone-500 hover:bg-stone-800/50 hover:text-stone-300 border-l-2 border-transparent"
+                            )}
+                        >
+                            <Icon className={clsx("h-5 w-5", isActive ? "text-emerald-400" : "text-stone-500")} />
+                            <span className="font-typewriter font-medium">{link.name}</span>
+                        </Link>
+                    );
+                })}
                 <button
                     type="button"
                     onClick={handleLock}

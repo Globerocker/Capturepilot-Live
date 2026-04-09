@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Activity, Target, Zap, ArrowRight, Loader2, Clock, Trophy, Search, Shield, BarChart3, Layers, CheckSquare, Phone, UserCheck } from "lucide-react";
+import { Activity, Target, Zap, ArrowRight, Loader2, Clock, Trophy, Search, Shield, BarChart3, Layers, CheckSquare, Phone, UserCheck, FileText, Mic } from "lucide-react";
 import ServiceCTA from "@/components/ui/ServiceCTA";
 import { MarketIntelligence } from "@/components/MarketIntelligence";
 import { Skeleton, SkeletonKpiCard } from "@/components/ui/Skeleton";
@@ -198,7 +198,7 @@ export default function UserDashboard() {
       {/* KPI Cards */}
       <section className="grid grid-cols-2 gap-3 sm:gap-4">
         <KpiCard
-          title="Your Matches"
+          title="Matched Opportunities"
           value={totalMatchCount}
           subtitle={`${hotMatchCount} strong, ${warmMatchCount} good`}
           icon={Target}
@@ -206,27 +206,26 @@ export default function UserDashboard() {
           highlight
         />
         <KpiCard
-          title="Strong Matches"
-          value={hotMatchCount}
-          subtitle="Strong profile alignment"
-          icon={Trophy}
-          href="/matches"
+          title="Pipeline Deals"
+          value={pipelineCount}
+          subtitle={pipelineCount > 0 ? `${Object.keys(pipelineStages).length} stages active` : "Add deals from matches"}
+          icon={Layers}
+          href="/pipeline"
           color="emerald"
         />
         <KpiCard
-          title="Available Contracts"
-          value={opsCount.toLocaleString()}
-          subtitle="Total federal opportunities"
-          icon={Activity}
-          href="/opportunities"
+          title="Proposal Drafts"
+          value={0}
+          subtitle="AI-generated proposals"
+          icon={FileText}
+          href="/proposals"
         />
         <KpiCard
-          title="Urgent"
-          value={urgentCount}
-          subtitle="Deadlines in 7 days"
-          icon={Clock}
-          href="/opportunities"
-          color={urgentCount > 0 ? "red" : undefined}
+          title="Competitors Tracked"
+          value={0}
+          subtitle="Analyze your competition"
+          icon={Shield}
+          href="/competitors"
         />
       </section>
 
@@ -461,16 +460,26 @@ export default function UserDashboard() {
       </section>
 
       {/* Quick Actions */}
-      <section className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-        <Link href="/opportunities" className="bg-gradient-to-br from-stone-900 to-black text-white rounded-[24px] sm:rounded-[32px] p-5 sm:p-6 hover:shadow-xl transition-all group">
-          <Search className="w-6 h-6 mb-3 text-stone-400 group-hover:text-white transition-colors" />
-          <h4 className="font-typewriter font-bold text-base mb-1">Browse Opportunities</h4>
-          <p className="text-stone-400 text-xs">Search and filter {opsCount.toLocaleString()} federal contracts</p>
+      <section className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+        <Link href="/check" className="bg-gradient-to-br from-emerald-700 to-emerald-900 text-white rounded-[20px] sm:rounded-[24px] p-4 sm:p-5 hover:shadow-xl transition-all group">
+          <Search className="w-5 h-5 mb-2 text-emerald-300 group-hover:text-white transition-colors" />
+          <h4 className="font-typewriter font-bold text-sm mb-0.5">Quick Check</h4>
+          <p className="text-emerald-300/80 text-[10px]">Analyze any company</p>
         </Link>
-        <Link href="/settings" className="bg-white border border-stone-200 rounded-[24px] sm:rounded-[32px] p-5 sm:p-6 hover:shadow-lg hover:border-stone-300 transition-all group">
-          <Shield className="w-6 h-6 mb-3 text-stone-400 group-hover:text-black transition-colors" />
-          <h4 className="font-typewriter font-bold text-base mb-1">Update Your Profile</h4>
-          <p className="text-stone-400 text-xs">Improve your matches by refining your business details</p>
+        <Link href="/proposals" className="bg-gradient-to-br from-stone-900 to-black text-white rounded-[20px] sm:rounded-[24px] p-4 sm:p-5 hover:shadow-xl transition-all group">
+          <FileText className="w-5 h-5 mb-2 text-stone-400 group-hover:text-white transition-colors" />
+          <h4 className="font-typewriter font-bold text-sm mb-0.5">Draft Proposal</h4>
+          <p className="text-stone-400 text-[10px]">AI-powered writing</p>
+        </Link>
+        <Link href="/matches" className="bg-white border border-stone-200 rounded-[20px] sm:rounded-[24px] p-4 sm:p-5 hover:shadow-lg hover:border-stone-300 transition-all group">
+          <Target className="w-5 h-5 mb-2 text-stone-400 group-hover:text-black transition-colors" />
+          <h4 className="font-typewriter font-bold text-sm mb-0.5">View Matches</h4>
+          <p className="text-stone-400 text-[10px]">{totalMatchCount} opportunities</p>
+        </Link>
+        <Link href="/capability-statement" className="bg-white border border-stone-200 rounded-[20px] sm:rounded-[24px] p-4 sm:p-5 hover:shadow-lg hover:border-stone-300 transition-all group">
+          <Mic className="w-5 h-5 mb-2 text-stone-400 group-hover:text-black transition-colors" />
+          <h4 className="font-typewriter font-bold text-sm mb-0.5">Cap Statement</h4>
+          <p className="text-stone-400 text-[10px]">Build your statement</p>
         </Link>
       </section>
 

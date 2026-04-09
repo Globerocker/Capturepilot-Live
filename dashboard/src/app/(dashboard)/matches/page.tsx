@@ -227,7 +227,7 @@ export default function MyMatchesPage() {
         <div className="max-w-5xl mx-auto pb-12 animate-in fade-in duration-500 px-1">
             <header className="mb-6">
                 <h2 className="text-2xl sm:text-3xl font-bold font-typewriter tracking-tighter text-black flex items-center">
-                    <Zap className="mr-2 sm:mr-3 w-6 h-6 sm:w-8 sm:h-8" /> My Matches
+                    <Target className="mr-2 sm:mr-3 w-6 h-6 sm:w-8 sm:h-8" /> Opportunities
                     <span className="ml-3 text-sm font-sans font-medium bg-stone-100 px-3 py-1 rounded-full text-stone-500 border border-stone-200">
                         {totalCount.toLocaleString()}
                     </span>
