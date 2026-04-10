@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse, after } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { runScoringPipeline } from "../route";
 
 export const maxDuration = 300;
 
@@ -77,31 +78,37 @@ export async function POST(request: NextRequest) {
             })
             .eq("id", analysisId);
 
-        // Kick off scoring in the background by calling the analyze-company endpoint
-        // with the analysis_id — it will detect selected_naics_codes is set and resume scoring
-        after(async () => {
-            try {
-                const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://app.capturepilot.com";
-                await fetch(`${baseUrl}/api/analyze-company/resume`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ analysis_id: analysisId, naics_codes: cleanCodes }),
-                });
-            } catch (e) {
-                console.error("Failed to trigger resume:", e);
-            }
-        });
+        console.log(`[select-naics] ${analysisId}: starting runScoringPipeline with codes ${cleanCodes.join(", ")}`);
+
+        // Run the scoring pipeline DIRECTLY (synchronous, blocks the response)
+        // This is fine because Vercel allows up to 300s and the frontend will just wait
+        try {
+            await runScoringPipeline(analysisId, cleanCodes);
+            console.log(`[select-naics] ${analysisId}: pipeline complete`);
+        } catch (pipelineErr) {
+            console.error(`[select-naics] ${analysisId}: pipeline failed:`, pipelineErr);
+            await sb
+                .from("company_analyses")
+                .update({
+                    status: "error",
+                    error_message: pipelineErr instanceof Error ? pipelineErr.message : "Scoring pipeline failed",
+                })
+                .eq("id", analysisId);
+            return NextResponse.json({
+                error: pipelineErr instanceof Error ? pipelineErr.message : "Scoring failed",
+            }, { status: 500 });
+        }
 
         return NextResponse.json({
             success: true,
             analysis_id: analysisId,
             selected_naics_codes: cleanCodes,
-            status: "scoring",
+            status: "complete",
         });
     } catch (error) {
         console.error("select-naics error:", error);
         return NextResponse.json(
-            { error: "Failed to save NAICS selection" },
+            { error: error instanceof Error ? error.message : "Failed to save NAICS selection" },
             { status: 500 },
         );
     }
