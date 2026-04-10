@@ -1,17 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
     MapPin, Users, Calendar, Target, Search, Sparkles,
     ArrowRight, Globe, Phone, Mail, Loader2, Briefcase, Shield,
     TrendingUp, Award, ChevronDown, Clock, Unlock, ExternalLink, DollarSign,
-    Linkedin, Facebook, Twitter, Save, FileDown, CheckCircle2, User, Building2, Hash
+    Linkedin, Facebook, Twitter, Save, FileDown, CheckCircle2, User, Building2, Hash,
+    Swords, AlertTriangle
 } from "lucide-react";
 import Image from "next/image";
 import clsx from "clsx";
 import { LeadMagnetForm } from "@/components/LeadMagnetForm";
+import { OpportunityLandscape, ConversionBottomSection, type OpportunityStats } from "@/components/OpportunityLandscape";
+import NaicsSelectionGate from "@/components/NaicsSelectionGate";
+import ReadinessScoreCard from "@/components/ReadinessScoreCard";
 
 interface CertRecommendation {
     cert: string;
@@ -45,6 +49,33 @@ interface MatchData {
     score: number;
     classification: string;
     score_breakdown: Record<string, number>;
+    ai_fit_summary?: string;
+}
+
+interface ReadinessBreakdown {
+    factors: Array<{ label: string; points: number; present: boolean; detail?: string }>;
+    raw_points: number;
+    total: number;
+    interpretation: string;
+}
+
+interface CompetitorData {
+    name: string;
+    uei: string | null;
+    cage_code: string | null;
+    sam_registered: boolean;
+    naics_codes: string[];
+    naics_overlap_pct: number;
+    total_awards: number;
+    award_count: number;
+    first_award_date: string | null;
+    last_award_date: string | null;
+    top_agency: string | null;
+    strengths: string[];
+    weaknesses: string[];
+    state: string | null;
+    source?: string;
+    sba_certifications?: string[];
 }
 
 interface AnalysisData {
@@ -83,6 +114,7 @@ interface AnalysisData {
         points_of_contact?: { name: string; title: string; email?: string; phone?: string }[];
     } | null;
     inferred_naics: { code: string; label: string; confidence: number; matched_keywords: string[] }[];
+    selected_naics_codes?: string[] | null;
     preview_matches: MatchData[];
     inferred_profile: {
         company_name?: string;
@@ -98,8 +130,102 @@ interface AnalysisData {
     };
     cert_recommendations: CertRecommendation[];
     easy_wins: EasyWin[];
+    opportunity_stats?: OpportunityStats | null;
+    competitors?: CompetitorData[] | null;
+    readiness_score?: number | null;
+    readiness_breakdown?: ReadinessBreakdown | null;
+    ai_match_summaries?: Record<string, string>;
     crawler_confidence?: number;
     is_saved?: boolean;
+    error_message?: string;
+}
+
+function CompetitorCard({ comp, rank }: { comp: CompetitorData; rank: number }) {
+    const fmtCurrency = (amount: number) => {
+        if (amount >= 1_000_000) return `$${(amount / 1_000_000).toFixed(1)}M`;
+        if (amount >= 1_000) return `$${(amount / 1_000).toFixed(0)}K`;
+        return `$${amount.toLocaleString()}`;
+    };
+
+    return (
+        <div className="bg-white border border-stone-200 rounded-2xl shadow-sm p-4 sm:p-5">
+            <div className="flex items-start gap-3 mb-3">
+                <div className="flex-shrink-0 w-8 h-8 bg-stone-100 text-stone-600 rounded-lg flex items-center justify-center font-bold text-sm">
+                    #{rank}
+                </div>
+                <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-bold text-sm text-black truncate">{comp.name}</p>
+                        {comp.state && (
+                            <span className="text-[9px] font-bold bg-stone-100 text-stone-600 border border-stone-200 px-2 py-0.5 rounded inline-flex items-center gap-1 uppercase">
+                                <MapPin className="w-2.5 h-2.5" /> {comp.state}
+                            </span>
+                        )}
+                        {comp.sam_registered ? (
+                            <span className="text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded">
+                                SAM Active
+                            </span>
+                        ) : (
+                            <span className="text-[9px] font-bold bg-stone-50 text-stone-500 border border-stone-200 px-2 py-0.5 rounded">
+                                SAM Unknown
+                            </span>
+                        )}
+                        {comp.naics_overlap_pct > 0 && (
+                            <span className="text-[9px] font-bold bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded">
+                                {comp.naics_overlap_pct}% NAICS overlap
+                            </span>
+                        )}
+                    </div>
+                    {comp.uei && (
+                        <p className="text-[10px] text-stone-400 font-mono mt-1">UEI: {comp.uei}</p>
+                    )}
+                </div>
+            </div>
+
+            {/* Award stats */}
+            {comp.award_count > 0 && (
+                <div className="flex items-center gap-3 mb-3 pb-3 border-b border-stone-100">
+                    <div className="flex items-center gap-1.5">
+                        <DollarSign className="w-3.5 h-3.5 text-emerald-500" />
+                        <p className="text-sm font-bold text-stone-800">{fmtCurrency(comp.total_awards)}</p>
+                        <p className="text-xs text-stone-500">in {comp.award_count} awards</p>
+                    </div>
+                    {comp.top_agency && (
+                        <div className="flex items-center gap-1 text-xs text-stone-500 truncate">
+                            <Building2 className="w-3 h-3 flex-shrink-0" />
+                            <span className="truncate">{comp.top_agency}</span>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* Strengths */}
+            {comp.strengths.length > 0 && (
+                <div className="mb-2">
+                    <div className="flex flex-wrap gap-1.5">
+                        {comp.strengths.map((s, i) => (
+                            <span key={i} className="text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded inline-flex items-center gap-1">
+                                <CheckCircle2 className="w-2.5 h-2.5" /> {s}
+                            </span>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* Weaknesses */}
+            {comp.weaknesses.length > 0 && (
+                <div>
+                    <div className="flex flex-wrap gap-1.5">
+                        {comp.weaknesses.map((w, i) => (
+                            <span key={i} className="text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded inline-flex items-center gap-1">
+                                <AlertTriangle className="w-2.5 h-2.5" /> {w}
+                            </span>
+                        ))}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
 }
 
 function getNextSteps(noticeType?: string): string[] {
@@ -190,6 +316,21 @@ function MatchCard({ match, rank }: { match: MatchData; rank: number }) {
                     expanded && "rotate-180"
                 )} />
             </button>
+
+            {/* AI fit summary — always visible on the card */}
+            {match.ai_fit_summary && (
+                <div className="px-4 sm:px-5 pb-4 -mt-2">
+                    <div className="bg-gradient-to-br from-emerald-50 to-blue-50 border border-emerald-100 rounded-xl p-3">
+                        <div className="flex items-start gap-2">
+                            <Sparkles className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0 mt-0.5" />
+                            <div className="min-w-0">
+                                <p className="text-[9px] font-bold uppercase tracking-widest text-emerald-700 mb-0.5">Why this is a fit</p>
+                                <p className="text-xs text-stone-700 leading-relaxed">{match.ai_fit_summary}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Expandable detail panel */}
             {expanded && (
@@ -283,6 +424,16 @@ function MatchCard({ match, rank }: { match: MatchData; rank: number }) {
     );
 }
 
+// Statuses that mean the pipeline is still running (keep polling)
+const IN_PROGRESS_STATUSES = new Set([
+    "crawling",
+    "enriching",
+    "classifying",
+    "scoring",
+    "finding_opportunities",
+    "generating",
+]);
+
 export default function CheckResultsPage() {
     const params = useParams();
     const [data, setData] = useState<AnalysisData | null>(null);
@@ -293,21 +444,67 @@ export default function CheckResultsPage() {
     const [updatedEasyWins, setUpdatedEasyWins] = useState<EasyWin[] | null>(null);
     const [saved, setSaved] = useState(false);
     const [saving, setSaving] = useState(false);
+    const pollRef = useRef<number | null>(null);
 
     const analysisId = params.analysisId as string;
 
     useEffect(() => {
         if (!analysisId) return;
+        let cancelled = false;
 
-        fetch(`/api/analyze-company/status/${analysisId}`)
-            .then(async (res) => {
+        const fetchOnce = async () => {
+            try {
+                const res = await fetch(`/api/analyze-company/status/${analysisId}`, {
+                    cache: "no-store",
+                });
                 if (!res.ok) throw new Error("Analysis not found");
-                return res.json();
-            })
-            .then(setData)
-            .catch((err) => setError(err.message))
-            .finally(() => setLoading(false));
+                const next = (await res.json()) as AnalysisData;
+                if (cancelled) return;
+                setData(next);
+                setLoading(false);
+
+                if (IN_PROGRESS_STATUSES.has(next.status)) {
+                    pollRef.current = window.setTimeout(fetchOnce, 3000);
+                }
+            } catch (err) {
+                if (cancelled) return;
+                setError((err as Error).message || "Failed to load");
+                setLoading(false);
+            }
+        };
+
+        fetchOnce();
+
+        return () => {
+            cancelled = true;
+            if (pollRef.current) {
+                clearTimeout(pollRef.current);
+                pollRef.current = null;
+            }
+        };
     }, [analysisId]);
+
+    // Called after the NAICS selection UI submits — kick off polling again
+    const handleNaicsSubmitted = () => {
+        setData((prev) => (prev ? { ...prev, status: "scoring" } : prev));
+        if (pollRef.current) clearTimeout(pollRef.current);
+
+        const poll = async () => {
+            try {
+                const res = await fetch(`/api/analyze-company/status/${analysisId}`, {
+                    cache: "no-store",
+                });
+                if (res.ok) {
+                    const next = (await res.json()) as AnalysisData;
+                    setData(next);
+                    if (IN_PROGRESS_STATUSES.has(next.status)) {
+                        pollRef.current = window.setTimeout(poll, 3000);
+                    }
+                }
+            } catch { /* ignore */ }
+        };
+        pollRef.current = window.setTimeout(poll, 1500);
+    };
 
     if (loading) {
         return (
@@ -322,10 +519,59 @@ export default function CheckResultsPage() {
             <div className="min-h-screen bg-stone-50 flex items-center justify-center px-4">
                 <div className="text-center">
                     <p className="text-stone-500 mb-4">{error || "Analysis not found"}</p>
-                    <Link href="/check" className="bg-black text-white px-6 py-3 rounded-2xl font-bold text-sm">
+                    <Link href="/admin/lead-check" className="bg-black text-white px-6 py-3 rounded-2xl font-bold text-sm">
                         Run New Check
                     </Link>
                 </div>
+            </div>
+        );
+    }
+
+    // Pipeline still running — show progress state
+    if (IN_PROGRESS_STATUSES.has(data.status)) {
+        const stageLabel: Record<string, string> = {
+            crawling: "Crawling website...",
+            enriching: "Enriching with SAM.gov data...",
+            classifying: "Classifying industries...",
+            scoring: "Scoring opportunities...",
+            finding_opportunities: "Finding more opportunities...",
+            generating: "Generating recommendations...",
+        };
+        return (
+            <div className="min-h-screen bg-stone-50 flex items-center justify-center px-4">
+                <div className="text-center max-w-md">
+                    <Loader2 className="w-10 h-10 text-emerald-500 animate-spin mx-auto mb-4" />
+                    <h2 className="font-bold text-lg mb-1">Analyzing {data.company_name}</h2>
+                    <p className="text-sm text-stone-500">{stageLabel[data.status] || "Processing..."}</p>
+                </div>
+            </div>
+        );
+    }
+
+    // NAICS selection gate — admin picks 1-2 codes before scoring
+    if (data.status === "awaiting_naics_selection") {
+        return (
+            <div className="min-h-screen bg-stone-50">
+                <header className="px-4 sm:px-6 py-4 flex items-center justify-between max-w-6xl mx-auto">
+                    <Link href="/admin/lead-check" className="flex items-center space-x-2">
+                        <Image src="/logo.png" alt="CP" width={20} height={20} className="rounded" />
+                        <span className="font-bold text-base">CapturePilot</span>
+                        <span className="text-[9px] bg-black text-white px-2 py-0.5 rounded-full uppercase">Admin</span>
+                    </Link>
+                </header>
+                <main className="max-w-3xl mx-auto px-4 pb-12 space-y-6">
+                    <div className="text-center">
+                        <h1 className="font-bold text-2xl sm:text-3xl text-black mb-2">{data.company_name}</h1>
+                        <p className="text-sm text-stone-500">
+                            {data.website.replace(/^https?:\/\//, "")}
+                        </p>
+                    </div>
+                    <NaicsSelectionGate
+                        analysisId={analysisId}
+                        inferredNaics={data.inferred_naics || []}
+                        onSubmitted={handleNaicsSubmitted}
+                    />
+                </main>
             </div>
         );
     }
@@ -351,8 +597,16 @@ export default function CheckResultsPage() {
     };
 
     const crawl = data.crawl_data || {};
-    const matches = (updatedMatches || data.preview_matches || []).slice(0, 5);
+    const rawMatches = updatedMatches || data.preview_matches || [];
+    const aiSummaries = data.ai_match_summaries || {};
+    const matches = rawMatches.slice(0, 10).map((m) => ({
+        ...m,
+        ai_fit_summary: m.ai_fit_summary || aiSummaries[m.opportunity_id] || undefined,
+    }));
     const naics = data.inferred_naics || [];
+    const selectedCodes = data.selected_naics_codes || [];
+    const readinessScore = typeof data.readiness_score === "number" ? data.readiness_score : null;
+    const readinessBreakdown = data.readiness_breakdown || null;
     const certs = crawl.certifications || [];
     const hasSam = !!data.sam_data && Object.keys(data.sam_data).length > 0;
     const easyWins = updatedEasyWins || data.easy_wins || [];
@@ -774,9 +1028,17 @@ export default function CheckResultsPage() {
                     }}
                 />
 
-                {/* Top 5 Matching Opportunities */}
+                {/* Government Contracting Readiness Score */}
+                {readinessScore !== null && (
+                    <ReadinessScoreCard score={readinessScore} breakdown={readinessBreakdown} />
+                )}
+
+                {/* Your Federal Opportunity Landscape — big numbers + bar charts + pitch */}
+                <OpportunityLandscape stats={data.opportunity_stats} />
+
+                {/* Top Matching Opportunities (up to 10) */}
                 <div>
-                    <h2 className="font-bold text-lg flex items-center mb-4 px-1">
+                    <h2 className="font-bold text-lg flex items-center mb-2 px-1">
                         <Target className="w-5 h-5 mr-2" /> Best Matching Opportunities
                         {matches.length > 0 && (
                             <span className="ml-3 text-sm font-sans font-medium bg-emerald-100 px-3 py-1 rounded-full text-emerald-700 border border-emerald-200">
@@ -784,6 +1046,13 @@ export default function CheckResultsPage() {
                             </span>
                         )}
                     </h2>
+                    {selectedCodes.length > 0 && (
+                        <p className="text-xs text-stone-500 mb-4 px-1">
+                            Scored against NAICS: {selectedCodes.map((c) => (
+                                <span key={c} className="font-mono font-bold bg-stone-100 px-1.5 py-0.5 rounded border border-stone-200 mx-0.5">{c}</span>
+                            ))}
+                        </p>
+                    )}
 
                     {matches.length > 0 ? (
                         <div className="space-y-3">
@@ -799,6 +1068,29 @@ export default function CheckResultsPage() {
                         </div>
                     )}
                 </div>
+
+                {/* Top 5 Competitors */}
+                {data.competitors && data.competitors.length > 0 && (
+                    <div>
+                        <h2 className="font-bold text-lg flex items-center mb-4 px-1">
+                            <Swords className="w-5 h-5 mr-2" /> Top {data.competitors.length} Competitors
+                            <span className="ml-3 text-sm font-sans font-medium bg-stone-100 px-3 py-1 rounded-full text-stone-700 border border-stone-200">
+                                By federal awards
+                            </span>
+                        </h2>
+                        <p className="text-xs text-stone-500 mb-4 px-1">
+                            Companies competing for the same federal opportunities, based on NAICS overlap and past award history.
+                        </p>
+                        <div className="space-y-3">
+                            {data.competitors.map((comp, i) => (
+                                <CompetitorCard key={`${comp.name}-${i}`} comp={comp} rank={i + 1} />
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Urgency / conversion bottom section */}
+                <ConversionBottomSection stats={data.opportunity_stats} />
 
                 {/* Easy Wins Section */}
                 {easyWins.length > 0 && (

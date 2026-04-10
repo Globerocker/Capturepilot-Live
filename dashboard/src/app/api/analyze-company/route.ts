@@ -453,6 +453,128 @@ function computeCrawlerConfidence(crawlData: Record<string, unknown>, samData: R
 }
 
 // ---------------------------------------------------------------------------
+// OPPORTUNITY LANDSCAPE STATS
+//   — aggregate counts + total value by NAICS and by state for the user's
+//     inferred NAICS + operating states. Feeds the "Your Federal Opportunity
+//     Landscape" section on the Quick Checker results page.
+// ---------------------------------------------------------------------------
+interface OpportunityStats {
+    total_opportunities: number;
+    total_estimated_value: number;
+    hot_matches: number;
+    warm_matches: number;
+    total_matches: number;
+    state_count: number;
+    states: string[];
+    naics_codes: string[];
+    by_naics: { code: string; label: string; count: number; total_value: number }[];
+    by_state: { state: string; count: number; total_value: number }[];
+}
+
+async function computeOpportunityStats(
+    sb: ReturnType<typeof makeDb>,
+    naicsCodes: string[],
+    naicsLabels: Record<string, string>,
+    userStates: string[],
+    scoredMatches: { score: number }[],
+): Promise<OpportunityStats> {
+    const stats: OpportunityStats = {
+        total_opportunities: 0,
+        total_estimated_value: 0,
+        hot_matches: 0,
+        warm_matches: 0,
+        total_matches: scoredMatches.length,
+        state_count: 0,
+        states: userStates,
+        naics_codes: naicsCodes,
+        by_naics: [],
+        by_state: [],
+    };
+
+    // Score bucketing for HOT/WARM (thresholds mirror match-scoring lib)
+    for (const m of scoredMatches) {
+        if (m.score >= 0.70) stats.hot_matches += 1;
+        else if (m.score >= 0.50) stats.warm_matches += 1;
+    }
+
+    if (naicsCodes.length === 0) return stats;
+
+    // Pull opportunities matching the company's NAICS — narrow by state when the
+    // user has target states, otherwise fall back to nationwide totals so we
+    // still surface a meaningful headline number.
+    const cleanStates = userStates
+        .map(s => (s || "").trim().toUpperCase())
+        .filter(s => s.length === 2);
+
+    // Use explicit batching to stay well under Supabase response limits.
+    const rows: { award_amount: number | null; estimated_value: number | null; naics_code: string | null; place_of_performance_state: string | null }[] = [];
+    let offset = 0;
+    const batchSize = 1000;
+    while (true) {
+        let query = sb
+            .from("opportunities")
+            .select("award_amount, estimated_value, naics_code, place_of_performance_state")
+            .in("naics_code", naicsCodes)
+            .eq("is_archived", false)
+            .range(offset, offset + batchSize - 1);
+
+        if (cleanStates.length > 0) {
+            query = query.in("place_of_performance_state", cleanStates);
+        }
+
+        const { data: batch } = await query;
+        if (!batch || batch.length === 0) break;
+        rows.push(...(batch as typeof rows));
+        if (batch.length < batchSize) break;
+        offset += batchSize;
+    }
+
+    // Aggregate
+    const naicsAgg = new Map<string, { count: number; value: number }>();
+    const stateAgg = new Map<string, { count: number; value: number }>();
+
+    for (const row of rows) {
+        const value = Number(row.estimated_value ?? row.award_amount ?? 0) || 0;
+        stats.total_opportunities += 1;
+        stats.total_estimated_value += value;
+
+        const code = (row.naics_code || "").trim();
+        if (code) {
+            const prev = naicsAgg.get(code) || { count: 0, value: 0 };
+            prev.count += 1;
+            prev.value += value;
+            naicsAgg.set(code, prev);
+        }
+
+        const state = (row.place_of_performance_state || "").trim().toUpperCase();
+        if (state) {
+            const prev = stateAgg.get(state) || { count: 0, value: 0 };
+            prev.count += 1;
+            prev.value += value;
+            stateAgg.set(state, prev);
+        }
+    }
+
+    stats.by_naics = Array.from(naicsAgg.entries())
+        .map(([code, v]) => ({
+            code,
+            label: naicsLabels[code] || code,
+            count: v.count,
+            total_value: Math.round(v.value),
+        }))
+        .sort((a, b) => b.total_value - a.total_value || b.count - a.count);
+
+    stats.by_state = Array.from(stateAgg.entries())
+        .map(([state, v]) => ({ state, count: v.count, total_value: Math.round(v.value) }))
+        .sort((a, b) => b.total_value - a.total_value || b.count - a.count);
+
+    stats.state_count = stats.by_state.length;
+    stats.total_estimated_value = Math.round(stats.total_estimated_value);
+
+    return stats;
+}
+
+// ---------------------------------------------------------------------------
 // EASY WINS COMPUTATION
 // ---------------------------------------------------------------------------
 interface EasyWin {
@@ -539,9 +661,599 @@ function computeEasyWins(
 }
 
 // ---------------------------------------------------------------------------
-// BACKGROUND PIPELINE — runs via after() once response is sent
+// AI MATCH SUMMARY — 2-3 sentence fit summary for a single opportunity
 // ---------------------------------------------------------------------------
-async function runAnalysisPipeline(analysisId: string, initialCompanyName: string, initialWebsite: string, initialUei: string, userProvidedName: boolean) {
+async function generateMatchSummary(
+    opportunity: {
+        title?: string;
+        agency?: string;
+        naics_code?: string;
+        set_aside_code?: string;
+        description?: string | null;
+    },
+    profile: { naics_codes: string[]; state?: string | null }
+): Promise<string> {
+    const openaiKey = process.env.OPENAI_API_KEY;
+    if (!openaiKey) return "";
+
+    const description = (opportunity.description || "").slice(0, 1500);
+    const prompt = `Given this company profile (NAICS: ${profile.naics_codes.join(", ")}, state: ${profile.state || "unknown"}) and this opportunity:
+Title: ${opportunity.title || "Unknown"}
+Agency: ${opportunity.agency || "Unknown"}
+NAICS: ${opportunity.naics_code || "Unknown"}
+Set-Aside: ${opportunity.set_aside_code || "None"}
+Description: ${description}
+
+Write a 2-3 sentence summary explaining why this is a good fit for the company. Focus on alignment, opportunity size, and any concerns. Be direct and specific.`;
+
+    try {
+        const response = await fetch("https://api.openai.com/v1/chat/completions", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${openaiKey}`,
+            },
+            body: JSON.stringify({
+                model: "gpt-4o-mini",
+                messages: [{ role: "user", content: prompt }],
+                max_tokens: 180,
+                temperature: 0.3,
+            }),
+        });
+
+        if (!response.ok) return "";
+        const data = await response.json();
+        return (data.choices?.[0]?.message?.content || "").trim();
+    } catch {
+        return "";
+    }
+}
+
+// ---------------------------------------------------------------------------
+// READINESS SCORE — 0-10 government contracting readiness
+// ---------------------------------------------------------------------------
+interface ReadinessBreakdown {
+    factors: Array<{ label: string; points: number; present: boolean; detail?: string }>;
+    raw_points: number;
+    total: number;
+    interpretation: string;
+}
+
+function calculateReadinessScore(
+    samData: Record<string, unknown> | null,
+    usaspendingData: { award_count: number; total_value: number } | null,
+    profile: ProfileForScoring,
+    crawlData: Record<string, unknown>,
+): { score: number; breakdown: ReadinessBreakdown } {
+    const factors: ReadinessBreakdown["factors"] = [];
+    let rawPoints = 0;
+
+    // +3 SAM.gov registered
+    const samRegistered = !!(samData && Object.keys(samData).length > 0);
+    if (samRegistered) rawPoints += 3;
+    factors.push({
+        label: "SAM.gov Registered",
+        points: samRegistered ? 3 : 0,
+        present: samRegistered,
+        detail: samRegistered ? "Active registration detected" : "Not registered — required to bid on federal contracts",
+    });
+
+    // +2 Past federal awards
+    const hasAwards = !!(usaspendingData && usaspendingData.award_count > 0);
+    if (hasAwards) rawPoints += 2;
+    factors.push({
+        label: "Past Federal Awards",
+        points: hasAwards ? 2 : 0,
+        present: hasAwards,
+        detail: hasAwards
+            ? `${usaspendingData!.award_count} awards ($${Math.round((usaspendingData!.total_value || 0) / 1000).toLocaleString()}K total)`
+            : "No prior federal awards found on USASpending",
+    });
+
+    // +2 Veteran-owned (SDVOSB/VOSB)
+    const certs = profile.sba_certifications || [];
+    const veteranOwned = certs.some(c => /sdvosb|vosb|veteran/i.test(c));
+    if (veteranOwned) rawPoints += 2;
+    factors.push({
+        label: "Veteran-Owned",
+        points: veteranOwned ? 2 : 0,
+        present: veteranOwned,
+        detail: veteranOwned ? "VOSB / SDVOSB certified" : "Not a veteran-owned business",
+    });
+
+    // +1.5 per set-aside cert (cap +2), excluding veteran-owned already counted
+    const setAsideCerts = certs.filter(c => /8\(a\)|8a|hubzone|wosb|edwosb|sdb|woman|disadvantaged/i.test(c));
+    const setAsidePoints = Math.min(setAsideCerts.length * 1.5, 2);
+    if (setAsidePoints > 0) rawPoints += setAsidePoints;
+    factors.push({
+        label: "Set-Aside Certifications",
+        points: setAsidePoints,
+        present: setAsideCerts.length > 0,
+        detail: setAsideCerts.length > 0
+            ? `${setAsideCerts.join(", ")}`
+            : "No 8(a) / HUBZone / WOSB / EDWOSB certifications",
+    });
+
+    // +1 Years in business > 5
+    const foundingYear = crawlData.founding_year as number | null;
+    const yearsInBusiness = foundingYear ? new Date().getFullYear() - foundingYear : 0;
+    const established = yearsInBusiness > 5;
+    if (established) rawPoints += 1;
+    factors.push({
+        label: "Established (5+ years)",
+        points: established ? 1 : 0,
+        present: established,
+        detail: foundingYear
+            ? `Founded ${foundingYear} (${yearsInBusiness} years)`
+            : "Founding year not detected",
+    });
+
+    // +0.5 Employee count > 10
+    const employeeSignals = crawlData.employee_signals as { estimate: number } | null;
+    const hasTeam = !!(employeeSignals && employeeSignals.estimate > 10);
+    if (hasTeam) rawPoints += 0.5;
+    factors.push({
+        label: "Team Size (10+)",
+        points: hasTeam ? 0.5 : 0,
+        present: hasTeam,
+        detail: employeeSignals
+            ? `~${employeeSignals.estimate} employees`
+            : "Team size not detected",
+    });
+
+    // Cap at 10 and round to integer
+    const capped = Math.min(rawPoints, 10);
+    const score = Math.round(capped);
+
+    let interpretation: string;
+    if (score <= 3) interpretation = "Not ready yet";
+    else if (score <= 6) interpretation = "Getting there";
+    else if (score <= 8) interpretation = "Ready to compete";
+    else interpretation = "Highly qualified";
+
+    return {
+        score,
+        breakdown: {
+            factors,
+            raw_points: Math.round(rawPoints * 10) / 10,
+            total: 10,
+            interpretation,
+        },
+    };
+}
+
+// ---------------------------------------------------------------------------
+// COMPETITOR DISCOVERY — find top 5 competitors for the analyzed company
+// ---------------------------------------------------------------------------
+interface CompetitorRecord {
+    name: string;
+    uei: string | null;
+    cage_code: string | null;
+    sam_registered: boolean;
+    naics_codes: string[];
+    naics_overlap_pct: number;
+    total_awards: number;
+    award_count: number;
+    first_award_date: string | null;
+    last_award_date: string | null;
+    top_agency: string | null;
+    strengths: string[];
+    weaknesses: string[];
+    state: string | null;
+    source: string;
+    sba_certifications: string[];
+}
+
+// Normalize a company name for dedup (lowercase, strip punctuation + common suffixes)
+function normalizeCompanyName(name: string): string {
+    return (name || "")
+        .toLowerCase()
+        .replace(/[,.]/g, " ")
+        .replace(/\b(inc|llc|corp|corporation|ltd|limited|co|company|group|holdings|services|solutions|enterprises)\b/gi, "")
+        .replace(/\s+/g, " ")
+        .trim();
+}
+
+// SAM.gov Entity API — find companies with the same primary NAICS
+async function findCompetitorsViaSam(primaryNaics: string): Promise<CompetitorRecord[]> {
+    if (!SAM_API_KEY || !primaryNaics) return [];
+
+    try {
+        const params = new URLSearchParams({
+            primaryNaics,
+            registrationStatus: "A",
+            samRegistered: "Yes",
+            includeSections: "entityRegistration,coreData,assertions",
+            api_key: SAM_API_KEY,
+        });
+
+        const response = await fetch(`${SAM_ENTITY_URL}?${params.toString()}`, {
+            headers: { "X-Api-Key": SAM_API_KEY },
+            signal: AbortSignal.timeout(15000),
+        });
+        if (!response.ok) return [];
+
+        const data = await response.json();
+        const entities = (data.entityData || []) as Array<Record<string, unknown>>;
+
+        const out: CompetitorRecord[] = [];
+        for (const entity of entities.slice(0, 20)) {
+            const reg = (entity.entityRegistration || {}) as Record<string, unknown>;
+            const coreData = (entity.coreData || {}) as Record<string, unknown>;
+            const physicalAddr = (coreData.physicalAddress || {}) as Record<string, unknown>;
+            const mailingAddr = (coreData.mailingAddress || {}) as Record<string, unknown>;
+            const addr = Object.keys(physicalAddr).length > 0 ? physicalAddr : mailingAddr;
+
+            const assertions = (entity.assertions || {}) as Record<string, unknown>;
+            const goodsAndServices = (assertions.goodsAndServices || {}) as Record<string, unknown>;
+            const naicsList = (goodsAndServices.naicsList || []) as Array<Record<string, unknown>>;
+            const naicsCodes = naicsList.map(n => String(n.naicsCode || "")).filter(c => c.length > 0);
+
+            const businessTypes = ((reg.businessTypes as string[]) || []).join(" ").toLowerCase();
+            const sbaList = ((goodsAndServices.sbaBusinessTypeList || []) as Array<Record<string, unknown>>)
+                .map(s => String(s.sbaBusinessTypeDesc || "").toLowerCase());
+            const typeStr = [businessTypes, ...sbaList].join(" ");
+
+            const certs: string[] = [];
+            if (typeStr.includes("8(a)") || typeStr.includes("8a")) certs.push("8(a)");
+            if (typeStr.includes("hubzone")) certs.push("HUBZone");
+            if (typeStr.includes("service-disabled") || typeStr.includes("sdvosb")) certs.push("SDVOSB");
+            if (typeStr.includes("women-owned") || typeStr.includes("wosb")) certs.push("WOSB");
+            if (typeStr.includes("veteran-owned")) certs.push("VOSB");
+
+            const name = String(reg.legalBusinessName || "").trim();
+            if (!name) continue;
+
+            out.push({
+                name,
+                uei: String(reg.ueiSAM || "") || null,
+                cage_code: String(reg.cageCode || "") || null,
+                sam_registered: true,
+                naics_codes: naicsCodes,
+                naics_overlap_pct: 0,
+                total_awards: 0,
+                award_count: 0,
+                first_award_date: null,
+                last_award_date: null,
+                top_agency: null,
+                strengths: [],
+                weaknesses: [],
+                state: String(addr.stateOrProvinceCode || "") || null,
+                source: "sam_gov",
+                sba_certifications: certs,
+            });
+        }
+        return out;
+    } catch {
+        return [];
+    }
+}
+
+// USASpending — find top recipients who won awards in the same NAICS
+async function findCompetitorsViaUsaSpending(primaryNaics: string): Promise<CompetitorRecord[]> {
+    if (!primaryNaics) return [];
+
+    try {
+        const response = await fetch("https://api.usaspending.gov/api/v2/search/spending_by_award/", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                filters: {
+                    naics_codes: [primaryNaics],
+                    time_period: [{ start_date: "2023-01-01", end_date: new Date().toISOString().split("T")[0] }],
+                    award_type_codes: ["A", "B", "C", "D"],
+                },
+                fields: ["Recipient Name", "Award Amount", "recipient_id", "Awarding Agency", "Start Date"],
+                limit: 50,
+                page: 1,
+                sort: "Award Amount",
+                order: "desc",
+            }),
+            signal: AbortSignal.timeout(15000),
+        });
+
+        if (!response.ok) return [];
+        const data = await response.json();
+        const results = (data.results || []) as Array<Record<string, unknown>>;
+
+        // Aggregate by recipient name
+        const byRecipient = new Map<string, {
+            name: string;
+            total: number;
+            count: number;
+            agencies: Map<string, number>;
+            first: string;
+            last: string;
+        }>();
+
+        for (const r of results) {
+            const name = String(r["Recipient Name"] || "").trim();
+            if (!name) continue;
+            const amt = Number(r["Award Amount"]) || 0;
+            const agency = String(r["Awarding Agency"] || "");
+            const date = String(r["Start Date"] || "");
+
+            const existing = byRecipient.get(name);
+            if (existing) {
+                existing.total += amt;
+                existing.count += 1;
+                if (agency) existing.agencies.set(agency, (existing.agencies.get(agency) || 0) + amt);
+                if (date && (!existing.first || date < existing.first)) existing.first = date;
+                if (date && (!existing.last || date > existing.last)) existing.last = date;
+            } else {
+                const agencies = new Map<string, number>();
+                if (agency) agencies.set(agency, amt);
+                byRecipient.set(name, {
+                    name,
+                    total: amt,
+                    count: 1,
+                    agencies,
+                    first: date,
+                    last: date,
+                });
+            }
+        }
+
+        const aggregated: CompetitorRecord[] = [];
+        for (const v of byRecipient.values()) {
+            let topAgency: string | null = null;
+            let topAgencyTotal = -1;
+            for (const [agency, total] of v.agencies.entries()) {
+                if (total > topAgencyTotal) {
+                    topAgency = agency;
+                    topAgencyTotal = total;
+                }
+            }
+            aggregated.push({
+                name: v.name,
+                uei: null,
+                cage_code: null,
+                sam_registered: false,
+                naics_codes: [primaryNaics],
+                naics_overlap_pct: 0,
+                total_awards: v.total,
+                award_count: v.count,
+                first_award_date: v.first || null,
+                last_award_date: v.last || null,
+                top_agency: topAgency,
+                strengths: [],
+                weaknesses: [],
+                state: null,
+                source: "usaspending",
+                sba_certifications: [],
+            });
+        }
+
+        aggregated.sort((a, b) => b.total_awards - a.total_awards);
+        return aggregated.slice(0, 20);
+    } catch {
+        return [];
+    }
+}
+
+// Internal contractors table — query by NAICS overlap
+async function findCompetitorsViaContractorsTable(
+    sb: ReturnType<typeof makeDb>,
+    primaryNaics: string[],
+): Promise<CompetitorRecord[]> {
+    if (!primaryNaics || primaryNaics.length === 0) return [];
+
+    try {
+        const { data: rows } = await sb
+            .from("contractors")
+            .select("company_name, uei, cage_code, state, naics_codes, sba_certifications, sam_registered")
+            .overlaps("naics_codes", primaryNaics)
+            .limit(20);
+
+        if (!rows || rows.length === 0) return [];
+
+        const out: CompetitorRecord[] = [];
+        for (const r of rows as Array<Record<string, unknown>>) {
+            const name = String(r.company_name || "").trim();
+            if (!name) continue;
+            out.push({
+                name,
+                uei: r.uei ? String(r.uei) : null,
+                cage_code: r.cage_code ? String(r.cage_code) : null,
+                sam_registered: r.sam_registered !== false,
+                naics_codes: Array.isArray(r.naics_codes) ? (r.naics_codes as unknown[]).map(String) : [],
+                naics_overlap_pct: 0,
+                total_awards: 0,
+                award_count: 0,
+                first_award_date: null,
+                last_award_date: null,
+                top_agency: null,
+                strengths: [],
+                weaknesses: [],
+                state: r.state ? String(r.state) : null,
+                source: "contractors_db",
+                sba_certifications: Array.isArray(r.sba_certifications) ? (r.sba_certifications as unknown[]).map(String) : [],
+            });
+        }
+        return out;
+    } catch {
+        return [];
+    }
+}
+
+// Enrich a single competitor's federal award history via USASpending
+async function enrichCompetitorAwards(comp: CompetitorRecord): Promise<void> {
+    if (!comp.name || comp.award_count > 0) return;
+
+    try {
+        const response = await fetch("https://api.usaspending.gov/api/v2/search/spending_by_award/", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                filters: {
+                    recipient_search_text: [comp.uei && comp.uei.length === 12 ? comp.uei : comp.name],
+                    time_period: [{ start_date: "2015-01-01", end_date: new Date().toISOString().split("T")[0] }],
+                    award_type_codes: ["A", "B", "C", "D"],
+                },
+                fields: ["Award Amount", "Awarding Agency", "Start Date"],
+                limit: 100,
+                page: 1,
+                sort: "Start Date",
+                order: "desc",
+            }),
+            signal: AbortSignal.timeout(10000),
+        });
+
+        if (!response.ok) return;
+        const data = await response.json();
+        const results = (data.results || []) as Array<Record<string, unknown>>;
+        if (results.length === 0) return;
+
+        const totals = results.reduce((sum, r) => sum + (Number(r["Award Amount"]) || 0), 0);
+        const agencyTotals = new Map<string, number>();
+        let firstDate = "";
+        let lastDate = "";
+
+        for (const r of results) {
+            const agency = String(r["Awarding Agency"] || "");
+            const amt = Number(r["Award Amount"]) || 0;
+            if (agency) agencyTotals.set(agency, (agencyTotals.get(agency) || 0) + amt);
+            const d = String(r["Start Date"] || "");
+            if (d && (!firstDate || d < firstDate)) firstDate = d;
+            if (d && (!lastDate || d > lastDate)) lastDate = d;
+        }
+
+        let topAgency: string | null = null;
+        let topTotal = -1;
+        for (const [a, t] of agencyTotals.entries()) {
+            if (t > topTotal) { topAgency = a; topTotal = t; }
+        }
+
+        comp.total_awards = totals;
+        comp.award_count = results.length;
+        comp.first_award_date = firstDate || null;
+        comp.last_award_date = lastDate || null;
+        comp.top_agency = topAgency;
+    } catch {
+        // silent fail — leave award fields at zero
+    }
+}
+
+// Infer strengths/weaknesses from enriched data
+function inferCompetitorStrengthsWeaknesses(comp: CompetitorRecord): void {
+    const strengths: string[] = [];
+    const weaknesses: string[] = [];
+
+    if (comp.total_awards > 1_000_000) strengths.push("Strong federal presence");
+    if (comp.naics_codes.length > 5) strengths.push("Multiple NAICS coverage");
+    if (comp.sba_certifications.includes("SDVOSB") || comp.sba_certifications.includes("VOSB")) {
+        strengths.push("Veteran-owned");
+    }
+    if (comp.sba_certifications.length > 0) strengths.push("Small business advantage");
+    if (comp.first_award_date && comp.first_award_date < "2020-01-01") {
+        strengths.push("Established player");
+    }
+
+    if (comp.award_count === 0) weaknesses.push("Limited federal experience");
+    if (comp.naics_codes.length > 0 && comp.naics_codes.length < 3) weaknesses.push("Single-NAICS focus");
+    if (comp.sba_certifications.length === 0) weaknesses.push("No set-aside certifications");
+    if (comp.first_award_date && comp.first_award_date > "2024-01-01") weaknesses.push("Recent entrant");
+
+    comp.strengths = strengths;
+    comp.weaknesses = weaknesses;
+}
+
+// Compute NAICS overlap % between analyzed company and competitor
+function computeNaicsOverlap(analyzedNaics: string[], competitorNaics: string[]): number {
+    if (analyzedNaics.length === 0 || competitorNaics.length === 0) return 0;
+    const aSet = new Set(analyzedNaics);
+    const matched = competitorNaics.filter(c => aSet.has(c)).length;
+    return Math.round((matched / analyzedNaics.length) * 100);
+}
+
+// Main discovery function — combines all 3 strategies and returns top 5 competitors
+async function findTopCompetitors(
+    selectedNaics: string[],
+    analyzedCompanyName: string,
+    analyzedUei: string | null,
+    sb: ReturnType<typeof makeDb>,
+): Promise<CompetitorRecord[]> {
+    if (!selectedNaics || selectedNaics.length === 0) return [];
+
+    const primaryNaics = selectedNaics[0];
+    const analyzedNormalized = normalizeCompanyName(analyzedCompanyName);
+
+    // Strategy A (SAM) + B (USASpending) + C (contractors table) in parallel
+    const [samResults, usaResults, dbResults] = await Promise.all([
+        findCompetitorsViaSam(primaryNaics),
+        findCompetitorsViaUsaSpending(primaryNaics),
+        findCompetitorsViaContractorsTable(sb, selectedNaics.slice(0, 5)),
+    ]);
+
+    // Merge sources, dedupe by normalized name (skip the analyzed company itself)
+    const merged = new Map<string, CompetitorRecord>();
+    const addOrMerge = (c: CompetitorRecord) => {
+        const key = normalizeCompanyName(c.name);
+        if (!key || key === analyzedNormalized) return;
+        if (analyzedUei && c.uei && c.uei === analyzedUei) return;
+
+        const existing = merged.get(key);
+        if (!existing) {
+            merged.set(key, { ...c });
+            return;
+        }
+        // Merge — prefer populated fields
+        if (!existing.uei && c.uei) existing.uei = c.uei;
+        if (!existing.cage_code && c.cage_code) existing.cage_code = c.cage_code;
+        if (!existing.state && c.state) existing.state = c.state;
+        if (!existing.top_agency && c.top_agency) existing.top_agency = c.top_agency;
+        if (c.total_awards > existing.total_awards) {
+            existing.total_awards = c.total_awards;
+            existing.award_count = c.award_count;
+            existing.first_award_date = c.first_award_date;
+            existing.last_award_date = c.last_award_date;
+        }
+        existing.naics_codes = Array.from(new Set([...existing.naics_codes, ...c.naics_codes]));
+        existing.sba_certifications = Array.from(new Set([...existing.sba_certifications, ...c.sba_certifications]));
+        existing.sam_registered = existing.sam_registered || c.sam_registered;
+        if (!existing.source.includes(c.source)) existing.source = `${existing.source}+${c.source}`;
+    };
+
+    // USASpending first (richest award data), then SAM, then contractors DB
+    for (const c of usaResults) addOrMerge(c);
+    for (const c of samResults) addOrMerge(c);
+    for (const c of dbResults) addOrMerge(c);
+
+    // Rank candidates: award totals then NAICS overlap
+    const candidates = Array.from(merged.values());
+    for (const c of candidates) {
+        c.naics_overlap_pct = computeNaicsOverlap(selectedNaics, c.naics_codes);
+    }
+    candidates.sort((a, b) => {
+        if (b.total_awards !== a.total_awards) return b.total_awards - a.total_awards;
+        return b.naics_overlap_pct - a.naics_overlap_pct;
+    });
+
+    // Take top 8 for enrichment, then whittle to 5
+    const topCandidates = candidates.slice(0, 8);
+
+    // Enrich award data for any without it (parallel, each with its own 10s timeout)
+    await Promise.all(topCandidates.map(enrichCompetitorAwards));
+
+    // Recompute overlap and infer strengths/weaknesses
+    for (const c of topCandidates) {
+        c.naics_overlap_pct = computeNaicsOverlap(selectedNaics, c.naics_codes);
+        inferCompetitorStrengthsWeaknesses(c);
+    }
+
+    // Re-sort after enrichment
+    topCandidates.sort((a, b) => {
+        if (b.total_awards !== a.total_awards) return b.total_awards - a.total_awards;
+        return b.naics_overlap_pct - a.naics_overlap_pct;
+    });
+
+    return topCandidates.slice(0, 5);
+}
+
+// ---------------------------------------------------------------------------
+// STAGE 1: CRAWL + CLASSIFY — stops at NAICS selection gate
+// ---------------------------------------------------------------------------
+async function runCrawlAndClassifyPipeline(analysisId: string, initialCompanyName: string, initialWebsite: string, initialUei: string, userProvidedName: boolean) {
     const sb = makeDb();
     let companyName = initialCompanyName;
     let website = initialWebsite;
@@ -668,16 +1380,85 @@ async function runAnalysisPipeline(analysisId: string, initialCompanyName: strin
             }
         }
 
-        await sb.from("company_analyses").update({ status: "scoring", inferred_naics: inferredNaics }).eq("id", analysisId);
+        // Persist classification artifacts for the scoring stage
+        await sb.from("company_analyses").update({
+            inferred_naics: inferredNaics,
+            crawl_data: crawlData,
+            sam_data: samData,
+            company_name: companyName,
+            uei: uei || null,
+        }).eq("id", analysisId);
 
-        // Step 4: Build temporary profile for scoring
+        // NAICS SELECTION GATE
+        // Check whether the user has already picked NAICS codes (e.g. retry path).
+        // If not, stop here and wait for the user/admin to confirm 1-2 codes.
+        const { data: selRow } = await sb
+            .from("company_analyses")
+            .select("selected_naics_codes")
+            .eq("id", analysisId)
+            .single();
+
+        const preSelected = (selRow?.selected_naics_codes as string[] | null) || null;
+
+        if (!preSelected || preSelected.length === 0) {
+            await sb.from("company_analyses").update({
+                status: "awaiting_naics_selection",
+            }).eq("id", analysisId);
+            return;
+        }
+
+        // If codes were already selected (unusual — e.g. retry), continue directly
+        await runScoringPipeline(analysisId, preSelected);
+        return;
+    } catch (error) {
+        console.error("Crawl/classify pipeline error:", error);
+        await sb.from("company_analyses").update({
+            status: "error",
+            error_message: (error as Error).message || "Pipeline failed",
+        }).eq("id", analysisId);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// STAGE 2: SCORING PIPELINE — runs after NAICS selection
+// ---------------------------------------------------------------------------
+export async function runScoringPipeline(analysisId: string, selectedNaicsCodes: string[]) {
+    const sb = makeDb();
+    try {
+        // Re-hydrate state from DB so this can be invoked independently from
+        // the select-naics endpoint as well as from Stage 1.
+        const { data: row } = await sb
+            .from("company_analyses")
+            .select("company_name, website, uei, sam_data, crawl_data, inferred_naics")
+            .eq("id", analysisId)
+            .single();
+
+        if (!row) {
+            console.error("Scoring pipeline: analysis not found", analysisId);
+            return;
+        }
+
+        const companyName = (row.company_name || "") as string;
+        const website = (row.website || "") as string;
+        const uei = (row.uei || "") as string;
+        const samData = (row.sam_data || null) as Record<string, unknown> | null;
+        const crawlData = (row.crawl_data || {}) as Record<string, unknown>;
+        const inferredNaics = (row.inferred_naics || []) as Array<{ code: string; label: string; confidence: number; matched_keywords?: string[] }>;
+
+        const description = (crawlData.description as string) || "";
+        const services = (crawlData.services as string[]) || [];
+        const usaspendingData = (crawlData.usaspending_data as UsaSpendingData | undefined) || null;
+
+        await sb.from("company_analyses").update({ status: "scoring" }).eq("id", analysisId);
+
+        // Build temporary profile for scoring — use SELECTED codes only
         const certifications = (crawlData.certifications as { type: string; confidence: number }[]) || [];
         const locations = (crawlData.locations as { state?: string }[]) || [];
         const detectedStates = (crawlData.detected_states as string[]) || [];
         const samCerts = samData ? (samData.sba_certifications as string[]) : [];
 
         const tempProfile: ProfileForScoring = {
-            naics_codes: inferredNaics.map(n => n.code),
+            naics_codes: selectedNaicsCodes,
             sba_certifications: [
                 ...(samCerts || []),
                 ...certifications.filter(c => c.confidence > 0.7).map(c => c.type),
@@ -694,7 +1475,7 @@ async function runAnalysisPipeline(analysisId: string, initialCompanyName: strin
         };
 
         // Step 5: On-demand NAICS crawl if we lack coverage
-        const naicsCodesToCheck = inferredNaics.map(n => n.code).slice(0, 5);
+        const naicsCodesToCheck = selectedNaicsCodes.slice(0, 5);
         if (naicsCodesToCheck.length > 0) {
             const { count: naicsOppCount } = await sb
                 .from("opportunities")
@@ -716,8 +1497,8 @@ async function runAnalysisPipeline(analysisId: string, initialCompanyName: strin
             }
         }
 
-        // Step 6: Score against opportunities — ONLY matching NAICS codes (not all 40K+)
-        const primaryNaics = inferredNaics.slice(0, 5).map(n => n.code);
+        // Step 6: Score against opportunities — ONLY the SELECTED NAICS codes
+        const primaryNaics = selectedNaicsCodes;
         const allOpps: OpportunityForScoring[] = [];
 
         // Fetch opportunities that match the company's primary NAICS codes only
@@ -748,11 +1529,13 @@ async function runAnalysisPipeline(analysisId: string, initialCompanyName: strin
         }
 
         scoredMatches.sort((a, b) => b.score - a.score);
-        // Take top 20 candidates (will deduplicate after enrichment with titles)
-        const topCandidates = scoredMatches.slice(0, 20);
+        // Take top 40 candidates (will deduplicate after enrichment with titles, then cap at 10)
+        const topCandidates = scoredMatches.slice(0, 40);
 
         // Enrich candidates with full opportunity details, then deduplicate by title
-        let topMatches = topCandidates;
+        // Keep raw description text around so we can feed it to the AI summary generator
+        const rawDescriptionMap = new Map<string, string>();
+        let topMatches: typeof topCandidates = topCandidates;
         if (topCandidates.length > 0) {
             const oppIds = topCandidates.map(m => m.opportunity_id);
             const { data: oppDetails } = await sb
@@ -775,6 +1558,7 @@ async function runAnalysisPipeline(analysisId: string, initialCompanyName: strin
                         match.notice_id = detail.notice_id;
                         match.place_of_performance_state = detail.place_of_performance_state;
                         match.description_url = detail.description;
+                        rawDescriptionMap.set(match.opportunity_id, detail.description || "");
                     }
                 }
             }
@@ -787,7 +1571,37 @@ async function runAnalysisPipeline(analysisId: string, initialCompanyName: strin
             if (!title || seenTitles.has(title)) return false;
             seenTitles.add(title);
             return true;
-        }).slice(0, 5);
+        }).slice(0, 10);
+
+        // Generate AI fit summaries (2-3 sentences) for each top match in parallel
+        const aiMatchSummaries: Record<string, string> = {};
+        if (topMatches.length > 0 && process.env.OPENAI_API_KEY) {
+            const summaryResults = await Promise.all(
+                topMatches.map(async (m) => {
+                    const rawDesc = rawDescriptionMap.get(m.opportunity_id) || "";
+                    const summary = await generateMatchSummary(
+                        {
+                            title: m.title,
+                            agency: m.agency,
+                            naics_code: m.naics_code,
+                            set_aside_code: m.set_aside_code,
+                            description: rawDesc,
+                        },
+                        { naics_codes: selectedNaicsCodes, state: tempProfile.state },
+                    );
+                    return { id: m.opportunity_id, summary };
+                })
+            );
+            for (const { id, summary } of summaryResults) {
+                if (summary) aiMatchSummaries[id] = summary;
+            }
+            // Attach summaries to match objects so they ride along with preview_matches
+            for (const m of topMatches as Array<typeof topMatches[number] & { ai_fit_summary?: string }>) {
+                if (aiMatchSummaries[m.opportunity_id]) {
+                    m.ai_fit_summary = aiMatchSummaries[m.opportunity_id];
+                }
+            }
+        }
 
         await sb.from("company_analyses").update({ status: "generating" }).eq("id", analysisId);
 
@@ -819,6 +1633,18 @@ async function runAnalysisPipeline(analysisId: string, initialCompanyName: strin
 
         // Easy wins
         const easyWins = computeEasyWins(crawlData, samData, inferredNaics, tempProfile);
+
+        // Opportunity landscape stats — powers the big-number section on the
+        // results page ("$X.XM in your states across Y opportunities").
+        const naicsLabelMap: Record<string, string> = {};
+        for (const n of inferredNaics) naicsLabelMap[n.code] = n.label || n.code;
+        const opportunityStats = await computeOpportunityStats(
+            sb,
+            primaryNaics,
+            naicsLabelMap,
+            tempProfile.target_states,
+            scoredMatches,
+        );
 
         // Generate company summary
         const summary = await generateSummary(companyName, description, services, certifications);
@@ -890,6 +1716,24 @@ async function runAnalysisPipeline(analysisId: string, initialCompanyName: strin
             } : null,
         };
 
+        // Compute readiness score (0-10)
+        const { score: readinessScore, breakdown: readinessBreakdown } =
+            calculateReadinessScore(samData, usaspendingData, tempProfile, crawlData);
+
+        // Step 7: Find top 5 competitors using SAM.gov + USASpending + contractors table
+        await sb.from("company_analyses").update({ status: "finding_competitors" }).eq("id", analysisId);
+        let competitors: CompetitorRecord[] = [];
+        try {
+            competitors = await findTopCompetitors(
+                selectedNaicsCodes,
+                companyName,
+                uei && uei.length === 12 ? uei : null,
+                sb,
+            );
+        } catch (e) {
+            console.warn("Competitor discovery error (non-fatal):", e);
+        }
+
         // Save everything — mark complete
         await sb.from("company_analyses").update({
             status: "complete",
@@ -900,10 +1744,16 @@ async function runAnalysisPipeline(analysisId: string, initialCompanyName: strin
             crawl_data: crawlData,
             cert_recommendations: certRecommendations,
             easy_wins: easyWins,
+            opportunity_stats: opportunityStats,
+            selected_naics_codes: selectedNaicsCodes,
+            readiness_score: readinessScore,
+            readiness_breakdown: readinessBreakdown,
+            ai_match_summaries: aiMatchSummaries,
+            competitors,
         }).eq("id", analysisId);
 
     } catch (error) {
-        console.error("Pipeline error:", error);
+        console.error("Scoring pipeline error:", error);
         await sb.from("company_analyses").update({
             status: "error",
             error_message: (error as Error).message || "Pipeline failed",
@@ -956,9 +1806,10 @@ export async function POST(request: NextRequest) {
 
         const analysisId = analysis.id;
 
-        // Run the full pipeline in the background after response is sent
+        // Run crawl + classify in the background. This stops at the NAICS selection
+        // gate; the select-naics endpoint resumes with scoring.
         after(async () => {
-            await runAnalysisPipeline(analysisId, companyName, website, uei, userProvidedName);
+            await runCrawlAndClassifyPipeline(analysisId, companyName, website, uei, userProvidedName);
         });
 
         // Return immediately with the analysis ID

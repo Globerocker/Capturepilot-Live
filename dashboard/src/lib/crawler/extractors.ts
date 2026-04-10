@@ -591,6 +591,199 @@ export function extractLegalInfo(
     return info;
 }
 
+// ─── Past Customers / Clients ──────────────────────────────────────────────
+
+/**
+ * Extract past customers/clients by locating sections labeled "clients", "customers",
+ * "case studies", "partners" and pulling short capitalized entity names from them.
+ * Returns a deduplicated list of up to 15 entries.
+ */
+export function extractPastCustomers(
+    texts: string[], soups: CheerioAPI[]
+): string[] {
+    const found = new Set<string>();
+    const sectionHeadings = /(?:our\s+)?(clients|customers|case\s+stud(?:y|ies)|partners|who\s+we\s+serve|trusted\s+by|testimonial)/i;
+
+    for (const $ of soups) {
+        // Find headings matching client/customer patterns, then collect sibling text
+        $("h1, h2, h3, h4, h5, section, div").each((_i, el) => {
+            const text = $(el).text().trim();
+            if (!text || text.length > 120) return;
+            if (!sectionHeadings.test(text)) return;
+
+            // Collect names from the next siblings (lists, divs, images with alt text)
+            const container = $(el).parent().length ? $(el).parent() : $(el);
+            container.find("li, img[alt], p, span").each((_j, sub) => {
+                let candidate = "";
+                const tagName = (sub as unknown as { tagName?: string }).tagName || (sub as unknown as { name?: string }).name || "";
+                if (tagName === "img") {
+                    candidate = $(sub).attr("alt") || "";
+                } else {
+                    candidate = $(sub).text().trim();
+                }
+                candidate = candidate.replace(/\s+/g, " ").trim();
+                // Valid customer names are 2-60 chars, start with uppercase, not a sentence
+                if (candidate.length < 2 || candidate.length > 60) return;
+                const words = candidate.split(/\s+/);
+                if (words.length > 6) return;
+                if (!/^[A-Z]/.test(candidate)) return;
+                // Skip generic words
+                if (/^(the|our|and|for|with|this|that|view|more|all|home|about|contact)$/i.test(candidate)) return;
+                found.add(candidate);
+            });
+        });
+    }
+
+    // Fallback: scan raw text for "trusted by X, Y, Z" or "clients include X, Y, Z" patterns
+    if (found.size < 3) {
+        const allText = texts.join(" ");
+        const trustedRe = /(?:trusted\s+by|clients?\s+include|customers?\s+include|partners?\s+include|our\s+clients|case\s+studies?)[:\s]+([^.!?\n]{10,400})/gi;
+        for (const m of findAll(trustedRe, allText)) {
+            const chunk = m[1];
+            for (const piece of chunk.split(/[,;&/]|\band\b/i)) {
+                const clean = piece.trim().replace(/\s+/g, " ");
+                if (clean.length < 2 || clean.length > 60) continue;
+                const words = clean.split(/\s+/);
+                if (words.length > 6) continue;
+                if (!/^[A-Z]/.test(clean)) continue;
+                if (/^(the|our|and|for|with|this|that|view|more|all|home|about|contact)$/i.test(clean)) continue;
+                found.add(clean);
+            }
+        }
+    }
+
+    return [...found].slice(0, 15);
+}
+
+// ─── Project Portfolio ─────────────────────────────────────────────────────
+
+/**
+ * Extract project/portfolio entries from case study pages, work/portfolio sections.
+ */
+export function extractProjectPortfolio(
+    texts: string[], soups: CheerioAPI[]
+): string[] {
+    const projects = new Set<string>();
+    const portfolioKws = /(portfolio|case\s+stud|project|our\s+work|recent\s+work|past\s+projects|featured\s+work)/i;
+
+    for (const $ of soups) {
+        $("h2, h3, h4, section, article").each((_i, el) => {
+            const text = $(el).text().trim();
+            if (!text || text.length > 150) return;
+            if (!portfolioKws.test(text)) return;
+
+            // Collect card titles from nearby containers
+            const container = $(el).parent().length ? $(el).parent() : $(el);
+            container.find("h3, h4, h5, .card-title, figcaption").each((_j, sub) => {
+                const candidate = $(sub).text().trim().replace(/\s+/g, " ");
+                if (candidate.length >= 5 && candidate.length <= 120) {
+                    projects.add(candidate);
+                }
+            });
+        });
+    }
+
+    return [...projects].slice(0, 10);
+}
+
+// ─── Government Experience Signals ─────────────────────────────────────────
+
+/**
+ * Detect phrases that indicate prior government / federal / military experience.
+ */
+export function detectGovExperience(
+    texts: string[]
+): { keywords: string[]; hit_count: number; has_gov_experience: boolean } {
+    const allText = texts.join(" ").toLowerCase();
+    const signals: Record<string, RegExp> = {
+        federal: /\bfederal\s+(?:government|contract|agency|client)/g,
+        government: /\bgovernment\s+(?:contract|client|agency|work|experience)/g,
+        military: /\bmilitary\s+(?:contract|experience|grade|client)/g,
+        dod: /\b(?:dod|department\s+of\s+defense)\b/g,
+        doe: /\b(?:department\s+of\s+energy)\b/g,
+        dhs: /\b(?:dhs|department\s+of\s+homeland\s+security)\b/g,
+        va: /\b(?:veterans?\s+affairs?|department\s+of\s+veterans?)\b/g,
+        army: /\bu\.?s\.?\s+army\b/g,
+        navy: /\bu\.?s\.?\s+navy\b/g,
+        airforce: /\bu\.?s\.?\s+air\s+force\b/g,
+        gsa_schedule: /\bgsa\s+schedule\b/g,
+        federal_contract: /\bfederal\s+contract/g,
+        prime_contractor: /\bprime\s+contractor\b/g,
+        past_performance: /\bpast\s+performance\b/g,
+        capability_statement: /\bcapability\s+statement\b/g,
+    };
+
+    const hits: string[] = [];
+    let hitCount = 0;
+    for (const [name, re] of Object.entries(signals)) {
+        const matches = [...allText.matchAll(re)];
+        if (matches.length > 0) {
+            hits.push(name);
+            hitCount += matches.length;
+        }
+    }
+
+    return {
+        keywords: hits,
+        hit_count: hitCount,
+        has_gov_experience: hits.length >= 2 || hitCount >= 3,
+    };
+}
+
+// ─── Team Size Signal ──────────────────────────────────────────────────────
+
+/**
+ * Return a qualitative team-size signal based on explicit mentions and employee estimate.
+ */
+export function inferTeamSizeSignal(
+    texts: string[], employeeSignals: { estimate: number; source: string } | null
+): string | null {
+    if (employeeSignals) {
+        const n = employeeSignals.estimate;
+        if (n >= 500) return "enterprise";
+        if (n >= 50) return "mid-sized";
+        if (n >= 10) return "small";
+        return "micro";
+    }
+
+    const allText = texts.join(" ").toLowerCase();
+    if (/\bfortune\s+\d+|\bmulti[-\s]national|\bglobal\s+presence/.test(allText)) return "enterprise";
+    if (/\b(family[-\s]owned|boutique|small\s+business|local\s+business|veteran[-\s]owned)/.test(allText)) return "small";
+    if (/\bteam\s+of\s+(\d+)\b/.test(allText)) {
+        const m = allText.match(/\bteam\s+of\s+(\d+)\b/);
+        if (m) {
+            const n = parseInt(m[1], 10);
+            if (n >= 50) return "mid-sized";
+            if (n >= 10) return "small";
+            return "micro";
+        }
+    }
+    return null;
+}
+
+// ─── Per-Page Clean Extract ────────────────────────────────────────────────
+
+/**
+ * Extract a cleaned textual summary for a single page (title + best paragraphs).
+ */
+export function extractPageSummary($: CheerioAPI): { title: string; text: string } {
+    const title = $("title").text().trim().slice(0, 200) ||
+                  $("h1").first().text().trim().slice(0, 200) ||
+                  "";
+    // Gather paragraph-like content, skipping nav/footer
+    $("nav, footer, header, aside, script, style, noscript").remove();
+    const paragraphs: string[] = [];
+    $("p, li, h2, h3, h4").each((_i, el) => {
+        const text = $(el).text().trim().replace(/\s+/g, " ");
+        if (text.length >= 30 && text.length <= 500) {
+            paragraphs.push(text);
+        }
+    });
+    // Cap to first ~2000 chars of collected content
+    const combined = paragraphs.join(" ").slice(0, 2000);
+    return { title, text: combined };
+}
+
 // ─── LinkedIn Enrichment ───────────────────────────────────────────────────
 
 export async function fetchLinkedInData(

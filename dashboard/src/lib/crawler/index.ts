@@ -22,6 +22,8 @@ import {
     extractLocations, detectCertifications, estimateEmployees, extractFoundingYear,
     extractLeadership, extractRevenueSignals, extractPastClients,
     detectUei, detectCageCode, extractLegalInfo, fetchLinkedInData,
+    extractPastCustomers, extractProjectPortfolio, detectGovExperience,
+    inferTeamSizeSignal, extractPageSummary,
 } from "./extractors";
 
 // Score a URL path + text against priority patterns
@@ -131,6 +133,7 @@ export async function analyzeCompany(
     const allTexts: string[] = [];
     const allHtmls: string[] = [];
     const pagesCrawled: string[] = [];
+    const pageExtracts: Array<{ url: string; title: string; text: string }> = [];
     const crawledUrls = new Set<string>();
     const discoveredLinks = new Map<string, number>();
     let crawlDepth = 0;
@@ -163,8 +166,14 @@ export async function analyzeCompany(
         allHtmls.push(homepageHtml);
         pagesCrawled.push(baseUrl);
 
-        const { text: homeText } = processPage(homepageHtml, baseUrl, baseDomain, crawledUrls, discoveredLinks);
+        const { text: homeText, $: home$ } = processPage(homepageHtml, baseUrl, baseDomain, crawledUrls, discoveredLinks);
         allTexts.push(homeText);
+        try {
+            const summary = extractPageSummary(home$);
+            if (summary.text.length > 0 || summary.title.length > 0) {
+                pageExtracts.push({ url: baseUrl, title: summary.title, text: summary.text });
+            }
+        } catch { /* best-effort */ }
 
         // ── Phase 2: Subpage crawl (sorted by priority) ──────────────
         const remainingBudget = MAX_PAGES - pagesCrawled.length;
@@ -193,8 +202,14 @@ export async function analyzeCompany(
                         allHtmls.push(result.value);
                         pagesCrawled.push(url);
 
-                        const { text } = processPage(result.value, url, baseDomain, crawledUrls, discoveredLinks);
+                        const { text, $: page$ } = processPage(result.value, url, baseDomain, crawledUrls, discoveredLinks);
                         allTexts.push(text);
+                        try {
+                            const summary = extractPageSummary(page$);
+                            if (summary.text.length > 0 || summary.title.length > 0) {
+                                pageExtracts.push({ url, title: summary.title, text: summary.text });
+                            }
+                        } catch { /* best-effort */ }
                         crawlDepth = Math.max(crawlDepth, 1);
                     } else {
                         errors.push(`Failed: ${url}`);
@@ -220,6 +235,11 @@ export async function analyzeCompany(
         const detectedUei = detectUei(allTexts, soups);
         const detectedCageCode = detectCageCode(allTexts);
         const legalInfo = extractLegalInfo(allTexts, soups);
+        // Enhanced insights
+        const pastCustomers = extractPastCustomers(allTexts, soups);
+        const projectPortfolio = extractProjectPortfolio(allTexts, soups);
+        const govExperienceSignals = detectGovExperience(allTexts);
+        const teamSizeSignal = inferTeamSizeSignal(allTexts, employeeSignals);
 
         const combinedText = allTexts.join(" ");
         const allPageText = combinedText.slice(0, 10000);
@@ -254,6 +274,11 @@ export async function analyzeCompany(
                 pages_crawled: pagesCrawled,
                 crawl_duration_ms: Date.now() - startTime,
                 crawl_depth: crawlDepth,
+                page_extracts: pageExtracts,
+                past_customers: pastCustomers,
+                project_portfolio: projectPortfolio,
+                gov_experience_signals: govExperienceSignals,
+                team_size_signal: teamSizeSignal,
             },
             errors,
         };

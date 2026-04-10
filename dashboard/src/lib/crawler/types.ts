@@ -31,6 +31,17 @@ export interface CrawlData {
     pages_crawled: string[];
     crawl_duration_ms: number;
     crawl_depth: number;
+    // --- Enhanced insights ---
+    // Per-page cleanest extracted text, keyed by URL
+    page_extracts: Array<{ url: string; title: string; text: string }>;
+    // Past customers/clients (names or labels, from "customers", "clients", "case studies")
+    past_customers: string[];
+    // Project portfolio entries (short descriptions/titles)
+    project_portfolio: string[];
+    // Government experience signals count (federal, DoD, military, etc.)
+    gov_experience_signals: { keywords: string[]; hit_count: number; has_gov_experience: boolean };
+    // Team/workforce qualitative signal ("small", "mid-sized", "enterprise")
+    team_size_signal: string | null;
 }
 
 export function emptyData(): CrawlData {
@@ -56,5 +67,10 @@ export function emptyData(): CrawlData {
         pages_crawled: [],
         crawl_duration_ms: 0,
         crawl_depth: 0,
+        page_extracts: [],
+        past_customers: [],
+        project_portfolio: [],
+        gov_experience_signals: { keywords: [], hit_count: 0, has_gov_experience: false },
+        team_size_signal: null,
     };
 }
