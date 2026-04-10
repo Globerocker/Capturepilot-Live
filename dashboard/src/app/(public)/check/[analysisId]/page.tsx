@@ -16,6 +16,7 @@ import { LeadMagnetForm } from "@/components/LeadMagnetForm";
 import { OpportunityLandscape, ConversionBottomSection, type OpportunityStats } from "@/components/OpportunityLandscape";
 import NaicsSelectionGate from "@/components/NaicsSelectionGate";
 import ReadinessScoreCard from "@/components/ReadinessScoreCard";
+import NaicsEditModal from "@/components/NaicsEditModal";
 
 interface CertRecommendation {
     cert: string;
@@ -74,6 +75,8 @@ interface CompetitorData {
     strengths: string[];
     weaknesses: string[];
     state: string | null;
+    website?: string | null;
+    google_search_url?: string;
     source?: string;
     sba_certifications?: string[];
 }
@@ -198,6 +201,33 @@ function CompetitorCard({ comp, rank }: { comp: CompetitorData; rank: number }) 
                     )}
                 </div>
             )}
+
+            {/* Website link */}
+            <div className="mb-3">
+                {comp.website ? (
+                    <a
+                        href={comp.website.startsWith("http") ? comp.website : `https://${comp.website}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 hover:text-emerald-800 hover:underline"
+                    >
+                        <Globe className="w-3 h-3" />
+                        Visit website
+                        <ExternalLink className="w-2.5 h-2.5" />
+                    </a>
+                ) : comp.google_search_url ? (
+                    <a
+                        href={comp.google_search_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 text-xs font-medium text-stone-500 hover:text-stone-700 hover:underline"
+                    >
+                        <Search className="w-3 h-3" />
+                        Find online
+                        <ExternalLink className="w-2.5 h-2.5" />
+                    </a>
+                ) : null}
+            </div>
 
             {/* Strengths */}
             {comp.strengths.length > 0 && (
@@ -445,6 +475,7 @@ export default function CheckResultsPage() {
     const [updatedEasyWins, setUpdatedEasyWins] = useState<EasyWin[] | null>(null);
     const [saved, setSaved] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [naicsEditOpen, setNaicsEditOpen] = useState(false);
     const pollRef = useRef<number | null>(null);
 
     const analysisId = params.analysisId as string;
@@ -506,6 +537,23 @@ export default function CheckResultsPage() {
             } catch { /* ignore */ }
         };
         pollRef.current = window.setTimeout(poll, 1500);
+    };
+
+    // Called after the NAICS edit modal saves — refetch data and close modal
+    const handleNaicsEditSaved = async () => {
+        try {
+            const res = await fetch(`/api/analyze-company/status/${analysisId}`, {
+                cache: "no-store",
+            });
+            if (res.ok) {
+                const next = (await res.json()) as AnalysisData;
+                setData(next);
+                setUpdatedMatches(null);
+                setUpdatedCertRecs(null);
+                setUpdatedEasyWins(null);
+            }
+        } catch { /* ignore */ }
+        setNaicsEditOpen(false);
     };
 
     if (loading) {
@@ -1034,10 +1082,17 @@ export default function CheckResultsPage() {
                 {/* NAICS Classification */}
                 {naics.length > 0 && (
                     <div className="bg-white rounded-[28px] border border-stone-200 shadow-sm overflow-hidden">
-                        <div className="bg-stone-50 border-b border-stone-100 px-5 sm:px-8 py-4">
+                        <div className="bg-stone-50 border-b border-stone-100 px-5 sm:px-8 py-4 flex items-center justify-between gap-3">
                             <h2 className="font-bold text-base flex items-center">
                                 <Target className="w-4 h-4 mr-2 text-stone-400" /> Inferred NAICS Codes
                             </h2>
+                            <button
+                                type="button"
+                                onClick={() => setNaicsEditOpen(true)}
+                                className="text-xs font-bold bg-white border border-stone-200 hover:border-emerald-400 hover:text-emerald-700 text-stone-700 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5"
+                            >
+                                <Target className="w-3 h-3" /> Edit codes
+                            </button>
                         </div>
                         <div className="p-5 sm:p-8 space-y-3">
                             {naics.map((n) => (
@@ -1087,6 +1142,16 @@ export default function CheckResultsPage() {
                     </a>
                 </div>
             </main>
+
+            {/* NAICS edit modal */}
+            {naicsEditOpen && (
+                <NaicsEditModal
+                    analysisId={analysisId}
+                    initialCodes={naics.map(n => ({ code: n.code, label: n.label }))}
+                    onClose={() => setNaicsEditOpen(false)}
+                    onSaved={handleNaicsEditSaved}
+                />
+            )}
         </div>
     );
 }
