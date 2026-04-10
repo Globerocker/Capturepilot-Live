@@ -227,7 +227,17 @@ async function inferNaicsOpenAI(
     const openaiKey = process.env.OPENAI_API_KEY;
     if (!openaiKey) return [];
 
-    const text = `Company: ${companyName}\nDescription: ${description}\nServices: ${services.join(", ")}\nContent Text:\n${pageContent.substring(0, 3000)}`;
+    // Build a rich, structured prompt — give the model the company name, description,
+    // explicit services list, and a generous chunk of page text. Use gpt-4o (not mini)
+    // because mini hallucinates adjacent NAICS codes (carpet cleaning for janitors etc).
+    const userMsg = [
+        `COMPANY NAME: ${companyName}`,
+        `WEBSITE DESCRIPTION: ${description || "(not provided)"}`,
+        `SERVICES LISTED ON SITE: ${services.length > 0 ? services.join(", ") : "(none extracted)"}`,
+        ``,
+        `WEBSITE CONTENT (first ~6000 chars):`,
+        pageContent.substring(0, 6000),
+    ].join("\n");
 
     try {
         const response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -237,41 +247,50 @@ async function inferNaicsOpenAI(
                 "Authorization": `Bearer ${openaiKey}`,
             },
             body: JSON.stringify({
-                model: "gpt-4o-mini",
+                model: "gpt-4o",
                 messages: [
                     {
                         role: "system",
-                        content: `You are an expert in NAICS classification for federal government contracting.
+                        content: `You are a NAICS classification expert for U.S. federal government contracting. Given a company's website content, you identify the most accurate 6-digit NAICS code(s) describing what the company actually does.
 
-Your job: identify the SINGLE most accurate primary NAICS code for the company, plus 1-2 strong secondary codes only if they describe DIFFERENT lines of business the company actually performs.
+YOUR TASK:
+1. Read the company description, services, and website content carefully.
+2. Identify the SINGLE primary NAICS code that best describes the company's core business.
+3. Optionally add 1-2 secondary codes ONLY if the company clearly operates multiple distinct lines of business.
+4. For each code, assign a confidence between 0.0 and 1.0 based on how directly the website evidence supports it, and write a one-sentence reason citing specific text from the page.
 
-CRITICAL RULES:
-- Return the PRIMARY code that best matches what they actually do as a business — be conservative.
-- Do NOT include adjacent or tangential codes (e.g. don't return "Carpet Cleaning" for a janitorial company that just happens to clean carpets as part of janitorial work — return "Janitorial Services").
-- Do NOT speculate. If a company is "building services / janitorial cleaning", the primary code is 561720 Janitorial Services. NOT 561740 Carpet Cleaning, NOT 812320 Drycleaning, NOT 561730 Landscaping.
-- Each secondary code must represent a clearly distinct line of business that you can quote evidence for from the text.
-- A primary code with 0.95 confidence is BETTER than 5 codes at 0.6.
-- Return at most 3 codes. Return 1 if you're unsure about secondaries.
+CRITICAL ANTI-HALLUCINATION RULES:
+- Be CONSERVATIVE. Returning 1 highly accurate code is better than returning 3 mediocre ones.
+- Do NOT pick adjacent or tangential codes. Examples of mistakes to avoid:
+  * "Janitorial Services" company → DO NOT also return "Carpet & Upholstery Cleaning" (561740) or "Drycleaning" (812320). Carpets are part of janitorial work.
+  * "Cleaning warehouses" mentioned → does NOT mean the company is in "Warehousing & Storage" (493110). It means they CLEAN warehouses (still janitorial 561720).
+  * "Construction company" → DO NOT return "Engineering Services" or "Management Consulting" unless they explicitly do those.
+- A confidence of 0.95 means: "the website explicitly says this is what they do, multiple times".
+- A confidence of 0.70 means: "this is implied but not explicit".
+- If you only have one strong signal, return ONE code. Don't pad the list.
 
-Output format (STRICT JSON, no markdown):
-{"codes":[{"code":"561720","confidence":0.95,"reason":"explicitly markets janitorial and commercial cleaning services"}]}`,
+OUTPUT FORMAT — STRICT JSON, no markdown, no code blocks:
+{"codes":[{"code":"561720","confidence":0.95,"reason":"website explicitly states 'commercial cleaning services for offices and medical facilities'"}]}`,
                     },
                     {
                         role: "user",
-                        content: text
-                    }
+                        content: userMsg,
+                    },
                 ],
-                max_tokens: 350,
+                max_tokens: 500,
                 temperature: 0.0,
+                response_format: { type: "json_object" },
             }),
-            signal: AbortSignal.timeout(20000),
+            signal: AbortSignal.timeout(25000),
         });
 
-        if (!response.ok) return [];
+        if (!response.ok) {
+            console.error("OpenAI NAICS classification failed:", response.status, await response.text().catch(() => ""));
+            return [];
+        }
         const data = await response.json();
         const content = data.choices?.[0]?.message?.content?.trim() || "{}";
 
-        // Clean markdown backticks if returned anyway
         const cleanContent = content.replace(/^```json\s*/i, "").replace(/```$/i, "").trim();
         const parsed = JSON.parse(cleanContent);
         const codes = Array.isArray(parsed) ? parsed : (Array.isArray(parsed.codes) ? parsed.codes : []);
@@ -285,10 +304,10 @@ Output format (STRICT JSON, no markdown):
                     reason: String(obj.reason || ""),
                 };
             })
-            .filter((c: { code: string }) => c.code.length === 6)
+            .filter((c: { code: string }) => /^\d{6}$/.test(c.code))
             .slice(0, 3);
-    } catch {
-        // fail silently
+    } catch (e) {
+        console.error("OpenAI NAICS classification error:", e instanceof Error ? e.message : e);
         return [];
     }
 }
@@ -653,58 +672,94 @@ async function runAnalysisPipeline(analysisId: string, initialCompanyName: strin
 
         await sb.from("company_analyses").update({ status: "classifying" }).eq("id", analysisId);
 
-        // Step 3: NAICS classification
+        // Step 3: NAICS classification — AI-FIRST
+        // We call OpenAI gpt-4o with the full company context (name, description, services,
+        // page content) and trust its confidence scores directly. The keyword classifier is
+        // a fallback ONLY for the case where OpenAI is unavailable or fails.
         const description = (crawlData.description as string) || "";
         const services = (crawlData.services as string[]) || [];
         const pageContent = (crawlData.all_page_text as string) || "";
         const samNaics = samData ? (samData.naics_codes as string[]) : undefined;
         const usaNaics = usaspendingData?.naics_from_awards || [];
 
-        let inferredNaics = classifyNaics(description, services, pageContent,
-            samNaics ? [...samNaics, ...usaNaics].filter((v, i, a) => a.indexOf(v) === i) : usaNaics.length > 0 ? usaNaics : undefined
-        );
+        // Load valid NAICS codes from DB to validate any AI-returned codes
+        let validDbCodes: Set<string> | null = null;
+        try {
+            const { data: dbCodes } = await sb.from("naics_codes").select("code");
+            validDbCodes = new Set((dbCodes || []).map((r: { code: string }) => r.code));
+        } catch { /* fallback to static file */ }
 
-        // Use OpenAI to validate and rank NAICS codes — keyword map only covers ~30 codes,
-        // so we still need OpenAI to find codes for industries the keyword classifier doesn't know.
-        // BUT: keyword matches with strong signals always win over AI hallucinations.
+        const isValidNaicsCode = (code: string): boolean => {
+            if (validDbCodes?.has(code)) return true;
+            return NAICS_CODES.some((n: { code: string }) => n.code === code);
+        };
+        const labelForCode = (code: string): string => {
+            const found = NAICS_CODES.find((n: { code: string; label: string }) => n.code === code);
+            return found?.label || code;
+        };
+
+        let inferredNaics: Array<{ code: string; label: string; confidence: number; matched_keywords: string[] }> = [];
+
+        // SAM.gov registered NAICS — these are authoritative, confidence 1.0
+        if (samNaics?.length) {
+            for (const code of samNaics) {
+                if (isValidNaicsCode(code) && !inferredNaics.some(x => x.code === code)) {
+                    inferredNaics.push({
+                        code,
+                        label: labelForCode(code),
+                        confidence: 1.0,
+                        matched_keywords: ["SAM.gov registration"],
+                    });
+                }
+            }
+        }
+
+        // Past USASpending awards — also high confidence
+        if (usaNaics.length > 0) {
+            for (const code of usaNaics) {
+                if (isValidNaicsCode(code) && !inferredNaics.some(x => x.code === code)) {
+                    inferredNaics.push({
+                        code,
+                        label: labelForCode(code),
+                        confidence: 0.95,
+                        matched_keywords: ["Past federal award history"],
+                    });
+                }
+            }
+        }
+
+        // OpenAI classification — primary source for the rest
+        let aiSucceeded = false;
         if (process.env.OPENAI_API_KEY) {
             const aiNaics = await inferNaicsOpenAI(companyName, description, services, pageContent);
             if (aiNaics.length > 0) {
-                let validDbCodes: Set<string> | null = null;
-                try {
-                    const { data: dbCodes } = await sb.from("naics_codes").select("code");
-                    validDbCodes = new Set((dbCodes || []).map((r: { code: string }) => r.code));
-                } catch { /* fallback to static file */ }
-
-                // OpenAI returns at most 3 codes with its own confidence; the FIRST one is the
-                // primary. Cap AI confidence at 0.8 so a strong keyword match (>0.85) still wins.
-                for (let i = 0; i < aiNaics.length; i++) {
-                    const ai = aiNaics[i];
-                    const inDb = validDbCodes?.has(ai.code);
-                    const naicsInfo = NAICS_CODES.find((n: { code: string; label: string }) => n.code === ai.code);
-                    if (!inDb && !naicsInfo) continue;
-
-                    const existing = inferredNaics.find((x: { code: string }) => x.code === ai.code);
-                    // Cap AI confidence at 0.8; primary code (i=0) gets 0.8, secondaries get 0.65
-                    const aiConf = Math.min(ai.confidence, i === 0 ? 0.8 : 0.65);
+                aiSucceeded = true;
+                for (const ai of aiNaics) {
+                    if (!isValidNaicsCode(ai.code)) continue;
+                    const existing = inferredNaics.find(x => x.code === ai.code);
                     if (existing) {
-                        // If the keyword classifier already found this code, keep its higher confidence
-                        existing.confidence = Math.max(existing.confidence, aiConf);
+                        // Already have it from SAM/USA — keep the higher confidence
+                        existing.confidence = Math.max(existing.confidence, ai.confidence);
                     } else {
                         inferredNaics.push({
                             code: ai.code,
-                            label: naicsInfo?.label || ai.code,
-                            confidence: aiConf,
-                            matched_keywords: ai.reason ? [`AI: ${ai.reason}`] : ["AI inferred"],
+                            label: labelForCode(ai.code),
+                            confidence: Math.min(ai.confidence, 0.95),
+                            matched_keywords: ai.reason ? [ai.reason] : ["AI classification"],
                         });
                     }
                 }
             }
         }
 
-        // Sort NAICS by confidence (highest first) so the strongest match shows first in the UI
+        // FALLBACK: keyword classifier — only if AI failed AND we have nothing from SAM/USA
+        if (!aiSucceeded && inferredNaics.length === 0) {
+            const keywordResults = classifyNaics(description, services, pageContent);
+            inferredNaics.push(...keywordResults);
+        }
+
+        // Sort by confidence DESC, cap at top 5
         inferredNaics.sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
-        // Cap to top 5 — beyond that we're just adding noise to the scoring pool
         inferredNaics = inferredNaics.slice(0, 5);
 
         await sb.from("company_analyses").update({ status: "scoring", inferred_naics: inferredNaics }).eq("id", analysisId);
