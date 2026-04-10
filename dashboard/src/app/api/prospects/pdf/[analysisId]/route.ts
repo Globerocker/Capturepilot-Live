@@ -66,9 +66,19 @@ export async function GET(
 
     // Readiness score — use stored value, or compute a sensible one from signals we already have.
     const storedReadiness = typeof data.readiness_score === "number" ? data.readiness_score : null;
-    const storedBreakdown = (data.readiness_breakdown || null) as ReadinessBreakdown | null;
-    const readiness = storedReadiness !== null && storedBreakdown
-        ? { score: clamp(storedReadiness, 0, 10), breakdown: storedBreakdown }
+    const rawBreakdown = data.readiness_breakdown as Record<string, unknown> | null;
+    const readiness = storedReadiness !== null && rawBreakdown
+        ? {
+            score: clamp(storedReadiness, 0, 10),
+            // Map the new factors[] shape into the 4-bucket {sam, certs, experience, veteran}
+            // shape this PDF was originally built around.
+            breakdown: normalizeBreakdown(rawBreakdown, {
+                hasSam: !!sam,
+                certCount: certs.length,
+                hasExperience: matches.length >= 3,
+                isVeteran,
+            }),
+        }
         : computeReadiness({
             hasSam: !!sam,
             certCount: certs.length,
@@ -846,6 +856,35 @@ function clamp(v: number, min: number, max: number): number {
 function truncate(s: string, max: number): string {
     if (!s) return "";
     return s.length > max ? s.slice(0, max - 1).trim() + "\u2026" : s;
+}
+
+/**
+ * Normalize the analyzer's new factors[] breakdown shape into the 4-bucket
+ * shape this PDF was originally built around. This keeps the existing render
+ * code unchanged while supporting both legacy and current analysis records.
+ */
+function normalizeBreakdown(
+    raw: Record<string, unknown>,
+    fallback: { hasSam: boolean; certCount: number; hasExperience: boolean; isVeteran: boolean },
+): ReadinessBreakdown {
+    // Legacy shape — already has the buckets
+    if (typeof raw.sam === "number" && typeof raw.certs === "number") {
+        return {
+            sam: clamp(Number(raw.sam), 0, 1),
+            certs: clamp(Number(raw.certs), 0, 1),
+            experience: clamp(Number(raw.experience ?? 0.5), 0, 1),
+            veteran: clamp(Number(raw.veteran ?? 0), 0, 1),
+        };
+    }
+    // New shape — { factors: [{label, points, present}], raw_points, total }
+    const factors = (raw.factors as Array<{ label?: string; present?: boolean }>) || [];
+    const has = (regex: RegExp) => factors.some(f => f.label && regex.test(f.label) && f.present);
+    return {
+        sam: has(/SAM/i) ? 1 : (fallback.hasSam ? 0.7 : 0.2),
+        certs: has(/cert|set-aside/i) ? 1 : (fallback.certCount > 0 ? 0.6 : 0.2),
+        experience: has(/awards|established|service offering/i) ? 1 : (fallback.hasExperience ? 0.7 : 0.35),
+        veteran: has(/veteran/i) ? 1 : (fallback.isVeteran ? 1 : 0.15),
+    };
 }
 
 /**

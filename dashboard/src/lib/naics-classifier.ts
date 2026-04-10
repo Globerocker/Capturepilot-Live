@@ -275,6 +275,7 @@ export function classifyNaics(
 
         let totalWeight = 0;
         let maxWeight = 0;
+        let matchedHighWeight = false;
         const matchedKeywords: string[] = [];
 
         for (const entry of entries) {
@@ -283,6 +284,7 @@ export function classifyNaics(
                 if (allText.includes(keyword)) {
                     totalWeight += entry.weight;
                     matchedKeywords.push(keyword);
+                    if (entry.weight >= 3) matchedHighWeight = true;
                     break; // count each entry only once
                 }
             }
@@ -290,11 +292,27 @@ export function classifyNaics(
 
         // Require at least 2 keyword groups matched OR 1 high-weight (3) keyword
         // This prevents a single generic word like "transportation" from triggering a code
-        const hasStrongSignal = matchedKeywords.length >= 2 ||
-            entries.some(e => e.weight >= 3 && e.keywords.some(k => matchedKeywords.includes(k)));
+        const hasStrongSignal = matchedKeywords.length >= 2 || matchedHighWeight;
 
         if (totalWeight > 0 && hasStrongSignal) {
-            const confidence = Math.min(totalWeight / maxWeight, 1.0);
+            // Confidence formula: previously totalWeight / maxWeight which was too harsh
+            // (a janitorial company matching only 3 of 10 entries got 30%). Now:
+            // - matching the highest-weight (3) keyword + ≥2 entries → 0.95
+            // - matching the highest-weight keyword alone → 0.85
+            // - 2+ medium entries (weight 2) without high-weight → 0.7
+            // - everything else falls back to the old proportional formula
+            let confidence: number;
+            if (matchedHighWeight && matchedKeywords.length >= 2) {
+                confidence = 0.95;
+            } else if (matchedHighWeight) {
+                confidence = 0.85;
+            } else if (matchedKeywords.length >= 3) {
+                confidence = 0.8;
+            } else if (matchedKeywords.length >= 2) {
+                confidence = 0.7;
+            } else {
+                confidence = Math.min(totalWeight / maxWeight, 1.0);
+            }
             const naicsInfo = NAICS_CODES.find(n => n.code === code);
             results.push({
                 code,
