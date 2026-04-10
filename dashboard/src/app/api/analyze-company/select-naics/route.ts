@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse, after } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { runScoringPipeline } from "../route";
 
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY!;
@@ -78,9 +77,19 @@ export async function POST(request: NextRequest) {
             })
             .eq("id", analysisId);
 
-        // Kick off scoring in the background
+        // Kick off scoring in the background by calling the analyze-company endpoint
+        // with the analysis_id — it will detect selected_naics_codes is set and resume scoring
         after(async () => {
-            await runScoringPipeline(analysisId, cleanCodes);
+            try {
+                const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://app.capturepilot.com";
+                await fetch(`${baseUrl}/api/analyze-company/resume`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ analysis_id: analysisId, naics_codes: cleanCodes }),
+                });
+            } catch (e) {
+                console.error("Failed to trigger resume:", e);
+            }
         });
 
         return NextResponse.json({
