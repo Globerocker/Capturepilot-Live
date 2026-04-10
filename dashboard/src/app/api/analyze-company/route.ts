@@ -1381,35 +1381,29 @@ async function runCrawlAndClassifyPipeline(analysisId: string, initialCompanyNam
             }
         }
 
+        console.log(`[analyze-company] ${analysisId}: classified ${inferredNaics.length} NAICS codes, persisting...`);
+
         // Persist classification artifacts for the scoring stage
-        await sb.from("company_analyses").update({
-            inferred_naics: inferredNaics,
-            crawl_data: crawlData,
-            sam_data: samData,
-            company_name: companyName,
-            uei: uei || null,
-        }).eq("id", analysisId);
-
-        // NAICS SELECTION GATE
-        // Check whether the user has already picked NAICS codes (e.g. retry path).
-        // If not, stop here and wait for the user/admin to confirm 1-2 codes.
-        const { data: selRow } = await sb
-            .from("company_analyses")
-            .select("selected_naics_codes")
-            .eq("id", analysisId)
-            .single();
-
-        const preSelected = (selRow?.selected_naics_codes as string[] | null) || null;
-
-        if (!preSelected || preSelected.length === 0) {
+        // CRITICAL: Set status to awaiting_naics_selection IN THE SAME UPDATE
+        // to avoid the row being stuck if a later query hangs
+        try {
             await sb.from("company_analyses").update({
+                inferred_naics: inferredNaics,
+                crawl_data: crawlData,
+                sam_data: samData,
+                company_name: companyName,
+                uei: uei || null,
                 status: "awaiting_naics_selection",
             }).eq("id", analysisId);
-            return;
+            console.log(`[analyze-company] ${analysisId}: status set to awaiting_naics_selection`);
+        } catch (updateErr) {
+            console.error(`[analyze-company] ${analysisId}: persist failed:`, updateErr);
+            // Try minimal update so user isn't stuck
+            await sb.from("company_analyses").update({
+                inferred_naics: inferredNaics,
+                status: "awaiting_naics_selection",
+            }).eq("id", analysisId);
         }
-
-        // If codes were already selected (unusual — e.g. retry), continue directly
-        await runScoringPipeline(analysisId, preSelected);
         return;
     } catch (error) {
         console.error("Crawl/classify pipeline error:", error);
