@@ -431,6 +431,7 @@ const IN_PROGRESS_STATUSES = new Set([
     "classifying",
     "scoring",
     "finding_opportunities",
+    "finding_competitors",
     "generating",
 ]);
 
@@ -535,6 +536,7 @@ export default function CheckResultsPage() {
             classifying: "Classifying industries...",
             scoring: "Scoring opportunities...",
             finding_opportunities: "Finding more opportunities...",
+            finding_competitors: "Finding your competitors...",
             generating: "Generating recommendations...",
         };
         return (

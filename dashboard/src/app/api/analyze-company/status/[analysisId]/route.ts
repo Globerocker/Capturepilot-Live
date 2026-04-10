@@ -68,6 +68,7 @@ export async function GET(
         readiness_score: data.readiness_score ?? null,
         readiness_breakdown: data.readiness_breakdown || null,
         ai_match_summaries: data.ai_match_summaries || {},
+        competitors: data.competitors || [],
         crawler_confidence: crawlerConfidence,
         is_saved: ((data.inferred_profile || {}) as Record<string, unknown>).is_saved === true,
         error_message: data.error_message,

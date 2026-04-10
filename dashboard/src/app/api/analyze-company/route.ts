@@ -748,8 +748,8 @@ async function runAnalysisPipeline(analysisId: string, initialCompanyName: strin
         }
 
         scoredMatches.sort((a, b) => b.score - a.score);
-        // Take top 20 candidates (will deduplicate after enrichment with titles)
-        const topCandidates = scoredMatches.slice(0, 20);
+        // Take top 40 candidates (will deduplicate after enrichment with titles)
+        const topCandidates = scoredMatches.slice(0, 40);
 
         // Enrich candidates with full opportunity details, then deduplicate by title
         let topMatches = topCandidates;
@@ -787,7 +787,7 @@ async function runAnalysisPipeline(analysisId: string, initialCompanyName: strin
             if (!title || seenTitles.has(title)) return false;
             seenTitles.add(title);
             return true;
-        }).slice(0, 5);
+        }).slice(0, 10);
 
         await sb.from("company_analyses").update({ status: "generating" }).eq("id", analysisId);
 
@@ -890,6 +890,213 @@ async function runAnalysisPipeline(analysisId: string, initialCompanyName: strin
             } : null,
         };
 
+        // ── Find Top 3 Competitors via USASpending ──
+        await sb.from("company_analyses").update({ status: "finding_competitors" }).eq("id", analysisId);
+        type CompetitorRow = {
+            name: string;
+            uei: string | null;
+            cage_code: string | null;
+            sam_registered: boolean;
+            naics_codes: string[];
+            naics_overlap_pct: number;
+            total_awards: number;
+            award_count: number;
+            first_award_date: string | null;
+            last_award_date: string | null;
+            top_agency: string | null;
+            strengths: string[];
+            weaknesses: string[];
+            state: string | null;
+            source?: string;
+            sba_certifications?: string[];
+        };
+        let competitors: CompetitorRow[] = [];
+        try {
+            const primaryNaics = inferredNaics.slice(0, 2).map(n => n.code);
+            if (primaryNaics.length > 0) {
+                const usaResp = await fetch("https://api.usaspending.gov/api/v2/search/spending_by_award/", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        filters: {
+                            naics_codes: primaryNaics,
+                            time_period: [{ start_date: "2023-01-01", end_date: new Date().toISOString().slice(0, 10) }],
+                            award_type_codes: ["A", "B", "C", "D"],
+                        },
+                        fields: ["Recipient Name", "Award Amount", "Awarding Agency", "Period of Performance Start Date", "Period of Performance Current End Date", "Place of Performance State Code", "naics_code"],
+                        limit: 50,
+                        page: 1,
+                        sort: "Award Amount",
+                        order: "desc",
+                    }),
+                    signal: AbortSignal.timeout(15000),
+                });
+                if (usaResp.ok) {
+                    const usaData = await usaResp.json();
+                    const awards = (usaData.results || []) as Array<{
+                        "Recipient Name"?: string;
+                        "Award Amount"?: number;
+                        "Awarding Agency"?: string;
+                        "Period of Performance Start Date"?: string;
+                        "Period of Performance Current End Date"?: string;
+                        "Place of Performance State Code"?: string;
+                        naics_code?: string;
+                    }>;
+                    // Aggregate by recipient name, exclude the analyzed company itself
+                    const agg = new Map<string, {
+                        total: number;
+                        count: number;
+                        agencies: Map<string, number>;
+                        naics: Set<string>;
+                        firstDate: string | null;
+                        lastDate: string | null;
+                        state: string | null;
+                    }>();
+                    const ownNameLower = companyName.toLowerCase();
+                    for (const a of awards) {
+                        const name = (a["Recipient Name"] || "").trim();
+                        if (!name || name.toLowerCase().includes(ownNameLower) || ownNameLower.includes(name.toLowerCase())) continue;
+                        const amt = Number(a["Award Amount"] || 0);
+                        const agency = a["Awarding Agency"] || "";
+                        const naics = (a.naics_code || "").trim();
+                        const start = a["Period of Performance Start Date"] || null;
+                        const end = a["Period of Performance Current End Date"] || null;
+                        const state = a["Place of Performance State Code"] || null;
+                        if (!agg.has(name)) agg.set(name, { total: 0, count: 0, agencies: new Map(), naics: new Set(), firstDate: null, lastDate: null, state: null });
+                        const e = agg.get(name)!;
+                        e.total += amt;
+                        e.count += 1;
+                        if (agency) e.agencies.set(agency, (e.agencies.get(agency) || 0) + 1);
+                        if (naics) e.naics.add(naics);
+                        if (start && (!e.firstDate || start < e.firstDate)) e.firstDate = start;
+                        if (end && (!e.lastDate || end > e.lastDate)) e.lastDate = end;
+                        if (state && !e.state) e.state = state;
+                    }
+                    const ownNaicsSet = new Set(primaryNaics);
+                    competitors = [...agg.entries()]
+                        .sort((a, b) => b[1].total - a[1].total)
+                        .slice(0, 3)
+                        .map(([name, e]) => {
+                            const topAgency = [...e.agencies.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+                            const naicsArr = [...e.naics];
+                            const overlap = naicsArr.filter(n => ownNaicsSet.has(n)).length;
+                            const overlapPct = naicsArr.length > 0 ? Math.round((overlap / naicsArr.length) * 100) : 0;
+                            const strengths: string[] = [];
+                            const weaknesses: string[] = [];
+                            if (e.total > 1_000_000) strengths.push("Strong federal presence");
+                            if (e.total > 10_000_000) strengths.push("Major contract winner");
+                            if (e.count > 5) strengths.push("Established track record");
+                            if (e.count < 3) weaknesses.push("Limited federal experience");
+                            if (e.total < 500_000) weaknesses.push("Small federal footprint");
+                            return {
+                                name,
+                                uei: null,
+                                cage_code: null,
+                                sam_registered: false,
+                                naics_codes: naicsArr,
+                                naics_overlap_pct: overlapPct,
+                                total_awards: e.total,
+                                award_count: e.count,
+                                first_award_date: e.firstDate,
+                                last_award_date: e.lastDate,
+                                top_agency: topAgency,
+                                strengths,
+                                weaknesses,
+                                state: e.state,
+                                source: "usaspending",
+                            } satisfies CompetitorRow;
+                        });
+                }
+            }
+        } catch (e) {
+            console.error("Competitor finder failed:", e instanceof Error ? e.message : e);
+        }
+
+        // ── Government Contracting Readiness Score (1-10) ──
+        type ReadinessFactor = { label: string; points: number; present: boolean; detail?: string };
+        const readinessFactors: ReadinessFactor[] = [];
+        let readinessPoints = 0;
+
+        // SAM.gov registered (+3)
+        const samReg = !!samData?.uei;
+        if (samReg) readinessPoints += 3;
+        readinessFactors.push({
+            label: "SAM.gov Registered",
+            points: 3,
+            present: samReg,
+            detail: samReg ? `UEI: ${samData?.uei}` : "Not yet registered on SAM.gov",
+        });
+
+        // Past federal awards (+2)
+        const awardCt = usaspendingData?.award_count || 0;
+        const hasAwards = awardCt > 0;
+        if (hasAwards) readinessPoints += 2;
+        readinessFactors.push({
+            label: "Past Federal Awards",
+            points: 2,
+            present: hasAwards,
+            detail: hasAwards ? `${awardCt} historical award${awardCt === 1 ? "" : "s"} on USASpending` : "No prior federal awards found",
+        });
+
+        // Veteran-owned (+2)
+        const samCertList = ((samData?.sba_certifications as string[] | undefined) || []);
+        const veteranCert = certifications.some(c => /vosb|sdvosb|veteran/i.test(c.type)) || samCertList.some((c: string) => /vosb|sdvosb|veteran/i.test(c));
+        if (veteranCert) readinessPoints += 2;
+        readinessFactors.push({
+            label: "Veteran-Owned (VOSB/SDVOSB)",
+            points: 2,
+            present: veteranCert,
+            detail: veteranCert ? "Eligible for veteran set-asides" : undefined,
+        });
+
+        // Other certifications (+1.5 each, max +2)
+        const otherCerts = certifications.filter(c => !/vosb|sdvosb|veteran/i.test(c.type)).map(c => c.type);
+        const otherCertCount = otherCerts.length;
+        const certBonus = Math.min(otherCertCount * 1.5, 2);
+        readinessPoints += certBonus;
+        readinessFactors.push({
+            label: "Set-Aside Certifications",
+            points: 2,
+            present: otherCertCount > 0,
+            detail: otherCertCount > 0 ? `${otherCertCount} certification${otherCertCount === 1 ? "" : "s"} detected` : undefined,
+        });
+
+        // Years in business >5 (+1) — best effort from crawl
+        const founded = (crawlData.founded_year as number) || (crawlData.founding_year as number) || 0;
+        const yearsOld = founded > 1900 ? new Date().getFullYear() - founded : 0;
+        const established = yearsOld >= 5;
+        if (established) readinessPoints += 1;
+        readinessFactors.push({
+            label: "5+ Years in Business",
+            points: 1,
+            present: established,
+            detail: established ? `${yearsOld} years` : undefined,
+        });
+
+        // Employee count > 10 (+0.5)
+        const empCount = (crawlData.employee_count as number) || (crawlData.employees as number) || 0;
+        const decentSize = empCount >= 10;
+        if (decentSize) readinessPoints += 0.5;
+        readinessFactors.push({
+            label: "10+ Employees",
+            points: 0.5,
+            present: decentSize,
+            detail: decentSize ? `${empCount} employees` : undefined,
+        });
+
+        const readinessScore = Math.min(Math.round(readinessPoints), 10);
+        let interpretation = "Not Ready Yet — start with SAM.gov registration";
+        if (readinessScore >= 9) interpretation = "Highly Qualified — pursue large prime contracts";
+        else if (readinessScore >= 7) interpretation = "Ready to Compete — bid on Sources Sought + RFIs";
+        else if (readinessScore >= 4) interpretation = "Getting Started — focus on certifications + small awards";
+
+        const readinessBreakdown = {
+            factors: readinessFactors,
+            raw_points: readinessPoints,
+            total: 10,
+            interpretation,
+        };
+
         // Save everything — mark complete
         await sb.from("company_analyses").update({
             status: "complete",
@@ -900,6 +1107,9 @@ async function runAnalysisPipeline(analysisId: string, initialCompanyName: strin
             crawl_data: crawlData,
             cert_recommendations: certRecommendations,
             easy_wins: easyWins,
+            readiness_score: readinessScore,
+            readiness_breakdown: readinessBreakdown,
+            competitors: competitors,
         }).eq("id", analysisId);
 
     } catch (error) {
