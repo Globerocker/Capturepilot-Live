@@ -548,34 +548,6 @@ export default function CheckResultsPage() {
         );
     }
 
-    // NAICS selection gate — admin picks 1-2 codes before scoring
-    if (data.status === "awaiting_naics_selection") {
-        return (
-            <div className="min-h-screen bg-stone-50">
-                <header className="px-4 sm:px-6 py-4 flex items-center justify-between max-w-6xl mx-auto">
-                    <Link href="/admin/lead-check" className="flex items-center space-x-2">
-                        <Image src="/logo.png" alt="CP" width={20} height={20} className="rounded" />
-                        <span className="font-bold text-base">CapturePilot</span>
-                        <span className="text-[9px] bg-black text-white px-2 py-0.5 rounded-full uppercase">Admin</span>
-                    </Link>
-                </header>
-                <main className="max-w-3xl mx-auto px-4 pb-12 space-y-6">
-                    <div className="text-center">
-                        <h1 className="font-bold text-2xl sm:text-3xl text-black mb-2">{data.company_name}</h1>
-                        <p className="text-sm text-stone-500">
-                            {data.website.replace(/^https?:\/\//, "")}
-                        </p>
-                    </div>
-                    <NaicsSelectionGate
-                        analysisId={analysisId}
-                        inferredNaics={data.inferred_naics || []}
-                        onSubmitted={handleNaicsSubmitted}
-                    />
-                </main>
-            </div>
-        );
-    }
-
     // Set initial saved state from data
     const isSaved = saved || data.is_saved;
 
