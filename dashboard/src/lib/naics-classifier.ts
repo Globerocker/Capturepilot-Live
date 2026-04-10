@@ -172,12 +172,15 @@ const NAICS_KEYWORD_MAP: Record<string, KeywordEntry[]> = {
         { keywords: ["intermodal", "multimodal"], weight: 2 },
     ],
     "493110": [
-        { keywords: ["warehousing", "warehouse", "warehouse services"], weight: 3 },
-        { keywords: ["storage facility", "storage services", "cold storage"], weight: 3 },
-        { keywords: ["distribution center", "fulfillment", "fulfillment center"], weight: 2 },
+        // "warehouse" alone is too generic — a cleaning company says "warehouse cleaning"
+        // and accidentally triggers warehousing services. Require operator-style phrases.
+        { keywords: ["warehousing services", "warehouse operator", "warehouse facility", "we operate a warehouse"], weight: 3 },
+        { keywords: ["cold storage", "bonded warehouse", "public warehouse"], weight: 3 },
+        { keywords: ["fulfillment center", "fulfillment services"], weight: 2 },
         { keywords: ["inventory management", "inventory control"], weight: 2 },
         { keywords: ["cross-docking", "cross docking"], weight: 2 },
         { keywords: ["pick and pack", "order fulfillment"], weight: 2 },
+        { keywords: ["3pl", "third-party logistics"], weight: 2 },
     ],
     "492110": [
         { keywords: ["courier", "courier services", "courier company"], weight: 3 },
@@ -323,9 +326,10 @@ export function classifyNaics(
         }
     }
 
-    // ── Disambiguation: suppress consulting codes when operational codes are stronger ──
+    // ── Disambiguation: suppress consulting/adjacent codes when operational codes are stronger ──
     // If the company actually DOES freight/trucking/construction/janitorial etc,
-    // don't also suggest the "consulting" version of that industry
+    // don't also suggest the "consulting" version of that industry, AND don't suggest
+    // adjacent codes that get falsely triggered by mentions of facility types they CLEAN.
     const operationalCodes = new Set(results.filter(r => r.confidence >= 0.3).map(r => r.code));
     const suppressMap: Record<string, string[]> = {
         // If freight/trucking codes found, suppress logistics consulting
@@ -334,8 +338,17 @@ export function classifyNaics(
         // If construction codes found, suppress engineering/management consulting
         "236220": ["541611", "541618"], "237130": ["541611"],
         "238210": ["541611"], "238910": ["541611"],
-        // If janitorial found, suppress facility consulting
-        "561720": ["541611", "541618"],
+        // If janitorial found, suppress facility consulting AND adjacent service codes
+        // that get falsely triggered when the cleaner mentions facility types they clean
+        // (warehouses, carpets, landscapes, etc.)
+        "561720": [
+            "541611", "541618",  // facility consulting
+            "493110",            // warehousing services (cleaner mentions "warehouse cleaning")
+            "561730",            // landscaping (cleaner mentions "grounds")
+            "561740",            // carpet & upholstery cleaning (carpet is part of janitorial)
+            "812320",            // drycleaning (cleaning ≠ drycleaning)
+            "811192",            // car washes (commercial cleaning ≠ car wash)
+        ],
         // If IT services found, suppress IT consulting
         "541512": ["541611", "541618"],
     };
