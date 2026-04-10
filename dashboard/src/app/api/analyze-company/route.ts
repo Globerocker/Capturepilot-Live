@@ -250,20 +250,21 @@ async function inferNaicsOpenAI(
                 max_tokens: 150,
                 temperature: 0.1,
             }),
+            signal: AbortSignal.timeout(20000),
         });
 
         if (!response.ok) return [];
         const data = await response.json();
         const content = data.choices?.[0]?.message?.content?.trim() || "[]";
-        
+
         // Clean markdown backticks if returned anyway
         const cleanContent = content.replace(/^```json\s*/i, "").replace(/```$/i, "").trim();
         const parsed = JSON.parse(cleanContent);
         if (Array.isArray(parsed)) {
             return parsed.map(c => String(c).trim()).filter(c => c.length === 6);
         }
-    } catch {
-        // fail silently
+    } catch (e) {
+        console.error("OpenAI NAICS inference failed:", e instanceof Error ? e.message : String(e));
         return [];
     }
     return [];
