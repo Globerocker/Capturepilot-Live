@@ -163,6 +163,8 @@ function BillingPageContent() {
   const [managingPortal, setManagingPortal] = useState(false);
   const [toast, setToast] = useState<{ type: "success" | "canceled"; message: string } | null>(null);
 
+  const isPaywallRedirect = searchParams.get("paywall") === "1";
+
   /* ---- Toast from Stripe redirect ---- */
   useEffect(() => {
     if (searchParams.get("success") === "true") {
@@ -325,16 +327,30 @@ function BillingPageContent() {
         </div>
       )}
 
+      {/* ---- Paywall Banner (shown after beta ends if redirected here) ---- */}
+      {isPaywallRedirect && (
+        <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-5 sm:p-6 mb-6 text-center">
+          <p className="text-lg font-bold text-amber-900 mb-1">
+            Beta Has Ended — Subscribe to Continue
+          </p>
+          <p className="text-sm text-amber-800 leading-relaxed">
+            Your free beta access ended on May 9, 2026. Pick a plan below to restore full access.
+            Beta feedback users keep their <span className="font-bold">$149/mo locked-in</span> rate.
+          </p>
+        </div>
+      )}
+
       {/* ---- Beta Banner ---- */}
       <div className="bg-emerald-50 border-2 border-emerald-300 rounded-2xl p-5 sm:p-6 mb-8 text-center">
         <p className="text-lg font-bold text-emerald-800 mb-1">
-          🚀 PUBLIC BETA — ALL FEATURES FREE
+          PUBLIC BETA — ALL FEATURES FREE
         </p>
         <p className="text-sm text-emerald-700 leading-relaxed">
           You have full access to every Pro feature during our public beta.
           <br className="hidden sm:block" />
-          Beta ends May 8, 2026. Beta users who provide feedback get{" "}
-          <span className="font-bold">$99/mo locked-in pricing</span> (50% off).
+          Beta ends <span className="font-bold">May 9, 2026</span> (our founder Andre Schuler&apos;s birthday).
+          Beta users who provide feedback get{" "}
+          <span className="font-bold">$149/mo locked-in pricing</span> (25% off forever).
         </p>
       </div>
 
@@ -581,7 +597,7 @@ function BillingPageContent() {
                   </span>
                 </div>
                 <p className="text-[11px] text-stone-500 text-center mt-2.5 font-medium">
-                  After beta: $199/mo or $99/mo with feedback discount
+                  After beta: $199/mo standard or $149/mo locked-in for beta feedback users (25% off forever)
                 </p>
               </div>
             </div>

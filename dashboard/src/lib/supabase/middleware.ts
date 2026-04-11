@@ -83,12 +83,14 @@ export async function updateSession(request: NextRequest) {
   // ─── Logged in: get profile once ───
   const { data: profile } = await supabase
     .from("user_profiles")
-    .select("account_type, onboarding_complete")
+    .select("account_type, onboarding_complete, subscription_status, trial_ends_at")
     .eq("auth_user_id", user.id)
     .single();
 
   const accountType = profile?.account_type || "self_service";
   const onboardingDone = profile?.onboarding_complete || false;
+  const subscriptionStatus = (profile?.subscription_status as string | null) || null;
+  const trialEndsAt = profile?.trial_ends_at as string | null;
 
   // ─── Root / login / signup → redirect to correct home ───
   if (pathname === "/" || pathname === "/login" || pathname === "/signup") {
@@ -128,6 +130,32 @@ export async function updateSession(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = "/onboard";
     return NextResponse.redirect(url);
+  }
+
+  // ─── Beta hard paywall ───
+  // Beta ends 2026-05-09 (founder's birthday). After that date, self-service users
+  // must have an active subscription OR an unexpired trial to access the dashboard.
+  // Billing + settings stay accessible so they can complete checkout.
+  const BETA_END = new Date("2026-05-09T00:00:00Z");
+  if (Date.now() >= BETA_END.getTime()) {
+    const isAllowedStatus =
+      subscriptionStatus === "active" ||
+      subscriptionStatus === "trialing" ||
+      subscriptionStatus === "past_due"; // 1 grace period — webhook can downgrade later
+    const trialStillActive = trialEndsAt && new Date(trialEndsAt).getTime() > Date.now();
+    const hasAccess = isAllowedStatus || trialStillActive;
+
+    const isPaywallExempt =
+      pathname.startsWith("/billing") ||
+      pathname.startsWith("/settings") ||
+      pathname === "/onboard";
+
+    if (!hasAccess && !isPaywallExempt) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/billing";
+      url.searchParams.set("paywall", "1");
+      return NextResponse.redirect(url);
+    }
   }
 
   return supabaseResponse;

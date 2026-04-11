@@ -144,7 +144,7 @@ export default function FeedbackWidget() {
                         </h3>
                         <p className="text-[11px] text-stone-500 mt-0.5">
                             {mode === "beta"
-                                ? "Complete this to lock in $99/mo pricing"
+                                ? "Complete this to lock in $149/mo pricing"
                                 : "Help us improve CapturePilot"}
                         </p>
                     </div>
@@ -155,7 +155,7 @@ export default function FeedbackWidget() {
                             <p className="font-bold text-sm text-stone-900">Thank you!</p>
                             <p className="text-xs text-stone-500 mt-1">
                                 {mode === "beta"
-                                    ? "Your beta feedback is recorded. $99/mo pricing locked in!"
+                                    ? "Your beta feedback is recorded. $149/mo pricing locked in!"
                                     : "Your feedback has been received."}
                             </p>
                         </div>
@@ -172,7 +172,7 @@ export default function FeedbackWidget() {
                                 </div>
                                 <div>
                                     <p className="text-sm font-bold text-emerald-800">Beta Survey</p>
-                                    <p className="text-[10px] text-emerald-600">Rate your experience &amp; lock in $99/mo</p>
+                                    <p className="text-[10px] text-emerald-600">Rate your experience &amp; lock in $149/mo</p>
                                 </div>
                             </button>
 
