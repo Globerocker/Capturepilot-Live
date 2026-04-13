@@ -32,6 +32,14 @@ export default function RootLayout({
         className={`${inter.variable} ${courier.variable} font-sans antialiased bg-stone-50 text-stone-900`}
       >
         {children}
+        {/* HubSpot Tracking Code — Portal 142366814 */}
+        <script
+          type="text/javascript"
+          id="hs-script-loader"
+          async
+          defer
+          src="//js.hs-scripts.com/142366814.js"
+        />
       </body>
     </html>
   );

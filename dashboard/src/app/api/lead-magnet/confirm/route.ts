@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { scoreOpportunityLeadMagnet, type ProfileForScoring, type OpportunityForScoring } from "@/lib/match-scoring";
 import { generateCertRecommendations } from "@/lib/cert-recommendations";
+import { sendQuickCheckerResultsEmail } from "@/lib/email";
 
 /**
  * POST /api/lead-magnet/confirm
@@ -187,6 +188,25 @@ export async function POST(request: NextRequest) {
         if (email) updatePayload.lead_email = email;
 
         await sb.from("company_analyses").update(updatePayload).eq("id", analysis_id);
+
+        // Send Quick Checker results email if lead provided an email
+        if (email) {
+            const readinessScore = topMatches.length > 0
+                ? Math.round((topMatches as Array<Record<string, unknown>>).reduce((sum, m) => sum + Number(m.score || 0), 0) / topMatches.length * 100)
+                : 0;
+
+            sendQuickCheckerResultsEmail(email, {
+                companyName: company_name || "Your Company",
+                analysisId: analysis_id,
+                readinessScore,
+                topMatches: (topMatches as Array<Record<string, unknown>>).slice(0, 3).map(m => ({
+                    title: String(m.title || "Federal Opportunity"),
+                    agency: String(m.agency || "Federal Agency"),
+                    score: Math.round(Number(m.score || 0) * 100),
+                })),
+                totalMatches: scored.length,
+            }).catch(err => console.error("Quick checker email send failed:", err));
+        }
 
         return NextResponse.json({
             updated_matches: topMatches,
