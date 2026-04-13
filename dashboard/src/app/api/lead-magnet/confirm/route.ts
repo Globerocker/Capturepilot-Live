@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { scoreOpportunityLeadMagnet, type ProfileForScoring, type OpportunityForScoring } from "@/lib/match-scoring";
 import { generateCertRecommendations } from "@/lib/cert-recommendations";
 import { sendQuickCheckerResultsEmail } from "@/lib/email";
+import { onQuickCheckerComplete } from "@/lib/hubspot";
 
 /**
  * POST /api/lead-magnet/confirm
@@ -194,6 +195,20 @@ export async function POST(request: NextRequest) {
             const readinessScore = topMatches.length > 0
                 ? Math.round((topMatches as Array<Record<string, unknown>>).reduce((sum, m) => sum + Number(m.score || 0), 0) / topMatches.length * 100)
                 : 0;
+
+            // Sync to HubSpot — create/update contact + deal in SaaS Pipeline
+            onQuickCheckerComplete({
+                email,
+                company: company_name,
+                readinessScore: Math.round(readinessScore / 10), // convert 0-100 → 0-10
+                naicsCodes: correctedProfile.naics_codes,
+                samRegistered: !!samData,
+                veteranOwned: correctedProfile.sba_certifications.some(c =>
+                    ["VOSB", "SDVOSB", "veteran_owned"].includes(c)
+                ),
+                businessState: state,
+                quickCheckerUrl: `${process.env.NEXT_PUBLIC_APP_URL || "https://app.capturepilot.com"}/check/${analysis_id}`,
+            }).catch(err => console.error("[HubSpot] Quick Checker sync failed:", err));
 
             sendQuickCheckerResultsEmail(email, {
                 companyName: company_name || "Your Company",
