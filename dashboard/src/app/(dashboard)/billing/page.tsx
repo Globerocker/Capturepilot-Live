@@ -14,6 +14,7 @@ import {
   Phone,
 } from "lucide-react";
 import clsx from "clsx";
+import CancelFlow from "@/components/billing/CancelFlow";
 
 const supabase = createSupabaseClient();
 
@@ -162,6 +163,8 @@ function BillingPageContent() {
   const [upgrading, setUpgrading] = useState(false);
   const [managingPortal, setManagingPortal] = useState(false);
   const [toast, setToast] = useState<{ type: "success" | "canceled"; message: string } | null>(null);
+  const [companyName, setCompanyName] = useState<string>("");
+  const [showCancelFlow, setShowCancelFlow] = useState(false);
 
   const isPaywallRedirect = searchParams.get("paywall") === "1";
 
@@ -195,7 +198,7 @@ function BillingPageContent() {
       const { data: profile } = await supabase
         .from("user_profiles")
         .select(
-          "subscription_status, trial_ends_at, stripe_customer_id, plan_tier, account_type"
+          "subscription_status, trial_ends_at, stripe_customer_id, plan_tier, account_type, company_name"
         )
         .eq("auth_user_id", user.id)
         .single();
@@ -236,6 +239,7 @@ function BillingPageContent() {
         nextBillingDate: null, // set by Stripe webhook in future
         stripeCustomerId: (p.stripe_customer_id as string) || null,
       });
+      setCompanyName((p.company_name as string) || "");
       setLoading(false);
     }
     load();
@@ -434,22 +438,56 @@ function BillingPageContent() {
 
           {/* Manage button */}
           {billing.stripeCustomerId && (
-            <button
-              type="button"
-              onClick={handleManage}
-              disabled={managingPortal}
-              className="inline-flex items-center bg-stone-100 text-stone-700 font-bold px-6 py-3 rounded-full text-sm hover:bg-stone-200 transition-all border border-stone-200 disabled:opacity-50"
-            >
-              {managingPortal ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
-                <ExternalLink className="w-4 h-4 mr-2" />
-              )}
-              {managingPortal ? "Opening..." : "Manage Subscription"}
-            </button>
+            <div className="flex items-center flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={handleManage}
+                disabled={managingPortal}
+                className="inline-flex items-center bg-stone-100 text-stone-700 font-bold px-6 py-3 rounded-full text-sm hover:bg-stone-200 transition-all border border-stone-200 disabled:opacity-50"
+              >
+                {managingPortal ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <ExternalLink className="w-4 h-4 mr-2" />
+                )}
+                {managingPortal ? "Opening..." : "Manage Subscription"}
+              </button>
+
+              {billing.planTier === "pro" &&
+                (billing.subscriptionStatus === "active" ||
+                  billing.subscriptionStatus === "trialing") && (
+                  <button
+                    type="button"
+                    onClick={() => setShowCancelFlow(true)}
+                    className="text-xs text-stone-400 hover:text-red-600 underline underline-offset-4 transition-colors"
+                  >
+                    Cancel Subscription
+                  </button>
+                )}
+            </div>
           )}
         </div>
       )}
+
+      {/* Cancel flow modal */}
+      <CancelFlow
+        open={showCancelFlow}
+        onClose={() => setShowCancelFlow(false)}
+        companyName={companyName}
+        onComplete={(result) => {
+          if (result.retained) {
+            setToast({
+              type: "success",
+              message: "50% off for 3 months applied — thanks for staying!",
+            });
+          } else {
+            setToast({
+              type: "canceled",
+              message: "Subscription cancelled. Access continues until period end.",
+            });
+          }
+        }}
+      />
 
       {/* ---- Consulting Status Card ---- */}
       {isConsulting && (
