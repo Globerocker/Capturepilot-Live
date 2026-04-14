@@ -1,13 +1,16 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseClient } from "@/lib/supabase/client";
 import { FileText, Loader2, Plus, Download, Clock, CheckCircle2, AlertCircle, ArrowRight, Search } from "lucide-react";
 import clsx from "clsx";
 import Link from "next/link";
+import ProposalJobProgress, { type ProposalJobStatus } from "@/components/proposals/ProposalJobProgress";
 
 const supabase = createSupabaseClient();
+
+const ACTIVE_JOB_STORAGE_KEY = "activeProposalJobId";
 
 interface ProposalDraft {
     id: string;
@@ -29,9 +32,12 @@ export default function ProposalsPage() {
     // New proposal form
     const [showNewForm, setShowNewForm] = useState(false);
     const [noticeId, setNoticeId] = useState("");
-    const [generating, setGenerating] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
     const [genError, setGenError] = useState("");
-    const [genProgress, setGenProgress] = useState("");
+
+    // Active background job
+    const [activeJobId, setActiveJobId] = useState<string | null>(null);
+    const downloadedJobsRef = useRef<Set<string>>(new Set());
 
     // Search
     const [searchInput, setSearchInput] = useState("");
@@ -40,7 +46,6 @@ export default function ProposalsPage() {
     const [recentMatches, setRecentMatches] = useState<Array<{ notice_id: string; title: string; agency: string }>>([]);
 
     const loadDrafts = useCallback(async () => {
-        // Load proposals from opportunities where ai_win_strategy.proposal_generated = true
         const { data } = await supabase
             .from("opportunities")
             .select("notice_id, title, agency, ai_win_strategy")
@@ -67,6 +72,13 @@ export default function ProposalsPage() {
         setDrafts(proposalDrafts);
     }, []);
 
+    // Restore active job from localStorage (survives reload / tab navigation)
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+        const stored = localStorage.getItem(ACTIVE_JOB_STORAGE_KEY);
+        if (stored) setActiveJobId(stored);
+    }, []);
+
     useEffect(() => {
         (async () => {
             const { data: { user } } = await supabase.auth.getUser();
@@ -79,13 +91,32 @@ export default function ProposalsPage() {
                 .single();
 
             if (!profile) { router.push("/onboard"); return; }
-            setProfileId((profile as Record<string, unknown>).id as string);
+            const pid = (profile as Record<string, unknown>).id as string;
+            setProfileId(pid);
+
+            // Look for the user's most recent active job in case one is
+            // running but localStorage was cleared (e.g. switched devices)
+            if (!activeJobId) {
+                const { data: activeJobs } = await supabase
+                    .from("proposal_jobs")
+                    .select("id")
+                    .eq("user_profile_id", pid)
+                    .in("status", ["pending", "writing"])
+                    .order("created_at", { ascending: false })
+                    .limit(1);
+                const restored = (activeJobs as Array<{ id: string }> | null)?.[0];
+                if (restored) {
+                    setActiveJobId(restored.id);
+                    localStorage.setItem(ACTIVE_JOB_STORAGE_KEY, restored.id);
+                    window.dispatchEvent(new Event("proposal-jobs-changed"));
+                }
+            }
 
             // Load recent HOT matches for quick-select
             const { data: matches } = await supabase
                 .from("user_matches")
                 .select("opportunities(notice_id, title, agency)")
-                .eq("user_profile_id", (profile as Record<string, unknown>).id as string)
+                .eq("user_profile_id", pid)
                 .eq("is_dismissed", false)
                 .order("score", { ascending: false })
                 .limit(10);
@@ -100,49 +131,8 @@ export default function ProposalsPage() {
             await loadDrafts();
             setLoading(false);
         })();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [router, loadDrafts]);
-
-    const handleGenerate = async () => {
-        if (!noticeId.trim() || !profileId) return;
-        setGenerating(true);
-        setGenError("");
-        setGenProgress("Generating proposal sections... This may take 1-2 minutes.");
-
-        try {
-            const res = await fetch("/api/ai/write-proposal", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    notice_id: noticeId.trim(),
-                    user_profile_id: profileId,
-                }),
-            });
-
-            if (!res.ok) {
-                const d = await res.json().catch(() => ({}));
-                if (d.code === "CAPABILITY_STATEMENT_REQUIRED") {
-                    setGenError("You need a capability statement first. Redirecting...");
-                    setTimeout(() => router.push(d.next || "/capability-statement"), 1200);
-                    return;
-                }
-                throw new Error(d.error || `Failed (${res.status})`);
-            }
-
-            const data = await res.json();
-            setGenProgress("");
-            setShowNewForm(false);
-            setNoticeId("");
-
-            // Download as text
-            downloadProposal(data);
-            await loadDrafts();
-        } catch (err) {
-            setGenError((err as Error).message || "Something went wrong.");
-            setGenProgress("");
-        } finally {
-            setGenerating(false);
-        }
-    };
 
     const downloadProposal = (data: {
         proposal_title: string;
@@ -185,36 +175,79 @@ export default function ProposalsPage() {
         URL.revokeObjectURL(url);
     };
 
-    const regenerateProposal = async (noticeIdToGen: string) => {
-        if (!profileId) return;
-        setGenerating(true);
+    const setActiveJob = (jobId: string | null) => {
+        setActiveJobId(jobId);
+        if (typeof window !== "undefined") {
+            if (jobId) {
+                localStorage.setItem(ACTIVE_JOB_STORAGE_KEY, jobId);
+            } else {
+                localStorage.removeItem(ACTIVE_JOB_STORAGE_KEY);
+            }
+            window.dispatchEvent(new Event("proposal-jobs-changed"));
+        }
+    };
+
+    const handleGenerate = async (targetNoticeId?: string) => {
+        const nid = (targetNoticeId ?? noticeId).trim();
+        if (!nid || !profileId) return;
+        setSubmitting(true);
         setGenError("");
-        setGenProgress("Regenerating proposal...");
 
         try {
-            const res = await fetch("/api/ai/write-proposal", {
+            const res = await fetch("/api/ai/write-proposal/start", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    notice_id: noticeIdToGen,
+                    notice_id: nid,
                     user_profile_id: profileId,
                 }),
             });
 
             if (!res.ok) {
                 const d = await res.json().catch(() => ({}));
+                if (d.code === "CAPABILITY_STATEMENT_REQUIRED") {
+                    setGenError("You need a capability statement first. Redirecting...");
+                    setTimeout(() => router.push(d.next || "/capability-statement"), 1200);
+                    return;
+                }
                 throw new Error(d.error || `Failed (${res.status})`);
             }
 
             const data = await res.json();
-            downloadProposal(data);
-            await loadDrafts();
+            setActiveJob(data.jobId);
+            setShowNewForm(false);
+            setNoticeId("");
         } catch (err) {
             setGenError((err as Error).message || "Something went wrong.");
         } finally {
-            setGenerating(false);
-            setGenProgress("");
+            setSubmitting(false);
         }
+    };
+
+    const handleJobComplete = useCallback(async (status: ProposalJobStatus) => {
+        // Auto-download once, refresh draft list, but keep the completed card
+        // visible until the user dismisses it.
+        if (!status.result) return;
+        if (downloadedJobsRef.current.has(status.id)) return;
+        downloadedJobsRef.current.add(status.id);
+        downloadProposal(status.result);
+        await loadDrafts();
+        // Clear the "running" storage hint so the indicator can hide
+        if (typeof window !== "undefined") {
+            localStorage.removeItem(ACTIVE_JOB_STORAGE_KEY);
+            window.dispatchEvent(new Event("proposal-jobs-changed"));
+        }
+    }, [loadDrafts]);
+
+    const handleJobFail = useCallback(() => {
+        if (typeof window !== "undefined") {
+            localStorage.removeItem(ACTIVE_JOB_STORAGE_KEY);
+            window.dispatchEvent(new Event("proposal-jobs-changed"));
+        }
+    }, []);
+
+    const dismissActiveJob = () => {
+        setActiveJob(null);
     };
 
     const filteredDrafts = searchInput
@@ -247,8 +280,18 @@ export default function ProposalsPage() {
                 </p>
             </header>
 
+            {/* Active job progress (persists across navigation via localStorage) */}
+            {activeJobId && (
+                <ProposalJobProgress
+                    jobId={activeJobId}
+                    onComplete={handleJobComplete}
+                    onFail={handleJobFail}
+                    onDismiss={dismissActiveJob}
+                />
+            )}
+
             {/* New Proposal CTA */}
-            {!showNewForm && !generating && (
+            {!showNewForm && !submitting && (
                 <button
                     type="button"
                     onClick={() => setShowNewForm(true)}
@@ -259,7 +302,7 @@ export default function ProposalsPage() {
             )}
 
             {/* New Proposal Form */}
-            {showNewForm && !generating && (
+            {showNewForm && (
                 <div className="bg-white border border-stone-200 rounded-2xl p-6 space-y-4">
                     <div className="flex items-center justify-between">
                         <h3 className="font-bold text-base flex items-center gap-2">
@@ -314,27 +357,23 @@ export default function ProposalsPage() {
 
                     <button
                         type="button"
-                        onClick={handleGenerate}
-                        disabled={!noticeId.trim()}
+                        onClick={() => handleGenerate()}
+                        disabled={!noticeId.trim() || submitting}
                         className="bg-black text-white px-6 py-3 rounded-xl text-sm font-bold inline-flex items-center gap-2 disabled:opacity-40 hover:bg-stone-800 transition-colors"
                     >
-                        <FileText className="w-4 h-4" /> Generate Proposal
+                        {submitting ? (
+                            <>
+                                <Loader2 className="w-4 h-4 animate-spin" /> Starting job...
+                            </>
+                        ) : (
+                            <>
+                                <FileText className="w-4 h-4" /> Generate Proposal
+                            </>
+                        )}
                     </button>
-                </div>
-            )}
-
-            {/* Generating state */}
-            {generating && (
-                <div className="bg-white border border-stone-200 rounded-2xl p-8 text-center">
-                    <Loader2 className="w-8 h-8 animate-spin text-emerald-500 mx-auto mb-3" />
-                    <h3 className="font-bold text-base mb-1">Writing Your Proposal</h3>
-                    <p className="text-xs text-stone-500">{genProgress}</p>
-                    <p className="text-[10px] text-stone-400 mt-2">Generating cover letter, executive summary, technical approach, and more...</p>
-                    {genError && (
-                        <div className="mt-4 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 inline-block">
-                            {genError}
-                        </div>
-                    )}
+                    <p className="text-[10px] text-stone-400">
+                        Generation runs in the background — you can keep browsing other pages and come back; progress is saved.
+                    </p>
                 </div>
             )}
 
@@ -376,8 +415,8 @@ export default function ProposalsPage() {
                                 <div className="flex items-center gap-2 flex-shrink-0">
                                     <button
                                         type="button"
-                                        onClick={() => regenerateProposal(draft.notice_id)}
-                                        disabled={generating}
+                                        onClick={() => handleGenerate(draft.notice_id)}
+                                        disabled={submitting || !!activeJobId}
                                         className="text-xs font-bold bg-white border border-stone-200 text-stone-600 px-3 py-1.5 rounded-lg hover:bg-stone-50 inline-flex items-center gap-1 disabled:opacity-50"
                                     >
                                         <Download className="w-3 h-3" /> Re-generate
@@ -394,11 +433,11 @@ export default function ProposalsPage() {
                     ))}
                 </div>
             ) : (
-                !generating && !showNewForm && (
+                !submitting && !showNewForm && !activeJobId && (
                     <div className="bg-stone-50 border border-stone-200 border-dashed rounded-2xl p-12 text-center">
                         <FileText className="w-12 h-12 text-stone-300 mx-auto mb-4" />
                         <p className="text-stone-500 text-sm mb-2">No proposals generated yet</p>
-                        <p className="text-stone-400 text-xs mb-4">Click "Start New Proposal" above to draft your first AI-powered proposal.</p>
+                        <p className="text-stone-400 text-xs mb-4">Click &quot;Start New Proposal&quot; above to draft your first AI-powered proposal.</p>
                     </div>
                 )
             )}
