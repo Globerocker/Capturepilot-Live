@@ -49,12 +49,14 @@ export async function POST(req: NextRequest) {
 
     // --- Pass 1: strategic_scoring ---
     if (doScoring) {
+        // Use range() instead of limit() — Supabase REST silently caps .limit() at 1000
+        // unless the project's max-rows setting is raised. range(0, N-1) bypasses that cap.
         const { data: opps, error } = await admin
             .from("opportunities")
             .select("id, notice_type, set_aside_code, naics_code, estimated_value, award_amount, description, incumbent_contractor_name, response_deadline, sources_sought_flag")
             .eq("is_archived", false)
             .or("strategic_scoring.is.null,strategic_scoring.eq.{}")
-            .limit(LIMIT);
+            .range(0, LIMIT - 1);
 
         if (!error && opps) {
             for (const opp of opps) {
@@ -85,7 +87,7 @@ export async function POST(req: NextRequest) {
             .eq("is_archived", false)
             .not("description", "is", null)
             .or("structured_requirements.is.null,structured_requirements.eq.{}")
-            .limit(LIMIT);
+            .range(0, LIMIT - 1);
 
         if (!error && opps) {
             for (const opp of opps) {
