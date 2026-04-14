@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { extractStructuredRequirements } from "@/lib/extract-requirements";
 
 export const maxDuration = 300;
 
@@ -9,15 +10,6 @@ function getSupabase() {
         process.env.SUPABASE_SERVICE_KEY!
     );
 }
-
-// Keyword patterns for requirements extraction
-const BONDING_RE = /bond(ing|ed|s)?|surety/i;
-const INSURANCE_RE = /insurance|liability|workers.?comp|general liability/i;
-const CLEARANCE_RE = /clearance|secret|top.?secret|ts\/sci|confidential|public.?trust/i;
-const EXPERIENCE_RE = /(\d+)\s*(?:years?|yrs?)\s*(?:of\s+)?(?:experience|exp)/i;
-const WORKFORCE_RE = /minimum\s*(?:of\s+)?(\d+)\s*(?:employees?|workers?|personnel|staff|fte)/i;
-const EQUIPMENT_RE = /equipment|vehicle|fleet|machinery|tools|supplies/i;
-const CERT_RE = /iso\s*\d+|cmmi|certified|certification|licensed/i;
 
 function extractEstimatedValue(raw: Record<string, unknown>): number | null {
     // Path 1: award.amount
@@ -108,43 +100,6 @@ function extractContacts(raw: Record<string, unknown>, noticeId: string): Contac
     return contacts;
 }
 
-function extractRequirements(description: string): Record<string, unknown> {
-    const text = description || "";
-    const reqs: Record<string, unknown> = {};
-
-    if (BONDING_RE.test(text)) reqs.bonding = "Required";
-    else reqs.bonding = "Not Spec.";
-
-    if (INSURANCE_RE.test(text)) reqs.insurance = "Required";
-    else reqs.insurance = "Not Spec.";
-
-    const clearanceMatch = text.match(CLEARANCE_RE);
-    if (clearanceMatch) {
-        const cl = clearanceMatch[0].toLowerCase();
-        if (cl.includes("ts/sci") || cl.includes("top secret")) reqs.clearance_level = "Top Secret/SCI";
-        else if (cl.includes("secret")) reqs.clearance_level = "Secret";
-        else if (cl.includes("confidential")) reqs.clearance_level = "Confidential";
-        else if (cl.includes("public trust")) reqs.clearance_level = "Public Trust";
-        else reqs.clearance_level = "Required";
-    } else {
-        reqs.clearance_level = "Not Spec.";
-    }
-
-    const expMatch = text.match(EXPERIENCE_RE);
-    reqs.min_experience_years = expMatch ? parseInt(expMatch[1]) : "Not Spec.";
-
-    const workforceMatch = text.match(WORKFORCE_RE);
-    reqs.min_workforce = workforceMatch ? parseInt(workforceMatch[1]) : "Not Spec.";
-
-    if (EQUIPMENT_RE.test(text)) reqs.equipment = "Required";
-    else reqs.equipment = "Not Spec.";
-
-    if (CERT_RE.test(text)) reqs.certifications_required = "Yes";
-    else reqs.certifications_required = "Not Spec.";
-
-    return reqs;
-}
-
 export async function GET(req: NextRequest) {
     const authHeader = req.headers.get("authorization");
     if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -208,7 +163,7 @@ export async function GET(req: NextRequest) {
             // 3. Extract structured requirements from description
             const desc = opp.description || (raw.description as string) || "";
             if (desc) {
-                const reqs = extractRequirements(desc);
+                const reqs = extractStructuredRequirements(desc);
                 updatePayload.structured_requirements = reqs;
                 reqsUpdates++;
             }

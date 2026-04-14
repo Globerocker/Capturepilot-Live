@@ -254,7 +254,7 @@ export async function GET(req: NextRequest) {
                                 : null,
                             solicitation_number: g.opportunity_number || null,
                             estimated_value: estimatedValue ? Number(estimatedValue) : null,
-                            link_url: `https://www.grants.gov/search-results-detail/${g.opportunity_id}`,
+                            link: `https://www.grants.gov/search-results-detail/${g.opportunity_id}`,
                             priority_flag: false,
                             is_archived: ["EXPIRED"].includes(grantStatus),
                             raw_json: g,

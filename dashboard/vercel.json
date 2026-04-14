@@ -50,6 +50,18 @@
         {
             "path": "/api/cron/beta_deadline",
             "schedule": "0 12 * * *"
+        },
+        {
+            "path": "/api/cron/strategic_scoring",
+            "schedule": "0 7 * * *"
+        },
+        {
+            "path": "/api/cron/ai_strategy",
+            "schedule": "0 9 * * *"
+        },
+        {
+            "path": "/api/cron/process_scheduled_emails",
+            "schedule": "0 14 * * *"
         }
     ]
 }

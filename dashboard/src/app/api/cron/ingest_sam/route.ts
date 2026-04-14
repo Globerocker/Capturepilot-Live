@@ -160,7 +160,7 @@ export async function GET(req: NextRequest) {
                             solicitation_number: o.solicitationNumber || null,
                             award_amount: award?.amount ? Number(award.amount) : null,
                             estimated_value: o.estimatedTotalValue ? Number(o.estimatedTotalValue) : (award?.amount ? Number(award.amount) : null),
-                            link_url: o.uiLink || (o.noticeId ? `https://sam.gov/opp/${o.noticeId}/view` : null),
+                            link: o.uiLink || (o.noticeId ? `https://sam.gov/opp/${o.noticeId}/view` : null),
                             priority_flag: false,
                             is_archived: ["EXPIRED", "ARCHIVED", "DELETED"].includes(status),
                             raw_json: o,
