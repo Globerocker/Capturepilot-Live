@@ -150,6 +150,20 @@ export default function CapabilityStatementPage() {
         if (data.success) {
             setBrand(data.brand);
             setPrimaryColor(String((data.brand.colors as Record<string, string>)?.primary || "#000000"));
+
+            // Autofill transcript / differentiators from extracted brand intel if fields are empty.
+            const brandData = data.brand as Record<string, unknown>;
+            const services = (brandData.services as string[]) || [];
+            const companyDesc = brandData.company_description as string;
+            const diff = brandData.differentiators as string;
+            if (!transcript && (services.length > 0 || companyDesc)) {
+                const block = [
+                    companyDesc,
+                    services.length > 0 ? `Services: ${services.join(", ")}.` : "",
+                ].filter(Boolean).join("\n\n");
+                setTranscript(block);
+            }
+            if (!differentiators && diff) setDifferentiators(diff);
         }
         setBrandLoading(false);
     };

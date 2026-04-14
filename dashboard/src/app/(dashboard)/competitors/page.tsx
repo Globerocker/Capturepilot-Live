@@ -3,7 +3,8 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { createSupabaseClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
-import { Shield, Globe, ExternalLink, Loader2, ChevronDown, TrendingUp, Search, Plus, LinkIcon, Users } from "lucide-react";
+import Link from "next/link";
+import { Shield, Globe, Loader2, ChevronRight, TrendingUp, Plus, LinkIcon, Users, Search } from "lucide-react";
 import { AnalysisProgressStepper, statusToStep } from "@/components/AnalysisProgressStepper";
 import clsx from "clsx";
 
@@ -47,7 +48,6 @@ export default function CompetitorsPage() {
     const router = useRouter();
     const [competitors, setCompetitors] = useState<Competitor[]>([]);
     const [loading, setLoading] = useState(true);
-    const [expandedId, setExpandedId] = useState<string | null>(null);
     const [profileId, setProfileId] = useState<string | null>(null);
 
     // Add competitor form state
@@ -362,17 +362,13 @@ export default function CompetitorsPage() {
 
             <div className="space-y-3">
                 {competitors.map((comp) => {
-                    const isExpanded = expandedId === comp.id;
-                    const crawl = comp.crawl_data || {};
-                    const services = (crawl.services as string[]) || [];
-                    const leadership = (crawl.leadership as Array<{ name: string; title: string }>) || [];
-                    const social = (crawl.social_links as Record<string, string>) || {};
-
                     return (
-                        <div key={comp.id} className="bg-white border border-stone-200 rounded-2xl overflow-hidden">
-                            {/* Header */}
-                            <button type="button" onClick={() => setExpandedId(isExpanded ? null : comp.id)}
-                                className="w-full text-left p-5 flex items-center gap-4 hover:bg-stone-50/50 transition-colors">
+                        <Link
+                            key={comp.id}
+                            href={`/competitors/${comp.id}`}
+                            className="block bg-white border border-stone-200 rounded-2xl overflow-hidden hover:border-stone-300 hover:shadow-sm transition-all"
+                        >
+                            <div className="w-full text-left p-5 flex items-center gap-4">
                                 <div className={clsx(
                                     "w-12 h-12 rounded-xl border-2 font-black text-sm flex items-center justify-center flex-shrink-0",
                                     comp.overlap_score >= 70 ? "text-red-600 bg-red-50 border-red-200" :
@@ -406,118 +402,9 @@ export default function CompetitorsPage() {
                                     </div>
                                 </div>
 
-                                <ChevronDown className={clsx("w-4 h-4 text-stone-400 transition-transform flex-shrink-0", isExpanded && "rotate-180")} />
-                            </button>
-
-                            {/* Detail panel */}
-                            {isExpanded && (
-                                <div className="border-t border-stone-100 bg-stone-50/50 p-5 space-y-4">
-                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                        <div className="bg-white rounded-xl border border-stone-200 p-3 text-center">
-                                            <p className="text-lg font-black text-stone-800">{comp.overlap_score}%</p>
-                                            <p className="text-[9px] text-stone-400 uppercase">Overlap</p>
-                                        </div>
-                                        <div className="bg-white rounded-xl border border-stone-200 p-3 text-center">
-                                            <p className="text-lg font-black text-stone-800">{formatEmployees(comp.employee_count)}</p>
-                                            <p className="text-[9px] text-stone-400 uppercase">Employees</p>
-                                        </div>
-                                        <div className="bg-white rounded-xl border border-stone-200 p-3 text-center">
-                                            <p className="text-lg font-black text-stone-800">{formatRevenue(comp.revenue_estimate)}</p>
-                                            <p className="text-[9px] text-stone-400 uppercase">Revenue</p>
-                                        </div>
-                                        <div className="bg-white rounded-xl border border-stone-200 p-3 text-center">
-                                            <p className="text-lg font-black text-stone-800 capitalize">{comp.federal_presence || "?"}</p>
-                                            <p className="text-[9px] text-stone-400 uppercase">Fed Presence</p>
-                                        </div>
-                                    </div>
-
-                                    {comp.uei && (
-                                        <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 flex items-center gap-3">
-                                            <Shield className="w-5 h-5 text-blue-500 flex-shrink-0" />
-                                            <div>
-                                                <p className="text-xs font-bold text-blue-800">SAM.gov Registered</p>
-                                                <p className="text-[10px] text-blue-600 font-mono">UEI: {comp.uei}</p>
-                                            </div>
-                                            <a href={`https://sam.gov/search/?q=${comp.uei}&index=ei`} target="_blank" rel="noopener noreferrer"
-                                                title="Look up on SAM.gov"
-                                                className="ml-auto text-xs font-bold text-blue-600 hover:text-blue-800 inline-flex items-center gap-1">
-                                                <ExternalLink className="w-3 h-3" /> SAM.gov
-                                            </a>
-                                        </div>
-                                    )}
-                                    {!comp.uei && (
-                                        <div className="bg-stone-50 border border-stone-200 rounded-xl p-3 flex items-center gap-3">
-                                            <Shield className="w-5 h-5 text-stone-400 flex-shrink-0" />
-                                            <div>
-                                                <p className="text-xs font-medium text-stone-600">No UEI on file</p>
-                                                <p className="text-[10px] text-stone-400">May not be registered on SAM.gov</p>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {comp.description && (
-                                        <div>
-                                            <p className="text-[10px] text-stone-400 uppercase mb-1">About</p>
-                                            <p className="text-sm text-stone-600 leading-relaxed">{comp.description}</p>
-                                        </div>
-                                    )}
-
-                                    {services.length > 0 && (
-                                        <div>
-                                            <p className="text-[10px] text-stone-400 uppercase mb-1.5">Services</p>
-                                            <div className="flex flex-wrap gap-1.5">
-                                                {services.slice(0, 8).map((s, i) => (
-                                                    <span key={i} className="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-lg">{s}</span>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {leadership.length > 0 && (
-                                        <div>
-                                            <p className="text-[10px] text-stone-400 uppercase mb-1.5">Leadership</p>
-                                            <div className="space-y-1">
-                                                {leadership.slice(0, 3).map((l, i) => (
-                                                    <div key={i} className="text-xs text-stone-600">
-                                                        <span className="font-bold">{l.name}</span> — {l.title}
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {comp.naics_codes && comp.naics_codes.length > 0 && (
-                                        <div>
-                                            <p className="text-[10px] text-stone-400 uppercase mb-1.5">NAICS Codes</p>
-                                            <div className="flex flex-wrap gap-1">
-                                                {comp.naics_codes.map((c, i) => (
-                                                    <span key={i} className="text-[10px] font-mono bg-stone-100 text-stone-600 border border-stone-200 px-2 py-0.5 rounded">{c}</span>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    <div className="flex gap-2 pt-2 border-t border-stone-200 flex-wrap">
-                                        {comp.website && (
-                                            <a href={comp.website.startsWith("http") ? comp.website : `https://${comp.website}`} target="_blank" rel="noopener noreferrer"
-                                                className="text-xs font-bold bg-white border border-stone-200 text-stone-700 px-3 py-1.5 rounded-lg hover:bg-stone-50 inline-flex items-center gap-1">
-                                                <Globe className="w-3 h-3" /> Website
-                                            </a>
-                                        )}
-                                        {social.linkedin && (
-                                            <a href={social.linkedin} target="_blank" rel="noopener noreferrer"
-                                                className="text-xs font-bold bg-white border border-stone-200 text-blue-700 px-3 py-1.5 rounded-lg hover:bg-blue-50 inline-flex items-center gap-1">
-                                                LinkedIn
-                                            </a>
-                                        )}
-                                    </div>
-
-                                    {comp.last_analyzed_at && (
-                                        <p className="text-[9px] text-stone-400">Last analyzed: {new Date(comp.last_analyzed_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p>
-                                    )}
-                                </div>
-                            )}
-                        </div>
+                                <ChevronRight className="w-4 h-4 text-stone-400 flex-shrink-0" />
+                            </div>
+                        </Link>
                     );
                 })}
             </div>

@@ -1,8 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Loader2, FileText, Download, AlertCircle, Paperclip, ChevronDown } from "lucide-react";
+import dynamic from "next/dynamic";
+import { Loader2, FileText, Download, AlertCircle, Paperclip, ChevronDown, Eye } from "lucide-react";
 import clsx from "clsx";
+
+// react-pdf relies on browser APIs — load it client-side only.
+const PdfPreview = dynamic(() => import("./PdfPreview"), { ssr: false });
 
 interface Attachment {
     name: string;
@@ -24,6 +28,7 @@ export default function OpportunityAttachments({ noticeId, resourceLinks, defaul
     const [error, setError] = useState("");
     const [fetched, setFetched] = useState(false);
     const [collapsed, setCollapsed] = useState(defaultCollapsed);
+    const [preview, setPreview] = useState<{ url: string; name: string; downloadUrl: string } | null>(null);
 
     useEffect(() => {
         if (!noticeId || fetched) return;
@@ -81,6 +86,8 @@ export default function OpportunityAttachments({ noticeId, resourceLinks, defaul
         return att.url;
     };
 
+    const isPreviewable = (name: string) => /\.pdf$/i.test(name);
+
     const fileIcon = (name: string) => {
         const ext = name.split(".").pop()?.toLowerCase();
         if (ext === "pdf") return "text-red-500";
@@ -132,11 +139,8 @@ export default function OpportunityAttachments({ noticeId, resourceLinks, defaul
                     {!loading && allLinks.length > 0 && (
                         <div className="bg-stone-50 border border-stone-200 rounded-2xl divide-y divide-stone-200">
                             {allLinks.map((att, idx) => (
-                                <a
+                                <div
                                     key={idx}
-                                    href={downloadHref(att)}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
                                     className="flex items-center justify-between p-4 hover:bg-stone-100 transition-colors first:rounded-t-2xl last:rounded-b-2xl"
                                 >
                                     <div className="flex items-center min-w-0 flex-1">
@@ -150,12 +154,44 @@ export default function OpportunityAttachments({ noticeId, resourceLinks, defaul
                                             </div>
                                         </div>
                                     </div>
-                                    <Download className="w-4 h-4 text-blue-500 flex-shrink-0 ml-3" />
-                                </a>
+                                    <div className="flex items-center gap-1 flex-shrink-0 ml-3">
+                                        {isPreviewable(att.name) && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setPreview({
+                                                    url: downloadHref(att),
+                                                    name: att.name,
+                                                    downloadUrl: downloadHref(att),
+                                                })}
+                                                title="Preview"
+                                                className="p-2 rounded-lg text-stone-500 hover:text-black hover:bg-stone-200 transition-colors"
+                                            >
+                                                <Eye className="w-4 h-4" />
+                                            </button>
+                                        )}
+                                        <a
+                                            href={downloadHref(att)}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            title="Download"
+                                            className="p-2 rounded-lg text-blue-500 hover:text-blue-700 hover:bg-blue-50 transition-colors"
+                                        >
+                                            <Download className="w-4 h-4" />
+                                        </a>
+                                    </div>
+                                </div>
                             ))}
                         </div>
                     )}
                 </div>
+            )}
+            {preview && (
+                <PdfPreview
+                    url={preview.url}
+                    fileName={preview.name}
+                    downloadUrl={preview.downloadUrl}
+                    onClose={() => setPreview(null)}
+                />
             )}
         </div>
     );

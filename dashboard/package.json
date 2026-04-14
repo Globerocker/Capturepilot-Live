@@ -30,6 +30,7 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-email-editor": "^1.8.0",
+    "react-pdf": "^10.4.1",
     "resend": "^6.10.0",
     "stripe": "^20.4.1",
     "tailwind-merge": "^3.5.0"

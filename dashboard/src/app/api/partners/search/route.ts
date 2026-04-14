@@ -20,46 +20,74 @@ export async function GET(req: NextRequest) {
 
     try {
         const { searchParams } = req.nextUrl;
-        const naics = searchParams.get("naics") || "";
-        const state = searchParams.get("state") || "";
+        // Accept repeated params: ?naics=123&naics=456&state=TX&state=CA
+        const naicsList = searchParams.getAll("naics").filter(Boolean);
+        const stateList = searchParams.getAll("state").filter(Boolean);
         const setAside = searchParams.get("set_aside") || "";
         const keyword = searchParams.get("keyword") || "";
         const limit = Math.min(parseInt(searchParams.get("limit") || "20"), 50);
 
-        if (!naics && !keyword) {
+        if (naicsList.length === 0 && !keyword) {
             return NextResponse.json({ error: "naics or keyword required" }, { status: 400 });
         }
 
-        // Build SAM Entity API query
-        const params = new URLSearchParams({
-            api_key: SAM_API_KEY,
-            registrationStatus: "A",
-            purposeOfRegistrationCode: "Z2", // Federal contracts
-            includeSections: "entityRegistration,coreData,assertions",
-        });
+        // Set-aside type mapping (SAM.gov business type codes)
+        const saMap: Record<string, string> = {
+            "8A": "2X", "SDVOSB": "QF", "WOSB": "A2", "HUBZONE": "27", "VOSB": "A5", "SDB": "XX",
+        };
 
-        if (naics) params.set("naicsCodeAny", naics);
-        if (state) params.set("physicalAddressStateCode", state);
-        if (keyword) params.set("legalBusinessName", keyword);
+        // SAM.gov Entity API only supports single naicsCodeAny / single physicalAddressStateCode.
+        // Fan out across every (naics × state) combination in parallel and merge the results.
+        const naicsAxis = naicsList.length ? naicsList : [""];
+        const stateAxis = stateList.length ? stateList : [""];
 
-        // Set-aside type mapping
-        if (setAside) {
-            const saMap: Record<string, string> = {
-                "8A": "2X", "SDVOSB": "QF", "WOSB": "A2", "HUBZONE": "27", "VOSB": "A5", "SDB": "XX",
-            };
-            const code = saMap[setAside.toUpperCase()];
-            if (code) params.set("sbaBusinessTypeCode", code);
+        const buildUrl = (naics: string, state: string): string => {
+            const params = new URLSearchParams({
+                api_key: SAM_API_KEY,
+                registrationStatus: "A",
+                purposeOfRegistrationCode: "Z2",
+                includeSections: "entityRegistration,coreData,assertions",
+            });
+            if (naics) params.set("naicsCodeAny", naics);
+            if (state) params.set("physicalAddressStateCode", state);
+            if (keyword) params.set("legalBusinessName", keyword);
+            if (setAside) {
+                const code = saMap[setAside.toUpperCase()];
+                if (code) params.set("sbaBusinessTypeCode", code);
+            }
+            return `https://api.sam.gov/entity-information/v3/entities?${params.toString()}`;
+        };
+
+        const urls: string[] = [];
+        for (const n of naicsAxis) {
+            for (const s of stateAxis) urls.push(buildUrl(n, s));
+        }
+        // Cap total outbound requests to avoid hammering SAM.gov.
+        const MAX_REQUESTS = 12;
+        const capped = urls.slice(0, MAX_REQUESTS);
+
+        const responses = await Promise.allSettled(
+            capped.map(u => fetch(u, { signal: AbortSignal.timeout(30000) })),
+        );
+
+        const rawEntities: Array<Record<string, unknown>> = [];
+        for (const r of responses) {
+            if (r.status !== "fulfilled" || !r.value.ok) continue;
+            const data = await r.value.json().catch(() => null);
+            if (!data?.entityData) continue;
+            for (const e of data.entityData as Array<Record<string, unknown>>) rawEntities.push(e);
         }
 
-        const url = `https://api.sam.gov/entity-information/v3/entities?${params.toString()}`;
-        const res = await fetch(url, { signal: AbortSignal.timeout(30000) });
-
-        if (!res.ok) {
-            return NextResponse.json({ error: `SAM API error: ${res.status}` }, { status: res.status });
+        // De-duplicate by UEI, preserve insertion order.
+        const seen = new Set<string>();
+        const entities: Array<Record<string, unknown>> = [];
+        for (const e of rawEntities) {
+            const uei = String(((e.entityRegistration || {}) as Record<string, unknown>).ueiSAM || "");
+            if (!uei || seen.has(uei)) continue;
+            seen.add(uei);
+            entities.push(e);
+            if (entities.length >= limit) break;
         }
-
-        const data = await res.json();
-        const entities = (data.entityData || []).slice(0, limit);
 
         const partners = entities.map((entity: Record<string, unknown>) => {
             const reg = (entity.entityRegistration || {}) as Record<string, unknown>;
@@ -100,7 +128,7 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({
             success: true,
             total: partners.length,
-            query: { naics, state, set_aside: setAside, keyword },
+            query: { naics: naicsList, state: stateList, set_aside: setAside, keyword },
             partners,
         });
 
