@@ -1,6 +1,5 @@
 import Sidebar from "@/components/layout/Sidebar";
 import UpgradeBanner from "@/components/UpgradeBanner";
-import LockScreen from "@/components/LockScreen";
 import FeedbackWidget from "@/components/FeedbackWidget";
 import GlobalToast from "@/components/GlobalToast";
 import SupportChat from "@/components/SupportChat";
@@ -23,7 +22,6 @@ export default function DashboardLayout({
           {children}
         </div>
       </main>
-      <LockScreen />
       <FeedbackWidget />
       <GlobalToast />
       <SupportChat />

@@ -14,6 +14,7 @@ import {
   Phone,
 } from "lucide-react";
 import clsx from "clsx";
+import InvoicesSection from "@/components/billing/InvoicesSection";
 
 const supabase = createSupabaseClient();
 
@@ -588,16 +589,29 @@ function BillingPageContent() {
                   ))}
                 </ul>
 
-                <div
-                  className="w-full py-3 rounded-full font-bold text-sm bg-emerald-600 text-white text-center shadow-md cursor-default"
-                >
-                  <span className="flex items-center justify-center gap-2">
-                    <CheckCircle2 className="w-4 h-4" />
-                    You Have Full Access
-                  </span>
-                </div>
+                {billing.planTier === "pro" && ["active", "trialing"].includes(billing.subscriptionStatus) ? (
+                  <div className="w-full py-3 rounded-full font-bold text-sm bg-emerald-600 text-white text-center shadow-md cursor-default">
+                    <span className="flex items-center justify-center gap-2">
+                      <CheckCircle2 className="w-4 h-4" />
+                      Current Plan
+                    </span>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleUpgrade(interval)}
+                    disabled={upgrading}
+                    className="w-full py-3 rounded-full font-bold text-sm bg-emerald-600 text-white hover:bg-emerald-700 active:bg-emerald-800 transition-all shadow-md disabled:opacity-60 inline-flex items-center justify-center gap-2"
+                  >
+                    {upgrading ? (
+                      <><Loader2 className="w-4 h-4 animate-spin" /> Redirecting...</>
+                    ) : (
+                      <>Upgrade to Pro — Start 30-day Free Trial</>
+                    )}
+                  </button>
+                )}
                 <p className="text-[11px] text-stone-500 text-center mt-2.5 font-medium">
-                  After beta: $199/mo standard or $149/mo locked-in for beta feedback users (25% off forever)
+                  {interval === "yearly" ? "Billed yearly — save 20%" : "Billed monthly"} · Cancel anytime
                 </p>
               </div>
             </div>
@@ -649,6 +663,11 @@ function BillingPageContent() {
           </div>
         </div>
       )}
+
+      {/* ---- Invoices & Billing History ---- */}
+      <div className="max-w-5xl mx-auto mt-6">
+        <InvoicesSection />
+      </div>
 
       {/* ---- FAQ Section ---- */}
       <div className="max-w-2xl mx-auto mt-4">

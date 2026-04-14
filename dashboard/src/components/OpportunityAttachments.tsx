@@ -70,6 +70,17 @@ export default function OpportunityAttachments({ noticeId, resourceLinks, defaul
             }),
     ];
 
+    const downloadHref = (att: Attachment) => {
+        if (!att.url) return "#";
+        try {
+            const u = new URL(att.url);
+            if (/(^|\.)sam\.gov$/i.test(u.hostname)) {
+                return `/api/sam/attachment-download?url=${encodeURIComponent(att.url)}&name=${encodeURIComponent(att.name)}`;
+            }
+        } catch { /* non-URL href, fall through */ }
+        return att.url;
+    };
+
     const fileIcon = (name: string) => {
         const ext = name.split(".").pop()?.toLowerCase();
         if (ext === "pdf") return "text-red-500";
@@ -123,7 +134,7 @@ export default function OpportunityAttachments({ noticeId, resourceLinks, defaul
                             {allLinks.map((att, idx) => (
                                 <a
                                     key={idx}
-                                    href={att.url || "#"}
+                                    href={downloadHref(att)}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="flex items-center justify-between p-4 hover:bg-stone-100 transition-colors first:rounded-t-2xl last:rounded-b-2xl"

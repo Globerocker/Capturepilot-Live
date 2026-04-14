@@ -3,11 +3,12 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseClient } from "@/lib/supabase/client";
-import { Layers, Loader2, Search, Eye, ChevronDown, ArrowRight, Target, Clock, Phone, Calendar, DollarSign, Plus, X } from "lucide-react";
+import { Layers, Loader2, Search, Eye, ChevronDown, Target, Clock, DollarSign, Plus, X, List, Columns } from "lucide-react";
 import clsx from "clsx";
 import Link from "next/link";
 import ServiceCTA from "@/components/ui/ServiceCTA";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
+import KanbanBoard from "@/components/pipeline/KanbanBoard";
 
 const supabase = createSupabaseClient();
 
@@ -113,6 +114,7 @@ export default function PipelinePage() {
         discovered: true, researching: true, preparing: true, submitted: true,
     });
     const [pipelineSort, setPipelineSort] = useState<"deadline" | "value" | "priority">("deadline");
+    const [viewMode, setViewMode] = useState<"list" | "kanban">("kanban");
     const [showCustomDeal, setShowCustomDeal] = useState(false);
     const [customDeal, setCustomDeal] = useState({ title: "", agency: "", naics_code: "", estimated_value: "", notes: "" });
     const [savingDeal, setSavingDeal] = useState(false);
@@ -339,6 +341,30 @@ export default function PipelinePage() {
                 </div>
             ) : (
                 <>
+                    {/* View toggle: Kanban vs List */}
+                    <div className="flex items-center gap-2 mb-3 bg-white border border-stone-200 rounded-full p-1 w-fit shadow-sm">
+                        <button
+                            type="button"
+                            onClick={() => setViewMode("kanban")}
+                            className={clsx(
+                                "inline-flex items-center text-xs font-bold px-4 py-2 rounded-full transition-all",
+                                viewMode === "kanban" ? "bg-black text-white" : "text-stone-500 hover:text-stone-800",
+                            )}
+                        >
+                            <Columns className="w-3.5 h-3.5 mr-1.5" /> Kanban
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setViewMode("list")}
+                            className={clsx(
+                                "inline-flex items-center text-xs font-bold px-4 py-2 rounded-full transition-all",
+                                viewMode === "list" ? "bg-black text-white" : "text-stone-500 hover:text-stone-800",
+                            )}
+                        >
+                            <List className="w-3.5 h-3.5 mr-1.5" /> List
+                        </button>
+                    </div>
+
                     {/* Sort + Summary Bar */}
                     <div className="flex flex-wrap items-center gap-2 mb-3">
                         <span className="text-[10px] text-stone-400 uppercase tracking-widest mr-1">Sort by</span>
@@ -371,6 +397,9 @@ export default function PipelinePage() {
                         )}
                     </div>
 
+                    {viewMode === "kanban" ? (
+                        <KanbanBoard pursuits={pursuits} stages={STAGES} onMove={updateStage} />
+                    ) : (
                     <div className="space-y-3">
                         {activeStages.map(stage => {
                             const rawItems = groupedPursuits[stage.key];
@@ -498,6 +527,7 @@ export default function PipelinePage() {
                             );
                         })}
                     </div>
+                    )}
 
                     {/* Bottom service CTA */}
                     <div className="mt-6">

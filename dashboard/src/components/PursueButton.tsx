@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { createSupabaseClient } from "@/lib/supabase/client";
-import { Sparkles, Loader2, CheckCircle2, Layers, ArrowRight } from "lucide-react";
+import { Sparkles, Loader2, CheckCircle2, Layers, ArrowRight, X } from "lucide-react";
 import Link from "next/link";
 import clsx from "clsx";
 
@@ -74,8 +74,14 @@ export default function PursueButton({ opportunityId, noticeType }: PursueButton
     const [pursuing, setPursuing] = useState(false);
     const [pursuit, setPursuit] = useState<{ id: string; stage: string } | null>(null);
     const [profileId, setProfileId] = useState<string | null>(null);
+    const [dismissed, setDismissed] = useState(false);
+
+    const dismissKey = `cp:pursue-dismissed:${opportunityId}`;
 
     useEffect(() => {
+        if (typeof window !== "undefined" && localStorage.getItem(dismissKey) === "1") {
+            setDismissed(true);
+        }
         async function check() {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) { setLoading(false); return; }
@@ -134,6 +140,13 @@ export default function PursueButton({ opportunityId, noticeType }: PursueButton
         setPursuing(false);
     };
 
+    const handleDismiss = () => {
+        if (typeof window !== "undefined") localStorage.setItem(dismissKey, "1");
+        setDismissed(true);
+    };
+
+    if (dismissed && !pursuit) return null;
+
     if (loading) {
         return (
             <div className="bg-white border border-stone-200 rounded-2xl sm:rounded-3xl p-6 sm:p-10 text-center shadow-sm">
@@ -175,24 +188,34 @@ export default function PursueButton({ opportunityId, noticeType }: PursueButton
     }
 
     return (
-        <div className="bg-white border border-stone-200 rounded-2xl sm:rounded-3xl p-6 sm:p-10 text-center shadow-sm relative overflow-hidden">
-            <div className="absolute left-0 top-0 bottom-0 w-2 bg-gradient-to-b from-blue-400 to-emerald-400"></div>
-            <h2 className="text-xl sm:text-2xl font-bold text-stone-900 mb-3 sm:mb-4">Interested in this opportunity?</h2>
-            <p className="text-stone-500 max-w-2xl mx-auto mb-6 sm:mb-8 text-sm sm:text-base">
-                Add it to your pipeline and get guided action items to help you pursue it step by step.
-            </p>
+        <div className="bg-white border border-stone-200 rounded-2xl p-4 sm:p-5 shadow-sm relative overflow-hidden">
+            <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-blue-400 to-emerald-400" />
             <button
                 type="button"
-                onClick={startPursuing}
-                disabled={pursuing}
-                className="inline-flex items-center justify-center bg-black text-white font-bold px-6 sm:px-10 py-3.5 sm:py-4 rounded-full hover:bg-stone-800 transition-all shadow-lg disabled:opacity-50"
+                onClick={handleDismiss}
+                title="Dismiss"
+                className="absolute top-2 right-2 p-1.5 rounded-full text-stone-400 hover:text-stone-700 hover:bg-stone-100 transition-colors"
             >
-                {pursuing ? (
-                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Adding...</>
-                ) : (
-                    <><Sparkles className="w-4 h-4 mr-2 text-emerald-400" /> Start Pursuing</>
-                )}
+                <X className="w-4 h-4" />
             </button>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pl-2 pr-8">
+                <div>
+                    <p className="font-bold text-sm text-stone-900">Interested in this opportunity?</p>
+                    <p className="text-xs text-stone-500 mt-0.5">Add it to your pipeline for guided next steps.</p>
+                </div>
+                <button
+                    type="button"
+                    onClick={startPursuing}
+                    disabled={pursuing}
+                    className="inline-flex items-center justify-center bg-black text-white font-bold px-4 py-2 rounded-full hover:bg-stone-800 transition-all text-xs disabled:opacity-50 flex-shrink-0"
+                >
+                    {pursuing ? (
+                        <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> Adding...</>
+                    ) : (
+                        <><Sparkles className="w-3.5 h-3.5 mr-1.5 text-emerald-400" /> Start Pursuing</>
+                    )}
+                </button>
+            </div>
         </div>
     );
 }

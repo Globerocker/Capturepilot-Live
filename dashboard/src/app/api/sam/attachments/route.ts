@@ -30,8 +30,9 @@ export async function GET(request: NextRequest) {
     }
 
     try {
-        // SAM.gov opportunity resources endpoint
-        const resourcesUrl = `https://api.sam.gov/prod/opportunities/v1/resources?noticeid=${encodeURIComponent(noticeId)}&api_key=${SAM_API_KEY}`;
+        // SAM.gov opportunity resources endpoint — API key via X-Api-Key header only
+        // (the ?api_key= URL parameter is deprecated and can cause rejections).
+        const resourcesUrl = `https://api.sam.gov/prod/opportunities/v1/resources?noticeid=${encodeURIComponent(noticeId)}`;
         const response = await fetch(resourcesUrl, {
             headers: { "X-Api-Key": SAM_API_KEY },
         });

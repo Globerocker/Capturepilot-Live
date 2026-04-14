@@ -1031,13 +1031,50 @@ export const NAICS_CODES: NaicsCode[] = [
     { code: "928120", label: "International Affairs" },
 ];
 
+// Keyword aliases — map common industry shorthand to label-matching terms.
+// When a user types a key, we also include results matching any of the expansion phrases.
+const NAICS_KEYWORD_ALIASES: Record<string, string[]> = {
+    it: ["computer", "software", "information", "data processing", "programming", "systems design"],
+    tech: ["computer", "software", "information", "technology", "programming", "systems design"],
+    software: ["computer", "software", "programming", "systems design"],
+    "computer programming": ["computer programming", "custom computer"],
+    cyber: ["computer", "security", "information"],
+    cybersecurity: ["computer", "security", "information"],
+    cleaning: ["janitorial", "cleaning"],
+    janitorial: ["janitorial", "cleaning"],
+    construction: ["construction", "contractors"],
+    hvac: ["plumbing", "heating", "air conditioning", "hvac"],
+    medical: ["medical", "health", "physician", "nursing", "hospital"],
+    healthcare: ["medical", "health", "physician", "nursing", "hospital"],
+    consulting: ["consulting", "advisory", "management"],
+    engineering: ["engineering"],
+    legal: ["legal", "law", "attorney"],
+    accounting: ["accounting", "bookkeeping", "auditing", "tax"],
+    logistics: ["freight", "warehousing", "transportation", "trucking"],
+    security: ["security", "guard", "investigation"],
+    marketing: ["marketing", "advertising", "public relations"],
+    staffing: ["employment", "staffing", "temporary"],
+    research: ["research", "development"],
+    design: ["design", "graphic", "industrial"],
+};
+
 export function searchNaics(query: string): NaicsCode[] {
     if (!query.trim()) return NAICS_CODES.filter((n) => n.popular);
 
     const q = query.toLowerCase().trim();
-    return NAICS_CODES.filter(
-        (n) =>
-            n.code.includes(q) ||
-            n.label.toLowerCase().includes(q)
-    );
+    const expansions = NAICS_KEYWORD_ALIASES[q] || [];
+    const terms = [q, ...expansions];
+
+    const matches = NAICS_CODES.filter((n) => {
+        const label = n.label.toLowerCase();
+        return terms.some((t) => n.code.includes(t) || label.includes(t));
+    });
+
+    // Rank: direct matches (code starts-with or exact label substring for the typed query)
+    // come before alias expansions. Keeps typed "541" prioritized over aliases.
+    return matches.sort((a, b) => {
+        const aDirect = a.code.includes(q) || a.label.toLowerCase().includes(q) ? 0 : 1;
+        const bDirect = b.code.includes(q) || b.label.toLowerCase().includes(q) ? 0 : 1;
+        return aDirect - bDirect;
+    });
 }

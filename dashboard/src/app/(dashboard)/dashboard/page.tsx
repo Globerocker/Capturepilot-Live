@@ -95,17 +95,32 @@ export default function UserDashboard() {
       const today = new Date().toISOString().split("T")[0];
       const profileId = (profileData as Record<string, unknown>).id as string;
 
-      // Run all counts in parallel
+      const ACTIVE_STATUSES = ["ACTIVE", "EXPIRING_SOON", "MARKET_RESEARCH", "DISCOVERED"];
+
+      // Run all counts in parallel. Use !inner join + status/archive filters so counts
+      // match what the matches list actually displays (skipping orphaned/archived opps).
       const [opsRes, hotRes, warmRes, urgentRes, topMatchRes] = await Promise.all([
         // Total active opportunities
         supabase.from("opportunities").select("*", { count: "exact", head: true }).eq("is_archived", false),
         // HOT matches from user_matches
         profileId
-          ? supabase.from("user_matches").select("*", { count: "exact", head: true }).eq("user_profile_id", profileId).eq("classification", "HOT").eq("is_dismissed", false)
+          ? supabase.from("user_matches")
+            .select("id, opportunities!inner(id)", { count: "exact", head: true })
+            .eq("user_profile_id", profileId)
+            .eq("classification", "HOT")
+            .eq("is_dismissed", false)
+            .eq("opportunities.is_archived", false)
+            .in("opportunities.status", ACTIVE_STATUSES)
           : Promise.resolve({ count: 0 }),
         // WARM matches
         profileId
-          ? supabase.from("user_matches").select("*", { count: "exact", head: true }).eq("user_profile_id", profileId).eq("classification", "WARM").eq("is_dismissed", false)
+          ? supabase.from("user_matches")
+            .select("id, opportunities!inner(id)", { count: "exact", head: true })
+            .eq("user_profile_id", profileId)
+            .eq("classification", "WARM")
+            .eq("is_dismissed", false)
+            .eq("opportunities.is_archived", false)
+            .in("opportunities.status", ACTIVE_STATUSES)
           : Promise.resolve({ count: 0 }),
         // Urgent: deadlines in 7 days
         supabase.from("opportunities").select("*", { count: "exact", head: true })
@@ -115,9 +130,11 @@ export default function UserDashboard() {
         // Top matches from user_matches (joined with opportunities)
         profileId
           ? supabase.from("user_matches")
-            .select("score, classification, opportunities(id, title, agency, naics_code, notice_type, response_deadline, set_aside_code)")
+            .select("score, classification, opportunities!inner(id, title, agency, naics_code, notice_type, response_deadline, set_aside_code, status, is_archived)")
             .eq("user_profile_id", profileId)
             .eq("is_dismissed", false)
+            .eq("opportunities.is_archived", false)
+            .in("opportunities.status", ACTIVE_STATUSES)
             .order("score", { ascending: false })
             .limit(8)
           : Promise.resolve({ data: [] }),

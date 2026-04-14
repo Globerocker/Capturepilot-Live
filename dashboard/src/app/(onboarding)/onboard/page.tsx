@@ -147,6 +147,8 @@ function OnboardPageContent() {
         zip_code: "",
         website: "",
         phone: "",
+        contact_name: "",
+        contact_phone: "",
         naics_codes: [] as string[],
         sba_certifications: [] as string[],
         employee_count: "",
@@ -302,6 +304,8 @@ function OnboardPageContent() {
             zip_code: form.zip_code || null,
             website: form.website || null,
             phone: form.phone || null,
+            contact_name: form.contact_name || null,
+            contact_phone: form.contact_phone || null,
             email: user.email || null,
             naics_codes: form.naics_codes.length > 0 ? form.naics_codes : [],
             sba_certifications: form.sba_certifications.length > 0 ? form.sba_certifications : [],
@@ -737,6 +741,24 @@ function OnboardPageContent() {
                             <input type="tel" value={form.phone} onChange={(e) => updateForm("phone", e.target.value)}
                                 className="w-full px-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" placeholder="(555) 123-4567" />
                         </div>
+
+                        {/* Personal contact person for this account */}
+                        <div className="border-t border-stone-100 pt-5 mt-2">
+                            <p className="text-xs font-bold text-stone-700 mb-3">Primary Contact Person</p>
+                            <p className="text-xs text-stone-500 mb-3">Who should we reach out to about this account? (You can leave blank to use your login email.)</p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                    <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">Contact Name</label>
+                                    <input type="text" value={form.contact_name} onChange={(e) => updateForm("contact_name", e.target.value)}
+                                        className="w-full px-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" placeholder="Full name" />
+                                </div>
+                                <div>
+                                    <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">Contact Phone</label>
+                                    <input type="tel" value={form.contact_phone} onChange={(e) => updateForm("contact_phone", e.target.value)}
+                                        className="w-full px-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" placeholder="(555) 123-4567" />
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 )}
 
@@ -1074,6 +1096,23 @@ function OnboardPageContent() {
 
                         <div>
                             <label className="text-xs text-stone-500 uppercase tracking-widest block mb-3">Target States (where you can perform work) *</label>
+                            {(() => {
+                                const allSelected = form.target_states.length === STATE_OPTIONS.length;
+                                return (
+                                    <button
+                                        type="button"
+                                        onClick={() => updateForm("target_states", allSelected ? [] : [...STATE_OPTIONS])}
+                                        className={clsx(
+                                            "mb-3 px-4 py-2 rounded-full border text-xs font-bold uppercase tracking-wider transition-all",
+                                            allSelected
+                                                ? "bg-emerald-500 text-white border-emerald-500"
+                                                : "bg-white text-stone-700 border-stone-300 hover:border-emerald-400 hover:text-emerald-700"
+                                        )}
+                                    >
+                                        {allSelected ? "✓ Nationwide selected — Clear" : "Select Nationwide (all 50 states)"}
+                                    </button>
+                                );
+                            })()}
                             <div className="flex flex-wrap gap-1.5 max-h-[180px] overflow-y-auto pr-1">
                                 {STATE_OPTIONS.map(s => (
                                     <button type="button" key={s} onClick={() => toggleArray("target_states", s)}
@@ -1088,7 +1127,9 @@ function OnboardPageContent() {
                                 ))}
                             </div>
                             {form.target_states.length > 0 && (
-                                <p className="text-xs text-emerald-600 font-bold mt-2">{form.target_states.length} states selected</p>
+                                <p className="text-xs text-emerald-600 font-bold mt-2">
+                                    {form.target_states.length === STATE_OPTIONS.length ? "Nationwide" : `${form.target_states.length} states selected`}
+                                </p>
                             )}
                         </div>
                     </div>

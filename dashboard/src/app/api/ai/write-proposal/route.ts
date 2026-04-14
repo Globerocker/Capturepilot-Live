@@ -58,13 +58,27 @@ export async function POST(req: NextRequest) {
             } catch { /* timeout */ }
         }
 
-        // Fetch company profile
+        // Fetch company profile — a capability statement is required before generating a proposal.
         let companyContext = "";
         if (user_profile_id) {
             const { data: profile } = await db.from("user_profiles")
-                .select("company_name, naics_codes, sba_certifications, state, employee_count, revenue, years_in_business, federal_awards_count, company_description, website")
+                .select("company_name, naics_codes, sba_certifications, state, employee_count, revenue, years_in_business, federal_awards_count, company_description, website, capability_statement")
                 .eq("id", user_profile_id).single();
-            if (profile) {
+            if (!profile) {
+                return NextResponse.json({ error: "User profile not found" }, { status: 404 });
+            }
+            const hasCapStatement = Boolean(
+                (profile as { capability_statement?: string }).capability_statement?.trim() ||
+                (profile.company_description && profile.company_description.trim().length >= 100),
+            );
+            if (!hasCapStatement) {
+                return NextResponse.json({
+                    error: "Capability statement required. Create or upload one before generating a proposal.",
+                    code: "CAPABILITY_STATEMENT_REQUIRED",
+                    next: "/capability-statement",
+                }, { status: 412 });
+            }
+            {
                 companyContext = `
 CONTRACTOR PROFILE:
 Company: ${profile.company_name}
@@ -76,7 +90,8 @@ Revenue: ${profile.revenue ? `$${Number(profile.revenue).toLocaleString()}` : "N
 Years in Business: ${profile.years_in_business || "N/A"}
 Federal Awards: ${profile.federal_awards_count || 0}
 Description: ${profile.company_description || "N/A"}
-Website: ${profile.website || "N/A"}`;
+Website: ${profile.website || "N/A"}
+Capability Statement: ${(profile as { capability_statement?: string }).capability_statement || "N/A"}`;
             }
         }
 
@@ -115,6 +130,7 @@ ${JSON.stringify(opp.structured_requirements || {}, null, 2).substring(0, 1000)}
 
         // Generate each section
         const writtenSections: Array<{ title: string; content: string; word_count: number; compliance_notes: string[] }> = [];
+        const sectionErrors: Array<{ section: string; error: string }> = [];
 
         for (const sectionTitle of sectionsToWrite) {
             const sectionPrompt = `Write the "${sectionTitle}" section of a government contract proposal.
@@ -153,15 +169,33 @@ Write ONLY the section content. No headers, no "Section X:" prefix. Just the bod
                 if (res.ok) {
                     const data = await res.json();
                     const content = data.choices?.[0]?.message?.content?.trim() || "";
-                    const wordCount = content.split(/\s+/).length;
-                    writtenSections.push({
-                        title: sectionTitle,
-                        content,
-                        word_count: wordCount,
-                        compliance_notes: [],
-                    });
+                    if (content) {
+                        writtenSections.push({
+                            title: sectionTitle,
+                            content,
+                            word_count: content.split(/\s+/).length,
+                            compliance_notes: [],
+                        });
+                    } else {
+                        sectionErrors.push({ section: sectionTitle, error: "OpenAI returned empty content" });
+                    }
+                } else {
+                    const errBody = await res.text().catch(() => "");
+                    console.error(`[write-proposal] OpenAI error for "${sectionTitle}" (${res.status}):`, errBody.substring(0, 500));
+                    sectionErrors.push({ section: sectionTitle, error: `OpenAI ${res.status}` });
                 }
-            } catch { /* skip failed section */ }
+            } catch (err) {
+                console.error(`[write-proposal] Section "${sectionTitle}" threw:`, err);
+                sectionErrors.push({ section: sectionTitle, error: (err as Error).message });
+            }
+        }
+
+        // If every section failed, surface a real error instead of returning an empty proposal.
+        if (writtenSections.length === 0) {
+            return NextResponse.json({
+                error: "Proposal generation failed — no sections could be written.",
+                details: sectionErrors,
+            }, { status: 502 });
         }
 
         // Generate compliance matrix
@@ -185,8 +219,12 @@ Write ONLY the section content. No headers, no "Section X:" prefix. Just the bod
                 let content = data.choices?.[0]?.message?.content?.trim() || "[]";
                 if (content.startsWith("```")) content = content.split("\n").slice(1).join("\n").replace(/```$/, "").trim();
                 complianceMatrix = JSON.parse(content);
+            } else {
+                console.error(`[write-proposal] Compliance matrix OpenAI ${compRes.status}`);
             }
-        } catch { /* compliance matrix generation failed */ }
+        } catch (err) {
+            console.error("[write-proposal] Compliance matrix failed:", err);
+        }
 
         const totalWords = writtenSections.reduce((s, sec) => s + sec.word_count, 0);
 

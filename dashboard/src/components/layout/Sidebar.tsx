@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import Image from "next/image";
-import { LayoutDashboard, Target, Layers, FileText, BarChart3, Mic, Users, Shield, CreditCard, Settings, LogOut, Menu, X, Lock } from "lucide-react";
+import { LayoutDashboard, Target, Layers, FileText, BarChart3, Mic, Users, Shield, CreditCard, Settings, LogOut, Menu, X } from "lucide-react";
 import clsx from "clsx";
 import { createSupabaseClient } from "@/lib/supabase/client";
 
@@ -38,11 +38,6 @@ export default function Sidebar() {
             document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
         });
         window.location.replace("/login");
-    };
-
-    const handleLock = () => {
-        window.dispatchEvent(new Event("lock-session"));
-        setMobileOpen(false);
     };
 
     const handleNavClick = () => {
@@ -117,14 +112,6 @@ export default function Sidebar() {
                         </Link>
                     );
                 })}
-                <button
-                    type="button"
-                    onClick={handleLock}
-                    className="w-full flex items-center space-x-3 px-4 py-3.5 lg:py-3 rounded-2xl text-stone-500 hover:bg-stone-800/50 hover:text-amber-400 transition-all duration-200 text-sm border-l-2 border-transparent"
-                >
-                    <Lock className="h-5 w-5" />
-                    <span className="font-medium">Lock</span>
-                </button>
                 <button
                     type="button"
                     onClick={handleSignOut}

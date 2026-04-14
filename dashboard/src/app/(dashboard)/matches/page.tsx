@@ -55,6 +55,10 @@ export default function MyMatchesPage() {
     const [filterNoticeType, setFilterNoticeType] = useState("");
     const [filterSetAside, setFilterSetAside] = useState("");
     const [filterState, setFilterState] = useState("");
+    const [filterNaics, setFilterNaics] = useState("");
+    const [filterClearance, setFilterClearance] = useState("");
+    const [filterCertification, setFilterCertification] = useState("");
+    const [viewMode, setViewMode] = useState<"strong" | "all">("strong");
     const [pursuingIds, setPursuingIds] = useState<Set<string>>(new Set());
     const [pursuedIds, setPursuedIds] = useState<Set<string>>(new Set());
     const [generatingMatches, setGeneratingMatches] = useState(false);
@@ -85,12 +89,18 @@ export default function MyMatchesPage() {
             .from("user_matches")
             .select(
                 "id, score, classification, score_breakdown, is_saved, is_dismissed, " +
-                "opportunities(id, title, agency, naics_code, notice_type, response_deadline, set_aside_code, place_of_performance_state, award_amount)",
+                "opportunities!inner(id, title, agency, naics_code, notice_type, response_deadline, set_aside_code, place_of_performance_state, award_amount, status, is_archived, structured_requirements)",
                 { count: "exact" }
             )
             .eq("user_profile_id", profileId)
             .eq("is_dismissed", false)
+            .eq("opportunities.is_archived", false)
             .in("opportunities.status", ["ACTIVE", "EXPIRING_SOON", "MARKET_RESEARCH", "DISCOVERED"]);
+
+        // View mode: "strong" = matches >= 50% (the curated view), "all" = everything including weak matches.
+        if (viewMode === "strong") {
+            query = query.gte("score", 0.5);
+        }
 
         if (filter === "HOT") {
             query = query.eq("classification", "HOT");
@@ -100,6 +110,11 @@ export default function MyMatchesPage() {
             query = query.eq("classification", "COLD");
         } else if (filter === "SAVED") {
             query = query.eq("is_saved", true);
+        }
+
+        if (filterNaics) {
+            // NAICS can be a full code or a prefix — use ilike for flexible matching.
+            query = query.ilike("opportunities.naics_code", `${filterNaics}%`);
         }
 
         query = query.order("score", { ascending: false });
@@ -128,6 +143,16 @@ export default function MyMatchesPage() {
         if (filterState) {
             filtered = filtered.filter(m => m.opportunities?.place_of_performance_state === filterState);
         }
+        if (filterClearance) {
+            filtered = filtered.filter(m => {
+                const sr = (m.opportunities as unknown as { structured_requirements?: { security_clearance?: string } })?.structured_requirements;
+                return sr?.security_clearance?.toLowerCase().includes(filterClearance.toLowerCase());
+            });
+        }
+        if (filterCertification) {
+            // SBA certification filter reuses set-aside code (best proxy available in this schema).
+            filtered = filtered.filter(m => m.opportunities?.set_aside_code?.toLowerCase().includes(filterCertification.toLowerCase()));
+        }
 
         // Client-side sorting
         if (sortBy !== "score") {
@@ -152,9 +177,10 @@ export default function MyMatchesPage() {
         }
 
         setMatches(filtered);
-        setTotalCount(activeSearch || filterNoticeType || filterSetAside || filterState ? filtered.length : (count || 0));
+        const hasClientFilter = activeSearch || filterNoticeType || filterSetAside || filterState || filterClearance || filterCertification;
+        setTotalCount(hasClientFilter ? filtered.length : (count || 0));
         setLoading(false);
-    }, [profileId, page, activeSearch, filter, sortBy, sortDirection, filterNoticeType, filterSetAside, filterState]);
+    }, [profileId, page, activeSearch, filter, sortBy, sortDirection, filterNoticeType, filterSetAside, filterState, filterNaics, filterClearance, filterCertification, viewMode]);
 
     useEffect(() => {
         if (profileId) fetchMatches();
@@ -251,6 +277,30 @@ export default function MyMatchesPage() {
                     </button>
                 </div>
             </header>
+
+            {/* View-mode toggle: Strong matches (>=50%) vs all opportunities */}
+            <section className="flex items-center gap-2 mb-4 bg-white border border-stone-200 rounded-full p-1 w-fit shadow-sm">
+                <button
+                    type="button"
+                    onClick={() => { setViewMode("strong"); setPage(1); }}
+                    className={clsx(
+                        "text-xs font-bold px-4 py-2 rounded-full transition-all",
+                        viewMode === "strong" ? "bg-black text-white" : "text-stone-500 hover:text-stone-800",
+                    )}
+                >
+                    My Matches (≥ 50%)
+                </button>
+                <button
+                    type="button"
+                    onClick={() => { setViewMode("all"); setPage(1); }}
+                    className={clsx(
+                        "text-xs font-bold px-4 py-2 rounded-full transition-all",
+                        viewMode === "all" ? "bg-black text-white" : "text-stone-500 hover:text-stone-800",
+                    )}
+                >
+                    All Opportunities
+                </button>
+            </section>
 
             {/* Filter Tabs */}
             <section className="flex flex-wrap gap-2 mb-4">
@@ -352,9 +402,41 @@ export default function MyMatchesPage() {
                             ))}
                         </select>
                     </div>
-                    {(filterNoticeType || filterSetAside || filterState) && (
-                        <button type="button" onClick={() => { setFilterNoticeType(""); setFilterSetAside(""); setFilterState(""); setPage(1); }} className="self-end px-3 py-2 text-xs font-bold text-red-600 bg-red-50 border border-red-200 rounded-full hover:bg-red-100">
-                            Clear
+                    <div className="flex-1 min-w-[120px]">
+                        <p className="text-[10px] text-stone-500 uppercase mb-2">NAICS Code</p>
+                        <input
+                            type="text"
+                            placeholder="e.g. 541512"
+                            className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black font-mono"
+                            value={filterNaics}
+                            onChange={(e) => { setFilterNaics(e.target.value.replace(/[^0-9]/g, "")); setPage(1); }}
+                        />
+                    </div>
+                    <div className="flex-1 min-w-[150px]">
+                        <p className="text-[10px] text-stone-500 uppercase mb-2">Security Clearance</p>
+                        <select title="Security Clearance" className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black" value={filterClearance} onChange={(e) => { setFilterClearance(e.target.value); setPage(1); }}>
+                            <option value="">Any</option>
+                            <option value="Confidential">Confidential</option>
+                            <option value="Secret">Secret</option>
+                            <option value="Top Secret">Top Secret</option>
+                            <option value="TS/SCI">TS/SCI</option>
+                        </select>
+                    </div>
+                    <div className="flex-1 min-w-[150px]">
+                        <p className="text-[10px] text-stone-500 uppercase mb-2">SBA Certification</p>
+                        <select title="SBA Certification" className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black" value={filterCertification} onChange={(e) => { setFilterCertification(e.target.value); setPage(1); }}>
+                            <option value="">Any</option>
+                            <option value="SDVOSB">SDVOSB (Service-Disabled Veteran)</option>
+                            <option value="VOSB">VOSB (Veteran-Owned)</option>
+                            <option value="WOSB">WOSB (Women-Owned)</option>
+                            <option value="EDWOSB">EDWOSB (Economically Disadvantaged WOSB)</option>
+                            <option value="8A">8(a) Business Development</option>
+                            <option value="HUBZone">HUBZone</option>
+                        </select>
+                    </div>
+                    {(filterNoticeType || filterSetAside || filterState || filterNaics || filterClearance || filterCertification) && (
+                        <button type="button" onClick={() => { setFilterNoticeType(""); setFilterSetAside(""); setFilterState(""); setFilterNaics(""); setFilterClearance(""); setFilterCertification(""); setPage(1); }} className="self-end px-3 py-2 text-xs font-bold text-red-600 bg-red-50 border border-red-200 rounded-full hover:bg-red-100">
+                            Clear All
                         </button>
                     )}
                 </section>

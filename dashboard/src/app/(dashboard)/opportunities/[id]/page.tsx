@@ -465,7 +465,7 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                     <StructuredRequirements dbRequirements={reqs} noticeId={opp.notice_id} />
 
                     {/* Description - fetched live from SAM.gov */}
-                    <OpportunityDescription noticeId={opp.notice_id} currentDescription={opp.description} defaultCollapsed={true} />
+                    <OpportunityDescription noticeId={opp.notice_id} currentDescription={opp.description} defaultCollapsed={false} />
 
                     {/* Incumbent Intelligence */}
                     {(opp.incumbent_contractor_name || opp.award_amount) && (
@@ -500,7 +500,7 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                     )}
 
                     {/* Attachments - fetched live from SAM.gov */}
-                    <OpportunityAttachments noticeId={opp.notice_id} resourceLinks={opp.resource_links} defaultCollapsed={true} />
+                    <OpportunityAttachments noticeId={opp.notice_id} resourceLinks={opp.resource_links} defaultCollapsed={false} />
 
                 </div>
 
@@ -597,7 +597,7 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                     <EmailDraftPanel opportunityId={opp.id} opportunityTitle={opp.title} />
 
                     {/* Service CTA */}
-                    <a href="https://calendly.com/capturepilot/strategy-call" target="_blank" rel="noopener noreferrer"
+                    <a href="https://meetings-na2.hubspot.com/americurial/intro-call" target="_blank" rel="noopener noreferrer"
                         className="block bg-gradient-to-br from-blue-50 to-white rounded-2xl sm:rounded-3xl border border-blue-200 p-4 sm:p-6 hover:shadow-md transition-all group">
                         <div className="flex items-start gap-3">
                             <div className="w-9 h-9 rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0">

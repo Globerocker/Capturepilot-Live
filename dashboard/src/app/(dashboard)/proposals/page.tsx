@@ -120,6 +120,11 @@ export default function ProposalsPage() {
 
             if (!res.ok) {
                 const d = await res.json().catch(() => ({}));
+                if (d.code === "CAPABILITY_STATEMENT_REQUIRED") {
+                    setGenError("You need a capability statement first. Redirecting...");
+                    setTimeout(() => router.push(d.next || "/capability-statement"), 1200);
+                    return;
+                }
                 throw new Error(d.error || `Failed (${res.status})`);
             }
 
