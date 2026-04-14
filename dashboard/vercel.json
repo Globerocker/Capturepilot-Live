@@ -53,7 +53,7 @@
         },
         {
             "path": "/api/cron/process_scheduled_emails",
-            "schedule": "0 * * * *"
+            "schedule": "0 14 * * *"
         }
     ]
 }
