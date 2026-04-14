@@ -76,6 +76,42 @@ export default function AdminProspectsPage() {
         setSelectedIds(new Set());
     };
 
+    const handleBulkRecheck = async () => {
+        if (selectedIds.size === 0) return;
+        if (!window.confirm(`Ready to re-check & crawl ${selectedIds.size} leads?`)) return;
+
+        const targets = prospects.filter(p => selectedIds.has(p.id));
+        for (const p of targets) {
+            setLoadingStatus(prev => ({ ...prev, [p.id]: "crawling" }));
+            try {
+                await fetch("/api/analyze-company", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ website: p.website, uei: p.uei })
+                });
+                setProspects(prev => prev.map(prospect => prospect.id === p.id ? { ...prospect, status: "crawling" } : prospect));
+            } catch (e) {
+                console.error(e);
+            }
+            setLoadingStatus(prev => ({ ...prev, [p.id]: "" }));
+        }
+        setSelectedIds(new Set());
+    };
+
+    const handleSingleRecheck = async (p: Prospect) => {
+        if (!window.confirm(`Ready to re-check ${p.company_name}?`)) return;
+        setLoadingStatus(prev => ({ ...prev, [p.id]: "crawling" }));
+        try {
+            await fetch("/api/analyze-company", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ website: p.website, uei: p.uei })
+            });
+            setProspects(prev => prev.map(prospect => prospect.id === p.id ? { ...prospect, status: "crawling" } : prospect));
+        } catch (e) { console.error(e); }
+        setLoadingStatus(prev => ({ ...prev, [p.id]: "" }));
+    };
+
     useEffect(() => {
         setLoading(true);
         fetch(`/api/prospects/list${filter === "saved" ? "?saved=true" : ""}`)
@@ -175,9 +211,14 @@ export default function AdminProspectsPage() {
                         <div className="flex items-center gap-2">
                             <span className="font-bold text-orange-700">{selectedIds.size} Leads Selected</span>
                         </div>
-                        <button onClick={handleBulkPushAndEnrich} className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-4 py-2 rounded-lg flex items-center gap-2 transition-colors">
-                            <Database className="w-4 h-4" /> Bulk Push & Enrich
-                        </button>
+                        <div className="flex items-center gap-2">
+                            <button onClick={handleBulkRecheck} className="bg-stone-800 hover:bg-black text-white font-bold px-4 py-2 rounded-lg flex items-center gap-2 transition-colors">
+                                <Search className="w-4 h-4" /> Bulk Re-Check
+                            </button>
+                            <button onClick={handleBulkPushAndEnrich} className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-4 py-2 rounded-lg flex items-center gap-2 transition-colors">
+                                <Database className="w-4 h-4" /> Bulk Push & Enrich
+                            </button>
+                        </div>
                     </div>
                 )}
 
@@ -294,6 +335,14 @@ export default function AdminProspectsPage() {
                                                 >
                                                     <ExternalLink className="w-3 h-3" /> Full Report
                                                 </Link>
+                                                <button
+                                                    type="button"
+                                                    disabled={loadingStatus[prospect.id] === "crawling" || prospect.status === "crawling"}
+                                                    onClick={() => handleSingleRecheck(prospect)}
+                                                    className="text-[10px] font-bold px-3 py-1.5 rounded-lg border bg-stone-100 text-stone-600 border-stone-200 inline-flex items-center gap-1 hover:bg-stone-200 transition-all disabled:opacity-50"
+                                                >
+                                                    {loadingStatus[prospect.id] === "crawling" || prospect.status === "crawling" ? <Loader2 className="w-3 h-3 animate-spin"/> : <Search className="w-3 h-3" />} Re-Check Lead
+                                                </button>
                                                 <button
                                                     type="button"
                                                     onClick={() => {

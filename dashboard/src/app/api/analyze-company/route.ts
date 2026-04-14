@@ -1003,6 +1003,10 @@ async function runAnalysisPipeline(analysisId: string, initialCompanyName: strin
         });
 
         // Save everything — mark complete
+        const finalFallbackEmail = apolloEnrichment?.email || decisionMaker?.email || inferredProfile.email;
+        const { data: currentRecord } = await sb.from("company_analyses").select("lead_email").eq("id", analysisId).maybeSingle();
+        const emailUpdate = !currentRecord?.lead_email && finalFallbackEmail ? { lead_email: finalFallbackEmail } : {};
+
         await sb.from("company_analyses").update({
             status: "complete",
             company_summary: summary,
@@ -1015,6 +1019,7 @@ async function runAnalysisPipeline(analysisId: string, initialCompanyName: strin
             readiness_score: readinessScore,
             readiness_breakdown: readinessBreakdown,
             competitors: competitors,
+            ...emailUpdate
         }).eq("id", analysisId);
 
     } catch (error) {
@@ -1052,24 +1057,45 @@ export async function POST(request: NextRequest) {
             try { companyName = new URL(website).hostname.replace(/^www\./, ""); } catch { companyName = website; }
         }
 
-        // Insert analysis record
-        const { data: analysis, error: insertError } = await sb
+        let analysisId: string;
+        let baseDomain = website;
+        try { baseDomain = new URL(website).hostname.replace(/^www\./, ""); } catch {}
+
+        const { data: existing } = await sb
             .from("company_analyses")
-            .insert({
-                company_name: companyName,
-                website,
-                uei: uei || null,
+            .select("id")
+            .ilike("website", `%${baseDomain}%`)
+            .order("created_at", { ascending: false })
+            .limit(1);
+
+        if (existing && existing.length > 0) {
+            // Reuse existing lead to prevent duplicates
+            analysisId = existing[0].id;
+            await sb.from("company_analyses").update({
                 status: "crawling",
                 ip_address: ip,
-            })
-            .select("id")
-            .single();
+                ...(userProvidedName ? { company_name: companyName } : {}),
+                ...(uei ? { uei } : {})
+            }).eq("id", analysisId);
+        } else {
+            // Insert analysis record
+            const { data: analysis, error: insertError } = await sb
+                .from("company_analyses")
+                .insert({
+                    company_name: companyName,
+                    website,
+                    uei: uei || null,
+                    status: "crawling",
+                    ip_address: ip,
+                })
+                .select("id")
+                .single();
 
-        if (insertError || !analysis) {
-            return NextResponse.json({ error: "Failed to create analysis" }, { status: 500 });
+            if (insertError || !analysis) {
+                return NextResponse.json({ error: "Failed to create analysis" }, { status: 500 });
+            }
+            analysisId = analysis.id;
         }
-
-        const analysisId = analysis.id;
 
         // Run the full pipeline in the background after response is sent
         after(async () => {

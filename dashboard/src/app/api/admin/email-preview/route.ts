@@ -5,42 +5,50 @@ import {
     featureBox,
     alertBox,
     urgentBox,
+    infoBox,
     paragraph,
     sectionLabel,
     scoreBadge,
+    numberedSection,
+    articleCta,
     APP_URL,
+    SITE_URL,
     COLORS,
 } from "@/lib/email-template";
+import { EMAIL_SETTINGS } from "@/lib/email-settings";
 
 /**
  * GET /api/admin/email-preview?type=welcome
  * Returns rendered HTML for any email template with sample data.
- * Used by the admin email preview page.
  */
 export async function GET(req: NextRequest) {
     const type = req.nextUrl.searchParams.get("type") || "welcome";
-
     const html = renderPreview(type);
     if (!html) {
         return NextResponse.json({ error: `Unknown template: ${type}` }, { status: 400 });
     }
-
     return new NextResponse(html, {
         headers: { "Content-Type": "text/html; charset=utf-8" },
     });
+}
+
+function cat(key: string): "transactional" | "marketing" {
+    return EMAIL_SETTINGS[key]?.category ?? "transactional";
 }
 
 function renderPreview(type: string): string | null {
     switch (type) {
         case "welcome":
             return emailTemplate({
+                category: cat("welcome"),
                 preheader: "We're already scanning 30,000+ federal opportunities for Acme Corp.",
-                heading: "Welcome aboard, Acme Corp!",
+                eyebrow: "Welcome Aboard",
+                heading: "Welcome to CapturePilot, Acme Corp",
                 body: `
                     ${paragraph("Your account is set up and we're already matching you with federal contracting opportunities.")}
                     ${contentCard(`
                         ${sectionLabel("What happens next")}
-                        <ul style="color:${COLORS.stone700};font-size:14px;line-height:1.8;padding-left:20px;margin:0;">
+                        <ul style="color:${COLORS.stone700};font-size:14px;line-height:1.9;padding-left:20px;margin:0;">
                             <li>We're scanning 30,000+ federal opportunities for your matches</li>
                             <li>Your dashboard will show HOT, WARM, and COLD leads</li>
                             <li>You'll receive alerts when new high-scoring opportunities appear</li>
@@ -52,109 +60,125 @@ function renderPreview(type: string): string | null {
 
         case "consulting_welcome":
             return emailTemplate({
+                category: cat("consulting_welcome"),
                 preheader: "Your CapturePilot consulting portal for SmartPipe is ready.",
+                eyebrow: "Your Portal Is Ready",
                 heading: "Hi Donny,",
                 body: `
                     ${paragraph("Your CapturePilot consulting portal for <strong>SmartPipe</strong> is ready. Our team is actively working on your government contracting pipeline.")}
                     ${contentCard(`
                         ${sectionLabel("Your Login")}
                         <p style="color:${COLORS.stone700};font-size:14px;margin:4px 0;"><strong>Email:</strong> donny@smart-pipe.com</p>
-                        <p style="color:${COLORS.stone700};font-size:14px;margin:4px 0;"><strong>Temporary Password:</strong> Sp1pe2026!</p>
-                        <p style="color:${COLORS.stone700};font-size:14px;margin:8px 0 0;">You can also sign in with your Google account.</p>
+                        <p style="color:${COLORS.stone700};font-size:14px;margin:4px 0;"><strong>Temporary Password:</strong> <code style="background:${COLORS.stone100};padding:2px 6px;border-radius:4px;font-family:monospace;">Sp1pe2026!</code></p>
+                        <p style="color:${COLORS.stone500};font-size:13px;margin:10px 0 0;">You can also sign in with Google.</p>
                     `)}
                     ${featureBox(`
                         ${sectionLabel("What you can do in your portal")}
-                        <ul style="color:#065f46;font-size:14px;line-height:1.8;padding-left:20px;margin:0;">
+                        <ul style="color:#065f46;font-size:14px;line-height:1.9;padding-left:20px;margin:0;">
                             <li>See which opportunities we're pursuing for you</li>
                             <li>View and complete assigned tasks</li>
-                            <li>Upload documents (capability statements, past performance, etc.)</li>
+                            <li>Upload capability statements and past performance</li>
                             <li>Track competitor activity</li>
                             <li>See our progress in real-time</li>
                         </ul>
                     `)}
                 `,
                 cta: { label: "Log In to Your Portal", url: `${APP_URL}/login` },
-                footerNote: "Questions? Reply to this email.",
+                footerNote: "Questions? Just reply to this email — our team will get back to you.",
             });
 
         case "task_notification":
             return emailTemplate({
+                category: cat("task_notification"),
                 preheader: "Action required: Upload Capability Statement",
+                eyebrow: "Task Assigned",
                 heading: "Hi Donny,",
                 body: `
                     ${paragraph("You have a new task that needs your attention:")}
                     ${alertBox(`
                         <p style="font-size:16px;font-weight:700;color:${COLORS.black};margin:0;">Upload Capability Statement</p>
-                        <p style="color:${COLORS.stone700};font-size:14px;margin:8px 0 0;line-height:1.5;">Please upload your company's capability statement so we can use it for upcoming proposals. This should include your core competencies, past performance, and key personnel.</p>
-                        <p style="color:#dc2626;font-size:14px;font-weight:700;margin:8px 0 0;">Due: Friday, April 18</p>
+                        <p style="color:${COLORS.stone700};font-size:14px;margin:8px 0 0;line-height:1.6;">Please upload your company's capability statement so we can use it for upcoming proposals.</p>
+                        <p style="color:#dc2626;font-size:14px;font-weight:700;margin:10px 0 0;">Due: Friday, April 18</p>
                     `)}
                 `,
                 cta: { label: "View Task", url: `${APP_URL}/portal/tasks` },
-                transactional: true,
             });
 
-        case "opportunity_alert":
+        case "opportunity_alert": {
+            const rows = [
+                { title: "Janitorial Services — Fort Bragg", agency: "U.S. Army", score: 87 },
+                { title: "Custodial Maintenance — GSA Building", agency: "General Services Administration", score: 72 },
+                { title: "Landscaping & Grounds Maintenance", agency: "Department of Veterans Affairs", score: 58 },
+                { title: "Facility Support Services — NOAA", agency: "National Oceanic and Atmospheric Administration", score: 51 },
+                { title: "Sources Sought: Custodial Services", agency: "U.S. Air Force", score: 45 },
+            ].map(o => `
+                <tr>
+                    <td style="padding:12px;border-bottom:1px solid ${COLORS.stone100};">
+                        <p style="font-size:14px;font-weight:700;color:${COLORS.black};margin:0;">${o.title}</p>
+                        <p style="font-size:12px;color:${COLORS.stone500};margin:3px 0 0;">${o.agency}</p>
+                    </td>
+                    <td style="padding:12px;border-bottom:1px solid ${COLORS.stone100};text-align:right;white-space:nowrap;">${scoreBadge(o.score)}</td>
+                </tr>`).join("");
+
             return emailTemplate({
+                category: cat("opportunity_alert"),
                 preheader: "5 new federal opportunities match your profile.",
-                heading: "Acme Corp, we found 5 new opportunities for you",
+                eyebrow: "Daily Matches",
+                heading: "Acme Corp, 5 new opportunities",
                 body: `
-                    <table role="presentation" style="width:100%;border-collapse:collapse;margin:20px 0;">
-                        <thead><tr>
-                            <th style="text-align:left;padding:8px 12px;font-size:11px;color:${COLORS.stone500};text-transform:uppercase;letter-spacing:1px;border-bottom:2px solid ${COLORS.stone200};">Opportunity</th>
-                            <th style="text-align:center;padding:8px 12px;font-size:11px;color:${COLORS.stone500};text-transform:uppercase;letter-spacing:1px;border-bottom:2px solid ${COLORS.stone200};">Match</th>
-                        </tr></thead>
-                        <tbody>
-                            <tr><td style="padding:10px 12px;border-bottom:1px solid ${COLORS.stone100};"><p style="font-size:14px;font-weight:600;color:${COLORS.black};margin:0;">Janitorial Services — Fort Bragg</p><p style="font-size:12px;color:${COLORS.stone500};margin:2px 0 0;">U.S. Army</p></td><td style="padding:10px 12px;border-bottom:1px solid ${COLORS.stone100};text-align:center;">${scoreBadge(87)}</td></tr>
-                            <tr><td style="padding:10px 12px;border-bottom:1px solid ${COLORS.stone100};"><p style="font-size:14px;font-weight:600;color:${COLORS.black};margin:0;">Custodial Maintenance — GSA Building</p><p style="font-size:12px;color:${COLORS.stone500};margin:2px 0 0;">General Services Administration</p></td><td style="padding:10px 12px;border-bottom:1px solid ${COLORS.stone100};text-align:center;">${scoreBadge(72)}</td></tr>
-                            <tr><td style="padding:10px 12px;border-bottom:1px solid ${COLORS.stone100};"><p style="font-size:14px;font-weight:600;color:${COLORS.black};margin:0;">Landscaping & Grounds Maintenance</p><p style="font-size:12px;color:${COLORS.stone500};margin:2px 0 0;">Department of Veterans Affairs</p></td><td style="padding:10px 12px;border-bottom:1px solid ${COLORS.stone100};text-align:center;">${scoreBadge(58)}</td></tr>
-                            <tr><td style="padding:10px 12px;border-bottom:1px solid ${COLORS.stone100};"><p style="font-size:14px;font-weight:600;color:${COLORS.black};margin:0;">Facility Support Services — NOAA</p><p style="font-size:12px;color:${COLORS.stone500};margin:2px 0 0;">National Oceanic and Atmospheric Administration</p></td><td style="padding:10px 12px;border-bottom:1px solid ${COLORS.stone100};text-align:center;">${scoreBadge(51)}</td></tr>
-                            <tr><td style="padding:10px 12px;border-bottom:1px solid ${COLORS.stone100};"><p style="font-size:14px;font-weight:600;color:${COLORS.black};margin:0;">Sources Sought: Custodial Services</p><p style="font-size:12px;color:${COLORS.stone500};margin:2px 0 0;">U.S. Air Force</p></td><td style="padding:10px 12px;border-bottom:1px solid ${COLORS.stone100};text-align:center;">${scoreBadge(45)}</td></tr>
-                        </tbody>
+                    ${paragraph("Here are your top matches for today, ranked by fit score.")}
+                    <table role="presentation" style="width:100%;border-collapse:collapse;margin:16px 0 8px;background:${COLORS.white};border:1px solid ${COLORS.stone200};border-radius:12px;overflow:hidden;">
+                        <tbody>${rows}</tbody>
                     </table>
                 `,
                 cta: { label: "View All Opportunities", url: `${APP_URL}/dashboard/opportunities` },
             });
+        }
 
         case "quick_checker": {
             const readinessScore = 62;
             const readinessColor = "#d97706";
             return emailTemplate({
+                category: cat("quick_checker"),
                 preheader: "Acme Janitorial scored 62/100 for federal readiness. 47 opportunities matched.",
-                heading: "Your Federal Readiness Report",
+                eyebrow: "Federal Readiness Report",
+                heading: "Your readiness score is in",
                 body: `
                     ${paragraph("Here are the Quick Checker results for <strong>Acme Janitorial</strong>.")}
-                    <div style="text-align:center;margin:24px 0;">
-                        <div style="display:inline-block;width:100px;height:100px;border-radius:50%;border:6px solid ${readinessColor};position:relative;line-height:88px;text-align:center;">
-                            <span style="font-size:32px;font-weight:800;color:${readinessColor};">${readinessScore}</span>
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0;"><tr><td align="center">
+                        <div style="display:inline-block;width:110px;height:110px;border-radius:50%;border:7px solid ${readinessColor};line-height:96px;text-align:center;background:${COLORS.white};">
+                            <span style="font-size:36px;font-weight:800;color:${readinessColor};vertical-align:middle;">${readinessScore}</span>
                         </div>
-                        <p style="font-size:14px;font-weight:700;color:${readinessColor};margin:8px 0 0;">Moderate Readiness</p>
+                        <p style="font-size:14px;font-weight:700;color:${readinessColor};margin:10px 0 0;text-transform:uppercase;letter-spacing:1px;">Moderate Readiness</p>
                         <p style="font-size:12px;color:${COLORS.stone500};margin:4px 0 0;">out of 100</p>
-                    </div>
-                    ${sectionLabel("Your Top Matching Opportunities")}
-                    <table role="presentation" style="width:100%;border-collapse:collapse;margin:12px 0 20px;">
+                    </td></tr></table>
+                    ${sectionLabel("Your top matching opportunities")}
+                    <table role="presentation" style="width:100%;border-collapse:collapse;margin:12px 0 12px;background:${COLORS.white};border:1px solid ${COLORS.stone200};border-radius:12px;overflow:hidden;">
                         <tbody>
-                            <tr><td style="padding:10px 12px;border-bottom:1px solid ${COLORS.stone100};"><p style="font-size:14px;font-weight:600;color:${COLORS.black};margin:0;">Janitorial Services — Fort Bragg</p><p style="font-size:12px;color:${COLORS.stone500};margin:2px 0 0;">U.S. Army</p></td><td style="padding:10px 12px;border-bottom:1px solid ${COLORS.stone100};text-align:center;">${scoreBadge(87)}</td></tr>
-                            <tr><td style="padding:10px 12px;border-bottom:1px solid ${COLORS.stone100};"><p style="font-size:14px;font-weight:600;color:${COLORS.black};margin:0;">Custodial Maintenance — GSA Building</p><p style="font-size:12px;color:${COLORS.stone500};margin:2px 0 0;">General Services Administration</p></td><td style="padding:10px 12px;border-bottom:1px solid ${COLORS.stone100};text-align:center;">${scoreBadge(72)}</td></tr>
-                            <tr><td style="padding:10px 12px;border-bottom:1px solid ${COLORS.stone100};"><p style="font-size:14px;font-weight:600;color:${COLORS.black};margin:0;">Landscaping & Grounds Maintenance</p><p style="font-size:12px;color:${COLORS.stone500};margin:2px 0 0;">Department of Veterans Affairs</p></td><td style="padding:10px 12px;border-bottom:1px solid ${COLORS.stone100};text-align:center;">${scoreBadge(58)}</td></tr>
+                            <tr><td style="padding:12px;border-bottom:1px solid ${COLORS.stone100};"><p style="font-size:14px;font-weight:700;color:${COLORS.black};margin:0;">Janitorial Services — Fort Bragg</p><p style="font-size:12px;color:${COLORS.stone500};margin:3px 0 0;">U.S. Army</p></td><td style="padding:12px;border-bottom:1px solid ${COLORS.stone100};text-align:right;">${scoreBadge(87)}</td></tr>
+                            <tr><td style="padding:12px;border-bottom:1px solid ${COLORS.stone100};"><p style="font-size:14px;font-weight:700;color:${COLORS.black};margin:0;">Custodial Maintenance — GSA Building</p><p style="font-size:12px;color:${COLORS.stone500};margin:3px 0 0;">General Services Administration</p></td><td style="padding:12px;border-bottom:1px solid ${COLORS.stone100};text-align:right;">${scoreBadge(72)}</td></tr>
+                            <tr><td style="padding:12px;border-bottom:1px solid ${COLORS.stone100};"><p style="font-size:14px;font-weight:700;color:${COLORS.black};margin:0;">Landscaping & Grounds Maintenance</p><p style="font-size:12px;color:${COLORS.stone500};margin:3px 0 0;">Department of Veterans Affairs</p></td><td style="padding:12px;border-bottom:1px solid ${COLORS.stone100};text-align:right;">${scoreBadge(58)}</td></tr>
                         </tbody>
                     </table>
-                    <p style="font-size:13px;color:${COLORS.stone500};text-align:center;margin:0 0 8px;">+ 44 more matching opportunities</p>
+                    <p style="font-size:13px;color:${COLORS.stone500};text-align:center;margin:8px 0 0;">&plus; 44 more matching opportunities</p>
                 `,
                 cta: { label: "Create Free Account to See All Results", url: `${APP_URL}/signup?ref=quickcheck` },
-                secondaryCta: { label: "View full report", url: `${APP_URL}/check/sample-analysis-id` },
+                secondaryCta: { label: "View full report", url: `${SITE_URL}/check/sample-analysis-id` },
             });
         }
 
         case "trial_expiring_3d":
             return emailTemplate({
+                category: cat("trial_expiring_3d"),
                 preheader: "Your CapturePilot trial expires in 3 days. Subscribe to keep your matches.",
+                eyebrow: "Trial Ending Soon",
                 heading: "Your trial expires in 3 days",
                 body: `
                     ${paragraph("Hi Sarah,")}
                     ${paragraph("Your free trial of CapturePilot expires in 3 days. Subscribe now to keep access to your matched federal opportunities and daily alerts.")}
                     ${contentCard(`
                         ${sectionLabel("What you'll keep with a subscription")}
-                        <ul style="color:${COLORS.stone700};font-size:14px;line-height:1.8;padding-left:20px;margin:0;">
+                        <ul style="color:${COLORS.stone700};font-size:14px;line-height:1.9;padding-left:20px;margin:0;">
                             <li>Daily opportunity matching across 30,000+ federal contracts</li>
                             <li>HOT/WARM/COLD scoring with competitive intelligence</li>
                             <li>Email alerts for high-scoring matches</li>
@@ -163,19 +187,20 @@ function renderPreview(type: string): string | null {
                     `)}
                 `,
                 cta: { label: "Subscribe Now", url: `${APP_URL}/settings/billing` },
-                transactional: true,
             });
 
         case "trial_expiring_1d":
             return emailTemplate({
+                category: cat("trial_expiring_1d"),
                 preheader: "Your CapturePilot trial expires today. Subscribe to keep your matches.",
+                eyebrow: "Final Day",
                 heading: "Your trial expires today",
                 body: `
                     ${paragraph("Hi Sarah,")}
                     ${paragraph("This is your last day of CapturePilot access. After today, you'll lose access to your matched opportunities and alerts.")}
                     ${contentCard(`
                         ${sectionLabel("What you'll keep with a subscription")}
-                        <ul style="color:${COLORS.stone700};font-size:14px;line-height:1.8;padding-left:20px;margin:0;">
+                        <ul style="color:${COLORS.stone700};font-size:14px;line-height:1.9;padding-left:20px;margin:0;">
                             <li>Daily opportunity matching across 30,000+ federal contracts</li>
                             <li>HOT/WARM/COLD scoring with competitive intelligence</li>
                             <li>Email alerts for high-scoring matches</li>
@@ -184,55 +209,58 @@ function renderPreview(type: string): string | null {
                     `)}
                 `,
                 cta: { label: "Subscribe Now", url: `${APP_URL}/settings/billing` },
-                transactional: true,
             });
 
         case "payment_failed":
             return emailTemplate({
+                category: cat("payment_failed"),
                 preheader: "We couldn't process your payment. Update your card to keep access.",
+                eyebrow: "Payment Issue",
                 heading: "We couldn't process your payment",
                 body: `
                     ${paragraph("Hi Sarah,")}
                     ${paragraph("Your most recent payment for CapturePilot failed. This can happen when a card expires or a bank declines the charge.")}
                     ${urgentBox(`
-                        <p style="font-size:14px;font-weight:700;color:#991b1b;margin:0 0 4px;">Action needed</p>
-                        <p style="font-size:14px;color:#991b1b;margin:0;line-height:1.5;">Please update your payment method to avoid losing access to your matched opportunities and alerts.</p>
+                        <p style="font-size:14px;font-weight:700;color:#991b1b;margin:0 0 6px;">Action needed</p>
+                        <p style="font-size:14px;color:#991b1b;margin:0;line-height:1.6;">Please update your payment method to avoid losing access to your matched opportunities and alerts.</p>
                     `)}
                 `,
                 cta: { label: "Update Payment Method", url: `${APP_URL}/settings/billing` },
-                transactional: true,
             });
 
         case "subscription_canceled":
             return emailTemplate({
+                category: cat("subscription_canceled"),
                 preheader: "Your CapturePilot subscription has been canceled.",
+                eyebrow: "Subscription Update",
                 heading: "Your subscription has been canceled",
                 body: `
                     ${paragraph("Hi Sarah,")}
                     ${paragraph("Your CapturePilot subscription has been canceled. You'll retain access through the end of your current billing period.")}
                     ${paragraph("We'll keep your profile and match history on file. If you decide to come back, everything will be right where you left it.")}
                     ${contentCard(`
-                        <p style="font-size:14px;color:${COLORS.stone700};margin:0;line-height:1.5;">Changed your mind? You can resubscribe at any time from your billing settings.</p>
+                        <p style="font-size:14px;color:${COLORS.stone700};margin:0;line-height:1.6;">Changed your mind? You can resubscribe at any time from your billing settings.</p>
                     `)}
                 `,
                 cta: { label: "Resubscribe", url: `${APP_URL}/settings/billing` },
-                transactional: true,
             });
 
         case "beta_deadline_8d":
             return emailTemplate({
+                category: cat("beta_deadline_8d"),
                 preheader: "8 days left to lock in 25% off CapturePilot forever. Use code BETA25 before May 9.",
+                eyebrow: "Beta Ending May 9",
                 heading: "8 days left to lock in your beta discount",
                 body: `
                     ${paragraph("Hi there,")}
                     ${paragraph("On <strong>May 9</strong>, CapturePilot exits beta and free access ends. Subscribe before the cutoff and you'll lock in <strong>25% off forever</strong>.")}
                     ${featureBox(`
-                        <p style="font-size:18px;font-weight:800;color:#065f46;margin:0 0 4px;text-align:center;">BETA25</p>
-                        <p style="font-size:13px;color:#065f46;margin:0;text-align:center;">Use this code at checkout for 25% off — locked in for as long as you're subscribed.</p>
+                        <p style="font-size:24px;font-weight:800;color:#065f46;margin:0 0 6px;text-align:center;letter-spacing:2px;font-family:monospace;">BETA25</p>
+                        <p style="font-size:13px;color:#065f46;margin:0;text-align:center;line-height:1.5;">25% off at checkout — locked in for as long as you're subscribed.</p>
                     `)}
                     ${contentCard(`
                         ${sectionLabel("What you get")}
-                        <ul style="color:${COLORS.stone700};font-size:14px;line-height:1.8;padding-left:20px;margin:0;">
+                        <ul style="color:${COLORS.stone700};font-size:14px;line-height:1.9;padding-left:20px;margin:0;">
                             <li>Daily matching across 30,000+ federal opportunities</li>
                             <li>Competitive intelligence and readiness scoring</li>
                             <li>Email alerts for high-scoring matches</li>
@@ -240,32 +268,107 @@ function renderPreview(type: string): string | null {
                         </ul>
                     `)}
                 `,
-                cta: { label: "Subscribe Now with BETA25", url: `${APP_URL}/settings/billing?promo=BETA25` },
+                cta: { label: "Subscribe with BETA25", url: `${APP_URL}/settings/billing?promo=BETA25` },
             });
 
         case "beta_deadline_1d":
             return emailTemplate({
-                preheader: "Tomorrow is the last day to lock in 25% off CapturePilot forever. Use code BETA25 before May 9.",
+                category: cat("beta_deadline_1d"),
+                preheader: "Tomorrow is the last day to lock in 25% off CapturePilot forever.",
+                eyebrow: "Beta Ending May 9",
                 heading: "Tomorrow is the last day to lock in your beta discount",
                 body: `
                     ${paragraph("Hi there,")}
                     ${paragraph("On <strong>May 9</strong>, CapturePilot exits beta and free access ends. Subscribe before the cutoff and you'll lock in <strong>25% off forever</strong>.")}
                     ${featureBox(`
-                        <p style="font-size:18px;font-weight:800;color:#065f46;margin:0 0 4px;text-align:center;">BETA25</p>
-                        <p style="font-size:13px;color:#065f46;margin:0;text-align:center;">Use this code at checkout for 25% off — locked in for as long as you're subscribed.</p>
-                    `)}
-                    ${contentCard(`
-                        ${sectionLabel("What you get")}
-                        <ul style="color:${COLORS.stone700};font-size:14px;line-height:1.8;padding-left:20px;margin:0;">
-                            <li>Daily matching across 30,000+ federal opportunities</li>
-                            <li>Competitive intelligence and readiness scoring</li>
-                            <li>Email alerts for high-scoring matches</li>
-                            <li>25% off for the lifetime of your subscription</li>
-                        </ul>
+                        <p style="font-size:24px;font-weight:800;color:#065f46;margin:0 0 6px;text-align:center;letter-spacing:2px;font-family:monospace;">BETA25</p>
+                        <p style="font-size:13px;color:#065f46;margin:0;text-align:center;line-height:1.5;">25% off at checkout — locked in for as long as you're subscribed.</p>
                     `)}
                     ${urgentBox(`<p style="font-size:14px;font-weight:700;color:#991b1b;margin:0;">After May 9, free access ends and the BETA25 discount expires permanently.</p>`)}
                 `,
-                cta: { label: "Subscribe Now with BETA25", url: `${APP_URL}/settings/billing?promo=BETA25` },
+                cta: { label: "Subscribe with BETA25", url: `${APP_URL}/settings/billing?promo=BETA25` },
+            });
+
+        // ─── Educational emails ─────────────────────────────
+
+        case "edu_contracting_101":
+            return emailTemplate({
+                category: cat("edu_contracting_101"),
+                preheader: "The complete beginner's guide to federal government contracting.",
+                eyebrow: "Learning Series",
+                heading: "Federal Contracting 101",
+                body: `
+                    ${paragraph("Hi Donny,")}
+                    ${paragraph("The federal government spends over $700 billion per year on contracts — and a growing share goes to small businesses. Here's what every new contractor needs to know to compete.")}
+                    ${numberedSection(1, "Understand NAICS codes", "Every federal opportunity is tagged with a NAICS code that identifies the industry. Picking the right codes is step one — they determine which contracts you can bid on.")}
+                    ${numberedSection(2, "Register on SAM.gov", "SAM.gov is the front door for federal contracting. Registration is free, takes 2-3 weeks, and you can't bid without it.")}
+                    ${numberedSection(3, "Identify your set-aside advantages", "Veteran-owned, women-owned, 8(a), HUBZone — set-aside programs reserve contracts for qualifying small businesses. Most contractors qualify for at least one.")}
+                    ${numberedSection(4, "Start with Sources Sought", "Sources Sought notices are 6-18 months ahead of the actual solicitation. Responding lets you influence the RFP and build agency relationships before competition heats up.")}
+                    ${articleCta("Government Contracting 101: The Complete Beginner's Guide", `${SITE_URL}/blog/government-contracting-101`, "15 min read")}
+                `,
+                cta: { label: "Read the Full Guide", url: `${SITE_URL}/blog/government-contracting-101` },
+            });
+
+        case "edu_naics_codes":
+            return emailTemplate({
+                category: cat("edu_naics_codes"),
+                preheader: "NAICS codes determine which federal contracts you qualify for. Here's how to pick the right ones.",
+                eyebrow: "Learning Series",
+                heading: "NAICS codes, decoded",
+                body: `
+                    ${paragraph("Hi Sarah,")}
+                    ${paragraph("NAICS codes are the six-digit industry codes that federal agencies use to classify every contract opportunity. If your company's NAICS doesn't match, you can't bid — full stop.")}
+                    ${infoBox(`
+                        ${sectionLabel("Quick fact")}
+                        <p style="color:${COLORS.stone700};font-size:14px;margin:0;line-height:1.6;">Most contractors qualify for <strong>3-8 NAICS codes</strong>. Listing more codes means more matched opportunities, but each code has its own small business size standard — some based on revenue, some on headcount.</p>
+                    `)}
+                    ${numberedSection(1, "Start with your primary work", "What do you actually do most days? Your primary NAICS should be the one where you generate the most revenue.")}
+                    ${numberedSection(2, "Add adjacent codes", "Many contractors add related codes to capture broader opportunities. A janitorial company might add landscaping and facility support services.")}
+                    ${numberedSection(3, "Check size standards", "Each NAICS has a small business threshold. Exceeding it in one code doesn't disqualify you from the others — but it matters for set-asides.")}
+                    ${articleCta("NAICS Codes Explained: Find the Right Codes for Your Business", `${SITE_URL}/blog/naics-codes-explained`, "10 min read")}
+                `,
+                cta: { label: "Read the Full Guide", url: `${SITE_URL}/blog/naics-codes-explained` },
+            });
+
+        case "edu_set_asides":
+            return emailTemplate({
+                category: cat("edu_set_asides"),
+                preheader: "Set-aside contracts reserve federal work for qualifying small businesses.",
+                eyebrow: "Learning Series",
+                heading: "Set-aside programs: your unfair advantage",
+                body: `
+                    ${paragraph("Hi there,")}
+                    ${paragraph("Federal set-aside programs reserve specific contracts for small businesses that meet certain criteria — veteran-owned, woman-owned, located in a HUBZone, and more. Qualifying means you compete against a much smaller pool.")}
+                    ${numberedSection(1, "8(a) Business Development", "A 9-year program for socially and economically disadvantaged small businesses. Includes sole-source contracts up to $4.5M and 6 years of protected competition.")}
+                    ${numberedSection(2, "SDVOSB / VOSB", "Service-Disabled Veteran-Owned and Veteran-Owned Small Business. The VA especially prioritizes these — 10%+ of VA contracts go to SDVOSBs.")}
+                    ${numberedSection(3, "WOSB / EDWOSB", "Women-Owned Small Business and Economically Disadvantaged WOSB. 5% of federal contract dollars are targeted to WOSBs.")}
+                    ${numberedSection(4, "HUBZone", "Historically Underutilized Business Zone. Location-based — your office must be in a HUBZone and 35%+ of employees must live there. 3% goal with 10% price preference on most bids.")}
+                    ${featureBox(`
+                        <p style="color:#065f46;font-size:14px;margin:0;line-height:1.6;"><strong>Most contractors qualify for at least one set-aside program.</strong> If you haven't checked, it's worth an afternoon — certification often takes weeks, not months.</p>
+                    `)}
+                    ${articleCta("Government Set-Aside Programs: Your Unfair Advantage", `${SITE_URL}/blog/set-aside-programs`, "12 min read")}
+                `,
+                cta: { label: "Read the Full Guide", url: `${SITE_URL}/blog/set-aside-programs` },
+            });
+
+        case "edu_capability_statement":
+            return emailTemplate({
+                category: cat("edu_capability_statement"),
+                preheader: "Your capability statement is your federal business card. Here's how to write one that wins.",
+                eyebrow: "Learning Series",
+                heading: "The capability statement that wins",
+                body: `
+                    ${paragraph("Hi Donny,")}
+                    ${paragraph("A capability statement is a one-page document every federal contracting officer expects to see before awarding work. Done well, it's your ticket into conversations. Done poorly, it ends them.")}
+                    ${numberedSection(1, "Core Competencies", "3-5 bullet points on what you do best. Be specific — \"IT services\" is too broad. \"Cybersecurity assessments for DoD networks\" is specific.")}
+                    ${numberedSection(2, "Past Performance", "List 3-5 recent projects with agency, contract value, period of performance, and outcomes.")}
+                    ${numberedSection(3, "Differentiators", "Why pick you over the competition? Certifications, clearances, key personnel, proprietary methods, geographic coverage.")}
+                    ${numberedSection(4, "Company Data", "DUNS/UEI, CAGE code, NAICS codes, set-aside certifications, POC, and SAM.gov registration date.")}
+                    ${numberedSection(5, "Logo and Branding", "Professional design signals professionalism. Use your own PDF, not a Word doc with clip art.")}
+                    ${numberedSection(6, "Keep it to one page", "Contracting officers scan, they don't read. Fit everything on one page or they won't finish it.")}
+                    ${articleCta("How to Write a Capability Statement That Wins Contracts", `${SITE_URL}/blog/capability-statement-guide`, "10 min read")}
+                `,
+                cta: { label: "Read the Full Guide", url: `${SITE_URL}/blog/capability-statement-guide` },
             });
 
         default:
