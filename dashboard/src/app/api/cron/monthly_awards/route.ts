@@ -91,7 +91,7 @@ export async function GET(req: NextRequest) {
                             solicitation_number: o.solicitationNumber || null,
                             award_amount: award?.amount ? Number(award.amount) : null,
                             estimated_value: award?.amount ? Number(award.amount) : null,
-                            link_url: o.uiLink || `https://sam.gov/opp/${o.noticeId}/view`,
+                            link: o.uiLink || `https://sam.gov/opp/${o.noticeId}/view`,
                             is_archived: status === "AWARDED",
                             raw_json: o,
                             status,
