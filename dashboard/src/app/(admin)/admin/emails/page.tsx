@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import {
     Mail, Send, Eye, Loader2, CheckCircle2, AlertTriangle,
     ChevronRight, Smartphone, Monitor, Clock, Zap, CreditCard,
     UserPlus, Bell, Shield, Gift, BookOpen, Users, Building2, UserCheck,
-    ToggleLeft, ToggleRight,
+    ToggleLeft, ToggleRight, Edit3,
 } from "lucide-react";
 import clsx from "clsx";
 
@@ -312,7 +313,7 @@ export default function AdminEmails() {
                             </div>
                         </div>
 
-                        {/* Test send */}
+                        {/* Test send + Edit Design */}
                         <div className="mt-4 pt-4 border-t border-stone-100">
                             <div className="flex items-center gap-2">
                                 <input
@@ -332,6 +333,13 @@ export default function AdminEmails() {
                                     {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                                     {sending ? "Sending..." : "Send Test"}
                                 </button>
+                                <Link
+                                    href={`/admin/emails/${selected.id}/edit`}
+                                    className="bg-stone-900 text-white px-4 py-2 rounded-lg text-sm font-bold inline-flex items-center gap-1.5 hover:bg-stone-800 transition-colors"
+                                >
+                                    <Edit3 className="w-4 h-4" />
+                                    Edit Design
+                                </Link>
                             </div>
                             {sendResult && (
                                 <div className={clsx("flex items-center gap-1.5 mt-2 text-xs font-medium", sendResult.success ? "text-emerald-600" : "text-red-600")}>

@@ -22,6 +22,7 @@ import {
 } from "./email-template";
 import { isEmailEnabled, getEmailCategory } from "./email-settings";
 import { getDripSequence } from "./drip-sequences";
+import { loadCustomTemplate, renderMergeTags } from "./email-custom-template";
 
 let _resend: Resend | null = null;
 function getResend(): Resend | null {
@@ -122,15 +123,39 @@ export async function dispatchScheduledEmail(params: {
 }
 
 /** Shared send wrapper — checks DB-backed settings toggle, logs, catches errors */
-async function send(key: string, to: string, subject: string, html: string): Promise<boolean> {
+/**
+ * If mergeVars is provided, checks for a published custom template first.
+ * Custom templates use {{mergeTag}} syntax substituted at send time.
+ * Falls back to the code-generated HTML when no published custom exists.
+ */
+async function send(
+    key: string,
+    to: string,
+    subject: string,
+    html: string,
+    mergeVars?: Record<string, string | number | undefined | null>,
+): Promise<boolean> {
     if (!(await isEmailEnabled(key))) {
         console.log(`[email] ${key} is disabled in settings, skipping send to ${to}`);
         return false;
     }
+
+    let finalHtml = html;
+    let finalSubject = subject;
+
+    if (mergeVars) {
+        const custom = await loadCustomTemplate(key);
+        if (custom?.html) {
+            finalHtml = renderMergeTags(custom.html, mergeVars);
+            if (custom.subject) finalSubject = renderMergeTags(custom.subject, mergeVars);
+            console.log(`[email] using custom published template for ${key}`);
+        }
+    }
+
     try {
         const r = getResend();
         if (!r) { console.warn("RESEND_API_KEY not set, skipping email"); return false; }
-        await r.emails.send({ from: FROM_EMAIL, to, subject, html });
+        await r.emails.send({ from: FROM_EMAIL, to, subject: finalSubject, html: finalHtml });
         return true;
     } catch (e) {
         console.error(`Failed to send ${key} email:`, e);
@@ -158,7 +183,10 @@ export async function sendWelcomeEmail(to: string, companyName: string) {
         `,
         cta: { label: "Go to Dashboard", url: `${APP_URL}/dashboard` },
     });
-    return send("welcome", to, `Welcome to CapturePilot, ${companyName}`, html);
+    return send("welcome", to, `Welcome to CapturePilot, ${companyName}`, html, {
+        companyName,
+        dashboardUrl: `${APP_URL}/dashboard`,
+    });
 }
 
 // ─── Welcome (Consulting) ─────────────────────────────────
@@ -196,7 +224,13 @@ export async function sendConsultingWelcomeEmail(
         cta: { label: "Log In to Your Portal", url: `${APP_URL}/login` },
         footerNote: "Questions? Just reply to this email — our team will get back to you.",
     });
-    return send("consulting_welcome", to, `Your CapturePilot Portal is Ready — ${companyName}`, html);
+    return send("consulting_welcome", to, `Your CapturePilot Portal is Ready — ${companyName}`, html, {
+        contactName,
+        companyName,
+        email: to,
+        tempPassword: tempPassword || "",
+        loginUrl: `${APP_URL}/login`,
+    });
 }
 
 // ─── Task Notification ─────────────────────────────────────
@@ -225,7 +259,13 @@ export async function sendTaskNotification(
         `,
         cta: { label: "View Task", url: `${APP_URL}/portal/tasks` },
     });
-    return send("task_notification", to, `Action Required: ${taskTitle}`, html);
+    return send("task_notification", to, `Action Required: ${taskTitle}`, html, {
+        contactName,
+        taskTitle,
+        taskDescription,
+        dueDate: dueDate || "",
+        tasksUrl: `${APP_URL}/portal/tasks`,
+    });
 }
 
 // ─── Opportunity Alert ─────────────────────────────────────
@@ -350,7 +390,11 @@ export async function sendTrialExpiringEmail(to: string, contactName: string, da
     const subject = daysLeft <= 1
         ? "Your CapturePilot trial expires today"
         : `Your CapturePilot trial expires in ${daysLeft} days`;
-    return send(key, to, subject, html);
+    return send(key, to, subject, html, {
+        contactName,
+        daysLeft,
+        billingUrl: `${APP_URL}/settings/billing`,
+    });
 }
 
 // ─── Payment Failed ─────────────────────────────────────────
@@ -370,7 +414,10 @@ export async function sendPaymentFailedEmail(to: string, contactName: string) {
         `,
         cta: { label: "Update Payment Method", url: `${APP_URL}/settings/billing` },
     });
-    return send("payment_failed", to, "Payment failed — update your card to keep CapturePilot access", html);
+    return send("payment_failed", to, "Payment failed — update your card to keep CapturePilot access", html, {
+        contactName,
+        billingUrl: `${APP_URL}/settings/billing`,
+    });
 }
 
 // ─── Subscription Canceled ──────────────────────────────────
@@ -390,7 +437,10 @@ export async function sendSubscriptionCanceledEmail(to: string, contactName: str
         `,
         cta: { label: "Resubscribe", url: `${APP_URL}/settings/billing` },
     });
-    return send("subscription_canceled", to, "Your CapturePilot subscription has been canceled", html);
+    return send("subscription_canceled", to, "Your CapturePilot subscription has been canceled", html, {
+        contactName,
+        billingUrl: `${APP_URL}/settings/billing`,
+    });
 }
 
 // ─── Beta Deadline Reminder ─────────────────────────────────
@@ -433,7 +483,11 @@ export async function sendBetaDeadlineEmail(to: string, contactName: string, day
         : daysUntilCutoff <= 4
             ? `${daysUntilCutoff} days left to lock in 25% off CapturePilot`
             : "Lock in 25% off CapturePilot before beta ends May 9";
-    return send(key, to, subject, html);
+    return send(key, to, subject, html, {
+        contactName,
+        daysUntilCutoff,
+        checkoutUrl: `${APP_URL}/settings/billing?promo=BETA25`,
+    });
 }
 
 // ─── Educational: Federal Contracting 101 ──────────────────
@@ -454,7 +508,10 @@ export async function sendEduContracting101Email(to: string, contactName: string
         `,
         cta: { label: "Read the Full Guide", url: `${SITE_URL}/blog/government-contracting-101` },
     });
-    return send("edu_contracting_101", to, "Federal Contracting 101 — your quick-start guide", html);
+    return send("edu_contracting_101", to, "Federal Contracting 101 — your quick-start guide", html, {
+        contactName,
+        blogUrl: `${SITE_URL}/blog/government-contracting-101`,
+    });
 }
 
 // ─── Educational: NAICS Codes Explained ────────────────────
@@ -478,7 +535,10 @@ export async function sendEduNaicsCodesEmail(to: string, contactName: string) {
         `,
         cta: { label: "Read the Full Guide", url: `${SITE_URL}/blog/naics-codes-explained` },
     });
-    return send("edu_naics_codes", to, "NAICS codes, decoded — the contractor's cheat sheet", html);
+    return send("edu_naics_codes", to, "NAICS codes, decoded — the contractor's cheat sheet", html, {
+        contactName,
+        blogUrl: `${SITE_URL}/blog/naics-codes-explained`,
+    });
 }
 
 // ─── Educational: Set-Aside Programs ───────────────────────
@@ -502,7 +562,10 @@ export async function sendEduSetAsidesEmail(to: string, contactName: string) {
         `,
         cta: { label: "Read the Full Guide", url: `${SITE_URL}/blog/set-aside-programs` },
     });
-    return send("edu_set_asides", to, "Set-asides: the small business advantage in federal contracting", html);
+    return send("edu_set_asides", to, "Set-asides: the small business advantage in federal contracting", html, {
+        contactName,
+        blogUrl: `${SITE_URL}/blog/set-aside-programs`,
+    });
 }
 
 // ─── Educational: Capability Statement ─────────────────────
@@ -525,5 +588,8 @@ export async function sendEduCapabilityStatementEmail(to: string, contactName: s
         `,
         cta: { label: "Read the Full Guide", url: `${SITE_URL}/blog/capability-statement-guide` },
     });
-    return send("edu_capability_statement", to, "Your capability statement, upgraded", html);
+    return send("edu_capability_statement", to, "Your capability statement, upgraded", html, {
+        contactName,
+        blogUrl: `${SITE_URL}/blog/capability-statement-guide`,
+    });
 }
