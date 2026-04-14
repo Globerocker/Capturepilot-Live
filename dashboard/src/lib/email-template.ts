@@ -1,15 +1,11 @@
 /**
  * Shared email template for all CapturePilot emails.
- * Matches the website brand: dark stone-950 header with grid pattern,
- * light body with subtle emerald dots, dark stone-900 footer with legal info.
+ * Dark stone-950 header with emerald CP badge, light body, dark footer with legal info.
+ * All backgrounds use solid colors — no SVG data URIs (they break email clients).
  */
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.capturepilot.com";
 const SITE_URL = "https://www.capturepilot.com";
-
-// Logo URLs (hosted on the public website)
-const LOGO_WHITE = `${SITE_URL}/cp-icon-white.png`;
-const LOGO_WORDMARK = `${SITE_URL}/logo.png`;
 
 // Brand palette (matches website exactly)
 const COLORS = {
@@ -36,12 +32,6 @@ const COLORS = {
 
 const FONT_STACK =
     "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
-
-// SVG data URI for the subtle dot pattern (emerald at 4% opacity on white)
-const DOTS_BG = `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24'><circle cx='12' cy='12' r='1' fill='%23059669' fill-opacity='0.06'/></svg>")`;
-
-// SVG data URI for grid pattern (white at 4% opacity on dark)
-const GRID_BG = `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='40' height='40'><path d='M40 0H0V40' fill='none' stroke='%23ffffff' stroke-opacity='0.04'/></svg>")`;
 
 interface EmailTemplateOptions {
     /** Hidden preheader text shown in inbox preview */
@@ -138,14 +128,18 @@ ${preheaderHtml}
 <!-- Thin emerald gradient accent bar -->
 <tr><td style="height:3px;background:linear-gradient(90deg,${COLORS.emerald600} 0%,${COLORS.emerald400} 50%,${COLORS.sky500} 100%);line-height:3px;font-size:0;">&nbsp;</td></tr>
 
-<!-- Dark header with grid pattern -->
+<!-- Dark header -->
 <tr>
-<td class="cp-header-pad" style="background:${COLORS.black};background-image:${GRID_BG};background-repeat:repeat;padding:28px 32px;">
+<td class="cp-header-pad" style="background-color:${COLORS.black};padding:28px 32px;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
 <tr>
 <td style="vertical-align:middle;">
-    <img src="${LOGO_WHITE}" alt="CapturePilot" width="28" height="28" style="display:inline-block;vertical-align:middle;border:0;outline:none;" />
-    <span style="display:inline-block;vertical-align:middle;margin-left:10px;color:${COLORS.white};font-size:17px;font-weight:800;letter-spacing:-0.3px;">CapturePilot</span>
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="display:inline-table;vertical-align:middle;">
+    <tr>
+        <td style="background-color:${COLORS.emerald500};width:28px;height:28px;border-radius:6px;text-align:center;vertical-align:middle;color:${COLORS.white};font-weight:800;font-size:14px;line-height:28px;">CP</td>
+        <td style="padding-left:10px;color:${COLORS.white};font-size:17px;font-weight:800;letter-spacing:-0.3px;vertical-align:middle;">CapturePilot</td>
+    </tr>
+    </table>
 </td>
 <td align="right" style="vertical-align:middle;">
     <span style="color:${COLORS.stone400};font-size:10px;text-transform:uppercase;letter-spacing:2px;font-weight:600;">Capture Intelligence</span>
@@ -155,9 +149,9 @@ ${preheaderHtml}
 </td>
 </tr>
 
-<!-- Body with subtle dots background -->
+<!-- Body -->
 <tr>
-<td class="cp-pad" style="background:${COLORS.white};background-image:${DOTS_BG};background-repeat:repeat;padding:44px 40px;">
+<td class="cp-pad" style="background-color:${COLORS.white};padding:44px 40px;">
 
 ${eyebrowHtml}
 
@@ -173,21 +167,25 @@ ${secondaryCtaHtml}
 
 ${footerNote ? `<tr><td style="background:${COLORS.stone50};padding:20px 40px;border-top:1px solid ${COLORS.stone200};"><p style="color:${COLORS.stone600};font-size:13px;margin:0;line-height:1.6;">${footerNote}</p></td></tr>` : ""}
 
-<!-- Dark footer with grid pattern + legal info -->
+<!-- Dark footer + legal info -->
 <tr>
-<td style="background:${COLORS.stone900};background-image:${GRID_BG};background-repeat:repeat;padding:36px 40px 28px;">
+<td style="background-color:${COLORS.stone900};padding:36px 40px 28px;">
 
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
 <tr class="cp-footer-cols">
 
 <!-- Column 1: Brand -->
 <td class="cp-footer-col" width="40%" style="vertical-align:top;padding-right:16px;">
-    <img src="${LOGO_WHITE}" alt="CapturePilot" width="24" height="24" style="display:inline-block;vertical-align:middle;border:0;" />
-    <span style="display:inline-block;vertical-align:middle;margin-left:8px;color:${COLORS.white};font-size:15px;font-weight:800;">CapturePilot</span>
-    <p style="color:${COLORS.stone400};font-size:12px;line-height:1.6;margin:12px 0 0;">Strategic capture intelligence for federal contractors.</p>
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="display:inline-table;vertical-align:middle;">
+    <tr>
+        <td style="background-color:${COLORS.emerald500};width:24px;height:24px;border-radius:5px;text-align:center;vertical-align:middle;color:${COLORS.white};font-weight:800;font-size:12px;line-height:24px;">CP</td>
+        <td style="padding-left:8px;color:${COLORS.white};font-size:15px;font-weight:800;vertical-align:middle;">CapturePilot</td>
+    </tr>
+    </table>
+    <p style="color:${COLORS.stone400};font-size:12px;line-height:1.6;margin:14px 0 0;">Strategic capture intelligence for federal contractors.</p>
     <p style="margin:14px 0 0;">
-        <a href="https://www.linkedin.com/company/capturepilot" style="display:inline-block;color:${COLORS.stone400};font-size:11px;text-decoration:none;">
-            <span style="display:inline-block;width:22px;height:22px;background:${COLORS.stone800};border-radius:4px;text-align:center;line-height:22px;color:${COLORS.stone300};font-weight:700;font-size:11px;">in</span>
+        <a href="https://www.linkedin.com/company/capturepilot" style="display:inline-block;text-decoration:none;">
+            <span style="display:inline-block;width:22px;height:22px;background-color:${COLORS.stone800};border-radius:4px;text-align:center;line-height:22px;color:${COLORS.stone300};font-weight:700;font-size:11px;">in</span>
         </a>
     </p>
 </td>
