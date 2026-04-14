@@ -67,6 +67,29 @@ git push captiorpilot main && git push live main && git push globerocker main
 - `contacts` — 91K SAM.gov opportunity contacts
 - `naics_codes` / `psc_codes` — validation whitelists for ingestion
 
+## Recent major changes (2026-04-16 — parallel agent sweep)
+
+**Enrichment pipeline fixed** (was completely broken in production):
+- `strategic_scoring` was empty on 100% of 57k opps. Now populated by new `/api/cron/strategic_scoring` + `/src/lib/strategic-scoring.ts` (deterministic rules).
+- `ai_win_strategy` was empty on 100% — cron existed but wasn't in `vercel.json`. Now scheduled daily.
+- `structured_requirements` empty on 94.7% — rewrote `backfill_requirements` cron to produce proper `scope_of_work` / `qualifications` / `deliverables` arrays.
+- `/api/cron/enrich` tried to `exec("python ...")` which can't run on Vercel. Replaced with TS-native implementation.
+- Latent `link_url` → `link` column mismatch causing silent upsert data loss. Fixed in ingest_sam, ingest_grants, monthly_awards.
+- New admin endpoints: `POST /api/admin/enrich-opportunity/[id]` (single opp end-to-end), `POST /api/admin/backfill-enrichment` (up to 5k rows per call).
+- After deploy, run backfill: `curl -X POST https://app/api/admin/backfill-enrichment -d '{"limit":5000,"only":"both"}'` repeatedly until all 57k are backfilled.
+
+**Capability Statement**: full rewrite with proper PDF (branded header, color bands, structured sections), Quick Checker crawler prefill, SSE-streamed per-section progress, TipTap bubble-menu AI editing (improve/shorten/expand/tighten), Google Drive save via Supabase provider_token.
+
+**AI Proposal**: moved to background job. New `proposal_jobs` table (migration 026). Generation runs fire-and-forget with `after()`. Per-section progress polled from `/api/ai/write-proposal/status/[jobId]`. Global `<RunningJobsIndicator>` in dashboard layout shows running jobs across navigation. `localStorage` persists active job across reloads.
+
+**Opportunities**: three view modes (card/list/table with column picker), bulk XLSX export (capped 20) via `exceljs`, AI natural-language filter via gpt-4o-mini JSON mode (`/api/matches/ai-filter`). View choice + column picks persisted in localStorage per profile.
+
+**Pipeline**: new `/pipeline/[pursuitId]` detail page with activity timeline + notes + action items. Notice-type tabs (All / Sources Sought / Pre-Solicitation / Solicitation). Custom stage renaming/reordering (config in `user_profiles.notes.pipeline_stages`). New `pipeline_activity` table (migration 027) logs stage/priority/note changes.
+
+**Billing**: multi-step cancel flow with 50% retention offer → reason survey → typed confirmation. Stripe subscription uses `cancel_at_period_end` (soft cancel). Feedback persisted to `cancellation_feedback` (migration 028).
+
+**Attachments**: "Analyze all attachments" button on opportunity detail runs a background job (migration 029) that downloads PDFs/DOCs via existing SAM proxy, uploads to Supabase Storage `opportunity-attachments` bucket, passes combined text to gpt-4o-mini (JSON mode), writes back to `opportunities.structured_requirements`. 30-day TTL via new `attachments_cached_until` column.
+
 ## Feature Map (by page)
 
 ### Dashboard (`/dashboard`)
@@ -153,6 +176,9 @@ git push captiorpilot main && git push live main && git push globerocker main
 | `@sentry/nextjs` | Error monitoring | global |
 | `react-email-editor` (Unlayer) | Visual email template builder | `/api/email-templates/` |
 | `@crawlee/cheerio` | HTML scraping for competitor/company analysis | `/lib/crawler/` |
+| `@dnd-kit/core` + `@dnd-kit/sortable` | Kanban pipeline drag-drop | `/components/pipeline/KanbanBoard.tsx` |
+| `react-pdf` | Inline PDF preview of attachments | `/components/PdfPreview.tsx` |
+| `exceljs` | Bulk XLSX export of selected matches | `/api/matches/export/route.ts` |
 | `lucide-react` | **Only allowed icon library** | everywhere |
 | `clsx` + `tailwind-merge` | Conditional class composition | everywhere |
 
