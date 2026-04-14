@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
     Mail, Send, Eye, Loader2, CheckCircle2, AlertTriangle,
     ChevronRight, Smartphone, Monitor, Clock, Zap, CreditCard,
     UserPlus, Bell, Shield, Gift, BookOpen, Users, Building2, UserCheck,
-    ToggleLeft, ToggleRight, Info,
+    ToggleLeft, ToggleRight,
 } from "lucide-react";
 import clsx from "clsx";
 
@@ -79,6 +79,8 @@ function AudienceBadge({ audience }: { audience: Audience }) {
     );
 }
 
+const ALL_AUDIENCES: Audience[] = ["self_service", "consulting", "lead", "all_users"];
+
 export default function AdminEmails() {
     const [selectedId, setSelectedId] = useState<string>("welcome");
     const [group, setGroup] = useState("all");
@@ -86,13 +88,70 @@ export default function AdminEmails() {
     const [testEmail, setTestEmail] = useState("");
     const [sending, setSending] = useState(false);
     const [sendResult, setSendResult] = useState<{ success: boolean; message: string } | null>(null);
-    const [enabled, setEnabled] = useState<Record<string, boolean>>(
-        Object.fromEntries(TEMPLATES.map(t => [t.id, t.enabled]))
+    const [loaded, setLoaded] = useState(false);
+    const [saving, setSaving] = useState<string | null>(null);
+
+    // Live settings from DB (override static TEMPLATES metadata for enabled + audience)
+    const [settings, setSettings] = useState<Record<string, { enabled: boolean; audience: Audience[] }>>(() =>
+        Object.fromEntries(TEMPLATES.map(t => [t.id, { enabled: t.enabled, audience: t.audience }]))
     );
+
+    // Fetch persisted settings on mount
+    useEffect(() => {
+        (async () => {
+            try {
+                const res = await fetch("/api/admin/email-settings");
+                if (!res.ok) return;
+                const data = await res.json();
+                if (data.settings) {
+                    const map: typeof settings = {};
+                    for (const s of data.settings as Array<{ key: string; enabled: boolean; audience: Audience[] }>) {
+                        map[s.key] = { enabled: s.enabled, audience: s.audience };
+                    }
+                    setSettings(prev => ({ ...prev, ...map }));
+                }
+            } finally {
+                setLoaded(true);
+            }
+        })();
+    }, []);
 
     const filtered = group === "all" ? TEMPLATES : TEMPLATES.filter(t => t.group === group);
     const selected = TEMPLATES.find(t => t.id === selectedId) || TEMPLATES[0];
-    const isEnabled = enabled[selected.id] ?? true;
+    const selectedSettings = settings[selected.id] || { enabled: true, audience: selected.audience };
+    const isEnabled = selectedSettings.enabled;
+
+    const persist = async (key: string, patch: { enabled?: boolean; audience?: Audience[] }) => {
+        setSaving(key);
+        // Optimistic update
+        setSettings(prev => ({ ...prev, [key]: { ...prev[key], ...patch } }));
+        try {
+            const res = await fetch("/api/admin/email-settings", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ key, ...patch }),
+            });
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                console.error("Failed to save setting:", data.error);
+            }
+        } catch (e) {
+            console.error("Network error saving setting:", e);
+        } finally {
+            setSaving(null);
+        }
+    };
+
+    const toggleEnabled = (key: string) => {
+        const current = settings[key]?.enabled ?? true;
+        persist(key, { enabled: !current });
+    };
+
+    const toggleAudience = (key: string, aud: Audience) => {
+        const current = settings[key]?.audience ?? [];
+        const next = current.includes(aud) ? current.filter(a => a !== aud) : [...current, aud];
+        persist(key, { audience: next });
+    };
 
     const handleSendTest = async () => {
         if (!testEmail.trim()) return;
@@ -124,15 +183,6 @@ export default function AdminEmails() {
                 <span className="text-xs text-stone-400">{TEMPLATES.length} templates</span>
             </div>
 
-            {/* Note about persistence */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 flex items-start gap-2">
-                <Info className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
-                <div className="flex-1 text-xs text-blue-900">
-                    <p className="font-bold mb-0.5">Toggles are currently session-only.</p>
-                    <p className="text-blue-700">Persistent toggles (DB-backed) and a drag-and-drop visual editor (Unlayer) are coming in the next sprint. For now, edit defaults in <code className="bg-blue-100 px-1.5 py-0.5 rounded">src/lib/email-settings.ts</code>.</p>
-                </div>
-            </div>
-
             {/* Group filter */}
             <div className="flex gap-1.5 flex-wrap">
                 {GROUPS.map(c => (
@@ -155,7 +205,9 @@ export default function AdminEmails() {
             <div className="flex gap-6">
                 {/* Template list */}
                 <div className="w-80 flex-shrink-0 space-y-1">
-                    {filtered.map(t => (
+                    {filtered.map(t => {
+                        const s = settings[t.id] || { enabled: true, audience: t.audience };
+                        return (
                         <button
                             key={t.id}
                             type="button"
@@ -172,18 +224,19 @@ export default function AdminEmails() {
                                 <div className="flex-1 min-w-0">
                                     <p className={clsx(
                                         "text-sm font-bold truncate",
-                                        enabled[t.id] ? "text-stone-800" : "text-stone-400 line-through"
+                                        s.enabled ? "text-stone-800" : "text-stone-400 line-through"
                                     )}>{t.name}</p>
                                     <p className="text-[10px] text-stone-400 truncate">{t.trigger}</p>
                                 </div>
-                                {!enabled[t.id] && <span className="text-[9px] font-bold text-stone-400 bg-stone-100 px-1.5 py-0.5 rounded">OFF</span>}
+                                {!s.enabled && <span className="text-[9px] font-bold text-stone-400 bg-stone-100 px-1.5 py-0.5 rounded">OFF</span>}
                                 {selectedId === t.id && <ChevronRight className="w-3.5 h-3.5 text-stone-400" />}
                             </div>
                             <div className="flex gap-1 mt-2 pl-6 flex-wrap">
-                                {t.audience.map(a => <AudienceBadge key={a} audience={a} />)}
+                                {s.audience.map(a => <AudienceBadge key={a} audience={a} />)}
                             </div>
                         </button>
-                    ))}
+                        );
+                    })}
                 </div>
 
                 {/* Preview panel */}
@@ -203,18 +256,21 @@ export default function AdminEmails() {
                                 </div>
                                 <p className="text-sm text-stone-500 mt-1">{selected.description}</p>
                             </div>
-                            {/* Enable toggle */}
+                            {/* Enable toggle — persists to DB */}
                             <button
                                 type="button"
-                                onClick={() => setEnabled(prev => ({ ...prev, [selected.id]: !prev[selected.id] }))}
+                                onClick={() => toggleEnabled(selected.id)}
+                                disabled={!loaded || saving === selected.id}
                                 className={clsx(
-                                    "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border font-bold text-xs transition-colors",
+                                    "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border font-bold text-xs transition-colors disabled:opacity-60",
                                     isEnabled
                                         ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
                                         : "bg-stone-100 text-stone-500 border-stone-200 hover:bg-stone-200"
                                 )}
                             >
-                                {isEnabled ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4" />}
+                                {saving === selected.id ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : isEnabled ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4" />}
                                 {isEnabled ? "Enabled" : "Disabled"}
                             </button>
                         </div>
@@ -230,9 +286,28 @@ export default function AdminEmails() {
                                 <p className="text-sm text-stone-700">{selected.trigger}</p>
                             </div>
                             <div>
-                                <p className="text-[10px] text-stone-400 uppercase tracking-wider font-bold mb-1">Audience</p>
+                                <p className="text-[10px] text-stone-400 uppercase tracking-wider font-bold mb-1">Audience <span className="normal-case text-stone-300">(click to toggle)</span></p>
                                 <div className="flex gap-1 flex-wrap">
-                                    {selected.audience.map(a => <AudienceBadge key={a} audience={a} />)}
+                                    {ALL_AUDIENCES.map(a => {
+                                        const active = selectedSettings.audience.includes(a);
+                                        const info = AUDIENCE_LABELS[a];
+                                        const Icon = info.icon;
+                                        return (
+                                            <button
+                                                key={a}
+                                                type="button"
+                                                onClick={() => toggleAudience(selected.id, a)}
+                                                disabled={!loaded || saving === selected.id}
+                                                className={clsx(
+                                                    "inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded border transition-all disabled:opacity-60",
+                                                    active ? info.color : "bg-white text-stone-400 border-stone-200 hover:bg-stone-50 opacity-50"
+                                                )}
+                                            >
+                                                <Icon className="w-3 h-3" />
+                                                {info.label}
+                                            </button>
+                                        );
+                                    })}
                                 </div>
                             </div>
                         </div>

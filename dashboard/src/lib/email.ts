@@ -30,9 +30,9 @@ function getResend(): Resend | null {
 
 const FROM_EMAIL = process.env.FROM_EMAIL || "CapturePilot <noreply@capturepilot.com>";
 
-/** Shared send wrapper — checks settings toggle, logs, catches errors */
+/** Shared send wrapper — checks DB-backed settings toggle, logs, catches errors */
 async function send(key: string, to: string, subject: string, html: string): Promise<boolean> {
-    if (!isEmailEnabled(key)) {
+    if (!(await isEmailEnabled(key))) {
         console.log(`[email] ${key} is disabled in settings, skipping send to ${to}`);
         return false;
     }
@@ -50,7 +50,7 @@ async function send(key: string, to: string, subject: string, html: string): Pro
 // ─── Welcome (Self-Service) ─────────────────────────────────
 export async function sendWelcomeEmail(to: string, companyName: string) {
     const html = emailTemplate({
-        category: getEmailCategory("welcome"),
+        category: await getEmailCategory("welcome"),
         preheader: `We're already scanning 30,000+ federal opportunities for ${companyName}.`,
         eyebrow: "Welcome Aboard",
         heading: `Welcome to CapturePilot, ${companyName}`,
@@ -84,7 +84,7 @@ export async function sendConsultingWelcomeEmail(
         <p style="color:${COLORS.stone500};font-size:13px;margin:10px 0 0;">You can also sign in with Google.</p>
     `;
     const html = emailTemplate({
-        category: getEmailCategory("consulting_welcome"),
+        category: await getEmailCategory("consulting_welcome"),
         preheader: `Your CapturePilot consulting portal for ${companyName} is ready.`,
         eyebrow: "Your Portal Is Ready",
         heading: `Hi ${contactName},`,
@@ -120,7 +120,7 @@ export async function sendTaskNotification(
         ? `<p style="color:#dc2626;font-size:14px;font-weight:700;margin:10px 0 0;">Due: ${new Date(dueDate).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</p>`
         : "";
     const html = emailTemplate({
-        category: getEmailCategory("task_notification"),
+        category: await getEmailCategory("task_notification"),
         preheader: `Action required: ${taskTitle}`,
         eyebrow: "Task Assigned",
         heading: `Hi ${contactName},`,
@@ -155,7 +155,7 @@ export async function sendOpportunityAlert(
         </tr>`).join("");
 
     const html = emailTemplate({
-        category: getEmailCategory("opportunity_alert"),
+        category: await getEmailCategory("opportunity_alert"),
         preheader: `${opportunities.length} new federal opportunities match your profile.`,
         eyebrow: "Daily Matches",
         heading: `${contactName}, ${opportunities.length} new opportunities`,
@@ -199,7 +199,7 @@ export async function sendQuickCheckerResultsEmail(
     const remaining = totalMatches - 3;
 
     const html = emailTemplate({
-        category: getEmailCategory("quick_checker"),
+        category: await getEmailCategory("quick_checker"),
         preheader: `${companyName} scored ${readinessScore}/100 for federal readiness. ${totalMatches} opportunities matched.`,
         eyebrow: "Federal Readiness Report",
         heading: "Your readiness score is in",
@@ -233,7 +233,7 @@ export async function sendTrialExpiringEmail(to: string, contactName: string, da
     const key = daysLeft <= 1 ? "trial_expiring_1d" : "trial_expiring_3d";
 
     const html = emailTemplate({
-        category: getEmailCategory(key),
+        category: await getEmailCategory(key),
         preheader: `Your CapturePilot trial expires ${urgency}. Subscribe to keep your matches.`,
         eyebrow: daysLeft <= 1 ? "Final Day" : "Trial Ending Soon",
         heading: `Your trial expires ${urgency}`,
@@ -265,7 +265,7 @@ export async function sendTrialExpiringEmail(to: string, contactName: string, da
 // ─── Payment Failed ─────────────────────────────────────────
 export async function sendPaymentFailedEmail(to: string, contactName: string) {
     const html = emailTemplate({
-        category: getEmailCategory("payment_failed"),
+        category: await getEmailCategory("payment_failed"),
         preheader: "We couldn't process your payment. Update your card to keep access.",
         eyebrow: "Payment Issue",
         heading: "We couldn't process your payment",
@@ -285,7 +285,7 @@ export async function sendPaymentFailedEmail(to: string, contactName: string) {
 // ─── Subscription Canceled ──────────────────────────────────
 export async function sendSubscriptionCanceledEmail(to: string, contactName: string) {
     const html = emailTemplate({
-        category: getEmailCategory("subscription_canceled"),
+        category: await getEmailCategory("subscription_canceled"),
         preheader: "Your CapturePilot subscription has been canceled.",
         eyebrow: "Subscription Update",
         heading: "Your subscription has been canceled",
@@ -312,7 +312,7 @@ export async function sendBetaDeadlineEmail(to: string, contactName: string, day
     const key = daysUntilCutoff <= 1 ? "beta_deadline_1d" : "beta_deadline_8d";
 
     const html = emailTemplate({
-        category: getEmailCategory(key),
+        category: await getEmailCategory(key),
         preheader: `${urgencyText} to lock in 25% off CapturePilot forever. Use code BETA25 before May 9.`,
         eyebrow: "Beta Ending May 9",
         heading: `${urgencyText} to lock in your beta discount`,
@@ -348,7 +348,7 @@ export async function sendBetaDeadlineEmail(to: string, contactName: string, day
 // ─── Educational: Federal Contracting 101 ──────────────────
 export async function sendEduContracting101Email(to: string, contactName: string) {
     const html = emailTemplate({
-        category: getEmailCategory("edu_contracting_101"),
+        category: await getEmailCategory("edu_contracting_101"),
         preheader: "The complete beginner's guide to federal government contracting.",
         eyebrow: "Learning Series",
         heading: "Federal Contracting 101",
@@ -369,7 +369,7 @@ export async function sendEduContracting101Email(to: string, contactName: string
 // ─── Educational: NAICS Codes Explained ────────────────────
 export async function sendEduNaicsCodesEmail(to: string, contactName: string) {
     const html = emailTemplate({
-        category: getEmailCategory("edu_naics_codes"),
+        category: await getEmailCategory("edu_naics_codes"),
         preheader: "NAICS codes determine which federal contracts you qualify for. Here's how to pick the right ones.",
         eyebrow: "Learning Series",
         heading: "NAICS codes, decoded",
@@ -393,7 +393,7 @@ export async function sendEduNaicsCodesEmail(to: string, contactName: string) {
 // ─── Educational: Set-Aside Programs ───────────────────────
 export async function sendEduSetAsidesEmail(to: string, contactName: string) {
     const html = emailTemplate({
-        category: getEmailCategory("edu_set_asides"),
+        category: await getEmailCategory("edu_set_asides"),
         preheader: "Set-aside contracts reserve federal work for qualifying small businesses. Here's your unfair advantage.",
         eyebrow: "Learning Series",
         heading: "Set-aside programs: your unfair advantage",
@@ -417,7 +417,7 @@ export async function sendEduSetAsidesEmail(to: string, contactName: string) {
 // ─── Educational: Capability Statement ─────────────────────
 export async function sendEduCapabilityStatementEmail(to: string, contactName: string) {
     const html = emailTemplate({
-        category: getEmailCategory("edu_capability_statement"),
+        category: await getEmailCategory("edu_capability_statement"),
         preheader: "Your capability statement is your federal business card. Here's how to write one that wins.",
         eyebrow: "Learning Series",
         heading: "The capability statement that wins",
