@@ -1,15 +1,19 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseClient } from "@/lib/supabase/client";
-import { Loader2, Sparkles, Search, X, ChevronLeft, ChevronRight, Trophy, Clock, Shield, Target, ArrowRight, Bookmark, EyeOff, Flame, ChevronUp, ChevronDown, Filter, CheckCircle2 } from "lucide-react";
-import NaicsKeywordInput from "@/components/NaicsKeywordInput";
+import { Loader2, Sparkles, Search, X, ChevronLeft, ChevronRight, Trophy, Shield, Target, ArrowRight, Bookmark, EyeOff, Flame, ChevronUp, ChevronDown, Filter, CheckCircle2, Download, AlertTriangle } from "lucide-react";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { createPursuit } from "@/lib/pursue-utils";
 import { Skeleton, SkeletonMatchCard } from "@/components/ui/Skeleton";
 import clsx from "clsx";
 import Link from "next/link";
+import { ViewToggle, type ViewMode } from "@/components/matches/ViewToggle";
+import { TableView, DEFAULT_COLUMN_KEYS, ALL_COLUMNS, type MatchRow } from "@/components/matches/TableView";
+import { ListView } from "@/components/matches/ListView";
+import { AIFilterBar, type AIFilters } from "@/components/matches/AIFilterBar";
+import { BulkExportDialog } from "@/components/matches/BulkExportDialog";
 
 const supabase = createSupabaseClient();
 
@@ -20,24 +24,11 @@ const formatCurrency = (val: number | null | undefined) => {
     return `$${val.toLocaleString()}`;
 };
 
-interface UserMatch {
-    id: string;
-    score: number;
-    classification: string;
+const MAX_SELECTION = 20;
+
+interface UserMatch extends MatchRow {
     score_breakdown: Record<string, number> | null;
-    is_saved: boolean;
     is_dismissed: boolean;
-    opportunities: {
-        id: string;
-        title: string;
-        agency: string;
-        naics_code: string;
-        notice_type: string;
-        response_deadline: string;
-        set_aside_code: string;
-        place_of_performance_state: string;
-        award_amount: number | null;
-    };
 }
 
 export default function MyMatchesPage() {
@@ -57,13 +48,52 @@ export default function MyMatchesPage() {
     const [filterSetAside, setFilterSetAside] = useState("");
     const [filterState, setFilterState] = useState("");
     const [filterNaics, setFilterNaics] = useState("");
-    const [filterClearance, setFilterClearance] = useState("");
-    const [filterCertification, setFilterCertification] = useState("");
-    const [viewMode, setViewMode] = useState<"strong" | "all">("strong");
+    const [filterMinScore, setFilterMinScore] = useState<number | null>(null);
+    const [filterMaxDeadlineDays, setFilterMaxDeadlineDays] = useState<number | null>(null);
     const [pursuingIds, setPursuingIds] = useState<Set<string>>(new Set());
     const [pursuedIds, setPursuedIds] = useState<Set<string>>(new Set());
     const [generatingMatches, setGeneratingMatches] = useState(false);
+
+    // View mode + columns
+    const [viewMode, setViewMode] = useState<ViewMode>("card");
+    const [visibleColumnKeys, setVisibleColumnKeys] = useState<string[]>(DEFAULT_COLUMN_KEYS);
+
+    // Selection / export
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [exportOpen, setExportOpen] = useState(false);
+    const [selectionWarning, setSelectionWarning] = useState<string | null>(null);
+
+    // AI filter
+    const [aiPrompt, setAiPrompt] = useState<string | null>(null);
+
     const pageSize = 25;
+
+    // Load persisted view + columns from localStorage
+    useEffect(() => {
+        if (!profileId) return;
+        try {
+            const savedView = localStorage.getItem(`matches:view:${profileId}`);
+            if (savedView === "card" || savedView === "list" || savedView === "table") setViewMode(savedView);
+            const savedCols = localStorage.getItem(`matches:columns:${profileId}`);
+            if (savedCols) {
+                const parsed = JSON.parse(savedCols);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    const valid = parsed.filter((k: string) => ALL_COLUMNS.some(c => c.key === k));
+                    if (valid.length > 0) setVisibleColumnKeys(valid);
+                }
+            }
+        } catch { /* ignore */ }
+    }, [profileId]);
+
+    // Persist
+    useEffect(() => {
+        if (!profileId) return;
+        try { localStorage.setItem(`matches:view:${profileId}`, viewMode); } catch { /* ignore */ }
+    }, [viewMode, profileId]);
+    useEffect(() => {
+        if (!profileId) return;
+        try { localStorage.setItem(`matches:columns:${profileId}`, JSON.stringify(visibleColumnKeys)); } catch { /* ignore */ }
+    }, [visibleColumnKeys, profileId]);
 
     useEffect(() => {
         async function loadProfile() {
@@ -90,18 +120,12 @@ export default function MyMatchesPage() {
             .from("user_matches")
             .select(
                 "id, score, classification, score_breakdown, is_saved, is_dismissed, " +
-                "opportunities!inner(id, title, agency, naics_code, notice_type, response_deadline, set_aside_code, place_of_performance_state, award_amount, status, is_archived, structured_requirements)",
+                "opportunities(id, title, agency, naics_code, notice_type, response_deadline, set_aside_code, place_of_performance_state, award_amount)",
                 { count: "exact" }
             )
             .eq("user_profile_id", profileId)
             .eq("is_dismissed", false)
-            .eq("opportunities.is_archived", false)
             .in("opportunities.status", ["ACTIVE", "EXPIRING_SOON", "MARKET_RESEARCH", "DISCOVERED"]);
-
-        // View mode: "strong" = matches >= 50% (the curated view), "all" = everything including weak matches.
-        if (viewMode === "strong") {
-            query = query.gte("score", 0.5);
-        }
 
         if (filter === "HOT") {
             query = query.eq("classification", "HOT");
@@ -113,9 +137,8 @@ export default function MyMatchesPage() {
             query = query.eq("is_saved", true);
         }
 
-        if (filterNaics) {
-            // NAICS can be a full code or a prefix — use ilike for flexible matching.
-            query = query.ilike("opportunities.naics_code", `${filterNaics}%`);
+        if (filterMinScore != null) {
+            query = query.gte("score", filterMinScore);
         }
 
         query = query.order("score", { ascending: false });
@@ -144,15 +167,17 @@ export default function MyMatchesPage() {
         if (filterState) {
             filtered = filtered.filter(m => m.opportunities?.place_of_performance_state === filterState);
         }
-        if (filterClearance) {
-            filtered = filtered.filter(m => {
-                const sr = (m.opportunities as unknown as { structured_requirements?: { security_clearance?: string } })?.structured_requirements;
-                return sr?.security_clearance?.toLowerCase().includes(filterClearance.toLowerCase());
-            });
+        if (filterNaics) {
+            filtered = filtered.filter(m => m.opportunities?.naics_code?.startsWith(filterNaics));
         }
-        if (filterCertification) {
-            // SBA certification filter reuses set-aside code (best proxy available in this schema).
-            filtered = filtered.filter(m => m.opportunities?.set_aside_code?.toLowerCase().includes(filterCertification.toLowerCase()));
+        if (filterMaxDeadlineDays != null) {
+            const cutoff = Date.now() + filterMaxDeadlineDays * 24 * 60 * 60 * 1000;
+            filtered = filtered.filter(m => {
+                const d = m.opportunities?.response_deadline;
+                if (!d) return false;
+                const t = new Date(d).getTime();
+                return t >= Date.now() && t <= cutoff;
+            });
         }
 
         // Client-side sorting
@@ -178,10 +203,10 @@ export default function MyMatchesPage() {
         }
 
         setMatches(filtered);
-        const hasClientFilter = activeSearch || filterNoticeType || filterSetAside || filterState || filterClearance || filterCertification;
-        setTotalCount(hasClientFilter ? filtered.length : (count || 0));
+        const anyClientFilter = Boolean(activeSearch || filterNoticeType || filterSetAside || filterState || filterNaics || filterMaxDeadlineDays != null);
+        setTotalCount(anyClientFilter ? filtered.length : (count || 0));
         setLoading(false);
-    }, [profileId, page, activeSearch, filter, sortBy, sortDirection, filterNoticeType, filterSetAside, filterState, filterNaics, filterClearance, filterCertification, viewMode]);
+    }, [profileId, page, activeSearch, filter, sortBy, sortDirection, filterNoticeType, filterSetAside, filterState, filterNaics, filterMinScore, filterMaxDeadlineDays]);
 
     useEffect(() => {
         if (profileId) fetchMatches();
@@ -195,6 +220,7 @@ export default function MyMatchesPage() {
     const dismissMatch = async (matchId: string) => {
         await supabase.from("user_matches").update({ is_dismissed: true }).eq("id", matchId);
         setMatches(prev => prev.filter(m => m.id !== matchId));
+        setSelectedIds(prev => { const n = new Set(prev); n.delete(matchId); return n; });
         setTotalCount(prev => prev - 1);
     };
 
@@ -217,6 +243,80 @@ export default function MyMatchesPage() {
         setGeneratingMatches(false);
     };
 
+    // Selection handlers
+    const toggleSelect = (id: string) => {
+        setSelectionWarning(null);
+        setSelectedIds(prev => {
+            const n = new Set(prev);
+            if (n.has(id)) {
+                n.delete(id);
+            } else {
+                if (n.size >= MAX_SELECTION) {
+                    setSelectionWarning(`You can select at most ${MAX_SELECTION} opportunities per export.`);
+                    return prev;
+                }
+                n.add(id);
+            }
+            return n;
+        });
+    };
+
+    const toggleSelectAllOnPage = () => {
+        setSelectionWarning(null);
+        const pageIds = matches.map(m => m.id);
+        const allSelected = pageIds.length > 0 && pageIds.every(id => selectedIds.has(id));
+        if (allSelected) {
+            setSelectedIds(prev => {
+                const n = new Set(prev);
+                pageIds.forEach(id => n.delete(id));
+                return n;
+            });
+        } else {
+            setSelectedIds(prev => {
+                const n = new Set(prev);
+                for (const id of pageIds) {
+                    if (n.size >= MAX_SELECTION) {
+                        setSelectionWarning(`Selection capped at ${MAX_SELECTION}. Deselect some to add more.`);
+                        break;
+                    }
+                    n.add(id);
+                }
+                return n;
+            });
+        }
+    };
+
+    // AI filter apply
+    const applyAIFilters = (f: AIFilters, prompt: string) => {
+        // Reset legacy filters first
+        setFilterNoticeType(f.notice_type || "");
+        setFilterSetAside(f.set_aside || "");
+        setFilterState(f.state || "");
+        setFilterNaics(f.naics_code || "");
+        setFilterMinScore(f.min_score ?? null);
+        setFilterMaxDeadlineDays(f.max_deadline_days ?? null);
+        if (f.keyword) {
+            setSearchInput(f.keyword);
+            setActiveSearch(f.keyword);
+        }
+        setAiPrompt(prompt);
+        setShowFilters(true);
+        setPage(1);
+    };
+
+    const clearAIFilter = () => {
+        setFilterNoticeType("");
+        setFilterSetAside("");
+        setFilterState("");
+        setFilterNaics("");
+        setFilterMinScore(null);
+        setFilterMaxDeadlineDays(null);
+        setAiPrompt(null);
+        setSearchInput("");
+        setActiveSearch("");
+        setPage(1);
+    };
+
     const totalPages = Math.ceil(totalCount / pageSize);
 
     const getNoticeColor = (type: string) => {
@@ -234,9 +334,12 @@ export default function MyMatchesPage() {
         return "text-stone-500 bg-stone-50 border-stone-200";
     };
 
+    const selectedArray = useMemo(() => Array.from(selectedIds), [selectedIds]);
+    const allSelectedOnPage = matches.length > 0 && matches.every(m => selectedIds.has(m.id));
+
     if (loading && matches.length === 0) {
         return (
-            <div className="max-w-7xl mx-auto pb-12 animate-in fade-in duration-500 px-1">
+            <div className="max-w-5xl mx-auto pb-12 animate-in fade-in duration-500 px-1">
                 <header className="mb-6">
                     <Skeleton className="h-8 w-48 rounded mb-2" />
                     <Skeleton className="h-4 w-72 rounded" />
@@ -251,7 +354,7 @@ export default function MyMatchesPage() {
     }
 
     return (
-        <div className="max-w-7xl mx-auto pb-12 animate-in fade-in duration-500 px-1">
+        <div className="max-w-5xl mx-auto pb-12 animate-in fade-in duration-500 px-1">
             <header className="mb-6">
                 <h2 className="text-2xl sm:text-3xl font-bold tracking-tighter text-black flex items-center">
                     <Target className="mr-2 sm:mr-3 w-6 h-6 sm:w-8 sm:h-8" /> Opportunities
@@ -279,32 +382,11 @@ export default function MyMatchesPage() {
                 </div>
             </header>
 
-            {/* View-mode toggle: Strong matches (>=50%) vs all opportunities */}
-            <section className="flex items-center gap-2 mb-4 bg-white border border-stone-200 rounded-full p-1 w-fit shadow-sm">
-                <button
-                    type="button"
-                    onClick={() => { setViewMode("strong"); setPage(1); }}
-                    className={clsx(
-                        "text-xs font-bold px-4 py-2 rounded-full transition-all",
-                        viewMode === "strong" ? "bg-black text-white" : "text-stone-500 hover:text-stone-800",
-                    )}
-                >
-                    My Matches (≥ 50%)
-                </button>
-                <button
-                    type="button"
-                    onClick={() => { setViewMode("all"); setPage(1); }}
-                    className={clsx(
-                        "text-xs font-bold px-4 py-2 rounded-full transition-all",
-                        viewMode === "all" ? "bg-black text-white" : "text-stone-500 hover:text-stone-800",
-                    )}
-                >
-                    All Opportunities
-                </button>
-            </section>
+            {/* AI Filter Bar */}
+            <AIFilterBar onApply={applyAIFilters} activePrompt={aiPrompt} onClear={clearAIFilter} />
 
             {/* Filter Tabs */}
-            <section className="flex flex-wrap gap-2 mb-4">
+            <section className="flex flex-wrap gap-2 mb-4 items-center">
                 {([
                     { key: "ALL" as const, label: "All Matches", icon: Target },
                     { key: "HOT" as const, label: "Strong Matches", icon: Flame },
@@ -325,6 +407,9 @@ export default function MyMatchesPage() {
                         {tab.label}
                     </button>
                 ))}
+                <div className="ml-auto">
+                    <ViewToggle value={viewMode} onChange={setViewMode} />
+                </div>
             </section>
 
             {/* Sort Bar */}
@@ -403,45 +488,41 @@ export default function MyMatchesPage() {
                             ))}
                         </select>
                     </div>
-                    <div className="flex-1 min-w-[200px]">
-                        <p className="text-[10px] text-stone-500 uppercase mb-2">NAICS (code or keyword)</p>
-                        <NaicsKeywordInput
-                            value={filterNaics}
-                            onChange={(code) => { setFilterNaics(code); setPage(1); }}
-                        />
+                    <div className="flex-1 min-w-[120px]">
+                        <p className="text-[10px] text-stone-500 uppercase mb-2">NAICS starts with</p>
+                        <input type="text" placeholder="e.g. 5617" value={filterNaics} onChange={(e) => { setFilterNaics(e.target.value.replace(/[^0-9]/g, "").slice(0, 6)); setPage(1); }}
+                            className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black font-mono" />
                     </div>
-                    <div className="flex-1 min-w-[150px]">
-                        <p className="text-[10px] text-stone-500 uppercase mb-2">Security Clearance</p>
-                        <select title="Security Clearance" className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black" value={filterClearance} onChange={(e) => { setFilterClearance(e.target.value); setPage(1); }}>
+                    <div className="flex-1 min-w-[130px]">
+                        <p className="text-[10px] text-stone-500 uppercase mb-2">Min Score</p>
+                        <select title="Min Score" className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black" value={filterMinScore ?? ""} onChange={(e) => { setFilterMinScore(e.target.value ? Number(e.target.value) : null); setPage(1); }}>
                             <option value="">Any</option>
-                            <option value="Confidential">Confidential</option>
-                            <option value="Secret">Secret</option>
-                            <option value="Top Secret">Top Secret</option>
-                            <option value="TS/SCI">TS/SCI</option>
+                            <option value="0.3">30%+</option>
+                            <option value="0.5">50%+ (WARM)</option>
+                            <option value="0.7">70%+ (HOT)</option>
                         </select>
                     </div>
-                    <div className="flex-1 min-w-[150px]">
-                        <p className="text-[10px] text-stone-500 uppercase mb-2">SBA Certification</p>
-                        <select title="SBA Certification" className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black" value={filterCertification} onChange={(e) => { setFilterCertification(e.target.value); setPage(1); }}>
+                    <div className="flex-1 min-w-[130px]">
+                        <p className="text-[10px] text-stone-500 uppercase mb-2">Closing in</p>
+                        <select title="Max Deadline Days" className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black" value={filterMaxDeadlineDays ?? ""} onChange={(e) => { setFilterMaxDeadlineDays(e.target.value ? Number(e.target.value) : null); setPage(1); }}>
                             <option value="">Any</option>
-                            <option value="SDVOSB">SDVOSB (Service-Disabled Veteran)</option>
-                            <option value="VOSB">VOSB (Veteran-Owned)</option>
-                            <option value="WOSB">WOSB (Women-Owned)</option>
-                            <option value="EDWOSB">EDWOSB (Economically Disadvantaged WOSB)</option>
-                            <option value="8A">8(a) Business Development</option>
-                            <option value="HUBZone">HUBZone</option>
+                            <option value="7">7 days</option>
+                            <option value="14">14 days</option>
+                            <option value="30">30 days</option>
+                            <option value="60">60 days</option>
+                            <option value="90">90 days</option>
                         </select>
                     </div>
-                    {(filterNoticeType || filterSetAside || filterState || filterNaics || filterClearance || filterCertification) && (
-                        <button type="button" onClick={() => { setFilterNoticeType(""); setFilterSetAside(""); setFilterState(""); setFilterNaics(""); setFilterClearance(""); setFilterCertification(""); setPage(1); }} className="self-end px-3 py-2 text-xs font-bold text-red-600 bg-red-50 border border-red-200 rounded-full hover:bg-red-100">
-                            Clear All
+                    {(filterNoticeType || filterSetAside || filterState || filterNaics || filterMinScore != null || filterMaxDeadlineDays != null) && (
+                        <button type="button" onClick={() => { setFilterNoticeType(""); setFilterSetAside(""); setFilterState(""); setFilterNaics(""); setFilterMinScore(null); setFilterMaxDeadlineDays(null); setPage(1); }} className="self-end px-3 py-2 text-xs font-bold text-red-600 bg-red-50 border border-red-200 rounded-full hover:bg-red-100">
+                            Clear
                         </button>
                     )}
                 </section>
             )}
 
             {/* Search */}
-            <div className="bg-white p-2 rounded-full border border-stone-200 shadow-sm flex items-center mb-6 focus-within:ring-2 focus-within:ring-black focus-within:border-transparent transition-all">
+            <div className="bg-white p-2 rounded-full border border-stone-200 shadow-sm flex items-center mb-4 focus-within:ring-2 focus-within:ring-black focus-within:border-transparent transition-all">
                 <Search className="w-5 h-5 text-stone-400 ml-3 sm:ml-4 mr-2" />
                 <input
                     type="text"
@@ -457,6 +538,37 @@ export default function MyMatchesPage() {
                     </button>
                 )}
             </div>
+
+            {/* Selection bar (for card + list views) */}
+            {matches.length > 0 && viewMode !== "table" && (
+                <div className="flex items-center gap-3 mb-2 px-1">
+                    <label className="flex items-center gap-2 text-[11px] text-stone-500 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            checked={allSelectedOnPage}
+                            onChange={toggleSelectAllOnPage}
+                            className="w-3.5 h-3.5 rounded border-stone-300 accent-black"
+                        />
+                        Select all on page
+                    </label>
+                    {selectedIds.size > 0 && (
+                        <span className="text-[11px] text-stone-500">
+                            {selectedIds.size} selected
+                        </span>
+                    )}
+                </div>
+            )}
+
+            {/* Selection warning */}
+            {selectionWarning && (
+                <div className="mb-3 bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-lg p-2 flex items-center gap-2">
+                    <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
+                    <span>{selectionWarning}</span>
+                    <button type="button" title="Dismiss warning" onClick={() => setSelectionWarning(null)} className="ml-auto text-amber-700 hover:text-amber-900">
+                        <X className="w-3 h-3" />
+                    </button>
+                </div>
+            )}
 
             {/* Empty States */}
             {matches.length === 0 && !loading && (
@@ -508,19 +620,59 @@ export default function MyMatchesPage() {
                 </div>
             )}
 
-            {/* Results */}
-            {matches.length > 0 && (
+            {/* Results — TABLE VIEW */}
+            {matches.length > 0 && viewMode === "table" && (
+                <TableView
+                    matches={matches}
+                    selectedIds={selectedIds}
+                    onToggleSelect={toggleSelect}
+                    onToggleSelectAll={toggleSelectAllOnPage}
+                    visibleColumnKeys={visibleColumnKeys}
+                    onVisibleColumnsChange={setVisibleColumnKeys}
+                    onToggleSave={toggleSave}
+                    onDismiss={dismissMatch}
+                    pursuedIds={pursuedIds}
+                />
+            )}
+
+            {/* Results — LIST VIEW */}
+            {matches.length > 0 && viewMode === "list" && (
+                <ListView
+                    matches={matches}
+                    selectedIds={selectedIds}
+                    onToggleSelect={toggleSelect}
+                    onToggleSave={toggleSave}
+                    onDismiss={dismissMatch}
+                    pursuedIds={pursuedIds}
+                />
+            )}
+
+            {/* Results — CARD VIEW */}
+            {matches.length > 0 && viewMode === "card" && (
                 <div className="space-y-2">
                     {matches.map((match) => {
                         const opp = match.opportunities;
                         if (!opp) return null;
                         const scorePercent = Math.round(match.score * 100);
+                        const isSelected = selectedIds.has(match.id);
                         return (
-                            <div key={match.id} className="bg-white border border-stone-200 hover:border-stone-300 rounded-xl sm:rounded-2xl p-3 sm:p-4 transition-all shadow-sm group">
+                            <div key={match.id} className={clsx(
+                                "bg-white border rounded-xl sm:rounded-2xl p-3 sm:p-4 transition-all shadow-sm group",
+                                isSelected ? "border-amber-300 bg-amber-50/30" : "border-stone-200 hover:border-stone-300"
+                            )}>
                                 <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                                    {/* Score Badge */}
-                                    <div className={clsx("flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 rounded-xl border-2 font-black text-sm sm:text-base flex-shrink-0", getScoreColor(match.score))}>
-                                        {scorePercent}%
+                                    {/* Selection + Score Badge */}
+                                    <div className="flex items-center gap-2 flex-shrink-0">
+                                        <input
+                                            type="checkbox"
+                                            checked={isSelected}
+                                            onChange={() => toggleSelect(match.id)}
+                                            className="w-3.5 h-3.5 rounded border-stone-300 accent-black"
+                                            title="Select for export"
+                                        />
+                                        <div className={clsx("flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 rounded-xl border-2 font-black text-sm sm:text-base", getScoreColor(match.score))}>
+                                            {scorePercent}%
+                                        </div>
                                     </div>
 
                                     {/* Content */}
@@ -638,6 +790,39 @@ export default function MyMatchesPage() {
                     </div>
                 </div>
             )}
+
+            {/* Floating Export Button */}
+            {selectedIds.size > 0 && (
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 animate-in slide-in-from-bottom-5 duration-200">
+                    <div className="bg-black text-white rounded-full shadow-2xl flex items-center gap-2 pl-4 pr-1 py-1 border border-stone-700">
+                        <span className="text-xs font-bold">
+                            {selectedIds.size} / {MAX_SELECTION} selected
+                        </span>
+                        <button
+                            type="button"
+                            onClick={() => setSelectedIds(new Set())}
+                            className="text-stone-400 hover:text-white p-1.5 rounded-full"
+                            title="Clear selection"
+                        >
+                            <X className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setExportOpen(true)}
+                            className="bg-emerald-500 hover:bg-emerald-600 text-white rounded-full px-4 py-2 text-xs font-bold flex items-center gap-1.5 transition-colors"
+                        >
+                            <Download className="w-3.5 h-3.5" />
+                            Export {selectedIds.size}
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            <BulkExportDialog
+                open={exportOpen}
+                matchIds={selectedArray}
+                onClose={() => setExportOpen(false)}
+            />
         </div>
     );
 }
