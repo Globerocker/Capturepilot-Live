@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { ArrowLeft, Building, Target, ShieldAlert, Award, Sparkles, MapPin, Calendar, CheckSquare, Phone, User, Mail } from "lucide-react";
+import { ArrowLeft, Building, Target, ShieldAlert, Award, Sparkles, MapPin, Calendar, CheckSquare, Phone, User, Mail, ExternalLink } from "lucide-react";
 import clsx from "clsx";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -230,6 +230,16 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                     <span className="bg-stone-100 text-stone-600 font-mono text-[10px] px-2 py-1 rounded-md border border-stone-200">
                         {opp.notice_id?.substring(0, 12)}...
                     </span>
+                    {opp.notice_id && (
+                        <a
+                            href={`https://sam.gov/opp/${opp.notice_id}/view`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 border border-blue-200 font-bold text-[10px] sm:text-xs px-2 sm:px-3 py-1 sm:py-1.5 rounded-md shadow-sm hover:bg-blue-100"
+                        >
+                            <ExternalLink className="w-3 h-3" /> View on SAM.gov
+                        </a>
+                    )}
                 </div>
                 <h1 className="text-2xl sm:text-4xl md:text-5xl font-bold tracking-tight text-stone-900 leading-tight mb-4 sm:mb-6">
                     {opp.title}
@@ -240,8 +250,9 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
             <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-6">
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6">
                     <div className="text-center">
-                        <p className={clsx("text-3xl font-black", successColor)}>{successScore}%</p>
-                        <p className="text-[10px] text-stone-400 uppercase mt-1">Success Probability</p>
+                        <p className={clsx("text-3xl font-black", successColor)}>{successLabel}</p>
+                        <p className="text-[10px] text-stone-400 uppercase mt-1">Opportunity Strength</p>
+                        <p className="text-[9px] text-stone-400 mt-0.5">Based on set-aside, incumbent & notice type</p>
                     </div>
                     <div className="text-center">
                         <p className="text-3xl font-black text-stone-800">{formattedValue}</p>

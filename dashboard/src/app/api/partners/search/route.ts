@@ -49,7 +49,8 @@ export async function GET(req: NextRequest) {
                 includeSections: "entityRegistration,coreData,assertions",
             });
             if (naics) params.set("naicsCodeAny", naics);
-            if (state) params.set("physicalAddressStateCode", state);
+            // SAM.gov v3 Entity API expects physicalAddressProvinceOrStateCode — the old physicalAddressStateCode is silently ignored.
+            if (state) params.set("physicalAddressProvinceOrStateCode", state);
             if (keyword) params.set("legalBusinessName", keyword);
             if (setAside) {
                 const code = saMap[setAside.toUpperCase()];

@@ -51,8 +51,9 @@ export async function POST(request: Request) {
     }
 
     const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-    if (!GEMINI_API_KEY) {
-        return NextResponse.json({ error: "GEMINI_API_KEY not configured" }, { status: 500 });
+    const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+    if (!GEMINI_API_KEY && !OPENAI_API_KEY) {
+        return NextResponse.json({ error: "Neither GEMINI_API_KEY nor OPENAI_API_KEY is configured" }, { status: 500 });
     }
 
     // Build prompt
@@ -105,26 +106,56 @@ Rules:
 - Format: "Subject: [subject]\\nBody: [body]" for each draft`;
 
     try {
-        const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
-            {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    contents: [{ parts: [{ text: prompt }] }],
-                    generationConfig: { temperature: 0.7, maxOutputTokens: 2048 },
-                }),
+        // Prefer Gemini (typically free), fall back to OpenAI when Gemini isn't configured.
+        let text = "";
+        if (GEMINI_API_KEY) {
+            const response = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: prompt }] }],
+                        generationConfig: { temperature: 0.7, maxOutputTokens: 2048 },
+                    }),
+                },
+            );
+            if (!response.ok) {
+                const err = await response.text();
+                console.error("[drafts/generate] Gemini error:", err);
+                // Fall through to OpenAI rather than hard-failing when Gemini rejects.
+            } else {
+                const result = await response.json();
+                text = result.candidates?.[0]?.content?.parts?.[0]?.text || "";
             }
-        );
-
-        if (!response.ok) {
-            const err = await response.text();
-            console.error("Gemini API error:", err);
-            return NextResponse.json({ error: "AI generation failed" }, { status: 500 });
         }
 
-        const result = await response.json();
-        const text = result.candidates?.[0]?.content?.parts?.[0]?.text || "";
+        if (!text && OPENAI_API_KEY) {
+            const oaRes = await fetch("https://api.openai.com/v1/chat/completions", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${OPENAI_API_KEY}` },
+                body: JSON.stringify({
+                    model: "gpt-4o-mini",
+                    messages: [
+                        { role: "system", content: "You are a B2G sales email expert. Follow the user's formatting instructions exactly." },
+                        { role: "user", content: prompt },
+                    ],
+                    max_tokens: 2048,
+                    temperature: 0.7,
+                }),
+            });
+            if (!oaRes.ok) {
+                const err = await oaRes.text();
+                console.error("[drafts/generate] OpenAI error:", err);
+                return NextResponse.json({ error: "AI generation failed (both Gemini and OpenAI unavailable)" }, { status: 500 });
+            }
+            const data = await oaRes.json();
+            text = data.choices?.[0]?.message?.content || "";
+        }
+
+        if (!text) {
+            return NextResponse.json({ error: "AI returned empty content" }, { status: 502 });
+        }
 
         // Parse the three drafts
         const drafts = text.split("---").map((section: string) => section.trim()).filter(Boolean);

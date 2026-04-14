@@ -71,6 +71,9 @@ export default function UserDashboard() {
   const [pipelineStages, setPipelineStages] = useState<Record<string, number>>({});
   const [actionsPending, setActionsPending] = useState(0);
   const [actionsUrgent, setActionsUrgent] = useState(0);
+  const [competitorCount, setCompetitorCount] = useState(0);
+  const [pendingActions, setPendingActions] = useState<Array<{ id: string; title: string; priority: string; opportunity_id: string }>>([]);
+  const [recentPipeline, setRecentPipeline] = useState<Array<{ id: string; stage: string; title: string; opportunity_id: string }>>([]);
   const [generatingMatches, setGeneratingMatches] = useState(false);
 
   useEffect(() => {
@@ -151,11 +154,25 @@ export default function UserDashboard() {
       const topData = (topMatchRes.data || []) as unknown as Array<{ score: number; classification: string; opportunities: TopOpp }>;
       setTopOpps(topData.map(m => m.opportunities).filter(Boolean));
 
-      // Fetch pipeline and action item counts
+      // Fetch pipeline, action items, competitors in parallel
       if (profileId) {
-        const [pursuitRes, actionsRes] = await Promise.all([
+        const [pursuitRes, actionsRes, competitorRes, recentPipelineRes, recentActionsRes] = await Promise.all([
           supabase.from("user_pursuits").select("stage").eq("user_profile_id", profileId),
           supabase.from("user_action_items").select("status, priority").eq("user_profile_id", profileId),
+          supabase.from("client_competitors")
+            .select("*", { count: "exact", head: true })
+            .eq("user_profile_id", profileId),
+          supabase.from("user_pursuits")
+            .select("id, stage, opportunity_id, opportunities(id, title)")
+            .eq("user_profile_id", profileId)
+            .order("stage_changed_at", { ascending: false })
+            .limit(5),
+          supabase.from("user_action_items")
+            .select("id, title, priority, opportunity_id")
+            .eq("user_profile_id", profileId)
+            .neq("status", "completed")
+            .order("priority", { ascending: false })
+            .limit(5),
         ]);
 
         const pursuits = (pursuitRes.data || []) as Array<{ stage: string }>;
@@ -167,6 +184,16 @@ export default function UserDashboard() {
         const actions = (actionsRes.data || []) as Array<{ status: string; priority: string }>;
         setActionsPending(actions.filter(a => a.status !== "completed").length);
         setActionsUrgent(actions.filter(a => a.priority === "high" && a.status !== "completed").length);
+
+        setCompetitorCount((competitorRes as { count: number | null }).count || 0);
+
+        type RecentPursuit = { id: string; stage: string; opportunity_id: string; opportunities: { id: string; title: string } | null };
+        const recents = (recentPipelineRes.data || []) as unknown as RecentPursuit[];
+        setRecentPipeline(recents.filter(r => r.opportunities).map(r => ({
+          id: r.id, stage: r.stage, title: r.opportunities!.title, opportunity_id: r.opportunity_id,
+        })));
+
+        setPendingActions((recentActionsRes.data || []) as Array<{ id: string; title: string; priority: string; opportunity_id: string }>);
       }
 
       setLoading(false);
@@ -176,7 +203,7 @@ export default function UserDashboard() {
 
   if (loading) {
     return (
-      <div className="max-w-5xl mx-auto space-y-6 sm:space-y-8 animate-in fade-in duration-500 px-1">
+      <div className="max-w-7xl mx-auto space-y-6 sm:space-y-8 animate-in fade-in duration-500 px-1">
         <header>
           <Skeleton className="h-8 w-64 rounded mb-2" />
           <Skeleton className="h-4 w-48 rounded" />
@@ -213,7 +240,7 @@ export default function UserDashboard() {
       </header>
 
       {/* KPI Cards */}
-      <section className="grid grid-cols-2 gap-3 sm:gap-4">
+      <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <KpiCard
           title="Matched Opportunities"
           value={totalMatchCount}
@@ -231,20 +258,76 @@ export default function UserDashboard() {
           color="emerald"
         />
         <KpiCard
-          title="Proposal Drafts"
-          value={0}
-          subtitle="AI-generated proposals"
-          icon={FileText}
-          href="/proposals"
+          title="Pending Action Items"
+          value={actionsPending}
+          subtitle={actionsUrgent > 0 ? `${actionsUrgent} urgent` : "Across all pursuits"}
+          icon={CheckSquare}
+          href="/pipeline"
         />
         <KpiCard
           title="Competitors Tracked"
-          value={0}
-          subtitle="Analyze your competition"
+          value={competitorCount}
+          subtitle={competitorCount > 0 ? "Click to view intel" : "Analyze your competition"}
           icon={Shield}
           href="/competitors"
         />
       </section>
+
+      {/* Action Items + Pipeline preview side-by-side on wide screens */}
+      {(pendingActions.length > 0 || recentPipeline.length > 0) && (
+        <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Action Items Preview */}
+          {pendingActions.length > 0 && (
+            <div className="bg-white border border-stone-200 rounded-2xl p-5">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-bold text-sm flex items-center"><CheckSquare className="w-4 h-4 mr-2 text-stone-400" /> Action Items</h3>
+                <Link href="/pipeline" className="text-xs text-stone-500 hover:text-black inline-flex items-center">View all <ArrowRight className="w-3 h-3 ml-1" /></Link>
+              </div>
+              <div className="space-y-1.5">
+                {pendingActions.map(a => (
+                  <Link key={a.id} href={`/opportunities/${a.opportunity_id}`}
+                        className="block p-3 rounded-xl border border-stone-100 hover:bg-stone-50">
+                    <div className="flex items-center gap-2">
+                      <span className={clsx(
+                        "text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded border",
+                        a.priority === "high" ? "bg-red-50 text-red-700 border-red-200" :
+                        a.priority === "medium" ? "bg-amber-50 text-amber-700 border-amber-200" :
+                        "bg-stone-50 text-stone-600 border-stone-200",
+                      )}>
+                        {a.priority}
+                      </span>
+                      <p className="text-xs text-stone-800 line-clamp-1">{a.title}</p>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Pipeline Preview */}
+          {recentPipeline.length > 0 && (
+            <div className="bg-white border border-stone-200 rounded-2xl p-5">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-bold text-sm flex items-center"><Layers className="w-4 h-4 mr-2 text-stone-400" /> Recent Pipeline Activity</h3>
+                <Link href="/pipeline" className="text-xs text-stone-500 hover:text-black inline-flex items-center">Open pipeline <ArrowRight className="w-3 h-3 ml-1" /></Link>
+              </div>
+              <div className="space-y-1.5">
+                {recentPipeline.map(p => (
+                  <Link key={p.id} href={`/opportunities/${p.opportunity_id}`}
+                        className="block p-3 rounded-xl border border-stone-100 hover:bg-stone-50">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded border bg-stone-100 text-stone-700 border-stone-200">
+                        {p.stage}
+                      </span>
+                      <p className="text-xs text-stone-800 line-clamp-1">{p.title}</p>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
+      )}
 
       {/* Profile Summary */}
       {profile && (

@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseClient } from "@/lib/supabase/client";
 import { Loader2, Sparkles, Search, X, ChevronLeft, ChevronRight, Trophy, Clock, Shield, Target, ArrowRight, Bookmark, EyeOff, Flame, ChevronUp, ChevronDown, Filter, CheckCircle2 } from "lucide-react";
+import NaicsKeywordInput from "@/components/NaicsKeywordInput";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { createPursuit } from "@/lib/pursue-utils";
 import { Skeleton, SkeletonMatchCard } from "@/components/ui/Skeleton";
@@ -235,7 +236,7 @@ export default function MyMatchesPage() {
 
     if (loading && matches.length === 0) {
         return (
-            <div className="max-w-5xl mx-auto pb-12 animate-in fade-in duration-500 px-1">
+            <div className="max-w-7xl mx-auto pb-12 animate-in fade-in duration-500 px-1">
                 <header className="mb-6">
                     <Skeleton className="h-8 w-48 rounded mb-2" />
                     <Skeleton className="h-4 w-72 rounded" />
@@ -250,7 +251,7 @@ export default function MyMatchesPage() {
     }
 
     return (
-        <div className="max-w-5xl mx-auto pb-12 animate-in fade-in duration-500 px-1">
+        <div className="max-w-7xl mx-auto pb-12 animate-in fade-in duration-500 px-1">
             <header className="mb-6">
                 <h2 className="text-2xl sm:text-3xl font-bold tracking-tighter text-black flex items-center">
                     <Target className="mr-2 sm:mr-3 w-6 h-6 sm:w-8 sm:h-8" /> Opportunities
@@ -402,14 +403,11 @@ export default function MyMatchesPage() {
                             ))}
                         </select>
                     </div>
-                    <div className="flex-1 min-w-[120px]">
-                        <p className="text-[10px] text-stone-500 uppercase mb-2">NAICS Code</p>
-                        <input
-                            type="text"
-                            placeholder="e.g. 541512"
-                            className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black font-mono"
+                    <div className="flex-1 min-w-[200px]">
+                        <p className="text-[10px] text-stone-500 uppercase mb-2">NAICS (code or keyword)</p>
+                        <NaicsKeywordInput
                             value={filterNaics}
-                            onChange={(e) => { setFilterNaics(e.target.value.replace(/[^0-9]/g, "")); setPage(1); }}
+                            onChange={(code) => { setFilterNaics(code); setPage(1); }}
                         />
                     </div>
                     <div className="flex-1 min-w-[150px]">

@@ -229,7 +229,7 @@ export default function PipelinePage() {
     }
 
     return (
-        <div className="max-w-5xl mx-auto pb-12 animate-in fade-in duration-500 px-1">
+        <div className="max-w-7xl mx-auto pb-12 animate-in fade-in duration-500 px-1">
             <header className="mb-6">
                 <div className="flex items-center justify-between">
                     <h2 className="text-2xl sm:text-3xl font-bold tracking-tighter text-black flex items-center">

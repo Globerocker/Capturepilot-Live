@@ -232,7 +232,7 @@ export default function CompetitorsPage() {
     };
 
     if (loading) return (
-        <div className="max-w-5xl mx-auto space-y-6 animate-in fade-in duration-500 px-1">
+        <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in duration-500 px-1">
             <div className="h-8 w-48 bg-stone-200 rounded animate-pulse" />
             <div className="h-4 w-72 bg-stone-100 rounded animate-pulse" />
             <div className="space-y-3">{[1, 2, 3].map(i => <div key={i} className="h-24 bg-stone-100 rounded-2xl animate-pulse" />)}</div>
@@ -240,7 +240,7 @@ export default function CompetitorsPage() {
     );
 
     return (
-        <div className="max-w-5xl mx-auto space-y-6 animate-in fade-in duration-500 px-1">
+        <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in duration-500 px-1">
             <header>
                 <h2 className="text-2xl sm:text-3xl font-bold tracking-tighter text-black flex items-center">
                     <Shield className="mr-2 sm:mr-3 w-6 h-6 sm:w-8 sm:h-8" /> Competitors

@@ -141,7 +141,7 @@ export default function CompetitorDetailPage({ params }: { params: Promise<{ id:
     const pastClients = ((crawl.past_clients as string[]) || []);
 
     return (
-        <div className="max-w-5xl mx-auto pb-12 space-y-6">
+        <div className="max-w-7xl mx-auto pb-12 space-y-6">
             {/* Back link */}
             <Link href="/competitors" className="inline-flex items-center gap-1.5 text-xs text-stone-500 hover:text-black transition-colors">
                 <ArrowLeft className="w-3.5 h-3.5" /> Back to competitors
@@ -353,12 +353,19 @@ export default function CompetitorDetailPage({ params }: { params: Promise<{ id:
             {competitor.last_analyzed_at && (
                 <p className="text-[10px] text-stone-400 text-center">
                     Last analyzed {new Date(competitor.last_analyzed_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                    {" · "}
-                    <a href={`${competitor.website?.startsWith("http") ? competitor.website : "https://" + competitor.website}`}
-                       target="_blank" rel="noopener noreferrer"
-                       className="underline hover:text-black inline-flex items-center gap-1">
-                        Open source <ExternalLink className="w-3 h-3" />
-                    </a>
+                    {competitor.website && (
+                        <>
+                            {" · "}
+                            <a
+                                href={competitor.website.startsWith("http") ? competitor.website : `https://${competitor.website}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="underline hover:text-black inline-flex items-center gap-1"
+                            >
+                                Open source <ExternalLink className="w-3 h-3" />
+                            </a>
+                        </>
+                    )}
                 </p>
             )}
         </div>

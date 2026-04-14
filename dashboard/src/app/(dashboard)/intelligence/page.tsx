@@ -127,7 +127,7 @@ export default function IntelligencePage() {
 
     if (loading) {
         return (
-            <div className="max-w-5xl mx-auto space-y-6 animate-in fade-in duration-500 px-1">
+            <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in duration-500 px-1">
                 <div className="h-8 w-48 bg-stone-200 rounded animate-pulse" />
                 <div className="h-4 w-72 bg-stone-100 rounded animate-pulse" />
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -139,7 +139,7 @@ export default function IntelligencePage() {
 
     if (naicsCodes.length === 0) {
         return (
-            <div className="max-w-5xl mx-auto space-y-6 animate-in fade-in duration-500 px-1">
+            <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in duration-500 px-1">
                 <header>
                     <h2 className="text-2xl sm:text-3xl font-bold tracking-tighter text-black flex items-center">
                         <BarChart3 className="mr-2 sm:mr-3 w-6 h-6 sm:w-8 sm:h-8" /> Market Intelligence
@@ -158,7 +158,7 @@ export default function IntelligencePage() {
     }
 
     return (
-        <div className="max-w-5xl mx-auto space-y-6 animate-in fade-in duration-500 px-1">
+        <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in duration-500 px-1">
             <header>
                 <h2 className="text-2xl sm:text-3xl font-bold tracking-tighter text-black flex items-center">
                     <BarChart3 className="mr-2 sm:mr-3 w-6 h-6 sm:w-8 sm:h-8" /> Market Intelligence

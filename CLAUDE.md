@@ -219,10 +219,66 @@ Node scripts:
 - Vercel root dir: `dashboard/`
 
 ## Known Issues / Backlog
+
+### Known bugs (unresolved)
 - **PSC/email display bug** (reported 2026-04-14 Americurial test): user saw email address rendered under "Product and Service Code" field during onboarding/settings. Code inspection found no mismapping — all UI bindings to `opp.psc_code` are correct, ingest validates against `psc_codes` whitelist. **Cannot reproduce without screenshot or live repro.**
 - **ESLint v9 migration**: `eslint` expects `eslint.config.js` but repo has legacy `.eslintrc`. `npm run lint` fails — non-blocking for builds.
-- **Dembrandt can't run in Vercel** (Playwright/Chromium too large) — use offline script in `tools/21`.
-- **Partners/Competitors polish**: bulk-add competitors from SAM list, partner shortlist persistence — not yet built.
+
+### Enrichment pipeline gaps (2026-04-14 user report)
+- **Strategic Scoring / Structured Requirements / AI Win Strategy fields empty** on opportunity detail pages for most opps. The `/tools/` Python enrichment scripts (3_generate_email_drafts.py, 5_award_intelligence.py, etc.) appear disconnected from the dashboard — needs audit. Likely causes: cron not running, env missing on Vercel cron, or scripts crashing silently.
+- **Market Intelligence fields empty** for common NAICS (e.g. 541511 spending / avg deal size). Need to audit whether tools/5 actually writes to the expected `market_intelligence` / `naics_stats` table.
+- **Attachment documents not auto-crawled**: Only SAM.gov metadata fetched; no background download, OCR, or requirement extraction. Needs a new cron that fetches PDF/DOCX attachments, stores them in `opportunity-attachments` bucket, and runs OpenAI extraction into `structured_requirements`.
+
+### Larger reworks backlog (deferred across sessions)
+
+**Opportunity list & search**
+- Multi-view toggle (card / list / HubSpot-style customizable table with column picker)
+- Bulk Excel export with selection + row cap (max 10–20 per export)
+- AI-assisted natural-language filter: user describes what they want in a sentence, LLM sets NAICS / set-aside / state / keyword filters automatically
+- Full SAM.gov passthrough search when "All Opportunities" — currently capped at our 37K ingested rows
+
+**Opportunity detail**
+- "Analyze all attachments" button — background fetches PDFs, extracts requirements via OpenAI, fills `structured_requirements` + `ai_win_strategy`. Expiration/TTL to avoid DB bloat.
+- Show real attachment filename + size before download instead of just "Download" button (done 2026-04-15 but needs polish)
+
+**Pipeline**
+- Split pipeline by notice type (Sources Sought / Pre-Solicitation / Solicitation) as separate boards
+- Custom stage configuration (user-defined stages, rename, reorder)
+- Deal detail page with activity history, notes timeline, contact log — currently cards aren't clickable
+- Responsive full-width layout (done 2026-04-15 via max-w-7xl)
+
+**Capability Statement**
+- PDF export is a single text blob — needs proper formatting with brand logo, color bands, structured sections, contact block
+- Markdown intermediate: render to MD then to PDF (same pipeline as Google Docs import)
+- Save-to-Google-Drive integration (user already has Google OAuth linked via Supabase)
+- Visual editor with text selection → AI edit (Gemini) for targeted passages
+- Progress bar during drafting; run in background so user can switch to other tools without losing state
+- Prefill from Quick Checker crawler (which works well) instead of bare brand extraction
+
+**AI Proposal**
+- Background job so generation persists when user navigates away (currently 5+ min foreground wait)
+- Progress visualization per section (which section is writing now, word count so far)
+- Integrate capability statement content into prompt (currently just uses company_description)
+
+**Settings / Billing**
+- Billing: cancel flow with retention (discount offer, reason survey, confirmation step)
+- Settings: multi-column layout on wide screens instead of single long scroll
+- Settings: Advanced Settings already defaults to expanded (verified 2026-04-15)
+
+**Dashboard**
+- Sidebar with quick-access Fixed tiles (Quick Checker / Drafter / Refresh Matches / Cap Statement)
+- Overall dashboard speed — page loads are sluggish, needs profiling (likely waterfall Supabase queries that should parallelize)
+
+**Partners**
+- Bulk-add to pursuit / partner shortlist persistence
+- NAICS dropdown wired to keyword search (done 2026-04-15) — replicate in opportunity filters (done)
+
+**Competitors**
+- Bulk-add competitors from SAM.gov contractor search
+- Competitor comparison table (side-by-side NAICS overlap, revenue, past clients)
+
+**Dembrandt integration**
+- Cannot run in Vercel (Playwright/Chromium too large) — use offline script `tools/21_enrich_brand_tokens.mjs`.
 
 ## Guidelines for Future Work
 - Ship small, ship often. Prefer editing existing files over creating new ones.
