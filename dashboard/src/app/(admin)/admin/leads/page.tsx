@@ -299,7 +299,7 @@ export default function AdminProspectsPage() {
                                                     onClick={() => {
                                                         setEditingLead(prospect.id);
                                                         setEditForm({
-                                                            lead_email: prospect.lead_email || "",
+                                                            lead_email: prospect.lead_email || contact?.email || "",
                                                             company_name: prospect.company_name,
                                                             contact_name: contact?.name || "",
                                                             phone: contact?.phone || ""

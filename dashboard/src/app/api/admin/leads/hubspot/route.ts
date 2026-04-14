@@ -26,13 +26,14 @@ export async function POST(req: NextRequest) {
 
         if (error || !profile) return NextResponse.json({ error: "Lead not found" }, { status: 404 });
 
-        const email = profile.lead_email;
+        const inferred = profile.inferred_profile || {};
+        const contactPerson = inferred.contact_person || {};
+        
+        const email = profile.lead_email || contactPerson.email;
         if (!email) {
             return NextResponse.json({ error: "Lead must have an email to sync to HubSpot" }, { status: 400 });
         }
 
-        const inferred = profile.inferred_profile || {};
-        const contactPerson = inferred.contact_person || {};
         const nameParts = (contactPerson.name || "").trim().split(/\s+/);
         
         // 1. Sync Contact
