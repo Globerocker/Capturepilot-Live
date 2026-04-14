@@ -1,7 +1,12 @@
 /**
  * Shared email template for all CapturePilot emails.
- * Dark stone-950 header with emerald CP badge, light body, dark footer with legal info.
- * All backgrounds use solid colors — no SVG data URIs (they break email clients).
+ *
+ * Minimal, business-print style matching the website's clean feel:
+ * - Light / white background (no dark sections — better for all clients, dark mode, print)
+ * - Thin emerald accent bar at top
+ * - Text-only wordmark header (no external images)
+ * - Emerald-500 solid pill CTA matching website buttons
+ * - Minimal footer: legal info + one preferences link (low spam-trigger surface)
  */
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.capturepilot.com";
@@ -9,7 +14,7 @@ const SITE_URL = "https://www.capturepilot.com";
 
 // Brand palette (matches website exactly)
 const COLORS = {
-    black: "#0c0a09",      // stone-950
+    black: "#0c0a09",
     stone900: "#1c1917",
     stone800: "#292524",
     stone700: "#44403c",
@@ -21,13 +26,12 @@ const COLORS = {
     stone100: "#f5f5f4",
     stone50: "#fafaf9",
     white: "#ffffff",
+    emerald700: "#047857",
     emerald600: "#059669",
     emerald500: "#10b981",
     emerald400: "#34d399",
-    emerald300: "#6ee7b7",
     emerald50: "#ecfdf5",
     emerald200: "#a7f3d0",
-    sky500: "#0ea5e9",
 };
 
 const FONT_STACK =
@@ -49,9 +53,9 @@ interface EmailTemplateOptions {
     /** Footer note above the standard footer */
     footerNote?: string;
     /**
-     * Email category — controls footer preferences/unsubscribe text.
-     * - "transactional": company updates, no unsubscribe link (Manage preferences only)
-     * - "marketing": CAN-SPAM regulated, full unsubscribe link required
+     * Email category — drives footer preferences/unsubscribe text.
+     * - "transactional": company updates, "Manage email preferences" only
+     * - "marketing": commercial, CAN-SPAM unsubscribe link
      */
     category?: "transactional" | "marketing";
 }
@@ -73,29 +77,24 @@ export function emailTemplate(options: EmailTemplateOptions): string {
         : "";
 
     const eyebrowHtml = eyebrow
-        ? `<div style="display:inline-block;background:${COLORS.emerald50};border:1px solid ${COLORS.emerald200};color:${COLORS.emerald600};font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;padding:4px 12px;border-radius:999px;margin-bottom:16px;">${eyebrow}</div>`
+        ? `<p style="margin:0 0 14px;color:${COLORS.emerald600};font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:2px;">${eyebrow}</p>`
         : "";
 
     const ctaHtml = cta
-        ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:32px auto 0;">
-            <tr><td align="center" style="border-radius:10px;background:${COLORS.emerald600};background:linear-gradient(135deg,${COLORS.emerald600} 0%,${COLORS.emerald500} 100%);box-shadow:0 8px 24px rgba(5,150,105,0.24);">
-                <a href="${cta.url}" style="display:inline-block;padding:15px 36px;color:${COLORS.white};text-decoration:none;font-weight:700;font-size:15px;letter-spacing:0.3px;border-radius:10px;">${cta.label} &rarr;</a>
+        ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:32px 0 0;">
+            <tr><td style="border-radius:999px;background-color:${COLORS.emerald500};">
+                <a href="${cta.url}" style="display:inline-block;padding:14px 32px;color:${COLORS.white};text-decoration:none;font-weight:700;font-size:15px;border-radius:999px;">${cta.label}</a>
             </td></tr>
            </table>`
         : "";
 
     const secondaryCtaHtml = secondaryCta
-        ? `<div style="text-align:center;margin:16px 0 0;">
-            <a href="${secondaryCta.url}" style="color:${COLORS.emerald600};font-size:13px;font-weight:600;text-decoration:underline;">${secondaryCta.label}</a>
-           </div>`
+        ? `<p style="margin:14px 0 0;"><a href="${secondaryCta.url}" style="color:${COLORS.stone500};font-size:13px;text-decoration:underline;">${secondaryCta.label}</a></p>`
         : "";
 
-    // Footer preference/unsubscribe — legal compliance
-    // Transactional emails: "Manage email preferences" only (company updates)
-    // Marketing emails: Full "Unsubscribe" link (CAN-SPAM requirement)
     const preferencesLink = category === "marketing"
-        ? `<a href="${APP_URL}/settings/notifications?unsubscribe=1" style="color:${COLORS.stone400};text-decoration:underline;">Unsubscribe</a>`
-        : `<a href="${APP_URL}/settings/notifications" style="color:${COLORS.stone400};text-decoration:underline;">Manage email preferences</a>`;
+        ? `<a href="${APP_URL}/settings/notifications?unsubscribe=1" style="color:${COLORS.stone500};text-decoration:underline;">Unsubscribe</a>`
+        : `<a href="${APP_URL}/settings/notifications" style="color:${COLORS.stone500};text-decoration:underline;">Manage email preferences</a>`;
 
     return `<!DOCTYPE html>
 <html lang="en">
@@ -110,36 +109,28 @@ export function emailTemplate(options: EmailTemplateOptions): string {
 <style>
   @media only screen and (max-width: 620px) {
     .cp-container { width: 100% !important; }
-    .cp-pad { padding: 28px 20px !important; }
-    .cp-header-pad { padding: 20px 20px !important; }
-    .cp-footer-cols { display: block !important; width: 100% !important; }
-    .cp-footer-col { display: block !important; width: 100% !important; padding: 0 0 20px !important; }
+    .cp-pad { padding: 32px 24px !important; }
     h1.cp-heading { font-size: 24px !important; }
   }
 </style>
 </head>
-<body style="margin:0;padding:0;background:${COLORS.stone100};font-family:${FONT_STACK};-webkit-font-smoothing:antialiased;">
+<body style="margin:0;padding:0;background-color:${COLORS.stone50};font-family:${FONT_STACK};-webkit-font-smoothing:antialiased;">
 ${preheaderHtml}
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${COLORS.stone100};">
-<tr><td align="center" style="padding:24px 12px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:${COLORS.stone50};">
+<tr><td align="center" style="padding:32px 12px;">
 
-<table role="presentation" class="cp-container" width="620" cellpadding="0" cellspacing="0" border="0" style="max-width:620px;width:100%;background:${COLORS.white};border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(12,10,9,0.06);">
+<table role="presentation" class="cp-container" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background-color:${COLORS.white};border-radius:12px;overflow:hidden;border:1px solid ${COLORS.stone200};">
 
-<!-- Thin emerald gradient accent bar -->
-<tr><td style="height:3px;background:linear-gradient(90deg,${COLORS.emerald600} 0%,${COLORS.emerald400} 50%,${COLORS.sky500} 100%);line-height:3px;font-size:0;">&nbsp;</td></tr>
+<!-- Thin emerald accent bar -->
+<tr><td style="height:3px;background-color:${COLORS.emerald500};line-height:3px;font-size:0;">&nbsp;</td></tr>
 
-<!-- Dark header -->
+<!-- Light header with text wordmark -->
 <tr>
-<td class="cp-header-pad" style="background-color:${COLORS.black};padding:28px 32px;">
+<td class="cp-pad" style="background-color:${COLORS.white};padding:28px 40px 0;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
 <tr>
 <td style="vertical-align:middle;">
-    <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="display:inline-table;vertical-align:middle;">
-    <tr>
-        <td style="background-color:${COLORS.emerald500};width:28px;height:28px;border-radius:6px;text-align:center;vertical-align:middle;color:${COLORS.white};font-weight:800;font-size:14px;line-height:28px;">CP</td>
-        <td style="padding-left:10px;color:${COLORS.white};font-size:17px;font-weight:800;letter-spacing:-0.3px;vertical-align:middle;">CapturePilot</td>
-    </tr>
-    </table>
+    <span style="color:${COLORS.black};font-size:18px;font-weight:800;letter-spacing:-0.3px;">CapturePilot</span>
 </td>
 <td align="right" style="vertical-align:middle;">
     <span style="color:${COLORS.stone400};font-size:10px;text-transform:uppercase;letter-spacing:2px;font-weight:600;">Capture Intelligence</span>
@@ -151,11 +142,11 @@ ${preheaderHtml}
 
 <!-- Body -->
 <tr>
-<td class="cp-pad" style="background-color:${COLORS.white};padding:44px 40px;">
+<td class="cp-pad" style="background-color:${COLORS.white};padding:32px 40px 40px;">
 
 ${eyebrowHtml}
 
-<h1 class="cp-heading" style="font-size:28px;font-weight:800;color:${COLORS.black};margin:0 0 24px;line-height:1.25;letter-spacing:-0.5px;">${heading}</h1>
+<h1 class="cp-heading" style="font-size:26px;font-weight:800;color:${COLORS.black};margin:0 0 20px;line-height:1.3;letter-spacing:-0.5px;">${heading}</h1>
 
 ${body}
 
@@ -165,87 +156,24 @@ ${secondaryCtaHtml}
 </td>
 </tr>
 
-${footerNote ? `<tr><td style="background:${COLORS.stone50};padding:20px 40px;border-top:1px solid ${COLORS.stone200};"><p style="color:${COLORS.stone600};font-size:13px;margin:0;line-height:1.6;">${footerNote}</p></td></tr>` : ""}
+${footerNote ? `<tr><td style="background-color:${COLORS.stone50};padding:18px 40px;border-top:1px solid ${COLORS.stone200};"><p style="color:${COLORS.stone600};font-size:13px;margin:0;line-height:1.6;">${footerNote}</p></td></tr>` : ""}
 
-<!-- Dark footer + legal info -->
+<!-- Minimal footer -->
 <tr>
-<td style="background-color:${COLORS.stone900};padding:36px 40px 28px;">
-
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-<tr class="cp-footer-cols">
-
-<!-- Column 1: Brand -->
-<td class="cp-footer-col" width="40%" style="vertical-align:top;padding-right:16px;">
-    <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="display:inline-table;vertical-align:middle;">
-    <tr>
-        <td style="background-color:${COLORS.emerald500};width:24px;height:24px;border-radius:5px;text-align:center;vertical-align:middle;color:${COLORS.white};font-weight:800;font-size:12px;line-height:24px;">CP</td>
-        <td style="padding-left:8px;color:${COLORS.white};font-size:15px;font-weight:800;vertical-align:middle;">CapturePilot</td>
-    </tr>
-    </table>
-    <p style="color:${COLORS.stone400};font-size:12px;line-height:1.6;margin:14px 0 0;">Strategic capture intelligence for federal contractors.</p>
-    <p style="margin:14px 0 0;">
-        <a href="https://www.linkedin.com/company/capturepilot" style="display:inline-block;text-decoration:none;">
-            <span style="display:inline-block;width:22px;height:22px;background-color:${COLORS.stone800};border-radius:4px;text-align:center;line-height:22px;color:${COLORS.stone300};font-weight:700;font-size:11px;">in</span>
-        </a>
+<td style="background-color:${COLORS.white};padding:24px 40px 28px;border-top:1px solid ${COLORS.stone100};">
+    <p style="color:${COLORS.stone600};font-size:12px;margin:0 0 4px;line-height:1.5;font-weight:700;">
+        CapturePilot &middot; A product by Americurial LLC
     </p>
-</td>
-
-<!-- Column 2: Product -->
-<td class="cp-footer-col" width="30%" style="vertical-align:top;padding-right:16px;">
-    <p style="color:${COLORS.stone300};font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;margin:0 0 10px;">Product</p>
-    <p style="margin:0;line-height:1.9;">
-        <a href="${SITE_URL}/pricing" style="color:${COLORS.stone400};font-size:12px;text-decoration:none;">Pricing</a><br>
-        <a href="${SITE_URL}/check" style="color:${COLORS.stone400};font-size:12px;text-decoration:none;">Quick Check</a><br>
-        <a href="${SITE_URL}/blog" style="color:${COLORS.stone400};font-size:12px;text-decoration:none;">Blog</a><br>
-        <a href="${APP_URL}/dashboard" style="color:${COLORS.stone400};font-size:12px;text-decoration:none;">Dashboard</a>
+    <p style="color:${COLORS.stone500};font-size:11px;margin:0 0 8px;line-height:1.6;">
+        Phoenix, Arizona &middot; info@americurial.com &middot; +1 (850) 376-9785
     </p>
-</td>
-
-<!-- Column 3: Company -->
-<td class="cp-footer-col" width="30%" style="vertical-align:top;">
-    <p style="color:${COLORS.stone300};font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;margin:0 0 10px;">Company</p>
-    <p style="margin:0;line-height:1.9;">
-        <a href="${SITE_URL}/about" style="color:${COLORS.stone400};font-size:12px;text-decoration:none;">About</a><br>
-        <a href="${SITE_URL}/contact" style="color:${COLORS.stone400};font-size:12px;text-decoration:none;">Contact</a><br>
-        <a href="${SITE_URL}/privacy" style="color:${COLORS.stone400};font-size:12px;text-decoration:none;">Privacy</a><br>
-        <a href="${SITE_URL}/terms" style="color:${COLORS.stone400};font-size:12px;text-decoration:none;">Terms</a>
+    <p style="color:${COLORS.stone400};font-size:11px;margin:0;line-height:1.6;">
+        &copy; 2026 Americurial LLC &middot; ${preferencesLink}
     </p>
-</td>
-
-</tr>
-</table>
-
-<!-- Legal bottom strip -->
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-top:1px solid ${COLORS.stone800};margin-top:28px;">
-<tr><td style="padding-top:18px;">
-    <p style="color:${COLORS.stone500};font-size:11px;margin:0 0 6px;line-height:1.6;">
-        ${preferencesLink}
-        &nbsp;&middot;&nbsp;
-        <a href="${SITE_URL}" style="color:${COLORS.stone400};text-decoration:underline;">capturepilot.com</a>
-        &nbsp;&middot;&nbsp;
-        <span style="color:${COLORS.stone500};">A product by <a href="${SITE_URL}/about" style="color:${COLORS.stone400};text-decoration:underline;">Americurial LLC</a></span>
-    </p>
-    <p style="color:${COLORS.stone500};font-size:11px;margin:0 0 4px;line-height:1.6;">
-        <a href="mailto:info@americurial.com" style="color:${COLORS.stone400};text-decoration:none;">info@americurial.com</a>
-        &nbsp;&middot;&nbsp;
-        <a href="tel:+18503769785" style="color:${COLORS.stone400};text-decoration:none;">+1 (850) 376-9785</a>
-        &nbsp;&middot;&nbsp;
-        <span style="color:${COLORS.stone500};">Phoenix, Arizona Headquarters</span>
-    </p>
-    <p style="color:${COLORS.stone600};font-size:10px;margin:0 0 4px;line-height:1.5;font-family:${FONT_STACK};">
-        CAGE: 17T63 &nbsp;&middot;&nbsp; UEI: CVJ8CD2MFXD8
-    </p>
-    <p style="color:${COLORS.stone600};font-size:10px;margin:0;line-height:1.5;">
-        &copy; 2026 Americurial LLC. All Rights Reserved.
-    </p>
-</td></tr>
-</table>
-
 </td>
 </tr>
 
 </table>
-<!-- /Container -->
 
 </td></tr>
 </table>
@@ -256,23 +184,23 @@ ${footerNote ? `<tr><td style="background:${COLORS.stone50};padding:20px 40px;bo
 // ─── Reusable content helpers ────────────────────────────────────────
 
 export function contentCard(innerHtml: string): string {
-    return `<div style="background:${COLORS.stone50};border-radius:14px;padding:22px;margin:20px 0;border:1px solid ${COLORS.stone200};">${innerHtml}</div>`;
+    return `<div style="background-color:${COLORS.stone50};border-radius:10px;padding:20px;margin:18px 0;border:1px solid ${COLORS.stone200};">${innerHtml}</div>`;
 }
 
 export function featureBox(innerHtml: string): string {
-    return `<div style="background:${COLORS.emerald50};border:1px solid ${COLORS.emerald200};border-radius:14px;padding:22px;margin:20px 0;">${innerHtml}</div>`;
+    return `<div style="background-color:${COLORS.emerald50};border:1px solid ${COLORS.emerald200};border-radius:10px;padding:20px;margin:18px 0;">${innerHtml}</div>`;
 }
 
 export function alertBox(innerHtml: string): string {
-    return `<div style="background:#fefce8;border:1px solid #fde68a;border-radius:14px;padding:22px;margin:20px 0;">${innerHtml}</div>`;
+    return `<div style="background-color:#fefce8;border:1px solid #fde68a;border-radius:10px;padding:20px;margin:18px 0;">${innerHtml}</div>`;
 }
 
 export function urgentBox(innerHtml: string): string {
-    return `<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:14px;padding:22px;margin:20px 0;">${innerHtml}</div>`;
+    return `<div style="background-color:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:20px;margin:18px 0;">${innerHtml}</div>`;
 }
 
 export function infoBox(innerHtml: string): string {
-    return `<div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:14px;padding:22px;margin:20px 0;">${innerHtml}</div>`;
+    return `<div style="background-color:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:20px;margin:18px 0;">${innerHtml}</div>`;
 }
 
 export function paragraph(text: string): string {
@@ -286,33 +214,30 @@ export function sectionLabel(text: string): string {
 export function scoreBadge(score: number): string {
     const bg = score >= 70 ? "#dcfce7" : score >= 50 ? "#fef9c3" : "#dbeafe";
     const color = score >= 70 ? "#166534" : score >= 50 ? "#854d0e" : "#1e40af";
-    return `<span style="display:inline-block;padding:3px 10px;border-radius:6px;font-size:12px;font-weight:700;background:${bg};color:${color};">${score}%</span>`;
+    return `<span style="display:inline-block;padding:3px 10px;border-radius:6px;font-size:12px;font-weight:700;background-color:${bg};color:${color};">${score}%</span>`;
 }
 
-/** Numbered section block — like the blog callouts */
+/** Numbered section block — for educational "how-to" emails */
 export function numberedSection(num: number, title: string, body: string): string {
     return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:18px 0;">
         <tr>
-            <td width="40" style="vertical-align:top;padding-right:14px;">
-                <div style="width:32px;height:32px;background:${COLORS.emerald50};border:1px solid ${COLORS.emerald200};border-radius:8px;text-align:center;line-height:30px;color:${COLORS.emerald600};font-weight:800;font-size:14px;">${num}</div>
+            <td width="36" style="vertical-align:top;padding-right:14px;">
+                <div style="width:28px;height:28px;background-color:${COLORS.emerald50};border:1px solid ${COLORS.emerald200};border-radius:6px;text-align:center;line-height:26px;color:${COLORS.emerald600};font-weight:800;font-size:13px;">${num}</div>
             </td>
             <td style="vertical-align:top;">
-                <h3 style="font-size:16px;font-weight:700;color:${COLORS.black};margin:4px 0 6px;line-height:1.3;">${title}</h3>
+                <h3 style="font-size:15px;font-weight:700;color:${COLORS.black};margin:4px 0 4px;line-height:1.3;">${title}</h3>
                 <p style="color:${COLORS.stone600};font-size:14px;line-height:1.6;margin:0;">${body}</p>
             </td>
         </tr>
     </table>`;
 }
 
-/** "Read the full guide" link card — for educational emails */
+/** Minimal inline article link — replaces the heavy dark "articleCta" card */
 export function articleCta(title: string, url: string, readTime?: string): string {
-    return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:24px 0;">
-        <tr><td style="background:${COLORS.stone900};border-radius:14px;padding:22px;">
-            <p style="color:${COLORS.emerald400};font-size:10px;text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin:0 0 8px;">Full Guide${readTime ? ` &middot; ${readTime}` : ""}</p>
-            <p style="color:${COLORS.white};font-size:16px;font-weight:700;margin:0 0 14px;line-height:1.3;">${title}</p>
-            <a href="${url}" style="display:inline-block;color:${COLORS.emerald400};font-size:13px;font-weight:700;text-decoration:none;">Read on capturepilot.com &rarr;</a>
-        </td></tr>
-    </table>`;
+    return `<p style="margin:24px 0 0;padding:14px 0 0;border-top:1px solid ${COLORS.stone200};">
+        <span style="display:block;color:${COLORS.stone400};font-size:11px;text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin-bottom:4px;">Read the full guide${readTime ? ` &middot; ${readTime}` : ""}</span>
+        <a href="${url}" style="color:${COLORS.emerald600};font-size:14px;font-weight:700;text-decoration:none;">${title} &rarr;</a>
+    </p>`;
 }
 
 export { APP_URL, SITE_URL, COLORS, FONT_STACK };
