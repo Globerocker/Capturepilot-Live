@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { sendConsultingWelcomeEmail } from "@/lib/email";
+import { sendConsultingWelcomeEmail, enqueueDripSequence } from "@/lib/email";
 import { notifyNewClient } from "@/lib/slack";
 
 function getAdmin() {
@@ -162,6 +162,14 @@ export async function POST(req: NextRequest) {
         // 5. Send welcome email + Slack notification
         await sendConsultingWelcomeEmail(email, company_name, contact_name || "there", tempPassword);
         notifyNewClient(company_name, email).catch(() => {});
+
+        // 6. Enroll in consulting onboarding drip sequence (fire-and-forget)
+        enqueueDripSequence({
+            sequenceKey: "consulting_onboarding",
+            email,
+            contactName: contact_name || company_name,
+            userProfileId: profileData.id,
+        }).catch(err => console.error("Drip enrollment failed:", err));
 
         return NextResponse.json({
             success: true,

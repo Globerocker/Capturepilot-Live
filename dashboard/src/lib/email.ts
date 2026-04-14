@@ -3,6 +3,7 @@
  * All emails use the shared branded template and respect email-settings toggles.
  */
 import { Resend } from "resend";
+import { createClient } from "@supabase/supabase-js";
 import {
     emailTemplate,
     contentCard,
@@ -20,6 +21,7 @@ import {
     COLORS,
 } from "./email-template";
 import { isEmailEnabled, getEmailCategory } from "./email-settings";
+import { getDripSequence } from "./drip-sequences";
 
 let _resend: Resend | null = null;
 function getResend(): Resend | null {
@@ -29,6 +31,95 @@ function getResend(): Resend | null {
 }
 
 const FROM_EMAIL = process.env.FROM_EMAIL || "CapturePilot <noreply@capturepilot.com>";
+
+function getDbAdmin() {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const key = process.env.SUPABASE_SERVICE_KEY;
+    if (!url || !key) return null;
+    return createClient(url, key);
+}
+
+/**
+ * Enroll a user in a drip sequence — inserts scheduled_emails rows for each step.
+ * Called after signup/onboarding. Idempotent: if the user is already enrolled in
+ * this sequence with pending rows, it's a no-op.
+ */
+export async function enqueueDripSequence(params: {
+    sequenceKey: string;
+    email: string;
+    contactName?: string;
+    userProfileId?: string;
+}): Promise<boolean> {
+    const { sequenceKey, email, contactName, userProfileId } = params;
+
+    const sequence = getDripSequence(sequenceKey);
+    if (!sequence) {
+        console.warn(`[drip] unknown sequence: ${sequenceKey}`);
+        return false;
+    }
+
+    const sb = getDbAdmin();
+    if (!sb) {
+        console.warn("[drip] DB not configured, skipping enrollment");
+        return false;
+    }
+
+    // Idempotency: if user already has pending rows for this sequence, skip
+    if (userProfileId) {
+        const { count } = await sb
+            .from("scheduled_emails")
+            .select("id", { count: "exact", head: true })
+            .eq("user_profile_id", userProfileId)
+            .eq("sequence_key", sequenceKey)
+            .eq("status", "pending");
+        if ((count || 0) > 0) {
+            console.log(`[drip] ${email} already enrolled in ${sequenceKey}, skipping`);
+            return false;
+        }
+    }
+
+    const now = Date.now();
+    const rows = sequence.steps.map(step => ({
+        user_profile_id: userProfileId ?? null,
+        email_address: email,
+        contact_name: contactName ?? null,
+        template_key: step.templateKey,
+        sequence_key: sequenceKey,
+        scheduled_for: new Date(now + step.dayOffset * 86400000).toISOString(),
+        status: "pending",
+    }));
+
+    const { error } = await sb.from("scheduled_emails").insert(rows);
+    if (error) {
+        console.error(`[drip] Failed to enqueue ${sequenceKey}:`, error);
+        return false;
+    }
+
+    console.log(`[drip] Enrolled ${email} in ${sequenceKey} (${rows.length} emails)`);
+    return true;
+}
+
+/**
+ * Dispatch a single scheduled email — used by the process_scheduled_emails cron.
+ * Maps template_key to the appropriate send function.
+ * Returns true on success, false on failure (cron records the result).
+ */
+export async function dispatchScheduledEmail(params: {
+    templateKey: string;
+    email: string;
+    contactName: string;
+}): Promise<boolean> {
+    const { templateKey, email, contactName } = params;
+    switch (templateKey) {
+        case "edu_contracting_101": return sendEduContracting101Email(email, contactName);
+        case "edu_naics_codes": return sendEduNaicsCodesEmail(email, contactName);
+        case "edu_set_asides": return sendEduSetAsidesEmail(email, contactName);
+        case "edu_capability_statement": return sendEduCapabilityStatementEmail(email, contactName);
+        default:
+            console.warn(`[dispatch] no handler for template ${templateKey}`);
+            return false;
+    }
+}
 
 /** Shared send wrapper — checks DB-backed settings toggle, logs, catches errors */
 async function send(key: string, to: string, subject: string, html: string): Promise<boolean> {
