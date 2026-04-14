@@ -5,7 +5,7 @@ import Link from "next/link";
 import {
     Globe, MapPin, Users, ExternalLink, Save, Search,
     Loader2, ChevronDown, Hash, Building2, Mail, Phone, User,
-    Linkedin, Calendar, Briefcase, Target, FileDown, Send, MessageSquare
+    Linkedin, Calendar, Briefcase, Target, FileDown, Send, MessageSquare, Database
 } from "lucide-react";
 import Image from "next/image";
 import clsx from "clsx";
@@ -25,6 +25,8 @@ interface Prospect {
     is_saved: boolean;
     lead_email: string | null;
     created_at: string;
+    readiness_score?: number;
+    readiness_breakdown?: Record<string, number>;
 }
 
 export default function AdminProspectsPage() {
@@ -33,6 +35,7 @@ export default function AdminProspectsPage() {
     const [filter, setFilter] = useState<"all" | "saved">("all");
     const [searchTerm, setSearchTerm] = useState("");
     const [expandedId, setExpandedId] = useState<string | null>(null);
+    const [loadingStatus, setLoadingStatus] = useState<Record<string, string>>({});
 
     useEffect(() => {
         setLoading(true);
@@ -178,6 +181,9 @@ export default function AdminProspectsPage() {
                                                 {prospect.is_saved && (
                                                     <span className="text-[9px] font-bold bg-blue-50 text-blue-600 border border-blue-200 px-1.5 py-0.5 rounded">SAVED</span>
                                                 )}
+                                                {(prospect.inferred_profile as any)?.synced_to_hubspot && (
+                                                    <span className="text-[9px] font-bold bg-orange-50 text-orange-600 border border-orange-200 px-1.5 py-0.5 rounded">HUBSPOT</span>
+                                                )}
                                                 {sam && (
                                                     <span className="text-[9px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-200 px-1.5 py-0.5 rounded">SAM</span>
                                                 )}
@@ -291,6 +297,49 @@ export default function AdminProspectsPage() {
                                                 >
                                                     <Send className="w-3 h-3" /> AI Outreach Email
                                                 </button>
+                                                <button
+                                                    type="button"
+                                                    disabled={loadingStatus[prospect.id] === "apollo"}
+                                                    onClick={async () => {
+                                                        setLoadingStatus(prev => ({ ...prev, [prospect.id]: "apollo" }));
+                                                        const res = await fetch("/api/admin/leads/apollo", {
+                                                            method: "POST",
+                                                            body: JSON.stringify({ id: prospect.id })
+                                                        });
+                                                        const data = await res.json();
+                                                        setLoadingStatus(prev => ({ ...prev, [prospect.id]: "" }));
+                                                        if (data.success && data.phone) {
+                                                            setProspects(prev => prev.map(p => p.id === prospect.id ? { ...p, inferred_profile: { ...p.inferred_profile, contact_person: { ...(p.inferred_profile as Record<string, unknown>)?.contact_person as any, phone: data.phone } } } : p));
+                                                            alert(`Enriched! Found mobile: ${data.phone}`);
+                                                        } else {
+                                                            alert(data.error || "No phone found");
+                                                        }
+                                                    }}
+                                                    className="text-[10px] font-bold px-3 py-1.5 rounded-lg border bg-violet-600 text-white border-violet-700 inline-flex items-center gap-1 hover:bg-violet-700 transition-all disabled:opacity-50"
+                                                >
+                                                    {loadingStatus[prospect.id] === "apollo" ? <Loader2 className="w-3 h-3 animate-spin"/> : <Search className="w-3 h-3" />} Enrich via Apollo
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    disabled={loadingStatus[prospect.id] === "hubspot" || !!(prospect.inferred_profile as any)?.synced_to_hubspot || !prospect.lead_email}
+                                                    onClick={async () => {
+                                                        setLoadingStatus(prev => ({ ...prev, [prospect.id]: "hubspot" }));
+                                                        const res = await fetch("/api/admin/leads/hubspot", {
+                                                            method: "POST",
+                                                            body: JSON.stringify({ id: prospect.id })
+                                                        });
+                                                        const data = await res.json();
+                                                        setLoadingStatus(prev => ({ ...prev, [prospect.id]: "" }));
+                                                        if (data.success) {
+                                                            setProspects(prev => prev.map(p => p.id === prospect.id ? { ...p, inferred_profile: { ...(p.inferred_profile as Record<string, unknown>), synced_to_hubspot: true } } : p));
+                                                        } else {
+                                                            alert(`Error: ${data.error}`);
+                                                        }
+                                                    }}
+                                                    className={clsx("text-[10px] font-bold px-3 py-1.5 rounded-lg border inline-flex items-center gap-1 transition-all disabled:opacity-50", (prospect.inferred_profile as any)?.synced_to_hubspot ? "bg-stone-100 text-stone-400 border-stone-200" : "bg-orange-500 text-white border-orange-600 hover:bg-orange-600")}
+                                                >
+                                                    {loadingStatus[prospect.id] === "hubspot" ? <Loader2 className="w-3 h-3 animate-spin"/> : <Database className="w-3 h-3" />} {(prospect.inferred_profile as any)?.synced_to_hubspot ? "Synced to HubSpot" : "Send to HubSpot"}
+                                                </button>
                                             </div>
 
                                             {/* Pipeline Status */}
@@ -333,6 +382,12 @@ export default function AdminProspectsPage() {
 
                                             {/* Key info grid */}
                                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                                {prospect.readiness_score !== undefined && (
+                                                    <div className="text-xs">
+                                                        <p className="text-[10px] text-stone-400 uppercase">Readiness</p>
+                                                        <p className="font-bold text-stone-700">{prospect.readiness_score}/10</p>
+                                                    </div>
+                                                )}
                                                 {uei && (
                                                     <div className="text-xs">
                                                         <p className="text-[10px] text-stone-400 uppercase">UEI</p>

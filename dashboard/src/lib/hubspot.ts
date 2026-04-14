@@ -282,6 +282,45 @@ export async function updateDealStage(dealId: string, stageId: string): Promise<
 }
 
 /**
+ * Create or update a HubSpot company by domain or name.
+ */
+export async function createOrUpdateCompanyInHubspot(companyName: string, domain?: string): Promise<string | null> {
+  if (!companyName) return null;
+  try {
+    const properties: Record<string, string> = { name: companyName };
+    if (domain) properties.domain = domain;
+    const result = await hsApi('POST', '/crm/v3/objects/companies', { properties });
+    return (result.id as string) || null;
+  } catch (err: unknown) {
+    const msg = (err as Error).message || '';
+    if (msg.includes('409') || msg.includes('already exists') || msg.includes('CONFLICT')) {
+      const match = msg.match(/existing object id:\s*(\d+)/i) ||
+                    msg.match(/Existing ID:\s*(\d+)/i) ||
+                    msg.match(/"id"\s*:\s*"?(\d+)"?/);
+      return match?.[1] || null;
+    }
+    console.error('[HubSpot] createOrUpdateCompanyInHubspot failed:', msg);
+    return null;
+  }
+}
+
+/**
+ * Associate a contact to a company.
+ */
+export async function associateContactToCompany(contactId: string, companyId: string): Promise<boolean> {
+  try {
+    await hsApi(
+      'PUT',
+      `/crm/v3/objects/companies/${companyId}/associations/contacts/${contactId}/company_to_contact`
+    );
+    return true;
+  } catch (err: unknown) {
+    console.error('[HubSpot] associateContactToCompany failed:', (err as Error).message);
+    return false;
+  }
+}
+
+/**
  * Search for an open deal for a contact in a specific pipeline.
  */
 export async function findOpenDealForContact(

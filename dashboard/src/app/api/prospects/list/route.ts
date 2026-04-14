@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     // Select without is_saved column (may not exist yet), use inferred_profile fallback
     const { data, error } = await sb
         .from("company_analyses")
-        .select("id, company_name, website, uei, status, company_summary, sam_data, inferred_naics, preview_matches, inferred_profile, crawl_data, lead_email, created_at")
+        .select("id, company_name, website, uei, status, company_summary, sam_data, inferred_naics, preview_matches, inferred_profile, crawl_data, lead_email, created_at, readiness_score, readiness_breakdown")
         .in("status", ["complete", "error"])
         .order("created_at", { ascending: false })
         .limit(100);
