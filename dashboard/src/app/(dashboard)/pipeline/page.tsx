@@ -1,20 +1,31 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseClient } from "@/lib/supabase/client";
-import { Layers, Loader2, Search, Eye, ChevronDown, Target, Clock, DollarSign, Plus, X, List, Columns } from "lucide-react";
+import { Layers, Loader2, Search, Eye, ChevronDown, Target, Clock, Plus, X, Settings, DollarSign } from "lucide-react";
 import clsx from "clsx";
 import Link from "next/link";
 import ServiceCTA from "@/components/ui/ServiceCTA";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
-import KanbanBoard from "@/components/pipeline/KanbanBoard";
+import PipelineTabs from "@/components/pipeline/PipelineTabs";
+import StageSettings from "@/components/pipeline/StageSettings";
+import {
+    NOTICE_TYPE_TABS,
+    STAGE_TOOLTIPS,
+    type PipelineStage,
+    getNextStages,
+    getStageInfo,
+    parseStagesFromNotes,
+} from "@/lib/pipeline-stages";
+import { logPipelineActivity } from "@/lib/pipeline-activity";
 
 const supabase = createSupabaseClient();
 
 interface Pursuit {
     id: string;
     opportunity_id: string;
+    user_profile_id: string;
     stage: string;
     priority: string;
     notes: string | null;
@@ -33,40 +44,6 @@ interface Pursuit {
     };
 }
 
-const STAGES = [
-    { key: "discovered", label: "Discovered", color: "bg-stone-100 border-stone-200 text-stone-700", dot: "bg-stone-400" },
-    { key: "researching", label: "Researching", color: "bg-blue-50 border-blue-200 text-blue-700", dot: "bg-blue-500" },
-    { key: "preparing", label: "Preparing", color: "bg-amber-50 border-amber-200 text-amber-700", dot: "bg-amber-500" },
-    { key: "submitted", label: "Submitted", color: "bg-purple-50 border-purple-200 text-purple-700", dot: "bg-purple-500" },
-    { key: "awarded", label: "Awarded", color: "bg-emerald-50 border-emerald-200 text-emerald-700", dot: "bg-emerald-500" },
-    { key: "lost", label: "Lost", color: "bg-red-50 border-red-200 text-red-700", dot: "bg-red-500" },
-    { key: "no_bid", label: "No Bid", color: "bg-stone-50 border-stone-200 text-stone-500", dot: "bg-stone-400" },
-];
-
-const STAGE_ORDER = STAGES.map(s => s.key);
-
-const STAGE_TOOLTIPS: Record<string, string> = {
-    discovered: "You've identified this opportunity. Next step: research the requirements and assess fit.",
-    researching: "Actively reviewing requirements, evaluating competition, and assessing your competitive position.",
-    preparing: "Writing your proposal, gathering past performance, and assembling your team.",
-    submitted: "Your response has been submitted. Await evaluation results.",
-    awarded: "Congratulations! You won this contract.",
-    lost: "This bid was not selected. Review the debrief to improve future submissions.",
-    no_bid: "You decided not to pursue this opportunity.",
-};
-
-function getStageInfo(stage: string) {
-    return STAGES.find(s => s.key === stage) || STAGES[0];
-}
-
-function getNextStages(currentStage: string): string[] {
-    if (currentStage === "discovered") return ["researching", "no_bid"];
-    if (currentStage === "researching") return ["preparing", "no_bid"];
-    if (currentStage === "preparing") return ["submitted", "no_bid"];
-    if (currentStage === "submitted") return ["awarded", "lost"];
-    return [];
-}
-
 function getDeadlineInfo(deadline: string | null): { label: string; color: string; daysLeft: number } | null {
     if (!deadline) return null;
     const now = Date.now();
@@ -80,7 +57,7 @@ function getDeadlineInfo(deadline: string | null): { label: string; color: strin
     return { label: `${daysLeft}d left`, color: "text-stone-500", daysLeft };
 }
 
-// Stage-specific service CTAs
+// Stage-specific service CTAs (keyed by stage key, not label)
 const STAGE_SERVICE_CTAS: Record<string, { title: string; description: string; variant: "default" | "amber" | "dark" } | null> = {
     discovered: null,
     researching: {
@@ -110,14 +87,18 @@ export default function PipelinePage() {
     const [loading, setLoading] = useState(true);
     const [pursuits, setPursuits] = useState<Pursuit[]>([]);
     const [profileId, setProfileId] = useState<string | null>(null);
+    const [profileNotes, setProfileNotes] = useState<string | null>(null);
     const [expandedStages, setExpandedStages] = useState<Record<string, boolean>>({
         discovered: true, researching: true, preparing: true, submitted: true,
     });
     const [pipelineSort, setPipelineSort] = useState<"deadline" | "value" | "priority">("deadline");
-    const [viewMode, setViewMode] = useState<"list" | "kanban">("kanban");
     const [showCustomDeal, setShowCustomDeal] = useState(false);
     const [customDeal, setCustomDeal] = useState({ title: "", agency: "", naics_code: "", estimated_value: "", notes: "" });
     const [savingDeal, setSavingDeal] = useState(false);
+    const [activeTab, setActiveTab] = useState<string>("all");
+    const [stageSettingsOpen, setStageSettingsOpen] = useState(false);
+
+    const stages: PipelineStage[] = useMemo(() => parseStagesFromNotes(profileNotes), [profileNotes]);
 
     useEffect(() => {
         async function load() {
@@ -126,12 +107,13 @@ export default function PipelinePage() {
 
             const { data: profile } = await supabase
                 .from("user_profiles")
-                .select("id")
+                .select("id, notes")
                 .eq("auth_user_id", user.id)
                 .single();
 
             if (!profile) { router.push("/onboard"); return; }
             setProfileId(profile.id);
+            setProfileNotes(profile.notes);
         }
         load();
     }, [router]);
@@ -154,16 +136,25 @@ export default function PipelinePage() {
         if (profileId) fetchPursuits();
     }, [profileId, fetchPursuits]);
 
-    const updateStage = async (pursuitId: string, newStage: string) => {
+    const updateStage = async (pursuit: Pursuit, newStage: string) => {
+        const prev = pursuit.stage;
+        const now = new Date().toISOString();
         const { error } = await supabase
             .from("user_pursuits")
-            .update({ stage: newStage, stage_changed_at: new Date().toISOString() })
-            .eq("id", pursuitId);
+            .update({ stage: newStage, stage_changed_at: now })
+            .eq("id", pursuit.id);
 
         if (!error) {
-            setPursuits(prev => prev.map(p =>
-                p.id === pursuitId ? { ...p, stage: newStage, stage_changed_at: new Date().toISOString() } : p
+            setPursuits(prevList => prevList.map(p =>
+                p.id === pursuit.id ? { ...p, stage: newStage, stage_changed_at: now } : p
             ));
+            await logPipelineActivity(supabase, {
+                pursuitId: pursuit.id,
+                userProfileId: pursuit.user_profile_id,
+                activityType: "stage_changed",
+                fromValue: prev,
+                toValue: newStage,
+            });
         }
     };
 
@@ -186,13 +177,24 @@ export default function PipelinePage() {
             .single();
 
         if (opp) {
-            await supabase.from("user_pursuits").insert({
+            const { data: newPursuit } = await supabase.from("user_pursuits").insert({
                 user_profile_id: profileId,
                 opportunity_id: opp.id,
                 stage: "discovered",
                 priority: "medium",
                 notes: customDeal.notes.trim() || null,
-            });
+            }).select("id").single();
+
+            if (newPursuit) {
+                await logPipelineActivity(supabase, {
+                    pursuitId: newPursuit.id,
+                    userProfileId: profileId,
+                    activityType: "created",
+                    toValue: "discovered",
+                    description: `Created custom deal: ${customDeal.title.trim()}`,
+                });
+            }
+
             setCustomDeal({ title: "", agency: "", naics_code: "", estimated_value: "", notes: "" });
             setShowCustomDeal(false);
             await fetchPursuits();
@@ -204,21 +206,36 @@ export default function PipelinePage() {
         setExpandedStages(prev => ({ ...prev, [stage]: !prev[stage] }));
     };
 
-    const groupedPursuits = STAGES.reduce((acc, stage) => {
-        acc[stage.key] = pursuits.filter(p => p.stage === stage.key);
+    // Filter pursuits by active notice_type tab.
+    const activeTabConfig = NOTICE_TYPE_TABS.find(t => t.key === activeTab) || NOTICE_TYPE_TABS[0];
+    const filteredPursuits = useMemo(() => {
+        return pursuits.filter(p => activeTabConfig.matches(p.opportunities?.notice_type));
+    }, [pursuits, activeTabConfig]);
+
+    // Per-tab counts (for badges).
+    const tabCounts = useMemo(() => {
+        const counts: Record<string, number> = {};
+        for (const tab of NOTICE_TYPE_TABS) {
+            counts[tab.key] = pursuits.filter(p => tab.matches(p.opportunities?.notice_type)).length;
+        }
+        return counts;
+    }, [pursuits]);
+
+    const groupedPursuits = stages.reduce((acc, stage) => {
+        acc[stage.key] = filteredPursuits.filter(p => p.stage === stage.key);
         return acc;
     }, {} as Record<string, Pursuit[]>);
 
-    const activeStages = STAGES.filter(s =>
-        groupedPursuits[s.key].length > 0 || ["discovered", "researching", "preparing", "submitted"].includes(s.key)
+    const activeStages = stages.filter(s =>
+        (groupedPursuits[s.key]?.length || 0) > 0 || ["discovered", "researching", "preparing", "submitted"].includes(s.key)
     );
 
-    // Pipeline stats
-    const totalValue = pursuits.reduce((sum, p) => {
+    // Pipeline stats (filtered)
+    const totalValue = filteredPursuits.reduce((sum, p) => {
         const opp = p.opportunities as Pursuit["opportunities"];
         return sum + (opp?.award_amount || 0);
     }, 0);
-    const activePursuits = pursuits.filter(p => !["awarded", "lost", "no_bid"].includes(p.stage)).length;
+    const activePursuits = filteredPursuits.filter(p => !["awarded", "lost", "no_bid"].includes(p.stage)).length;
 
     if (loading && pursuits.length === 0) {
         return (
@@ -229,7 +246,7 @@ export default function PipelinePage() {
     }
 
     return (
-        <div className="max-w-7xl mx-auto pb-12 animate-in fade-in duration-500 px-1">
+        <div className="max-w-5xl mx-auto pb-12 animate-in fade-in duration-500 px-1">
             <header className="mb-6">
                 <div className="flex items-center justify-between">
                     <h2 className="text-2xl sm:text-3xl font-bold tracking-tighter text-black flex items-center">
@@ -238,18 +255,40 @@ export default function PipelinePage() {
                             {pursuits.length}
                         </span>
                     </h2>
-                    <button
-                        type="button"
-                        onClick={() => setShowCustomDeal(true)}
-                        className="inline-flex items-center bg-black text-white font-bold px-4 py-2 rounded-full hover:bg-stone-800 transition-all text-xs"
-                    >
-                        <Plus className="w-3.5 h-3.5 mr-1.5" /> Add Deal
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            title="Customize stages"
+                            onClick={() => setStageSettingsOpen(true)}
+                            className="inline-flex items-center bg-white border border-stone-200 text-stone-600 p-2 rounded-full hover:bg-stone-50 transition-all"
+                        >
+                            <Settings className="w-4 h-4" />
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setShowCustomDeal(true)}
+                            className="inline-flex items-center bg-black text-white font-bold px-4 py-2 rounded-full hover:bg-stone-800 transition-all text-xs"
+                        >
+                            <Plus className="w-3.5 h-3.5 mr-1.5" /> Add Deal
+                        </button>
+                    </div>
                 </div>
                 <p className="text-stone-500 mt-1 font-medium text-sm">
                     Track your contract pursuit progress
                 </p>
             </header>
+
+            {/* Stage Settings Modal */}
+            {profileId && (
+                <StageSettings
+                    open={stageSettingsOpen}
+                    onClose={() => setStageSettingsOpen(false)}
+                    profileId={profileId}
+                    currentStages={stages}
+                    currentNotes={profileNotes}
+                    onSaved={(_newStages, newNotes) => setProfileNotes(newNotes)}
+                />
+            )}
 
             {/* Custom Deal Modal */}
             {showCustomDeal && (
@@ -341,29 +380,8 @@ export default function PipelinePage() {
                 </div>
             ) : (
                 <>
-                    {/* View toggle: Kanban vs List */}
-                    <div className="flex items-center gap-2 mb-3 bg-white border border-stone-200 rounded-full p-1 w-fit shadow-sm">
-                        <button
-                            type="button"
-                            onClick={() => setViewMode("kanban")}
-                            className={clsx(
-                                "inline-flex items-center text-xs font-bold px-4 py-2 rounded-full transition-all",
-                                viewMode === "kanban" ? "bg-black text-white" : "text-stone-500 hover:text-stone-800",
-                            )}
-                        >
-                            <Columns className="w-3.5 h-3.5 mr-1.5" /> Kanban
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setViewMode("list")}
-                            className={clsx(
-                                "inline-flex items-center text-xs font-bold px-4 py-2 rounded-full transition-all",
-                                viewMode === "list" ? "bg-black text-white" : "text-stone-500 hover:text-stone-800",
-                            )}
-                        >
-                            <List className="w-3.5 h-3.5 mr-1.5" /> List
-                        </button>
-                    </div>
+                    {/* Notice-type tabs */}
+                    <PipelineTabs counts={tabCounts} active={activeTab} onChange={setActiveTab} />
 
                     {/* Sort + Summary Bar */}
                     <div className="flex flex-wrap items-center gap-2 mb-3">
@@ -397,136 +415,166 @@ export default function PipelinePage() {
                         )}
                     </div>
 
-                    {viewMode === "kanban" ? (
-                        <KanbanBoard pursuits={pursuits} stages={STAGES} onMove={updateStage} />
+                    {filteredPursuits.length === 0 ? (
+                        <div className="bg-white border border-stone-200 border-dashed rounded-2xl p-8 text-center">
+                            <p className="text-sm text-stone-500">
+                                No deals match the <span className="font-bold">{activeTabConfig.label}</span> filter.
+                            </p>
+                        </div>
                     ) : (
-                    <div className="space-y-3">
-                        {activeStages.map(stage => {
-                            const rawItems = groupedPursuits[stage.key];
-                            const items = [...rawItems].sort((a, b) => {
-                                const oppA = a.opportunities as Pursuit["opportunities"];
-                                const oppB = b.opportunities as Pursuit["opportunities"];
-                                if (pipelineSort === "deadline") {
-                                    return (oppA?.response_deadline || "9999").localeCompare(oppB?.response_deadline || "9999");
-                                }
-                                if (pipelineSort === "value") {
-                                    return (oppB?.award_amount || 0) - (oppA?.award_amount || 0);
-                                }
-                                const pOrder: Record<string, number> = { high: 0, medium: 1, low: 2 };
-                                return (pOrder[a.priority] ?? 1) - (pOrder[b.priority] ?? 1);
-                            });
-                            const isExpanded = expandedStages[stage.key] ?? false;
-                            const serviceCta = STAGE_SERVICE_CTAS[stage.key];
+                        <div className="space-y-3">
+                            {activeStages.map(stage => {
+                                const rawItems = groupedPursuits[stage.key] || [];
+                                const items = [...rawItems].sort((a, b) => {
+                                    const oppA = a.opportunities as Pursuit["opportunities"];
+                                    const oppB = b.opportunities as Pursuit["opportunities"];
+                                    if (pipelineSort === "deadline") {
+                                        return (oppA?.response_deadline || "9999").localeCompare(oppB?.response_deadline || "9999");
+                                    }
+                                    if (pipelineSort === "value") {
+                                        return (oppB?.award_amount || 0) - (oppA?.award_amount || 0);
+                                    }
+                                    const pOrder: Record<string, number> = { high: 0, medium: 1, low: 2 };
+                                    return (pOrder[a.priority] ?? 1) - (pOrder[b.priority] ?? 1);
+                                });
+                                const isExpanded = expandedStages[stage.key] ?? false;
+                                const serviceCta = STAGE_SERVICE_CTAS[stage.key];
 
-                            return (
-                                <div key={stage.key} className="bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden">
-                                    <button
-                                        type="button"
-                                        onClick={() => toggleStage(stage.key)}
-                                        className="w-full flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 hover:bg-stone-50 transition-colors"
-                                    >
-                                        <div className="flex items-center gap-2 sm:gap-3">
-                                            <span className={clsx("text-[10px] sm:text-xs font-bold uppercase tracking-widest px-2.5 py-1 rounded-full border", stage.color)}>
-                                                {stage.label}
-                                            </span>
-                                            <InfoTooltip text={STAGE_TOOLTIPS[stage.key] || ""} />
-                                            <span className="text-sm font-bold text-stone-700">{items.length}</span>
-                                        </div>
-                                        <ChevronDown className={clsx("w-4 h-4 text-stone-400 transition-transform", isExpanded && "rotate-180")} />
-                                    </button>
+                                return (
+                                    <div key={stage.key} className="bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden">
+                                        <button
+                                            type="button"
+                                            onClick={() => toggleStage(stage.key)}
+                                            className="w-full flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 hover:bg-stone-50 transition-colors"
+                                        >
+                                            <div className="flex items-center gap-2 sm:gap-3">
+                                                <span className={clsx("text-[10px] sm:text-xs font-bold uppercase tracking-widest px-2.5 py-1 rounded-full border", stage.color)}>
+                                                    {stage.label}
+                                                </span>
+                                                {STAGE_TOOLTIPS[stage.key] && (
+                                                    <InfoTooltip text={STAGE_TOOLTIPS[stage.key] || ""} />
+                                                )}
+                                                <span className="text-sm font-bold text-stone-700">{items.length}</span>
+                                            </div>
+                                            <ChevronDown className={clsx("w-4 h-4 text-stone-400 transition-transform", isExpanded && "rotate-180")} />
+                                        </button>
 
-                                    {isExpanded && items.length > 0 && (
-                                        <div className="border-t border-stone-100">
-                                            <div className="divide-y divide-stone-100">
-                                                {items.map(pursuit => {
-                                                    const opp = pursuit.opportunities as Pursuit["opportunities"];
-                                                    const nextStages = getNextStages(pursuit.stage);
-                                                    const deadlineInfo = getDeadlineInfo(opp?.response_deadline);
-                                                    const strat = opp?.strategic_scoring || {};
-                                                    const winProb = (strat as Record<string, string>).win_prob_tier;
+                                        {isExpanded && items.length > 0 && (
+                                            <div className="border-t border-stone-100">
+                                                <div className="divide-y divide-stone-100">
+                                                    {items.map(pursuit => {
+                                                        const opp = pursuit.opportunities as Pursuit["opportunities"];
+                                                        const nextStages = getNextStages(stages, pursuit.stage);
+                                                        const deadlineInfo = getDeadlineInfo(opp?.response_deadline);
+                                                        const strat = opp?.strategic_scoring || {};
+                                                        const winProb = (strat as Record<string, string>).win_prob_tier;
 
-                                                    return (
-                                                        <div key={pursuit.id} className="px-4 sm:px-6 py-3 sm:py-4 hover:bg-stone-50 transition-colors">
-                                                            <div className="flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-4">
-                                                                <div className="flex-1 min-w-0">
-                                                                    <Link href={`/opportunities/${opp?.id}`} className="font-bold text-sm text-black hover:underline line-clamp-1">
-                                                                        {opp?.title || "Unknown Opportunity"}
-                                                                    </Link>
-                                                                    <p className="text-xs text-stone-500 line-clamp-1 mt-0.5">{opp?.agency}</p>
+                                                        return (
+                                                            <div key={pursuit.id} className="group relative hover:bg-stone-50 transition-colors">
+                                                                {/* Clickable row target: full-row link to deal detail */}
+                                                                <Link
+                                                                    href={`/pipeline/${pursuit.id}`}
+                                                                    aria-label={`Open deal: ${opp?.title || "Unknown Opportunity"}`}
+                                                                    className="absolute inset-0 z-0"
+                                                                />
+                                                                <div className="relative z-10 px-4 sm:px-6 py-3 sm:py-4 pointer-events-none">
+                                                                    <div className="flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-4">
+                                                                        <div className="flex-1 min-w-0">
+                                                                            <p className="font-bold text-sm text-black line-clamp-1 group-hover:underline">
+                                                                                {opp?.title || "Unknown Opportunity"}
+                                                                            </p>
+                                                                            <p className="text-xs text-stone-500 line-clamp-1 mt-0.5">{opp?.agency}</p>
 
-                                                                    {/* Rich metadata row */}
-                                                                    <div className="flex items-center gap-2 mt-2 flex-wrap">
-                                                                        {opp?.naics_code && (
-                                                                            <span className="font-mono text-[10px] bg-stone-100 px-2 py-0.5 rounded text-stone-600 border border-stone-200">{opp.naics_code}</span>
-                                                                        )}
-                                                                        {opp?.award_amount && (
-                                                                            <span className="text-[10px] font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded border border-emerald-200">
-                                                                                {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(opp.award_amount!)}
-                                                                            </span>
-                                                                        )}
-                                                                        {winProb && (
-                                                                            <span className={clsx("text-[10px] font-bold px-2 py-0.5 rounded border",
-                                                                                winProb === "HIGH" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
-                                                                                winProb === "MEDIUM" ? "bg-amber-50 text-amber-700 border-amber-200" :
-                                                                                "bg-red-50 text-red-700 border-red-200"
-                                                                            )}>
-                                                                                PWin: {winProb}
-                                                                            </span>
-                                                                        )}
-                                                                        {deadlineInfo && (
-                                                                            <span className={clsx("text-[10px] font-bold flex items-center gap-1", deadlineInfo.color)}>
-                                                                                <Clock className="w-3 h-3" />
-                                                                                {deadlineInfo.label}
-                                                                            </span>
-                                                                        )}
+                                                                            {/* Rich metadata row */}
+                                                                            <div className="flex items-center gap-2 mt-2 flex-wrap">
+                                                                                {opp?.notice_type && (
+                                                                                    <span className="text-[10px] font-bold bg-stone-100 text-stone-600 border border-stone-200 px-2 py-0.5 rounded-full">
+                                                                                        {opp.notice_type}
+                                                                                    </span>
+                                                                                )}
+                                                                                {opp?.naics_code && (
+                                                                                    <span className="font-mono text-[10px] bg-stone-100 px-2 py-0.5 rounded text-stone-600 border border-stone-200">{opp.naics_code}</span>
+                                                                                )}
+                                                                                {opp?.award_amount && (
+                                                                                    <span className="text-[10px] font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded border border-emerald-200">
+                                                                                        {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(opp.award_amount!)}
+                                                                                    </span>
+                                                                                )}
+                                                                                {winProb && (
+                                                                                    <span className={clsx("text-[10px] font-bold px-2 py-0.5 rounded border",
+                                                                                        winProb === "HIGH" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+                                                                                            winProb === "MEDIUM" ? "bg-amber-50 text-amber-700 border-amber-200" :
+                                                                                                "bg-red-50 text-red-700 border-red-200"
+                                                                                    )}>
+                                                                                        PWin: {winProb}
+                                                                                    </span>
+                                                                                )}
+                                                                                {deadlineInfo && (
+                                                                                    <span className={clsx("text-[10px] font-bold flex items-center gap-1", deadlineInfo.color)}>
+                                                                                        <Clock className="w-3 h-3" />
+                                                                                        {deadlineInfo.label}
+                                                                                    </span>
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="flex items-center gap-2 flex-shrink-0 pointer-events-auto">
+                                                                            {nextStages.length > 0 && (
+                                                                                <select
+                                                                                    title="Move to stage"
+                                                                                    value=""
+                                                                                    onClick={(e) => e.stopPropagation()}
+                                                                                    onChange={(e) => {
+                                                                                        if (e.target.value) {
+                                                                                            updateStage(pursuit, e.target.value);
+                                                                                            e.currentTarget.blur();
+                                                                                        }
+                                                                                    }}
+                                                                                    className="text-xs bg-stone-100 border border-stone-200 rounded-lg px-2 py-1.5 font-bold cursor-pointer hover:bg-stone-200 transition-colors"
+                                                                                >
+                                                                                    <option value="">Move to...</option>
+                                                                                    {nextStages.map(ns => (
+                                                                                        <option key={ns} value={ns}>{getStageInfo(stages, ns).label}</option>
+                                                                                    ))}
+                                                                                </select>
+                                                                            )}
+                                                                            <Link
+                                                                                href={`/opportunities/${opp?.id}`}
+                                                                                onClick={(e) => e.stopPropagation()}
+                                                                                className="p-1.5 text-stone-400 hover:text-black transition-colors"
+                                                                                title="View opportunity"
+                                                                            >
+                                                                                <Eye className="w-4 h-4" />
+                                                                            </Link>
+                                                                        </div>
                                                                     </div>
                                                                 </div>
-                                                                <div className="flex items-center gap-2 flex-shrink-0">
-                                                                    {nextStages.length > 0 && (
-                                                                        <select
-                                                                            title="Move to stage"
-                                                                            value=""
-                                                                            onChange={(e) => { if (e.target.value) updateStage(pursuit.id, e.target.value); }}
-                                                                            className="text-xs bg-stone-100 border border-stone-200 rounded-lg px-2 py-1.5 font-bold cursor-pointer hover:bg-stone-200 transition-colors"
-                                                                        >
-                                                                            <option value="">Move to...</option>
-                                                                            {nextStages.map(ns => (
-                                                                                <option key={ns} value={ns}>{getStageInfo(ns).label}</option>
-                                                                            ))}
-                                                                        </select>
-                                                                    )}
-                                                                    <Link href={`/opportunities/${opp?.id}`} className="p-1.5 text-stone-400 hover:text-black transition-colors">
-                                                                        <Eye className="w-4 h-4" />
-                                                                    </Link>
-                                                                </div>
                                                             </div>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-
-                                            {/* Stage-specific service CTA */}
-                                            {serviceCta && items.length > 0 && (
-                                                <div className="border-t border-stone-100 px-4 sm:px-6 py-3">
-                                                    <ServiceCTA
-                                                        title={serviceCta.title}
-                                                        description={serviceCta.description}
-                                                        variant={serviceCta.variant}
-                                                    />
+                                                        );
+                                                    })}
                                                 </div>
-                                            )}
-                                        </div>
-                                    )}
 
-                                    {isExpanded && items.length === 0 && (
-                                        <div className="border-t border-stone-100 px-6 py-4 text-center">
-                                            <p className="text-xs text-stone-400">No opportunities at this stage</p>
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })}
-                    </div>
+                                                {/* Stage-specific service CTA */}
+                                                {serviceCta && items.length > 0 && (
+                                                    <div className="border-t border-stone-100 px-4 sm:px-6 py-3">
+                                                        <ServiceCTA
+                                                            title={serviceCta.title}
+                                                            description={serviceCta.description}
+                                                            variant={serviceCta.variant}
+                                                        />
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {isExpanded && items.length === 0 && (
+                                            <div className="border-t border-stone-100 px-6 py-4 text-center">
+                                                <p className="text-xs text-stone-400">No opportunities at this stage</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
                     )}
 
                     {/* Bottom service CTA */}
