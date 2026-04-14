@@ -124,13 +124,15 @@ ${preheaderHtml}
 <!-- Thin emerald accent bar -->
 <tr><td style="height:3px;background-color:${COLORS.emerald500};line-height:3px;font-size:0;">&nbsp;</td></tr>
 
-<!-- Light header with text wordmark -->
+<!-- Light header with logo -->
 <tr>
 <td class="cp-pad" style="background-color:${COLORS.white};padding:28px 40px 0;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
 <tr>
 <td style="vertical-align:middle;">
-    <span style="color:${COLORS.black};font-size:18px;font-weight:800;letter-spacing:-0.3px;">CapturePilot</span>
+    <a href="${SITE_URL}" style="text-decoration:none;color:${COLORS.black};">
+        <img src="${SITE_URL}/logo.png" alt="CapturePilot" height="32" style="display:inline-block;vertical-align:middle;border:0;outline:none;max-height:32px;width:auto;" />
+    </a>
 </td>
 <td align="right" style="vertical-align:middle;">
     <span style="color:${COLORS.stone400};font-size:10px;text-transform:uppercase;letter-spacing:2px;font-weight:600;">Capture Intelligence</span>
@@ -158,16 +160,16 @@ ${secondaryCtaHtml}
 
 ${footerNote ? `<tr><td style="background-color:${COLORS.stone50};padding:18px 40px;border-top:1px solid ${COLORS.stone200};"><p style="color:${COLORS.stone600};font-size:13px;margin:0;line-height:1.6;">${footerNote}</p></td></tr>` : ""}
 
-<!-- Minimal footer -->
+<!-- Minimal centered footer -->
 <tr>
-<td style="background-color:${COLORS.white};padding:24px 40px 28px;border-top:1px solid ${COLORS.stone100};">
-    <p style="color:${COLORS.stone600};font-size:12px;margin:0 0 4px;line-height:1.5;font-weight:700;">
+<td align="center" style="background-color:${COLORS.white};padding:24px 40px 28px;border-top:1px solid ${COLORS.stone100};text-align:center;">
+    <p style="color:${COLORS.stone600};font-size:12px;margin:0 0 4px;line-height:1.5;font-weight:700;text-align:center;">
         CapturePilot &middot; A product by Americurial LLC
     </p>
-    <p style="color:${COLORS.stone500};font-size:11px;margin:0 0 8px;line-height:1.6;">
+    <p style="color:${COLORS.stone500};font-size:11px;margin:0 0 8px;line-height:1.6;text-align:center;">
         Phoenix, Arizona &middot; info@americurial.com &middot; +1 (850) 376-9785
     </p>
-    <p style="color:${COLORS.stone400};font-size:11px;margin:0;line-height:1.6;">
+    <p style="color:${COLORS.stone400};font-size:11px;margin:0;line-height:1.6;text-align:center;">
         &copy; 2026 Americurial LLC &middot; ${preferencesLink}
     </p>
 </td>
