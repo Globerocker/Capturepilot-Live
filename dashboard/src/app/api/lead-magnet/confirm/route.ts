@@ -196,10 +196,52 @@ export async function POST(request: NextRequest) {
                 ? Math.round((topMatches as Array<Record<string, unknown>>).reduce((sum, m) => sum + Number(m.score || 0), 0) / topMatches.length * 100)
                 : 0;
 
+            let finalPhone = "";
+            try {
+                // Auto-Enrich via Apollo before pushing to HubSpot
+                const { data: latestAnalysis } = await sb.from("company_analyses").select("website, inferred_profile").eq("id", analysis_id).single();
+                const domain = latestAnalysis?.website ? String(latestAnalysis.website).replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0] : "";
+                const contactName = String((latestAnalysis?.inferred_profile as any)?.contact_person?.name || "");
+                finalPhone = String((latestAnalysis?.inferred_profile as any)?.contact_person?.phone || "");
+
+                if (domain && contactName && !finalPhone) {
+                    const nameParts = contactName.trim().split(/\s+/);
+                    const firstName = nameParts[0];
+                    const lastName = nameParts.slice(1).join(" ");
+                    const apolloKey = process.env.APOLLO_API_KEY;
+
+                    if (apolloKey && firstName && lastName) {
+                        const apolloRes = await fetch("https://api.apollo.io/api/v1/people/match", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json", "X-Api-Key": apolloKey },
+                            body: JSON.stringify({ first_name: firstName, last_name: lastName, domain, organization_name: company_name }),
+                            signal: AbortSignal.timeout(10000),
+                        });
+                        if (apolloRes.ok) {
+                            const apolloData = await apolloRes.json();
+                            const mobile = apolloData?.person?.phone_numbers?.find((p: any) => p.type === 'mobile')?.sanitized_number;
+                            if (mobile) {
+                                finalPhone = mobile;
+                                const currentProfile = (latestAnalysis?.inferred_profile as Record<string, unknown>) || {};
+                                await sb.from("company_analyses").update({
+                                    inferred_profile: {
+                                        ...currentProfile,
+                                        contact_person: { ...(currentProfile.contact_person as any), phone: mobile }
+                                    }
+                                }).eq("id", analysis_id);
+                            }
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error("[Apollo] Auto-enrichment failed:", e);
+            }
+
             // Sync to HubSpot — create/update contact + deal in SaaS Pipeline
             onQuickCheckerComplete({
                 email,
                 company: company_name,
+                phone: finalPhone || undefined,
                 readinessScore: Math.round(readinessScore / 10), // convert 0-100 → 0-10
                 naicsCodes: correctedProfile.naics_codes,
                 samRegistered: !!samData,

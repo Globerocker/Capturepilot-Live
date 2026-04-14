@@ -362,11 +362,13 @@ export async function onQuickCheckerComplete(params: {
   businessState?: string;
   uei?: string;
   quickCheckerUrl?: string;
+  phone?: string;
 }): Promise<void> {
   if (!params.email) return; // No email = can't sync to HubSpot
 
   const contactId = await syncContactToHubspot(params.email, {
     company: params.company,
+    phone: params.phone,
     readiness_score: params.readinessScore,
     naics_codes: params.naicsCodes.join(', '),
     sam_registered: params.samRegistered,

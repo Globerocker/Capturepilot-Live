@@ -5,7 +5,7 @@ import Link from "next/link";
 import {
     Globe, MapPin, Users, ExternalLink, Save, Search,
     Loader2, ChevronDown, Hash, Building2, Mail, Phone, User,
-    Linkedin, Calendar, Briefcase, Target, FileDown, Send, MessageSquare, Database
+    Linkedin, Calendar, Briefcase, Target, FileDown, Send, MessageSquare, Database, Edit3, CheckSquare, Square
 } from "lucide-react";
 import Image from "next/image";
 import clsx from "clsx";
@@ -36,6 +36,45 @@ export default function AdminProspectsPage() {
     const [searchTerm, setSearchTerm] = useState("");
     const [expandedId, setExpandedId] = useState<string | null>(null);
     const [loadingStatus, setLoadingStatus] = useState<Record<string, string>>({});
+    const [editingLead, setEditingLead] = useState<string | null>(null);
+    const [editForm, setEditForm] = useState<{ lead_email: string, company_name: string, contact_name: string, phone: string }>({ lead_email: "", company_name: "", contact_name: "", phone: "" });
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+    const toggleSelection = (id: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
+
+    const handleBulkPushAndEnrich = async () => {
+        if (selectedIds.size === 0) return;
+        if (!window.confirm(`Ready to enrich & push ${selectedIds.size} leads?`)) return;
+
+        for (const id of Array.from(selectedIds)) {
+            setLoadingStatus(prev => ({ ...prev, [id]: "bulk" }));
+            try {
+                const apolloRes = await fetch("/api/admin/leads/apollo", { method: "POST", body: JSON.stringify({ id }) });
+                const apolloData = await apolloRes.json();
+                if (apolloData.success && apolloData.phone) {
+                    setProspects(prev => prev.map(p => p.id === id ? { ...p, inferred_profile: { ...p.inferred_profile, contact_person: { ...(p.inferred_profile as Record<string,unknown>)?.contact_person as Record<string,unknown>, phone: apolloData.phone } } } : p));
+                }
+                const hsRes = await fetch("/api/admin/leads/hubspot", { method: "POST", body: JSON.stringify({ id }) });
+                const hsData = await hsRes.json();
+                if (hsData.success) {
+                    setProspects(prev => prev.map(p => p.id === id ? { ...p, inferred_profile: { ...(p.inferred_profile as Record<string, unknown>), synced_to_hubspot: true } } : p));
+                }
+            } catch (e) {
+                console.error(e);
+            }
+            setLoadingStatus(prev => ({ ...prev, [id]: "" }));
+        }
+        alert("Bulk Push Complete");
+        setSelectedIds(new Set());
+    };
 
     useEffect(() => {
         setLoading(true);
@@ -131,6 +170,17 @@ export default function AdminProspectsPage() {
                     </div>
                 </div>
 
+                {selectedIds.size > 0 && (
+                    <div className="bg-orange-50 border border-orange-200 rounded-xl p-3 flex sm:flex-row flex-col justify-between items-center text-sm gap-3">
+                        <div className="flex items-center gap-2">
+                            <span className="font-bold text-orange-700">{selectedIds.size} Leads Selected</span>
+                        </div>
+                        <button onClick={handleBulkPushAndEnrich} className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-4 py-2 rounded-lg flex items-center gap-2 transition-colors">
+                            <Database className="w-4 h-4" /> Bulk Push & Enrich
+                        </button>
+                    </div>
+                )}
+
                 {/* Prospects List */}
                 {loading ? (
                     <div className="flex items-center justify-center py-20">
@@ -159,11 +209,13 @@ export default function AdminProspectsPage() {
                             return (
                                 <div key={prospect.id} className="bg-white border border-stone-200 rounded-2xl shadow-sm overflow-hidden">
                                     {/* Row header */}
-                                    <button
-                                        type="button"
+                                    <div
+                                        className="w-full text-left px-4 sm:px-6 py-4 flex items-center gap-4 hover:bg-stone-50/50 transition-colors cursor-pointer"
                                         onClick={() => setExpandedId(isExpanded ? null : prospect.id)}
-                                        className="w-full text-left px-4 sm:px-6 py-4 flex items-center gap-4 hover:bg-stone-50/50 transition-colors"
                                     >
+                                        <div onClick={(e) => toggleSelection(prospect.id, e)} className="p-1 hover:bg-stone-200 rounded text-stone-400 flex-shrink-0 transition-colors">
+                                            {selectedIds.has(prospect.id) ? <CheckSquare className="w-5 h-5 text-black" /> : <Square className="w-5 h-5" />}
+                                        </div>
                                         {/* Score */}
                                         <div className={clsx(
                                             "w-10 h-10 rounded-xl border-2 font-black text-sm flex items-center justify-center flex-shrink-0",
@@ -177,7 +229,10 @@ export default function AdminProspectsPage() {
 
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-2 flex-wrap mb-0.5">
-                                                <p className="font-bold text-sm text-black truncate">{prospect.company_name}</p>
+                                                <p className="font-bold text-sm text-black truncate">
+                                                    {prospect.company_name}
+                                                    {contact?.name && <span className="font-normal text-stone-500 text-xs ml-2">— {contact.name} {contact.phone && `(${contact.phone})`}</span>}
+                                                </p>
                                                 {prospect.is_saved && (
                                                     <span className="text-[9px] font-bold bg-blue-50 text-blue-600 border border-blue-200 px-1.5 py-0.5 rounded">SAVED</span>
                                                 )}
@@ -215,7 +270,7 @@ export default function AdminProspectsPage() {
                                             "w-4 h-4 text-stone-400 flex-shrink-0 transition-transform",
                                             isExpanded && "rotate-180"
                                         )} />
-                                    </button>
+                                    </div>
 
                                     {/* Expanded detail */}
                                     {isExpanded && (
@@ -239,6 +294,21 @@ export default function AdminProspectsPage() {
                                                 >
                                                     <ExternalLink className="w-3 h-3" /> Full Report
                                                 </Link>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setEditingLead(prospect.id);
+                                                        setEditForm({
+                                                            lead_email: prospect.lead_email || "",
+                                                            company_name: prospect.company_name,
+                                                            contact_name: contact?.name || "",
+                                                            phone: contact?.phone || ""
+                                                        });
+                                                    }}
+                                                    className="text-[10px] font-bold px-3 py-1.5 rounded-lg border bg-white text-stone-600 border-stone-200 inline-flex items-center gap-1 hover:bg-stone-50 transition-all"
+                                                >
+                                                    <Edit3 className="w-3 h-3" /> Edit Lead
+                                                </button>
                                                 <button
                                                     type="button"
                                                     onClick={async () => {
@@ -321,7 +391,7 @@ export default function AdminProspectsPage() {
                                                 </button>
                                                 <button
                                                     type="button"
-                                                    disabled={loadingStatus[prospect.id] === "hubspot" || !!(prospect.inferred_profile as any)?.synced_to_hubspot || !prospect.lead_email}
+                                                    disabled={loadingStatus[prospect.id] === "hubspot" || !!(prospect.inferred_profile as any)?.synced_to_hubspot}
                                                     onClick={async () => {
                                                         setLoadingStatus(prev => ({ ...prev, [prospect.id]: "hubspot" }));
                                                         const res = await fetch("/api/admin/leads/hubspot", {
@@ -342,143 +412,194 @@ export default function AdminProspectsPage() {
                                                 </button>
                                             </div>
 
-                                            {/* Pipeline Status */}
-                                            <div className="flex items-center gap-2 mb-2">
-                                                <span className="text-[10px] text-stone-400 uppercase">Status:</span>
-                                                {["New", "Contacted", "Interested", "Meeting Scheduled", "Proposal Sent", "Won", "Lost"].map(status => (
-                                                    <button
-                                                        key={status}
-                                                        type="button"
-                                                        onClick={async () => {
-                                                            // Store pipeline status in inferred_profile
-                                                            await fetch("/api/prospects/save", {
-                                                                method: "POST",
-                                                                headers: { "Content-Type": "application/json" },
-                                                                body: JSON.stringify({ analysis_id: prospect.id, pipeline_status: status }),
-                                                            });
-                                                            // Update local state
-                                                            setProspects(prev => prev.map(p =>
-                                                                p.id === prospect.id
-                                                                    ? { ...p, inferred_profile: { ...p.inferred_profile, pipeline_status: status } }
-                                                                    : p
-                                                            ));
-                                                        }}
-                                                        className={clsx(
-                                                            "text-[9px] font-bold px-2 py-0.5 rounded border transition-colors",
-                                                            (prospect.inferred_profile as Record<string, unknown>)?.pipeline_status === status
-                                                                ? "bg-black text-white border-black"
-                                                                : "bg-white text-stone-500 border-stone-200 hover:border-stone-400"
-                                                        )}
-                                                    >
-                                                        {status}
-                                                    </button>
-                                                ))}
-                                            </div>
-
-                                            {/* Summary */}
-                                            {prospect.company_summary && (
-                                                <p className="text-sm text-stone-600 leading-relaxed">{prospect.company_summary}</p>
-                                            )}
-
-                                            {/* Key info grid */}
-                                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                                {prospect.readiness_score !== undefined && (
-                                                    <div className="text-xs">
-                                                        <p className="text-[10px] text-stone-400 uppercase">Readiness</p>
-                                                        <p className="font-bold text-stone-700">{prospect.readiness_score}/10</p>
-                                                    </div>
-                                                )}
-                                                {uei && (
-                                                    <div className="text-xs">
-                                                        <p className="text-[10px] text-stone-400 uppercase">UEI</p>
-                                                        <p className="font-mono font-bold text-stone-700">{uei}</p>
-                                                    </div>
-                                                )}
-                                                {cage && (
-                                                    <div className="text-xs">
-                                                        <p className="text-[10px] text-stone-400 uppercase">CAGE</p>
-                                                        <p className="font-mono font-bold text-stone-700">{cage}</p>
-                                                    </div>
-                                                )}
-                                                {state && (
-                                                    <div className="text-xs">
-                                                        <p className="text-[10px] text-stone-400 uppercase">State</p>
-                                                        <p className="font-bold text-stone-700">{state}</p>
-                                                    </div>
-                                                )}
-                                                {prospect.lead_email && (
-                                                    <div className="text-xs">
-                                                        <p className="text-[10px] text-stone-400 uppercase">Email</p>
-                                                        <p className="font-bold text-stone-700">{prospect.lead_email}</p>
-                                                    </div>
-                                                )}
-                                            </div>
-
-                                            {/* Contact person */}
-                                            {contact && (
-                                                <div className="flex items-center gap-3 bg-white border border-stone-200 rounded-xl p-3">
-                                                    <div className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center font-bold text-xs flex-shrink-0">
-                                                        {contact.name.charAt(0)}
-                                                    </div>
-                                                    <div className="text-xs min-w-0">
-                                                        <p className="font-bold text-stone-700">{contact.name} <span className="font-normal text-stone-500">— {contact.title}</span></p>
-                                                        <div className="flex gap-3 mt-0.5">
-                                                            {contact.email && <span className="text-blue-600 inline-flex items-center gap-1"><Mail className="w-3 h-3" />{contact.email}</span>}
-                                                            {contact.phone && <span className="text-blue-600 inline-flex items-center gap-1"><Phone className="w-3 h-3" />{contact.phone}</span>}
+                                            {editingLead === prospect.id ? (
+                                                <div className="bg-white p-4 rounded-xl border border-stone-200 mt-2 space-y-3">
+                                                    <h4 className="font-bold text-sm text-stone-800">Edit Lead Details</h4>
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                                                        <div>
+                                                            <label className="block text-stone-500 mb-1">Company Name</label>
+                                                            <input className="w-full border border-stone-200 rounded p-1.5 focus:outline-none focus:border-stone-400" value={editForm.company_name} onChange={e => setEditForm({...editForm, company_name: e.target.value})} />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-stone-500 mb-1">Contact Name</label>
+                                                            <input className="w-full border border-stone-200 rounded p-1.5 focus:outline-none focus:border-stone-400" value={editForm.contact_name} onChange={e => setEditForm({...editForm, contact_name: e.target.value})} />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-stone-500 mb-1">Email <span className="text-[9px] text-orange-500">(Required for HubSpot)</span></label>
+                                                            <input className="w-full border border-stone-200 rounded p-1.5 focus:outline-none focus:border-stone-400" type="email" value={editForm.lead_email} onChange={e => setEditForm({...editForm, lead_email: e.target.value})} />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-stone-500 mb-1">Phone</label>
+                                                            <input className="w-full border border-stone-200 rounded p-1.5 focus:outline-none focus:border-stone-400" value={editForm.phone} onChange={e => setEditForm({...editForm, phone: e.target.value})} />
                                                         </div>
                                                     </div>
-                                                </div>
-                                            )}
-
-                                            {/* Social links */}
-                                            {(social.linkedin || social.facebook || social.twitter) && (
-                                                <div className="flex gap-2">
-                                                    {social.linkedin && (
-                                                        <a href={social.linkedin} target="_blank" rel="noopener noreferrer" className="text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 px-2.5 py-1.5 rounded-lg inline-flex items-center gap-1">
-                                                            <Linkedin className="w-3 h-3" /> LinkedIn
-                                                        </a>
-                                                    )}
-                                                </div>
-                                            )}
-
-                                            {/* NAICS */}
-                                            {prospect.inferred_naics?.length > 0 && (
-                                                <div>
-                                                    <p className="text-[10px] text-stone-400 uppercase mb-1">NAICS Codes</p>
-                                                    <div className="flex gap-1.5 flex-wrap">
-                                                        {prospect.inferred_naics.slice(0, 5).map(n => (
-                                                            <span key={n.code} className="text-[10px] font-mono bg-stone-100 text-stone-600 border border-stone-200 px-2 py-0.5 rounded">
-                                                                {n.code} ({Math.round(n.confidence * 100)}%)
-                                                            </span>
-                                                        ))}
+                                                    <div className="flex justify-end gap-2 mt-2">
+                                                        <button type="button" onClick={() => setEditingLead(null)} className="px-3 py-1.5 text-xs font-bold text-stone-500 hover:text-stone-700 transition-colors">Cancel</button>
+                                                        <button 
+                                                            type="button"
+                                                            disabled={loadingStatus[prospect.id] === "save"}
+                                                            onClick={async () => {
+                                                                setLoadingStatus(prev => ({ ...prev, [prospect.id]: "save" }));
+                                                                const payload = { id: prospect.id, ...editForm };
+                                                                const res = await fetch("/api/admin/leads/edit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+                                                                if (res.ok) {
+                                                                    setProspects(prev => prev.map(p => p.id === prospect.id ? { ...p, 
+                                                                        company_name: editForm.company_name, 
+                                                                        lead_email: editForm.lead_email, 
+                                                                        inferred_profile: { ...p.inferred_profile, contact_person: { ...(p.inferred_profile as any).contact_person, name: editForm.contact_name, phone: editForm.phone } } 
+                                                                    } : p));
+                                                                    setEditingLead(null);
+                                                                } else {
+                                                                    const parsed = await res.json();
+                                                                    alert(parsed.error || "Failed to update");
+                                                                }
+                                                                setLoadingStatus(prev => ({ ...prev, [prospect.id]: "" }));
+                                                            }} 
+                                                            className="px-3 py-1.5 text-xs font-bold border border-blue-600 bg-blue-600 text-white rounded-lg inline-flex items-center gap-1 hover:bg-blue-700 transition-colors disabled:opacity-50"
+                                                        >
+                                                            {loadingStatus[prospect.id] === "save" ? <Loader2 className="w-3 h-3 animate-spin"/> : <Save className="w-3 h-3"/>} Save Changes
+                                                        </button>
                                                     </div>
                                                 </div>
-                                            )}
-
-                                            {/* Top matches */}
-                                            {prospect.preview_matches?.length > 0 && (
-                                                <div>
-                                                    <p className="text-[10px] text-stone-400 uppercase mb-1">Top Matches</p>
-                                                    <div className="space-y-1.5">
-                                                        {prospect.preview_matches.slice(0, 3).map((m, i) => (
-                                                            <div key={i} className="flex items-center gap-2 text-xs bg-white border border-stone-200 rounded-lg px-3 py-2">
-                                                                <span className={clsx(
-                                                                    "font-bold font-mono w-8 text-center",
-                                                                    m.score >= 0.7 ? "text-emerald-600" : m.score >= 0.5 ? "text-amber-600" : "text-blue-600"
-                                                                )}>
-                                                                    {Math.round(m.score * 100)}
-                                                                </span>
-                                                                <span className="text-stone-700 truncate flex-1">{m.title || "Untitled"}</span>
-                                                                <span className="text-stone-400 text-[10px] flex-shrink-0">{m.agency}</span>
-                                                                {m.notice_id && (
-                                                                    <a href={`https://sam.gov/opp/${m.notice_id}/view`} target="_blank" rel="noopener noreferrer" className="text-blue-600">
-                                                                        <ExternalLink className="w-3 h-3" />
-                                                                    </a>
+                                            ) : (
+                                                <>
+                                                    {/* Pipeline Status */}
+                                                    <div className="flex items-center gap-2 mb-2">
+                                                        <span className="text-[10px] text-stone-400 uppercase">Status:</span>
+                                                        {["New", "Contacted", "Interested", "Meeting Scheduled", "Proposal Sent", "Won", "Lost"].map(status => (
+                                                            <button
+                                                                key={status}
+                                                                type="button"
+                                                                onClick={async () => {
+                                                                    await fetch("/api/prospects/save", {
+                                                                        method: "POST",
+                                                                        headers: { "Content-Type": "application/json" },
+                                                                        body: JSON.stringify({ analysis_id: prospect.id, pipeline_status: status }),
+                                                                    });
+                                                                    setProspects(prev => prev.map(p =>
+                                                                        p.id === prospect.id
+                                                                            ? { ...p, inferred_profile: { ...p.inferred_profile, pipeline_status: status } }
+                                                                            : p
+                                                                    ));
+                                                                }}
+                                                                className={clsx(
+                                                                    "text-[9px] font-bold px-2 py-0.5 rounded border transition-colors",
+                                                                    (prospect.inferred_profile as Record<string, unknown>)?.pipeline_status === status
+                                                                        ? "bg-black text-white border-black"
+                                                                        : "bg-white text-stone-500 border-stone-200 hover:border-stone-400"
                                                                 )}
-                                                            </div>
+                                                            >
+                                                                {status}
+                                                            </button>
                                                         ))}
                                                     </div>
-                                                </div>
+
+                                                    {/* Summary */}
+                                                    {prospect.company_summary && (
+                                                        <p className="text-sm text-stone-600 leading-relaxed">{prospect.company_summary}</p>
+                                                    )}
+
+                                                    {/* Key info grid */}
+                                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                                        {prospect.readiness_score !== undefined && (
+                                                            <div className="text-xs">
+                                                                <p className="text-[10px] text-stone-400 uppercase">Readiness</p>
+                                                                <p className="font-bold text-stone-700">{prospect.readiness_score}/10</p>
+                                                            </div>
+                                                        )}
+                                                        {uei && (
+                                                            <div className="text-xs">
+                                                                <p className="text-[10px] text-stone-400 uppercase">UEI</p>
+                                                                <p className="font-mono font-bold text-stone-700">{uei}</p>
+                                                            </div>
+                                                        )}
+                                                        {cage && (
+                                                            <div className="text-xs">
+                                                                <p className="text-[10px] text-stone-400 uppercase">CAGE</p>
+                                                                <p className="font-mono font-bold text-stone-700">{cage}</p>
+                                                            </div>
+                                                        )}
+                                                        {state && (
+                                                            <div className="text-xs">
+                                                                <p className="text-[10px] text-stone-400 uppercase">State</p>
+                                                                <p className="font-bold text-stone-700">{state}</p>
+                                                            </div>
+                                                        )}
+                                                        {prospect.lead_email && (
+                                                            <div className="text-xs">
+                                                                <p className="text-[10px] text-stone-400 uppercase">Email</p>
+                                                                <p className="font-bold text-stone-700">{prospect.lead_email}</p>
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Contact person */}
+                                                    {contact && (
+                                                        <div className="flex items-center gap-3 bg-white border border-stone-200 rounded-xl p-3">
+                                                            <div className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center font-bold text-xs flex-shrink-0">
+                                                                {contact.name.charAt(0)}
+                                                            </div>
+                                                            <div className="text-xs min-w-0">
+                                                                <p className="font-bold text-stone-700">{contact.name} {contact.title && <span className="font-normal text-stone-500">— {contact.title}</span>}</p>
+                                                                <div className="flex gap-3 mt-0.5">
+                                                                    {contact.email && <span className="text-blue-600 inline-flex items-center gap-1"><Mail className="w-3 h-3" />{contact.email}</span>}
+                                                                    {contact.phone && <span className="text-blue-600 inline-flex items-center gap-1"><Phone className="w-3 h-3" />{contact.phone}</span>}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Social links */}
+                                                    {(social.linkedin || social.facebook || social.twitter) && (
+                                                        <div className="flex gap-2">
+                                                            {social.linkedin && (
+                                                                <a href={social.linkedin} target="_blank" rel="noopener noreferrer" className="text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 px-2.5 py-1.5 rounded-lg inline-flex items-center gap-1">
+                                                                    <Linkedin className="w-3 h-3" /> LinkedIn
+                                                                </a>
+                                                            )}
+                                                        </div>
+                                                    )}
+
+                                                    {/* NAICS */}
+                                                    {prospect.inferred_naics?.length > 0 && (
+                                                        <div>
+                                                            <p className="text-[10px] text-stone-400 uppercase mb-1">NAICS Codes</p>
+                                                            <div className="flex gap-1.5 flex-wrap">
+                                                                {prospect.inferred_naics.slice(0, 5).map(n => (
+                                                                    <span key={n.code} className="text-[10px] font-mono bg-stone-100 text-stone-600 border border-stone-200 px-2 py-0.5 rounded">
+                                                                        {n.code} ({Math.round(n.confidence * 100)}%)
+                                                                    </span>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Top matches */}
+                                                    {prospect.preview_matches?.length > 0 && (
+                                                        <div>
+                                                            <p className="text-[10px] text-stone-400 uppercase mb-1">Top Matches</p>
+                                                            <div className="space-y-1.5">
+                                                                {prospect.preview_matches.slice(0, 3).map((m, i) => (
+                                                                    <div key={i} className="flex items-center gap-2 text-xs bg-white border border-stone-200 rounded-lg px-3 py-2">
+                                                                        <span className={clsx(
+                                                                            "font-bold font-mono w-8 text-center",
+                                                                            m.score >= 0.7 ? "text-emerald-600" : m.score >= 0.5 ? "text-amber-600" : "text-blue-600"
+                                                                        )}>
+                                                                            {Math.round(m.score * 100)}
+                                                                        </span>
+                                                                        <span className="text-stone-700 truncate flex-1">{m.title || "Untitled"}</span>
+                                                                        <span className="text-stone-400 text-[10px] flex-shrink-0">{m.agency}</span>
+                                                                        {m.notice_id && (
+                                                                            <a href={`https://sam.gov/opp/${m.notice_id}/view`} target="_blank" rel="noopener noreferrer" className="text-blue-600">
+                                                                                <ExternalLink className="w-3 h-3" />
+                                                                            </a>
+                                                                        )}
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </>
                                             )}
                                         </div>
                                     )}
