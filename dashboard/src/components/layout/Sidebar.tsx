@@ -19,11 +19,11 @@ export default function Sidebar() {
         { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
         { name: "Opportunities", href: "/matches", icon: Target },
         { name: "Pipeline", href: "/pipeline", icon: Layers },
-        { name: "AI Proposals", href: "/proposals", icon: FileText },
+        { name: "AI Proposals", href: "/ai-drafter/proposals", icon: FileText },
         { name: "AI Drafter", href: "/ai-drafter", icon: Pencil },
         { name: "Documents", href: "/documents", icon: FolderOpen },
         { name: "Market Intel", href: "/intelligence", icon: BarChart3 },
-        { name: "Cap Statement", href: "/capability-statement", icon: Mic },
+        { name: "Cap Statement", href: "/ai-drafter/capability-statement", icon: Mic },
         { name: "Partners", href: "/partners", icon: Users },
         { name: "Competitors", href: "/competitors", icon: Shield },
     ];

@@ -3,7 +3,8 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseClient } from "@/lib/supabase/client";
-import { Layers, Loader2, Search, Eye, ChevronDown, Target, Clock, Plus, X, Settings, DollarSign } from "lucide-react";
+import { Layers, Loader2, Search, Eye, ChevronDown, Target, Clock, Plus, X, Settings, DollarSign, LayoutGrid, List } from "lucide-react";
+import KanbanBoard from "@/components/pipeline/KanbanBoard";
 import clsx from "clsx";
 import Link from "next/link";
 import ServiceCTA from "@/components/ui/ServiceCTA";
@@ -104,6 +105,7 @@ export default function PipelinePage() {
     const [savingDeal, setSavingDeal] = useState(false);
     const [activeTab, setActiveTab] = useState<string>("all");
     const [stageSettingsOpen, setStageSettingsOpen] = useState(false);
+    const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
 
     const stages: PipelineStage[] = useMemo(() => parseStagesFromNotes(profileNotes), [profileNotes]);
 
@@ -391,7 +393,8 @@ export default function PipelinePage() {
                     <PipelineTabs counts={tabCounts} active={activeTab} onChange={setActiveTab} />
 
                     {/* Sort + Summary Bar */}
-                    <div className="flex flex-wrap items-center gap-2 mb-3">
+                    <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                      <div className="flex flex-wrap items-center gap-2">
                         <span className="text-[10px] text-stone-400 uppercase tracking-widest mr-1">Sort by</span>
                         {([
                             { key: "deadline" as const, label: "Deadline" },
@@ -405,6 +408,15 @@ export default function PipelinePage() {
                                 {opt.label}
                             </button>
                         ))}
+                      </div>
+                      <div className="flex items-center gap-1 border border-stone-200 rounded-lg p-1 bg-white">
+                        <button type="button" onClick={() => setViewMode("kanban")} className={clsx("p-1.5 rounded-md transition-colors", viewMode === "kanban" ? "bg-stone-100 text-black" : "text-stone-400 hover:text-stone-700")}>
+                           <LayoutGrid className="w-4 h-4" />
+                        </button>
+                        <button type="button" onClick={() => setViewMode("list")} className={clsx("p-1.5 rounded-md transition-colors", viewMode === "list" ? "bg-stone-100 text-black" : "text-stone-400 hover:text-stone-700")}>
+                           <List className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-3 mb-4">
                         <div className="bg-white border border-stone-200 rounded-xl px-3 sm:px-4 py-2 text-xs">
@@ -428,6 +440,11 @@ export default function PipelinePage() {
                                 No deals match the <span className="font-bold">{activeTabConfig.label}</span> filter.
                             </p>
                         </div>
+                    ) : viewMode === "kanban" ? (
+                        <KanbanBoard pursuits={filteredPursuits as any} stages={stages as any} onMove={(id, stage) => {
+                            const p = pursuits.find(x => x.id === id);
+                            if (p) updateStage(p, stage);
+                        }} />
                     ) : (
                         <div className="space-y-3">
                             {activeStages.map(stage => {

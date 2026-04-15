@@ -84,22 +84,34 @@ export function extractServices(soups: CheerioAPI[], _texts: string[]): string[]
     for (const $ of soups) {
         // List items
         $("ul li, ol li").each((_i, el) => {
-            const text = $(el).text().trim();
-            if (text.length > 10 && text.length < 100) {
+            const text = $(el).text().replace(/\s+/g, " ").trim();
+            // Services usually have decent length. Skip if too short or too long.
+            if (text.length > 10 && text.length < 120) {
                 const lower = text.toLowerCase();
-                if (!["home", "login", "sign", "privacy", "cookie", "©"].some(s => lower.includes(s))) {
-                    services.add(text);
+                // Aggressive blocklist for UI/Nav elements
+                if (!["home", "login", "sign", "privacy", "cookie", "©", "contact us", "about us", "terms", "policy", "sitemap", "read more", "learn more"].some(s => lower.includes(s))) {
+                    // Check if parent looks like a navigation menu
+                    const parentTag = $(el).parent().prop("tagName")?.toLowerCase();
+                    const parentClass = $(el).parent().attr("class")?.toLowerCase() || "";
+                    if (!parentClass.includes("nav") && !parentClass.includes("menu") && parentTag !== "nav") {
+                        services.add(text);
+                    }
                 }
             }
         });
 
         // Headings near service keywords
-        $("h2, h3, h4").each((_i, el) => {
-            const text = $(el).text().trim();
+        $("h2, h3, h4, .service-title, .card-title").each((_i, el) => {
+            const text = $(el).text().replace(/\s+/g, " ").trim();
             if (text.length > 5 && text.length < 80) {
-                const kws = ["service", "solution", "capabilit", "offer", "what we do", "specializ"];
-                const parentText = $(el).parent().text().trim().slice(0, 100).toLowerCase();
-                if (kws.some(kw => text.toLowerCase().includes(kw) || parentText.includes(kw))) {
+                const kws = ["service", "solution", "capabilit", "offer", "what we do", "specializ", "core competenc"];
+                const lower = text.toLowerCase();
+                const parentText = $(el).parent().text().replace(/\s+/g, " ").trim().slice(0, 100).toLowerCase();
+                
+                // Aggressive blocklist
+                if (["home", "login", "contact", "about"].some(s => lower.includes(s))) return;
+
+                if (kws.some(kw => lower.includes(kw) || parentText.includes(kw))) {
                     services.add(text);
                 }
             }
@@ -308,7 +320,7 @@ function isLikelyPersonName(name: string): boolean {
     if (!words.every(w => /^[A-Z][a-zA-Z'-]+$/.test(w))) return false;
     // Reject common non-name words
     const junkNames = new Set(["our", "the", "and", "for", "with", "from", "your", "this", "that",
-        "all", "new", "top", "best", "more", "about", "home", "page", "site",
+        "all", "new", "top", "best", "more", "about", "home", "page", "site", "contact",
         "ambient", "general", "commercial", "industrial", "professional", "custom"]);
     if (words.some(w => junkNames.has(w.toLowerCase()))) return false;
     // Name total length reasonable

@@ -1,5 +1,7 @@
 "use client";
 
+import DrafterTabs from "@/components/layout/DrafterTabs";
+
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseClient } from "@/lib/supabase/client";
@@ -207,7 +209,7 @@ export default function ProposalsPage() {
                 const d = await res.json().catch(() => ({}));
                 if (d.code === "CAPABILITY_STATEMENT_REQUIRED") {
                     setGenError("You need a capability statement first. Redirecting...");
-                    setTimeout(() => router.push(d.next || "/capability-statement"), 1200);
+                    setTimeout(() => router.push(d.next || "/ai-drafter/capability-statement"), 1200);
                     return;
                 }
                 throw new Error(d.error || `Failed (${res.status})`);
@@ -268,17 +270,7 @@ export default function ProposalsPage() {
 
     return (
         <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in duration-500 px-1">
-            <header>
-                <h2 className="text-2xl sm:text-3xl font-bold tracking-tighter text-black flex items-center">
-                    <FileText className="mr-2 sm:mr-3 w-6 h-6 sm:w-8 sm:h-8" /> AI Proposals
-                    <span className="ml-3 text-sm font-sans font-medium bg-stone-100 px-3 py-1 rounded-full text-stone-500 border border-stone-200">
-                        {drafts.length}
-                    </span>
-                </h2>
-                <p className="text-stone-500 mt-1 font-medium text-sm">
-                    Generate full proposal drafts powered by AI for any federal opportunity.
-                </p>
-            </header>
+            <DrafterTabs />
 
             {/* Active job progress (persists across navigation via localStorage) */}
             {activeJobId && (

@@ -11,6 +11,7 @@ import Image from "next/image";
 import clsx from "clsx";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { NAICS_CODES, searchNaics } from "@/lib/naics-codes";
+import KeywordPicker from "@/components/KeywordPicker";
 
 const supabase = createSupabaseClient();
 
@@ -151,7 +152,14 @@ function OnboardPageContent() {
         years_in_business: "",
         has_federal_experience: null as null | boolean,
         federal_experience_notes: "",
+
+        // Keywords — max 3 primary, 5 secondary. Canonical strings matching gov_keywords.keyword.
+        primary_keywords: [] as string[],
+        secondary_keywords: [] as string[],
     });
+
+    // AI-suggested keywords from the website crawl, shown as quick-adds in the picker.
+    const [keywordSuggestions, setKeywordSuggestions] = useState<string[]>([]);
 
     const updateForm = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) =>
         setForm(prev => ({ ...prev, [key]: value }));
@@ -221,6 +229,36 @@ function OnboardPageContent() {
             if (brand?.company_description) markSource("company_description", "website");
             if (brand?.services?.length) markSource("services", "website");
             if (brand?.differentiators?.length) markSource("differentiators", "website");
+
+            // Fire-and-forget keyword suggestion. Seeds primary + secondary picks into the
+            // KeywordPicker suggestions strip shown in Step 3. Failures are silent —
+            // the picker still works via manual typeahead.
+            fetch("/api/keywords/suggest", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    company_name: brand?.company_name || form.company_name,
+                    company_description: brand?.company_description || "",
+                    services: brand?.services || [],
+                    differentiators: brand?.differentiators || [],
+                }),
+            })
+                .then(r => r.ok ? r.json() : null)
+                .then((kw: { primary?: string[]; secondary?: string[] } | null) => {
+                    if (!kw) return;
+                    const suggested = [...(kw.primary || []), ...(kw.secondary || [])];
+                    if (suggested.length > 0) setKeywordSuggestions(suggested);
+                    // Auto-fill primary/secondary ONLY if user hasn't touched them yet.
+                    setForm(prev => {
+                        if (prev.primary_keywords.length > 0 || prev.secondary_keywords.length > 0) return prev;
+                        return {
+                            ...prev,
+                            primary_keywords: (kw.primary || []).slice(0, 3),
+                            secondary_keywords: (kw.secondary || []).slice(0, 5),
+                        };
+                    });
+                })
+                .catch(() => { /* non-fatal — user can still pick keywords manually */ });
 
             const detail = [
                 brand?.logo_url ? "logo" : null,
@@ -359,6 +397,10 @@ function OnboardPageContent() {
             years_in_business: yearsNum,
             has_federal_experience: form.has_federal_experience,
             federal_experience_notes: form.federal_experience_notes || null,
+
+            // Keywords (gov_keywords library)
+            primary_keywords: form.primary_keywords,
+            secondary_keywords: form.secondary_keywords,
 
             onboarding_complete: true,
             trial_ends_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
@@ -1016,6 +1058,27 @@ function OnboardPageContent() {
                                     placeholder="e.g. Prime on GSA Schedule 70 since 2021; 3 DoD task orders under $500K; active TS facility clearance." />
                             </div>
                         )}
+
+                        {/* Keywords — boosts matches on niches NAICS can't express */}
+                        <div className="pt-4 border-t border-stone-100">
+                            <label className="text-xs text-stone-500 uppercase tracking-widest block mb-1">
+                                Capability Keywords
+                                <InfoTooltip text="Pick up to 3 primary + 5 secondary keywords that describe what you do. When an opportunity's NAICS doesn't match yours, we'll match against these in the title, description, and attachments — so niche capabilities (e.g. body armor, GIS, PPE) still get found." />
+                            </label>
+                            <p className="text-xs text-stone-500 mb-3">
+                                Helps us surface opportunities even when NAICS doesn&apos;t line up.
+                            </p>
+                            <KeywordPicker
+                                primary={form.primary_keywords}
+                                secondary={form.secondary_keywords}
+                                suggestions={keywordSuggestions}
+                                onChange={(p, s) => setForm(prev => ({
+                                    ...prev,
+                                    primary_keywords: p,
+                                    secondary_keywords: s,
+                                }))}
+                            />
+                        </div>
                     </div>
                 )}
 

@@ -1,6 +1,8 @@
 // @ts-nocheck
 "use client";
 
+import DrafterTabs from "@/components/layout/DrafterTabs";
+
 import { useEffect, useRef, useState } from "react";
 import { createSupabaseClient } from "@/lib/supabase/client";
 import {

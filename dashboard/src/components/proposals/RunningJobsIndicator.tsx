@@ -100,7 +100,7 @@ export default function RunningJobsIndicator() {
 
     return (
         <Link
-            href="/proposals"
+            href="/ai-drafter/proposals"
             className="fixed bottom-6 right-6 z-40 bg-black text-white rounded-full pl-3 pr-4 py-2 shadow-lg hover:bg-stone-800 transition-all flex items-center gap-2 text-xs font-bold"
             aria-label={`${runningCount} proposal${runningCount === 1 ? "" : "s"} generating — view progress`}
         >

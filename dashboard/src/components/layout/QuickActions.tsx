@@ -32,8 +32,8 @@ export default function QuickActions({ onNavigate }: QuickActionsProps) {
 
     const linkTiles = [
         { name: "Quick Checker", href: "/check", icon: Zap },
-        { name: "AI Drafter", href: "/proposals", icon: FileText },
-        { name: "Cap Statement", href: "/capability-statement", icon: Mic },
+        { name: "AI Drafter", href: "/ai-drafter/proposals", icon: FileText },
+        { name: "Cap Statement", href: "/ai-drafter/capability-statement", icon: Mic },
     ];
 
     const tileClasses = (isActive: boolean) =>

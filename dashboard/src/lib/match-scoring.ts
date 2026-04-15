@@ -119,6 +119,89 @@ export function scoreCertBonus(userCerts: string[], oppSetAside: string | null):
     return 0.3;
 }
 
+// ------------------------------------------------------------
+// Keyword matching (gov_keywords library)
+// ------------------------------------------------------------
+// A keyword entry is a canonical term plus any alias variants pulled from
+// gov_keywords.aliases. We match case-insensitively with word boundaries
+// against (in descending signal strength): title, description, structured_requirements.
+//
+// Per-field weights (per keyword, max taken across fields):
+//   title          multi-word 1.0,  single-word 0.6
+//   description    multi-word 0.4,  single-word 0.2
+//   structured_req multi-word 0.4,  single-word 0.2
+//
+// Per-group (primary or secondary) score = max per-keyword score (a single
+// strong hit earns full credit — we are NOT averaging).
+
+export interface KeywordEntry {
+    keyword: string;         // canonical, lowercase
+    aliases?: string[];      // variants; all lowercase in gov_keywords
+}
+
+function escapeRegex(s: string): string {
+    return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// Case-insensitive word-boundary test. Whitespace between words is tolerant.
+function phraseHits(phrase: string, text: string): boolean {
+    if (!text || !phrase) return false;
+    const parts = phrase.trim().split(/\s+/).map(escapeRegex);
+    const re = new RegExp(`\\b${parts.join("\\s+")}\\b`, "i");
+    return re.test(text);
+}
+
+function scoreSingleKeyword(
+    entry: KeywordEntry,
+    title: string,
+    description: string,
+    requirementsText: string
+): number {
+    const variants = [entry.keyword, ...(entry.aliases || [])].filter(Boolean);
+    let best = 0;
+    for (const v of variants) {
+        const isMulti = v.includes(" ");
+        if (phraseHits(v, title)) best = Math.max(best, isMulti ? 1.0 : 0.6);
+        if (phraseHits(v, description)) best = Math.max(best, isMulti ? 0.4 : 0.2);
+        if (phraseHits(v, requirementsText)) best = Math.max(best, isMulti ? 0.4 : 0.2);
+        if (best >= 1.0) break;
+    }
+    return best;
+}
+
+export function scoreKeywords(
+    primaries: KeywordEntry[],
+    secondaries: KeywordEntry[],
+    opp: { title?: string | null; description?: string | null; structured_requirements?: unknown }
+): { combined: number; primary: number; secondary: number; matched: string[] } {
+    const title = (opp.title || "").toString();
+    const description = (opp.description || "").toString();
+    const reqText = opp.structured_requirements
+        ? typeof opp.structured_requirements === "string"
+            ? opp.structured_requirements
+            : JSON.stringify(opp.structured_requirements)
+        : "";
+
+    let primaryBest = 0;
+    let secondaryBest = 0;
+    const matched: string[] = [];
+
+    for (const entry of primaries || []) {
+        const s = scoreSingleKeyword(entry, title, description, reqText);
+        if (s > 0) matched.push(entry.keyword);
+        if (s > primaryBest) primaryBest = s;
+    }
+    for (const entry of secondaries || []) {
+        const s = scoreSingleKeyword(entry, title, description, reqText);
+        if (s > 0) matched.push(entry.keyword);
+        if (s > secondaryBest) secondaryBest = s;
+    }
+
+    // Primary weight 1.0, secondary 0.4. Cap combined at 1.0.
+    const combined = Math.min(1.0, primaryBest * 1.0 + secondaryBest * 0.4);
+    return { combined, primary: primaryBest, secondary: secondaryBest, matched };
+}
+
 export interface ProfileForScoring {
     naics_codes: string[];
     sba_certifications: string[];
@@ -128,6 +211,10 @@ export interface ProfileForScoring {
     federal_awards_count: number;
     target_psc_codes: string[];
     preferred_agencies: string[];
+    // Optional — when present, enables keyword-based matching with dynamic
+    // NAICS/keyword weight shift. Expanded with aliases from gov_keywords.
+    primary_keywords?: KeywordEntry[];
+    secondary_keywords?: KeywordEntry[];
 }
 
 export interface OpportunityForScoring {
@@ -140,6 +227,10 @@ export interface OpportunityForScoring {
     place_of_performance_state: string | null;
     award_amount: number | null;
     response_deadline: string | null;
+    // Optional — used only when keywords are configured on the profile.
+    title?: string | null;
+    description?: string | null;
+    structured_requirements?: unknown;
 }
 
 export interface ScoredMatch {
@@ -226,27 +317,71 @@ export function scoreOpportunity(
     const ap = scoreAgencyPref(profile.preferred_agencies || [], opp.agency);
     const cb = scoreCertBonus(profile.sba_certifications || [], opp.set_aside_code);
 
-    const total = W.naics * naics + W.psc * psc + W.set_aside * sa + W.geo * geo +
+    // Keyword matching — optional, enabled when the profile has primary or
+    // secondary keywords. We shift the NAICS weight based on its own
+    // confidence so niches without a NAICS code can still match.
+    const hasKeywords = (profile.primary_keywords?.length || 0) > 0 ||
+        (profile.secondary_keywords?.length || 0) > 0;
+
+    let naicsEff = W.naics;
+    let kwEff = 0;
+    let kwCombined = 0;
+    let kwMatched: string[] = [];
+
+    if (hasKeywords) {
+        const kw = scoreKeywords(
+            profile.primary_keywords || [],
+            profile.secondary_keywords || [],
+            opp,
+        );
+        kwCombined = kw.combined;
+        kwMatched = kw.matched;
+        // Dynamic shift: when NAICS matches strongly, keywords are a light
+        // refinement bonus; when NAICS signal is weak, keywords absorb the
+        // slot. Fixed 0.05 bonus ensures keywords always count.
+        naicsEff = W.naics * naics;            // effective contribution amount
+        kwEff = 0.05 + W.naics * (1 - naics);
+    }
+
+    const base = W.psc * psc + W.set_aside * sa + W.geo * geo +
         W.value_fit * vf + W.past_perf * pp + W.notice_type * nt +
         W.agency_pref * ap + W.deadline * dl + W.cert_bonus * cb;
 
+    // If keywords are configured, naicsEff is the already-weighted contribution
+    // (not a raw weight). Otherwise fall back to W.naics * naics.
+    const naicsContribution = hasKeywords ? naicsEff : W.naics * naics;
+    const kwContribution = hasKeywords ? kwEff * kwCombined : 0;
+
+    let total = base + naicsContribution + kwContribution;
+    if (total > 1.0) total = 1.0;   // cap — keyword bonus can push over nominal max
+
     if (total < 0.30) return null;
 
-    return {
+    const breakdown: Record<string, number> = {
+        naics: Math.round(naics * 100) / 100,
+        psc: Math.round(psc * 100) / 100,
+        set_aside: Math.round(sa * 100) / 100,
+        geo: Math.round(geo * 100) / 100,
+        value_fit: Math.round(vf * 100) / 100,
+        past_performance: Math.round(pp * 100) / 100,
+        notice_type: Math.round(nt * 100) / 100,
+        agency_pref: Math.round(ap * 100) / 100,
+        deadline: Math.round(dl * 100) / 100,
+        cert_bonus: Math.round(cb * 100) / 100,
+    };
+    if (hasKeywords) {
+        breakdown.keywords = Math.round(kwCombined * 100) / 100;
+        breakdown.keyword_weight_shift = Math.round(kwEff * 100) / 100;
+    }
+
+    const result: ScoredMatch = {
         opportunity_id: opp.id,
         score: Math.round(total * 10000) / 10000,
         classification: total >= 0.70 ? "HOT" : total >= 0.50 ? "WARM" : "COLD",
-        score_breakdown: {
-            naics: Math.round(naics * 100) / 100,
-            psc: Math.round(psc * 100) / 100,
-            set_aside: Math.round(sa * 100) / 100,
-            geo: Math.round(geo * 100) / 100,
-            value_fit: Math.round(vf * 100) / 100,
-            past_performance: Math.round(pp * 100) / 100,
-            notice_type: Math.round(nt * 100) / 100,
-            agency_pref: Math.round(ap * 100) / 100,
-            deadline: Math.round(dl * 100) / 100,
-            cert_bonus: Math.round(cb * 100) / 100,
-        },
+        score_breakdown: breakdown,
     };
+    if (hasKeywords && kwMatched.length > 0) {
+        (result.score_breakdown as Record<string, unknown>).matched_keywords = kwMatched;
+    }
+    return result;
 }

@@ -151,7 +151,7 @@ export async function loadProposalContext(
                 body: {
                     error: "Capability statement required. Create or upload one before generating a proposal.",
                     code: "CAPABILITY_STATEMENT_REQUIRED",
-                    next: "/capability-statement",
+                    next: "/ai-drafter/capability-statement",
                 },
             };
         }

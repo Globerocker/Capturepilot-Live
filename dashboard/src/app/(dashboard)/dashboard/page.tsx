@@ -203,7 +203,7 @@ export default function UserDashboard() {
 
   if (loading) {
     return (
-      <div className="max-w-[1600px] mx-auto space-y-6 sm:space-y-8 animate-in fade-in duration-500 px-1">
+      <div className="w-full 2xl:max-w-[1600px] mx-auto space-y-6 sm:space-y-8 animate-in fade-in duration-500 px-1">
         <header>
           <Skeleton className="h-8 w-64 rounded mb-2" />
           <Skeleton className="h-4 w-48 rounded" />
@@ -227,7 +227,7 @@ export default function UserDashboard() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6 sm:space-y-8 animate-in fade-in duration-500 px-1">
+    <div className="w-full 2xl:w-full 2xl:max-w-[1600px] mx-auto space-y-6 sm:space-y-8 animate-in fade-in duration-500 px-1">
 
       {/* Welcome Header */}
       <header>
@@ -272,8 +272,232 @@ export default function UserDashboard() {
           href="/competitors"
         />
       </section>
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start mt-6">
+        {/* LEFT COLUMN */}
+        <div className="xl:col-span-8 flex flex-col gap-6">
+          {/* Quick Actions */}
+      <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
+        <Link href="/check" className="bg-gradient-to-br from-emerald-700 to-emerald-900 text-white rounded-[20px] sm:rounded-[24px] p-4 sm:p-5 hover:shadow-xl transition-all group">
+          <Search className="w-5 h-5 mb-2 text-emerald-300 group-hover:text-white transition-colors" />
+          <h4 className="font-bold text-sm mb-0.5">Quick Check</h4>
+          <p className="text-emerald-300/80 text-[10px]">Analyze any company</p>
+        </Link>
+        <Link href="/ai-drafter/proposals" className="bg-gradient-to-br from-stone-900 to-black text-white rounded-[20px] sm:rounded-[24px] p-4 sm:p-5 hover:shadow-xl transition-all group">
+          <FileText className="w-5 h-5 mb-2 text-stone-400 group-hover:text-white transition-colors" />
+          <h4 className="font-bold text-sm mb-0.5">Draft Proposal</h4>
+          <p className="text-stone-400 text-[10px]">AI-powered writing</p>
+        </Link>
+        <Link href="/ai-drafter?tab=email" className="bg-white border border-stone-200 rounded-[20px] sm:rounded-[24px] p-4 sm:p-5 hover:shadow-lg hover:border-stone-300 transition-all group">
+          <Mail className="w-5 h-5 mb-2 text-stone-400 group-hover:text-black transition-colors" />
+          <h4 className="font-bold text-sm mb-0.5">Email Drafter</h4>
+          <p className="text-stone-400 text-[10px]">POC outreach</p>
+        </Link>
+        <Link href="/ai-drafter?tab=template" className="bg-white border border-stone-200 rounded-[20px] sm:rounded-[24px] p-4 sm:p-5 hover:shadow-lg hover:border-stone-300 transition-all group">
+          <Pencil className="w-5 h-5 mb-2 text-stone-400 group-hover:text-black transition-colors" />
+          <h4 className="font-bold text-sm mb-0.5">Template Drafter</h4>
+          <p className="text-stone-400 text-[10px]">Reusable sections</p>
+        </Link>
+        <Link href="/matches" className="bg-white border border-stone-200 rounded-[20px] sm:rounded-[24px] p-4 sm:p-5 hover:shadow-lg hover:border-stone-300 transition-all group">
+          <Target className="w-5 h-5 mb-2 text-stone-400 group-hover:text-black transition-colors" />
+          <h4 className="font-bold text-sm mb-0.5">View Matches</h4>
+          <p className="text-stone-400 text-[10px]">{totalMatchCount} opportunities</p>
+        </Link>
+        <Link href="/ai-drafter/capability-statement" className="bg-white border border-stone-200 rounded-[20px] sm:rounded-[24px] p-4 sm:p-5 hover:shadow-lg hover:border-stone-300 transition-all group">
+          <Mic className="w-5 h-5 mb-2 text-stone-400 group-hover:text-black transition-colors" />
+          <h4 className="font-bold text-sm mb-0.5">Cap Statement</h4>
+          <p className="text-stone-400 text-[10px]">Build your statement</p>
+        </Link>
+      </section>
+          {/* Top Matching Opportunities */}
+      <section className="bg-white rounded-[24px] sm:rounded-[32px] p-5 sm:p-6 border border-stone-200 shadow-sm">
+        <div className="flex flex-col gap-4 mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <h3 className="font-bold text-base sm:text-lg flex items-center">
+              <Sparkles className="w-5 h-5 mr-2 text-stone-400" />
+              Opportunities
+            </h3>
+            <Link href="/opportunities" className="text-xs font-bold bg-stone-100 border border-stone-200 px-4 py-2 rounded-full hover:bg-stone-200 transition-colors flex items-center self-start sm:self-auto">
+              Browse All <ArrowRight className="w-3 h-3 ml-1" />
+            </Link>
+          </div>
+          
+          {/* Quick Filters */}
+          <div className="flex items-center space-x-2 flex-wrap border-b border-stone-100 pb-2">
+             <button className="text-xs font-bold px-3 py-1.5 rounded-full bg-black text-white transition-all">All Opportunities</button>
+             <button className="text-xs font-bold px-3 py-1.5 rounded-full bg-white text-stone-500 hover:bg-stone-100 transition-all">Strong Matches</button>
+             <button className="text-xs font-bold px-3 py-1.5 rounded-full bg-white text-stone-500 hover:bg-stone-100 transition-all">Good Matches</button>
+             <button className="text-xs font-bold px-3 py-1.5 rounded-full bg-white text-stone-500 hover:bg-stone-100 transition-all">Possible Matches</button>
+          </div>
+        </div>
 
-      {/* Action Items + Pipeline preview side-by-side on wide screens */}
+        {topOpps.length === 0 ? (
+          <div className="text-center py-8 sm:py-12">
+            <Sparkles className="w-10 h-10 text-stone-300 mx-auto mb-3" />
+            <p className="text-stone-500 text-sm mb-2">
+              {generatingMatches ? "Loading opportunities..." : "No opportunities found"}
+            </p>
+            <p className="text-stone-400 text-xs mb-4">
+              {generatingMatches
+                ? "This usually takes 10-30 seconds. We're scoring opportunities against your profile."
+                : "We couldn't find any opportunities matching these criteria."}
+            </p>
+            <div className="flex items-center justify-center gap-3 flex-wrap">
+              <button
+                type="button"
+                onClick={async () => {
+                  setGeneratingMatches(true);
+                  try {
+                    await fetch("/api/matches/refresh", { method: "POST" });
+                    window.location.reload();
+                  } catch { setGeneratingMatches(false); }
+                }}
+                disabled={generatingMatches}
+                className="bg-black text-white px-6 py-2.5 rounded-full text-sm font-bold inline-flex items-center disabled:opacity-60"
+              >
+                {generatingMatches ? (
+                  <><Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" /> Generating...</>
+                ) : (
+                  <><Sparkles className="w-3.5 h-3.5 mr-2" /> Find Opportunities</>
+                )}
+              </button>
+              <Link href="/settings" className="bg-white text-stone-700 border border-stone-200 px-6 py-2.5 rounded-full text-sm font-bold inline-flex items-center hover:bg-stone-50">
+                Update Profile <ArrowRight className="w-3 h-3 ml-2" />
+              </Link>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {topOpps.map((opp) => {
+              const isEasyWin = opp.notice_type?.includes("Sources Sought") && opp.set_aside_code;
+              return (
+                <Link
+                  key={opp.id}
+                  href={`/opportunities/${opp.id}`}
+                  className="block bg-stone-50 hover:bg-stone-100 active:bg-stone-200 border border-stone-200 hover:border-stone-300 rounded-xl sm:rounded-2xl p-3 sm:p-4 transition-all"
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        {isEasyWin && (
+                          <span className="text-[9px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded uppercase">Easy Win</span>
+                        )}
+                        {opp.notice_type && (
+                          <span className={clsx(
+                            "text-[9px] px-2 py-0.5 rounded border uppercase tracking-widest",
+                            opp.notice_type.includes("Sources Sought") ? "bg-emerald-50 text-emerald-600 border-emerald-200" :
+                            opp.notice_type.includes("Presolicitation") ? "bg-blue-50 text-blue-600 border-blue-200" :
+                            "bg-stone-100 text-stone-500 border-stone-200"
+                          )}>
+                            {opp.notice_type}
+                          </span>
+                        )}
+                      </div>
+                      <p className="font-bold text-sm text-black line-clamp-1">{opp.title}</p>
+                      <p className="text-xs text-stone-500 line-clamp-1">{opp.agency}</p>
+                    </div>
+                    <div className="flex items-center gap-3 text-xs flex-shrink-0">
+                      <span className="font-mono bg-stone-200 px-2 py-0.5 rounded text-stone-600">{opp.naics_code}</span>
+                      <span className="font-bold text-stone-700 whitespace-nowrap">
+                        {opp.response_deadline ? new Date(opp.response_deadline).toLocaleDateString() : "TBD"}
+                      </span>
+                    </div>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        )}
+      </section>
+        </div>
+
+        {/* RIGHT COLUMN */}
+        <div className="xl:col-span-4 flex flex-col gap-6">
+          {/* Profile Summary */}
+      {profile && (
+        <section className="bg-white rounded-[24px] sm:rounded-[32px] p-5 sm:p-6 border border-stone-200 shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+            <h3 className="font-bold text-base sm:text-lg flex items-center">
+              <BarChart3 className="w-5 h-5 mr-2 text-stone-400" />
+              Your Profile
+            </h3>
+            <Link href="/settings" className="text-xs font-bold text-stone-500 hover:text-black transition-colors flex items-center">
+              Edit Profile <ArrowRight className="w-3 h-3 ml-1" />
+            </Link>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="bg-stone-50 rounded-xl p-3 border border-stone-100">
+              <p className="text-[10px] text-stone-400 uppercase tracking-widest mb-1">NAICS Codes</p>
+              <div className="flex flex-wrap gap-1">
+                {profile.naics_codes?.slice(0, 4).map(n => (
+                  <span key={n} className="font-mono text-xs bg-black text-white px-2 py-0.5 rounded">{n}</span>
+                ))}
+                {(profile.naics_codes?.length || 0) > 4 && <span className="text-xs text-stone-400">+{profile.naics_codes.length - 4}</span>}
+                {(!profile.naics_codes || profile.naics_codes.length === 0) && <span className="text-xs text-stone-400">Not set</span>}
+              </div>
+            </div>
+            <div className="bg-stone-50 rounded-xl p-3 border border-stone-100">
+              <p className="text-[10px] text-stone-400 uppercase tracking-widest mb-1">Certifications</p>
+              <div className="flex flex-wrap gap-1">
+                {profile.sba_certifications?.slice(0, 3).map(c => (
+                  <span key={c} className="text-xs font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded">{c}</span>
+                ))}
+                {(!profile.sba_certifications || profile.sba_certifications.length === 0) && <span className="text-xs text-stone-400">None</span>}
+              </div>
+            </div>
+            <div className="bg-stone-50 rounded-xl p-3 border border-stone-100">
+              <p className="text-[10px] text-stone-400 uppercase tracking-widest mb-1">Location</p>
+              <p className="font-bold text-sm">{profile.state || "Not set"}</p>
+              {profile.target_states?.length > 0 && (
+                <p className="text-xs text-stone-400 mt-0.5">Serving {profile.target_states.length} states</p>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
+          {/* Pipeline & Action Items Summary */}
+      {(pipelineCount > 0 || actionsPending > 0) && (
+        <section className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+          <Link href="/pipeline" className="bg-white rounded-[24px] sm:rounded-[32px] p-5 sm:p-6 border border-stone-200 shadow-sm hover:shadow-md hover:border-stone-300 transition-all">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-bold text-base flex items-center">
+                <Layers className="w-5 h-5 mr-2 text-stone-400" /> Pipeline
+              </h3>
+              <ArrowRight className="w-4 h-4 text-stone-400" />
+            </div>
+            {pipelineCount > 0 ? (
+              <div className="space-y-1">
+                {Object.entries(pipelineStages).filter(([, count]) => count > 0).map(([stage, count]) => (
+                  <div key={stage} className="flex items-center justify-between text-xs">
+                    <span className="text-stone-500 capitalize">{stage.replace("_", " ")}</span>
+                    <span className="font-bold text-stone-700">{count}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-stone-400">No opportunities in pipeline</p>
+            )}
+          </Link>
+          <Link href="/pipeline" className="bg-white rounded-[24px] sm:rounded-[32px] p-5 sm:p-6 border border-stone-200 shadow-sm hover:shadow-md hover:border-stone-300 transition-all">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-bold text-base flex items-center">
+                <CheckSquare className="w-5 h-5 mr-2 text-stone-400" /> Action Items
+              </h3>
+              <ArrowRight className="w-4 h-4 text-stone-400" />
+            </div>
+            {actionsPending > 0 ? (
+              <div>
+                <p className="text-2xl font-black tracking-tighter">{actionsPending}</p>
+                <p className="text-xs text-stone-500">
+                  pending{actionsUrgent > 0 && <span className="text-red-600 font-bold"> ({actionsUrgent} high priority)</span>}
+                </p>
+              </div>
+            ) : (
+              <p className="text-xs text-stone-400">No pending action items</p>
+            )}
+          </Link>
+        </section>
+      )}
+          {/* Action Items + Pipeline preview side-by-side on wide screens */}
       {(pendingActions.length > 0 || recentPipeline.length > 0) && (
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Action Items Preview */}
@@ -328,51 +552,7 @@ export default function UserDashboard() {
           )}
         </section>
       )}
-
-      {/* Profile Summary */}
-      {profile && (
-        <section className="bg-white rounded-[24px] sm:rounded-[32px] p-5 sm:p-6 border border-stone-200 shadow-sm">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-            <h3 className="font-bold text-base sm:text-lg flex items-center">
-              <BarChart3 className="w-5 h-5 mr-2 text-stone-400" />
-              Your Profile
-            </h3>
-            <Link href="/settings" className="text-xs font-bold text-stone-500 hover:text-black transition-colors flex items-center">
-              Edit Profile <ArrowRight className="w-3 h-3 ml-1" />
-            </Link>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="bg-stone-50 rounded-xl p-3 border border-stone-100">
-              <p className="text-[10px] text-stone-400 uppercase tracking-widest mb-1">NAICS Codes</p>
-              <div className="flex flex-wrap gap-1">
-                {profile.naics_codes?.slice(0, 4).map(n => (
-                  <span key={n} className="font-mono text-xs bg-black text-white px-2 py-0.5 rounded">{n}</span>
-                ))}
-                {(profile.naics_codes?.length || 0) > 4 && <span className="text-xs text-stone-400">+{profile.naics_codes.length - 4}</span>}
-                {(!profile.naics_codes || profile.naics_codes.length === 0) && <span className="text-xs text-stone-400">Not set</span>}
-              </div>
-            </div>
-            <div className="bg-stone-50 rounded-xl p-3 border border-stone-100">
-              <p className="text-[10px] text-stone-400 uppercase tracking-widest mb-1">Certifications</p>
-              <div className="flex flex-wrap gap-1">
-                {profile.sba_certifications?.slice(0, 3).map(c => (
-                  <span key={c} className="text-xs font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded">{c}</span>
-                ))}
-                {(!profile.sba_certifications || profile.sba_certifications.length === 0) && <span className="text-xs text-stone-400">None</span>}
-              </div>
-            </div>
-            <div className="bg-stone-50 rounded-xl p-3 border border-stone-100">
-              <p className="text-[10px] text-stone-400 uppercase tracking-widest mb-1">Location</p>
-              <p className="font-bold text-sm">{profile.state || "Not set"}</p>
-              {profile.target_states?.length > 0 && (
-                <p className="text-xs text-stone-400 mt-0.5">Serving {profile.target_states.length} states</p>
-              )}
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* Profile Completeness + Service CTA */}
+          {/* Profile Completeness + Service CTA */}
       {profile && (() => {
         const { score, missing } = calculateProfileCompleteness(profile);
         return (
@@ -423,175 +603,8 @@ export default function UserDashboard() {
           </section>
         );
       })()}
-
-      {/* Pipeline & Action Items Summary */}
-      {(pipelineCount > 0 || actionsPending > 0) && (
-        <section className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-          <Link href="/pipeline" className="bg-white rounded-[24px] sm:rounded-[32px] p-5 sm:p-6 border border-stone-200 shadow-sm hover:shadow-md hover:border-stone-300 transition-all">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-bold text-base flex items-center">
-                <Layers className="w-5 h-5 mr-2 text-stone-400" /> Pipeline
-              </h3>
-              <ArrowRight className="w-4 h-4 text-stone-400" />
-            </div>
-            {pipelineCount > 0 ? (
-              <div className="space-y-1">
-                {Object.entries(pipelineStages).filter(([, count]) => count > 0).map(([stage, count]) => (
-                  <div key={stage} className="flex items-center justify-between text-xs">
-                    <span className="text-stone-500 capitalize">{stage.replace("_", " ")}</span>
-                    <span className="font-bold text-stone-700">{count}</span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-xs text-stone-400">No opportunities in pipeline</p>
-            )}
-          </Link>
-          <Link href="/pipeline" className="bg-white rounded-[24px] sm:rounded-[32px] p-5 sm:p-6 border border-stone-200 shadow-sm hover:shadow-md hover:border-stone-300 transition-all">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-bold text-base flex items-center">
-                <CheckSquare className="w-5 h-5 mr-2 text-stone-400" /> Action Items
-              </h3>
-              <ArrowRight className="w-4 h-4 text-stone-400" />
-            </div>
-            {actionsPending > 0 ? (
-              <div>
-                <p className="text-2xl font-black tracking-tighter">{actionsPending}</p>
-                <p className="text-xs text-stone-500">
-                  pending{actionsUrgent > 0 && <span className="text-red-600 font-bold"> ({actionsUrgent} high priority)</span>}
-                </p>
-              </div>
-            ) : (
-              <p className="text-xs text-stone-400">No pending action items</p>
-            )}
-          </Link>
-        </section>
-      )}
-
-      {/* Top Matching Opportunities */}
-      <section className="bg-white rounded-[24px] sm:rounded-[32px] p-5 sm:p-6 border border-stone-200 shadow-sm">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-          <h3 className="font-bold text-base sm:text-lg flex items-center">
-            <Sparkles className="w-5 h-5 mr-2 text-stone-400" />
-            Top Matches for You
-          </h3>
-          <Link href="/opportunities" className="text-xs font-bold bg-stone-100 border border-stone-200 px-4 py-2 rounded-full hover:bg-stone-200 transition-colors flex items-center self-start sm:self-auto">
-            Browse All <ArrowRight className="w-3 h-3 ml-1" />
-          </Link>
         </div>
-
-        {topOpps.length === 0 ? (
-          <div className="text-center py-8 sm:py-12">
-            <Sparkles className="w-10 h-10 text-stone-300 mx-auto mb-3" />
-            <p className="text-stone-500 text-sm mb-2">
-              {generatingMatches ? "Calculating your matches..." : "No matches generated yet"}
-            </p>
-            <p className="text-stone-400 text-xs mb-4">
-              {generatingMatches
-                ? "This usually takes 10-30 seconds. We're scoring opportunities against your profile."
-                : "Generate matches to find federal opportunities tailored to your profile."}
-            </p>
-            <div className="flex items-center justify-center gap-3 flex-wrap">
-              <button
-                type="button"
-                onClick={async () => {
-                  setGeneratingMatches(true);
-                  try {
-                    await fetch("/api/matches/refresh", { method: "POST" });
-                    window.location.reload();
-                  } catch { setGeneratingMatches(false); }
-                }}
-                disabled={generatingMatches}
-                className="bg-black text-white px-6 py-2.5 rounded-full text-sm font-bold inline-flex items-center disabled:opacity-60"
-              >
-                {generatingMatches ? (
-                  <><Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" /> Generating...</>
-                ) : (
-                  <><Sparkles className="w-3.5 h-3.5 mr-2" /> Generate Matches</>
-                )}
-              </button>
-              <Link href="/settings" className="bg-white text-stone-700 border border-stone-200 px-6 py-2.5 rounded-full text-sm font-bold inline-flex items-center hover:bg-stone-50">
-                Update Profile <ArrowRight className="w-3 h-3 ml-2" />
-              </Link>
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {topOpps.map((opp) => {
-              const isEasyWin = opp.notice_type?.includes("Sources Sought") && opp.set_aside_code;
-              return (
-                <Link
-                  key={opp.id}
-                  href={`/opportunities/${opp.id}`}
-                  className="block bg-stone-50 hover:bg-stone-100 active:bg-stone-200 border border-stone-200 hover:border-stone-300 rounded-xl sm:rounded-2xl p-3 sm:p-4 transition-all"
-                >
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1 flex-wrap">
-                        {isEasyWin && (
-                          <span className="text-[9px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded uppercase">Easy Win</span>
-                        )}
-                        {opp.notice_type && (
-                          <span className={clsx(
-                            "text-[9px] px-2 py-0.5 rounded border uppercase tracking-widest",
-                            opp.notice_type.includes("Sources Sought") ? "bg-emerald-50 text-emerald-600 border-emerald-200" :
-                            opp.notice_type.includes("Presolicitation") ? "bg-blue-50 text-blue-600 border-blue-200" :
-                            "bg-stone-100 text-stone-500 border-stone-200"
-                          )}>
-                            {opp.notice_type}
-                          </span>
-                        )}
-                      </div>
-                      <p className="font-bold text-sm text-black line-clamp-1">{opp.title}</p>
-                      <p className="text-xs text-stone-500 line-clamp-1">{opp.agency}</p>
-                    </div>
-                    <div className="flex items-center gap-3 text-xs flex-shrink-0">
-                      <span className="font-mono bg-stone-200 px-2 py-0.5 rounded text-stone-600">{opp.naics_code}</span>
-                      <span className="font-bold text-stone-700 whitespace-nowrap">
-                        {opp.response_deadline ? new Date(opp.response_deadline).toLocaleDateString() : "TBD"}
-                      </span>
-                    </div>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-        )}
-      </section>
-
-      {/* Quick Actions */}
-      <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
-        <Link href="/check" className="bg-gradient-to-br from-emerald-700 to-emerald-900 text-white rounded-[20px] sm:rounded-[24px] p-4 sm:p-5 hover:shadow-xl transition-all group">
-          <Search className="w-5 h-5 mb-2 text-emerald-300 group-hover:text-white transition-colors" />
-          <h4 className="font-bold text-sm mb-0.5">Quick Check</h4>
-          <p className="text-emerald-300/80 text-[10px]">Analyze any company</p>
-        </Link>
-        <Link href="/proposals" className="bg-gradient-to-br from-stone-900 to-black text-white rounded-[20px] sm:rounded-[24px] p-4 sm:p-5 hover:shadow-xl transition-all group">
-          <FileText className="w-5 h-5 mb-2 text-stone-400 group-hover:text-white transition-colors" />
-          <h4 className="font-bold text-sm mb-0.5">Draft Proposal</h4>
-          <p className="text-stone-400 text-[10px]">AI-powered writing</p>
-        </Link>
-        <Link href="/ai-drafter?tab=email" className="bg-white border border-stone-200 rounded-[20px] sm:rounded-[24px] p-4 sm:p-5 hover:shadow-lg hover:border-stone-300 transition-all group">
-          <Mail className="w-5 h-5 mb-2 text-stone-400 group-hover:text-black transition-colors" />
-          <h4 className="font-bold text-sm mb-0.5">Email Drafter</h4>
-          <p className="text-stone-400 text-[10px]">POC outreach</p>
-        </Link>
-        <Link href="/ai-drafter?tab=template" className="bg-white border border-stone-200 rounded-[20px] sm:rounded-[24px] p-4 sm:p-5 hover:shadow-lg hover:border-stone-300 transition-all group">
-          <Pencil className="w-5 h-5 mb-2 text-stone-400 group-hover:text-black transition-colors" />
-          <h4 className="font-bold text-sm mb-0.5">Template Drafter</h4>
-          <p className="text-stone-400 text-[10px]">Reusable sections</p>
-        </Link>
-        <Link href="/matches" className="bg-white border border-stone-200 rounded-[20px] sm:rounded-[24px] p-4 sm:p-5 hover:shadow-lg hover:border-stone-300 transition-all group">
-          <Target className="w-5 h-5 mb-2 text-stone-400 group-hover:text-black transition-colors" />
-          <h4 className="font-bold text-sm mb-0.5">View Matches</h4>
-          <p className="text-stone-400 text-[10px]">{totalMatchCount} opportunities</p>
-        </Link>
-        <Link href="/capability-statement" className="bg-white border border-stone-200 rounded-[20px] sm:rounded-[24px] p-4 sm:p-5 hover:shadow-lg hover:border-stone-300 transition-all group">
-          <Mic className="w-5 h-5 mb-2 text-stone-400 group-hover:text-black transition-colors" />
-          <h4 className="font-bold text-sm mb-0.5">Cap Statement</h4>
-          <p className="text-stone-400 text-[10px]">Build your statement</p>
-        </Link>
-      </section>
+      </div>
 
       {/* Market Intelligence */}
       {profile && profile.naics_codes.length > 0 && (

@@ -27,7 +27,7 @@ git push captiorpilot main && git push live main && git push globerocker main
 - SAM API key via `X-Api-Key` header (NOT URL params — `?api_key=` is deprecated and can cause rejections)
 - Apollo: use `mixed_companies/search` (free tier), NOT `mixed_people/search`
 - Never commit `.env`, `.env.local`, `.mcp.json`
-- When creating migrations, pick the next free number under `supabase/migrations/` (current latest: **032**)
+- When creating migrations, pick the next free number under `supabase/migrations/` (current latest: **034**)
 
 ## Architecture
 - `/dashboard/src/app/(public)/` — Public pages (login, signup, check, admin)

@@ -236,11 +236,104 @@ def score_cert_bonus(user_certs, opp_set_aside):
 
 
 # ---------------------------------------------------------------------------
+# KEYWORD SCORING (gov_keywords library)
+# ---------------------------------------------------------------------------
+# Mirrors dashboard/src/lib/match-scoring.ts scoreKeywords. A keyword entry is
+# a canonical term + aliases (from gov_keywords.aliases). Per-field weights
+# taken as max across fields: title (1.0/0.6), description (0.4/0.2),
+# structured_requirements (0.4/0.2) — higher for multi-word phrases.
+import re
+import json
+
+
+def _phrase_hits(phrase, text):
+    if not text or not phrase:
+        return False
+    parts = [re.escape(p) for p in phrase.strip().split()]
+    if not parts:
+        return False
+    pattern = r"\b" + r"\s+".join(parts) + r"\b"
+    return re.search(pattern, text, re.IGNORECASE) is not None
+
+
+def _score_single_keyword(entry, title, description, req_text):
+    variants = [entry.get("keyword")] + list(entry.get("aliases") or [])
+    variants = [v for v in variants if v]
+    best = 0.0
+    for v in variants:
+        is_multi = " " in v.strip()
+        if _phrase_hits(v, title):
+            best = max(best, 1.0 if is_multi else 0.6)
+        if _phrase_hits(v, description):
+            best = max(best, 0.4 if is_multi else 0.2)
+        if _phrase_hits(v, req_text):
+            best = max(best, 0.4 if is_multi else 0.2)
+        if best >= 1.0:
+            break
+    return best
+
+
+def score_keywords(primary_entries, secondary_entries, opp):
+    """Returns dict with combined (0-1), primary, secondary, matched[]."""
+    title = (opp.get("title") or "") if isinstance(opp.get("title"), str) else ""
+    description = (opp.get("description") or "") if isinstance(opp.get("description"), str) else ""
+    sr = opp.get("structured_requirements")
+    if sr is None:
+        req_text = ""
+    elif isinstance(sr, str):
+        req_text = sr
+    else:
+        try:
+            req_text = json.dumps(sr)
+        except Exception:
+            req_text = ""
+
+    primary_best = 0.0
+    secondary_best = 0.0
+    matched = []
+
+    for entry in primary_entries or []:
+        s = _score_single_keyword(entry, title, description, req_text)
+        if s > 0:
+            matched.append(entry.get("keyword"))
+        if s > primary_best:
+            primary_best = s
+
+    for entry in secondary_entries or []:
+        s = _score_single_keyword(entry, title, description, req_text)
+        if s > 0:
+            matched.append(entry.get("keyword"))
+        if s > secondary_best:
+            secondary_best = s
+
+    combined = min(1.0, primary_best * 1.0 + secondary_best * 0.4)
+    return {
+        "combined": combined,
+        "primary": primary_best,
+        "secondary": secondary_best,
+        "matched": matched,
+    }
+
+
+# ---------------------------------------------------------------------------
 # HELPERS
 # ---------------------------------------------------------------------------
 def chunk_list(lst, n):
     for i in range(0, len(lst), n):
         yield lst[i:i + n]
+
+
+def load_keyword_entries(supabase, keyword_list):
+    """Look up gov_keywords for a list of canonical keywords, returning entries
+    with aliases attached. Missing rows fall through as alias-less entries."""
+    if not keyword_list:
+        return []
+    try:
+        res = supabase.table("gov_keywords").select("keyword, aliases").in_("keyword", keyword_list).execute()
+        by_kw = {row["keyword"]: row.get("aliases") or [] for row in (res.data or [])}
+    except Exception:
+        by_kw = {}
+    return [{"keyword": kw, "aliases": by_kw.get(kw, [])} for kw in keyword_list]
 
 
 # ---------------------------------------------------------------------------
@@ -265,7 +358,8 @@ def score_matches(single_user_id=None):
         "id, company_name, naics_codes, sba_certifications, state, "
         "target_states, employee_count, revenue, federal_awards_count, "
         "service_radius_miles, target_contract_types, "
-        "target_psc_codes, preferred_agencies, contract_value_min, contract_value_max"
+        "target_psc_codes, preferred_agencies, contract_value_min, contract_value_max, "
+        "primary_keywords, secondary_keywords"
     ).eq("onboarding_complete", True)
     if single_user_id:
         query = query.eq("id", single_user_id)
@@ -279,6 +373,10 @@ def score_matches(single_user_id=None):
     print(f"  Users to score: {len(users)}")
 
     # --- Load active opportunities ---
+    # NOTE: title/description/structured_requirements are fetched here because
+    # keyword matching needs them. For users without keywords the fields are
+    # simply ignored, so the extra bytes don't affect scoring — but we keep
+    # them in the select to avoid a second round-trip per user.
     all_opportunities = []
     offset = 0
     batch_size = 1000
@@ -286,7 +384,8 @@ def score_matches(single_user_id=None):
         opp_batch = supabase.table("opportunities").select(
             "id, naics_code, psc_code, notice_type, agency, "
             "set_aside_code, place_of_performance_state, "
-            "award_amount, response_deadline"
+            "award_amount, response_deadline, "
+            "title, description, structured_requirements"
         ).eq("is_archived", False).range(offset, offset + batch_size - 1).execute()
         all_opportunities.extend(opp_batch.data)
         if len(opp_batch.data) < batch_size:
@@ -316,11 +415,20 @@ def score_matches(single_user_id=None):
         user_revenue = user.get("revenue") or 0
         user_fed_awards = user.get("federal_awards_count") or 0
         user_preferred_agencies = user.get("preferred_agencies") or []
+        user_primary_kw = user.get("primary_keywords") or []
+        user_secondary_kw = user.get("secondary_keywords") or []
+
+        # Resolve to gov_keywords entries with aliases (single lookup per user).
+        primary_entries = load_keyword_entries(supabase, user_primary_kw) if user_primary_kw else []
+        secondary_entries = load_keyword_entries(supabase, user_secondary_kw) if user_secondary_kw else []
+        has_keywords = bool(primary_entries or secondary_entries)
 
         print(f"  Scoring for: {user_name}")
         print(f"    NAICS: {user_naics[:5]}{'...' if len(user_naics) > 5 else ''}")
         print(f"    State: {user_state}, Targets: {len(user_target_states)} states")
         print(f"    Certs: {user_certs}")
+        if has_keywords:
+            print(f"    Keywords: primary={user_primary_kw} secondary={user_secondary_kw}")
 
         scored_matches = []
 
@@ -349,9 +457,28 @@ def score_matches(single_user_id=None):
             ap = score_agency_pref(user_preferred_agencies, opp.get("agency"))
             cb = score_cert_bonus(user_certs, opp.get("set_aside_code"))
 
+            # --- Keyword matching + dynamic NAICS/keyword weight shift ---
+            # When keywords are configured, the NAICS weight slot shifts to
+            # keywords based on NAICS confidence. Keywords always get at
+            # least a 0.05 bonus slot so a strong keyword match can refine.
+            kw_combined = 0.0
+            kw_matched = []
+            if has_keywords:
+                kw_res = score_keywords(primary_entries, secondary_entries, opp)
+                kw_combined = kw_res["combined"]
+                kw_matched = kw_res["matched"]
+                naics_contribution = W_NAICS * naics
+                kw_weight = 0.05 + W_NAICS * (1 - naics)
+                kw_contribution = kw_weight * kw_combined
+            else:
+                naics_contribution = W_NAICS * naics
+                kw_contribution = 0.0
+                kw_weight = 0.0
+
             # --- Weighted total ---
             total = (
-                W_NAICS * naics +
+                naics_contribution +
+                kw_contribution +
                 W_PSC * psc +
                 W_SET_ASIDE * sa +
                 W_GEO * geo +
@@ -362,6 +489,8 @@ def score_matches(single_user_id=None):
                 W_DEADLINE * dl +
                 W_CERT_BONUS * cb
             )
+            if total > 1.0:
+                total = 1.0  # cap — keyword bonus can push past nominal max
 
             # Only keep WARM or better
             if total < 0.30:
@@ -369,24 +498,31 @@ def score_matches(single_user_id=None):
 
             classification = "HOT" if total >= 0.70 else ("WARM" if total >= 0.50 else "COLD")
 
+            breakdown = {
+                "naics": round(naics, 2),
+                "psc": round(psc, 2),
+                "set_aside": round(sa, 2),
+                "geo": round(geo, 2),
+                "value_fit": round(vf, 2),
+                "past_performance": round(pp, 2),
+                "notice_type": round(nt, 2),
+                "agency_pref": round(ap, 2),
+                "deadline": round(dl, 2),
+                "cert_bonus": round(cb, 2),
+                "total": round(total, 4),
+            }
+            if has_keywords:
+                breakdown["keywords"] = round(kw_combined, 2)
+                breakdown["keyword_weight"] = round(kw_weight, 2)
+                if kw_matched:
+                    breakdown["matched_keywords"] = kw_matched
+
             scored_matches.append({
                 "user_profile_id": user_id,
                 "opportunity_id": opp_id,
                 "score": round(total, 4),
                 "classification": classification,
-                "score_breakdown": {
-                    "naics": round(naics, 2),
-                    "psc": round(psc, 2),
-                    "set_aside": round(sa, 2),
-                    "geo": round(geo, 2),
-                    "value_fit": round(vf, 2),
-                    "past_performance": round(pp, 2),
-                    "notice_type": round(nt, 2),
-                    "agency_pref": round(ap, 2),
-                    "deadline": round(dl, 2),
-                    "cert_bonus": round(cb, 2),
-                    "total": round(total, 4),
-                },
+                "score_breakdown": breakdown,
             })
 
         # Sort by score, keep top MAX_MATCHES_PER_USER

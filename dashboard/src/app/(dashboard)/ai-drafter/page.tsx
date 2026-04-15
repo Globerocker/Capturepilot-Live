@@ -1,5 +1,6 @@
 "use client";
 
+import DrafterTabs from "@/components/layout/DrafterTabs";
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -43,7 +44,7 @@ function AiDrafterInner() {
     const searchParams = useSearchParams();
     const initialTab = (searchParams?.get("tab") as Tab) || "email";
     const [tab, setTab] = useState<Tab>(
-        initialTab === "proposal" || initialTab === "email" || initialTab === "template" ? initialTab : "email"
+        initialTab === "email" || initialTab === "template" ? initialTab : "email"
     );
     const [profileId, setProfileId] = useState<string | null>(null);
 
@@ -60,23 +61,14 @@ function AiDrafterInner() {
 
     return (
         <div className="max-w-4xl mx-auto pb-12 animate-in fade-in duration-500 px-1">
-            <header className="mb-6">
-                <h2 className="text-2xl sm:text-3xl font-bold tracking-tighter text-black flex items-center">
-                    <Pencil className="mr-2 sm:mr-3 w-6 h-6 sm:w-8 sm:h-8" /> AI Drafter
-                </h2>
-                <p className="text-stone-500 font-medium text-sm mt-1">
-                    Draft proposals, outreach emails, and reusable templates with AI. All grounded in your company profile.
-                </p>
-            </header>
+            <DrafterTabs />
+            {/* Sub-Tabs for Emails & Templates */}
+            <div className="flex items-center gap-2 mb-6 mt-6">
+                <button type="button" onClick={() => setTab("email")} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-colors ${tab === "email" ? "bg-black text-white" : "bg-stone-100 text-stone-600 hover:bg-stone-200"}`}>Email Drafter</button>
+                <button type="button" onClick={() => setTab("template")} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-colors ${tab === "template" ? "bg-black text-white" : "bg-stone-100 text-stone-600 hover:bg-stone-200"}`}>Template Drafter</button>
+            </div>
 
-            {/* Tabs */}
-            <nav className="flex items-center gap-2 mb-6 border-b border-stone-200">
-                <TabButton active={tab === "proposal"} onClick={() => setTab("proposal")} icon={FileText} label="Proposal" />
-                <TabButton active={tab === "email"}    onClick={() => setTab("email")}    icon={Mail}     label="Email" />
-                <TabButton active={tab === "template"} onClick={() => setTab("template")} icon={ShieldCheck} label="Template" />
-            </nav>
-
-            {tab === "proposal" && <ProposalTab />}
+            
             {tab === "email"    && profileId && <EmailTab profileId={profileId} />}
             {tab === "template" && profileId && <TemplateTab profileId={profileId} />}
         </div>
@@ -110,7 +102,7 @@ function ProposalTab() {
                 Generate a complete, multi-section federal proposal tied to a specific opportunity. Runs as a background job so you can keep working.
             </p>
             <Link
-                href="/proposals"
+                href="/ai-drafter/proposals"
                 className="inline-flex items-center gap-2 bg-white text-black px-5 py-2.5 rounded-full text-sm font-bold hover:bg-stone-200 transition-colors"
             >
                 Go to Proposal Writer <ArrowRight className="w-4 h-4" />

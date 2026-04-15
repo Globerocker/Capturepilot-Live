@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
-import { scoreOpportunity, type ProfileForScoring, type OpportunityForScoring } from "@/lib/match-scoring";
+import { scoreOpportunity, type ProfileForScoring, type OpportunityForScoring, type KeywordEntry } from "@/lib/match-scoring";
 
 // Persist all matches with score above MIN_MATCH_SCORE. No hard cap.
 // Previous behavior capped at top 500, which hid ~99% of ~54k opportunities from users.
@@ -31,7 +31,8 @@ export async function POST() {
     const { data: profile } = await sb
         .from("user_profiles")
         .select("id, naics_codes, sba_certifications, state, target_states, revenue, " +
-            "federal_awards_count, target_psc_codes, preferred_agencies")
+            "federal_awards_count, target_psc_codes, preferred_agencies, " +
+            "primary_keywords, secondary_keywords")
         .eq("auth_user_id", user.id)
         .single();
 
@@ -40,6 +41,23 @@ export async function POST() {
     }
 
     const p = profile as unknown as Record<string, unknown>;
+
+    // Resolve profile keywords to gov_keywords entries (with aliases) once.
+    const primaryKw = (p.primary_keywords as string[]) || [];
+    const secondaryKw = (p.secondary_keywords as string[]) || [];
+    const allProfileKw = [...primaryKw, ...secondaryKw];
+    let keywordLibraryMap: Map<string, string[]> = new Map();
+    if (allProfileKw.length > 0) {
+        const { data: kwRows } = await sb
+            .from("gov_keywords")
+            .select("keyword, aliases")
+            .in("keyword", allProfileKw);
+        keywordLibraryMap = new Map(
+            (kwRows || []).map(r => [r.keyword as string, (r.aliases as string[]) || []]),
+        );
+    }
+    const toEntries = (list: string[]): KeywordEntry[] =>
+        list.map(kw => ({ keyword: kw, aliases: keywordLibraryMap.get(kw) || [] }));
 
     const profileForScoring: ProfileForScoring = {
         naics_codes: (p.naics_codes as string[]) || [],
@@ -50,16 +68,25 @@ export async function POST() {
         federal_awards_count: (p.federal_awards_count as number) || 0,
         target_psc_codes: (p.target_psc_codes as string[]) || [],
         preferred_agencies: (p.preferred_agencies as string[]) || [],
+        primary_keywords: toEntries(primaryKw),
+        secondary_keywords: toEntries(secondaryKw),
     };
 
-    // Load active opportunities (paginate)
+    // Load active opportunities (paginate). We fetch title/description/
+    // structured_requirements only when the profile has keywords, to keep
+    // the payload small for the common keyword-less path.
+    const hasKeywords = primaryKw.length > 0 || secondaryKw.length > 0;
+    const oppSelect = hasKeywords
+        ? "id, naics_code, psc_code, notice_type, agency, set_aside_code, place_of_performance_state, award_amount, response_deadline, title, description, structured_requirements"
+        : "id, naics_code, psc_code, notice_type, agency, set_aside_code, place_of_performance_state, award_amount, response_deadline";
+
     const allOpps: OpportunityForScoring[] = [];
     let offset = 0;
     const batchSize = 1000;
     while (true) {
         const { data: batch } = await sb
             .from("opportunities")
-            .select("id, naics_code, psc_code, notice_type, agency, set_aside_code, place_of_performance_state, award_amount, response_deadline")
+            .select(oppSelect)
             .eq("is_archived", false)
             .range(offset, offset + batchSize - 1);
         if (!batch || batch.length === 0) break;
@@ -69,7 +96,7 @@ export async function POST() {
     }
 
     // Score all opportunities
-    const scored: { user_profile_id: string; opportunity_id: string; score: number; classification: string; score_breakdown: Record<string, number> }[] = [];
+    const scored: { user_profile_id: string; opportunity_id: string; score: number; classification: string; score_breakdown: Record<string, unknown> }[] = [];
 
     for (const opp of allOpps) {
         const result = scoreOpportunity(profileForScoring, opp);
