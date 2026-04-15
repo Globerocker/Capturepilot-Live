@@ -493,8 +493,8 @@ export default function SettingsPage() {
     /* ================================================================ */
 
     return (
-        <div className="max-w-3xl mx-auto space-y-6 animate-in fade-in duration-500 pb-16 px-1">
-            {/* ---- Header ---- */}
+        <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in duration-500 pb-16 px-1">
+            {/* ---- Header (full width) ---- */}
             <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
                 <div>
                     <h2 className="text-2xl sm:text-3xl font-bold tracking-tighter text-black flex items-center">
@@ -520,9 +520,16 @@ export default function SettingsPage() {
             </header>
 
             {/* ================================================================ */}
-            {/*  SECTION 1: Account Overview                                     */}
+            {/*  Two-column grid on lg+ (single column on smaller screens)       */}
+            {/*  Uses grid-auto-flow:dense + col-start utilities per section so  */}
+            {/*  sections don't need to be re-ordered in source.                 */}
             {/* ================================================================ */}
-            <section id="account" className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start lg:[grid-auto-flow:row_dense]">
+
+            {/* ================================================================ */}
+            {/*  SECTION 1: Account Overview  (LEFT column on lg+)               */}
+            {/* ================================================================ */}
+            <section id="account" className="lg:col-start-1 bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
                 <p className="text-stone-400 text-xs uppercase tracking-widest font-bold mb-4">Account Overview</p>
                 <div className="space-y-0">
                     {/* Email */}
@@ -582,7 +589,7 @@ export default function SettingsPage() {
             {/* ================================================================ */}
             {/*  SECTION 2: Subscription Management                              */}
             {/* ================================================================ */}
-            <section id="subscription" className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
+            <section id="subscription" className="lg:col-start-2 bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
                 <p className="text-stone-400 text-xs uppercase tracking-widest font-bold mb-4">Subscription</p>
 
                 {subLoading ? (
@@ -767,7 +774,7 @@ export default function SettingsPage() {
             {/* ================================================================ */}
             {/*  SECTION 3: Invoices & Billing History                           */}
             {/* ================================================================ */}
-            <section id="invoices" className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
+            <section id="invoices" className="lg:col-start-2 bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
                 <button
                     type="button"
                     onClick={() => setInvoicesExpanded(!invoicesExpanded)}
@@ -870,7 +877,7 @@ export default function SettingsPage() {
             {/* ================================================================ */}
             {/*  SECTION 4: Profile Settings                                     */}
             {/* ================================================================ */}
-            <section id="profile" className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
+            <section id="profile" className="lg:col-start-1 bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
                 <p className="text-stone-400 text-xs uppercase tracking-widest font-bold mb-4">Profile Settings</p>
                 <div className="space-y-4">
                     <div>
@@ -1002,7 +1009,7 @@ export default function SettingsPage() {
                 const missing = checks.filter(([ok]) => !ok).map(([, label]) => label);
 
                 return (
-                    <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
+                    <section className="lg:col-start-2 bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
                         <div className="flex items-center justify-between mb-3">
                             <h3 className="font-bold text-base sm:text-lg flex items-center">
                                 <UserCheck className="w-5 h-5 mr-2 text-stone-400" /> Profile Strength
@@ -1033,7 +1040,7 @@ export default function SettingsPage() {
 
             {/* ---- Advanced Settings Toggle ---- */}
             <button type="button" onClick={() => setShowAdvanced(!showAdvanced)}
-                className="w-full bg-stone-50 border border-stone-200 rounded-2xl p-4 text-left hover:bg-stone-100 transition-colors flex items-center justify-between">
+                className="lg:col-start-1 w-full bg-stone-50 border border-stone-200 rounded-2xl p-4 text-left hover:bg-stone-100 transition-colors flex items-center justify-between">
                 <span className="text-sm font-bold text-stone-600">
                     {showAdvanced ? "Hide Advanced Settings" : "Show Advanced Settings"}
                 </span>
@@ -1044,7 +1051,7 @@ export default function SettingsPage() {
 
             {showAdvanced && (<>
             {/* Capacity & Experience */}
-            <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
+            <section className="lg:col-start-1 bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
                 <h3 className="font-bold text-base sm:text-lg flex items-center mb-4">
                     <Briefcase className="w-5 h-5 mr-2 text-stone-400" /> Capacity & Experience
                 </h3>
@@ -1134,7 +1141,7 @@ export default function SettingsPage() {
             </section>
 
             {/* Industry */}
-            <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
+            <section className="lg:col-start-1 bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
                 <h3 className="font-bold text-base sm:text-lg flex items-center mb-4">
                     <Shield className="w-5 h-5 mr-2 text-stone-400" /> Industry & Certifications
                 </h3>
@@ -1201,7 +1208,7 @@ export default function SettingsPage() {
             </section>
 
             {/* PSC Codes & Clearances */}
-            <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
+            <section className="lg:col-start-1 bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
                 <h3 className="font-bold text-base sm:text-lg flex items-center mb-4">
                     <Shield className="w-5 h-5 mr-2 text-stone-400" /> Service Codes & Clearances
                 </h3>
@@ -1266,7 +1273,7 @@ export default function SettingsPage() {
             </section>
 
             {/* Preferred Agencies & Contract Preferences */}
-            <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
+            <section className="lg:col-start-1 bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
                 <h3 className="font-bold text-base sm:text-lg flex items-center mb-4">
                     <Building className="w-5 h-5 mr-2 text-stone-400" /> Targeting Preferences
                 </h3>
@@ -1340,7 +1347,7 @@ export default function SettingsPage() {
             </>)}
 
             {/* Target States */}
-            <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
+            <section className="lg:col-start-1 bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
                 <h3 className="font-bold text-base sm:text-lg flex items-center mb-4">
                     <MapPin className="w-5 h-5 mr-2 text-stone-400" /> Target States
                 </h3>
@@ -1381,7 +1388,7 @@ export default function SettingsPage() {
             </section>
 
             {/* Notifications */}
-            <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
+            <section className="lg:col-start-2 bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
                 <h3 className="font-bold text-base sm:text-lg flex items-center mb-4">
                     <Bell className="w-5 h-5 mr-2 text-stone-400" /> Notifications
                 </h3>
@@ -1424,7 +1431,7 @@ export default function SettingsPage() {
             {/* ================================================================ */}
             {/*  SECTION 5: Password                                             */}
             {/* ================================================================ */}
-            <section id="password" className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
+            <section id="password" className="lg:col-start-2 bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
                 <p className="text-stone-400 text-xs uppercase tracking-widest font-bold mb-4">Password</p>
                 <div className="space-y-4">
                     <p className="text-xs text-stone-500">
@@ -1483,7 +1490,7 @@ export default function SettingsPage() {
             </section>
 
             {/* Google Login */}
-            <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
+            <section className="lg:col-start-2 bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
                 <h3 className="font-bold text-base sm:text-lg flex items-center mb-2">
                     Quick Login
                 </h3>
@@ -1504,7 +1511,7 @@ export default function SettingsPage() {
             {/* ================================================================ */}
             {/*  SECTION 6: Danger Zone                                          */}
             {/* ================================================================ */}
-            <section id="danger-zone" className="bg-white rounded-2xl border border-red-200 shadow-sm p-5 sm:p-7">
+            <section id="danger-zone" className="lg:col-start-2 bg-white rounded-2xl border border-red-200 shadow-sm p-5 sm:p-7">
                 <p className="text-red-500 text-xs uppercase tracking-widest font-bold mb-4">Danger Zone</p>
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                     <div>
@@ -1524,7 +1531,10 @@ export default function SettingsPage() {
                 </div>
             </section>
 
-            {/* Service CTA */}
+            </div>
+            {/* ---- /Two-column grid ---- */}
+
+            {/* Service CTA (full width, outside grid) */}
             <ServiceCTA
                 title="Need help with your GovCon profile?"
                 description="Our team can optimize your SAM.gov registration, identify the best NAICS codes for your business, and match you with the right certifications."
