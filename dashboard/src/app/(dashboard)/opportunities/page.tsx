@@ -496,7 +496,7 @@ export default function OpportunitiesPage() {
                             {viewMode === "list" && (
                                 <div className="bg-white rounded-[32px] border border-stone-200 shadow-sm overflow-hidden mb-6 flex-shrink-0">
                                     <table className="w-full text-left border-collapse">
-                                        <thead>
+                                        <thead className="sticky top-0 z-10">
                                             <tr className="bg-stone-50 border-b border-stone-200 text-stone-500 text-[10px] uppercase tracking-wider">
                                                 <th className="py-4 px-5 font-bold cursor-pointer hover:text-black select-none" onClick={() => handleColumnSort("posted_date")}>Posted <SortIndicator col="posted_date" /></th>
                                                 <th className="py-4 px-5 font-bold">Title / Agency</th>
@@ -518,7 +518,7 @@ export default function OpportunitiesPage() {
                                                     <tr key={op.id} onClick={() => setSelectedOpportunity(op)} onDoubleClick={() => router.push(`/opportunities/${op.id}`)} className={clsx("transition-all duration-150 group cursor-pointer", selectedOpportunity?.id === op.id ? "bg-stone-100" : "hover:bg-stone-50 hover:shadow-sm")}>
                                                         <td className="py-3.5 px-5 font-mono text-xs text-stone-500">{op.posted_date ? new Date(op.posted_date).toLocaleDateString() : "---"}</td>
                                                         <td className="py-3.5 px-5">
-                                                            <p className="font-bold text-black line-clamp-1 max-w-[200px] xl:max-w-md group-hover:text-stone-600">{op.title}</p>
+                                                            <p className="font-bold text-black line-clamp-1 max-w-[200px] xl:max-w-md 2xl:max-w-2xl group-hover:text-stone-600">{op.title}</p>
                                                             <p className="text-stone-500 text-xs line-clamp-1 mt-0.5">{agencyName}</p>
                                                         </td>
                                                         <td className="py-3.5 px-5">
@@ -567,7 +567,7 @@ export default function OpportunitiesPage() {
 
                             {/* Grid View */}
                             {viewMode === "grid" && (
-                                <div className={clsx("grid gap-5 transition-all mb-6", selectedOpportunity ? "grid-cols-1 xl:grid-cols-2" : "grid-cols-1 md:grid-cols-2 xl:grid-cols-3")}>
+                                <div className={clsx("grid gap-5 transition-all mb-6", selectedOpportunity ? "grid-cols-1 xl:grid-cols-2" : "grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4")}>
                                     {opportunities.map((op) => {
                                         const typeName = op.notice_type || op.opportunity_types?.name || "UNKNOWN";
                                         const agencyName = op.agency || op.department || op.agencies?.sub_tier || op.agencies?.department || "Federal Agency";
