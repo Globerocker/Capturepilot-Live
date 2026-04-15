@@ -75,6 +75,49 @@ function normalizeServices(raw: unknown): ServiceItem[] {
     return out;
 }
 
+// Coerces arbitrary JSON (strings, objects, mixed) into a flat string[].
+// crawl_data shapes vary per crawler — objects here crash React with
+// "Objects are not valid as a React child" if rendered directly.
+function coerceStringArray(raw: unknown): string[] {
+    if (!raw) return [];
+    if (!Array.isArray(raw)) return [];
+    const out: string[] = [];
+    for (const item of raw) {
+        if (typeof item === "string") {
+            const t = item.trim();
+            if (t) out.push(t);
+        } else if (item && typeof item === "object") {
+            const obj = item as Record<string, unknown>;
+            const v = obj.name || obj.title || obj.label || obj.value || obj.text || obj.client || obj.location || obj.city;
+            if (v) out.push(String(v).trim());
+        }
+    }
+    return out;
+}
+
+interface LeaderItem { name: string; title?: string; bio?: string }
+function normalizeLeadership(raw: unknown): LeaderItem[] {
+    if (!raw || !Array.isArray(raw)) return [];
+    const out: LeaderItem[] = [];
+    for (const item of raw) {
+        if (typeof item === "string" && item.trim()) {
+            out.push({ name: item.trim() });
+            continue;
+        }
+        if (item && typeof item === "object") {
+            const obj = item as Record<string, unknown>;
+            const name = String(obj.name || obj.fullName || obj.full_name || "").trim();
+            if (!name) continue;
+            out.push({
+                name,
+                title: obj.title || obj.role || obj.position ? String(obj.title || obj.role || obj.position) : undefined,
+                bio: obj.bio || obj.summary ? String(obj.bio || obj.summary) : undefined,
+            });
+        }
+    }
+    return out;
+}
+
 const presenceColors: Record<string, string> = {
     primary: "bg-red-50 text-red-700 border-red-200",
     heavy: "bg-amber-50 text-amber-700 border-amber-200",
@@ -119,11 +162,12 @@ export default function CompetitorDetailPage({ params }: { params: Promise<{ id:
             setCompetitor(comp);
 
             // Load opportunities with matching NAICS codes (competitor's likely bid targets)
-            if (comp.naics_codes && comp.naics_codes.length > 0) {
+            const compNaics = Array.isArray(comp.naics_codes) ? comp.naics_codes.filter(c => typeof c === "string") : [];
+            if (compNaics.length > 0) {
                 const { data: opps } = await supabase
                     .from("opportunities")
                     .select("id, title, agency, naics_code")
-                    .in("naics_code", comp.naics_codes)
+                    .in("naics_code", compNaics)
                     .eq("is_archived", false)
                     .in("status", ["ACTIVE", "EXPIRING_SOON", "MARKET_RESEARCH"])
                     .limit(8);
@@ -146,11 +190,14 @@ export default function CompetitorDetailPage({ params }: { params: Promise<{ id:
 
     const crawl = competitor.crawl_data || {};
     const services = normalizeServices(crawl.services);
-    const leadership = ((crawl.leadership as Array<{ name: string; title: string; bio?: string }>) || []);
-    const social = (crawl.social_links as Record<string, string>) || {};
-    const certifications = ((crawl.certifications as string[]) || []);
-    const locations = ((crawl.locations as string[]) || []);
-    const pastClients = ((crawl.past_clients as string[]) || []);
+    const leadership = normalizeLeadership(crawl.leadership);
+    const social = (crawl.social_links && typeof crawl.social_links === "object" && !Array.isArray(crawl.social_links))
+        ? (crawl.social_links as Record<string, string>)
+        : {};
+    const certifications = coerceStringArray(crawl.certifications);
+    const locations = coerceStringArray(crawl.locations);
+    const pastClients = coerceStringArray(crawl.past_clients);
+    const naicsCodes = Array.isArray(competitor.naics_codes) ? competitor.naics_codes.filter(c => typeof c === "string") : [];
 
     return (
         <div className="max-w-7xl mx-auto pb-12 space-y-6">
@@ -289,15 +336,15 @@ export default function CompetitorDetailPage({ params }: { params: Promise<{ id:
             )}
 
             {/* NAICS codes with labels */}
-            {competitor.naics_codes && competitor.naics_codes.length > 0 && (
+            {naicsCodes.length > 0 && (
                 <div className="bg-white border border-stone-200 rounded-2xl p-6">
                     <div className="flex items-center gap-2 mb-4">
                         <Target className="w-4 h-4 text-stone-400" />
                         <h2 className="font-bold text-sm uppercase tracking-widest text-stone-700">NAICS Codes</h2>
-                        <span className="ml-auto text-xs text-stone-400">{competitor.naics_codes.length}</span>
+                        <span className="ml-auto text-xs text-stone-400">{naicsCodes.length}</span>
                     </div>
                     <div className="space-y-1.5">
-                        {competitor.naics_codes.map((code, i) => (
+                        {naicsCodes.map((code, i) => (
                             <div key={i} className="flex items-center gap-3 py-1.5 border-b border-stone-50 last:border-0">
                                 <span className="font-mono text-xs bg-stone-100 text-stone-700 px-2 py-0.5 rounded font-bold flex-shrink-0">{code}</span>
                                 <span className="text-xs text-stone-600">{lookupNaicsLabel(code) || "—"}</span>
