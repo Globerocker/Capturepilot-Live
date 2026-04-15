@@ -88,6 +88,12 @@ export interface ContactProperties {
   beta_feedback_given?: boolean;
   matched_opportunities_count?: number;
   veteran_owned?: boolean;
+  // Firmographics collected in onboarding Step 3 (crawler can't know these)
+  capturepilot_company_size?: 'micro' | 'small' | 'mid' | 'large';
+  numberofemployees?: number; // HubSpot standard property
+  annualrevenue_range?: string;
+  capturepilot_years_in_business?: number;
+  capturepilot_has_fed_experience?: boolean;
 }
 
 /**

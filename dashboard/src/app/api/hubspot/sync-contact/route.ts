@@ -25,6 +25,14 @@ export async function POST(req: NextRequest) {
             source,
             user_id,
             account_type,
+            company_size,
+            employee_count,
+            annual_revenue_range,
+            years_in_business,
+            has_federal_experience,
+            naics_codes,
+            business_state,
+            uei,
         } = body as {
             email?: string;
             contact_name?: string;
@@ -34,6 +42,14 @@ export async function POST(req: NextRequest) {
             source?: string;
             user_id?: string;
             account_type?: "self_service" | "consulting" | "admin";
+            company_size?: "micro" | "small" | "mid" | "large";
+            employee_count?: number;
+            annual_revenue_range?: string;
+            years_in_business?: number;
+            has_federal_experience?: boolean;
+            naics_codes?: string[] | string;
+            business_state?: string;
+            uei?: string;
         };
 
         if (!email) {
@@ -58,6 +74,22 @@ export async function POST(req: NextRequest) {
                 capturepilot_user_id: user_id,
                 account_type: account_type,
                 lead_source_cp: source === "consulting_client_created" ? "manual" : "signup",
+                capturepilot_company_size: company_size,
+                numberofemployees: typeof employee_count === "number" && !Number.isNaN(employee_count)
+                    ? employee_count
+                    : undefined,
+                annualrevenue_range: annual_revenue_range,
+                capturepilot_years_in_business:
+                    typeof years_in_business === "number" && !Number.isNaN(years_in_business)
+                        ? years_in_business
+                        : undefined,
+                capturepilot_has_fed_experience:
+                    typeof has_federal_experience === "boolean" ? has_federal_experience : undefined,
+                naics_codes: Array.isArray(naics_codes)
+                    ? naics_codes.join(", ")
+                    : (typeof naics_codes === "string" ? naics_codes : undefined),
+                business_state,
+                uei,
             },
         });
 
