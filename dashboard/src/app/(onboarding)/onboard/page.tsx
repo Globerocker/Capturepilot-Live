@@ -3,17 +3,14 @@
 import { useState, useEffect, Suspense } from "react";
 import { createSupabaseClient } from "@/lib/supabase/client";
 import {
-    Building, MapPin, Target, ShieldCheck, Briefcase, Truck,
-    ArrowRight, ArrowLeft, CheckCircle2, Loader2, Search, X, ExternalLink
+    Building, MapPin, Target, ShieldCheck, Briefcase,
+    ArrowRight, ArrowLeft, CheckCircle2, Loader2, Search, X, Sparkles, Globe, Phone, User,
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import clsx from "clsx";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { NAICS_CODES, searchNaics } from "@/lib/naics-codes";
-import { PSC_CODES } from "@/lib/psc-codes";
-import { FEDERAL_AGENCIES } from "@/lib/federal-agencies";
-import AddressAutocomplete from "@/components/AddressAutocomplete";
 
 const supabase = createSupabaseClient();
 
@@ -33,67 +30,35 @@ const STATE_OPTIONS = [
     "SD","TN","TX","UT","VT","VA","WA","WV","WI","WY","DC","PR","GU","VI"
 ];
 
-const REVENUE_RANGES = [
-    { value: "", label: "Select range..." },
-    { value: "100000", label: "Under $100K" },
-    { value: "500000", label: "$100K - $500K" },
-    { value: "1000000", label: "$500K - $1M" },
-    { value: "5000000", label: "$1M - $5M" },
-    { value: "10000000", label: "$5M - $10M" },
-    { value: "25000000", label: "$10M - $25M" },
-    { value: "50000000", label: "$25M+" },
+const COMPANY_SIZE_OPTIONS = [
+    { value: "micro", label: "Micro", sublabel: "1-9 employees" },
+    { value: "small", label: "Small", sublabel: "10-49 employees" },
+    { value: "mid", label: "Mid", sublabel: "50-249 employees" },
+    { value: "large", label: "Large", sublabel: "250+ employees" },
+] as const;
+
+const REVENUE_RANGE_OPTIONS = [
+    { value: "<1M", label: "Under $1M" },
+    { value: "1-5M", label: "$1M - $5M" },
+    { value: "5-25M", label: "$5M - $25M" },
+    { value: "25-100M", label: "$25M - $100M" },
+    { value: "100M+", label: "$100M+" },
 ];
 
-const EMPLOYEE_RANGES = [
-    { value: "", label: "Select range..." },
-    { value: "5", label: "1-5" },
-    { value: "15", label: "6-20" },
-    { value: "35", label: "21-50" },
-    { value: "75", label: "51-100" },
-    { value: "150", label: "101-250" },
-    { value: "500", label: "250+" },
-];
+// Keeps the numeric revenue column populated (midpoint) so existing scoring / filters don't break.
+const REVENUE_RANGE_TO_NUMERIC: Record<string, number> = {
+    "<1M":      500_000,
+    "1-5M":   3_000_000,
+    "5-25M": 15_000_000,
+    "25-100M": 60_000_000,
+    "100M+": 150_000_000,
+};
 
-const CONTRACT_TARGETS = [
-    { value: "micro", label: "Micro-Purchase (<$10K)" },
-    { value: "sap", label: "Simplified ($10K-$250K)" },
-    { value: "sole_source", label: "8(a) Sole Source (up to $4.5M)" },
-    { value: "full_open", label: "Full & Open" },
-    { value: "idiq", label: "IDIQ / GWAC" },
-];
-
-const CONTRACT_VALUE_RANGES = [
-    { value: "", label: "No preference" },
-    { value: "10000", label: "Under $10K" },
-    { value: "25000", label: "$10K - $25K" },
-    { value: "100000", label: "$25K - $100K" },
-    { value: "250000", label: "$100K - $250K" },
-    { value: "1000000", label: "$250K - $1M" },
-    { value: "5000000", label: "$1M - $5M" },
-    { value: "10000000", label: "$5M+" },
-];
-
-const CLEARANCE_OPTIONS = [
-    { value: "Confidential", label: "Confidential" },
-    { value: "Secret", label: "Secret" },
-    { value: "Top Secret", label: "Top Secret" },
-    { value: "TS/SCI", label: "TS/SCI" },
-];
-
-// Validation helpers
 function validateUEI(uei: string): { valid: boolean; error?: string } {
     if (!uei) return { valid: true };
     const cleaned = uei.trim().toUpperCase();
     if (cleaned.length !== 12) return { valid: false, error: "UEI must be exactly 12 characters" };
     if (!/^[A-Z0-9]{12}$/.test(cleaned)) return { valid: false, error: "UEI can only contain letters and numbers" };
-    return { valid: true };
-}
-
-function validateCAGE(cage: string): { valid: boolean; error?: string } {
-    if (!cage) return { valid: true };
-    const cleaned = cage.trim().toUpperCase();
-    if (cleaned.length !== 5) return { valid: false, error: "CAGE code must be exactly 5 characters" };
-    if (!/^[A-Z0-9]{5}$/.test(cleaned)) return { valid: false, error: "CAGE code can only contain letters and numbers" };
     return { valid: true };
 }
 
@@ -109,69 +74,101 @@ interface SamEntity {
     phone: string;
 }
 
+interface BrandKit {
+    logo_url?: string;
+    favicon_url?: string;
+    colors?: { primary?: string; secondary?: string; accent?: string };
+    all_colors?: string[];
+    company_name?: string;
+    // Optionally filled by /api/brand when OpenAI is available:
+    company_description?: string;
+    services?: string[];
+    differentiators?: string[];
+}
+
+type TaskStatus = "pending" | "running" | "done" | "error" | "skipped";
+interface PrefillTask {
+    key: "brand" | "sam";
+    label: string;
+    status: TaskStatus;
+    detail?: string;
+}
+
+// Field provenance badges
+type FieldSource = "sam" | "website" | "manual" | null;
+
 function OnboardPageContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const analysisId = searchParams.get("analysis_id");
     const [analysisLoaded, setAnalysisLoaded] = useState(false);
-    const [step, setStep] = useState(0);
+
+    // New 3-step flow (1 = identity+website, 2 = prefill review, 3 = firmographics)
+    const [step, setStep] = useState<1 | 2 | 3>(1);
+
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
     const [matchCount, setMatchCount] = useState(0);
     const [scoringMatches, setScoringMatches] = useState(false);
     const [oppCount, setOppCount] = useState(0);
 
-    // SAM.gov lookup state
-    const [samRegistered, setSamRegistered] = useState<boolean | null>(null);
-    const [ueiInput, setUeiInput] = useState("");
-    const [nameInput, setNameInput] = useState("");
-    const [samLoading, setSamLoading] = useState(false);
-    const [samError, setSamError] = useState("");
-    const [samResults, setSamResults] = useState<SamEntity[]>([]);
-    const [samPopulated, setSamPopulated] = useState(false);
-    const [searchMode, setSearchMode] = useState<"uei" | "name">("uei");
+    // Prefill pipeline state
+    const [prefillRunning, setPrefillRunning] = useState(false);
+    const [prefillTasks, setPrefillTasks] = useState<PrefillTask[]>([
+        { key: "brand", label: "Reading your website", status: "pending" },
+        { key: "sam",   label: "Looking up SAM.gov registration", status: "pending" },
+    ]);
+    const [brandKit, setBrandKit] = useState<BrandKit | null>(null);
 
-    // NAICS/PSC search
     const [naicsSearch, setNaicsSearch] = useState("");
-    const [pscSearch, setPscSearch] = useState("");
 
-    // Form state
+    // Per-field provenance so we can show "auto-filled from website / SAM.gov" badges
+    const [fieldSources, setFieldSources] = useState<Record<string, FieldSource>>({});
+
+    // Form state — only the fields this flow cares about. Other downstream fields
+    // stay at the schema defaults and can be edited from Settings later.
     const [form, setForm] = useState({
-        company_name: "",
-        dba_name: "",
-        uei: "",
-        cage_code: "",
-        address_line_1: "",
-        city: "",
-        state: "",
-        zip_code: "",
-        website: "",
-        phone: "",
+        // Step 1
         contact_name: "",
+        job_title: "",
         contact_phone: "",
+        company_name: "",
+        company_website: "",
+        uei: "",
+
+        // Step 2 (prefilled from crawl, editable)
         naics_codes: [] as string[],
-        sba_certifications: [] as string[],
-        employee_count: "",
-        revenue: "",
-        years_in_business: "",
-        service_radius_miles: "50",
-        has_bonding: false,
-        has_fleet: false,
-        has_municipal_exp: false,
-        federal_awards_count: "",
-        target_contract_types: [] as string[],
         target_states: [] as string[],
-        target_psc_codes: [] as string[],
-        preferred_agencies: [] as string[],
-        contract_value_min: "",
-        contract_value_max: "",
-        security_clearances: [] as string[],
-        prime_or_sub: "both",
+        sba_certifications: [] as string[],
+        company_description: "",
+        services: [] as string[],
+        differentiators: [] as string[],
+
+        // Step 3 (human-only)
+        company_size: "" as "" | "micro" | "small" | "mid" | "large",
+        employee_count: "",
+        annual_revenue_range: "",
+        years_in_business: "",
+        has_federal_experience: null as null | boolean,
+        federal_experience_notes: "",
     });
 
-    const updateForm = (key: string, value: unknown) => setForm(prev => ({ ...prev, [key]: value }));
+    const updateForm = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) =>
+        setForm(prev => ({ ...prev, [key]: value }));
 
-    // Pre-fill from lead magnet analysis (if analysis_id in URL)
+    const markSource = (field: string, source: FieldSource) =>
+        setFieldSources(prev => ({ ...prev, [field]: source }));
+
+    const toggleArray = (key: "naics_codes" | "sba_certifications" | "target_states" | "services" | "differentiators", value: string) => {
+        setForm(prev => {
+            const arr = prev[key] as string[];
+            const next = arr.includes(value) ? arr.filter(v => v !== value) : [...arr, value];
+            return { ...prev, [key]: next };
+        });
+        markSource(key, "manual");
+    };
+
+    // Optional: pre-fill from an inbound lead magnet analysis id
     useEffect(() => {
         if (!analysisId || analysisLoaded) return;
         fetch(`/api/analyze-company/status/${analysisId}`)
@@ -182,106 +179,144 @@ function OnboardPageContent() {
                 setForm(prev => ({
                     ...prev,
                     company_name: (p.company_name as string) || prev.company_name,
-                    dba_name: (p.dba_name as string) || prev.dba_name,
+                    company_website: (p.website as string) || prev.company_website,
                     uei: (p.uei as string) || prev.uei,
-                    cage_code: (p.cage_code as string) || prev.cage_code,
-                    address_line_1: (p.address_line_1 as string) || prev.address_line_1,
-                    city: (p.city as string) || prev.city,
-                    state: (p.state as string) || prev.state,
-                    zip_code: (p.zip_code as string) || prev.zip_code,
-                    website: (p.website as string) || prev.website,
-                    phone: (p.phone as string) || prev.phone,
                     naics_codes: (p.naics_codes as string[])?.length ? (p.naics_codes as string[]) : prev.naics_codes,
                     sba_certifications: (p.sba_certifications as string[])?.length ? (p.sba_certifications as string[]) : prev.sba_certifications,
-                    employee_count: p.employee_count ? String(p.employee_count) : prev.employee_count,
-                    years_in_business: p.years_in_business ? String(p.years_in_business) : prev.years_in_business,
-                    has_bonding: typeof p.has_bonding === "boolean" ? p.has_bonding : prev.has_bonding,
                     target_states: (p.target_states as string[])?.length ? (p.target_states as string[]) : prev.target_states,
                 }));
-                // Skip SAM step if data was enriched
-                if (data.sam_data && Object.keys(data.sam_data).length > 0) {
-                    setSamPopulated(true);
-                    setStep(1);
-                }
                 setAnalysisLoaded(true);
             })
-            .catch(() => { /* ignore - user can fill manually */ });
+            .catch(() => { /* ignore */ });
     }, [analysisId, analysisLoaded]);
 
-    const toggleArray = (key: "naics_codes" | "sba_certifications" | "target_contract_types" | "target_states" | "target_psc_codes" | "preferred_agencies" | "security_clearances", value: string) => {
-        setForm(prev => {
-            const arr = prev[key] as string[];
-            return { ...prev, [key]: arr.includes(value) ? arr.filter(v => v !== value) : [...arr, value] };
-        });
-    };
+    // ─── Prefill pipeline ─────────────────────────────────────────────────────
+    const updateTask = (key: PrefillTask["key"], patch: Partial<PrefillTask>) =>
+        setPrefillTasks(prev => prev.map(t => t.key === key ? { ...t, ...patch } : t));
 
-    // SAM.gov entity lookup
-    const lookupSam = async (type: "uei" | "name") => {
-        const query = type === "uei" ? ueiInput.trim() : nameInput.trim();
-        if (!query) return;
-
-        if (type === "uei") {
-            const validation = validateUEI(query);
-            if (!validation.valid) { setSamError(validation.error || "Invalid UEI"); return; }
-        }
-
-        setSamLoading(true);
-        setSamError("");
-        setSamResults([]);
-
+    const runBrandPrefill = async (): Promise<void> => {
+        if (!form.company_website.trim()) { updateTask("brand", { status: "skipped", detail: "No website" }); return; }
+        updateTask("brand", { status: "running" });
         try {
-            const param = type === "uei" ? `uei=${encodeURIComponent(query.toUpperCase())}` : `name=${encodeURIComponent(query)}`;
-            const res = await fetch(`/api/sam/entity?${param}`);
-            const data = await res.json();
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 30_000);
+            const res = await fetch("/api/brand", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ website: form.company_website.trim() }),
+                signal: controller.signal,
+            });
+            clearTimeout(timer);
+            if (!res.ok) throw new Error(`brand ${res.status}`);
+            const { brand } = await res.json() as { brand: BrandKit };
+            setBrandKit(brand || null);
 
-            if (!res.ok) {
-                setSamError(data.error || "Failed to lookup entity");
-                setSamLoading(false);
-                return;
-            }
+            setForm(prev => ({
+                ...prev,
+                company_name: prev.company_name || brand?.company_name || prev.company_name,
+                company_description: prev.company_description || brand?.company_description || "",
+                services: prev.services.length ? prev.services : (brand?.services || []),
+                differentiators: prev.differentiators.length ? prev.differentiators : (brand?.differentiators || []),
+            }));
+            if (brand?.company_description) markSource("company_description", "website");
+            if (brand?.services?.length) markSource("services", "website");
+            if (brand?.differentiators?.length) markSource("differentiators", "website");
 
-            if (!data.entities || data.entities.length === 0) {
-                setSamError(type === "uei" ? "No entity found for this UEI. Check the number and try again." : "No entities found. Try a different name.");
-                setSamLoading(false);
-                return;
-            }
-
-            if (type === "uei" && data.entities.length === 1) {
-                // Direct match - auto-populate
-                populateFromSam(data.entities[0]);
-            } else {
-                // Multiple results - show list to pick from
-                setSamResults(data.entities);
-            }
-        } catch {
-            setSamError("Network error. Please try again.");
+            const detail = [
+                brand?.logo_url ? "logo" : null,
+                brand?.all_colors?.length ? `${brand.all_colors.length} colors` : null,
+                brand?.company_description ? "description" : null,
+                brand?.services?.length ? `${brand.services.length} services` : null,
+            ].filter(Boolean).join(" · ");
+            updateTask("brand", { status: "done", detail: detail || "no rich data" });
+        } catch (e) {
+            updateTask("brand", { status: "error", detail: (e as Error).name === "AbortError" ? "Timed out" : "Crawl failed" });
         }
-        setSamLoading(false);
     };
 
-    const populateFromSam = (entity: SamEntity) => {
-        setForm(prev => ({
-            ...prev,
-            company_name: entity.company_name || prev.company_name,
-            dba_name: entity.dba_name || prev.dba_name,
-            uei: entity.uei || prev.uei,
-            cage_code: entity.cage_code || prev.cage_code,
-            address_line_1: entity.address?.line1 || prev.address_line_1,
-            city: entity.address?.city || prev.city,
-            state: entity.address?.state || prev.state,
-            zip_code: entity.address?.zip || prev.zip_code,
-            website: entity.website || prev.website,
-            phone: entity.phone || prev.phone,
-            naics_codes: entity.naics_codes?.length > 0 ? entity.naics_codes : prev.naics_codes,
-            sba_certifications: entity.sba_certifications?.length > 0 ? entity.sba_certifications : prev.sba_certifications,
-        }));
-        setSamPopulated(true);
-        setSamResults([]);
-        setStep(1);
+    const runSamPrefill = async (): Promise<void> => {
+        const uei = form.uei.trim().toUpperCase();
+        const name = form.company_name.trim();
+        if (!uei && !name) { updateTask("sam", { status: "skipped", detail: "No UEI or name" }); return; }
+        if (uei) {
+            const v = validateUEI(uei);
+            if (!v.valid) { updateTask("sam", { status: "error", detail: v.error || "Invalid UEI" }); return; }
+        }
+        updateTask("sam", { status: "running" });
+        try {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 30_000);
+            const param = uei ? `uei=${encodeURIComponent(uei)}` : `name=${encodeURIComponent(name)}`;
+            const res = await fetch(`/api/sam/entity?${param}`, { signal: controller.signal });
+            clearTimeout(timer);
+            if (!res.ok) throw new Error(`sam ${res.status}`);
+            const data = await res.json() as { entities?: SamEntity[] };
+            const entities = data.entities || [];
+            // Only auto-populate when we have exactly one match (UEI is unique) OR when search was by UEI.
+            const picked = uei ? entities[0] : (entities.length === 1 ? entities[0] : null);
+            if (!picked) {
+                updateTask("sam", {
+                    status: entities.length > 1 ? "skipped" : "skipped",
+                    detail: entities.length > 1 ? `${entities.length} matches — skipped` : "Not on SAM.gov yet",
+                });
+                return;
+            }
+
+            setForm(prev => ({
+                ...prev,
+                company_name: prev.company_name || picked.company_name,
+                uei: prev.uei || picked.uei,
+                naics_codes: prev.naics_codes.length ? prev.naics_codes : (picked.naics_codes || []),
+                sba_certifications: prev.sba_certifications.length
+                    ? prev.sba_certifications
+                    : (picked.sba_certifications || []),
+                target_states: prev.target_states.length
+                    ? prev.target_states
+                    : (picked.address?.state ? [picked.address.state] : []),
+            }));
+            if (picked.naics_codes?.length) markSource("naics_codes", "sam");
+            if (picked.sba_certifications?.length) markSource("sba_certifications", "sam");
+            if (picked.address?.state) markSource("target_states", "sam");
+
+            updateTask("sam", { status: "done", detail: `${picked.company_name} · ${picked.naics_codes?.length || 0} NAICS` });
+        } catch (e) {
+            updateTask("sam", { status: "error", detail: (e as Error).name === "AbortError" ? "Timed out" : "SAM lookup failed" });
+        }
     };
 
+    const startPrefill = async () => {
+        setPrefillRunning(true);
+        // Reset tasks
+        setPrefillTasks([
+            { key: "brand", label: "Reading your website", status: "pending" },
+            { key: "sam",   label: "Looking up SAM.gov registration", status: "pending" },
+        ]);
+        setStep(2);
+        // Fire in parallel; each has its own 30s timeout.
+        await Promise.allSettled([runBrandPrefill(), runSamPrefill()]);
+        setPrefillRunning(false);
+    };
+
+    const skipPrefill = () => {
+        setPrefillTasks(prev => prev.map(t => ({ ...t, status: "skipped" as TaskStatus, detail: "Skipped" })));
+        setStep(2);
+    };
+
+    // ─── Save ─────────────────────────────────────────────────────────────────
     const handleSave = async () => {
-        if (!form.company_name) { alert("Company name is required."); return; }
+        const missing: string[] = [];
+        if (!form.contact_name.trim()) missing.push("Contact name");
+        if (!form.job_title.trim()) missing.push("Job title");
+        if (!form.contact_phone.trim()) missing.push("Contact phone");
+        if (!form.company_name.trim()) missing.push("Company name");
+        if (!form.company_website.trim()) missing.push("Website");
+        if (!form.company_size) missing.push("Company size");
+        if (!form.employee_count) missing.push("Employee count");
+        if (!form.annual_revenue_range) missing.push("Annual revenue");
+        if (!form.years_in_business) missing.push("Years in business");
+        if (form.has_federal_experience === null) missing.push("Federal experience");
+        if (missing.length) { alert(`Required: ${missing.join(", ")}`); return; }
+
         setSaving(true);
 
         const { data: { user } } = await supabase.auth.getUser();
@@ -292,47 +327,62 @@ function OnboardPageContent() {
             return;
         }
 
+        const employeeCountNum = form.employee_count ? parseInt(form.employee_count, 10) : null;
+        const yearsNum = form.years_in_business ? Math.min(parseInt(form.years_in_business, 10), 200) : null;
+
         const payload = {
             auth_user_id: user.id,
-            company_name: form.company_name,
-            dba_name: form.dba_name || null,
-            uei: form.uei || null,
-            cage_code: form.cage_code || null,
-            address_line_1: form.address_line_1 || null,
-            city: form.city || null,
-            state: form.state || null,
-            zip_code: form.zip_code || null,
-            website: form.website || null,
-            phone: form.phone || null,
-            contact_name: form.contact_name || null,
-            contact_phone: form.contact_phone || null,
             email: user.email || null,
-            naics_codes: form.naics_codes.length > 0 ? form.naics_codes : [],
-            sba_certifications: form.sba_certifications.length > 0 ? form.sba_certifications : [],
-            employee_count: form.employee_count ? parseInt(form.employee_count) : null,
-            revenue: form.revenue ? parseFloat(form.revenue) : null,
-            years_in_business: form.years_in_business ? Math.min(parseInt(form.years_in_business), 200) : null,
-            service_radius_miles: form.service_radius_miles ? parseInt(form.service_radius_miles) : 50,
-            has_bonding: form.has_bonding,
-            has_fleet: form.has_fleet,
-            has_municipal_exp: form.has_municipal_exp,
-            federal_awards_count: form.federal_awards_count ? parseInt(form.federal_awards_count) : 0,
-            target_contract_types: form.target_contract_types.length > 0 ? form.target_contract_types : [],
-            target_states: form.target_states.length > 0 ? form.target_states : [],
-            target_psc_codes: form.target_psc_codes.length > 0 ? form.target_psc_codes : [],
-            preferred_agencies: form.preferred_agencies.length > 0 ? form.preferred_agencies : [],
-            contract_value_min: form.contract_value_min ? parseFloat(form.contract_value_min) : null,
-            contract_value_max: form.contract_value_max ? parseFloat(form.contract_value_max) : null,
-            security_clearances: form.security_clearances.length > 0 ? form.security_clearances : [],
-            prime_or_sub: form.prime_or_sub || "both",
+
+            // Step 1
+            company_name: form.company_name,
+            contact_name: form.contact_name,
+            job_title: form.job_title,
+            contact_phone: form.contact_phone,
+            website: form.company_website || null,
+            uei: form.uei ? form.uei.trim().toUpperCase() : null,
+
+            // Step 2
+            naics_codes: form.naics_codes,
+            target_states: form.target_states,
+            sba_certifications: form.sba_certifications,
+            company_description: form.company_description || null,
+
+            // Step 3
+            company_size: form.company_size || null,
+            employee_count: employeeCountNum,
+            annual_revenue_range: form.annual_revenue_range || null,
+            // Keep numeric revenue column in sync for existing scoring/filters
+            revenue: form.annual_revenue_range
+                ? REVENUE_RANGE_TO_NUMERIC[form.annual_revenue_range] || null
+                : null,
+            years_in_business: yearsNum,
+            has_federal_experience: form.has_federal_experience,
+            federal_experience_notes: form.federal_experience_notes || null,
+
             onboarding_complete: true,
             trial_ends_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
             subscription_status: "trialing",
         };
 
+        // Stash services/differentiators into notes JSON since they're not top-level columns.
+        // We read-modify-write notes so we don't clobber other keys.
+        const { data: existingNotesRow } = await supabase
+            .from("user_profiles")
+            .select("notes")
+            .eq("auth_user_id", user.id)
+            .maybeSingle();
+        const prevNotes = (existingNotesRow?.notes as Record<string, unknown> | null) || {};
+        const mergedNotes = {
+            ...prevNotes,
+            services: form.services,
+            differentiators: form.differentiators,
+            brand_kit: brandKit || (prevNotes as { brand_kit?: unknown }).brand_kit || null,
+        };
+
         const { error } = await supabase
             .from("user_profiles")
-            .upsert(payload, { onConflict: "auth_user_id" });
+            .upsert({ ...payload, notes: mergedNotes }, { onConflict: "auth_user_id" });
 
         if (error) {
             console.error("Save error:", error);
@@ -367,13 +417,39 @@ function OnboardPageContent() {
         setSaved(true);
         setSaving(false);
 
-        // Send welcome email in background
-        if (user?.email) {
+        // Fire-and-forget: welcome email
+        if (user.email) {
             fetch("/api/email/welcome", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email: user.email, company_name: form.company_name }),
             }).catch(() => {});
+        }
+
+        // Fire-and-forget: HubSpot sync with full firmographics
+        if (user.email) {
+            fetch("/api/hubspot/sync-contact", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    email: user.email,
+                    contact_name: form.contact_name,
+                    job_title: form.job_title,
+                    phone: form.contact_phone,
+                    company: form.company_name,
+                    source: "onboarding_complete",
+                    user_id: user.id,
+                    account_type: "self_service",
+                    company_size: form.company_size || undefined,
+                    employee_count: employeeCountNum ?? undefined,
+                    annual_revenue_range: form.annual_revenue_range || undefined,
+                    years_in_business: yearsNum ?? undefined,
+                    has_federal_experience: form.has_federal_experience ?? undefined,
+                    naics_codes: form.naics_codes,
+                    business_state: form.target_states[0] || undefined,
+                    uei: form.uei || undefined,
+                }),
+            }).catch((err) => console.error("[HubSpot sync failed]", err));
         }
 
         // Trigger match scoring in background
@@ -385,42 +461,71 @@ function OnboardPageContent() {
                 setMatchCount(data.written || 0);
             }
         } catch {
-            // Match scoring failed silently — user can trigger later from dashboard
+            /* user can retry from dashboard */
         }
         setScoringMatches(false);
     };
 
-    const totalSteps = 5; // 0-4
-
-    // Validation for current step
+    // ─── Validation ───────────────────────────────────────────────────────────
     const ueiValidation = validateUEI(form.uei);
-    const cageValidation = validateCAGE(form.cage_code);
-
-    // Step-level validation
     const step1Valid = !!(
+        form.contact_name.trim() &&
+        form.job_title.trim() &&
+        form.contact_phone.trim() &&
         form.company_name.trim() &&
-        form.address_line_1.trim() &&
-        form.city.trim() &&
-        form.state &&
-        form.zip_code.trim() &&
-        (form.uei ? ueiValidation.valid : true) &&
-        (form.cage_code ? cageValidation.valid : true)
+        form.company_website.trim() &&
+        (form.uei ? ueiValidation.valid : true)
     );
-    const step2Valid = form.naics_codes.length > 0;
-    const step3Valid = !!(form.employee_count && form.revenue && form.years_in_business);
-    const step4Valid = form.target_states.length > 0;
+    const step2Valid = form.naics_codes.length > 0 && form.target_states.length > 0;
+    const step3Valid = !!(
+        form.company_size &&
+        form.employee_count &&
+        form.annual_revenue_range &&
+        form.years_in_business &&
+        form.has_federal_experience !== null
+    );
 
-    const canAdvance = (s: number) => {
-        if (s === 1) return step1Valid;
-        if (s === 2) return step2Valid;
-        if (s === 3) return step3Valid;
-        if (s === 4) return step4Valid;
-        return true;
-    };
-
-    // NAICS search results
     const filteredNaics = naicsSearch ? searchNaics(naicsSearch) : NAICS_CODES.filter(n => n.popular);
 
+    // ─── UI helpers ───────────────────────────────────────────────────────────
+    const SourceBadge = ({ field }: { field: string }) => {
+        const src = fieldSources[field];
+        if (!src || src === "manual") return null;
+        const label = src === "sam" ? "from SAM.gov" : "from website";
+        return (
+            <span className="ml-2 inline-flex items-center text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded">
+                <Sparkles className="w-2.5 h-2.5 mr-1" /> {label}
+            </span>
+        );
+    };
+
+    const TaskRow = ({ task }: { task: PrefillTask }) => {
+        const icon = task.status === "running"
+            ? <Loader2 className="w-4 h-4 animate-spin text-stone-500" />
+            : task.status === "done"
+                ? <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                : task.status === "error"
+                    ? <X className="w-4 h-4 text-red-500" />
+                    : task.status === "skipped"
+                        ? <span className="w-4 h-4 inline-block rounded-full bg-stone-200" />
+                        : <span className="w-4 h-4 inline-block rounded-full border-2 border-stone-200" />;
+        return (
+            <div className="flex items-center gap-3 py-2">
+                {icon}
+                <span className={clsx(
+                    "text-sm font-medium",
+                    task.status === "done" ? "text-stone-900" : "text-stone-600",
+                )}>
+                    {task.label}
+                </span>
+                {task.detail && (
+                    <span className="text-xs text-stone-400 ml-auto">{task.detail}</span>
+                )}
+            </div>
+        );
+    };
+
+    // ─── Saved confirmation ───────────────────────────────────────────────────
     if (saved) {
         return (
             <div className="text-center animate-in fade-in duration-500 py-4 sm:py-8">
@@ -449,6 +554,7 @@ function OnboardPageContent() {
                         </p>
                     )}
                     <button
+                        type="button"
                         onClick={() => router.push("/dashboard")}
                         className="inline-flex items-center bg-black text-white font-bold px-8 py-4 rounded-full hover:bg-stone-800 transition-all shadow-lg text-sm"
                     >
@@ -467,11 +573,11 @@ function OnboardPageContent() {
                         <Image src="/logo.png" alt="CP" width={20} height={20} className="rounded" />
                     </div>
                     <h2 className="text-2xl sm:text-3xl font-bold tracking-tighter text-black">
-                        {step === 0 ? "Welcome to CapturePilot" : "Tell Us About Your Business"}
+                        Tell Us About Your Business
                     </h2>
                 </div>
                 <p className="text-stone-500 mt-1 font-medium text-sm sm:text-base">
-                    {step === 0 ? "Let\u2019s connect your business to federal opportunities." : "This takes about 3 minutes. We\u2019ll use this to find your best matches."}
+                    Three short steps. We&apos;ll use your website and SAM.gov record to do most of the typing for you.
                 </p>
                 <button
                     type="button"
@@ -486,341 +592,223 @@ function OnboardPageContent() {
                 </button>
             </header>
 
-            {/* Progress Bar (steps 1-4 only) */}
-            {step > 0 && (
-                <div className="mb-6 sm:mb-8">
-                    <div className="flex justify-between items-center mb-3">
-                        {[
-                            { n: 1, label: "Company" },
-                            { n: 2, label: "Industry" },
-                            { n: 3, label: "Capacity" },
-                            { n: 4, label: "Targets" },
-                        ].map(s => (
-                            <button type="button" key={s.n} onClick={() => { if (s.n <= step) setStep(s.n); }} className={clsx(
-                                "flex items-center text-xs uppercase tracking-widest transition-colors",
-                                step === s.n ? "text-black font-bold" : step > s.n ? "text-emerald-600 cursor-pointer" : "text-stone-400 cursor-default"
+            {/* Progress */}
+            <div className="mb-6 sm:mb-8">
+                <div className="flex justify-between items-center mb-3">
+                    {[
+                        { n: 1 as const, label: "You & Company" },
+                        { n: 2 as const, label: "Review Prefill" },
+                        { n: 3 as const, label: "Business Profile" },
+                    ].map(s => (
+                        <button type="button" key={s.n} onClick={() => { if (s.n <= step) setStep(s.n); }} className={clsx(
+                            "flex items-center text-xs uppercase tracking-widest transition-colors",
+                            step === s.n ? "text-black font-bold" : step > s.n ? "text-emerald-600 cursor-pointer" : "text-stone-400 cursor-default"
+                        )}>
+                            <span className={clsx(
+                                "w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center mr-1 sm:mr-2 text-[11px] font-bold border-2 transition-all",
+                                step === s.n ? "bg-black text-white border-black" : step > s.n ? "bg-emerald-500 text-white border-emerald-500" : "bg-stone-100 text-stone-400 border-stone-200"
                             )}>
-                                <span className={clsx(
-                                    "w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center mr-1 sm:mr-2 text-[11px] font-bold border-2 transition-all",
-                                    step === s.n ? "bg-black text-white border-black" : step > s.n ? "bg-emerald-500 text-white border-emerald-500" : "bg-stone-100 text-stone-400 border-stone-200"
-                                )}>
-                                    {step > s.n ? <CheckCircle2 className="w-4 h-4" /> : s.n}
-                                </span>
-                                <span className="hidden sm:inline">{s.label}</span>
-                            </button>
-                        ))}
-                    </div>
-                    <div className="w-full bg-stone-200 rounded-full h-1.5">
-                        <div className="bg-black rounded-full h-1.5 transition-all duration-500" style={{ width: `${(step / 4) * 100}%` }} />
-                    </div>
+                                {step > s.n ? <CheckCircle2 className="w-4 h-4" /> : s.n}
+                            </span>
+                            <span className="hidden sm:inline">{s.label}</span>
+                        </button>
+                    ))}
                 </div>
-            )}
+                <div className="w-full bg-stone-200 rounded-full h-1.5">
+                    <div className="bg-black rounded-full h-1.5 transition-all duration-500" style={{ width: `${((step - 1) / 2) * 100}%` }} />
+                </div>
+            </div>
 
             <div className="bg-white rounded-[24px] sm:rounded-[40px] border border-stone-200 shadow-sm p-5 sm:p-8 md:p-10">
 
-                {/* Step 0: SAM.gov Check */}
-                {step === 0 && (
-                    <div className="space-y-6 animate-in fade-in duration-300">
-                        <div className="text-center">
-                            <h3 className="font-bold text-lg sm:text-xl mb-2">Are you registered on SAM.gov?</h3>
-                            <p className="text-stone-500 text-sm">
-                                If you&apos;re registered, we can auto-fill your company information.
-                            </p>
-                        </div>
-
-                        {samRegistered === null && (
-                            <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                                <button type="button" onClick={() => setSamRegistered(true)}
-                                    className="flex items-center justify-center px-8 py-4 rounded-2xl border-2 border-stone-200 hover:border-black hover:bg-stone-50 transition-all text-base font-bold">
-                                    <CheckCircle2 className="w-5 h-5 mr-2 text-emerald-500" /> Yes, I&apos;m registered
-                                </button>
-                                <button type="button" onClick={() => { setSamRegistered(false); setStep(1); }}
-                                    className="flex items-center justify-center px-8 py-4 rounded-2xl border-2 border-stone-200 hover:border-stone-400 hover:bg-stone-50 transition-all text-base font-bold text-stone-600">
-                                    <X className="w-5 h-5 mr-2 text-stone-400" /> Not yet
-                                </button>
-                            </div>
-                        )}
-
-                        {samRegistered === true && (
-                            <div className="space-y-4">
-                                {/* Search mode tabs */}
-                                <div className="flex gap-2 justify-center">
-                                    <button type="button" onClick={() => { setSearchMode("uei"); setSamError(""); setSamResults([]); }}
-                                        className={clsx("px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all",
-                                            searchMode === "uei" ? "bg-black text-white" : "bg-stone-100 text-stone-600 hover:bg-stone-200")}>
-                                        Search by UEI
-                                    </button>
-                                    <button type="button" onClick={() => { setSearchMode("name"); setSamError(""); setSamResults([]); }}
-                                        className={clsx("px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all",
-                                            searchMode === "name" ? "bg-black text-white" : "bg-stone-100 text-stone-600 hover:bg-stone-200")}>
-                                        Search by Name
-                                    </button>
-                                </div>
-
-                                {searchMode === "uei" && (
-                                    <div>
-                                        <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">
-                                            Unique Entity Identifier (UEI)
-                                            <InfoTooltip text="Your 12-character alphanumeric code assigned when you register on SAM.gov. Find it at SAM.gov under your entity registration." />
-                                        </label>
-                                        <div className="flex gap-2">
-                                            <input type="text" value={ueiInput} onChange={(e) => setUeiInput(e.target.value.toUpperCase())}
-                                                maxLength={12}
-                                                className="flex-1 px-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm font-mono uppercase"
-                                                placeholder="e.g. ABCD12345678"
-                                                onKeyDown={(e) => { if (e.key === "Enter") lookupSam("uei"); }}
-                                            />
-                                            <button type="button" onClick={() => lookupSam("uei")} disabled={samLoading || !ueiInput.trim()}
-                                                className="px-5 py-3.5 bg-black text-white rounded-xl font-bold text-sm hover:bg-stone-800 transition-all disabled:opacity-50 flex items-center">
-                                                {samLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Search className="w-4 h-4 mr-1" /> Look Up</>}
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {searchMode === "name" && (
-                                    <div>
-                                        <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">Company Name</label>
-                                        <div className="flex gap-2">
-                                            <input type="text" value={nameInput} onChange={(e) => setNameInput(e.target.value)}
-                                                className="flex-1 px-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm"
-                                                placeholder="e.g. Acme Services LLC"
-                                                onKeyDown={(e) => { if (e.key === "Enter") lookupSam("name"); }}
-                                            />
-                                            <button type="button" onClick={() => lookupSam("name")} disabled={samLoading || !nameInput.trim()}
-                                                className="px-5 py-3.5 bg-black text-white rounded-xl font-bold text-sm hover:bg-stone-800 transition-all disabled:opacity-50 flex items-center">
-                                                {samLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Search className="w-4 h-4 mr-1" /> Search</>}
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {samError && (
-                                    <p className="text-red-600 text-sm bg-red-50 border border-red-200 rounded-xl p-3">{samError}</p>
-                                )}
-
-                                {/* Search results list */}
-                                {samResults.length > 0 && (
-                                    <div className="space-y-2">
-                                        <p className="text-xs text-stone-500 uppercase tracking-widest">Select your entity:</p>
-                                        {samResults.map((entity, i) => (
-                                            <button key={i} type="button" onClick={() => populateFromSam(entity)}
-                                                className="w-full text-left bg-stone-50 hover:bg-stone-100 border border-stone-200 hover:border-stone-300 rounded-xl p-4 transition-all">
-                                                <p className="font-bold text-sm">{entity.company_name}</p>
-                                                {entity.dba_name && <p className="text-xs text-stone-500">DBA: {entity.dba_name}</p>}
-                                                <p className="text-xs text-stone-400 font-mono mt-1">UEI: {entity.uei} {entity.cage_code && `| CAGE: ${entity.cage_code}`}</p>
-                                                <p className="text-xs text-stone-400">{[entity.address?.city, entity.address?.state].filter(Boolean).join(", ")}</p>
-                                            </button>
-                                        ))}
-                                    </div>
-                                )}
-
-                                {/* Skip link */}
-                                <div className="text-center pt-2">
-                                    <button type="button" onClick={() => setStep(1)} className="text-sm text-stone-500 hover:text-black underline underline-offset-2 transition-colors">
-                                        Skip and enter manually
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-
-                        {samRegistered === false && (
-                            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 sm:p-6 text-center">
-                                <h4 className="font-bold text-amber-800 mb-2">SAM.gov Registration Required</h4>
-                                <p className="text-amber-700 text-sm mb-4">
-                                    To win federal contracts, your business must be registered on SAM.gov. You can still set up your profile here and start finding opportunities while you register.
-                                </p>
-                                <a href="https://sam.gov/content/entity-registration" target="_blank" rel="noopener noreferrer"
-                                    className="inline-flex items-center text-sm font-bold text-amber-800 hover:text-amber-900 underline underline-offset-2">
-                                    Register on SAM.gov <ExternalLink className="w-3 h-3 ml-1" />
-                                </a>
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                {/* Step 1: Company Info */}
+                {/* ─── Step 1: Identity + Website + UEI ───────────────────── */}
                 {step === 1 && (
-                    <div className="space-y-5 animate-in fade-in duration-300">
-                        <div className="flex items-center mb-4">
-                            <Building className="w-5 h-5 sm:w-6 sm:h-6 mr-3 text-stone-400" />
-                            <h3 className="font-bold text-lg sm:text-xl">Company Information</h3>
+                    <div className="space-y-6 animate-in fade-in duration-300">
+                        <div className="flex items-center mb-2">
+                            <User className="w-5 h-5 sm:w-6 sm:h-6 mr-3 text-stone-400" />
+                            <h3 className="font-bold text-lg sm:text-xl">About You & Your Company</h3>
                         </div>
 
-                        {samPopulated && (
-                            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center text-sm text-emerald-700">
-                                <CheckCircle2 className="w-4 h-4 mr-2 flex-shrink-0" />
-                                Auto-populated from SAM.gov. Review and edit if needed.
+                        <div className="bg-stone-50 border border-stone-200 rounded-2xl p-4 space-y-4">
+                            <div className="flex items-center gap-2">
+                                <Briefcase className="w-4 h-4 text-stone-400" />
+                                <h4 className="text-sm font-bold text-stone-700">Primary Contact</h4>
                             </div>
-                        )}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">Contact Name *</label>
+                                    <input type="text" required value={form.contact_name}
+                                        onChange={(e) => updateForm("contact_name", e.target.value)}
+                                        className="w-full px-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm"
+                                        placeholder="Jane Doe" />
+                                </div>
+                                <div>
+                                    <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">
+                                        Position / Title *
+                                        <InfoTooltip text="Your role at the company (e.g. Owner, CEO, BD Director). Used on outreach to contracting officers." />
+                                    </label>
+                                    <input type="text" required value={form.job_title}
+                                        onChange={(e) => updateForm("job_title", e.target.value)}
+                                        className="w-full px-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm"
+                                        placeholder="e.g. Owner, CEO, VP" />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">Personal Phone *</label>
+                                <div className="relative">
+                                    <Phone className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                                    <input type="tel" required value={form.contact_phone}
+                                        onChange={(e) => updateForm("contact_phone", e.target.value)}
+                                        className="w-full pl-9 pr-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm"
+                                        placeholder="(555) 123-4567" />
+                                </div>
+                            </div>
+                        </div>
 
                         <div>
                             <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">Company Name *</label>
-                            <input type="text" value={form.company_name} onChange={(e) => updateForm("company_name", e.target.value)}
-                                className="w-full px-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm font-medium" placeholder="Legal Business Name" />
-                        </div>
-                        <div>
-                            <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">
-                                DBA Name
-                                <InfoTooltip text="Doing Business As -- the trade name your company operates under if different from your legal business name." />
-                            </label>
-                            <input type="text" value={form.dba_name} onChange={(e) => updateForm("dba_name", e.target.value)}
-                                className="w-full px-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" placeholder="Trade name (optional)" />
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div>
-                                <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">
-                                    UEI
-                                    <InfoTooltip text="Your Unique Entity Identifier -- a 12-character alphanumeric code assigned when you register on SAM.gov." />
-                                </label>
-                                <input type="text" value={form.uei} onChange={(e) => updateForm("uei", e.target.value.toUpperCase())}
-                                    maxLength={12}
-                                    className={clsx("w-full px-4 py-3.5 border rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm font-mono uppercase",
-                                        form.uei && !ueiValidation.valid ? "border-red-300 bg-red-50" : "border-stone-200"
-                                    )} placeholder="12-character ID" />
-                                {form.uei && !ueiValidation.valid && <p className="text-red-600 text-xs mt-1">{ueiValidation.error}</p>}
-                            </div>
-                            <div>
-                                <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">
-                                    CAGE Code
-                                    <InfoTooltip text="Commercial and Government Entity Code -- a 5-character identifier assigned by the Department of Defense during SAM.gov registration." />
-                                </label>
-                                <input type="text" value={form.cage_code} onChange={(e) => updateForm("cage_code", e.target.value.toUpperCase())}
-                                    maxLength={5}
-                                    className={clsx("w-full px-4 py-3.5 border rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm font-mono uppercase",
-                                        form.cage_code && !cageValidation.valid ? "border-red-300 bg-red-50" : "border-stone-200"
-                                    )} placeholder="e.g. 7ABC1" />
-                                {form.cage_code && !cageValidation.valid && <p className="text-red-600 text-xs mt-1">{cageValidation.error}</p>}
-                            </div>
-                        </div>
-                        <div>
-                            <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">Street Address *</label>
-                            <AddressAutocomplete
-                                value={form.address_line_1}
-                                onChange={(val) => updateForm("address_line_1", val)}
-                                onSelect={(addr) => {
-                                    setForm(prev => ({
-                                        ...prev,
-                                        address_line_1: addr.address_line_1,
-                                        city: addr.city,
-                                        state: addr.state,
-                                        zip_code: addr.zip_code,
-                                    }));
-                                }}
-                                placeholder="Start typing an address..."
-                                className="w-full pl-9 pr-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm"
-                            />
-                        </div>
-                        <div className="grid grid-cols-3 gap-3">
-                            <div>
-                                <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">City *</label>
-                                <input type="text" value={form.city} onChange={(e) => updateForm("city", e.target.value)}
-                                    className="w-full px-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" placeholder="City" />
-                            </div>
-                            <div>
-                                <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">State *</label>
-                                <select title="State" value={form.state} onChange={(e) => updateForm("state", e.target.value)}
-                                    className="w-full px-3 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm bg-white">
-                                    <option value="">--</option>
-                                    {STATE_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">ZIP *</label>
-                                <input type="text" value={form.zip_code} onChange={(e) => updateForm("zip_code", e.target.value)}
-                                    className="w-full px-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm font-mono" placeholder="ZIP" />
-                            </div>
-                        </div>
-                        <div>
-                            <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">Website</label>
-                            <input type="text" value={form.website} onChange={(e) => updateForm("website", e.target.value)}
-                                className="w-full px-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" placeholder="www.example.com" />
-                        </div>
-                        <div>
-                            <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">Phone</label>
-                            <input type="tel" value={form.phone} onChange={(e) => updateForm("phone", e.target.value)}
-                                className="w-full px-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" placeholder="(555) 123-4567" />
+                            <input type="text" value={form.company_name}
+                                onChange={(e) => updateForm("company_name", e.target.value)}
+                                className="w-full px-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm font-medium"
+                                placeholder="Legal Business Name" />
                         </div>
 
-                        {/* Personal contact person for this account */}
-                        <div className="border-t border-stone-100 pt-5 mt-2">
-                            <p className="text-xs font-bold text-stone-700 mb-3">Primary Contact Person</p>
-                            <p className="text-xs text-stone-500 mb-3">Who should we reach out to about this account? (You can leave blank to use your login email.)</p>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <div>
-                                    <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">Contact Name</label>
-                                    <input type="text" value={form.contact_name} onChange={(e) => updateForm("contact_name", e.target.value)}
-                                        className="w-full px-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" placeholder="Full name" />
-                                </div>
-                                <div>
-                                    <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">Contact Phone</label>
-                                    <input type="tel" value={form.contact_phone} onChange={(e) => updateForm("contact_phone", e.target.value)}
-                                        className="w-full px-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" placeholder="(555) 123-4567" />
-                                </div>
+                        <div>
+                            <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">
+                                Company Website *
+                                <InfoTooltip text="We'll crawl your site to pre-fill services, differentiators, logo, and brand colors — so you don't have to retype them." />
+                            </label>
+                            <div className="relative">
+                                <Globe className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                                <input type="text" value={form.company_website}
+                                    onChange={(e) => updateForm("company_website", e.target.value)}
+                                    className="w-full pl-9 pr-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm"
+                                    placeholder="www.yourcompany.com" />
                             </div>
+                        </div>
+
+                        <div>
+                            <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">
+                                UEI (optional)
+                                <InfoTooltip text="Your 12-character SAM.gov Unique Entity Identifier. Optional — if you have one, we'll auto-pull your NAICS codes and certifications." />
+                            </label>
+                            <input type="text" value={form.uei}
+                                onChange={(e) => updateForm("uei", e.target.value.toUpperCase())}
+                                maxLength={12}
+                                className={clsx(
+                                    "w-full px-4 py-3.5 border rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm font-mono uppercase",
+                                    form.uei && !ueiValidation.valid ? "border-red-300 bg-red-50" : "border-stone-200",
+                                )}
+                                placeholder="12-character ID (leave blank if none)" />
+                            {form.uei && !ueiValidation.valid && (
+                                <p className="text-red-600 text-xs mt-1">{ueiValidation.error}</p>
+                            )}
+                            <p className="text-[11px] text-stone-400 mt-1.5">
+                                Don&apos;t have one yet? That&apos;s fine — you can add it later from Settings.
+                            </p>
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-3 pt-2">
+                            <button type="button" onClick={startPrefill} disabled={!step1Valid}
+                                className="flex-1 flex items-center justify-center px-5 sm:px-6 py-3.5 rounded-full bg-black text-white hover:bg-stone-800 font-bold text-sm transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
+                                <Sparkles className="w-4 h-4 mr-2" /> Prefill from website {form.uei ? "+ SAM.gov" : ""}
+                            </button>
+                            <button type="button" onClick={skipPrefill} disabled={!step1Valid}
+                                className="text-sm text-stone-500 hover:text-black underline underline-offset-2 transition-colors disabled:opacity-50">
+                                Skip prefill, fill manually
+                            </button>
                         </div>
                     </div>
                 )}
 
-                {/* Step 2: Industry & Certifications */}
+                {/* ─── Step 2: Review prefilled ───────────────────────────── */}
                 {step === 2 && (
                     <div className="space-y-6 animate-in fade-in duration-300">
-                        <div className="flex items-center mb-4">
-                            <Target className="w-5 h-5 sm:w-6 sm:h-6 mr-3 text-stone-400" />
-                            <h3 className="font-bold text-lg sm:text-xl">Industry & Certifications</h3>
+                        <div className="flex items-center mb-2">
+                            <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 mr-3 text-stone-400" />
+                            <h3 className="font-bold text-lg sm:text-xl">Review Prefilled Info</h3>
                         </div>
 
+                        {/* Task status card */}
+                        <div className="bg-stone-50 border border-stone-200 rounded-2xl p-4">
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="text-xs text-stone-500 uppercase tracking-widest font-bold">
+                                    {prefillRunning ? "Working…" : "Prefill Complete"}
+                                </span>
+                                {!prefillRunning && (
+                                    <button type="button" onClick={startPrefill}
+                                        className="text-xs text-stone-500 hover:text-black underline underline-offset-2">
+                                        Re-run prefill
+                                    </button>
+                                )}
+                            </div>
+                            <div className="divide-y divide-stone-200">
+                                {prefillTasks.map(t => <TaskRow key={t.key} task={t} />)}
+                            </div>
+                        </div>
+
+                        {/* Logo preview (if brand kit found one) */}
+                        {brandKit?.logo_url && (
+                            <div className="flex items-center gap-4 bg-white border border-stone-200 rounded-2xl p-4">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={brandKit.logo_url} alt="Company logo"
+                                    className="w-16 h-16 object-contain rounded-lg bg-stone-50 border border-stone-200" />
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-bold text-black truncate">{brandKit.company_name || form.company_name}</p>
+                                    <p className="text-xs text-stone-400 truncate">Logo & brand colors detected</p>
+                                    {brandKit.all_colors && brandKit.all_colors.length > 0 && (
+                                        <div className="flex gap-1 mt-1.5">
+                                            {brandKit.all_colors.slice(0, 5).map(c => (
+                                                <span key={c} className="w-5 h-5 rounded border border-stone-200"
+                                                    style={{ backgroundColor: c }} title={c} />
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* NAICS */}
                         <div>
                             <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">
                                 NAICS Codes *
-                                <InfoTooltip text="North American Industry Classification System codes that describe your industry. Select at least one that matches the services or products you offer." />
+                                <SourceBadge field="naics_codes" />
                             </label>
-
-                            {/* NAICS Search */}
                             <div className="relative mb-3">
                                 <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
                                 <input type="text" value={naicsSearch} onChange={(e) => setNaicsSearch(e.target.value)}
                                     className="w-full pl-9 pr-8 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm"
                                     placeholder="Search by code or keyword..." />
                                 {naicsSearch && (
-                                    <button type="button" onClick={() => setNaicsSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600">
+                                    <button type="button" title="Clear search" aria-label="Clear search" onClick={() => setNaicsSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600">
                                         <X className="w-4 h-4" />
                                     </button>
                                 )}
                             </div>
-
-                            {/* Selected NAICS chips */}
                             {form.naics_codes.length > 0 && (
                                 <div className="flex flex-wrap gap-1.5 mb-3">
-                                    {form.naics_codes.map(code => {
-                                        const naics = NAICS_CODES.find(n => n.code === code);
-                                        return (
-                                            <span key={code} className="inline-flex items-center bg-black text-white text-xs font-mono px-2.5 py-1 rounded-lg">
-                                                {code}
-                                                <button type="button" onClick={() => toggleArray("naics_codes", code)} className="ml-1.5 hover:text-red-300">
-                                                    <X className="w-3 h-3" />
-                                                </button>
-                                            </span>
-                                        );
-                                    })}
+                                    {form.naics_codes.map(code => (
+                                        <span key={code} className="inline-flex items-center bg-black text-white text-xs font-mono px-2.5 py-1 rounded-lg">
+                                            {code}
+                                            <button type="button" title={`Remove ${code}`} aria-label={`Remove ${code}`} onClick={() => toggleArray("naics_codes", code)} className="ml-1.5 hover:text-red-300">
+                                                <X className="w-3 h-3" />
+                                            </button>
+                                        </span>
+                                    ))}
                                     <span className="text-xs text-emerald-600 font-bold self-center ml-1">{form.naics_codes.length} selected</span>
                                 </div>
                             )}
-
-                            <div className="grid grid-cols-1 gap-1.5 max-h-[280px] overflow-y-auto pr-1">
+                            <div className="grid grid-cols-1 gap-1.5 max-h-[200px] overflow-y-auto pr-1">
                                 {filteredNaics.map(n => (
                                     <button type="button" key={n.code} onClick={() => toggleArray("naics_codes", n.code)}
                                         className={clsx(
-                                            "flex items-center text-left px-4 py-3 rounded-xl border text-sm transition-all",
+                                            "flex items-center text-left px-4 py-2.5 rounded-xl border text-sm transition-all",
                                             form.naics_codes.includes(n.code)
                                                 ? "bg-black text-white border-black"
-                                                : "bg-white text-stone-700 border-stone-200 hover:border-stone-400 active:bg-stone-100"
+                                                : "bg-white text-stone-700 border-stone-200 hover:border-stone-400",
                                         )}>
                                         <span className="font-mono text-xs mr-2 opacity-70">{n.code}</span>
                                         <span className="font-medium">{n.label}</span>
-                                        {samPopulated && form.naics_codes.includes(n.code) && (
-                                            <span className="ml-auto text-[9px] bg-emerald-400/20 text-emerald-200 px-1.5 py-0.5 rounded">SAM</span>
-                                        )}
                                     </button>
                                 ))}
                                 {filteredNaics.length === 0 && (
@@ -829,10 +817,42 @@ function OnboardPageContent() {
                             </div>
                         </div>
 
+                        {/* Target states */}
+                        <div>
+                            <div className="flex items-center justify-between mb-3">
+                                <label className="text-xs text-stone-500 uppercase tracking-widest">
+                                    Target States *
+                                    <SourceBadge field="target_states" />
+                                </label>
+                                <button type="button"
+                                    onClick={() => setForm(prev => ({ ...prev, target_states: prev.target_states.length === STATE_OPTIONS.length ? [] : [...STATE_OPTIONS] }))}
+                                    className="text-[11px] font-bold uppercase tracking-wider text-stone-500 hover:text-black underline underline-offset-2">
+                                    {form.target_states.length === STATE_OPTIONS.length ? "Clear all" : "Nationwide"}
+                                </button>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5 max-h-[180px] overflow-y-auto pr-1">
+                                {STATE_OPTIONS.map(s => (
+                                    <button type="button" key={s} onClick={() => toggleArray("target_states", s)}
+                                        className={clsx(
+                                            "px-3 py-2 rounded-lg border text-xs font-mono font-bold transition-all min-w-[48px]",
+                                            form.target_states.includes(s)
+                                                ? "bg-black text-white border-black"
+                                                : "bg-white text-stone-600 border-stone-200 hover:border-stone-400",
+                                        )}>
+                                        {s}
+                                    </button>
+                                ))}
+                            </div>
+                            {form.target_states.length > 0 && (
+                                <p className="text-xs text-emerald-600 font-bold mt-2">{form.target_states.length} states selected</p>
+                            )}
+                        </div>
+
+                        {/* Set-asides */}
                         <div>
                             <label className="text-xs text-stone-500 uppercase tracking-widest block mb-3">
-                                SBA Certifications
-                                <InfoTooltip text="Small Business Administration certifications that may qualify you for set-aside contracts reserved for specific business categories." />
+                                SBA Certifications / Set-Asides
+                                <SourceBadge field="sba_certifications" />
                             </label>
                             <div className="flex flex-wrap gap-2">
                                 {CERT_OPTIONS.map(c => (
@@ -841,7 +861,7 @@ function OnboardPageContent() {
                                             "px-3 sm:px-4 py-2.5 rounded-full border text-xs font-bold uppercase tracking-wider transition-all",
                                             form.sba_certifications.includes(c.value)
                                                 ? "bg-black text-white border-black"
-                                                : "bg-white text-stone-600 border-stone-200 hover:border-stone-400 active:bg-stone-100"
+                                                : "bg-white text-stone-600 border-stone-200 hover:border-stone-400",
                                         )}>
                                         {form.sba_certifications.includes(c.value) && <CheckCircle2 className="w-3 h-3 inline mr-1" />}
                                         {c.label}
@@ -850,318 +870,237 @@ function OnboardPageContent() {
                             </div>
                         </div>
 
-                        {/* PSC Codes */}
+                        {/* Company description */}
                         <div>
                             <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">
-                                Product/Service Codes (PSC)
-                                <InfoTooltip text="PSC codes describe the specific products or services you provide. These help match you to the right opportunities beyond NAICS." />
+                                Company Description
+                                <SourceBadge field="company_description" />
                             </label>
-                            <div className="relative mb-3">
-                                <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                                <input type="text" value={pscSearch} onChange={(e) => setPscSearch(e.target.value)}
-                                    className="w-full pl-9 pr-8 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm"
-                                    placeholder="Search PSC codes..." />
-                                {pscSearch && (
-                                    <button type="button" title="Clear search" onClick={() => setPscSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600">
-                                        <X className="w-4 h-4" />
-                                    </button>
-                                )}
-                            </div>
-                            {form.target_psc_codes.length > 0 && (
-                                <div className="flex flex-wrap gap-1.5 mb-3">
-                                    {form.target_psc_codes.map(code => (
-                                        <span key={code} className="inline-flex items-center bg-black text-white text-xs font-mono px-2.5 py-1 rounded-lg">
-                                            {code}
-                                            <button type="button" title={`Remove ${code}`} onClick={() => toggleArray("target_psc_codes", code)} className="ml-1.5 hover:text-red-300">
-                                                <X className="w-3 h-3" />
-                                            </button>
-                                        </span>
-                                    ))}
-                                </div>
-                            )}
-                            <div className="grid grid-cols-1 gap-1.5 max-h-[200px] overflow-y-auto pr-1">
-                                {(() => {
-                                    const search = pscSearch.toLowerCase();
-                                    const filtered = search
-                                        ? PSC_CODES.filter(p => p.code.toLowerCase().includes(search) || p.label.toLowerCase().includes(search) || p.category.toLowerCase().includes(search))
-                                        : PSC_CODES.filter(p => p.popular);
-                                    return filtered.slice(0, 30).map(p => (
-                                        <button type="button" key={p.code} onClick={() => toggleArray("target_psc_codes", p.code)}
-                                            className={clsx(
-                                                "flex items-center text-left px-4 py-2.5 rounded-xl border text-sm transition-all",
-                                                form.target_psc_codes.includes(p.code)
-                                                    ? "bg-black text-white border-black"
-                                                    : "bg-white text-stone-700 border-stone-200 hover:border-stone-400 active:bg-stone-100"
-                                            )}>
-                                            <span className="font-mono text-xs mr-2 opacity-70">{p.code}</span>
-                                            <span className="font-medium">{p.label}</span>
-                                        </button>
-                                    ));
-                                })()}
-                            </div>
-                            {!pscSearch && <p className="text-[10px] text-stone-400 mt-1.5">Showing popular codes. Search to find more.</p>}
+                            <textarea value={form.company_description}
+                                onChange={(e) => { updateForm("company_description", e.target.value); markSource("company_description", "manual"); }}
+                                rows={3}
+                                className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm resize-none"
+                                placeholder="What does your company do? (Used in proposals and capability statements.)" />
                         </div>
 
-                        {/* Security Clearances */}
-                        <div>
-                            <label className="text-xs text-stone-500 uppercase tracking-widest block mb-3">
-                                Security Clearances
-                                <InfoTooltip text="If your company holds security clearances, select them here. Many DoD and intelligence contracts require specific clearance levels." />
-                            </label>
-                            <div className="flex flex-wrap gap-2">
-                                {CLEARANCE_OPTIONS.map(c => (
-                                    <button type="button" key={c.value} onClick={() => toggleArray("security_clearances", c.value)}
-                                        className={clsx(
-                                            "px-3 sm:px-4 py-2.5 rounded-full border text-xs font-bold uppercase tracking-wider transition-all",
-                                            form.security_clearances.includes(c.value)
-                                                ? "bg-black text-white border-black"
-                                                : "bg-white text-stone-600 border-stone-200 hover:border-stone-400 active:bg-stone-100"
-                                        )}>
-                                        {form.security_clearances.includes(c.value) && <CheckCircle2 className="w-3 h-3 inline mr-1" />}
-                                        {c.label}
-                                    </button>
-                                ))}
-                            </div>
+                        {/* Services / Differentiators as editable chip lists */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <EditableChipList
+                                label="Services"
+                                field="services"
+                                items={form.services}
+                                onAdd={(v) => setForm(p => ({ ...p, services: [...p.services, v] }))}
+                                onRemove={(v) => setForm(p => ({ ...p, services: p.services.filter(s => s !== v) }))}
+                                sourceBadge={<SourceBadge field="services" />}
+                            />
+                            <EditableChipList
+                                label="Differentiators"
+                                field="differentiators"
+                                items={form.differentiators}
+                                onAdd={(v) => setForm(p => ({ ...p, differentiators: [...p.differentiators, v] }))}
+                                onRemove={(v) => setForm(p => ({ ...p, differentiators: p.differentiators.filter(s => s !== v) }))}
+                                sourceBadge={<SourceBadge field="differentiators" />}
+                            />
                         </div>
                     </div>
                 )}
 
-                {/* Step 3: Capacity & Experience */}
+                {/* ─── Step 3: Firmographics the crawler can't know ────── */}
                 {step === 3 && (
-                    <div className="space-y-5 animate-in fade-in duration-300">
-                        <div className="flex items-center mb-4">
-                            <Briefcase className="w-5 h-5 sm:w-6 sm:h-6 mr-3 text-stone-400" />
-                            <h3 className="font-bold text-lg sm:text-xl">Capacity & Experience</h3>
+                    <div className="space-y-6 animate-in fade-in duration-300">
+                        <div className="flex items-center mb-2">
+                            <Building className="w-5 h-5 sm:w-6 sm:h-6 mr-3 text-stone-400" />
+                            <h3 className="font-bold text-lg sm:text-xl">Business Profile</h3>
+                        </div>
+                        <p className="text-sm text-stone-500">
+                            A few things our crawler can&apos;t see. All required — they drive scoring thresholds and set-aside eligibility.
+                        </p>
+
+                        {/* Company size */}
+                        <div>
+                            <label className="text-xs text-stone-500 uppercase tracking-widest block mb-3">Company Size *</label>
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                {COMPANY_SIZE_OPTIONS.map(opt => (
+                                    <button type="button" key={opt.value}
+                                        onClick={() => updateForm("company_size", opt.value)}
+                                        className={clsx(
+                                            "text-left px-4 py-3 rounded-xl border transition-all",
+                                            form.company_size === opt.value
+                                                ? "bg-black text-white border-black"
+                                                : "bg-white text-stone-700 border-stone-200 hover:border-stone-400",
+                                        )}>
+                                        <span className="block text-sm font-bold">{opt.label}</span>
+                                        <span className={clsx(
+                                            "block text-[11px]",
+                                            form.company_size === opt.value ? "text-white/70" : "text-stone-400",
+                                        )}>{opt.sublabel}</span>
+                                    </button>
+                                ))}
+                            </div>
                         </div>
 
+                        {/* Employee count + Revenue */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
                                 <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">Employee Count *</label>
-                                <select title="Employee Count" value={form.employee_count} onChange={(e) => updateForm("employee_count", e.target.value)}
-                                    className="w-full px-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm bg-white">
-                                    {EMPLOYEE_RANGES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-                                </select>
+                                <input type="number" min={1} max={1_000_000}
+                                    value={form.employee_count}
+                                    onChange={(e) => updateForm("employee_count", e.target.value)}
+                                    className="w-full px-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm"
+                                    placeholder="e.g. 24" />
                             </div>
                             <div>
                                 <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">Annual Revenue *</label>
-                                <select title="Annual Revenue" value={form.revenue} onChange={(e) => updateForm("revenue", e.target.value)}
+                                <select title="Annual Revenue"
+                                    value={form.annual_revenue_range}
+                                    onChange={(e) => updateForm("annual_revenue_range", e.target.value)}
                                     className="w-full px-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm bg-white">
-                                    {REVENUE_RANGES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                                    <option value="">Select range...</option>
+                                    {REVENUE_RANGE_OPTIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                                 </select>
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div>
-                                <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">Years in Business *</label>
-                                <input type="number" min={0} max={200} value={form.years_in_business} onChange={(e) => { const v = e.target.value ? String(Math.min(parseInt(e.target.value), 200)) : ""; updateForm("years_in_business", v); }}
-                                    className="w-full px-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" placeholder="e.g. 12" />
-                            </div>
-                            <div>
-                                <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">Service Radius (miles)</label>
-                                <input type="number" value={form.service_radius_miles} onChange={(e) => updateForm("service_radius_miles", e.target.value)}
-                                    className="w-full px-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" placeholder="50" />
-                            </div>
-                        </div>
-
+                        {/* Years in business */}
                         <div>
-                            <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">Past Federal Awards</label>
-                            <input type="number" value={form.federal_awards_count} onChange={(e) => updateForm("federal_awards_count", e.target.value)}
-                                className="w-full px-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" placeholder="Number of past federal contracts (0 if none)" />
+                            <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">Years in Business *</label>
+                            <input type="number" min={0} max={200}
+                                value={form.years_in_business}
+                                onChange={(e) => {
+                                    const v = e.target.value ? String(Math.min(parseInt(e.target.value, 10), 200)) : "";
+                                    updateForm("years_in_business", v);
+                                }}
+                                className="w-full px-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm"
+                                placeholder="e.g. 12" />
                         </div>
 
-                        <div>
-                            <label className="text-xs text-stone-500 uppercase tracking-widest block mb-3">Operational Capabilities</label>
-                            <div className="flex flex-wrap gap-2 sm:gap-3">
-                                <button type="button" onClick={() => updateForm("has_bonding", !form.has_bonding)}
-                                    className={clsx("flex items-center px-4 py-3 rounded-xl border text-sm transition-all",
-                                        form.has_bonding ? "bg-emerald-100 text-emerald-800 border-emerald-300" : "bg-white text-stone-600 border-stone-200 hover:border-stone-400"
-                                    )}>
-                                    <ShieldCheck className="w-4 h-4 mr-2" /> Bonded / Insured
-                                </button>
-                                <button type="button" onClick={() => updateForm("has_fleet", !form.has_fleet)}
-                                    className={clsx("flex items-center px-4 py-3 rounded-xl border text-sm transition-all",
-                                        form.has_fleet ? "bg-emerald-100 text-emerald-800 border-emerald-300" : "bg-white text-stone-600 border-stone-200 hover:border-stone-400"
-                                    )}>
-                                    <Truck className="w-4 h-4 mr-2" /> Fleet / Vehicles
-                                </button>
-                                <button type="button" onClick={() => updateForm("has_municipal_exp", !form.has_municipal_exp)}
-                                    className={clsx("flex items-center px-4 py-3 rounded-xl border text-sm transition-all",
-                                        form.has_municipal_exp ? "bg-emerald-100 text-emerald-800 border-emerald-300" : "bg-white text-stone-600 border-stone-200 hover:border-stone-400"
-                                    )}>
-                                    <Building className="w-4 h-4 mr-2" /> Gov Experience
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* Step 4: Target Preferences */}
-                {step === 4 && (
-                    <div className="space-y-6 animate-in fade-in duration-300">
-                        <div className="flex items-center mb-4">
-                            <MapPin className="w-5 h-5 sm:w-6 sm:h-6 mr-3 text-stone-400" />
-                            <h3 className="font-bold text-lg sm:text-xl">Target Preferences</h3>
-                        </div>
-
-                        <div>
-                            <label className="text-xs text-stone-500 uppercase tracking-widest block mb-3">Contract Types of Interest</label>
-                            <div className="flex flex-wrap gap-2">
-                                {CONTRACT_TARGETS.map(ct => (
-                                    <button type="button" key={ct.value} onClick={() => toggleArray("target_contract_types", ct.value)}
-                                        className={clsx(
-                                            "px-3 sm:px-4 py-2.5 rounded-full border text-xs font-bold transition-all",
-                                            form.target_contract_types.includes(ct.value)
-                                                ? "bg-black text-white border-black"
-                                                : "bg-white text-stone-600 border-stone-200 hover:border-stone-400 active:bg-stone-100"
-                                        )}>
-                                        {form.target_contract_types.includes(ct.value) && <CheckCircle2 className="w-3 h-3 inline mr-1" />}
-                                        {ct.label}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* Preferred Agencies */}
+                        {/* Federal experience */}
                         <div>
                             <label className="text-xs text-stone-500 uppercase tracking-widest block mb-3">
-                                Preferred Agencies
-                                <InfoTooltip text="Select federal agencies you want to work with. This helps prioritize opportunities from agencies you're targeting." />
-                            </label>
-                            <div className="flex flex-wrap gap-1.5 max-h-[180px] overflow-y-auto pr-1">
-                                {FEDERAL_AGENCIES.filter(a => a.popular).map(a => (
-                                    <button type="button" key={a.code} onClick={() => toggleArray("preferred_agencies", a.code)}
-                                        className={clsx(
-                                            "px-3 py-2 rounded-lg border text-xs font-bold transition-all",
-                                            form.preferred_agencies.includes(a.code)
-                                                ? "bg-black text-white border-black"
-                                                : "bg-white text-stone-600 border-stone-200 hover:border-stone-400 active:bg-stone-100"
-                                        )}>
-                                        {a.shortName}
-                                    </button>
-                                ))}
-                            </div>
-                            {form.preferred_agencies.length > 0 && (
-                                <p className="text-xs text-emerald-600 font-bold mt-2">{form.preferred_agencies.length} agencies selected</p>
-                            )}
-                        </div>
-
-                        {/* Contract Value Range */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div>
-                                <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">
-                                    Min Contract Value
-                                    <InfoTooltip text="Minimum contract value you're interested in. Helps filter out contracts that are too small." />
-                                </label>
-                                <select title="Min Contract Value" value={form.contract_value_min} onChange={(e) => updateForm("contract_value_min", e.target.value)}
-                                    className="w-full px-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm bg-white">
-                                    {CONTRACT_VALUE_RANGES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">
-                                    Max Contract Value
-                                </label>
-                                <select title="Max Contract Value" value={form.contract_value_max} onChange={(e) => updateForm("contract_value_max", e.target.value)}
-                                    className="w-full px-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm bg-white">
-                                    {CONTRACT_VALUE_RANGES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-                                </select>
-                            </div>
-                        </div>
-
-                        {/* Prime vs Sub */}
-                        <div>
-                            <label className="text-xs text-stone-500 uppercase tracking-widest block mb-3">
-                                Role Preference
-                                <InfoTooltip text="Do you want to bid as a prime contractor, subcontractor, or both? Primes lead the contract; subs support a prime." />
+                                Federal Contract Experience *
+                                <InfoTooltip text="Have you ever held a prime federal contract? Subcontracts count if you were named on an award." />
                             </label>
                             <div className="flex gap-2">
                                 {[
-                                    { value: "prime", label: "Prime Only" },
-                                    { value: "sub", label: "Sub Only" },
-                                    { value: "both", label: "Both" },
-                                ].map(opt => (
-                                    <button type="button" key={opt.value} onClick={() => updateForm("prime_or_sub", opt.value)}
-                                        className={clsx(
-                                            "flex-1 px-4 py-3 rounded-xl border text-sm font-bold transition-all text-center",
-                                            form.prime_or_sub === opt.value
-                                                ? "bg-black text-white border-black"
-                                                : "bg-white text-stone-600 border-stone-200 hover:border-stone-400"
-                                        )}>
-                                        {opt.label}
-                                    </button>
-                                ))}
+                                    { value: true, label: "Yes", icon: ShieldCheck },
+                                    { value: false, label: "No, we're new to federal", icon: Target },
+                                ].map(opt => {
+                                    const Icon = opt.icon;
+                                    return (
+                                        <button type="button" key={String(opt.value)}
+                                            onClick={() => updateForm("has_federal_experience", opt.value)}
+                                            className={clsx(
+                                                "flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl border text-sm font-bold transition-all",
+                                                form.has_federal_experience === opt.value
+                                                    ? "bg-black text-white border-black"
+                                                    : "bg-white text-stone-600 border-stone-200 hover:border-stone-400",
+                                            )}>
+                                            <Icon className="w-4 h-4" />
+                                            {opt.label}
+                                        </button>
+                                    );
+                                })}
                             </div>
                         </div>
 
-                        <div>
-                            <label className="text-xs text-stone-500 uppercase tracking-widest block mb-3">Target States (where you can perform work) *</label>
-                            {(() => {
-                                const allSelected = form.target_states.length === STATE_OPTIONS.length;
-                                return (
-                                    <button
-                                        type="button"
-                                        onClick={() => updateForm("target_states", allSelected ? [] : [...STATE_OPTIONS])}
-                                        className={clsx(
-                                            "mb-3 px-4 py-2 rounded-full border text-xs font-bold uppercase tracking-wider transition-all",
-                                            allSelected
-                                                ? "bg-emerald-500 text-white border-emerald-500"
-                                                : "bg-white text-stone-700 border-stone-300 hover:border-emerald-400 hover:text-emerald-700"
-                                        )}
-                                    >
-                                        {allSelected ? "✓ Nationwide selected — Clear" : "Select Nationwide (all 50 states)"}
-                                    </button>
-                                );
-                            })()}
-                            <div className="flex flex-wrap gap-1.5 max-h-[180px] overflow-y-auto pr-1">
-                                {STATE_OPTIONS.map(s => (
-                                    <button type="button" key={s} onClick={() => toggleArray("target_states", s)}
-                                        className={clsx(
-                                            "px-3 py-2 rounded-lg border text-xs font-mono font-bold transition-all min-w-[48px]",
-                                            form.target_states.includes(s)
-                                                ? "bg-black text-white border-black"
-                                                : "bg-white text-stone-600 border-stone-200 hover:border-stone-400 active:bg-stone-100"
-                                        )}>
-                                        {s}
-                                    </button>
-                                ))}
+                        {form.has_federal_experience && (
+                            <div>
+                                <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">
+                                    Federal Experience Notes
+                                    <InfoTooltip text="Briefly: agencies, contract vehicles (GSA, SEWP, 8(a) STARS), notable awards. Optional but helps scoring." />
+                                </label>
+                                <textarea value={form.federal_experience_notes}
+                                    onChange={(e) => updateForm("federal_experience_notes", e.target.value)}
+                                    rows={3}
+                                    className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm resize-none"
+                                    placeholder="e.g. Prime on GSA Schedule 70 since 2021; 3 DoD task orders under $500K; active TS facility clearance." />
                             </div>
-                            {form.target_states.length > 0 && (
-                                <p className="text-xs text-emerald-600 font-bold mt-2">
-                                    {form.target_states.length === STATE_OPTIONS.length ? "Nationwide" : `${form.target_states.length} states selected`}
-                                </p>
-                            )}
-                        </div>
-                    </div>
-                )}
-
-                {/* Navigation Buttons */}
-                {step > 0 && (
-                    <div className="flex justify-between mt-6 sm:mt-8 pt-5 sm:pt-6 border-t border-stone-100">
-                        <button type="button" onClick={() => setStep(s => s - 1)}
-                            className="flex items-center px-5 sm:px-6 py-3 rounded-full border border-stone-200 text-stone-600 hover:bg-stone-50 active:bg-stone-100 font-bold text-sm transition-all">
-                            <ArrowLeft className="w-4 h-4 mr-2" /> Back
-                        </button>
-
-                        {step < 4 ? (
-                            <div className="flex items-center gap-3">
-                                {!canAdvance(step) && (
-                                    <span className="text-xs text-red-500 font-medium hidden sm:inline">Fill required fields to continue</span>
-                                )}
-                                <button type="button" onClick={() => setStep(s => s + 1)}
-                                    disabled={!canAdvance(step)}
-                                    className="flex items-center px-5 sm:px-6 py-3 rounded-full bg-black text-white hover:bg-stone-800 active:bg-stone-700 font-bold text-sm transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
-                                    Next <ArrowRight className="w-4 h-4 ml-2" />
-                                </button>
-                            </div>
-                        ) : (
-                            <button type="button" onClick={handleSave} disabled={saving || !canAdvance(step) || !step1Valid}
-                                className="flex items-center px-6 sm:px-8 py-3 rounded-full bg-emerald-600 text-white hover:bg-emerald-700 active:bg-emerald-800 font-bold text-sm transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">
-                                {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Saving...</> : <><CheckCircle2 className="w-4 h-4 mr-2" /> Complete Setup</>}
-                            </button>
                         )}
                     </div>
                 )}
+
+                {/* Navigation */}
+                <div className="flex justify-between mt-6 sm:mt-8 pt-5 sm:pt-6 border-t border-stone-100">
+                    {step > 1 ? (
+                        <button type="button" onClick={() => setStep(s => (s - 1) as 1 | 2 | 3)}
+                            className="flex items-center px-5 sm:px-6 py-3 rounded-full border border-stone-200 text-stone-600 hover:bg-stone-50 font-bold text-sm transition-all">
+                            <ArrowLeft className="w-4 h-4 mr-2" /> Back
+                        </button>
+                    ) : <div />}
+
+                    {step === 1 ? null /* Step 1 uses Prefill button above */ : step === 2 ? (
+                        <div className="flex items-center gap-3">
+                            {!step2Valid && (
+                                <span className="text-xs text-stone-400 font-medium hidden sm:inline">Pick at least one NAICS + state</span>
+                            )}
+                            <button type="button" onClick={() => setStep(3)}
+                                disabled={!step2Valid}
+                                className="flex items-center px-5 sm:px-6 py-3 rounded-full bg-black text-white hover:bg-stone-800 font-bold text-sm transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
+                                Next <ArrowRight className="w-4 h-4 ml-2" />
+                            </button>
+                        </div>
+                    ) : (
+                        <button type="button" onClick={handleSave}
+                            disabled={saving || !step3Valid || !step1Valid || !step2Valid}
+                            className="flex items-center px-6 sm:px-8 py-3 rounded-full bg-emerald-600 text-white hover:bg-emerald-700 font-bold text-sm transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">
+                            {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Saving...</> : <><CheckCircle2 className="w-4 h-4 mr-2" /> Complete Setup</>}
+                        </button>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ─── Editable chip list used for services + differentiators ─────────────────
+function EditableChipList({
+    label, field, items, onAdd, onRemove, sourceBadge,
+}: {
+    label: string;
+    field: string;
+    items: string[];
+    onAdd: (value: string) => void;
+    onRemove: (value: string) => void;
+    sourceBadge?: React.ReactNode;
+}) {
+    const [draft, setDraft] = useState("");
+    return (
+        <div>
+            <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">
+                {label}
+                {sourceBadge}
+            </label>
+            <div className="flex flex-wrap gap-1.5 mb-2 min-h-[32px]">
+                {items.map(v => (
+                    <span key={`${field}-${v}`}
+                        className="inline-flex items-center bg-stone-900 text-white text-xs font-medium px-2.5 py-1 rounded-lg">
+                        {v}
+                        <button type="button" onClick={() => onRemove(v)} className="ml-1.5 hover:text-red-300" title={`Remove ${v}`}>
+                            <X className="w-3 h-3" />
+                        </button>
+                    </span>
+                ))}
+                {items.length === 0 && (
+                    <span className="text-xs text-stone-400 italic self-center">None yet — add below.</span>
+                )}
+            </div>
+            <div className="flex gap-2">
+                <input type="text" value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                        if (e.key === "Enter" && draft.trim()) {
+                            e.preventDefault();
+                            onAdd(draft.trim());
+                            setDraft("");
+                        }
+                    }}
+                    className="flex-1 px-3 py-2 border border-stone-200 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm"
+                    placeholder={`Add a ${label.toLowerCase().replace(/s$/, "")}...`} />
+                <button type="button"
+                    onClick={() => { if (draft.trim()) { onAdd(draft.trim()); setDraft(""); } }}
+                    className="px-3 py-2 bg-stone-100 text-stone-700 rounded-lg font-bold text-xs hover:bg-stone-200 transition-all">
+                    Add
+                </button>
             </div>
         </div>
     );

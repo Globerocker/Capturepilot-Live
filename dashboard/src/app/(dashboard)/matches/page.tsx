@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseClient } from "@/lib/supabase/client";
-import { Loader2, Sparkles, Search, X, ChevronLeft, ChevronRight, Trophy, Shield, Target, ArrowRight, Bookmark, EyeOff, Flame, ChevronUp, ChevronDown, Filter, CheckCircle2, Download, AlertTriangle } from "lucide-react";
+import { Loader2, Sparkles, Search, X, ChevronLeft, ChevronRight, Trophy, Shield, Target, ArrowRight, Bookmark, EyeOff, Flame, ChevronUp, ChevronDown, Filter, CheckCircle2, Download, AlertTriangle, List, Table as TableIcon, Columns3, GripVertical } from "lucide-react";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { createPursuit } from "@/lib/pursue-utils";
 import { Skeleton, SkeletonMatchCard } from "@/components/ui/Skeleton";
@@ -29,6 +29,21 @@ const MAX_SELECTION = 20;
 interface UserMatch extends MatchRow {
     score_breakdown: Record<string, number> | null;
     is_dismissed: boolean;
+    opportunities: {
+        id: string;
+        title: string;
+        agency: string;
+        naics_code: string;
+        psc_code: string | null;
+        notice_type: string;
+        response_deadline: string;
+        posted_date: string | null;
+        set_aside_code: string;
+        place_of_performance_state: string;
+        award_amount: number | null;
+        estimated_value: number | null;
+        source: string | null;
+    };
 }
 
 export default function MyMatchesPage() {
@@ -116,11 +131,14 @@ export default function MyMatchesPage() {
         if (!profileId) { setLoading(false); return; }
         setLoading(true);
 
+        // Use !inner on the opportunities join since we filter on opportunities.status —
+        // without !inner Supabase returns matches with opportunities: null and the count
+        // diverges from the rendered row count (per CLAUDE.md).
         let query = supabase
             .from("user_matches")
             .select(
                 "id, score, classification, score_breakdown, is_saved, is_dismissed, " +
-                "opportunities(id, title, agency, naics_code, notice_type, response_deadline, set_aside_code, place_of_performance_state, award_amount)",
+                "opportunities!inner(id, title, agency, naics_code, psc_code, notice_type, response_deadline, posted_date, set_aside_code, place_of_performance_state, award_amount, estimated_value, source)",
                 { count: "exact" }
             )
             .eq("user_profile_id", profileId)
@@ -339,7 +357,7 @@ export default function MyMatchesPage() {
 
     if (loading && matches.length === 0) {
         return (
-            <div className="max-w-5xl mx-auto pb-12 animate-in fade-in duration-500 px-1">
+            <div className="max-w-[1600px] mx-auto pb-12 animate-in fade-in duration-500 px-1">
                 <header className="mb-6">
                     <Skeleton className="h-8 w-48 rounded mb-2" />
                     <Skeleton className="h-4 w-72 rounded" />
@@ -354,7 +372,7 @@ export default function MyMatchesPage() {
     }
 
     return (
-        <div className="max-w-5xl mx-auto pb-12 animate-in fade-in duration-500 px-1">
+        <div className="max-w-[1600px] mx-auto pb-12 animate-in fade-in duration-500 px-1">
             <header className="mb-6">
                 <h2 className="text-2xl sm:text-3xl font-bold tracking-tighter text-black flex items-center">
                     <Target className="mr-2 sm:mr-3 w-6 h-6 sm:w-8 sm:h-8" /> Opportunities
@@ -442,17 +460,19 @@ export default function MyMatchesPage() {
                         {sortBy === opt.key && (sortDirection === "asc" ? <ChevronUp className="w-3 h-3 ml-1" /> : <ChevronDown className="w-3 h-3 ml-1" />)}
                     </button>
                 ))}
-                <button
-                    type="button"
-                    onClick={() => setShowFilters(!showFilters)}
-                    className={clsx(
-                        "text-xs font-bold px-3 py-1.5 rounded-full border transition-all flex items-center ml-auto",
-                        showFilters ? "bg-black text-white border-black" : "bg-white text-stone-500 border-stone-200 hover:bg-stone-100"
-                    )}
-                >
-                    <Filter className="w-3 h-3 mr-1.5" />
-                    Filters
-                </button>
+                <div className="ml-auto flex items-center gap-2">
+                    <button
+                        type="button"
+                        onClick={() => setShowFilters(!showFilters)}
+                        className={clsx(
+                            "text-xs font-bold px-3 py-1.5 rounded-full border transition-all flex items-center",
+                            showFilters ? "bg-black text-white border-black" : "bg-white text-stone-500 border-stone-200 hover:bg-stone-100"
+                        )}
+                    >
+                        <Filter className="w-3 h-3 mr-1.5" />
+                        Filters
+                    </button>
+                </div>
             </section>
 
             {/* Advanced Filters */}

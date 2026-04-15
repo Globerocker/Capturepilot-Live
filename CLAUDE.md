@@ -27,7 +27,7 @@ git push captiorpilot main && git push live main && git push globerocker main
 - SAM API key via `X-Api-Key` header (NOT URL params — `?api_key=` is deprecated and can cause rejections)
 - Apollo: use `mixed_companies/search` (free tier), NOT `mixed_people/search`
 - Never commit `.env`, `.env.local`, `.mcp.json`
-- When creating migrations, pick the next free number under `supabase/migrations/` (current latest: **025**)
+- When creating migrations, pick the next free number under `supabase/migrations/` (current latest: **032**)
 
 ## Architecture
 - `/dashboard/src/app/(public)/` — Public pages (login, signup, check, admin)
@@ -38,7 +38,7 @@ git push captiorpilot main && git push live main && git push globerocker main
 - `/dashboard/src/lib/` — Shared libs (crawler, scoring, email, supabase, naics-codes, psc-codes)
 - `/dashboard/src/components/` — Shared UI components
 - `/tools/` — Python + Node enrichment scripts (numbered 1-21)
-- `/dashboard/supabase/migrations/` — DB migrations (001-025)
+- `/dashboard/supabase/migrations/` — DB migrations (001-032)
 
 ## User Types
 - `self_service` — SaaS users (full dashboard, self-onboarding)

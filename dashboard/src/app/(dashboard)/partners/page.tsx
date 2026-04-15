@@ -36,6 +36,7 @@ export default function PartnersPage() {
     const [searching, setSearching] = useState(false);
     const [results, setResults] = useState<Partner[]>([]);
     const [searched, setSearched] = useState(false);
+    const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
     // NAICS picker
     const [naicsQuery, setNaicsQuery] = useState("");
@@ -95,6 +96,7 @@ export default function PartnersPage() {
     const handleSearch = async () => {
         if (naicsCodes.length === 0 && !keyword.trim()) return;
         setSearching(true);
+        setErrorMsg(null);
         const params = new URLSearchParams();
         for (const n of naicsCodes) params.append("naics", n);
         for (const s of states) params.append("state", s);
@@ -102,9 +104,26 @@ export default function PartnersPage() {
         if (keyword.trim()) params.set("keyword", keyword.trim());
         params.set("limit", "50");
 
-        const res = await fetch(`/api/partners/search?${params.toString()}`);
-        const data = await res.json();
-        setResults(data.partners || []);
+        try {
+            const res = await fetch(`/api/partners/search?${params.toString()}`);
+            const data = await res.json();
+            if (!res.ok || data.error) {
+                setErrorMsg(
+                    data.error
+                        ? `${data.error}${data.upstream_errors?.length ? ` — ${data.upstream_errors[0]}` : ""}`
+                        : `Search failed (HTTP ${res.status})`
+                );
+                setResults([]);
+            } else {
+                setResults(data.partners || []);
+                if (data.upstream_errors?.length) {
+                    setErrorMsg(`Partial results: ${data.upstream_errors[0]}`);
+                }
+            }
+        } catch (err) {
+            setErrorMsg(`Network error: ${(err as Error).message}`);
+            setResults([]);
+        }
         setSearched(true);
         setSearching(false);
     };
@@ -118,7 +137,7 @@ export default function PartnersPage() {
     }, [keyword]);
 
     return (
-        <div className="max-w-7xl mx-auto space-y-6 pb-12">
+        <div className="max-w-[1600px] mx-auto space-y-6 pb-12">
             <div>
                 <h1 className="text-2xl font-bold flex items-center gap-2">
                     <Users className="w-6 h-6" /> Find Teaming Partners
@@ -300,8 +319,16 @@ export default function PartnersPage() {
                 </button>
             </div>
 
+            {/* Upstream error banner */}
+            {errorMsg && (
+                <div className="bg-red-50 border border-red-200 rounded-2xl p-4">
+                    <p className="text-xs font-bold text-red-700 mb-0.5">SAM.gov partner search issue</p>
+                    <p className="text-xs text-red-600 break-words">{errorMsg}</p>
+                </div>
+            )}
+
             {/* Results */}
-            {searched && results.length === 0 && !searching && (
+            {searched && !errorMsg && results.length === 0 && !searching && (
                 <div className="bg-white border border-stone-200 rounded-2xl p-8 text-center">
                     <p className="text-stone-500 text-sm">No partners found. Try different search criteria.</p>
                 </div>
@@ -310,6 +337,7 @@ export default function PartnersPage() {
             {results.length > 0 && (
                 <div className="space-y-3">
                     <p className="text-sm text-stone-500">{results.length} partners found</p>
+                    <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-3">
                     {results.map((p, i) => (
                         <div key={p.uei || i} className="bg-white border border-stone-200 rounded-2xl p-5 hover:border-stone-300 transition-colors">
                             <div className="flex items-start justify-between gap-3">
@@ -352,6 +380,7 @@ export default function PartnersPage() {
                             </div>
                         </div>
                     ))}
+                    </div>
                 </div>
             )}
         </div>

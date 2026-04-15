@@ -96,11 +96,23 @@ export default function CompetitorDetailPage({ params }: { params: Promise<{ id:
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) { router.push("/login"); return; }
 
+            // Look up user's profile so we can scope the competitor query to them.
+            // Without this filter, `.single()` throws PGRST116 (and the page silently
+            // redirects) whenever a competitor's id doesn't belong to the current user
+            // or RLS hides the row — which happens on every detail open.
+            const { data: profile } = await supabase
+                .from("user_profiles")
+                .select("id")
+                .eq("auth_user_id", user.id)
+                .single();
+            if (!profile) { router.push("/onboard"); return; }
+
             const { data } = await supabase
                 .from("client_competitors")
                 .select("*")
                 .eq("id", id)
-                .single();
+                .eq("user_profile_id", profile.id)
+                .maybeSingle();
 
             if (!data) { router.push("/competitors"); return; }
             const comp = data as Competitor;
