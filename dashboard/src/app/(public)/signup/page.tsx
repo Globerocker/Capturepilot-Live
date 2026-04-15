@@ -60,6 +60,16 @@ function SignupPageContent() {
       setError(friendlyError(error.message));
       setLoading(false);
     } else {
+      // Fire-and-forget HubSpot sync — do not block redirect
+      fetch("/api/hubspot/sync-contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          source: "signup",
+          account_type: "self_service",
+        }),
+      }).catch((err) => console.error("[HubSpot sync failed]", err));
       router.push(analysisId ? `/onboard?analysis_id=${analysisId}` : "/onboard");
     }
   };
