@@ -3,8 +3,9 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { createSupabaseClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
-import { Shield, Globe, ExternalLink, Loader2, ChevronDown, TrendingUp, Search, Plus, LinkIcon, Users } from "lucide-react";
+import { Shield, Globe, ExternalLink, Loader2, ChevronDown, TrendingUp, Search, Plus, LinkIcon, Users, ArrowRight } from "lucide-react";
 import { AnalysisProgressStepper, statusToStep } from "@/components/AnalysisProgressStepper";
+import Link from "next/link";
 import clsx from "clsx";
 
 const supabase = createSupabaseClient();
@@ -515,6 +516,13 @@ export default function CompetitorsPage() {
                                     {comp.last_analyzed_at && (
                                         <p className="text-[9px] text-stone-400">Last analyzed: {new Date(comp.last_analyzed_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p>
                                     )}
+
+                                    <Link
+                                        href={`/competitors/${comp.id}`}
+                                        className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700 hover:text-emerald-800 mt-2"
+                                    >
+                                        View full analysis <ArrowRight className="w-3 h-3" />
+                                    </Link>
                                 </div>
                             )}
                         </div>
