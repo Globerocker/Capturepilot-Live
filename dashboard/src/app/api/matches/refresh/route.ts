@@ -4,7 +4,9 @@ import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { scoreOpportunity, type ProfileForScoring, type OpportunityForScoring } from "@/lib/match-scoring";
 
-const MAX_MATCHES = 500;
+// Persist all matches with score above MIN_MATCH_SCORE. No hard cap.
+// Previous behavior capped at top 500, which hid ~99% of ~54k opportunities from users.
+const MIN_MATCH_SCORE = 0.3; // classifications: COLD 0.3-0.5, WARM 0.5-0.7, HOT 0.7+
 
 export async function POST() {
     // Auth check
@@ -79,24 +81,20 @@ export async function POST() {
         });
     }
 
-    // Sort and keep top MAX_MATCHES
+    // Keep all matches above MIN_MATCH_SCORE, sorted by score descending
     scored.sort((a, b) => b.score - a.score);
-    const top = scored.slice(0, MAX_MATCHES);
+    const top = scored.filter(m => m.score >= MIN_MATCH_SCORE);
 
-    // Clean stale matches
-    if (top.length > 0) {
-        const keepIds = top.map(m => m.opportunity_id);
-        try {
-            await sb.from("user_matches").delete()
-                .eq("user_profile_id", p.id as string)
-                .not("opportunity_id", "in", `(${keepIds.join(",")})`);
-        } catch { /* ok */ }
-    }
+    // Clean stale matches — delete everything for this user, then reinsert.
+    // Using an IN-list with thousands of UUIDs fails on Postgres (URL length + param limits).
+    await sb.from("user_matches")
+        .delete()
+        .eq("user_profile_id", p.id as string);
 
-    // Upsert matches (in chunks of 200)
+    // Upsert matches (in chunks of 500)
     let written = 0;
-    for (let i = 0; i < top.length; i += 200) {
-        const chunk = top.slice(i, i + 200);
+    for (let i = 0; i < top.length; i += 500) {
+        const chunk = top.slice(i, i + 500);
         const { error } = await sb.from("user_matches")
             .upsert(chunk, { onConflict: "user_profile_id,opportunity_id" });
         if (!error) written += chunk.length;

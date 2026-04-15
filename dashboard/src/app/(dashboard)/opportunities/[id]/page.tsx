@@ -10,6 +10,7 @@ import PursueButton from "@/components/PursueButton";
 import OpportunityDescription from "@/components/OpportunityDescription";
 import OpportunityAttachments from "@/components/OpportunityAttachments";
 import StructuredRequirements from "@/components/StructuredRequirements";
+import { MarketIntelligence } from "@/components/MarketIntelligence";
 import { estimateContractValue } from "@/utils/estimateValue";
 
 export const dynamic = 'force-dynamic';
@@ -512,6 +513,11 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
 
                     {/* Attachments - fetched live from SAM.gov */}
                     <OpportunityAttachments noticeId={opp.notice_id} resourceLinks={opp.resource_links} defaultCollapsed={false} />
+
+                    {/* Market Intelligence — live aggregates from USASpending.gov keyed on this opp's NAICS */}
+                    {opp.naics_code && (
+                        <MarketIntelligence naicsCodes={[opp.naics_code]} companyName={opp.incumbent_contractor_name || undefined} />
+                    )}
 
                 </div>
 

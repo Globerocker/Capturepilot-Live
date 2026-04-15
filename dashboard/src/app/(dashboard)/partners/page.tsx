@@ -36,6 +36,7 @@ export default function PartnersPage() {
     const [searching, setSearching] = useState(false);
     const [results, setResults] = useState<Partner[]>([]);
     const [searched, setSearched] = useState(false);
+    const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
     // NAICS picker
     const [naicsQuery, setNaicsQuery] = useState("");
@@ -95,6 +96,7 @@ export default function PartnersPage() {
     const handleSearch = async () => {
         if (naicsCodes.length === 0 && !keyword.trim()) return;
         setSearching(true);
+        setErrorMsg(null);
         const params = new URLSearchParams();
         for (const n of naicsCodes) params.append("naics", n);
         for (const s of states) params.append("state", s);
@@ -102,9 +104,26 @@ export default function PartnersPage() {
         if (keyword.trim()) params.set("keyword", keyword.trim());
         params.set("limit", "50");
 
-        const res = await fetch(`/api/partners/search?${params.toString()}`);
-        const data = await res.json();
-        setResults(data.partners || []);
+        try {
+            const res = await fetch(`/api/partners/search?${params.toString()}`);
+            const data = await res.json();
+            if (!res.ok || data.error) {
+                setErrorMsg(
+                    data.error
+                        ? `${data.error}${data.upstream_errors?.length ? ` — ${data.upstream_errors[0]}` : ""}`
+                        : `Search failed (HTTP ${res.status})`
+                );
+                setResults([]);
+            } else {
+                setResults(data.partners || []);
+                if (data.upstream_errors?.length) {
+                    setErrorMsg(`Partial results: ${data.upstream_errors[0]}`);
+                }
+            }
+        } catch (err) {
+            setErrorMsg(`Network error: ${(err as Error).message}`);
+            setResults([]);
+        }
         setSearched(true);
         setSearching(false);
     };
@@ -300,8 +319,16 @@ export default function PartnersPage() {
                 </button>
             </div>
 
+            {/* Upstream error banner */}
+            {errorMsg && (
+                <div className="bg-red-50 border border-red-200 rounded-2xl p-4">
+                    <p className="text-xs font-bold text-red-700 mb-0.5">SAM.gov partner search issue</p>
+                    <p className="text-xs text-red-600 break-words">{errorMsg}</p>
+                </div>
+            )}
+
             {/* Results */}
-            {searched && results.length === 0 && !searching && (
+            {searched && !errorMsg && results.length === 0 && !searching && (
                 <div className="bg-white border border-stone-200 rounded-2xl p-8 text-center">
                     <p className="text-stone-500 text-sm">No partners found. Try different search criteria.</p>
                 </div>
