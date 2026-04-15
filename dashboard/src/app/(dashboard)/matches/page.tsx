@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseClient } from "@/lib/supabase/client";
-import { Loader2, Sparkles, Search, X, ChevronLeft, ChevronRight, Trophy, Shield, Target, ArrowRight, Bookmark, EyeOff, Flame, ChevronUp, ChevronDown, Filter, CheckCircle2, Download, AlertTriangle } from "lucide-react";
+import { Loader2, Sparkles, Search, X, ChevronLeft, ChevronRight, Trophy, Shield, Target, ArrowRight, Bookmark, EyeOff, Flame, ChevronUp, ChevronDown, Filter, CheckCircle2, Download, AlertTriangle, List, Table as TableIcon, Columns3, GripVertical } from "lucide-react";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { createPursuit } from "@/lib/pursue-utils";
 import { Skeleton, SkeletonMatchCard } from "@/components/ui/Skeleton";
@@ -29,6 +29,147 @@ const MAX_SELECTION = 20;
 interface UserMatch extends MatchRow {
     score_breakdown: Record<string, number> | null;
     is_dismissed: boolean;
+    opportunities: {
+        id: string;
+        title: string;
+        agency: string;
+        naics_code: string;
+        psc_code: string | null;
+        notice_type: string;
+        response_deadline: string;
+        posted_date: string | null;
+        set_aside_code: string;
+        place_of_performance_state: string;
+        award_amount: number | null;
+        estimated_value: number | null;
+        source: string | null;
+    };
+}
+
+type ColumnKey =
+    | "score" | "title" | "agency" | "notice_type" | "set_aside"
+    | "state" | "estimated_value" | "posted_date" | "response_deadline"
+    | "naics" | "psc" | "source" | "actions";
+
+interface ColumnDef {
+    key: ColumnKey;
+    label: string;
+    defaultVisible: boolean;
+}
+
+const ALL_COLUMNS: ColumnDef[] = [
+    { key: "score",            label: "Score",         defaultVisible: true  },
+    { key: "title",            label: "Title",         defaultVisible: true  },
+    { key: "agency",           label: "Agency",        defaultVisible: true  },
+    { key: "notice_type",      label: "Notice Type",   defaultVisible: true  },
+    { key: "set_aside",        label: "Set-Aside",     defaultVisible: false },
+    { key: "state",            label: "Place of Perf.",defaultVisible: false },
+    { key: "estimated_value",  label: "Est. Value",    defaultVisible: false },
+    { key: "posted_date",      label: "Posted",        defaultVisible: false },
+    { key: "response_deadline",label: "Deadline",      defaultVisible: true  },
+    { key: "naics",            label: "NAICS",         defaultVisible: false },
+    { key: "psc",              label: "PSC",           defaultVisible: false },
+    { key: "source",           label: "Source",        defaultVisible: false },
+    { key: "actions",          label: "Actions",       defaultVisible: true  },
+];
+
+const COLUMN_MAP: Record<ColumnKey, ColumnDef> = Object.fromEntries(ALL_COLUMNS.map(c => [c.key, c])) as Record<ColumnKey, ColumnDef>;
+
+const DEFAULT_COLUMN_ORDER: ColumnKey[] = ALL_COLUMNS.map(c => c.key);
+const DEFAULT_VISIBLE: ColumnKey[] = ALL_COLUMNS.filter(c => c.defaultVisible).map(c => c.key);
+
+type ViewMode = "list" | "table";
+
+function renderTableCell(
+    key: ColumnKey,
+    match: UserMatch,
+    opp: UserMatch["opportunities"],
+    ctx: {
+        scorePercent: number;
+        getScoreColor: (s: number) => string;
+        getNoticeColor: (t: string) => string;
+        formatCurrency: (v: number | null | undefined) => string | null;
+        toggleSave: (matchId: string, currentlySaved: boolean) => void;
+        dismissMatch: (matchId: string) => void;
+        handlePursue: (oppId: string, noticeType: string) => void;
+        pursuingIds: Set<string>;
+        pursuedIds: Set<string>;
+    }
+): React.ReactNode {
+    switch (key) {
+        case "score":
+            return (
+                <span className={clsx("inline-flex items-center justify-center px-2 py-1 rounded-lg border-2 font-black text-xs", ctx.getScoreColor(match.score))}>
+                    {ctx.scorePercent}%
+                </span>
+            );
+        case "title":
+            return (
+                <Link href={`/opportunities/${opp.id}`} className="font-bold text-black hover:underline line-clamp-1 max-w-xs block">
+                    {opp.title}
+                </Link>
+            );
+        case "agency":
+            return <span className="text-stone-600 line-clamp-1 max-w-[200px] block">{opp.agency || "—"}</span>;
+        case "notice_type":
+            return opp.notice_type ? (
+                <span className={clsx("text-[10px] font-bold px-2 py-0.5 rounded border uppercase tracking-widest", ctx.getNoticeColor(opp.notice_type))}>
+                    {opp.notice_type}
+                </span>
+            ) : <span className="text-stone-400">—</span>;
+        case "set_aside":
+            return opp.set_aside_code ? (
+                <span className="text-[10px] font-bold bg-blue-50 text-blue-600 border border-blue-200 px-2 py-0.5 rounded uppercase">{opp.set_aside_code}</span>
+            ) : <span className="text-stone-400">—</span>;
+        case "state":
+            return <span className="font-mono text-xs text-stone-600">{opp.place_of_performance_state || "—"}</span>;
+        case "estimated_value": {
+            const v = opp.estimated_value ?? opp.award_amount;
+            const s = ctx.formatCurrency(v);
+            return s ? <span className="font-bold text-emerald-700">{s}</span> : <span className="text-stone-400">—</span>;
+        }
+        case "posted_date":
+            return opp.posted_date ? <span className="text-xs text-stone-600">{new Date(opp.posted_date).toLocaleDateString()}</span> : <span className="text-stone-400">—</span>;
+        case "response_deadline":
+            return opp.response_deadline ? <span className="font-bold text-xs text-stone-700">{new Date(opp.response_deadline).toLocaleDateString()}</span> : <span className="text-stone-400">TBD</span>;
+        case "naics":
+            return <span className="font-mono text-xs bg-stone-100 px-2 py-0.5 rounded border border-stone-200">{opp.naics_code || "—"}</span>;
+        case "psc":
+            return opp.psc_code ? <span className="font-mono text-xs bg-stone-100 px-2 py-0.5 rounded border border-stone-200">{opp.psc_code}</span> : <span className="text-stone-400">—</span>;
+        case "source":
+            return <span className="text-xs text-stone-500 uppercase">{opp.source || "SAM"}</span>;
+        case "actions":
+            return (
+                <div className="flex items-center gap-1">
+                    {ctx.pursuedIds.has(opp.id) ? (
+                        <span className="inline-flex items-center gap-1 text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg text-[10px] font-bold">
+                            <CheckCircle2 className="w-3 h-3" /> Pursuing
+                        </span>
+                    ) : (
+                        <button type="button" title="Pursue"
+                            onClick={() => ctx.handlePursue(opp.id, opp.notice_type)}
+                            disabled={ctx.pursuingIds.has(opp.id)}
+                            className="p-1.5 rounded-lg text-stone-400 hover:text-black hover:bg-stone-100 disabled:opacity-50">
+                            {ctx.pursuingIds.has(opp.id) ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                        </button>
+                    )}
+                    <button type="button" title={match.is_saved ? "Unsave" : "Save"}
+                        onClick={() => ctx.toggleSave(match.id, match.is_saved)}
+                        className={clsx("p-1.5 rounded-lg",
+                            match.is_saved ? "text-amber-500 bg-amber-50" : "text-stone-400 hover:text-amber-500 hover:bg-amber-50"
+                        )}>
+                        <Bookmark className="w-3.5 h-3.5" fill={match.is_saved ? "currentColor" : "none"} />
+                    </button>
+                    <button type="button" title="Dismiss"
+                        onClick={() => ctx.dismissMatch(match.id)}
+                        className="p-1.5 rounded-lg text-stone-400 hover:text-red-500 hover:bg-red-50">
+                        <EyeOff className="w-3.5 h-3.5" />
+                    </button>
+                </div>
+            );
+        default:
+            return null;
+    }
 }
 
 export default function MyMatchesPage() {
@@ -123,7 +264,7 @@ export default function MyMatchesPage() {
             .from("user_matches")
             .select(
                 "id, score, classification, score_breakdown, is_saved, is_dismissed, " +
-                "opportunities!inner(id, title, agency, naics_code, notice_type, response_deadline, set_aside_code, place_of_performance_state, award_amount)",
+                "opportunities!inner(id, title, agency, naics_code, psc_code, notice_type, response_deadline, posted_date, set_aside_code, place_of_performance_state, award_amount, estimated_value, source)",
                 { count: "exact" }
             )
             .eq("user_profile_id", profileId)
@@ -445,18 +586,105 @@ export default function MyMatchesPage() {
                         {sortBy === opt.key && (sortDirection === "asc" ? <ChevronUp className="w-3 h-3 ml-1" /> : <ChevronDown className="w-3 h-3 ml-1" />)}
                     </button>
                 ))}
-                <button
-                    type="button"
-                    onClick={() => setShowFilters(!showFilters)}
-                    className={clsx(
-                        "text-xs font-bold px-3 py-1.5 rounded-full border transition-all flex items-center ml-auto",
-                        showFilters ? "bg-black text-white border-black" : "bg-white text-stone-500 border-stone-200 hover:bg-stone-100"
+                <div className="ml-auto flex items-center gap-2">
+                    {/* View toggle */}
+                    <div className="inline-flex rounded-full border border-stone-200 bg-white overflow-hidden">
+                        <button
+                            type="button"
+                            title="List view"
+                            onClick={() => setViewMode("list")}
+                            className={clsx(
+                                "px-3 py-1.5 text-xs font-bold inline-flex items-center gap-1 transition-colors",
+                                viewMode === "list" ? "bg-black text-white" : "text-stone-500 hover:bg-stone-50"
+                            )}
+                        >
+                            <List className="w-3 h-3" /> List
+                        </button>
+                        <button
+                            type="button"
+                            title="Table view"
+                            onClick={() => setViewMode("table")}
+                            className={clsx(
+                                "px-3 py-1.5 text-xs font-bold inline-flex items-center gap-1 transition-colors",
+                                viewMode === "table" ? "bg-black text-white" : "text-stone-500 hover:bg-stone-50"
+                            )}
+                        >
+                            <TableIcon className="w-3 h-3" /> Table
+                        </button>
+                    </div>
+                    {viewMode === "table" && (
+                        <button
+                            type="button"
+                            onClick={() => setShowColumnPicker(v => !v)}
+                            className={clsx(
+                                "text-xs font-bold px-3 py-1.5 rounded-full border transition-all inline-flex items-center gap-1",
+                                showColumnPicker ? "bg-black text-white border-black" : "bg-white text-stone-500 border-stone-200 hover:bg-stone-100"
+                            )}
+                        >
+                            <Columns3 className="w-3 h-3" /> Columns
+                        </button>
                     )}
-                >
-                    <Filter className="w-3 h-3 mr-1.5" />
-                    Filters
-                </button>
+                    <button
+                        type="button"
+                        onClick={() => setShowFilters(!showFilters)}
+                        className={clsx(
+                            "text-xs font-bold px-3 py-1.5 rounded-full border transition-all flex items-center",
+                            showFilters ? "bg-black text-white border-black" : "bg-white text-stone-500 border-stone-200 hover:bg-stone-100"
+                        )}
+                    >
+                        <Filter className="w-3 h-3 mr-1.5" />
+                        Filters
+                    </button>
+                </div>
             </section>
+
+            {/* Column picker (table view only) */}
+            {viewMode === "table" && showColumnPicker && (
+                <section className="bg-white border border-stone-200 rounded-2xl p-4 mb-4 animate-in slide-in-from-top-2 duration-200">
+                    <div className="flex items-center justify-between mb-3">
+                        <p className="text-xs font-bold text-stone-700 uppercase tracking-widest">Customize columns</p>
+                        <button
+                            type="button"
+                            onClick={() => { setColumnOrder(DEFAULT_COLUMN_ORDER); setVisibleColumns(DEFAULT_VISIBLE); }}
+                            className="text-[11px] font-bold text-stone-500 hover:text-black underline"
+                        >
+                            Reset
+                        </button>
+                    </div>
+                    <p className="text-[11px] text-stone-400 mb-3">Drag the handle to reorder. Toggle the checkbox to show/hide.</p>
+                    <ul className="space-y-1">
+                        {columnOrder.map(key => {
+                            const col = COLUMN_MAP[key];
+                            const visible = visibleColumns.includes(key);
+                            return (
+                                <li
+                                    key={key}
+                                    draggable
+                                    onDragStart={() => setDragColumn(key)}
+                                    onDragOver={(e) => e.preventDefault()}
+                                    onDrop={() => handleColumnDrop(key)}
+                                    onDragEnd={() => setDragColumn(null)}
+                                    className={clsx(
+                                        "flex items-center gap-2 px-2 py-1.5 rounded-lg border bg-stone-50 cursor-move",
+                                        dragColumn === key ? "opacity-50 border-black" : "border-stone-200"
+                                    )}
+                                >
+                                    <GripVertical className="w-3.5 h-3.5 text-stone-400" />
+                                    <label className="flex-1 flex items-center gap-2 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={visible}
+                                            onChange={() => toggleColumn(key)}
+                                            className="accent-black"
+                                        />
+                                        <span className="text-xs font-medium text-stone-700">{col.label}</span>
+                                    </label>
+                                </li>
+                            );
+                        })}
+                    </ul>
+                </section>
+            )}
 
             {/* Advanced Filters */}
             {showFilters && (
