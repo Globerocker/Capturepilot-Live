@@ -4,8 +4,10 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { createSupabaseClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Shield, Globe, Loader2, ChevronRight, TrendingUp, Plus, LinkIcon, Users, Search } from "lucide-react";
+import { Shield, Globe, ChevronRight, TrendingUp, Plus, LinkIcon, Users, Search, Building2, GitCompareArrows, X } from "lucide-react";
 import { AnalysisProgressStepper, statusToStep } from "@/components/AnalysisProgressStepper";
+import BulkAddFromSam from "@/components/competitors/BulkAddFromSam";
+import ComparisonTable from "@/components/competitors/ComparisonTable";
 import clsx from "clsx";
 
 const supabase = createSupabaseClient();
@@ -49,9 +51,13 @@ export default function CompetitorsPage() {
     const [competitors, setCompetitors] = useState<Competitor[]>([]);
     const [loading, setLoading] = useState(true);
     const [profileId, setProfileId] = useState<string | null>(null);
+    const [userNaics, setUserNaics] = useState<string[]>([]);
+    const [userStates, setUserStates] = useState<string[]>([]);
 
     // Add competitor form state
     const [showAddForm, setShowAddForm] = useState(false);
+    const [showBulkModal, setShowBulkModal] = useState(false);
+    const [bulkFlash, setBulkFlash] = useState<string>("");
     const [addUrl, setAddUrl] = useState("");
     const [addUei, setAddUei] = useState("");
     const [analyzing, setAnalyzing] = useState(false);
@@ -59,6 +65,19 @@ export default function CompetitorsPage() {
     const [analysisError, setAnalysisError] = useState("");
     const [analysisName, setAnalysisName] = useState("");
     const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    // Comparison state
+    const [compareIds, setCompareIds] = useState<string[]>([]);
+    const [showComparison, setShowComparison] = useState(false);
+    const MAX_COMPARE = 4;
+
+    function toggleCompare(id: string) {
+        setCompareIds(prev => {
+            if (prev.includes(id)) return prev.filter(x => x !== id);
+            if (prev.length >= MAX_COMPARE) return prev;
+            return [...prev, id];
+        });
+    }
 
     const stopPolling = useCallback(() => {
         if (pollRef.current) {
@@ -84,10 +103,15 @@ export default function CompetitorsPage() {
         (async () => {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) { router.push("/login"); return; }
-            const { data: prof } = await supabase.from("user_profiles").select("id").eq("auth_user_id", user.id).single();
+            const { data: prof } = await supabase.from("user_profiles").select("id, naics_codes, target_states, state").eq("auth_user_id", user.id).single();
             if (!prof) { router.push("/onboard"); return; }
-            setProfileId((prof as Record<string, unknown>).id as string);
-            await loadCompetitors((prof as Record<string, unknown>).id as string);
+            const p = prof as Record<string, unknown>;
+            setProfileId(p.id as string);
+            setUserNaics(((p.naics_codes as string[]) || []).slice(0, 3));
+            const ts = (p.target_states as string[] | null) || null;
+            if (ts && ts.length) setUserStates(ts.slice(0, 5));
+            else if (p.state) setUserStates([p.state as string]);
+            await loadCompetitors(p.id as string);
             setLoading(false);
         })();
     }, [loadCompetitors, router]);
@@ -253,17 +277,41 @@ export default function CompetitorsPage() {
                 </p>
             </header>
 
+            {bulkFlash && (
+                <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm rounded-xl px-4 py-2.5 flex items-center justify-between animate-in fade-in duration-300">
+                    <span>{bulkFlash}</span>
+                    <button
+                        type="button"
+                        aria-label="Dismiss"
+                        title="Dismiss"
+                        onClick={() => setBulkFlash("")}
+                        className="text-emerald-600 hover:text-emerald-900"
+                    >
+                        <X className="w-3.5 h-3.5" />
+                    </button>
+                </div>
+            )}
+
             {/* Add Competitor Form */}
             {!analyzing && (
                 <div className="bg-white border border-stone-200 rounded-2xl overflow-hidden">
                     {!showAddForm ? (
-                        <button
-                            type="button"
-                            onClick={() => setShowAddForm(true)}
-                            className="w-full p-4 flex items-center justify-center gap-2 text-sm font-bold text-emerald-700 hover:bg-emerald-50/50 transition-colors"
-                        >
-                            <Plus className="w-4 h-4" /> Add Competitor
-                        </button>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-stone-200">
+                            <button
+                                type="button"
+                                onClick={() => setShowAddForm(true)}
+                                className="w-full p-4 flex items-center justify-center gap-2 text-sm font-bold text-emerald-700 hover:bg-emerald-50/50 transition-colors"
+                            >
+                                <Plus className="w-4 h-4" /> Add Competitor
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setShowBulkModal(true)}
+                                className="w-full p-4 flex items-center justify-center gap-2 text-sm font-bold text-stone-700 hover:bg-stone-50 transition-colors"
+                            >
+                                <Building2 className="w-4 h-4" /> Bulk Add from SAM.gov
+                            </button>
+                        </div>
                     ) : (
                         <form onSubmit={handleAddSubmit} className="p-5 space-y-4">
                             <div className="flex items-center gap-2 mb-1">
@@ -360,54 +408,126 @@ export default function CompetitorsPage() {
                 </div>
             )}
 
+            {/* Comparison Table */}
+            {showComparison && compareIds.length >= 2 && (
+                <ComparisonTable
+                    competitors={competitors.filter(c => compareIds.includes(c.id))}
+                    onClose={() => setShowComparison(false)}
+                />
+            )}
+
             <div className="space-y-3">
                 {competitors.map((comp) => {
+                    const isChecked = compareIds.includes(comp.id);
+                    const disableCheck = !isChecked && compareIds.length >= MAX_COMPARE;
                     return (
-                        <Link
+                        <div
                             key={comp.id}
-                            href={`/competitors/${comp.id}`}
-                            className="block bg-white border border-stone-200 rounded-2xl overflow-hidden hover:border-stone-300 hover:shadow-sm transition-all"
+                            className={clsx(
+                                "bg-white border rounded-2xl overflow-hidden transition-all",
+                                isChecked
+                                    ? "border-emerald-300 ring-2 ring-emerald-100"
+                                    : "border-stone-200 hover:border-stone-300 hover:shadow-sm"
+                            )}
                         >
                             <div className="w-full text-left p-5 flex items-center gap-4">
-                                <div className={clsx(
-                                    "w-12 h-12 rounded-xl border-2 font-black text-sm flex items-center justify-center flex-shrink-0",
-                                    comp.overlap_score >= 70 ? "text-red-600 bg-red-50 border-red-200" :
-                                    comp.overlap_score >= 40 ? "text-amber-600 bg-amber-50 border-amber-200" :
-                                    "text-blue-600 bg-blue-50 border-blue-200"
-                                )}>
-                                    {comp.overlap_score}%
-                                </div>
-
-                                <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                        <span className="font-bold text-sm text-black">{comp.competitor_name}</span>
-                                        {comp.federal_presence && (
-                                            <span className={clsx("text-[9px] font-bold px-2 py-0.5 rounded border uppercase",
-                                                presenceColors[comp.federal_presence] || presenceColors.unknown
-                                            )}>
-                                                Fed: {comp.federal_presence}
-                                            </span>
-                                        )}
-                                        {comp.uei && (
-                                            <span className="text-[9px] font-mono bg-blue-50 text-blue-600 border border-blue-200 px-2 py-0.5 rounded">
-                                                UEI: {comp.uei}
-                                            </span>
-                                        )}
+                                <label
+                                    className={clsx(
+                                        "flex-shrink-0 flex items-center justify-center",
+                                        disableCheck ? "cursor-not-allowed opacity-40" : "cursor-pointer"
+                                    )}
+                                    title={disableCheck ? `Max ${MAX_COMPARE} competitors can be compared` : "Select for comparison"}
+                                >
+                                    <input
+                                        type="checkbox"
+                                        checked={isChecked}
+                                        disabled={disableCheck}
+                                        onChange={() => toggleCompare(comp.id)}
+                                        className="w-4 h-4 rounded border-stone-300 text-emerald-600 focus:ring-emerald-500/20"
+                                        aria-label={`Select ${comp.competitor_name} for comparison`}
+                                    />
+                                </label>
+                                <Link
+                                    href={`/competitors/${comp.id}`}
+                                    className="flex-1 min-w-0 flex items-center gap-4 group"
+                                >
+                                    <div className={clsx(
+                                        "w-12 h-12 rounded-xl border-2 font-black text-sm flex items-center justify-center flex-shrink-0",
+                                        comp.overlap_score >= 70 ? "text-red-600 bg-red-50 border-red-200" :
+                                        comp.overlap_score >= 40 ? "text-amber-600 bg-amber-50 border-amber-200" :
+                                        "text-blue-600 bg-blue-50 border-blue-200"
+                                    )}>
+                                        {comp.overlap_score}%
                                     </div>
-                                    <p className="text-xs text-stone-500 mt-0.5 line-clamp-1">{comp.description || ""}</p>
-                                    <div className="flex items-center gap-3 mt-1.5 text-xs text-stone-400">
-                                        {comp.employee_count && <span><Users className="w-3 h-3 inline mr-0.5" />{formatEmployees(comp.employee_count)} employees</span>}
-                                        {comp.revenue_estimate && <span><TrendingUp className="w-3 h-3 inline mr-0.5" />{formatRevenue(comp.revenue_estimate)}</span>}
-                                        {comp.website && <span><Globe className="w-3 h-3 inline mr-0.5" />{comp.website.replace(/^https?:\/\//, "").replace(/\/$/, "")}</span>}
-                                    </div>
-                                </div>
 
-                                <ChevronRight className="w-4 h-4 text-stone-400 flex-shrink-0" />
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <span className="font-bold text-sm text-black group-hover:text-emerald-700 transition-colors">{comp.competitor_name}</span>
+                                            {comp.federal_presence && (
+                                                <span className={clsx("text-[9px] font-bold px-2 py-0.5 rounded border uppercase",
+                                                    presenceColors[comp.federal_presence] || presenceColors.unknown
+                                                )}>
+                                                    Fed: {comp.federal_presence}
+                                                </span>
+                                            )}
+                                            {comp.uei && (
+                                                <span className="text-[9px] font-mono bg-blue-50 text-blue-600 border border-blue-200 px-2 py-0.5 rounded">
+                                                    UEI: {comp.uei}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <p className="text-xs text-stone-500 mt-0.5 line-clamp-1">{comp.description || ""}</p>
+                                        <div className="flex items-center gap-3 mt-1.5 text-xs text-stone-400">
+                                            {comp.employee_count && <span><Users className="w-3 h-3 inline mr-0.5" />{formatEmployees(comp.employee_count)} employees</span>}
+                                            {comp.revenue_estimate && <span><TrendingUp className="w-3 h-3 inline mr-0.5" />{formatRevenue(comp.revenue_estimate)}</span>}
+                                            {comp.website && <span><Globe className="w-3 h-3 inline mr-0.5" />{comp.website.replace(/^https?:\/\//, "").replace(/\/$/, "")}</span>}
+                                        </div>
+                                    </div>
+
+                                    <ChevronRight className="w-4 h-4 text-stone-400 flex-shrink-0" />
+                                </Link>
                             </div>
-                        </Link>
+                        </div>
                     );
                 })}
             </div>
+
+            {/* Floating compare button */}
+            {compareIds.length >= 2 && !showComparison && (
+                <button
+                    type="button"
+                    onClick={() => setShowComparison(true)}
+                    className="fixed bottom-6 right-6 z-40 inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm px-5 py-3 rounded-2xl shadow-lg hover:shadow-xl transition-all animate-in fade-in slide-in-from-bottom-4 duration-300"
+                >
+                    <GitCompareArrows className="w-4 h-4" />
+                    Compare ({compareIds.length})
+                </button>
+            )}
+            {compareIds.length > 0 && (
+                <button
+                    type="button"
+                    onClick={() => { setCompareIds([]); setShowComparison(false); }}
+                    className={clsx(
+                        "fixed z-40 inline-flex items-center gap-1 text-xs font-medium text-stone-600 bg-white border border-stone-200 hover:border-stone-300 px-3 py-2 rounded-xl shadow-sm transition-all",
+                        compareIds.length >= 2 && !showComparison ? "bottom-6 right-[11.5rem]" : "bottom-6 right-6"
+                    )}
+                >
+                    <X className="w-3 h-3" /> Clear selection
+                </button>
+            )}
+
+            {/* Bulk Add Modal */}
+            <BulkAddFromSam
+                open={showBulkModal}
+                onClose={() => setShowBulkModal(false)}
+                onAdded={async (count) => {
+                    if (profileId) await loadCompetitors(profileId);
+                    if (count > 0) setBulkFlash(`Added ${count} competitor${count === 1 ? "" : "s"} from SAM.gov.`);
+                    else setBulkFlash("No new competitors added (all were duplicates).");
+                }}
+                defaultNaics={userNaics}
+                defaultStates={userStates}
+            />
         </div>
     );
 }
