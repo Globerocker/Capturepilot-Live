@@ -493,7 +493,7 @@ export default function SettingsPage() {
     /* ================================================================ */
 
     return (
-        <div className="max-w-3xl mx-auto space-y-6 animate-in fade-in duration-500 pb-16 px-1">
+        <div className="max-w-[1400px] mx-auto animate-in fade-in duration-500 pb-16 px-1 space-y-6">
             {/* ---- Header ---- */}
             <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
                 <div>
@@ -519,6 +519,9 @@ export default function SettingsPage() {
                 </button>
             </header>
 
+            {/* Two-column layout on xl: sidebar (account/billing/auth/danger) + main profile form */}
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
+            <div className="xl:col-span-1 space-y-6">
             {/* ================================================================ */}
             {/*  SECTION 1: Account Overview                                     */}
             {/* ================================================================ */}
@@ -867,6 +870,10 @@ export default function SettingsPage() {
                 )}
             </section>
 
+            </div>
+
+            {/* ===== Right column: Profile form (spans 2) ===== */}
+            <div className="xl:col-span-2 space-y-6">
             {/* ================================================================ */}
             {/*  SECTION 4: Profile Settings                                     */}
             {/* ================================================================ */}
@@ -1420,6 +1427,8 @@ export default function SettingsPage() {
                     </div>
                 </div>
             </section>
+            </div>
+            </div>
 
             {/* ================================================================ */}
             {/*  SECTION 5: Password                                             */}
