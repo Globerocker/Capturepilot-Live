@@ -29,6 +29,7 @@ export default function PartnersPage() {
     const [searching, setSearching] = useState(false);
     const [results, setResults] = useState<Partner[]>([]);
     const [searched, setSearched] = useState(false);
+    const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
     // Pre-fill from user's NAICS codes
     useEffect(() => {
@@ -43,16 +44,38 @@ export default function PartnersPage() {
     const handleSearch = async () => {
         if (!naics && !keyword) return;
         setSearching(true);
+        setErrorMsg(null);
         const params = new URLSearchParams();
-        if (naics) params.set("naics", naics);
-        if (state) params.set("state", state);
+
+        // Support comma/whitespace-separated NAICS and state inputs, appended as repeated params.
+        const naicsTokens = naics.split(/[\s,]+/).map(s => s.trim()).filter(Boolean);
+        const stateTokens = state.split(/[\s,]+/).map(s => s.trim()).filter(Boolean);
+        for (const n of naicsTokens) params.append("naics", n);
+        for (const s of stateTokens) params.append("state", s);
         if (cert) params.set("set_aside", cert);
         if (keyword) params.set("keyword", keyword);
         params.set("limit", "30");
 
-        const res = await fetch(`/api/partners/search?${params.toString()}`);
-        const data = await res.json();
-        setResults(data.partners || []);
+        try {
+            const res = await fetch(`/api/partners/search?${params.toString()}`);
+            const data = await res.json();
+            if (!res.ok || data.error) {
+                setErrorMsg(
+                    data.error
+                        ? `${data.error}${data.upstream_errors?.length ? ` — ${data.upstream_errors[0]}` : ""}`
+                        : `Search failed (HTTP ${res.status})`
+                );
+                setResults([]);
+            } else {
+                setResults(data.partners || []);
+                if (data.upstream_errors?.length) {
+                    setErrorMsg(`Partial results: ${data.upstream_errors[0]}`);
+                }
+            }
+        } catch (err) {
+            setErrorMsg(`Network error: ${(err as Error).message}`);
+            setResults([]);
+        }
         setSearched(true);
         setSearching(false);
     };
@@ -106,8 +129,16 @@ export default function PartnersPage() {
                 </button>
             </div>
 
+            {/* Upstream error banner */}
+            {errorMsg && (
+                <div className="bg-red-50 border border-red-200 rounded-2xl p-4">
+                    <p className="text-xs font-bold text-red-700 mb-0.5">SAM.gov partner search issue</p>
+                    <p className="text-xs text-red-600 break-words">{errorMsg}</p>
+                </div>
+            )}
+
             {/* Results */}
-            {searched && results.length === 0 && (
+            {searched && !errorMsg && results.length === 0 && (
                 <div className="bg-white border border-stone-200 rounded-2xl p-8 text-center">
                     <p className="text-stone-500 text-sm">No partners found. Try different search criteria.</p>
                 </div>
