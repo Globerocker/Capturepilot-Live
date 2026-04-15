@@ -7,6 +7,7 @@ import Image from "next/image";
 import { LayoutDashboard, Target, Layers, FileText, BarChart3, Mic, Users, Shield, CreditCard, Settings, LogOut, Menu, X } from "lucide-react";
 import clsx from "clsx";
 import { createSupabaseClient } from "@/lib/supabase/client";
+import QuickActions from "./QuickActions";
 
 export default function Sidebar() {
     const [mobileOpen, setMobileOpen] = useState(false);
@@ -90,8 +91,13 @@ export default function Sidebar() {
                 })}
             </nav>
 
+            {/* Bottom-anchored section: Quick Actions + nav footer */}
+            <div className="mt-auto">
+            {/* Quick Actions */}
+            <QuickActions onNavigate={handleNavClick} />
+
             {/* Bottom links */}
-            <div className="px-3 lg:px-4 mt-auto space-y-0.5 border-t border-stone-800/60 pt-3">
+            <div className="px-3 lg:px-4 space-y-0.5 border-t border-stone-800/60 pt-3">
                 {bottomLinks.map((link) => {
                     const Icon = link.icon;
                     const isActive = pathname.startsWith(link.href);
@@ -120,6 +126,7 @@ export default function Sidebar() {
                     <LogOut className="h-5 w-5" />
                     <span className="font-medium">Sign Out</span>
                 </button>
+            </div>
             </div>
         </>
     );
