@@ -104,6 +104,13 @@ const STAGE_SERVICE_CTAS: Record<string, { title: string; description: string; v
     },
 };
 
+// TODO(kanban): CLAUDE.md advertises a Kanban board (components/pipeline/KanbanBoard.tsx)
+// with @dnd-kit drag-and-drop as the default pipeline view. That component does not exist
+// in the repo and the current page renders only a vertical stage-accordion — which is why
+// users report "Kanban view is missing" even though docs claim it's default.
+// Fixing this requires building a new KanbanBoard component (layout change plus feature work)
+// rather than a behavioral bugfix, so it was deferred by the bugfix sweep and left for the
+// feature/layout agents. Ref: bug #4 in 2026-04-14 sweep.
 export default function PipelinePage() {
     const router = useRouter();
     const [loading, setLoading] = useState(true);
