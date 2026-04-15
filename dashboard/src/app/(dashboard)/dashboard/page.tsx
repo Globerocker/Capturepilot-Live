@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Activity, Target, Sparkles, ArrowRight, Loader2, Clock, Trophy, Search, Shield, BarChart3, Layers, CheckSquare, Phone, UserCheck, FileText, Mic } from "lucide-react";
+import { Activity, Target, Sparkles, ArrowRight, Loader2, Clock, Trophy, Search, Shield, BarChart3, Layers, CheckSquare, Phone, UserCheck, FileText, Mic, Mail, Pencil } from "lucide-react";
 import ServiceCTA from "@/components/ui/ServiceCTA";
 import { MarketIntelligence } from "@/components/MarketIntelligence";
 import { Skeleton, SkeletonKpiCard } from "@/components/ui/Skeleton";
@@ -460,7 +460,7 @@ export default function UserDashboard() {
       </section>
 
       {/* Quick Actions */}
-      <section className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+      <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
         <Link href="/check" className="bg-gradient-to-br from-emerald-700 to-emerald-900 text-white rounded-[20px] sm:rounded-[24px] p-4 sm:p-5 hover:shadow-xl transition-all group">
           <Search className="w-5 h-5 mb-2 text-emerald-300 group-hover:text-white transition-colors" />
           <h4 className="font-bold text-sm mb-0.5">Quick Check</h4>
@@ -470,6 +470,16 @@ export default function UserDashboard() {
           <FileText className="w-5 h-5 mb-2 text-stone-400 group-hover:text-white transition-colors" />
           <h4 className="font-bold text-sm mb-0.5">Draft Proposal</h4>
           <p className="text-stone-400 text-[10px]">AI-powered writing</p>
+        </Link>
+        <Link href="/ai-drafter?tab=email" className="bg-white border border-stone-200 rounded-[20px] sm:rounded-[24px] p-4 sm:p-5 hover:shadow-lg hover:border-stone-300 transition-all group">
+          <Mail className="w-5 h-5 mb-2 text-stone-400 group-hover:text-black transition-colors" />
+          <h4 className="font-bold text-sm mb-0.5">Email Drafter</h4>
+          <p className="text-stone-400 text-[10px]">POC outreach</p>
+        </Link>
+        <Link href="/ai-drafter?tab=template" className="bg-white border border-stone-200 rounded-[20px] sm:rounded-[24px] p-4 sm:p-5 hover:shadow-lg hover:border-stone-300 transition-all group">
+          <Pencil className="w-5 h-5 mb-2 text-stone-400 group-hover:text-black transition-colors" />
+          <h4 className="font-bold text-sm mb-0.5">Template Drafter</h4>
+          <p className="text-stone-400 text-[10px]">Reusable sections</p>
         </Link>
         <Link href="/matches" className="bg-white border border-stone-200 rounded-[20px] sm:rounded-[24px] p-4 sm:p-5 hover:shadow-lg hover:border-stone-300 transition-all group">
           <Target className="w-5 h-5 mb-2 text-stone-400 group-hover:text-black transition-colors" />
