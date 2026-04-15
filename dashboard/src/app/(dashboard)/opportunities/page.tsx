@@ -144,7 +144,7 @@ export default function OpportunitiesPage() {
         try {
             let query = supabase
                 .from("opportunities")
-                .select("*, agencies(department, sub_tier), opportunity_types(name), set_asides(code)", { count: 'exact' });
+                .select("*, agencies(department, sub_tier), opportunity_types(name), set_asides(code)", { count: 'estimated' });
 
             if (activeSearch) {
                 query = query.or(`title.ilike.%${activeSearch}%,notice_id.ilike.%${activeSearch}%,agency.ilike.%${activeSearch}%,description.ilike.%${activeSearch}%`);
