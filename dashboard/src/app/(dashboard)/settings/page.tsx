@@ -12,7 +12,7 @@ import { createSupabaseClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import Link from "next/link";
-import { NAICS_CODES, searchNaics } from "@/lib/naics-codes";
+import { NAICS_CODES } from "@/lib/naics-codes";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import AddressAutocomplete from "@/components/AddressAutocomplete";
 import { PSC_CODES } from "@/lib/psc-codes";
@@ -201,10 +201,8 @@ export default function SettingsPage() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
-    const [showAdvanced, setShowAdvanced] = useState(true);
+    const [showAdvanced, setShowAdvanced] = useState(false);
     const [userEmail, setUserEmail] = useState("");
-    const [googleLinked, setGoogleLinked] = useState(false);
-    const [autosaveStatus, setAutosaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
     const [profile, setProfile] = useState<Profile | null>(null);
     const [naicsSearch, setNaicsSearch] = useState("");
     const [pscSearch, setPscSearch] = useState("");
@@ -237,7 +235,6 @@ export default function SettingsPage() {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) { router.push("/login"); return; }
             setUserEmail(user.email || "");
-            setGoogleLinked((user.identities || []).some(i => i.provider === "google"));
 
             const { data } = await supabase
                 .from("user_profiles")
@@ -383,61 +380,6 @@ export default function SettingsPage() {
         setSaving(false);
     };
 
-    /* ---- Autosave: debounced silent save whenever profile changes ---- */
-    useEffect(() => {
-        if (!profile || loading) return;
-        // Skip transient validation errors — autosave shouldn't clobber with bad data
-        if (Object.keys(validationErrors).length > 0) return;
-
-        setAutosaveStatus("saving");
-        const timer = setTimeout(async () => {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) return;
-            const { error } = await supabase
-                .from("user_profiles")
-                .update({
-                    company_name: profile.company_name,
-                    dba_name: profile.dba_name,
-                    uei: profile.uei ? profile.uei.toUpperCase() : null,
-                    cage_code: profile.cage_code ? profile.cage_code.toUpperCase() : null,
-                    address_line_1: profile.address_line_1,
-                    city: profile.city,
-                    state: profile.state,
-                    zip_code: profile.zip_code,
-                    website: profile.website,
-                    phone: profile.phone,
-                    contact_name: profile.contact_name,
-                    naics_codes: profile.naics_codes || [],
-                    sba_certifications: profile.sba_certifications || [],
-                    employee_count: profile.employee_count,
-                    revenue: profile.revenue,
-                    years_in_business: profile.years_in_business,
-                    service_radius_miles: profile.service_radius_miles,
-                    has_bonding: profile.has_bonding,
-                    has_fleet: profile.has_fleet,
-                    has_municipal_exp: profile.has_municipal_exp,
-                    federal_awards_count: profile.federal_awards_count,
-                    target_states: profile.target_states || [],
-                    target_contract_types: profile.target_contract_types || [],
-                    target_psc_codes: profile.target_psc_codes || [],
-                    preferred_agencies: profile.preferred_agencies || [],
-                    contract_value_min: profile.contract_value_min,
-                    contract_value_max: profile.contract_value_max,
-                    security_clearances: profile.security_clearances || [],
-                    prime_or_sub: profile.prime_or_sub || "both",
-                    notification_preferences: profile.notification_preferences,
-                })
-                .eq("auth_user_id", user.id);
-            setAutosaveStatus(error ? "error" : "saved");
-            if (!error) {
-                setTimeout(() => setAutosaveStatus("idle"), 2000);
-            }
-        }, 1200);
-
-        return () => clearTimeout(timer);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [profile]);
-
     /* ---- Stripe portal ---- */
     const openStripePortal = useCallback(async () => {
         setPortalLoading(true);
@@ -551,8 +493,8 @@ export default function SettingsPage() {
     /* ================================================================ */
 
     return (
-        <div className="max-w-3xl mx-auto space-y-6 animate-in fade-in duration-500 pb-16 px-1">
-            {/* ---- Header ---- */}
+        <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in duration-500 pb-16 px-1">
+            {/* ---- Header (full width) ---- */}
             <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
                 <div>
                     <h2 className="text-2xl sm:text-3xl font-bold tracking-tighter text-black flex items-center">
@@ -562,21 +504,6 @@ export default function SettingsPage() {
                         Manage your account, subscription, and business profile
                     </p>
                 </div>
-                <div className="flex items-center gap-3 self-start sm:self-auto">
-                    <span
-                        aria-live="polite"
-                        className={clsx(
-                            "text-xs font-medium transition-opacity",
-                            autosaveStatus === "idle" && "opacity-0",
-                            autosaveStatus === "saving" && "text-stone-500",
-                            autosaveStatus === "saved" && "text-emerald-600",
-                            autosaveStatus === "error" && "text-red-600",
-                        )}
-                    >
-                        {autosaveStatus === "saving" && "Autosaving..."}
-                        {autosaveStatus === "saved" && "✓ Saved"}
-                        {autosaveStatus === "error" && "Autosave failed"}
-                    </span>
                 <button
                     type="button"
                     onClick={handleSave}
@@ -590,13 +517,19 @@ export default function SettingsPage() {
                      saved ? <><CheckCircle2 className="w-4 h-4 mr-2" /> Saved</> :
                      "Save Changes"}
                 </button>
-                </div>
             </header>
 
             {/* ================================================================ */}
-            {/*  SECTION 1: Account Overview                                     */}
+            {/*  Two-column grid on lg+ (single column on smaller screens)       */}
+            {/*  Uses grid-auto-flow:dense + col-start utilities per section so  */}
+            {/*  sections don't need to be re-ordered in source.                 */}
             {/* ================================================================ */}
-            <section id="account" className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start lg:[grid-auto-flow:row_dense]">
+
+            {/* ================================================================ */}
+            {/*  SECTION 1: Account Overview  (LEFT column on lg+)               */}
+            {/* ================================================================ */}
+            <section id="account" className="lg:col-start-1 bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
                 <p className="text-stone-400 text-xs uppercase tracking-widest font-bold mb-4">Account Overview</p>
                 <div className="space-y-0">
                     {/* Email */}
@@ -656,7 +589,7 @@ export default function SettingsPage() {
             {/* ================================================================ */}
             {/*  SECTION 2: Subscription Management                              */}
             {/* ================================================================ */}
-            <section id="subscription" className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
+            <section id="subscription" className="lg:col-start-2 bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
                 <p className="text-stone-400 text-xs uppercase tracking-widest font-bold mb-4">Subscription</p>
 
                 {subLoading ? (
@@ -838,15 +771,113 @@ export default function SettingsPage() {
                 )}
             </section>
 
-            {/* Invoices & Billing History moved to /billing */}
-            <div className="bg-stone-50 border border-stone-200 border-dashed rounded-2xl p-4 text-xs text-stone-500 text-center">
-                Invoices & billing history now live on the <Link href="/billing#invoices" className="font-bold text-black underline underline-offset-2 hover:no-underline">Billing page</Link>.
-            </div>
+            {/* ================================================================ */}
+            {/*  SECTION 3: Invoices & Billing History                           */}
+            {/* ================================================================ */}
+            <section id="invoices" className="lg:col-start-2 bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
+                <button
+                    type="button"
+                    onClick={() => setInvoicesExpanded(!invoicesExpanded)}
+                    className="w-full flex items-center justify-between"
+                >
+                    <p className="text-stone-400 text-xs uppercase tracking-widest font-bold">
+                        Invoices & Billing History
+                    </p>
+                    {invoicesExpanded
+                        ? <ChevronUp className="w-4 h-4 text-stone-400" />
+                        : <ChevronDown className="w-4 h-4 text-stone-400" />
+                    }
+                </button>
+
+                {invoicesExpanded && (
+                    <div className="mt-4">
+                        {invoicesLoading ? (
+                            <div className="space-y-3">
+                                {[...Array(4)].map((_, i) => (
+                                    <SkeletonBlock key={i} className="h-12 w-full" />
+                                ))}
+                            </div>
+                        ) : invoices.length === 0 ? (
+                            <div className="text-center py-8">
+                                <Receipt className="w-8 h-8 text-stone-300 mx-auto mb-2" />
+                                <p className="text-sm text-stone-500">No invoices yet</p>
+                                <p className="text-xs text-stone-400 mt-1">
+                                    Invoices will appear here once you subscribe to a paid plan.
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="overflow-x-auto -mx-2 sm:mx-0">
+                                <table className="w-full text-sm">
+                                    <thead>
+                                        <tr className="border-b border-stone-200">
+                                            <th className="text-left text-[10px] text-stone-400 uppercase tracking-widest font-bold py-2 px-2">Date</th>
+                                            <th className="text-left text-[10px] text-stone-400 uppercase tracking-widest font-bold py-2 px-2">Invoice #</th>
+                                            <th className="text-right text-[10px] text-stone-400 uppercase tracking-widest font-bold py-2 px-2">Amount</th>
+                                            <th className="text-center text-[10px] text-stone-400 uppercase tracking-widest font-bold py-2 px-2">Status</th>
+                                            <th className="text-right text-[10px] text-stone-400 uppercase tracking-widest font-bold py-2 px-2">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {invoices.map((inv, idx) => (
+                                            <tr
+                                                key={inv.id}
+                                                className={clsx(
+                                                    "border-b border-stone-100 last:border-0 hover:bg-stone-50 transition-colors",
+                                                    idx % 2 === 1 && "bg-stone-50/50"
+                                                )}
+                                            >
+                                                <td className="py-3 px-2 text-stone-700 whitespace-nowrap">
+                                                    {formatDate(inv.created)}
+                                                </td>
+                                                <td className="py-3 px-2 text-stone-600 font-mono text-xs">
+                                                    {inv.number || "---"}
+                                                </td>
+                                                <td className="py-3 px-2 text-right text-stone-800 font-medium tabular-nums">
+                                                    {formatCurrency(inv.amount, inv.currency)}
+                                                </td>
+                                                <td className="py-3 px-2 text-center">
+                                                    <InvoiceStatusBadge status={inv.status} />
+                                                </td>
+                                                <td className="py-3 px-2 text-right">
+                                                    <div className="flex items-center justify-end gap-1.5">
+                                                        {inv.pdf_url && (
+                                                            <a
+                                                                href={inv.pdf_url}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                title="Download PDF"
+                                                                className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-stone-500 hover:text-stone-700 hover:bg-stone-100 transition-all"
+                                                            >
+                                                                <Download className="w-3.5 h-3.5" />
+                                                            </a>
+                                                        )}
+                                                        {inv.hosted_url && (
+                                                            <a
+                                                                href={inv.hosted_url}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                title="View invoice"
+                                                                className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-stone-500 hover:text-stone-700 hover:bg-stone-100 transition-all"
+                                                            >
+                                                                <Eye className="w-3.5 h-3.5" />
+                                                            </a>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </div>
+                )}
+            </section>
 
             {/* ================================================================ */}
             {/*  SECTION 4: Profile Settings                                     */}
             {/* ================================================================ */}
-            <section id="profile" className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
+            <section id="profile" className="lg:col-start-1 bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
                 <p className="text-stone-400 text-xs uppercase tracking-widest font-bold mb-4">Profile Settings</p>
                 <div className="space-y-4">
                     <div>
@@ -978,7 +1009,7 @@ export default function SettingsPage() {
                 const missing = checks.filter(([ok]) => !ok).map(([, label]) => label);
 
                 return (
-                    <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
+                    <section className="lg:col-start-2 bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
                         <div className="flex items-center justify-between mb-3">
                             <h3 className="font-bold text-base sm:text-lg flex items-center">
                                 <UserCheck className="w-5 h-5 mr-2 text-stone-400" /> Profile Strength
@@ -1009,7 +1040,7 @@ export default function SettingsPage() {
 
             {/* ---- Advanced Settings Toggle ---- */}
             <button type="button" onClick={() => setShowAdvanced(!showAdvanced)}
-                className="w-full bg-stone-50 border border-stone-200 rounded-2xl p-4 text-left hover:bg-stone-100 transition-colors flex items-center justify-between">
+                className="lg:col-start-1 w-full bg-stone-50 border border-stone-200 rounded-2xl p-4 text-left hover:bg-stone-100 transition-colors flex items-center justify-between">
                 <span className="text-sm font-bold text-stone-600">
                     {showAdvanced ? "Hide Advanced Settings" : "Show Advanced Settings"}
                 </span>
@@ -1020,7 +1051,7 @@ export default function SettingsPage() {
 
             {showAdvanced && (<>
             {/* Capacity & Experience */}
-            <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
+            <section className="lg:col-start-1 bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
                 <h3 className="font-bold text-base sm:text-lg flex items-center mb-4">
                     <Briefcase className="w-5 h-5 mr-2 text-stone-400" /> Capacity & Experience
                 </h3>
@@ -1110,7 +1141,7 @@ export default function SettingsPage() {
             </section>
 
             {/* Industry */}
-            <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
+            <section className="lg:col-start-1 bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
                 <h3 className="font-bold text-base sm:text-lg flex items-center mb-4">
                     <Shield className="w-5 h-5 mr-2 text-stone-400" /> Industry & Certifications
                 </h3>
@@ -1137,8 +1168,9 @@ export default function SettingsPage() {
                         )}
                         <div className="grid grid-cols-1 gap-1.5 max-h-[240px] overflow-y-auto pr-1">
                             {(() => {
-                                const filtered = naicsSearch
-                                    ? searchNaics(naicsSearch)
+                                const search = naicsSearch.toLowerCase();
+                                const filtered = search
+                                    ? NAICS_CODES.filter(n => n.code.includes(search) || n.label.toLowerCase().includes(search))
                                     : NAICS_CODES.filter(n => n.popular || (profile.naics_codes || []).includes(n.code));
                                 return filtered.slice(0, 50).map(n => (
                                     <button type="button" key={n.code} onClick={() => toggleArray("naics_codes", n.code)}
@@ -1176,7 +1208,7 @@ export default function SettingsPage() {
             </section>
 
             {/* PSC Codes & Clearances */}
-            <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
+            <section className="lg:col-start-1 bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
                 <h3 className="font-bold text-base sm:text-lg flex items-center mb-4">
                     <Shield className="w-5 h-5 mr-2 text-stone-400" /> Service Codes & Clearances
                 </h3>
@@ -1241,7 +1273,7 @@ export default function SettingsPage() {
             </section>
 
             {/* Preferred Agencies & Contract Preferences */}
-            <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
+            <section className="lg:col-start-1 bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
                 <h3 className="font-bold text-base sm:text-lg flex items-center mb-4">
                     <Building className="w-5 h-5 mr-2 text-stone-400" /> Targeting Preferences
                 </h3>
@@ -1315,7 +1347,7 @@ export default function SettingsPage() {
             </>)}
 
             {/* Target States */}
-            <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
+            <section className="lg:col-start-1 bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
                 <h3 className="font-bold text-base sm:text-lg flex items-center mb-4">
                     <MapPin className="w-5 h-5 mr-2 text-stone-400" /> Target States
                 </h3>
@@ -1356,7 +1388,7 @@ export default function SettingsPage() {
             </section>
 
             {/* Notifications */}
-            <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
+            <section className="lg:col-start-2 bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
                 <h3 className="font-bold text-base sm:text-lg flex items-center mb-4">
                     <Bell className="w-5 h-5 mr-2 text-stone-400" /> Notifications
                 </h3>
@@ -1399,7 +1431,7 @@ export default function SettingsPage() {
             {/* ================================================================ */}
             {/*  SECTION 5: Password                                             */}
             {/* ================================================================ */}
-            <section id="password" className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
+            <section id="password" className="lg:col-start-2 bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
                 <p className="text-stone-400 text-xs uppercase tracking-widest font-bold mb-4">Password</p>
                 <div className="space-y-4">
                     <p className="text-xs text-stone-500">
@@ -1457,31 +1489,29 @@ export default function SettingsPage() {
                 </div>
             </section>
 
-            {/* Google Login — only show if Google is NOT yet linked */}
-            {!googleLinked && (
-                <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
-                    <h3 className="font-bold text-base sm:text-lg flex items-center mb-2">
-                        Quick Login
-                    </h3>
-                    <p className="text-xs text-stone-500 mb-4">Link your Google account for one-click login next time.</p>
-                    <button
-                        type="button"
-                        onClick={async () => {
-                            const sb = createSupabaseClient();
-                            await sb.auth.linkIdentity({ provider: "google", options: { redirectTo: window.location.origin + "/settings" } });
-                        }}
-                        className="inline-flex items-center gap-2.5 bg-white border-2 border-stone-200 hover:border-stone-400 px-5 py-3 rounded-xl text-sm font-bold transition-colors"
-                    >
-                        <svg className="w-5 h-5" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
-                        Connect Google Account
-                    </button>
-                </section>
-            )}
+            {/* Google Login */}
+            <section className="lg:col-start-2 bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
+                <h3 className="font-bold text-base sm:text-lg flex items-center mb-2">
+                    Quick Login
+                </h3>
+                <p className="text-xs text-stone-500 mb-4">Link your Google account for one-click login next time.</p>
+                <button
+                    type="button"
+                    onClick={async () => {
+                        const sb = createSupabaseClient();
+                        await sb.auth.linkIdentity({ provider: "google", options: { redirectTo: window.location.origin + "/settings" } });
+                    }}
+                    className="inline-flex items-center gap-2.5 bg-white border-2 border-stone-200 hover:border-stone-400 px-5 py-3 rounded-xl text-sm font-bold transition-colors"
+                >
+                    <svg className="w-5 h-5" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+                    Connect Google Account
+                </button>
+            </section>
 
             {/* ================================================================ */}
             {/*  SECTION 6: Danger Zone                                          */}
             {/* ================================================================ */}
-            <section id="danger-zone" className="bg-white rounded-2xl border border-red-200 shadow-sm p-5 sm:p-7">
+            <section id="danger-zone" className="lg:col-start-2 bg-white rounded-2xl border border-red-200 shadow-sm p-5 sm:p-7">
                 <p className="text-red-500 text-xs uppercase tracking-widest font-bold mb-4">Danger Zone</p>
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                     <div>
@@ -1501,7 +1531,10 @@ export default function SettingsPage() {
                 </div>
             </section>
 
-            {/* Service CTA */}
+            </div>
+            {/* ---- /Two-column grid ---- */}
+
+            {/* Service CTA (full width, outside grid) */}
             <ServiceCTA
                 title="Need help with your GovCon profile?"
                 description="Our team can optimize your SAM.gov registration, identify the best NAICS codes for your business, and match you with the right certifications."
