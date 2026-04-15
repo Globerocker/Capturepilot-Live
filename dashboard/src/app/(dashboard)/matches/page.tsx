@@ -81,11 +81,14 @@ export default function MyMatchesPage() {
         if (!profileId) { setLoading(false); return; }
         setLoading(true);
 
+        // Use !inner on the opportunities join since we filter on opportunities.status —
+        // without !inner Supabase returns matches with opportunities: null and the count
+        // diverges from the rendered row count (per CLAUDE.md).
         let query = supabase
             .from("user_matches")
             .select(
                 "id, score, classification, score_breakdown, is_saved, is_dismissed, " +
-                "opportunities(id, title, agency, naics_code, notice_type, response_deadline, set_aside_code, place_of_performance_state, award_amount)",
+                "opportunities!inner(id, title, agency, naics_code, notice_type, response_deadline, set_aside_code, place_of_performance_state, award_amount)",
                 { count: "exact" }
             )
             .eq("user_profile_id", profileId)
