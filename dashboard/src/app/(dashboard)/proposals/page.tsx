@@ -218,7 +218,7 @@ export default function ProposalsPage() {
 
     if (loading) {
         return (
-            <div className="max-w-5xl mx-auto space-y-6 animate-in fade-in duration-500 px-1">
+            <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in duration-500 px-1">
                 <div className="h-8 w-48 bg-stone-200 rounded animate-pulse" />
                 <div className="h-4 w-72 bg-stone-100 rounded animate-pulse" />
                 <div className="space-y-3">
