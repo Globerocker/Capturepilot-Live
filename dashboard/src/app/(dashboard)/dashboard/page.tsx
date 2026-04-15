@@ -203,7 +203,7 @@ export default function UserDashboard() {
 
   if (loading) {
     return (
-      <div className="max-w-7xl mx-auto space-y-6 sm:space-y-8 animate-in fade-in duration-500 px-1">
+      <div className="max-w-[1600px] mx-auto space-y-6 sm:space-y-8 animate-in fade-in duration-500 px-1">
         <header>
           <Skeleton className="h-8 w-64 rounded mb-2" />
           <Skeleton className="h-4 w-48 rounded" />

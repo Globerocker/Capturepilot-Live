@@ -137,7 +137,7 @@ export default function PartnersPage() {
     }, [keyword]);
 
     return (
-        <div className="max-w-7xl mx-auto space-y-6 pb-12">
+        <div className="max-w-[1600px] mx-auto space-y-6 pb-12">
             <div>
                 <h1 className="text-2xl font-bold flex items-center gap-2">
                     <Users className="w-6 h-6" /> Find Teaming Partners
@@ -337,6 +337,7 @@ export default function PartnersPage() {
             {results.length > 0 && (
                 <div className="space-y-3">
                     <p className="text-sm text-stone-500">{results.length} partners found</p>
+                    <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-3">
                     {results.map((p, i) => (
                         <div key={p.uei || i} className="bg-white border border-stone-200 rounded-2xl p-5 hover:border-stone-300 transition-colors">
                             <div className="flex items-start justify-between gap-3">
@@ -379,6 +380,7 @@ export default function PartnersPage() {
                             </div>
                         </div>
                     ))}
+                    </div>
                 </div>
             )}
         </div>

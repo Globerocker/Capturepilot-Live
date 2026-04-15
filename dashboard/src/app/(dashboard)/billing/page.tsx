@@ -312,7 +312,7 @@ function BillingPageContent() {
         : "Free";
 
   return (
-    <div className="max-w-5xl mx-auto pb-16 animate-in fade-in duration-500 px-1">
+    <div className="max-w-6xl mx-auto pb-16 animate-in fade-in duration-500 px-1">
       {/* Toast */}
       {toast && (
         <div
