@@ -159,12 +159,12 @@ export default function UserDashboard() {
 
   if (loading) {
     return (
-      <div className="max-w-5xl mx-auto space-y-6 sm:space-y-8 animate-in fade-in duration-500 px-1">
+      <div className="max-w-[1600px] mx-auto space-y-6 sm:space-y-8 animate-in fade-in duration-500 px-1">
         <header>
           <Skeleton className="h-8 w-64 rounded mb-2" />
           <Skeleton className="h-4 w-48 rounded" />
         </header>
-        <section className="grid grid-cols-2 gap-3 sm:gap-4">
+        <section className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
           <SkeletonKpiCard />
           <SkeletonKpiCard />
           <SkeletonKpiCard />
@@ -183,7 +183,7 @@ export default function UserDashboard() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6 sm:space-y-8 animate-in fade-in duration-500 px-1">
+    <div className="max-w-[1600px] mx-auto space-y-6 sm:space-y-8 animate-in fade-in duration-500 px-1">
 
       {/* Welcome Header */}
       <header>
@@ -196,7 +196,7 @@ export default function UserDashboard() {
       </header>
 
       {/* KPI Cards */}
-      <section className="grid grid-cols-2 gap-3 sm:gap-4">
+      <section className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
         <KpiCard
           title="Matched Opportunities"
           value={totalMatchCount}
@@ -326,7 +326,7 @@ export default function UserDashboard() {
 
       {/* Pipeline & Action Items Summary */}
       {(pipelineCount > 0 || actionsPending > 0) && (
-        <section className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+        <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
           <Link href="/pipeline" className="bg-white rounded-[24px] sm:rounded-[32px] p-5 sm:p-6 border border-stone-200 shadow-sm hover:shadow-md hover:border-stone-300 transition-all">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-bold text-base flex items-center">
@@ -460,7 +460,7 @@ export default function UserDashboard() {
       </section>
 
       {/* Quick Actions */}
-      <section className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+      <section className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-4 gap-3 sm:gap-4">
         <Link href="/check" className="bg-gradient-to-br from-emerald-700 to-emerald-900 text-white rounded-[20px] sm:rounded-[24px] p-4 sm:p-5 hover:shadow-xl transition-all group">
           <Search className="w-5 h-5 mb-2 text-emerald-300 group-hover:text-white transition-colors" />
           <h4 className="font-bold text-sm mb-0.5">Quick Check</h4>
