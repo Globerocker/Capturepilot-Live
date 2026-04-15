@@ -7,6 +7,7 @@
  */
 
 const HUBSPOT_TOKEN =
+  process.env.HUBSPOT_API_KEY ||
   process.env.HUBSPOT_ACCESS_TOKEN ||
   process.env.HUBSPOT_PRIVATE_APP_TOKEN ||
   '';
@@ -71,6 +72,8 @@ export interface ContactProperties {
   lastname?: string;
   company?: string;
   phone?: string;
+  jobtitle?: string;
+  lifecyclestage?: string;
   // Custom CapturePilot properties
   capturepilot_user_id?: string;
   account_type?: AccountType;
@@ -85,6 +88,64 @@ export interface ContactProperties {
   beta_feedback_given?: boolean;
   matched_opportunities_count?: number;
   veteran_owned?: boolean;
+}
+
+/**
+ * Split a single "contact_name" style full name into first/last parts.
+ * Keeps middle names on the last-name bucket so nothing is lost.
+ */
+export function splitContactName(fullName?: string | null): { firstname?: string; lastname?: string } {
+  if (!fullName) return {};
+  const trimmed = fullName.trim();
+  if (!trimmed) return {};
+  const parts = trimmed.split(/\s+/);
+  if (parts.length === 1) return { firstname: parts[0] };
+  return { firstname: parts[0], lastname: parts.slice(1).join(' ') };
+}
+
+/**
+ * Upsert a HubSpot contact by email.
+ * Searches by email first; PATCHes when found, POSTs otherwise.
+ *
+ * Fire-and-forget safe — all errors are swallowed and logged.
+ * Returns the HubSpot contact ID or null when sync is skipped / fails.
+ */
+export async function upsertHubSpotContact(params: {
+  email: string;
+  firstname?: string;
+  lastname?: string;
+  phone?: string;
+  company?: string;
+  jobtitle?: string;
+  lifecyclestage?: string;
+  // passthrough for any additional CapturePilot custom properties
+  extra?: Omit<ContactProperties, 'email' | 'firstname' | 'lastname' | 'phone' | 'company' | 'jobtitle' | 'lifecyclestage'>;
+}): Promise<string | null> {
+  const { email, extra, ...base } = params;
+  if (!email) return null;
+  if (!HUBSPOT_TOKEN) {
+    console.warn('[HubSpot] No token configured — skipping upsertHubSpotContact');
+    return null;
+  }
+
+  const properties: ContactProperties = { ...base, ...(extra || {}) };
+
+  try {
+    // 1. Search by email
+    const existingId = await getContactByEmail(email);
+    if (existingId) {
+      const ok = await updateContactById(existingId, properties);
+      return ok ? existingId : null;
+    }
+    // 2. Create new
+    const result = await hsApi('POST', '/crm/v3/objects/contacts', {
+      properties: { email, ...toHsPropertiesV3(properties) },
+    });
+    return (result.id as string) || null;
+  } catch (err) {
+    console.error('[HubSpot] upsertHubSpotContact failed:', (err as Error).message);
+    return null;
+  }
 }
 
 // ─── Internal API Wrapper ─────────────────────────────────────────────────────

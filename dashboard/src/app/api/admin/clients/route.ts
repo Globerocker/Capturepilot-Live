@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { sendConsultingWelcomeEmail } from "@/lib/email";
 import { notifyNewClient } from "@/lib/slack";
+import { upsertHubSpotContact, splitContactName } from "@/lib/hubspot";
 
 function getAdmin() {
     return createClient(
@@ -21,7 +22,7 @@ export async function POST(req: NextRequest) {
         const {
             email, password, company_name, contact_name, contact_phone,
             website, uei, cage_code, naics_codes, state, city,
-            sba_certifications, notes,
+            sba_certifications, notes, job_title,
         } = body;
 
         if (!email || !company_name) {
@@ -51,6 +52,7 @@ export async function POST(req: NextRequest) {
             email,
             contact_name: contact_name || null,
             contact_phone: contact_phone || null,
+            job_title: job_title || null,
             website: website || null,
             uei: uei || null,
             cage_code: cage_code || null,
@@ -163,6 +165,32 @@ export async function POST(req: NextRequest) {
         await sendConsultingWelcomeEmail(email, company_name, contact_name || "there", tempPassword);
         notifyNewClient(company_name, email).catch(() => {});
 
+        // 6. Sync to HubSpot (fire-and-forget — never block client creation)
+        (async () => {
+            try {
+                const { firstname, lastname } = splitContactName(contact_name);
+                await upsertHubSpotContact({
+                    email,
+                    firstname,
+                    lastname,
+                    phone: contact_phone,
+                    company: company_name,
+                    jobtitle: job_title,
+                    lifecyclestage: "customer",
+                    extra: {
+                        capturepilot_user_id: authUserId,
+                        account_type: "consulting",
+                        lead_source_cp: "manual",
+                        uei: uei || undefined,
+                        business_state: state || undefined,
+                        naics_codes: Array.isArray(naics_codes) ? naics_codes.join(", ") : undefined,
+                    },
+                });
+            } catch (err) {
+                console.error("[admin/clients] HubSpot sync failed:", (err as Error).message);
+            }
+        })();
+
         return NextResponse.json({
             success: true,
             profile_id: profileData.id,
@@ -254,7 +282,7 @@ export async function PATCH(req: NextRequest) {
         const admin = getAdmin();
 
         // Whitelist allowed update fields
-        const allowed = ["company_name", "contact_name", "contact_phone", "email", "website",
+        const allowed = ["company_name", "contact_name", "contact_phone", "job_title", "email", "website",
             "uei", "cage_code", "naics_codes", "sba_certifications", "state", "city",
             "notes", "client_status", "account_type", "company_description",
             "employee_count", "revenue", "target_states", "address_line_1", "zip_code"];

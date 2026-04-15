@@ -139,6 +139,9 @@ function OnboardPageContent() {
     const [form, setForm] = useState({
         company_name: "",
         dba_name: "",
+        contact_name: "",
+        job_title: "",
+        contact_phone: "",
         uei: "",
         cage_code: "",
         address_line_1: "",
@@ -279,7 +282,15 @@ function OnboardPageContent() {
     };
 
     const handleSave = async () => {
-        if (!form.company_name) { alert("Company name is required."); return; }
+        // Required contact fields (server-side guard — client-side button also
+        // stays disabled via step1Valid, but we re-check here in case it leaks through)
+        const missing: string[] = [];
+        if (!form.company_name.trim()) missing.push("Company name");
+        if (!form.contact_name.trim()) missing.push("Contact name");
+        if (!form.job_title.trim()) missing.push("Job title");
+        if (!form.contact_phone.trim()) missing.push("Contact phone");
+        if (missing.length) { alert(`Required: ${missing.join(", ")}`); return; }
+
         setSaving(true);
 
         const { data: { user } } = await supabase.auth.getUser();
@@ -294,6 +305,9 @@ function OnboardPageContent() {
             auth_user_id: user.id,
             company_name: form.company_name,
             dba_name: form.dba_name || null,
+            contact_name: form.contact_name || null,
+            job_title: form.job_title || null,
+            contact_phone: form.contact_phone || null,
             uei: form.uei || null,
             cage_code: form.cage_code || null,
             address_line_1: form.address_line_1 || null,
@@ -372,6 +386,23 @@ function OnboardPageContent() {
             }).catch(() => {});
         }
 
+        // Sync to HubSpot (fire-and-forget — do not block onboarding completion)
+        if (user?.email) {
+            fetch("/api/hubspot/sync-contact", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    email: user.email,
+                    contact_name: form.contact_name,
+                    job_title: form.job_title,
+                    phone: form.contact_phone,
+                    company: form.company_name,
+                    source: "onboarding_complete",
+                    user_id: user.id,
+                }),
+            }).catch((err) => console.error("[HubSpot sync failed]", err));
+        }
+
         // Trigger match scoring in background
         setScoringMatches(true);
         try {
@@ -395,6 +426,9 @@ function OnboardPageContent() {
     // Step-level validation
     const step1Valid = !!(
         form.company_name.trim() &&
+        form.contact_name.trim() &&
+        form.job_title.trim() &&
+        form.contact_phone.trim() &&
         form.address_line_1.trim() &&
         form.city.trim() &&
         form.state &&
@@ -663,6 +697,65 @@ function OnboardPageContent() {
                             <input type="text" value={form.dba_name} onChange={(e) => updateForm("dba_name", e.target.value)}
                                 className="w-full px-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm" placeholder="Trade name (optional)" />
                         </div>
+
+                        {/* Contact person — required so we can reach a real human */}
+                        <div className="bg-stone-50 border border-stone-200 rounded-2xl p-4 space-y-4">
+                            <div className="flex items-center gap-2">
+                                <Briefcase className="w-4 h-4 text-stone-400" />
+                                <h4 className="text-sm font-bold text-stone-700">Primary Contact</h4>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">Contact Name *</label>
+                                    <input
+                                        type="text"
+                                        required
+                                        value={form.contact_name}
+                                        onChange={(e) => updateForm("contact_name", e.target.value)}
+                                        className={clsx(
+                                            "w-full px-4 py-3.5 border rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm",
+                                            !form.contact_name.trim() ? "border-stone-200" : "border-stone-200"
+                                        )}
+                                        placeholder="Jane Doe"
+                                    />
+                                    {!form.contact_name.trim() && (
+                                        <p className="text-[11px] text-stone-400 mt-1">Required — who should we reach for matches?</p>
+                                    )}
+                                </div>
+                                <div>
+                                    <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">
+                                        Position / Title *
+                                        <InfoTooltip text="Your role at the company (e.g. Owner, CEO, Director of Business Development). Used on outreach to contracting officers." />
+                                    </label>
+                                    <input
+                                        type="text"
+                                        required
+                                        value={form.job_title}
+                                        onChange={(e) => updateForm("job_title", e.target.value)}
+                                        className="w-full px-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm"
+                                        placeholder="e.g. Owner, CEO, VP"
+                                    />
+                                    {!form.job_title.trim() && (
+                                        <p className="text-[11px] text-stone-400 mt-1">Required.</p>
+                                    )}
+                                </div>
+                            </div>
+                            <div>
+                                <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">Personal Phone *</label>
+                                <input
+                                    type="tel"
+                                    required
+                                    value={form.contact_phone}
+                                    onChange={(e) => updateForm("contact_phone", e.target.value)}
+                                    className="w-full px-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm"
+                                    placeholder="(555) 123-4567"
+                                />
+                                {!form.contact_phone.trim() && (
+                                    <p className="text-[11px] text-stone-400 mt-1">Required — we only call on time-critical pursuits.</p>
+                                )}
+                            </div>
+                        </div>
+
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
                                 <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">
