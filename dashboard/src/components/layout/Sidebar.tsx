@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import {
     LayoutDashboard, Target, Layers, FileText, BarChart3, Mic, Users, Shield,
@@ -31,6 +31,8 @@ interface NavChildItem {
 export default function Sidebar() {
     const [mobileOpen, setMobileOpen] = useState(false);
     const pathname = usePathname();
+    const searchParams = useSearchParams();
+    const currentStatus = searchParams?.get("status") || null;
     const supabase = createSupabaseClient();
 
     const navLinks: NavItem[] = [
@@ -76,13 +78,29 @@ export default function Sidebar() {
 
     const handleNavClick = () => { setMobileOpen(false); };
 
-    // Active matcher: exact for /ai-drafter (Email Templates sub), otherwise prefix.
+    // Active matcher with query-param awareness. Three sub-items can point to
+    // /partners?status=active, /partners?status=potential, /partners (exact) —
+    // usePathname() strips the query, so we also compare the target href's
+    // ?status= against the live one; only the matching tab highlights.
     const isLinkActive = (href: string, matchExact = false): boolean => {
-        if (matchExact) return pathname === href.split("?")[0];
-        // Strip querystring for path matching (we don't track ?status= for highlight).
-        const cleanHref = href.split("?")[0];
-        if (cleanHref === "/ai-drafter") return pathname === "/ai-drafter";
-        return pathname === cleanHref || pathname.startsWith(cleanHref + "/");
+        const [hrefPath, hrefQuery] = href.split("?");
+        const hrefStatus = hrefQuery ? new URLSearchParams(hrefQuery).get("status") : null;
+
+        if (matchExact) {
+            // "Exact" means: same path AND no ?status= (the "All" sub-item).
+            return pathname === hrefPath && !currentStatus;
+        }
+
+        // /ai-drafter is the Email Templates leaf — exact path only.
+        if (hrefPath === "/ai-drafter") return pathname === "/ai-drafter";
+
+        // If this link carries a ?status= param, it only lights up when the
+        // current URL has that same param. Otherwise the 3 partner tabs all
+        // match /partners and highlight together.
+        if (hrefStatus) return pathname === hrefPath && currentStatus === hrefStatus;
+
+        // Plain path link: prefix match is fine (covers nested /pipeline/[id]).
+        return pathname === hrefPath || pathname.startsWith(hrefPath + "/");
     };
 
     // A parent with children is active if any child matches OR its own path matches.

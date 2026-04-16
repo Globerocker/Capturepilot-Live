@@ -197,17 +197,31 @@ function PartnersPageInner() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [keyword]);
 
+    // Three distinct views controlled by ?status= query:
+    //   null         → Partner Search (SAM.gov lookup + saved list at bottom)
+    //   "active"     → Active Partners only (working with them now)
+    //   "potential"  → Potential Partners only (shortlist to evaluate)
+    const viewMode: "search" | "active" | "potential" = statusFilter === "active"
+        ? "active" : statusFilter === "potential" ? "potential" : "search";
+
     return (
         <div className="max-w-[1600px] mx-auto space-y-6 pb-12">
             <div>
                 <h1 className="text-2xl font-bold flex items-center gap-2">
-                    <Users className="w-6 h-6" /> Find Teaming Partners
+                    {viewMode === "search" ? <><Search className="w-6 h-6" /> Partner Search</>
+                        : viewMode === "active" ? <><Handshake className="w-6 h-6 text-emerald-600" /> Active Partners</>
+                        : <><Users className="w-6 h-6" /> Potential Partners</>}
                 </h1>
                 <p className="text-sm text-stone-500 mt-1">
-                    Search SAM.gov for registered companies to team with on government contracts.
+                    {viewMode === "search" && "Search SAM.gov for registered companies to team with on government contracts."}
+                    {viewMode === "active" && "Partners you're currently working with. Click a card to open the relationship detail."}
+                    {viewMode === "potential" && "Shortlist of companies you're evaluating for teaming. Click to drill in or promote to Active."}
                 </p>
             </div>
 
+            {/* Search Form — only visible in default Search view. */}
+            {viewMode === "search" && (
+                <>
             {/* Search Form */}
             <div className="bg-white border border-stone-200 rounded-2xl p-5 space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -453,6 +467,8 @@ function PartnersPageInner() {
                     ))}
                     </div>
                 </div>
+            )}
+                </>
             )}
 
             {/* Saved partners section */}

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Activity, Target, Sparkles, ArrowRight, Loader2, Clock, Trophy, Search, Shield, BarChart3, Layers, CheckSquare, Phone, UserCheck, FileText, Mic, Mail, Pencil } from "lucide-react";
 import ServiceCTA from "@/components/ui/ServiceCTA";
 import { MarketIntelligence } from "@/components/MarketIntelligence";
+import { DashboardMarketCard } from "@/components/DashboardMarketCard";
 import { Skeleton, SkeletonKpiCard } from "@/components/ui/Skeleton";
 import clsx from "clsx";
 import Link from "next/link";
@@ -272,6 +273,13 @@ export default function UserDashboard() {
           href="/competitors"
         />
       </section>
+
+      {/* Compact market card — shows 5yr federal spend + YoY + top buyers for the user's NAICS */}
+      {profile && profile.naics_codes.length > 0 && (
+        <section>
+          <DashboardMarketCard naicsCodes={profile.naics_codes} />
+        </section>
+      )}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start mt-6">
         {/* LEFT COLUMN */}
         <div className="xl:col-span-8 flex flex-col gap-6">
@@ -606,7 +614,7 @@ export default function UserDashboard() {
         </div>
       </div>
 
-      {/* Market Intelligence */}
+      {/* Market Intelligence — full panel, shown at bottom for users who want depth. */}
       {profile && profile.naics_codes.length > 0 && (
         <MarketIntelligence naicsCodes={profile.naics_codes} companyName={profile.company_name} />
       )}

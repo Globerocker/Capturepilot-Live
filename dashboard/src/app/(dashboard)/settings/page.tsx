@@ -18,6 +18,7 @@ import AddressAutocomplete from "@/components/AddressAutocomplete";
 import { PSC_CODES } from "@/lib/psc-codes";
 import { FEDERAL_AGENCIES } from "@/lib/federal-agencies";
 import KeywordPicker from "@/components/KeywordPicker";
+import TeamManagement from "@/components/TeamManagement";
 
 const supabase = createSupabaseClient();
 
@@ -1100,6 +1101,9 @@ export default function SettingsPage() {
 
                 {/* RIGHT COLUMN */}
                 <div className="w-full lg:w-1/2 flex flex-col gap-6">
+                    {/* Team — invite teammates, manage roles, see seat usage */}
+                    <TeamManagement />
+
                     <section id="subscription" className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
 
                 <p className="text-stone-400 text-xs uppercase tracking-widest font-bold mb-4">Subscription</p>
