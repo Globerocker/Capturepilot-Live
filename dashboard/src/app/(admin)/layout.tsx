@@ -8,7 +8,7 @@ import Image from "next/image";
 import {
     LayoutDashboard, Users, Briefcase, Target, UserCog,
     Wrench, Settings, LogOut, Loader2, Search, ChevronDown,
-    Menu, X, FileText, Bell, MessageSquare, Mail,
+    Menu, X, FileText, Bell, MessageSquare, Mail, Gift,
 } from "lucide-react";
 import clsx from "clsx";
 
@@ -20,6 +20,7 @@ const supabase = createBrowserClient(
 const NAV = [
     { href: "/admin/overview", icon: LayoutDashboard, label: "Dashboard" },
     { href: "/admin/clients", icon: Users, label: "Clients" },
+    { href: "/admin/beta-invites", icon: Gift, label: "Beta Invites" },
     { href: "/admin/lead-check", icon: Search, label: "Lead Check" },
     { href: "/admin/opportunities", icon: Briefcase, label: "Opportunities" },
     { href: "/admin/leads", icon: FileText, label: "Leads" },

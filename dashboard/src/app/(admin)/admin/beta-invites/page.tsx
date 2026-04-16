@@ -1,0 +1,296 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import {
+    Gift, Send, Mail, CheckCircle2, Clock, Copy, Loader2,
+    Trash2, RotateCw, Plus,
+} from "lucide-react";
+import clsx from "clsx";
+
+interface Invite {
+    id: string;
+    email: string;
+    recipient_name: string | null;
+    company_name: string | null;
+    personal_note: string | null;
+    token: string;
+    sent_at: string;
+    claimed_at: string | null;
+    expires_at: string;
+}
+
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.capturepilot.com";
+
+export default function AdminBetaInvitesPage() {
+    const [invites, setInvites] = useState<Invite[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [sending, setSending] = useState(false);
+    const [result, setResult] = useState<{ kind: "ok" | "err"; msg: string } | null>(null);
+    const [copiedToken, setCopiedToken] = useState<string | null>(null);
+
+    const [form, setForm] = useState({
+        email: "",
+        recipient_name: "",
+        company_name: "",
+        personal_note: "",
+    });
+
+    const load = async () => {
+        const res = await fetch("/api/admin/beta-invites");
+        const data = await res.json();
+        setInvites(data.invites || []);
+        setLoading(false);
+    };
+
+    useEffect(() => { load(); }, []);
+
+    const send = async (resend = false) => {
+        setSending(true);
+        setResult(null);
+        const res = await fetch("/api/admin/beta-invites", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ...form, resend }),
+        });
+        const data = await res.json();
+        if (data.success) {
+            setResult({ kind: "ok", msg: data.message });
+            setForm({ email: "", recipient_name: "", company_name: "", personal_note: "" });
+            load();
+        } else {
+            setResult({ kind: "err", msg: data.error || "Something went wrong" });
+        }
+        setSending(false);
+    };
+
+    const resendInvite = async (inv: Invite) => {
+        setSending(true);
+        setResult(null);
+        const res = await fetch("/api/admin/beta-invites", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                email: inv.email,
+                recipient_name: inv.recipient_name,
+                company_name: inv.company_name,
+                personal_note: inv.personal_note,
+            }),
+        });
+        const data = await res.json();
+        setResult(data.success
+            ? { kind: "ok", msg: `Resent to ${inv.email}` }
+            : { kind: "err", msg: data.error || "Resend failed" });
+        setSending(false);
+        load();
+    };
+
+    const revoke = async (id: string) => {
+        if (!confirm("Revoke this invitation? The link will stop working.")) return;
+        await fetch("/api/admin/beta-invites", {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id }),
+        });
+        load();
+    };
+
+    const copyLink = async (token: string) => {
+        await navigator.clipboard.writeText(`${APP_URL}/signup?invite=${token}`);
+        setCopiedToken(token);
+        setTimeout(() => setCopiedToken(null), 1500);
+    };
+
+    const canSend = form.email.trim().length > 3 && form.email.includes("@");
+
+    if (loading) {
+        return <div className="min-h-screen flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-stone-400" /></div>;
+    }
+
+    const claimed = invites.filter(i => i.claimed_at).length;
+    const pending = invites.length - claimed;
+
+    return (
+        <div className="w-full max-w-5xl mx-auto space-y-6">
+            <div className="flex items-center justify-between">
+                <div>
+                    <h1 className="text-2xl font-bold text-stone-900 flex items-center gap-2">
+                        <Gift className="w-6 h-6" /> Beta Invitations
+                    </h1>
+                    <p className="text-sm text-stone-500 mt-1">
+                        Send personal beta invites (e.g. to LinkedIn outreach contacts). Each invite gets a tokenized signup link.
+                    </p>
+                </div>
+                <div className="flex items-center gap-3 text-xs">
+                    <div className="bg-white border border-stone-200 rounded-lg px-3 py-2">
+                        <span className="text-stone-500">Pending </span>
+                        <span className="font-bold">{pending}</span>
+                    </div>
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+                        <span className="text-emerald-700">Claimed </span>
+                        <span className="font-bold text-emerald-800">{claimed}</span>
+                    </div>
+                </div>
+            </div>
+
+            {/* Create form */}
+            <div className="bg-white border border-stone-200 rounded-2xl p-6 space-y-4">
+                <h2 className="font-bold text-sm flex items-center gap-1.5"><Plus className="w-4 h-4" /> New Invitation</h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-xs font-medium text-stone-500 mb-1">Email *</label>
+                        <input
+                            type="email"
+                            value={form.email}
+                            onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+                            placeholder="contact@company.com"
+                            className="w-full border border-stone-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-black"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-medium text-stone-500 mb-1">Recipient Name</label>
+                        <input
+                            value={form.recipient_name}
+                            onChange={e => setForm(f => ({ ...f, recipient_name: e.target.value }))}
+                            placeholder="Jane Doe"
+                            className="w-full border border-stone-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-black"
+                        />
+                    </div>
+                    <div className="sm:col-span-2">
+                        <label className="block text-xs font-medium text-stone-500 mb-1">Company Name</label>
+                        <input
+                            value={form.company_name}
+                            onChange={e => setForm(f => ({ ...f, company_name: e.target.value }))}
+                            placeholder="Acme Industries"
+                            className="w-full border border-stone-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-black"
+                        />
+                    </div>
+                    <div className="sm:col-span-2">
+                        <label className="block text-xs font-medium text-stone-500 mb-1">
+                            Personal Note <span className="text-stone-400 font-normal">(optional — appears in the email)</span>
+                        </label>
+                        <textarea
+                            value={form.personal_note}
+                            onChange={e => setForm(f => ({ ...f, personal_note: e.target.value }))}
+                            placeholder="Great connecting on LinkedIn! Based on your work with federal contracts, I think CapturePilot would save you hours every week."
+                            rows={3}
+                            className="w-full border border-stone-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-black resize-none"
+                        />
+                    </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-2">
+                    <p className="text-xs text-stone-400">
+                        Invite link: <code className="bg-stone-100 px-1.5 py-0.5 rounded">{APP_URL}/signup?invite=…</code>
+                    </p>
+                    <button
+                        type="button"
+                        onClick={() => send(false)}
+                        disabled={!canSend || sending}
+                        className="bg-black text-white px-5 py-2.5 rounded-xl text-sm font-bold inline-flex items-center gap-2 hover:bg-stone-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                        {sending ? "Sending…" : "Send Invitation"}
+                    </button>
+                </div>
+            </div>
+
+            {result && (
+                <div className={clsx(
+                    "p-4 rounded-xl text-sm font-medium",
+                    result.kind === "ok"
+                        ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                        : "bg-red-50 text-red-700 border border-red-200"
+                )}>
+                    {result.msg}
+                </div>
+            )}
+
+            {/* List */}
+            <div className="space-y-2">
+                <h2 className="font-bold text-sm text-stone-600 uppercase tracking-wider">Sent Invitations</h2>
+                {invites.length === 0 ? (
+                    <div className="bg-white border border-stone-200 rounded-2xl p-12 text-center">
+                        <Mail className="w-10 h-10 text-stone-300 mx-auto mb-3" />
+                        <p className="text-stone-500 text-sm">No invitations sent yet.</p>
+                    </div>
+                ) : invites.map(inv => {
+                    const expired = new Date(inv.expires_at).getTime() < Date.now();
+                    return (
+                        <div key={inv.id} className="bg-white border border-stone-200 rounded-2xl p-4">
+                            <div className="flex items-start gap-4">
+                                <div className={clsx(
+                                    "w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0",
+                                    inv.claimed_at ? "bg-emerald-100" : expired ? "bg-stone-100" : "bg-amber-100",
+                                )}>
+                                    {inv.claimed_at
+                                        ? <CheckCircle2 className="w-4 h-4 text-emerald-700" />
+                                        : <Clock className={clsx("w-4 h-4", expired ? "text-stone-400" : "text-amber-700")} />}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="font-bold text-sm text-black">
+                                            {inv.recipient_name || inv.email}
+                                        </span>
+                                        {inv.company_name && (
+                                            <span className="text-xs text-stone-500">· {inv.company_name}</span>
+                                        )}
+                                        <span className={clsx(
+                                            "text-[10px] font-bold px-2 py-0.5 rounded border uppercase",
+                                            inv.claimed_at
+                                                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                                : expired
+                                                    ? "bg-stone-100 text-stone-500 border-stone-200"
+                                                    : "bg-amber-50 text-amber-700 border-amber-200",
+                                        )}>
+                                            {inv.claimed_at ? "Claimed" : expired ? "Expired" : "Pending"}
+                                        </span>
+                                    </div>
+                                    <div className="text-xs text-stone-500 mt-1">
+                                        {inv.email} · sent {new Date(inv.sent_at).toLocaleString()}
+                                        {inv.claimed_at && <> · claimed {new Date(inv.claimed_at).toLocaleString()}</>}
+                                    </div>
+                                    {inv.personal_note && (
+                                        <p className="text-xs text-stone-600 italic mt-2 border-l-2 border-stone-200 pl-2">
+                                            {inv.personal_note}
+                                        </p>
+                                    )}
+                                </div>
+                                <div className="flex items-center gap-1 flex-shrink-0">
+                                    <button
+                                        type="button"
+                                        onClick={() => copyLink(inv.token)}
+                                        title="Copy signup link"
+                                        className="p-2 rounded-lg hover:bg-stone-100 text-stone-500 hover:text-black transition-colors"
+                                    >
+                                        {copiedToken === inv.token
+                                            ? <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                                            : <Copy className="w-4 h-4" />}
+                                    </button>
+                                    {!inv.claimed_at && (
+                                        <button
+                                            type="button"
+                                            onClick={() => resendInvite(inv)}
+                                            disabled={sending}
+                                            title="Resend email"
+                                            className="p-2 rounded-lg hover:bg-stone-100 text-stone-500 hover:text-black transition-colors disabled:opacity-50"
+                                        >
+                                            <RotateCw className="w-4 h-4" />
+                                        </button>
+                                    )}
+                                    <button
+                                        type="button"
+                                        onClick={() => revoke(inv.id)}
+                                        title="Revoke invitation"
+                                        className="p-2 rounded-lg hover:bg-red-50 text-stone-400 hover:text-red-600 transition-colors"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+}

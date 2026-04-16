@@ -1,21 +1,64 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { useState, Suspense, useEffect } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
-import { ArrowRight, CheckCircle2, Loader2 } from "lucide-react";
+import { ArrowRight, CheckCircle2, Loader2, Gift } from "lucide-react";
+import clsx from "clsx";
 import { createSupabaseClient } from "@/lib/supabase/client";
+
+interface InviteDetails {
+  email: string;
+  recipient_name: string | null;
+  company_name: string | null;
+  claimed: boolean;
+}
 
 function SignupPageContent() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [invite, setInvite] = useState<InviteDetails | null>(null);
+  const [inviteError, setInviteError] = useState<string | null>(null);
   const router = useRouter();
   const searchParams = useSearchParams();
   const analysisId = searchParams.get("analysis_id");
+  const inviteToken = searchParams.get("invite");
   const supabase = createSupabaseClient();
+
+  // Load invite details if a token is present
+  useEffect(() => {
+    if (!inviteToken) return;
+    (async () => {
+      try {
+        const res = await fetch(`/api/beta-invites/${inviteToken}`);
+        const data = await res.json();
+        if (!res.ok) {
+          setInviteError(data.error || "Invalid invitation link");
+          return;
+        }
+        setInvite(data);
+        setEmail(data.email);
+      } catch {
+        setInviteError("Could not load invitation");
+      }
+    })();
+  }, [inviteToken]);
+
+  const claimInvite = async (authUserId: string | undefined) => {
+    if (!inviteToken) return;
+    try {
+      await fetch(`/api/beta-invites/${inviteToken}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ auth_user_id: authUserId }),
+      });
+    } catch {
+      // non-blocking
+    }
+  };
 
   const AUTH_ERROR_MAP: Record<string, string> = {
     "Anonymous sign-ins are disabled": "Please enter your email and password to create an account.",
@@ -33,10 +76,14 @@ function SignupPageContent() {
   const handleGoogleSignup = async () => {
     setLoading(true);
     setError("");
+    const callbackParams = new URLSearchParams();
+    if (analysisId) callbackParams.set("analysis_id", analysisId);
+    if (inviteToken) callbackParams.set("invite", inviteToken);
+    const qs = callbackParams.toString();
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback${analysisId ? `?analysis_id=${analysisId}` : ""}`,
+        redirectTo: `${window.location.origin}/auth/callback${qs ? `?${qs}` : ""}`,
       },
     });
     if (error) {
@@ -49,28 +96,44 @@ function SignupPageContent() {
     e.preventDefault();
     setLoading(true);
     setError("");
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         emailRedirectTo: `${window.location.origin}/auth/callback`,
+        data: invite
+          ? {
+              beta_invite: true,
+              recipient_name: invite.recipient_name || undefined,
+              company_name: invite.company_name || undefined,
+            }
+          : undefined,
       },
     });
     if (error) {
       setError(friendlyError(error.message));
       setLoading(false);
     } else {
+      if (inviteToken) await claimInvite(data.user?.id);
       // Fire-and-forget HubSpot sync — do not block redirect
       fetch("/api/hubspot/sync-contact", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email,
-          source: "signup",
+          source: inviteToken ? "beta_invite" : "signup",
           account_type: "self_service",
+          company_name: invite?.company_name,
+          contact_name: invite?.recipient_name,
         }),
       }).catch((err) => console.error("[HubSpot sync failed]", err));
-      router.push(analysisId ? `/onboard?analysis_id=${analysisId}` : "/onboard");
+
+      const onboardParams = new URLSearchParams();
+      if (analysisId) onboardParams.set("analysis_id", analysisId);
+      if (invite?.company_name) onboardParams.set("company", invite.company_name);
+      if (invite?.recipient_name) onboardParams.set("name", invite.recipient_name);
+      const onboardQs = onboardParams.toString();
+      router.push(`/onboard${onboardQs ? `?${onboardQs}` : ""}`);
     }
   };
 
@@ -84,17 +147,48 @@ function SignupPageContent() {
         </div>
 
         <div className="bg-white rounded-[32px] p-8 border border-stone-200 shadow-sm">
-          <h2 className="text-xl font-bold text-center mb-2">
-            Start Your Free Trial
-          </h2>
-          <p className="text-sm text-stone-500 text-center mb-2">
-            It&apos;s completely free right now. No credit card required.
-          </p>
-          <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2 mb-6 text-center">
-            <span className="text-xs font-bold text-emerald-700">
-              Beta users save 25% on their subscription when we launch paid plans
-            </span>
-          </div>
+          {invite ? (
+            <>
+              <div className="flex items-center justify-center w-12 h-12 bg-emerald-100 rounded-full mx-auto mb-4">
+                <Gift className="w-6 h-6 text-emerald-700" />
+              </div>
+              <h2 className="text-xl font-bold text-center mb-2">
+                {invite.recipient_name
+                  ? `Welcome, ${invite.recipient_name.split(" ")[0]}`
+                  : "You're invited to the beta"}
+              </h2>
+              <p className="text-sm text-stone-500 text-center mb-2">
+                {invite.company_name
+                  ? <>Your beta account for <strong>{invite.company_name}</strong> is pre-approved. Just set a password.</>
+                  : "Your beta account is pre-approved. Just set a password."}
+              </p>
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2 mb-6 text-center">
+                <span className="text-xs font-bold text-emerald-700">
+                  25% off locked in for life when paid plans launch
+                </span>
+              </div>
+            </>
+          ) : (
+            <>
+              <h2 className="text-xl font-bold text-center mb-2">
+                Start Your Free Trial
+              </h2>
+              <p className="text-sm text-stone-500 text-center mb-2">
+                It&apos;s completely free right now. No credit card required.
+              </p>
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2 mb-6 text-center">
+                <span className="text-xs font-bold text-emerald-700">
+                  Beta users save 25% on their subscription when we launch paid plans
+                </span>
+              </div>
+            </>
+          )}
+
+          {inviteError && (
+            <div className="bg-amber-50 text-amber-700 text-xs p-3 rounded-xl border border-amber-200 mb-6">
+              {inviteError}. You can still sign up below.
+            </div>
+          )}
 
           {/* Google OAuth */}
           <button
@@ -139,10 +233,19 @@ function SignupPageContent() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-black/10 focus:border-stone-400"
+                readOnly={!!invite}
+                className={clsx(
+                  "w-full px-4 py-3 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-black/10 focus:border-stone-400",
+                  invite
+                    ? "bg-stone-50 border-stone-200 text-stone-600 cursor-not-allowed"
+                    : "border-stone-200"
+                )}
                 placeholder="you@company.com"
                 required
               />
+              {invite && (
+                <p className="text-xs text-stone-400 mt-1.5">This invitation is tied to {email}.</p>
+              )}
             </div>
             <div>
               <label className="block text-xs font-medium text-stone-500 mb-1.5">

@@ -39,6 +39,7 @@ export const DEFAULT_EMAIL_SETTINGS: Record<string, EmailConfig> = {
     trial_expiring_1d: { enabled: true, audience: ["self_service"], category: "transactional", label: "Trial Expiring (Last day)", description: "Final warning on last day of trial." },
     payment_failed: { enabled: true, audience: ["self_service"], category: "transactional", label: "Payment Failed", description: "Sent when Stripe payment fails." },
     subscription_canceled: { enabled: true, audience: ["self_service"], category: "transactional", label: "Subscription Canceled", description: "Sent when subscription is canceled." },
+    beta_invite: { enabled: true, audience: ["lead"], category: "marketing", label: "Beta Invite (Manual)", description: "Sent when admin manually invites a beta tester from /admin/beta-invites." },
     beta_deadline_8d: { enabled: true, audience: ["self_service"], category: "marketing", label: "Beta Deadline (8 days)", description: "First beta deadline reminder." },
     beta_deadline_1d: { enabled: true, audience: ["self_service"], category: "marketing", label: "Beta Deadline (Last day)", description: "Final beta deadline reminder." },
     edu_contracting_101: { enabled: true, audience: ["consulting"], category: "marketing", label: "Learning: Federal Contracting 101", description: "Intro guide to federal contracting." },

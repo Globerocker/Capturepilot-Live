@@ -233,6 +233,104 @@ export async function sendConsultingWelcomeEmail(
     });
 }
 
+// ─── Beta Invite (Manual from Admin) ───────────────────────
+export async function sendBetaInviteEmail(
+    to: string,
+    params: {
+        recipientName?: string;
+        companyName?: string;
+        personalNote?: string;
+        token: string;
+    },
+) {
+    const { recipientName, companyName, personalNote, token } = params;
+    const firstName = (recipientName || "").split(" ")[0] || "there";
+    const signupUrl = `${APP_URL}/signup?invite=${token}`;
+
+    const noteBlock = personalNote
+        ? contentCard(`
+            ${sectionLabel("A note from our team")}
+            <p style="color:${COLORS.stone700};font-size:14px;margin:0;line-height:1.7;font-style:italic;">${personalNote.replace(/\n/g, "<br/>")}</p>
+        `)
+        : "";
+
+    const companyLine = companyName
+        ? paragraph(`We've been following <strong>${companyName}</strong> and think CapturePilot could be a strong fit for your federal contracting pipeline.`)
+        : paragraph("We think CapturePilot could be a strong fit for your federal contracting pipeline.");
+
+    const html = emailTemplate({
+        category: "marketing",
+        preheader: `You're invited to join CapturePilot as a beta user — 25% off locked in forever.`,
+        eyebrow: "Private Beta Invitation",
+        heading: `Hi ${firstName}, you're invited`,
+        body: `
+            ${companyLine}
+            ${paragraph("CapturePilot matches your company against 30,000+ federal opportunities every day, scores each one for fit, and tells you exactly where to focus — so you stop wasting time on contracts you can't win.")}
+            ${noteBlock}
+            ${featureBox(`
+                ${sectionLabel("Your beta perks")}
+                <ul style="color:#065f46;font-size:14px;line-height:1.9;padding-left:20px;margin:0;">
+                    <li>Free access during the beta period</li>
+                    <li><strong>25% off locked in for life</strong> when paid plans launch</li>
+                    <li>Direct line to our team for feedback and feature requests</li>
+                    <li>Your account is pre-approved — just set a password</li>
+                </ul>
+            `)}
+        `,
+        cta: { label: "Claim Your Beta Account", url: signupUrl },
+        footerNote: "This invitation is personal to you — please don't forward the link.",
+    });
+
+    return send("beta_invite", to, `You're invited to CapturePilot (beta access)`, html, {
+        recipientName: recipientName || "",
+        firstName,
+        companyName: companyName || "",
+        signupUrl,
+    });
+}
+
+// ─── Team Invitation ───────────────────────────────────────
+// Sent when an existing user invites a teammate to their company profile.
+// `token` routes the recipient to the accept page; `inviterName` + `companyName`
+// show up in the email body so the invite doesn't look spammy.
+export async function sendTeamInviteEmail(
+    to: string,
+    params: {
+        inviterName: string;
+        companyName: string;
+        role: string;
+        token: string;
+    },
+) {
+    const { inviterName, companyName, role, token } = params;
+    const acceptUrl = `${APP_URL}/invite/accept?token=${token}`;
+
+    const html = emailTemplate({
+        category: "transactional",
+        preheader: `${inviterName} invited you to join ${companyName} on CapturePilot.`,
+        eyebrow: "Team Invitation",
+        heading: `You're invited to ${companyName}`,
+        body: `
+            ${paragraph(`<strong>${inviterName}</strong> invited you to join <strong>${companyName}</strong> on CapturePilot as a <strong>${role}</strong>.`)}
+            ${paragraph("CapturePilot is the federal contracting intelligence platform your team uses to find, track, and win government opportunities.")}
+            ${featureBox(`
+                ${sectionLabel("What happens next")}
+                <ul style="color:#065f46;font-size:14px;line-height:1.9;padding-left:20px;margin:0;">
+                    <li>Click the button below to accept the invitation</li>
+                    <li>If you don't have an account yet, you'll be prompted to create one</li>
+                    <li>Once accepted, you'll have ${role} access to ${companyName}'s dashboard</li>
+                </ul>
+            `)}
+        `,
+        cta: { label: "Accept Invitation", url: acceptUrl },
+        footerNote: "This invitation expires in 14 days.",
+    });
+
+    return send("team_invite", to, `${inviterName} invited you to ${companyName} on CapturePilot`, html, {
+        inviterName, companyName, role, acceptUrl,
+    });
+}
+
 // ─── Task Notification ─────────────────────────────────────
 export async function sendTaskNotification(
     to: string,
