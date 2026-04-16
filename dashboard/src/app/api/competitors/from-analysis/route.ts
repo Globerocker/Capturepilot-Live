@@ -5,6 +5,27 @@ import { createClient } from "@supabase/supabase-js";
 
 export const maxDuration = 60;
 
+// Same formula as /api/competitors/add-from-sam — exact 6-digit match scores 1,
+// shared 4-digit industry-group prefix scores 0.5, normalized by the larger set.
+function computeOverlapScore(userNaics: string[], compNaics: string[]): number {
+    if (!userNaics.length || !compNaics.length) return 0;
+    const userSet = new Set(userNaics.map(String));
+    const compSet = new Set(compNaics.map(String));
+    let exact = 0;
+    for (const c of compSet) if (userSet.has(c)) exact++;
+    let prefix = 0;
+    for (const c of compSet) {
+        if (userSet.has(c)) continue;
+        const p = c.slice(0, 4);
+        for (const u of userSet) {
+            if (u.slice(0, 4) === p) { prefix++; break; }
+        }
+    }
+    const denom = Math.max(userSet.size, compSet.size);
+    const score = (exact + prefix * 0.5) / denom;
+    return Math.max(0, Math.min(100, Math.round(score * 100)));
+}
+
 /**
  * POST /api/competitors/from-analysis
  * Body: { analysis_id: string }
@@ -34,10 +55,11 @@ export async function POST(req: NextRequest) {
 
     const { data: profile } = await admin
         .from("user_profiles")
-        .select("id")
+        .select("id, naics_codes")
         .eq("auth_user_id", user.id)
         .maybeSingle();
     if (!profile) return NextResponse.json({ error: "No profile" }, { status: 404 });
+    const userNaics = ((profile as { naics_codes?: string[] | null }).naics_codes || []) as string[];
 
     const { data: analysis } = await admin
         .from("company_analyses")
@@ -110,7 +132,15 @@ export async function POST(req: NextRequest) {
         secondary_keywords: secondaryKeywords,
     };
 
-    const federalPresence = Object.keys(samData).length > 0 ? "strong" : uei ? "moderate" : "none";
+    // Federal presence — gauge by real USASpending award history, not SAM-only
+    // registration. A company can be SAM-registered with zero federal contracts
+    // (e.g. educational entities); calling that "strong" is misleading.
+    const awardCount = Number((crawlData.usaspending_data as { award_count?: number } | null)?.award_count || 0);
+    const federalPresence = awardCount >= 3 ? "strong"
+        : (awardCount >= 1 || Object.keys(samData).length > 0 || uei) ? "moderate"
+        : "none";
+
+    const overlapScore = computeOverlapScore(userNaics, naicsCodes);
 
     const { data: inserted, error } = await admin
         .from("client_competitors")
@@ -126,7 +156,7 @@ export async function POST(req: NextRequest) {
             federal_presence: federalPresence,
             crawl_data: crawlWithKw,
             last_analyzed_at: new Date().toISOString(),
-            overlap_score: 0,
+            overlap_score: overlapScore,
         })
         .select("id")
         .single();

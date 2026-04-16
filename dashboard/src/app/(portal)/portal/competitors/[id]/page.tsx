@@ -54,6 +54,65 @@ function formatEmployees(raw: string | null): string {
     return num.toLocaleString();
 }
 
+// Parse legacy naics_codes[] entries. Handles bare strings, objects, and
+// JSON-stringified objects (a leftover from an earlier insert bug where object
+// arrays were written to a TEXT[] column and came back as raw JSON text).
+function parseNaicsCode(c: unknown): string | null {
+    if (typeof c === "string") {
+        const t = c.trim();
+        if (/^\d{4,6}$/.test(t)) return t;
+        if (t.startsWith("{")) {
+            try {
+                const obj = JSON.parse(t) as Record<string, unknown>;
+                const code = String(obj.code || "").trim();
+                if (/^\d{4,6}$/.test(code)) return code;
+            } catch { /* fall through */ }
+        }
+        return null;
+    }
+    if (c && typeof c === "object") {
+        const code = String((c as Record<string, unknown>).code || "").trim();
+        if (/^\d{4,6}$/.test(code)) return code;
+    }
+    return null;
+}
+
+// Reject leadership entries that are actually blog posts / content cards picked
+// up by the crawler (e.g. "GovCon Glossary", "Free Beginner Course"). Two-word
+// capitalized strings pass the naive name heuristic, so we filter the known-bad
+// marketing/educational vocabulary here.
+const NON_PERSON_WORDS = /\b(guide|course|training|glossary|beginner|expert|tutorial|lesson|module|certificate|certification|schedule|registration|checklist|template|webinar|podcast|handbook|masterclass|capabilities|offerings|directory|overview|mission|vision|about|contact|home|career|careers|news|press|blog|resources|products|solutions|services|pricing|terms|privacy|policy|sitemap|company|team)\b/i;
+
+function looksLikePerson(name: string): boolean {
+    if (!name) return false;
+    const parts = name.trim().split(/\s+/);
+    if (parts.length < 2 || parts.length > 5) return false;
+    if (!parts.every(p => /^[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ'-]+$/.test(p))) return false;
+    if (NON_PERSON_WORDS.test(name)) return false;
+    if (/^[A-Z]{2,}$/.test(name)) return false;
+    return true;
+}
+
+function filterLeadership(raw: unknown): Array<{ name: string; title: string }> {
+    if (!Array.isArray(raw)) return [];
+    const seen = new Set<string>();
+    const out: Array<{ name: string; title: string }> = [];
+    for (const item of raw) {
+        if (!item || typeof item !== "object") continue;
+        const obj = item as Record<string, unknown>;
+        const name = String(obj.name || obj.fullName || obj.full_name || "").trim();
+        if (!name || !looksLikePerson(name)) continue;
+        const key = name.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const rawTitle = obj.title || obj.role || obj.position;
+        const title = rawTitle ? String(rawTitle).trim() : "";
+        if (title && NON_PERSON_WORDS.test(title)) continue;
+        out.push({ name, title });
+    }
+    return out;
+}
+
 // ---------------------------------------------------------------------------
 // Competitive Analysis Builder (deterministic, from crawl_data)
 // ---------------------------------------------------------------------------
@@ -329,12 +388,13 @@ export default function CompetitorDetail() {
         const employeeCount = (crawlData.employee_signals as string) || (crawlData.employee_count as string) || comp.employee_count;
         const revenueEstimate = (crawlData.revenue_signals as string) || (crawlData.revenue_estimate as string) || comp.revenue_estimate;
 
-        let federalPresence = comp.federal_presence || "unknown";
-        if (samData && Object.keys(samData).length > 0) {
-            federalPresence = "strong";
-        } else if (uei) {
-            federalPresence = "moderate";
-        }
+        // Same presence rule as initial insert — require USASpending award
+        // history for "strong"; SAM-only registration is "moderate".
+        const awardCount = Number((crawlData.usaspending_data as { award_count?: number } | null)?.award_count || 0);
+        let federalPresence: string = comp.federal_presence || "unknown";
+        if (awardCount >= 3) federalPresence = "strong";
+        else if (awardCount >= 1 || (samData && Object.keys(samData).length > 0) || uei) federalPresence = "moderate";
+        else if (!uei) federalPresence = "none";
 
         await supabase.from("client_competitors").update({
             competitor_name: competitorName,
@@ -388,7 +448,7 @@ export default function CompetitorDetail() {
 
     const crawl = comp.crawl_data || {};
     const services = (crawl.services as string[]) || [];
-    const leadership = (crawl.leadership as Array<{ name: string; title: string }>) || [];
+    const leadership = filterLeadership(crawl.leadership);
     const social = (crawl.social_links as Record<string, string>) || {};
     const contacts = (crawl.contacts as Array<{ email?: string; phone?: string; name?: string }>) || [];
     const certs = (crawl.certifications as Array<{ type: string; confidence: number }>) || [];
@@ -401,8 +461,10 @@ export default function CompetitorDetail() {
     const weaknesses = buildWeaknesses(comp);
     const differentiators = buildDifferentiators(comp);
 
-    // NAICS overlap
-    const compNaics = (comp.naics_codes || []).map(c => c.replace(/\s.*/, "").trim());
+    // NAICS overlap — parse legacy shapes (objects / JSON-strings) into bare codes.
+    const compNaics = (comp.naics_codes || [])
+        .map(parseNaicsCode)
+        .filter((c): c is string => !!c);
     const userNaicsCodes = userNaics.map(c => c.replace(/\s.*/, "").trim());
     const overlappingNaics = compNaics.filter(c => userNaicsCodes.includes(c));
     const nonOverlappingNaics = compNaics.filter(c => !userNaicsCodes.includes(c));
@@ -479,15 +541,15 @@ export default function CompetitorDetail() {
                         </div>
 
                         {/* NAICS badges */}
-                        {comp.naics_codes && comp.naics_codes.length > 0 && (
+                        {compNaics.length > 0 && (
                             <div className="flex flex-wrap gap-1.5 mt-3">
-                                {comp.naics_codes.slice(0, 8).map((code, i) => (
+                                {compNaics.slice(0, 8).map((code, i) => (
                                     <span key={i} className="text-[10px] font-mono bg-stone-100 text-stone-600 border border-stone-200 px-2 py-0.5 rounded">
                                         {code}
                                     </span>
                                 ))}
-                                {comp.naics_codes.length > 8 && (
-                                    <span className="text-[10px] text-stone-400">+{comp.naics_codes.length - 8} more</span>
+                                {compNaics.length > 8 && (
+                                    <span className="text-[10px] text-stone-400">+{compNaics.length - 8} more</span>
                                 )}
                             </div>
                         )}
@@ -709,9 +771,9 @@ export default function CompetitorDetail() {
                             <Briefcase className="w-5 h-5 text-stone-500" />
                             <h3 className="text-sm font-bold text-stone-700">NAICS Codes</h3>
                         </div>
-                        {comp.naics_codes && comp.naics_codes.length > 0 ? (
+                        {compNaics.length > 0 ? (
                             <div className="flex flex-wrap gap-1">
-                                {comp.naics_codes.map((code, i) => (
+                                {compNaics.map((code, i) => (
                                     <span key={i} className="text-[10px] font-mono bg-white text-stone-600 border border-stone-200 px-2 py-0.5 rounded">
                                         {code}
                                     </span>

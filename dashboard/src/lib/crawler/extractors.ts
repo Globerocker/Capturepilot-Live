@@ -6,7 +6,8 @@
  * plain-text strings (texts) and returns structured data.
  */
 
-import type { CheerioAPI } from "cheerio";
+import type { CheerioAPI, Cheerio } from "cheerio";
+import type { AnyNode } from "domhandler";
 import {
     EMAIL_RE, PHONE_RE, YEAR_RE, EMPLOYEE_RE, REVENUE_RE, REVENUE_RE2,
     UEI_RE, UEI_CONTEXT_RE, ADDRESS_RE, STATE_RE_STR,
@@ -82,6 +83,56 @@ export function extractDescription(soups: CheerioAPI[], texts: string[]): string
 
 // ─── Services ──────────────────────────────────────────────────────────────
 
+// Phrases that routinely appear in <li> items that are actually menu / footer /
+// CTA / marketing copy rather than real services.
+const SERVICE_BLOCKLIST = [
+    "home", "login", "sign in", "sign up", "signup", "privacy", "cookie", "©",
+    "contact us", "about us", "terms", "policy", "sitemap", "read more", "learn more",
+    "get started", "get expert", "get help", "book now", "book a call", "schedule a call",
+    "free course", "free guide", "free trial", "free consultation", "free download",
+    "watch video", "watch now", "listen now", "subscribe", "newsletter",
+    "all guides", "all courses", "all articles", "all posts", "view all",
+    "terms of service", "terms of use", "refund policy", "shipping",
+    "my account", "your account", "log out", "sign out",
+    "careers", "jobs", "press", "media kit", "company", "our team", "our story",
+    "testimonials", "case studies", "pricing", "plans", "compare plans", "faq", "help center",
+];
+
+// Ancestor-tag / class tokens that indicate navigation or chrome rather than content.
+const NAV_CLASS_TOKENS = ["nav", "menu", "header", "footer", "sidebar", "breadcrumb", "pagination", "cta"];
+
+function hasNavAncestor(node: Cheerio<AnyNode>): boolean {
+    let cur = node.parent();
+    for (let depth = 0; depth < 4 && cur.length; depth++) {
+        const tag = cur.prop("tagName")?.toLowerCase();
+        if (tag === "nav" || tag === "header" || tag === "footer" || tag === "aside") return true;
+        const cls = (cur.attr("class") || "").toLowerCase();
+        const id = (cur.attr("id") || "").toLowerCase();
+        if (NAV_CLASS_TOKENS.some(t => cls.includes(t) || id.includes(t))) return true;
+        cur = cur.parent();
+    }
+    return false;
+}
+
+function isLikelyServiceText(raw: string): boolean {
+    const text = raw.trim();
+    if (text.length < 10 || text.length > 120) return false;
+    // Strip decorative arrows used in CTA links ("All Guides →")
+    if (/[→↗»›▶▸▷▹⟶]/.test(text)) return false;
+    // TOC-style numbering ("01What Is a Capability Statement?")
+    if (/^\d+[A-Za-z]/.test(text) || /^\d+\.\s/.test(text)) return false;
+    // All-caps blurbs are usually section headers, not services
+    if (text === text.toUpperCase() && /[A-Z]{3,}/.test(text)) return false;
+    // Contains a question — typically FAQ copy or blog title, not a service name
+    if (text.includes("?")) return false;
+
+    const lower = text.toLowerCase();
+    for (const bad of SERVICE_BLOCKLIST) {
+        if (lower.includes(bad)) return false;
+    }
+    return true;
+}
+
 export function extractServices(soups: CheerioAPI[], _texts: string[]): string[] {
     const services = new Set<string>();
 
@@ -89,35 +140,23 @@ export function extractServices(soups: CheerioAPI[], _texts: string[]): string[]
         // List items
         $("ul li, ol li").each((_i, el) => {
             const text = $(el).text().replace(/\s+/g, " ").trim();
-            // Services usually have decent length. Skip if too short or too long.
-            if (text.length > 10 && text.length < 120) {
-                const lower = text.toLowerCase();
-                // Aggressive blocklist for UI/Nav elements
-                if (!["home", "login", "sign", "privacy", "cookie", "©", "contact us", "about us", "terms", "policy", "sitemap", "read more", "learn more"].some(s => lower.includes(s))) {
-                    // Check if parent looks like a navigation menu
-                    const parentTag = $(el).parent().prop("tagName")?.toLowerCase();
-                    const parentClass = $(el).parent().attr("class")?.toLowerCase() || "";
-                    if (!parentClass.includes("nav") && !parentClass.includes("menu") && parentTag !== "nav") {
-                        services.add(text);
-                    }
-                }
-            }
+            if (!isLikelyServiceText(text)) return;
+            if (hasNavAncestor($(el))) return;
+            services.add(text);
         });
 
         // Headings near service keywords
         $("h2, h3, h4, .service-title, .card-title").each((_i, el) => {
             const text = $(el).text().replace(/\s+/g, " ").trim();
-            if (text.length > 5 && text.length < 80) {
-                const kws = ["service", "solution", "capabilit", "offer", "what we do", "specializ", "core competenc"];
-                const lower = text.toLowerCase();
-                const parentText = $(el).parent().text().replace(/\s+/g, " ").trim().slice(0, 100).toLowerCase();
-                
-                // Aggressive blocklist
-                if (["home", "login", "contact", "about"].some(s => lower.includes(s))) return;
+            if (text.length < 5 || text.length > 80) return;
+            if (!isLikelyServiceText(text)) return;
+            if (hasNavAncestor($(el))) return;
 
-                if (kws.some(kw => lower.includes(kw) || parentText.includes(kw))) {
-                    services.add(text);
-                }
+            const kws = ["service", "solution", "capabilit", "offer", "what we do", "specializ", "core competenc"];
+            const lower = text.toLowerCase();
+            const parentText = $(el).parent().text().replace(/\s+/g, " ").trim().slice(0, 100).toLowerCase();
+            if (kws.some(kw => lower.includes(kw) || parentText.includes(kw))) {
+                services.add(text);
             }
         });
     }
@@ -289,15 +328,25 @@ export function detectCertifications(
 
 // ─── Employee Estimate ─────────────────────────────────────────────────────
 
+// Words that, when found in the immediate context of an "N employees" match,
+// mean the number is talking about *other* people (customers, students, the
+// federal workforce) rather than this company's own team.
+const EMPLOYEE_OTHER_CONTEXT_RE = /\b(client|customer|student|graduate|member|user|subscriber|business|compan(?:y|ies)|contractor|small\s+business|federal\s+employee|federal\s+workforce|serve(?:d|s)?|help(?:ed|s)?|train(?:ed|s|ing)?|course|course\s+graduate|community)\b/i;
+
 export function estimateEmployees(
     texts: string[]
 ): { estimate: number; source: string } | null {
     const allText = texts.join(" ");
     for (const m of findAll(EMPLOYEE_RE, allText)) {
         const count = parseInt(m[1], 10);
-        if (count >= 1 && count <= 50000) {
-            return { estimate: count, source: "page_text" };
-        }
+        if (count < 1 || count > 50000) continue;
+        // Check a ±80 char window for "5,000 small businesses", "500 graduates",
+        // "trained 5,000 contractors" — these aren't the company's headcount.
+        const start = Math.max(0, (m.index ?? 0) - 80);
+        const end = Math.min(allText.length, (m.index ?? 0) + m[0].length + 80);
+        const context = allText.slice(start, end);
+        if (EMPLOYEE_OTHER_CONTEXT_RE.test(context)) continue;
+        return { estimate: count, source: "page_text" };
     }
     return null;
 }
@@ -474,15 +523,32 @@ export function extractRevenueSignals(
         k: 1_000,
     };
 
+    // Phrases that, when near the dollar figure, mean it's market size / total
+    // contract spend / fundraising stats — NOT this company's revenue.
+    const otherContextRe = /\b(award(?:ed|s)?|contract(?:s|ing)?|market\s+size|federal\s+budget|federal\s+spending|industry|annually\s+awarded|spent|budget|raised|funding|investment|valuation|economy|gdp|grants?|total\s+federal|government\s+spending)\b/i;
+    // Phrases that corroborate this *is* the company's revenue.
+    const ownContextRe = /\b(our\s+revenue|company\s+revenue|annual\s+revenue|gross\s+revenue|we\s+generate|revenue\s+of|revenues\s+of|sales\s+of|top\s+line)\b/i;
+
     for (const re of [REVENUE_RE, REVENUE_RE2]) {
         for (const m of findAll(re, allText)) {
             const amount = parseFloat(m[1]);
             const unit = m[2].toLowerCase();
             const mult = multipliers[unit] || 1;
             const estimate = amount * mult;
-            if (estimate >= 10_000 && estimate <= 100_000_000_000) {
-                return { estimate, source: "page_text" };
-            }
+            if (estimate < 10_000 || estimate > 100_000_000_000) continue;
+
+            const start = Math.max(0, (m.index ?? 0) - 100);
+            const end = Math.min(allText.length, (m.index ?? 0) + m[0].length + 100);
+            const context = allText.slice(start, end);
+
+            // If the surrounding copy is clearly about market size / contract
+            // volume / fundraising, skip — it's not the company's own revenue.
+            if (otherContextRe.test(context) && !ownContextRe.test(context)) continue;
+            // Very large figures (>$1B) are almost always market-wide numbers
+            // unless something explicitly ties them to the company.
+            if (estimate > 1_000_000_000 && !ownContextRe.test(context)) continue;
+
+            return { estimate, source: "page_text" };
         }
     }
     return null;

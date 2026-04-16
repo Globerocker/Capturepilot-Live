@@ -183,14 +183,31 @@ export default function CompetitorsPage() {
         const employeeCount = (crawlData.employee_signals as string) || (crawlData.employee_count as string) || null;
         const revenueEstimate = (crawlData.revenue_signals as string) || (crawlData.revenue_estimate as string) || null;
 
+        // Federal presence — SAM-only registration isn't enough for "strong";
+        // require real USASpending award history so educational/training-only
+        // SAM registrants don't get flagged as strong competitors.
+        const awardCount = Number((crawlData.usaspending_data as { award_count?: number } | null)?.award_count || 0);
         let federalPresence = "unknown";
-        if (samData && Object.keys(samData).length > 0) {
-            federalPresence = "strong";
-        } else if (uei) {
-            federalPresence = "moderate";
-        } else {
-            federalPresence = "none";
+        if (awardCount >= 3) federalPresence = "strong";
+        else if (awardCount >= 1 || (samData && Object.keys(samData).length > 0) || uei) federalPresence = "moderate";
+        else federalPresence = "none";
+
+        // Overlap — exact 6-digit match = 1, shared 4-digit industry group = 0.5,
+        // normalized by the larger set. Mirrors add-from-sam formula.
+        const userSet = new Set(userNaics.map(String));
+        const compSet = new Set(inferredNaics.map(String));
+        let exactOverlap = 0;
+        for (const c of compSet) if (userSet.has(c)) exactOverlap++;
+        let prefixOverlap = 0;
+        for (const c of compSet) {
+            if (userSet.has(c)) continue;
+            const p = c.slice(0, 4);
+            for (const u of userSet) {
+                if (u.slice(0, 4) === p) { prefixOverlap++; break; }
+            }
         }
+        const overlapDenom = Math.max(userSet.size, compSet.size) || 1;
+        const overlapScore = Math.max(0, Math.min(100, Math.round(((exactOverlap + prefixOverlap * 0.5) / overlapDenom) * 100)));
 
         // Ask the keyword suggest endpoint for primary + secondary keywords based on
         // the crawled company data. Fire-and-wait (30s cap) so the competitor gets
@@ -234,7 +251,7 @@ export default function CompetitorsPage() {
             federal_presence: federalPresence,
             crawl_data: crawlDataWithKeywords,
             last_analyzed_at: new Date().toISOString(),
-            overlap_score: 0,
+            overlap_score: overlapScore,
         });
 
         if (error) {
