@@ -258,8 +258,8 @@ const BETA_INVITE_DEFAULTS = {
     ctaLabel: "Claim Your Beta Account",
     introLineFor: (companyName?: string) =>
         companyName
-            ? `We've been following <strong>${companyName}</strong> and think CapturePilot could be a strong fit for your federal contracting pipeline.`
-            : "We think CapturePilot could be a strong fit for your federal contracting pipeline.",
+            ? `I'd like to invite <strong>${companyName}</strong> into CapturePilot's private beta.`
+            : "I'd like to invite you into CapturePilot's private beta.",
 };
 
 /**
@@ -291,14 +291,14 @@ export function renderBetaInviteEmail(params: BetaInviteRenderParams): { subject
         heading,
         body: `
             ${paragraph(introLine)}
-            ${paragraph("CapturePilot matches your company against 30,000+ federal opportunities every day, scores each one for fit, and tells you exactly where to focus — so you stop wasting time on contracts you can't win.")}
+            ${paragraph("CapturePilot scans new federal opportunities from SAM.gov every day and scores them against your company profile, so you only look at the ones worth pursuing.")}
             ${noteBlock}
             ${featureBox(`
-                ${sectionLabel("Your beta perks")}
+                ${sectionLabel("What beta access includes")}
                 <ul style="color:#065f46;font-size:14px;line-height:1.9;padding-left:20px;margin:0;">
                     <li>Free access during the beta period</li>
-                    <li><strong>25% off locked in for life</strong> when paid plans launch</li>
-                    <li>Direct line to our team for feedback and feature requests</li>
+                    <li>25% off for life when paid plans launch</li>
+                    <li>A direct line to our team for feedback</li>
                     <li>Your account is pre-approved — just set a password</li>
                 </ul>
             `)}

@@ -33,15 +33,24 @@ export async function POST(req: NextRequest) {
     const recipientName = body.recipient_name?.trim() || "";
     const companyName = body.company_name?.trim() || "";
 
-    const systemPrompt = `You write short, warm beta-invite email copy for CapturePilot, a federal-contracting SaaS. The admin met the recipient through some specific context and is now inviting them to try the product. Write copy that feels personal, specific to that context, and non-salesy. Never invent facts not given in the context. Keep it tight and human — no corporate filler. Do not use em-dashes in generated copy.
+    const systemPrompt = `You write a short beta-invite email for CapturePilot, a federal-contracting SaaS. The admin briefly describes how they met the recipient, and you draft the invite copy.
 
-You MUST return valid JSON with exactly these fields:
-- subject: string (email subject line, 40-70 chars, reference the context)
-- eyebrow: string (uppercase-looking label, 2-5 words, sets context — e.g. "Following Up", "Great Connecting", "From Our Call")
-- heading: string (the headline, 4-8 words — use [firstName] as a literal placeholder if a name fits; otherwise omit it)
-- ctaLabel: string (button text, 2-4 words — e.g. "Accept Beta Access", "Claim Your Access")
-- introLine: string (1 sentence opening the email body, specific to the context)
-- personalNote: string (1-2 sentences referencing the context explicitly, then handing off to the invite. Warm, specific, no salesy language. Do NOT repeat the intro line.)`;
+HARD RULES:
+- Never invent facts, numbers, statistics, or product details that are not in the context. If the admin didn't mention it, you don't write it.
+- No marketing speak, no self-aggrandizing language, no superlatives ("game-changing", "revolutionary", "powerful", "best-in-class", etc.).
+- Do not claim specific counts ("30,000 opportunities", "thousands of contracts", etc.) — these vary and you'll get them wrong.
+- Do not pretend to know anything about the recipient's company beyond what the admin said.
+- First-person singular voice ("I"), not "we" or "our team", unless the context says otherwise. It's a personal message from one person.
+- Conversational, direct, human. Short sentences. No fluff.
+- Do not use em-dashes.
+
+Return valid JSON with exactly these fields:
+- subject: string (email subject, 30-60 chars, plain and specific — not clickbait)
+- eyebrow: string (2-4 word label above the heading — e.g. "Following Up", "Great Connecting")
+- heading: string (4-8 words — use [firstName] as a literal placeholder if a first name fits naturally)
+- ctaLabel: string (button text, 2-4 words — e.g. "Accept Invite", "Set Up Account")
+- introLine: string (one sentence opening the email, naturally referencing the context)
+- personalNote: string (1-2 sentences that reference the context more specifically, then hand off to the invite. Don't repeat the intro line.)`;
 
     const userPrompt = `CONTEXT (how the admin met the recipient):
 ${context}

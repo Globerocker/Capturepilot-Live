@@ -4,18 +4,17 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
     Gift, Send, Mail, CheckCircle2, Clock, Copy, Loader2,
     Trash2, RotateCw, Plus, Sliders, Eye, Sparkles,
-    MessageSquare, Phone, Users, Snowflake,
 } from "lucide-react";
 import clsx from "clsx";
-import { INVITE_TEMPLATES, getTemplate, type TemplateId } from "./templates";
 
-const TEMPLATE_ICONS: Record<TemplateId, typeof Sparkles> = {
-    ai: Sparkles,
-    linkedin: MessageSquare,
-    call: Phone,
-    in_person: Users,
-    cold: Snowflake,
-};
+// Quick-add chips — clicking one appends a short hint to the context textarea.
+// The admin can still edit and add specifics; this just saves typing.
+const CONTEXT_CHIPS: { label: string; snippet: string }[] = [
+    { label: "We had a call", snippet: "We had a call recently. " },
+    { label: "LinkedIn chat", snippet: "We chatted on LinkedIn. " },
+    { label: "Met in person", snippet: "We met in person. " },
+    { label: "No prior contact", snippet: "No prior contact — cold outreach. " },
+];
 
 interface Invite {
     id: string;
@@ -54,34 +53,12 @@ export default function AdminBetaInvitesPage() {
         introLine: "",
     });
 
-    const [templateId, setTemplateId] = useState<TemplateId>("ai");
     const [aiContext, setAiContext] = useState("");
     const [aiLoading, setAiLoading] = useState(false);
     const [aiError, setAiError] = useState<string | null>(null);
 
-    // Apply a template's preset overrides + personal note.
-    // The "[firstName]" token in headings is replaced with the recipient's first name.
-    const applyTemplate = (id: TemplateId) => {
-        setTemplateId(id);
-        setAiError(null);
-        const t = getTemplate(id);
-        if (t.requiresAi) {
-            return; // AI template fills in only after the user hits Generate
-        }
-        const firstName = (form.recipient_name || "").trim().split(" ")[0] || "there";
-        const renderTokens = (s: string | undefined) =>
-            (s ?? "").replace(/\[firstName\]/gi, firstName);
-        setOverrides({
-            subject: renderTokens(t.overrides?.subject),
-            eyebrow: renderTokens(t.overrides?.eyebrow),
-            heading: renderTokens(t.overrides?.heading),
-            ctaLabel: renderTokens(t.overrides?.ctaLabel),
-            introLine: renderTokens(t.overrides?.introLine),
-        });
-        if (t.personalNote !== undefined) {
-            setForm(f => ({ ...f, personal_note: renderTokens(t.personalNote) }));
-        }
-        setShowCustomize(true);
+    const appendChip = (snippet: string) => {
+        setAiContext(c => (c.trim() ? c.replace(/\s*$/, " ") + snippet : snippet));
     };
 
     const runAiDraft = async () => {
@@ -271,68 +248,45 @@ export default function AdminBetaInvitesPage() {
                 <div className="bg-white border border-stone-200 rounded-2xl p-6 space-y-4">
                     <h2 className="font-bold text-sm flex items-center gap-1.5"><Plus className="w-4 h-4" /> New Invitation</h2>
 
-                    {/* Template picker */}
-                    <div className="space-y-2">
-                        <p className="text-xs font-medium text-stone-500">Template</p>
-                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-                            {INVITE_TEMPLATES.map(t => {
-                                const Icon = TEMPLATE_ICONS[t.id];
-                                const active = templateId === t.id;
-                                return (
-                                    <button
-                                        key={t.id}
-                                        type="button"
-                                        onClick={() => applyTemplate(t.id)}
-                                        title={t.hint}
-                                        className={clsx(
-                                            "flex flex-col items-center gap-1 px-2 py-3 rounded-xl border text-[11px] font-bold transition-colors text-center",
-                                            active
-                                                ? "bg-black text-white border-black"
-                                                : "bg-white text-stone-600 border-stone-200 hover:border-stone-400 hover:bg-stone-50"
-                                        )}
-                                    >
-                                        <Icon className="w-4 h-4" />
-                                        <span className="leading-tight">{t.label}</span>
-                                    </button>
-                                );
-                            })}
-                        </div>
-                        <p className="text-[11px] text-stone-400">{getTemplate(templateId).hint}</p>
-                    </div>
-
-                    {/* AI context input — only when AI template is selected */}
-                    {templateId === "ai" && (
-                        <div className="bg-gradient-to-br from-stone-50 to-emerald-50/30 border border-emerald-100 rounded-xl p-4 space-y-3">
-                            <label className="block text-xs font-bold text-stone-700 flex items-center gap-1.5">
-                                <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                                Describe the context (AI writes the email)
-                            </label>
-                            <textarea
-                                value={aiContext}
-                                onChange={e => setAiContext(e.target.value)}
-                                placeholder="e.g. Met Jane at GovCon Summit last Thursday. She runs a janitorial company in VA and is trying to land their first federal contract. We chatted about how their competitors are getting a 6-month head start through Sources Sought notices."
-                                rows={3}
-                                className="w-full border border-stone-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-black resize-none bg-white"
-                            />
-                            {aiError && (
-                                <p className="text-xs text-red-600">{aiError}</p>
-                            )}
-                            <div className="flex items-center justify-between">
-                                <p className="text-[11px] text-stone-500">
-                                    The more specific, the better — referencing specific topics makes the email feel personal.
-                                </p>
+                    {/* AI context editor — single source of truth for drafting */}
+                    <div className="bg-gradient-to-br from-stone-50 to-emerald-50/30 border border-emerald-100 rounded-xl p-4 space-y-3">
+                        <label className="block text-xs font-bold text-stone-700 flex items-center gap-1.5">
+                            <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                            Context for the AI
+                        </label>
+                        <textarea
+                            value={aiContext}
+                            onChange={e => setAiContext(e.target.value)}
+                            placeholder="How do you know this person? What did you discuss? Keep it specific — a few sentences is fine."
+                            rows={3}
+                            className="w-full border border-stone-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-black resize-none bg-white"
+                        />
+                        <div className="flex flex-wrap gap-1.5">
+                            <span className="text-[11px] text-stone-400 self-center pr-1">Quick add:</span>
+                            {CONTEXT_CHIPS.map(c => (
                                 <button
+                                    key={c.label}
                                     type="button"
-                                    onClick={runAiDraft}
-                                    disabled={aiLoading || !aiContext.trim()}
-                                    className="bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold inline-flex items-center gap-1.5 hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    onClick={() => appendChip(c.snippet)}
+                                    className="text-[11px] font-medium px-2 py-1 rounded-full bg-white border border-stone-200 text-stone-600 hover:border-stone-400 hover:text-black transition-colors"
                                 >
-                                    {aiLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                                    {aiLoading ? "Drafting…" : "Generate Email"}
+                                    + {c.label}
                                 </button>
-                            </div>
+                            ))}
                         </div>
-                    )}
+                        {aiError && <p className="text-xs text-red-600">{aiError}</p>}
+                        <div className="flex items-center justify-end">
+                            <button
+                                type="button"
+                                onClick={runAiDraft}
+                                disabled={aiLoading || !aiContext.trim()}
+                                className="bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold inline-flex items-center gap-1.5 hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {aiLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                                {aiLoading ? "Drafting…" : "Draft email"}
+                            </button>
+                        </div>
+                    </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
