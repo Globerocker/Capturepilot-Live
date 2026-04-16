@@ -157,7 +157,7 @@ export function TableView({
         return acc;
     }, {} as Record<string, number>);
 
-    const { getWidth, getResizerProps, reset: resetWidths } = useResizableColumns({
+    const { getWidth, getResizerProps, reset: resetWidths, activeResizeKey } = useResizableColumns({
         storageKey: profileId ? `matches:colwidths:${profileId}` : null,
         defaults: defaultWidths,
         min: 60,
@@ -249,21 +249,33 @@ export function TableView({
                                     className="w-3.5 h-3.5 rounded border-stone-300 text-black focus:ring-black accent-black"
                                 />
                             </th>
-                            {visibleCols.map(col => (
-                                <th
-                                    key={col.key}
-                                    className="relative text-left px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-stone-500"
-                                    style={{ width: getWidth(col.key), minWidth: getWidth(col.key), maxWidth: getWidth(col.key) }}
-                                >
-                                    <div className="truncate pr-2">{col.label}</div>
-                                    <span
-                                        {...getResizerProps(col.key)}
-                                        className="group flex items-center justify-center hover:bg-stone-200/60"
+                            {visibleCols.map(col => {
+                                const isResizing = activeResizeKey === col.key;
+                                return (
+                                    <th
+                                        key={col.key}
+                                        className={clsx(
+                                            "relative text-left px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-stone-500",
+                                            isResizing && "bg-emerald-50",
+                                        )}
+                                        style={{ width: getWidth(col.key), minWidth: getWidth(col.key), maxWidth: getWidth(col.key) }}
                                     >
-                                        <span className="w-px h-4 bg-stone-300 group-hover:bg-stone-600 transition-colors" />
-                                    </span>
-                                </th>
-                            ))}
+                                        <div className="truncate pr-2">{col.label}</div>
+                                        <span
+                                            {...getResizerProps(col.key)}
+                                            className={clsx(
+                                                "group flex items-center justify-center",
+                                                isResizing ? "bg-emerald-500/30" : "hover:bg-emerald-200/50",
+                                            )}
+                                        >
+                                            <span className={clsx(
+                                                "h-full w-0.5 transition-colors",
+                                                isResizing ? "bg-emerald-600" : "bg-stone-200 group-hover:bg-emerald-500",
+                                            )} />
+                                        </span>
+                                    </th>
+                                );
+                            })}
                             <th className="px-3 py-2 text-right text-[10px] font-bold uppercase tracking-widest text-stone-500" style={{ width: 96 }}>Actions</th>
                         </tr>
                     </thead>

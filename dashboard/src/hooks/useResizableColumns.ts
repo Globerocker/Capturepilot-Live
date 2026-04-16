@@ -32,6 +32,7 @@ export function useResizableColumns(opts: {
     const min = opts.min ?? 60;
     const max = opts.max ?? 900;
     const [widths, setWidths] = useState<Record<string, number>>(opts.defaults);
+    const [activeResizeKey, setActiveResizeKey] = useState<string | null>(null);
     const activeKey = useRef<string | null>(null);
     const startX = useRef(0);
     const startWidth = useRef(0);
@@ -67,6 +68,7 @@ export function useResizableColumns(opts: {
     const onMouseUp = useCallback(() => {
         if (!activeKey.current) return;
         activeKey.current = null;
+        setActiveResizeKey(null);
         document.body.style.cursor = "";
         document.body.style.userSelect = "";
         window.removeEventListener("mousemove", onMouseMove);
@@ -83,6 +85,7 @@ export function useResizableColumns(opts: {
         e.preventDefault();
         e.stopPropagation();
         activeKey.current = key;
+        setActiveResizeKey(key);
         startX.current = e.clientX;
         startWidth.current = widths[key] ?? opts.defaults[key] ?? 150;
         document.body.style.cursor = "col-resize";
@@ -128,5 +131,5 @@ export function useResizableColumns(opts: {
         persist(opts.defaults);
     }, [opts.defaults, persist]);
 
-    return { widths, getWidth, getResizerProps, reset };
+    return { widths, getWidth, getResizerProps, reset, activeResizeKey };
 }

@@ -11,6 +11,8 @@ import { SkeletonTableRow } from "@/components/ui/Skeleton";
 import { cleanDescription } from "@/utils/cleanDescription";
 import { estimateContractValue } from "@/utils/estimateValue";
 import { useResizableColumns } from "@/hooks/useResizableColumns";
+import { AIFilterBar, type AIFilters } from "@/components/matches/AIFilterBar";
+import SavedViews from "@/components/SavedViews";
 
 // Default pixel widths for the Opportunities list-view columns.
 // Stored per-profile under `opportunities:colwidths:${profileId}` in localStorage.
@@ -75,7 +77,9 @@ export default function OpportunitiesPage() {
     const pageSize = 50;
 
     // Quick Filters
-    const [quickFilter, setQuickFilter] = useState<"ALL" | "HAS_MATCHES" | "SOURCES_SOUGHT" | "ENRICHED" | "EASY_WINS">("ALL");
+    // Removed EASY_WINS / HAS_MATCHES — those were duplicating /matches functionality.
+    // Opportunities is for browsing the full 57k corpus; match-scored filtering lives on /matches.
+    const [quickFilter, setQuickFilter] = useState<"ALL" | "SOURCES_SOUGHT" | "ENRICHED">("ALL");
 
     // Sort — column header click-to-sort
     const [sortCol, setSortCol] = useState<string>("posted_date");
@@ -118,12 +122,30 @@ export default function OpportunitiesPage() {
     }, []);
 
     // Resizable column widths (persisted per profile in localStorage).
-    const { getWidth: getColWidth, getResizerProps: getColResizer, reset: resetColWidths } = useResizableColumns({
+    const { getWidth: getColWidth, getResizerProps: getColResizer, reset: resetColWidths, activeResizeKey } = useResizableColumns({
         storageKey: profileId ? `opportunities:colwidths:${profileId}` : null,
         defaults: OPP_COLUMN_DEFAULTS,
         min: 60,
         max: 900,
     });
+
+    // Small helper so every header doesn't have to duplicate the resizer JSX.
+    // Green state during active drag makes the direction feel obvious (left =
+    // narrower, right = wider) which fixes the previous "awkward" feel.
+    const ColResizer = ({ k }: { k: string }) => (
+        <span
+            {...getColResizer(k)}
+            className={clsx(
+                "group flex items-center justify-center",
+                activeResizeKey === k ? "bg-emerald-500/30" : "hover:bg-emerald-200/50",
+            )}
+        >
+            <span className={clsx(
+                "h-full w-0.5 transition-colors",
+                activeResizeKey === k ? "bg-emerald-600" : "bg-stone-200 group-hover:bg-emerald-500",
+            )} />
+        </span>
+    );
 
     // Check pursuit status when opportunity is selected
     useEffect(() => {
@@ -145,6 +167,10 @@ export default function OpportunitiesPage() {
     const [filterNaics, setFilterNaics] = useState("");
     const [filterState, setFilterState] = useState("");
     const [filterSetAside, setFilterSetAside] = useState("");
+
+    // AI filter prompt (natural-language → structured filter)
+    const [aiPrompt, setAiPrompt] = useState<string | null>(null);
+    const [activeSavedViewId, setActiveSavedViewId] = useState<string | null>(null);
 
     // Calculate data richness score
     const calcDataScore = (op: Opportunity): number => {
@@ -225,33 +251,8 @@ export default function OpportunitiesPage() {
                     results.sort((a, b) => sortDir === "desc" ? (b._dataScore || 0) - (a._dataScore || 0) : (a._dataScore || 0) - (b._dataScore || 0));
                 }
 
-                // Easy Wins: High winability + deadline not passed
-                if (quickFilter === "EASY_WINS") {
-                    const today = new Date().toISOString().split("T")[0];
-                    results = results.filter(op => {
-                        const win = getWinability(op);
-                        if (win.label !== "High") return false;
-                        // Keep if no deadline (TBD) or deadline is in the future
-                        if (op.response_deadline && op.response_deadline < today) return false;
-                        return true;
-                    });
-                }
-
-                // For HAS_MATCHES filter, we need to check which have matches
-                if (quickFilter === "HAS_MATCHES") {
-                    const oppIds = results.map(r => r.id);
-                    if (oppIds.length > 0) {
-                        const { data: matchData } = await supabase
-                            .from("matches")
-                            .select("opportunity_id")
-                            .in("opportunity_id", oppIds);
-                        const matchedIds = new Set((matchData || []).map(m => m.opportunity_id));
-                        results = results.filter(r => matchedIds.has(r.id));
-                    }
-                }
-
                 setOpportunities(results);
-                setTotalCount(quickFilter === "HAS_MATCHES" || quickFilter === "EASY_WINS" ? results.length : (count || 0));
+                setTotalCount(count || 0);
             }
         } catch (err) {
             console.error(err);
@@ -361,13 +362,58 @@ export default function OpportunitiesPage() {
                         </div>
                     </header>
 
+                    {/* AI natural-language filter — "small business janitorial in TX closing in 30 days"
+                        gets translated by /api/matches/ai-filter to the structured filter state below. */}
+                    <AIFilterBar
+                        activePrompt={aiPrompt}
+                        onApply={(filters: AIFilters, prompt: string) => {
+                            setAiPrompt(prompt);
+                            if (filters.naics_code) setFilterNaics(filters.naics_code);
+                            if (filters.set_aside) setFilterSetAside(filters.set_aside);
+                            if (filters.state) setFilterState(filters.state);
+                            if (filters.notice_type) setFilterType(filters.notice_type);
+                            if (filters.keyword) { setSearchInput(filters.keyword); setActiveSearch(filters.keyword); }
+                            setPage(1);
+                        }}
+                        onClear={() => {
+                            setAiPrompt(null);
+                            setFilterNaics(""); setFilterSetAside(""); setFilterState("");
+                            setFilterType(""); setSearchInput(""); setActiveSearch("");
+                            setPage(1);
+                        }}
+                    />
+
+                    {/* Saved Views — HubSpot-style filter presets (drag to reorder, click to apply) */}
+                    <SavedViews
+                        page="opportunities"
+                        activeViewId={activeSavedViewId}
+                        currentFilterState={{
+                            quickFilter, sortCol, sortDir, filterAgency, filterType,
+                            filterNaics, filterState, filterSetAside, activeSearch, viewMode,
+                        }}
+                        onApply={(state, viewId) => {
+                            setActiveSavedViewId(viewId);
+                            const s = state as Record<string, unknown>;
+                            if (typeof s.quickFilter === "string") setQuickFilter(s.quickFilter as typeof quickFilter);
+                            if (typeof s.sortCol === "string") setSortCol(s.sortCol);
+                            if (typeof s.sortDir === "string") setSortDir(s.sortDir as "asc" | "desc");
+                            if (typeof s.filterAgency === "string") setFilterAgency(s.filterAgency);
+                            if (typeof s.filterType === "string") setFilterType(s.filterType);
+                            if (typeof s.filterNaics === "string") setFilterNaics(s.filterNaics);
+                            if (typeof s.filterState === "string") setFilterState(s.filterState);
+                            if (typeof s.filterSetAside === "string") setFilterSetAside(s.filterSetAside);
+                            if (typeof s.activeSearch === "string") { setActiveSearch(s.activeSearch); setSearchInput(s.activeSearch); }
+                            if (typeof s.viewMode === "string") setViewMode(s.viewMode as typeof viewMode);
+                            setPage(1);
+                        }}
+                        onClear={() => setActiveSavedViewId(null)}
+                    />
+
                     {/* Quick Filters + Sort Bar */}
                     <section className="bg-stone-50 border border-stone-200 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4 mb-6">
                         <div className="flex items-center space-x-2 flex-wrap gap-2">
                             {([
                                 { key: "ALL" as const, label: "All Records", icon: null },
-                                { key: "EASY_WINS" as const, label: "Easy Wins", icon: Trophy },
-                                { key: "HAS_MATCHES" as const, label: "Has Matches", icon: Flame },
                                 { key: "SOURCES_SOUGHT" as const, label: "Sources Sought", icon: Sparkles },
                                 { key: "ENRICHED" as const, label: "Enriched", icon: Target },
                             ]).map(tab => (
@@ -532,41 +578,41 @@ export default function OpportunitiesPage() {
                                     <table className="text-left border-collapse" style={{ tableLayout: "fixed", width: "max-content", minWidth: "100%" }}>
                                         <thead className="sticky top-0 z-10">
                                             <tr className="bg-stone-50 border-b border-stone-200 text-stone-500 text-[10px] uppercase tracking-wider">
-                                                <th className="relative py-4 px-5 font-bold cursor-pointer hover:text-black select-none" style={{ width: getColWidth("posted_date") }} onClick={() => handleColumnSort("posted_date")}>
+                                                <th className={clsx("relative py-4 px-5 font-bold cursor-pointer hover:text-black select-none", activeResizeKey === "posted_date" && "bg-emerald-50")} style={{ width: getColWidth("posted_date") }} onClick={() => handleColumnSort("posted_date")}>
                                                     <span className="truncate pr-2 block">Posted <SortIndicator col="posted_date" /></span>
-                                                    <span {...getColResizer("posted_date")} className="group flex items-center justify-center hover:bg-stone-200/60"><span className="w-px h-4 bg-stone-300 group-hover:bg-stone-600 transition-colors" /></span>
+                                                    <ColResizer k="posted_date" />
                                                 </th>
-                                                <th className="relative py-4 px-5 font-bold" style={{ width: getColWidth("title") }}>
+                                                <th className={clsx("relative py-4 px-5 font-bold", activeResizeKey === "title" && "bg-emerald-50")} style={{ width: getColWidth("title") }}>
                                                     <span className="truncate pr-2 block">Title / Agency</span>
-                                                    <span {...getColResizer("title")} className="group flex items-center justify-center hover:bg-stone-200/60"><span className="w-px h-4 bg-stone-300 group-hover:bg-stone-600 transition-colors" /></span>
+                                                    <ColResizer k="title" />
                                                 </th>
-                                                <th className="relative py-4 px-5 font-bold cursor-pointer hover:text-black select-none" style={{ width: getColWidth("notice_type") }} onClick={() => handleColumnSort("notice_type")}>
+                                                <th className={clsx("relative py-4 px-5 font-bold cursor-pointer hover:text-black select-none", activeResizeKey === "notice_type" && "bg-emerald-50")} style={{ width: getColWidth("notice_type") }} onClick={() => handleColumnSort("notice_type")}>
                                                     <span className="truncate pr-2 block">Type <SortIndicator col="notice_type" /></span>
-                                                    <span {...getColResizer("notice_type")} className="group flex items-center justify-center hover:bg-stone-200/60"><span className="w-px h-4 bg-stone-300 group-hover:bg-stone-600 transition-colors" /></span>
+                                                    <ColResizer k="notice_type" />
                                                 </th>
-                                                <th className="relative py-4 px-5 font-bold cursor-pointer hover:text-black select-none" style={{ width: getColWidth("naics_code") }} onClick={() => handleColumnSort("naics_code")}>
+                                                <th className={clsx("relative py-4 px-5 font-bold cursor-pointer hover:text-black select-none", activeResizeKey === "naics_code" && "bg-emerald-50")} style={{ width: getColWidth("naics_code") }} onClick={() => handleColumnSort("naics_code")}>
                                                     <span className="truncate pr-2 block">NAICS <SortIndicator col="naics_code" /></span>
-                                                    <span {...getColResizer("naics_code")} className="group flex items-center justify-center hover:bg-stone-200/60"><span className="w-px h-4 bg-stone-300 group-hover:bg-stone-600 transition-colors" /></span>
+                                                    <ColResizer k="naics_code" />
                                                 </th>
-                                                <th className="relative py-4 px-5 font-bold cursor-pointer hover:text-black select-none" style={{ width: getColWidth("place_of_performance_state") }} onClick={() => handleColumnSort("place_of_performance_state")}>
+                                                <th className={clsx("relative py-4 px-5 font-bold cursor-pointer hover:text-black select-none", activeResizeKey === "place_of_performance_state" && "bg-emerald-50")} style={{ width: getColWidth("place_of_performance_state") }} onClick={() => handleColumnSort("place_of_performance_state")}>
                                                     <span className="truncate pr-2 block">State <SortIndicator col="place_of_performance_state" /></span>
-                                                    <span {...getColResizer("place_of_performance_state")} className="group flex items-center justify-center hover:bg-stone-200/60"><span className="w-px h-4 bg-stone-300 group-hover:bg-stone-600 transition-colors" /></span>
+                                                    <ColResizer k="place_of_performance_state" />
                                                 </th>
-                                                <th className="relative py-4 px-5 font-bold" style={{ width: getColWidth("award_amount") }}>
+                                                <th className={clsx("relative py-4 px-5 font-bold", activeResizeKey === "award_amount" && "bg-emerald-50")} style={{ width: getColWidth("award_amount") }}>
                                                     <span className="truncate pr-2 block">Value</span>
-                                                    <span {...getColResizer("award_amount")} className="group flex items-center justify-center hover:bg-stone-200/60"><span className="w-px h-4 bg-stone-300 group-hover:bg-stone-600 transition-colors" /></span>
+                                                    <ColResizer k="award_amount" />
                                                 </th>
-                                                <th className="relative py-4 px-5 font-bold cursor-pointer hover:text-black select-none" style={{ width: getColWidth("response_deadline") }} onClick={() => handleColumnSort("response_deadline")}>
+                                                <th className={clsx("relative py-4 px-5 font-bold cursor-pointer hover:text-black select-none", activeResizeKey === "response_deadline" && "bg-emerald-50")} style={{ width: getColWidth("response_deadline") }} onClick={() => handleColumnSort("response_deadline")}>
                                                     <span className="truncate pr-2 block">Deadline <SortIndicator col="response_deadline" /></span>
-                                                    <span {...getColResizer("response_deadline")} className="group flex items-center justify-center hover:bg-stone-200/60"><span className="w-px h-4 bg-stone-300 group-hover:bg-stone-600 transition-colors" /></span>
+                                                    <ColResizer k="response_deadline" />
                                                 </th>
-                                                <th className="relative py-4 px-5 font-bold" style={{ width: getColWidth("winability") }}>
+                                                <th className={clsx("relative py-4 px-5 font-bold", activeResizeKey === "winability" && "bg-emerald-50")} style={{ width: getColWidth("winability") }}>
                                                     <span className="truncate pr-2 block">Winability</span>
-                                                    <span {...getColResizer("winability")} className="group flex items-center justify-center hover:bg-stone-200/60"><span className="w-px h-4 bg-stone-300 group-hover:bg-stone-600 transition-colors" /></span>
+                                                    <ColResizer k="winability" />
                                                 </th>
-                                                <th className="relative py-4 px-5 font-bold cursor-pointer hover:text-black select-none" style={{ width: getColWidth("data_rich") }} onClick={() => handleColumnSort("data_rich")}>
+                                                <th className={clsx("relative py-4 px-5 font-bold cursor-pointer hover:text-black select-none", activeResizeKey === "data_rich" && "bg-emerald-50")} style={{ width: getColWidth("data_rich") }} onClick={() => handleColumnSort("data_rich")}>
                                                     <span className="truncate pr-2 block">Data <SortIndicator col="data_rich" /></span>
-                                                    <span {...getColResizer("data_rich")} className="group flex items-center justify-center hover:bg-stone-200/60"><span className="w-px h-4 bg-stone-300 group-hover:bg-stone-600 transition-colors" /></span>
+                                                    <ColResizer k="data_rich" />
                                                 </th>
                                             </tr>
                                         </thead>

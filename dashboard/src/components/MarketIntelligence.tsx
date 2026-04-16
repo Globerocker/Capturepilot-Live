@@ -72,6 +72,20 @@ export function MarketIntelligence({ naicsCodes, companyName }: { naicsCodes: st
         );
     }
 
+    // Defensive check — if USASpending returned all-zeros (niche NAICS or
+    // transient API issue), hide the chart entirely instead of rendering
+    // misleading flat bars + "$0 total market" that confuse users.
+    if ((marketData.summary?.total_spend || 0) === 0) {
+        return (
+            <div className="bg-white border border-stone-200 rounded-2xl p-6 text-center">
+                <p className="text-xs text-stone-500">
+                    USASpending has no recent award data for NAICS {naicsCodes.join(", ")}.
+                    Check back in a day — the cache refreshes nightly.
+                </p>
+            </div>
+        );
+    }
+
     const { summary, yearly_spend, top_agencies, top_states } = marketData;
     const maxSpend = Math.max(...yearly_spend.map(y => y.amount), 1);
     const maxAgencySpend = Math.max(...top_agencies.map(a => a.amount), 1);

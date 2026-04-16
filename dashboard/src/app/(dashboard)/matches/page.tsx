@@ -14,6 +14,7 @@ import { TableView, DEFAULT_COLUMN_KEYS, ALL_COLUMNS, type MatchRow } from "@/co
 import { ListView } from "@/components/matches/ListView";
 import { AIFilterBar, type AIFilters } from "@/components/matches/AIFilterBar";
 import { BulkExportDialog } from "@/components/matches/BulkExportDialog";
+import SavedViews from "@/components/SavedViews";
 
 const supabase = createSupabaseClient();
 
@@ -71,6 +72,7 @@ export default function MyMatchesPage() {
     // View mode + columns
     const [viewMode, setViewMode] = useState<ViewMode>("card");
     const [visibleColumnKeys, setVisibleColumnKeys] = useState<string[]>(DEFAULT_COLUMN_KEYS);
+    const [activeSavedViewId, setActiveSavedViewId] = useState<string | null>(null);
 
     // Selection / export
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -401,6 +403,35 @@ export default function MyMatchesPage() {
 
             {/* AI Filter Bar */}
             <AIFilterBar onApply={applyAIFilters} activePrompt={aiPrompt} onClear={clearAIFilter} />
+
+            {/* Saved Views — HubSpot-style filter presets (drag to reorder, click to apply) */}
+            <SavedViews
+                page="matches"
+                activeViewId={activeSavedViewId}
+                currentFilterState={{
+                    filter, sortBy, sortDirection, filterNoticeType, filterSetAside, filterState,
+                    filterNaics, filterMinScore, filterMaxDeadlineDays, activeSearch,
+                    viewMode, visibleColumnKeys,
+                }}
+                onApply={(state, viewId) => {
+                    setActiveSavedViewId(viewId);
+                    const s = state as Record<string, unknown>;
+                    if (typeof s.filter === "string") setFilter(s.filter as typeof filter);
+                    if (typeof s.sortBy === "string") setSortBy(s.sortBy as typeof sortBy);
+                    if (typeof s.sortDirection === "string") setSortDirection(s.sortDirection as typeof sortDirection);
+                    if (typeof s.filterNoticeType === "string") setFilterNoticeType(s.filterNoticeType);
+                    if (typeof s.filterSetAside === "string") setFilterSetAside(s.filterSetAside);
+                    if (typeof s.filterState === "string") setFilterState(s.filterState);
+                    if (typeof s.filterNaics === "string") setFilterNaics(s.filterNaics);
+                    if (typeof s.filterMinScore === "number" || s.filterMinScore === null) setFilterMinScore(s.filterMinScore as number | null);
+                    if (typeof s.filterMaxDeadlineDays === "number" || s.filterMaxDeadlineDays === null) setFilterMaxDeadlineDays(s.filterMaxDeadlineDays as number | null);
+                    if (typeof s.activeSearch === "string") { setActiveSearch(s.activeSearch); setSearchInput(s.activeSearch); }
+                    if (typeof s.viewMode === "string") setViewMode(s.viewMode as typeof viewMode);
+                    if (Array.isArray(s.visibleColumnKeys)) setVisibleColumnKeys(s.visibleColumnKeys as string[]);
+                    setPage(1);
+                }}
+                onClear={() => setActiveSavedViewId(null)}
+            />
 
             {/* Filter Tabs */}
             <section className="flex flex-wrap gap-2 mb-4 items-center">

@@ -1,8 +1,9 @@
 // @ts-nocheck
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, Suspense } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { createSupabaseClient } from "@/lib/supabase/client";
 import { Users, Search, Loader2, Shield, Globe, MapPin, X, ChevronDown, Handshake, Plus, CheckCircle2 } from "lucide-react";
 import clsx from "clsx";
@@ -41,6 +42,18 @@ interface SavedPartner {
 }
 
 export default function PartnersPage() {
+    return (
+        <Suspense fallback={<div className="flex items-center justify-center h-64"><Loader2 className="w-6 h-6 text-stone-400 animate-spin" /></div>}>
+            <PartnersPageInner />
+        </Suspense>
+    );
+}
+
+function PartnersPageInner() {
+    const searchParams = useSearchParams();
+    // Sidebar flyout can deep-link to /partners?status=active or ?status=potential.
+    // The parameter filters the Saved Partners section (search results untouched).
+    const statusFilter = (searchParams.get("status") as "active" | "potential" | null) || null;
     const [activeTab, setActiveTab] = useState<"search" | "saved">("search");
     const [naicsCodes, setNaicsCodes] = useState<string[]>([]);
     const [states, setStates] = useState<string[]>([]);
@@ -446,12 +459,16 @@ export default function PartnersPage() {
             {savedPartners.length > 0 && (
                 <div className="mt-10">
                     <h3 className="text-lg font-bold tracking-tight text-black mb-3 flex items-center gap-2">
-                        <Handshake className="w-5 h-5 text-emerald-600" /> Your Partners
+                        <Handshake className="w-5 h-5 text-emerald-600" />
+                        {statusFilter === "active" ? "Active Partners" : statusFilter === "potential" ? "Potential Partners" : "Your Partners"}
                         <span className="text-sm font-sans font-medium bg-stone-100 px-3 py-1 rounded-full text-stone-500 border border-stone-200">
-                            {savedPartners.length}
+                            {statusFilter ? savedPartners.filter(p => p.status === statusFilter).length : savedPartners.length}
                         </span>
+                        {statusFilter && (
+                            <Link href="/partners" className="ml-2 text-[11px] text-stone-500 hover:text-black underline">Show all</Link>
+                        )}
                     </h3>
-                    {(["active", "potential"] as const).map(status => {
+                    {(["active", "potential"] as const).filter(s => !statusFilter || statusFilter === s).map(status => {
                         const group = savedPartners.filter(p => p.status === status);
                         if (group.length === 0) return null;
                         return (

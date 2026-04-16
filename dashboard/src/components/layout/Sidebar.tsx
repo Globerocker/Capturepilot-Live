@@ -2,30 +2,60 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import Image from "next/image";
-import { LayoutDashboard, Target, Layers, FileText, BarChart3, Mic, Users, Shield, CreditCard, Settings, LogOut, Menu, X, FolderOpen, Mail, Search } from "lucide-react";
+import {
+    LayoutDashboard, Target, Layers, FileText, BarChart3, Mic, Users, Shield,
+    CreditCard, Settings, LogOut, Menu, X, FolderOpen, Mail, Search, Pencil,
+    Handshake, Clock, ChevronRight,
+} from "lucide-react";
 import clsx from "clsx";
 import { createSupabaseClient } from "@/lib/supabase/client";
 import QuickActions from "./QuickActions";
 
+interface NavItem {
+    name: string;
+    href: string;
+    icon: React.ComponentType<{ className?: string }>;
+    children?: NavChildItem[];
+}
+interface NavChildItem {
+    name: string;
+    href: string;
+    icon: React.ComponentType<{ className?: string }>;
+    // For children with query-string routing (e.g. /partners?status=active), we
+    // match on the full href; otherwise we prefix-match.
+    matchExact?: boolean;
+}
+
 export default function Sidebar() {
     const [mobileOpen, setMobileOpen] = useState(false);
     const pathname = usePathname();
-    const router = useRouter();
     const supabase = createSupabaseClient();
 
-    const navLinks = [
+    const navLinks: NavItem[] = [
         { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
         { name: "Matches", href: "/matches", icon: Target },
         { name: "Opportunities", href: "/opportunities", icon: Search },
         { name: "Pipeline", href: "/pipeline", icon: Layers },
-        { name: "AI Proposals", href: "/ai-drafter/proposals", icon: FileText },
-        { name: "Cap Statement", href: "/ai-drafter/capability-statement", icon: Mic },
-        { name: "Email Templates", href: "/ai-drafter", icon: Mail },
+        {
+            name: "AI Drafter", href: "/ai-drafter/proposals", icon: Pencil,
+            children: [
+                { name: "AI Proposals", href: "/ai-drafter/proposals", icon: FileText },
+                { name: "Cap Statement", href: "/ai-drafter/capability-statement", icon: Mic },
+                { name: "Email Templates", href: "/ai-drafter", icon: Mail, matchExact: true },
+            ],
+        },
         { name: "Documents", href: "/documents", icon: FolderOpen },
         { name: "Market Intel", href: "/intelligence", icon: BarChart3 },
-        { name: "Partners", href: "/partners", icon: Users },
+        {
+            name: "Partners", href: "/partners", icon: Users,
+            children: [
+                { name: "All Partners", href: "/partners", icon: Users, matchExact: true },
+                { name: "Active", href: "/partners?status=active", icon: Handshake },
+                { name: "Potential", href: "/partners?status=potential", icon: Clock },
+            ],
+        },
         { name: "Competitors", href: "/competitors", icon: Shield },
     ];
 
@@ -44,8 +74,122 @@ export default function Sidebar() {
         window.location.replace("/login");
     };
 
-    const handleNavClick = () => {
-        setMobileOpen(false);
+    const handleNavClick = () => { setMobileOpen(false); };
+
+    // Active matcher: exact for /ai-drafter (Email Templates sub), otherwise prefix.
+    const isLinkActive = (href: string, matchExact = false): boolean => {
+        if (matchExact) return pathname === href.split("?")[0];
+        // Strip querystring for path matching (we don't track ?status= for highlight).
+        const cleanHref = href.split("?")[0];
+        if (cleanHref === "/ai-drafter") return pathname === "/ai-drafter";
+        return pathname === cleanHref || pathname.startsWith(cleanHref + "/");
+    };
+
+    // A parent with children is active if any child matches OR its own path matches.
+    const isParentActive = (item: NavItem): boolean => {
+        if (item.children && item.children.some(c => isLinkActive(c.href, c.matchExact))) return true;
+        return isLinkActive(item.href);
+    };
+
+    const renderNavItem = (item: NavItem) => {
+        const Icon = item.icon;
+        const hasChildren = !!item.children?.length;
+        const isActive = isParentActive(item);
+
+        if (!hasChildren) {
+            return (
+                <Link
+                    key={item.name}
+                    href={item.href}
+                    onClick={handleNavClick}
+                    className={clsx(
+                        "flex items-center space-x-3 px-4 py-3.5 lg:py-3 rounded-2xl transition-all duration-200 font-medium text-sm",
+                        isActive
+                            ? "bg-emerald-500/10 text-emerald-400 border-l-2 border-emerald-500"
+                            : "text-stone-500 hover:bg-stone-800/50 hover:text-stone-300 border-l-2 border-transparent",
+                    )}
+                >
+                    <Icon className={clsx("h-5 w-5", isActive ? "text-emerald-400" : "text-stone-500")} />
+                    <span className="font-medium">{item.name}</span>
+                </Link>
+            );
+        }
+
+        return (
+            <div key={item.name} className="relative group">
+                {/* Parent row — clicking goes to the default child. Hover reveals flyout on desktop. */}
+                <Link
+                    href={item.href}
+                    onClick={handleNavClick}
+                    className={clsx(
+                        "flex items-center space-x-3 px-4 py-3.5 lg:py-3 rounded-2xl transition-all duration-200 font-medium text-sm",
+                        isActive
+                            ? "bg-emerald-500/10 text-emerald-400 border-l-2 border-emerald-500"
+                            : "text-stone-500 hover:bg-stone-800/50 hover:text-stone-300 border-l-2 border-transparent",
+                    )}
+                >
+                    <Icon className={clsx("h-5 w-5", isActive ? "text-emerald-400" : "text-stone-500")} />
+                    <span className="font-medium flex-1">{item.name}</span>
+                    <ChevronRight className="h-3.5 w-3.5 opacity-40 group-hover:opacity-80 transition-opacity hidden lg:block" />
+                </Link>
+
+                {/* Mobile: inline expanded children (no hover, tap-friendly). */}
+                <div className="lg:hidden pl-8 mt-0.5 space-y-0.5">
+                    {item.children!.map(child => {
+                        const ChildIcon = child.icon;
+                        const childActive = isLinkActive(child.href, child.matchExact);
+                        return (
+                            <Link
+                                key={child.name}
+                                href={child.href}
+                                onClick={handleNavClick}
+                                className={clsx(
+                                    "flex items-center space-x-3 px-4 py-2 rounded-xl text-xs transition-colors",
+                                    childActive
+                                        ? "bg-emerald-500/10 text-emerald-400"
+                                        : "text-stone-500 hover:bg-stone-800/50 hover:text-stone-300",
+                                )}
+                            >
+                                <ChildIcon className="h-3.5 w-3.5" />
+                                <span>{child.name}</span>
+                            </Link>
+                        );
+                    })}
+                </div>
+
+                {/* Desktop: flyout menu anchored to the right of the sidebar. Visible on group hover.
+                    `group-hover:block` on Tailwind; a small buffer (pl-2, -translate-x-2) bridges the
+                    gap so the hover doesn't break when moving cursor between parent and panel. */}
+                <div className="hidden lg:group-hover:block absolute left-full top-0 ml-1 z-40 pt-0 min-w-[220px]">
+                    <div className="bg-stone-900 border border-stone-800 rounded-2xl shadow-2xl py-2">
+                        <div className="px-4 pb-1.5 mb-1 border-b border-stone-800/60 flex items-center gap-2">
+                            <Icon className="h-3.5 w-3.5 text-stone-500" />
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-stone-500">{item.name}</span>
+                        </div>
+                        {item.children!.map(child => {
+                            const ChildIcon = child.icon;
+                            const childActive = isLinkActive(child.href, child.matchExact);
+                            return (
+                                <Link
+                                    key={child.name}
+                                    href={child.href}
+                                    onClick={handleNavClick}
+                                    className={clsx(
+                                        "flex items-center space-x-3 px-4 py-2.5 mx-1 rounded-xl transition-colors text-sm",
+                                        childActive
+                                            ? "bg-emerald-500/10 text-emerald-400"
+                                            : "text-stone-400 hover:bg-stone-800/60 hover:text-stone-200",
+                                    )}
+                                >
+                                    <ChildIcon className={clsx("h-4 w-4", childActive ? "text-emerald-400" : "text-stone-500")} />
+                                    <span className="font-medium">{child.name}</span>
+                                </Link>
+                            );
+                        })}
+                    </div>
+                </div>
+            </div>
+        );
     };
 
     const sidebarContent = (
@@ -70,66 +214,46 @@ export default function Sidebar() {
             </div>
 
             {/* Navigation */}
-            <nav className="flex-1 px-3 lg:px-4 space-y-0.5">
-                {navLinks.map((link) => {
-                    const Icon = link.icon;
-                    const isActive = pathname.startsWith(link.href);
-
-                    return (
-                        <Link
-                            key={link.name}
-                            href={link.href}
-                            onClick={handleNavClick}
-                            className={clsx(
-                                "flex items-center space-x-3 px-4 py-3.5 lg:py-3 rounded-2xl transition-all duration-200 font-medium text-sm",
-                                isActive
-                                    ? "bg-emerald-500/10 text-emerald-400 border-l-2 border-emerald-500"
-                                    : "text-stone-500 hover:bg-stone-800/50 hover:text-stone-300 border-l-2 border-transparent"
-                            )}
-                        >
-                            <Icon className={clsx("h-5 w-5", isActive ? "text-emerald-400" : "text-stone-500")} />
-                            <span className="font-medium">{link.name}</span>
-                        </Link>
-                    );
-                })}
+            <nav className="flex-1 px-3 lg:px-4 space-y-0.5 lg:overflow-visible overflow-y-auto">
+                {navLinks.map(renderNavItem)}
             </nav>
 
             {/* Bottom-anchored section: Quick Actions + nav footer */}
             <div className="mt-auto">
-            {/* Quick Actions */}
-            <QuickActions onNavigate={handleNavClick} />
+                {/* Quick Actions */}
+                <QuickActions onNavigate={handleNavClick} />
 
-            {/* Bottom links */}
-            <div className="px-3 lg:px-4 space-y-0.5 border-t border-stone-800/60 pt-3">
-                {bottomLinks.map((link) => {
-                    const Icon = link.icon;
-                    const isActive = pathname.startsWith(link.href);
-                    return (
-                        <Link
-                            key={link.name}
-                            href={link.href}
-                            onClick={handleNavClick}
-                            className={clsx(
-                                "flex items-center space-x-3 px-4 py-3.5 lg:py-3 rounded-2xl transition-all duration-200 text-sm",
-                                isActive
-                                    ? "bg-emerald-500/10 text-emerald-400 border-l-2 border-emerald-500"
-                                    : "text-stone-500 hover:bg-stone-800/50 hover:text-stone-300 border-l-2 border-transparent"
-                            )}
-                        >
-                            <Icon className={clsx("h-5 w-5", isActive ? "text-emerald-400" : "text-stone-500")} />
-                            <span className="font-medium">{link.name}</span>
-                        </Link>
-                    );
-                })}
-                <button
-                    type="button"
-                    onClick={handleSignOut}
-                    className="w-full flex items-center space-x-3 px-4 py-3.5 lg:py-3 rounded-2xl text-stone-500 hover:bg-stone-800/50 hover:text-red-400 transition-all duration-200 text-sm border-l-2 border-transparent"
-                >
-                    <LogOut className="h-5 w-5" />
-                    <span className="font-medium">Sign Out</span>
-                </button>
-            </div>
+                {/* Bottom links */}
+                <div className="px-3 lg:px-4 space-y-0.5 border-t border-stone-800/60 pt-3">
+                    {bottomLinks.map((link) => {
+                        const Icon = link.icon;
+                        const isActive = pathname.startsWith(link.href);
+                        return (
+                            <Link
+                                key={link.name}
+                                href={link.href}
+                                onClick={handleNavClick}
+                                className={clsx(
+                                    "flex items-center space-x-3 px-4 py-3.5 lg:py-3 rounded-2xl transition-all duration-200 text-sm",
+                                    isActive
+                                        ? "bg-emerald-500/10 text-emerald-400 border-l-2 border-emerald-500"
+                                        : "text-stone-500 hover:bg-stone-800/50 hover:text-stone-300 border-l-2 border-transparent",
+                                )}
+                            >
+                                <Icon className={clsx("h-5 w-5", isActive ? "text-emerald-400" : "text-stone-500")} />
+                                <span className="font-medium">{link.name}</span>
+                            </Link>
+                        );
+                    })}
+                    <button
+                        type="button"
+                        onClick={handleSignOut}
+                        className="w-full flex items-center space-x-3 px-4 py-3.5 lg:py-3 rounded-2xl text-stone-500 hover:bg-stone-800/50 hover:text-red-400 transition-all duration-200 text-sm border-l-2 border-transparent"
+                    >
+                        <LogOut className="h-5 w-5" />
+                        <span className="font-medium">Sign Out</span>
+                    </button>
+                </div>
             </div>
         </>
     );
@@ -164,7 +288,7 @@ export default function Sidebar() {
             <div
                 className={clsx(
                     "lg:hidden fixed top-0 left-0 bottom-0 z-50 w-72 bg-stone-950 flex flex-col pb-6 shadow-2xl transition-transform duration-300 ease-in-out",
-                    mobileOpen ? "translate-x-0" : "-translate-x-full"
+                    mobileOpen ? "translate-x-0" : "-translate-x-full",
                 )}
             >
                 {sidebarContent}
