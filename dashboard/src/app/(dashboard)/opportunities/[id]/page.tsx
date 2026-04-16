@@ -11,6 +11,7 @@ import OpportunityDescription from "@/components/OpportunityDescription";
 import OpportunityAttachments from "@/components/OpportunityAttachments";
 import StructuredRequirements from "@/components/StructuredRequirements";
 import { MarketIntelligence } from "@/components/MarketIntelligence";
+import { HistoricalWinners } from "@/components/HistoricalWinners";
 import { estimateContractValue } from "@/utils/estimateValue";
 
 export const dynamic = 'force-dynamic';
@@ -513,6 +514,14 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
 
                     {/* Attachments - fetched live from SAM.gov */}
                     <OpportunityAttachments noticeId={opp.notice_id} resourceLinks={opp.resource_links} defaultCollapsed={false} />
+
+                    {/* Historical winners under the same NAICS — who typically wins these? */}
+                    {opp.naics_code && (
+                        <HistoricalWinners
+                            naicsCode={opp.naics_code}
+                            currentAwardee={opp.incumbent_contractor_name || opp.awardee || null}
+                        />
+                    )}
 
                     {/* Market Intelligence — live aggregates from USASpending.gov keyed on this opp's NAICS */}
                     {opp.naics_code && (

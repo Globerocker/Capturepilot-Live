@@ -3,7 +3,7 @@
 import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Globe, Hash, Users, MapPin, Briefcase, Save, Loader2, Trash2, CheckCircle2, Handshake } from "lucide-react";
+import { ArrowLeft, Globe, Hash, Users, MapPin, Briefcase, Save, Loader2, Trash2, CheckCircle2, Handshake, RefreshCw, Sparkles } from "lucide-react";
 import clsx from "clsx";
 import { NAICS_CODES } from "@/lib/naics-codes";
 
@@ -85,6 +85,37 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
         if (res.ok) router.push("/partners");
     };
 
+    const [refreshing, setRefreshing] = useState(false);
+    const [refreshMsg, setRefreshMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+    const refreshCrawl = async () => {
+        if (!partner?.website) {
+            setRefreshMsg({ type: "error", text: "Partner has no website to crawl." });
+            return;
+        }
+        setRefreshing(true);
+        setRefreshMsg(null);
+        try {
+            const res = await fetch(`/api/partners/${id}/refresh`, { method: "POST" });
+            const body = await res.json() as { success?: boolean; pages_crawled?: number; error?: string };
+            if (res.ok && body.success) {
+                setRefreshMsg({ type: "success", text: `Crawled ${body.pages_crawled ?? 0} pages. Keywords + description refreshed.` });
+                // Reload partner so UI reflects new data.
+                const r = await fetch(`/api/partners/${id}`);
+                if (r.ok) {
+                    const b = await r.json() as { partner: Partner };
+                    setPartner(b.partner);
+                }
+            } else {
+                setRefreshMsg({ type: "error", text: body.error || "Refresh failed." });
+            }
+        } catch (e) {
+            setRefreshMsg({ type: "error", text: (e as Error).message });
+        }
+        setRefreshing(false);
+        setTimeout(() => setRefreshMsg(null), 5000);
+    };
+
     if (loading) {
         return <div className="flex justify-center items-center min-h-[400px]"><Loader2 className="w-8 h-8 animate-spin text-stone-400" /></div>;
     }
@@ -148,6 +179,18 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
                             <Handshake className="w-3.5 h-3.5" />
                             {partner.status === "active" ? "Mark Potential" : "Mark Active"}
                         </button>
+                        {partner.website && (
+                            <button
+                                type="button"
+                                disabled={refreshing}
+                                onClick={refreshCrawl}
+                                className="text-[10px] font-bold px-3 py-1.5 rounded-lg border bg-white text-stone-700 border-stone-200 hover:bg-stone-50 inline-flex items-center gap-1 disabled:opacity-50"
+                                title="Re-crawl the partner's website and refresh description + keywords"
+                            >
+                                {refreshing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                                {refreshing ? "Crawling…" : "Refresh Crawl"}
+                            </button>
+                        )}
                         <button
                             type="button"
                             disabled={saving}
@@ -158,7 +201,51 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
                         </button>
                     </div>
                 </div>
+                {refreshMsg && (
+                    <div className={clsx(
+                        "mt-3 text-xs px-3 py-2 rounded-lg border",
+                        refreshMsg.type === "success" ? "bg-emerald-50 text-emerald-800 border-emerald-200" : "bg-rose-50 text-rose-700 border-rose-200",
+                    )}>
+                        {refreshMsg.text}
+                    </div>
+                )}
             </div>
+
+            {/* Auto-extracted capability keywords from the latest crawl. */}
+            {(() => {
+                const crawl = (partner.crawl_data || {}) as Record<string, unknown>;
+                const primary = Array.isArray(crawl.primary_keywords) ? (crawl.primary_keywords as string[]) : [];
+                const secondary = Array.isArray(crawl.secondary_keywords) ? (crawl.secondary_keywords as string[]) : [];
+                if (primary.length === 0 && secondary.length === 0) return null;
+                return (
+                    <div className="bg-white border border-stone-200 rounded-2xl p-6">
+                        <h2 className="font-bold text-sm uppercase tracking-widest text-stone-700 mb-3 flex items-center gap-2">
+                            <Sparkles className="w-4 h-4 text-stone-400" /> Capability Keywords
+                            <span className="text-[10px] text-stone-400 normal-case tracking-normal font-normal ml-auto">Auto-extracted from website</span>
+                        </h2>
+                        {primary.length > 0 && (
+                            <div className="mb-3">
+                                <p className="text-[10px] uppercase tracking-widest text-emerald-700 mb-1.5 font-bold">Primary</p>
+                                <div className="flex flex-wrap gap-1.5">
+                                    {primary.map((kw, i) => (
+                                        <span key={i} className="text-xs bg-emerald-50 text-emerald-900 border border-emerald-200 px-2.5 py-1 rounded-full font-medium">{kw}</span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        {secondary.length > 0 && (
+                            <div>
+                                <p className="text-[10px] uppercase tracking-widest text-stone-500 mb-1.5 font-bold">Secondary</p>
+                                <div className="flex flex-wrap gap-1.5">
+                                    {secondary.map((kw, i) => (
+                                        <span key={i} className="text-xs bg-stone-50 text-stone-700 border border-stone-200 px-2.5 py-1 rounded-full">{kw}</span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                );
+            })()}
 
             {partner.naics_codes.length > 0 && (
                 <div className="bg-white border border-stone-200 rounded-2xl p-6">
