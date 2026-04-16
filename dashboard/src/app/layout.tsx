@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, Courier_Prime } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 
 const inter = Inter({
@@ -32,6 +33,7 @@ export default function RootLayout({
         className={`${inter.variable} ${courier.variable} font-sans antialiased bg-stone-50 text-stone-900`}
       >
         {children}
+        <Analytics />
         {/* HubSpot Tracking Code — Portal 245197783 */}
         <script
           type="text/javascript"
