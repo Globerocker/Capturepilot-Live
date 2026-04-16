@@ -8,6 +8,7 @@ import { createSupabaseClient } from "@/lib/supabase/client";
 import { Users, Search, Loader2, Shield, Globe, MapPin, X, ChevronDown, Handshake, Plus, CheckCircle2 } from "lucide-react";
 import clsx from "clsx";
 import { NAICS_CODES, searchNaics } from "@/lib/naics-codes";
+import { AwardCountBadge } from "@/components/AwardCountBadge";
 
 const supabase = createSupabaseClient();
 
@@ -439,6 +440,9 @@ function PartnersPageInner() {
                                             {p.naics_codes.length > 5 && <span className="text-[9px] text-stone-400">+{p.naics_codes.length - 5}</span>}
                                         </div>
                                     )}
+                                    <div className="mt-1.5">
+                                        <AwardCountBadge name={p.company_name} uei={p.uei} />
+                                    </div>
                                 </div>
                                 <div className="flex flex-col gap-1.5 flex-shrink-0">
                                     <a href={p.sam_url} target="_blank" rel="noopener noreferrer"
@@ -509,6 +513,7 @@ function PartnersPageInner() {
                                             <div className="flex items-center gap-2 flex-wrap text-xs text-stone-500">
                                                 {p.state && <span className="inline-flex items-center gap-1"><MapPin className="w-3 h-3" />{p.state}</span>}
                                                 {p.uei && <span className="text-[10px] font-mono text-stone-400">UEI: {p.uei}</span>}
+                                                <AwardCountBadge name={p.company_name} uei={p.uei} />
                                             </div>
                                         </Link>
                                     ))}

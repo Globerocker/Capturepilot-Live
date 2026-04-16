@@ -8,6 +8,7 @@ import { Shield, Globe, ChevronRight, TrendingUp, Plus, LinkIcon, Users, Search,
 import { AnalysisProgressStepper, statusToStep } from "@/components/AnalysisProgressStepper";
 import BulkAddFromSam from "@/components/competitors/BulkAddFromSam";
 import ComparisonTable from "@/components/competitors/ComparisonTable";
+import { AwardCountBadge } from "@/components/AwardCountBadge";
 import clsx from "clsx";
 
 const supabase = createSupabaseClient();
@@ -557,6 +558,7 @@ export default function CompetitorsPage() {
                                                     UEI: {comp.uei}
                                                 </span>
                                             )}
+                                            <AwardCountBadge name={comp.competitor_name} uei={comp.uei} />
                                         </div>
                                         <p className="text-xs text-stone-500 mt-0.5 line-clamp-1">{comp.description || ""}</p>
                                         <div className="flex items-center gap-3 mt-1.5 text-xs text-stone-400">

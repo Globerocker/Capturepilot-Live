@@ -10,6 +10,8 @@ import {
 } from "lucide-react";
 import clsx from "clsx";
 import { NAICS_CODES } from "@/lib/naics-codes";
+import { PastAwardsPanel } from "@/components/PastAwardsPanel";
+import { SubawardsPanel } from "@/components/SubawardsPanel";
 
 const supabase = createSupabaseClient();
 
@@ -104,8 +106,41 @@ const NON_PERSON_PATTERNS = [
     /\b(inc|llc|ltd|corp|corporation|company|group|association|foundation|partners|services|solutions|systems|industries|holdings)\b/i,
     /\b(capabilities|offerings|directory|overview|mission|vision|about|contact|home|career|careers|news|press|blog|resources|products|solutions)\b/i,
     /\b(department|division|bureau|agency|office)\b/i,
+    /\b(guide|course|training|glossary|beginner|expert|tutorial|lesson|module|certificate|certification|schedule|registration|checklist|template|workbook|ebook|webinar|podcast|handbook|masterclass)\b/i,
+    /\b(get|buy|learn|read|watch|download|explore|discover|join|start|view|see|book|try|shop)\b/i,
     /^(the|our|your|their|this|that)\s/i,
 ];
+
+// Parse a single naics_codes[] entry. Three legacy shapes appear in the wild:
+//   1. bare code string:     "541611"
+//   2. object:                { code: "541611", label: "...", confidence: 1 }
+//   3. JSON-stringified obj: '{"code":"541611","label":"...",...}'  ← from an
+//      old bug where object arrays were inserted into a TEXT[] column; Postgres
+//      stringified each element. Display as raw text looks like garbage.
+function parseNaicsEntry(c: unknown): { code: string; label?: string } | null {
+    if (typeof c === "string") {
+        const t = c.trim();
+        if (/^\d{4,6}$/.test(t)) return { code: t };
+        if (t.startsWith("{")) {
+            try {
+                const obj = JSON.parse(t) as Record<string, unknown>;
+                const code = String(obj.code || "").trim();
+                if (/^\d{4,6}$/.test(code)) {
+                    return { code, label: obj.label ? String(obj.label) : undefined };
+                }
+            } catch { /* not JSON, fall through */ }
+        }
+        return null;
+    }
+    if (c && typeof c === "object") {
+        const obj = c as Record<string, unknown>;
+        const code = String(obj.code || "").trim();
+        if (/^\d{4,6}$/.test(code)) {
+            return { code, label: obj.label ? String(obj.label) : undefined };
+        }
+    }
+    return null;
+}
 
 function looksLikeCompanyOrSection(s: string): boolean {
     if (!s) return true;
@@ -209,18 +244,12 @@ export default function CompetitorDetailPage({ params }: { params: Promise<{ id:
             setCompetitor(comp);
 
             // Load opportunities with matching NAICS codes (competitor's likely bid targets).
-            // Existing rows may have a mix of strings and legacy {code,label,...} objects —
-            // normalize both to bare code strings before hitting the opportunities table.
-            const compNaics = Array.isArray(comp.naics_codes)
-                ? comp.naics_codes.map((c: unknown) => {
-                    if (typeof c === "string") return c;
-                    if (c && typeof c === "object" && "code" in c) {
-                        const code = (c as { code: unknown }).code;
-                        return typeof code === "string" ? code : null;
-                    }
-                    return null;
-                }).filter((c): c is string => !!c)
-                : [];
+            // Existing rows may hold legacy shapes (objects, stringified JSON) — normalize
+            // via parseNaicsEntry before querying.
+            const compNaics = (Array.isArray(comp.naics_codes) ? comp.naics_codes : [])
+                .map(parseNaicsEntry)
+                .filter((e): e is NonNullable<typeof e> => !!e)
+                .map(e => e.code);
             if (compNaics.length > 0) {
                 const { data: opps } = await supabase
                     .from("opportunities")
@@ -257,17 +286,9 @@ export default function CompetitorDetailPage({ params }: { params: Promise<{ id:
     const pastClients = coerceStringArray(crawl.past_clients);
     const primaryKeywords = coerceStringArray(crawl.primary_keywords);
     const secondaryKeywords = coerceStringArray(crawl.secondary_keywords);
-    // Accept both legacy shapes: ["541611"] or [{code:"541611",label:...,confidence:...}].
-    const naicsCodes = Array.isArray(competitor.naics_codes)
-        ? competitor.naics_codes.map((c: unknown) => {
-            if (typeof c === "string") return c;
-            if (c && typeof c === "object" && "code" in c) {
-                const code = (c as { code: unknown }).code;
-                return typeof code === "string" ? code : "";
-            }
-            return "";
-        }).filter(c => !!c)
-        : [];
+    const naicsEntries = (Array.isArray(competitor.naics_codes) ? competitor.naics_codes : [])
+        .map(parseNaicsEntry)
+        .filter((e): e is NonNullable<typeof e> => !!e);
 
     return (
         <div className="max-w-7xl mx-auto pb-12 space-y-6">
@@ -361,6 +382,12 @@ export default function CompetitorDetailPage({ params }: { params: Promise<{ id:
                 </div>
             </div>
 
+            {/* Federal award history — live from USASpending.gov (keyed on UEI when available) */}
+            <PastAwardsPanel name={competitor.competitor_name} uei={competitor.uei} />
+
+            {/* Subaward / teaming relationships — who they sub for, who they hire. */}
+            <SubawardsPanel name={competitor.competitor_name} uei={competitor.uei} />
+
             {/* Capability keywords (auto-extracted from crawl) */}
             {(primaryKeywords.length > 0 || secondaryKeywords.length > 0) && (
                 <div className="bg-white border border-stone-200 rounded-2xl p-6">
@@ -441,18 +468,18 @@ export default function CompetitorDetailPage({ params }: { params: Promise<{ id:
             )}
 
             {/* NAICS codes with labels */}
-            {naicsCodes.length > 0 && (
+            {naicsEntries.length > 0 && (
                 <div className="bg-white border border-stone-200 rounded-2xl p-6">
                     <div className="flex items-center gap-2 mb-4">
                         <Target className="w-4 h-4 text-stone-400" />
                         <h2 className="font-bold text-sm uppercase tracking-widest text-stone-700">NAICS Codes</h2>
-                        <span className="ml-auto text-xs text-stone-400">{naicsCodes.length}</span>
+                        <span className="ml-auto text-xs text-stone-400">{naicsEntries.length}</span>
                     </div>
                     <div className="space-y-1.5">
-                        {naicsCodes.map((code, i) => (
+                        {naicsEntries.map((entry, i) => (
                             <div key={i} className="flex items-center gap-3 py-1.5 border-b border-stone-50 last:border-0">
-                                <span className="font-mono text-xs bg-stone-100 text-stone-700 px-2 py-0.5 rounded font-bold flex-shrink-0">{code}</span>
-                                <span className="text-xs text-stone-600">{lookupNaicsLabel(code) || "—"}</span>
+                                <span className="font-mono text-xs bg-stone-100 text-stone-700 px-2 py-0.5 rounded font-bold flex-shrink-0">{entry.code}</span>
+                                <span className="text-xs text-stone-600">{lookupNaicsLabel(entry.code) || entry.label || "—"}</span>
                             </div>
                         ))}
                     </div>

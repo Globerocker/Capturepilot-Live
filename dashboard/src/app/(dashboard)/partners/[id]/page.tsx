@@ -6,6 +6,8 @@ import Link from "next/link";
 import { ArrowLeft, Globe, Hash, Users, MapPin, Briefcase, Save, Loader2, Trash2, CheckCircle2, Handshake, RefreshCw, Sparkles } from "lucide-react";
 import clsx from "clsx";
 import { NAICS_CODES } from "@/lib/naics-codes";
+import { PastAwardsPanel } from "@/components/PastAwardsPanel";
+import { SubawardsPanel } from "@/components/SubawardsPanel";
 
 interface Partner {
     id: string;
@@ -210,6 +212,12 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
                     </div>
                 )}
             </div>
+
+            {/* Federal award history — live from USASpending.gov */}
+            <PastAwardsPanel name={partner.company_name} uei={partner.uei} />
+
+            {/* Teaming graph — primes they sub for, subs they hire. Great for partner fit. */}
+            <SubawardsPanel name={partner.company_name} uei={partner.uei} />
 
             {/* Auto-extracted capability keywords from the latest crawl. */}
             {(() => {
