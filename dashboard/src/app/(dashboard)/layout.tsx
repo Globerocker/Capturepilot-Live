@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Sidebar from "@/components/layout/Sidebar";
 import UpgradeBanner from "@/components/UpgradeBanner";
 import FeedbackWidget from "@/components/FeedbackWidget";
@@ -13,7 +14,9 @@ export default function DashboardLayout({
 }) {
   return (
     <div className="flex bg-stone-50 min-h-screen lg:h-screen lg:overflow-hidden text-stone-900 selection:bg-black selection:text-white">
-      <Sidebar />
+      <Suspense fallback={<div className="w-64 border-r border-stone-200 bg-white" />}>
+        <Sidebar />
+      </Suspense>
       <main className="flex-1 flex flex-col overflow-hidden lg:pl-2 pt-14 lg:pt-0">
         <div className="bg-emerald-600 text-white text-center py-2 px-4 text-xs font-medium">
           Public Beta — All features unlocked free until May 9, 2026. Give feedback to lock in $149/mo pricing (25% off forever).
