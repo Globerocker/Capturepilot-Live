@@ -22,7 +22,7 @@ function generateToken(): string {
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
-        const { email, recipient_name, company_name, personal_note, resend } = body;
+        const { email, recipient_name, company_name, personal_note, overrides, resend } = body;
 
         if (!email) {
             return NextResponse.json({ error: "Email is required" }, { status: 400 });
@@ -78,6 +78,15 @@ export async function POST(req: NextRequest) {
             companyName: company_name,
             personalNote: personal_note,
             token,
+            overrides: overrides && typeof overrides === "object"
+                ? {
+                      subject: overrides.subject,
+                      eyebrow: overrides.eyebrow,
+                      heading: overrides.heading,
+                      ctaLabel: overrides.ctaLabel,
+                      introLine: overrides.introLine,
+                  }
+                : undefined,
         });
 
         if (!sent) {

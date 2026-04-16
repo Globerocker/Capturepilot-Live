@@ -234,18 +234,48 @@ export async function sendConsultingWelcomeEmail(
 }
 
 // ─── Beta Invite (Manual from Admin) ───────────────────────
-export async function sendBetaInviteEmail(
-    to: string,
-    params: {
-        recipientName?: string;
-        companyName?: string;
-        personalNote?: string;
-        token: string;
-    },
-) {
-    const { recipientName, companyName, personalNote, token } = params;
+
+export interface BetaInviteOverrides {
+    subject?: string;
+    eyebrow?: string;
+    heading?: string;
+    ctaLabel?: string;
+    introLine?: string;
+}
+
+export interface BetaInviteRenderParams {
+    recipientName?: string;
+    companyName?: string;
+    personalNote?: string;
+    token: string;
+    overrides?: BetaInviteOverrides;
+}
+
+const BETA_INVITE_DEFAULTS = {
+    subject: "You're invited to CapturePilot (beta access)",
+    eyebrow: "Private Beta Invitation",
+    headingFor: (firstName: string) => `Hi ${firstName}, you're invited`,
+    ctaLabel: "Claim Your Beta Account",
+    introLineFor: (companyName?: string) =>
+        companyName
+            ? `We've been following <strong>${companyName}</strong> and think CapturePilot could be a strong fit for your federal contracting pipeline.`
+            : "We think CapturePilot could be a strong fit for your federal contracting pipeline.",
+};
+
+/**
+ * Build a beta invite email (subject + HTML) without sending.
+ * Used by both the send endpoint and the admin preview endpoint.
+ */
+export function renderBetaInviteEmail(params: BetaInviteRenderParams): { subject: string; html: string } {
+    const { recipientName, companyName, personalNote, token, overrides } = params;
     const firstName = (recipientName || "").split(" ")[0] || "there";
     const signupUrl = `${APP_URL}/signup?invite=${token}`;
+
+    const subject = overrides?.subject?.trim() || BETA_INVITE_DEFAULTS.subject;
+    const eyebrow = overrides?.eyebrow?.trim() || BETA_INVITE_DEFAULTS.eyebrow;
+    const heading = overrides?.heading?.trim() || BETA_INVITE_DEFAULTS.headingFor(firstName);
+    const ctaLabel = overrides?.ctaLabel?.trim() || BETA_INVITE_DEFAULTS.ctaLabel;
+    const introLine = overrides?.introLine?.trim() || BETA_INVITE_DEFAULTS.introLineFor(companyName);
 
     const noteBlock = personalNote
         ? contentCard(`
@@ -254,17 +284,13 @@ export async function sendBetaInviteEmail(
         `)
         : "";
 
-    const companyLine = companyName
-        ? paragraph(`We've been following <strong>${companyName}</strong> and think CapturePilot could be a strong fit for your federal contracting pipeline.`)
-        : paragraph("We think CapturePilot could be a strong fit for your federal contracting pipeline.");
-
     const html = emailTemplate({
         category: "marketing",
         preheader: `You're invited to join CapturePilot as a beta user — 25% off locked in forever.`,
-        eyebrow: "Private Beta Invitation",
-        heading: `Hi ${firstName}, you're invited`,
+        eyebrow,
+        heading,
         body: `
-            ${companyLine}
+            ${paragraph(introLine)}
             ${paragraph("CapturePilot matches your company against 30,000+ federal opportunities every day, scores each one for fit, and tells you exactly where to focus — so you stop wasting time on contracts you can't win.")}
             ${noteBlock}
             ${featureBox(`
@@ -277,11 +303,23 @@ export async function sendBetaInviteEmail(
                 </ul>
             `)}
         `,
-        cta: { label: "Claim Your Beta Account", url: signupUrl },
+        cta: { label: ctaLabel, url: signupUrl },
         footerNote: "This invitation is personal to you — please don't forward the link.",
     });
 
-    return send("beta_invite", to, `You're invited to CapturePilot (beta access)`, html, {
+    return { subject, html };
+}
+
+export async function sendBetaInviteEmail(
+    to: string,
+    params: BetaInviteRenderParams,
+) {
+    const { recipientName, companyName } = params;
+    const firstName = (recipientName || "").split(" ")[0] || "there";
+    const signupUrl = `${APP_URL}/signup?invite=${params.token}`;
+    const { subject, html } = renderBetaInviteEmail(params);
+
+    return send("beta_invite", to, subject, html, {
         recipientName: recipientName || "",
         firstName,
         companyName: companyName || "",

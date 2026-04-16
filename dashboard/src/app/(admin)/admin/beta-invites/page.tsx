@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
     Gift, Send, Mail, CheckCircle2, Clock, Copy, Loader2,
-    Trash2, RotateCw, Plus,
+    Trash2, RotateCw, Plus, Sliders, Eye,
 } from "lucide-react";
 import clsx from "clsx";
 
@@ -35,6 +35,54 @@ export default function AdminBetaInvitesPage() {
         personal_note: "",
     });
 
+    const [showCustomize, setShowCustomize] = useState(false);
+    const [overrides, setOverrides] = useState({
+        subject: "",
+        eyebrow: "",
+        heading: "",
+        ctaLabel: "",
+        introLine: "",
+    });
+
+    const [preview, setPreview] = useState<{ subject: string; html: string } | null>(null);
+    const [previewLoading, setPreviewLoading] = useState(false);
+    const previewTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // Debounced live preview — refetches HTML whenever form or overrides change
+    const previewPayload = useMemo(() => ({
+        recipient_name: form.recipient_name,
+        company_name: form.company_name,
+        personal_note: form.personal_note,
+        overrides: {
+            subject: overrides.subject,
+            eyebrow: overrides.eyebrow,
+            heading: overrides.heading,
+            ctaLabel: overrides.ctaLabel,
+            introLine: overrides.introLine,
+        },
+    }), [form.recipient_name, form.company_name, form.personal_note, overrides]);
+
+    useEffect(() => {
+        if (previewTimer.current) clearTimeout(previewTimer.current);
+        previewTimer.current = setTimeout(async () => {
+            setPreviewLoading(true);
+            try {
+                const res = await fetch("/api/admin/beta-invites/preview", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(previewPayload),
+                });
+                const data = await res.json();
+                if (res.ok) setPreview({ subject: data.subject, html: data.html });
+            } finally {
+                setPreviewLoading(false);
+            }
+        }, 300);
+        return () => {
+            if (previewTimer.current) clearTimeout(previewTimer.current);
+        };
+    }, [previewPayload]);
+
     const load = async () => {
         const res = await fetch("/api/admin/beta-invites");
         const data = await res.json();
@@ -50,12 +98,17 @@ export default function AdminBetaInvitesPage() {
         const res = await fetch("/api/admin/beta-invites", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ ...form, resend }),
+            body: JSON.stringify({
+                ...form,
+                overrides: showCustomize ? overrides : undefined,
+                resend,
+            }),
         });
         const data = await res.json();
         if (data.success) {
             setResult({ kind: "ok", msg: data.message });
             setForm({ email: "", recipient_name: "", company_name: "", personal_note: "" });
+            setOverrides({ subject: "", eyebrow: "", heading: "", ctaLabel: "", introLine: "" });
             load();
         } else {
             setResult({ kind: "err", msg: data.error || "Something went wrong" });
@@ -132,65 +185,164 @@ export default function AdminBetaInvitesPage() {
                 </div>
             </div>
 
-            {/* Create form */}
-            <div className="bg-white border border-stone-200 rounded-2xl p-6 space-y-4">
-                <h2 className="font-bold text-sm flex items-center gap-1.5"><Plus className="w-4 h-4" /> New Invitation</h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                        <label className="block text-xs font-medium text-stone-500 mb-1">Email *</label>
-                        <input
-                            type="email"
-                            value={form.email}
-                            onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-                            placeholder="contact@company.com"
-                            className="w-full border border-stone-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-black"
-                        />
+            {/* Create form + live preview */}
+            <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-4">
+                {/* LEFT — form */}
+                <div className="bg-white border border-stone-200 rounded-2xl p-6 space-y-4">
+                    <h2 className="font-bold text-sm flex items-center gap-1.5"><Plus className="w-4 h-4" /> New Invitation</h2>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs font-medium text-stone-500 mb-1">Email *</label>
+                            <input
+                                type="email"
+                                value={form.email}
+                                onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+                                placeholder="contact@company.com"
+                                className="w-full border border-stone-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-black"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium text-stone-500 mb-1">Recipient Name</label>
+                            <input
+                                value={form.recipient_name}
+                                onChange={e => setForm(f => ({ ...f, recipient_name: e.target.value }))}
+                                placeholder="Jane Doe"
+                                className="w-full border border-stone-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-black"
+                            />
+                        </div>
+                        <div className="sm:col-span-2">
+                            <label className="block text-xs font-medium text-stone-500 mb-1">Company Name</label>
+                            <input
+                                value={form.company_name}
+                                onChange={e => setForm(f => ({ ...f, company_name: e.target.value }))}
+                                placeholder="Acme Industries"
+                                className="w-full border border-stone-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-black"
+                            />
+                        </div>
+                        <div className="sm:col-span-2">
+                            <label className="block text-xs font-medium text-stone-500 mb-1">
+                                Personal Note <span className="text-stone-400 font-normal">(optional — appears in the email)</span>
+                            </label>
+                            <textarea
+                                value={form.personal_note}
+                                onChange={e => setForm(f => ({ ...f, personal_note: e.target.value }))}
+                                placeholder="Great connecting on LinkedIn! Based on your work with federal contracts, I think CapturePilot would save you hours every week."
+                                rows={3}
+                                className="w-full border border-stone-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-black resize-none"
+                            />
+                        </div>
                     </div>
-                    <div>
-                        <label className="block text-xs font-medium text-stone-500 mb-1">Recipient Name</label>
-                        <input
-                            value={form.recipient_name}
-                            onChange={e => setForm(f => ({ ...f, recipient_name: e.target.value }))}
-                            placeholder="Jane Doe"
-                            className="w-full border border-stone-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-black"
-                        />
-                    </div>
-                    <div className="sm:col-span-2">
-                        <label className="block text-xs font-medium text-stone-500 mb-1">Company Name</label>
-                        <input
-                            value={form.company_name}
-                            onChange={e => setForm(f => ({ ...f, company_name: e.target.value }))}
-                            placeholder="Acme Industries"
-                            className="w-full border border-stone-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-black"
-                        />
-                    </div>
-                    <div className="sm:col-span-2">
-                        <label className="block text-xs font-medium text-stone-500 mb-1">
-                            Personal Note <span className="text-stone-400 font-normal">(optional — appears in the email)</span>
-                        </label>
-                        <textarea
-                            value={form.personal_note}
-                            onChange={e => setForm(f => ({ ...f, personal_note: e.target.value }))}
-                            placeholder="Great connecting on LinkedIn! Based on your work with federal contracts, I think CapturePilot would save you hours every week."
-                            rows={3}
-                            className="w-full border border-stone-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-black resize-none"
-                        />
+
+                    {/* Customize toggle */}
+                    <button
+                        type="button"
+                        onClick={() => setShowCustomize(s => !s)}
+                        className="flex items-center gap-1.5 text-xs font-bold text-stone-600 hover:text-black transition-colors"
+                    >
+                        <Sliders className="w-3.5 h-3.5" />
+                        {showCustomize ? "Hide" : "Customize"} email
+                    </button>
+
+                    {showCustomize && (
+                        <div className="space-y-3 pt-2 border-t border-stone-100">
+                            <p className="text-[11px] text-stone-400">
+                                Leave a field blank to use the default. Overrides only apply to this invitation.
+                            </p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div className="sm:col-span-2">
+                                    <label className="block text-xs font-medium text-stone-500 mb-1">Subject Line</label>
+                                    <input
+                                        value={overrides.subject}
+                                        onChange={e => setOverrides(o => ({ ...o, subject: e.target.value }))}
+                                        placeholder="You're invited to CapturePilot (beta access)"
+                                        className="w-full border border-stone-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-black"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-stone-500 mb-1">Eyebrow</label>
+                                    <input
+                                        value={overrides.eyebrow}
+                                        onChange={e => setOverrides(o => ({ ...o, eyebrow: e.target.value }))}
+                                        placeholder="Private Beta Invitation"
+                                        className="w-full border border-stone-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-black"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-stone-500 mb-1">CTA Button Label</label>
+                                    <input
+                                        value={overrides.ctaLabel}
+                                        onChange={e => setOverrides(o => ({ ...o, ctaLabel: e.target.value }))}
+                                        placeholder="Claim Your Beta Account"
+                                        className="w-full border border-stone-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-black"
+                                    />
+                                </div>
+                                <div className="sm:col-span-2">
+                                    <label className="block text-xs font-medium text-stone-500 mb-1">Heading</label>
+                                    <input
+                                        value={overrides.heading}
+                                        onChange={e => setOverrides(o => ({ ...o, heading: e.target.value }))}
+                                        placeholder="Hi [name], you're invited"
+                                        className="w-full border border-stone-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-black"
+                                    />
+                                </div>
+                                <div className="sm:col-span-2">
+                                    <label className="block text-xs font-medium text-stone-500 mb-1">
+                                        Opening Line <span className="text-stone-400 font-normal">(HTML allowed)</span>
+                                    </label>
+                                    <textarea
+                                        value={overrides.introLine}
+                                        onChange={e => setOverrides(o => ({ ...o, introLine: e.target.value }))}
+                                        placeholder="We've been following [Company] and think CapturePilot could be a strong fit…"
+                                        rows={2}
+                                        className="w-full border border-stone-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-black resize-none"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="flex items-center justify-between pt-2">
+                        <p className="text-xs text-stone-400">
+                            Link: <code className="bg-stone-100 px-1.5 py-0.5 rounded">{APP_URL}/signup?invite=…</code>
+                        </p>
+                        <button
+                            type="button"
+                            onClick={() => send(false)}
+                            disabled={!canSend || sending}
+                            className="bg-black text-white px-5 py-2.5 rounded-xl text-sm font-bold inline-flex items-center gap-2 hover:bg-stone-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                            {sending ? "Sending…" : "Send Invitation"}
+                        </button>
                     </div>
                 </div>
 
-                <div className="flex items-center justify-between pt-2">
-                    <p className="text-xs text-stone-400">
-                        Invite link: <code className="bg-stone-100 px-1.5 py-0.5 rounded">{APP_URL}/signup?invite=…</code>
-                    </p>
-                    <button
-                        type="button"
-                        onClick={() => send(false)}
-                        disabled={!canSend || sending}
-                        className="bg-black text-white px-5 py-2.5 rounded-xl text-sm font-bold inline-flex items-center gap-2 hover:bg-stone-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                        {sending ? "Sending…" : "Send Invitation"}
-                    </button>
+                {/* RIGHT — live preview */}
+                <div className="bg-white border border-stone-200 rounded-2xl overflow-hidden flex flex-col">
+                    <div className="px-4 py-3 border-b border-stone-100 flex items-center justify-between bg-stone-50">
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-stone-700">
+                            <Eye className="w-3.5 h-3.5" /> Live Email Preview
+                        </div>
+                        {previewLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-stone-400" />}
+                    </div>
+                    {preview ? (
+                        <>
+                            <div className="px-4 py-2 border-b border-stone-100 text-xs">
+                                <span className="text-stone-400 uppercase tracking-wider text-[10px] font-bold">Subject</span>
+                                <p className="font-medium text-stone-800 truncate mt-0.5">{preview.subject}</p>
+                            </div>
+                            <iframe
+                                title="Email preview"
+                                srcDoc={preview.html}
+                                sandbox=""
+                                className="w-full flex-1 border-0 bg-stone-100 min-h-[620px]"
+                            />
+                        </>
+                    ) : (
+                        <div className="flex-1 flex items-center justify-center text-xs text-stone-400 p-8">
+                            {previewLoading ? "Rendering preview…" : "Preview will appear here"}
+                        </div>
+                    )}
                 </div>
             </div>
 
