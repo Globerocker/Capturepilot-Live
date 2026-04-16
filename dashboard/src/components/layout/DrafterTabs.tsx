@@ -1,14 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 import clsx from "clsx";
 import { Pencil, FileText, Mic, Mail } from "lucide-react";
 
 export default function DrafterTabs() {
     const pathname = usePathname();
-    const searchParams = useSearchParams();
-    
+
     // We treat /ai-drafter (which has email/template tabs inside) as "Emails & Templates"
     const isAiDrafterRoot = pathname === "/ai-drafter";
     
