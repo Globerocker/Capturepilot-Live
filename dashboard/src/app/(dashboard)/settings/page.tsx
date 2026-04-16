@@ -1588,6 +1588,7 @@ export default function SettingsPage() {
 
 
                 </div>
+            </div>
             {/* ---- /Two-column grid ---- */}
 
             {/* Service CTA (full width, outside grid) */}

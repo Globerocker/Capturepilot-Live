@@ -5,7 +5,8 @@
  */
 
 import * as cheerio from "cheerio";
-import { CheerioCrawler, MemoryStorage, Configuration } from "@crawlee/cheerio";
+import os from "os";
+import { CheerioCrawler, Configuration } from "@crawlee/cheerio";
 import type { CrawlResult } from "./types";
 import { emptyData } from "./types";
 import {
@@ -22,14 +23,17 @@ import {
     inferTeamSizeSignal, extractPageSummary,
 } from "./extractors";
 
-// Configure Crawlee to use memory instead of disk to prevent Vercel filesystem errors
-const memoryStorage = new MemoryStorage({
-    localDirectory: undefined, // ensure no disk usage
-});
+// Configure Crawlee to use Vercel's writable /tmp directory to avoid readonly errors
 const config = new Configuration({
-    storageClient: memoryStorage,
+    defaultDatasetId: "default",
+    defaultKeyValueStoreId: "default",
+    defaultRequestQueueId: "default",
+    purgeOnStart: true,
     availableMemoryRatio: 0.5,
 });
+// Set storage directory explicitly to /tmp
+process.env.CRAWLEE_STORAGE_DIR = os.tmpdir() + '/crawlee_storage';
+
 
 function scorePath(text: string): number {
     let best = 0;
