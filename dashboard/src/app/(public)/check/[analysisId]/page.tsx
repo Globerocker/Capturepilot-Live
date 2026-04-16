@@ -619,6 +619,26 @@ export default function CheckResultsPage() {
         window.open(`/api/prospects/pdf/${analysisId}`, "_blank");
     };
 
+    const [savingCompetitor, setSavingCompetitor] = useState(false);
+    const [competitorId, setCompetitorId] = useState<string | null>(null);
+    const handleSaveAsCompetitor = async () => {
+        setSavingCompetitor(true);
+        try {
+            const res = await fetch("/api/competitors/from-analysis", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ analysis_id: analysisId }),
+            });
+            if (res.ok) {
+                const body = await res.json() as { competitor_id?: string };
+                if (body.competitor_id) setCompetitorId(body.competitor_id);
+            } else if (res.status === 401) {
+                window.location.href = `/login?next=${encodeURIComponent(window.location.pathname)}`;
+            }
+        } catch { /* ignore */ }
+        setSavingCompetitor(false);
+    };
+
     const crawl = data.crawl_data || {};
     // Merge AI fit summaries onto the matches (summaries live in a separate JSONB column)
     const rawMatches = updatedMatches || data.preview_matches || [];
@@ -740,6 +760,23 @@ export default function CheckResultsPage() {
                                 >
                                     <FileDown className="w-3 h-3" /> Export
                                 </button>
+                                {competitorId ? (
+                                    <Link
+                                        href={`/competitors/${competitorId}`}
+                                        className="text-[10px] font-bold px-3 py-1.5 rounded-lg border bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 inline-flex items-center gap-1 transition-all print:hidden"
+                                    >
+                                        <Swords className="w-3 h-3" /> View Competitor
+                                    </Link>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={handleSaveAsCompetitor}
+                                        disabled={savingCompetitor}
+                                        className="text-[10px] font-bold px-3 py-1.5 rounded-lg border bg-stone-900 text-white border-stone-900 hover:bg-black inline-flex items-center gap-1 transition-all print:hidden disabled:opacity-50"
+                                    >
+                                        <Swords className="w-3 h-3" /> {savingCompetitor ? "Saving…" : "Save as Competitor"}
+                                    </button>
+                                )}
                             </div>
                         </div>
                     </div>

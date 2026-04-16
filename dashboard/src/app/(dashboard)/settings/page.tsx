@@ -381,6 +381,13 @@ export default function SettingsPage() {
             alert("Failed to save: " + error.message);
         } else {
             setSaved(true);
+            // Kick off a fresh match refresh in the background. Profile fields
+            // like NAICS / keywords / certifications directly affect scoring —
+            // waiting for the 03:00 UTC cron to re-score would make settings
+            // feel unresponsive. We intentionally don't await it.
+            fetch("/api/matches/refresh", { method: "POST" }).catch(() => {
+                // non-fatal: user can still hit the manual refresh button on /matches
+            });
         }
         setSaving(false);
     };

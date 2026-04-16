@@ -2,8 +2,9 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef } from "react";
+import Link from "next/link";
 import { createSupabaseClient } from "@/lib/supabase/client";
-import { Users, Search, Loader2, Shield, Globe, MapPin, X, ChevronDown } from "lucide-react";
+import { Users, Search, Loader2, Shield, Globe, MapPin, X, ChevronDown, Handshake, Plus, CheckCircle2 } from "lucide-react";
 import clsx from "clsx";
 import { NAICS_CODES, searchNaics } from "@/lib/naics-codes";
 
@@ -28,7 +29,19 @@ const STATE_OPTIONS = [
     "SD","TN","TX","UT","VT","VA","WA","WV","WI","WY",
 ];
 
+interface SavedPartner {
+    id: string;
+    company_name: string;
+    website: string | null;
+    uei: string | null;
+    naics_codes: string[];
+    state: string | null;
+    certifications: string[];
+    status: "active" | "potential" | "archived";
+}
+
 export default function PartnersPage() {
+    const [activeTab, setActiveTab] = useState<"search" | "saved">("search");
     const [naicsCodes, setNaicsCodes] = useState<string[]>([]);
     const [states, setStates] = useState<string[]>([]);
     const [cert, setCert] = useState("");
@@ -37,6 +50,41 @@ export default function PartnersPage() {
     const [results, setResults] = useState<Partner[]>([]);
     const [searched, setSearched] = useState(false);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
+    const [savedPartners, setSavedPartners] = useState<SavedPartner[]>([]);
+    const [savedUEIs, setSavedUEIs] = useState<Set<string>>(new Set());
+    const [savingUEI, setSavingUEI] = useState<string | null>(null);
+
+    const loadSaved = async () => {
+        const res = await fetch("/api/partners/save");
+        if (!res.ok) return;
+        const body = await res.json() as { partners: SavedPartner[] };
+        setSavedPartners(body.partners || []);
+        setSavedUEIs(new Set(body.partners.filter(p => p.uei).map(p => p.uei as string)));
+    };
+
+    useEffect(() => { loadSaved(); }, []);
+
+    const savePartner = async (p: Partner, status: "active" | "potential") => {
+        setSavingUEI(p.uei);
+        const res = await fetch("/api/partners/save", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                company_name: p.company_name,
+                website: p.website || null,
+                uei: p.uei || null,
+                naics_codes: p.naics_codes || [],
+                state: p.state || null,
+                certifications: p.certifications || [],
+                status,
+            }),
+        });
+        if (res.ok) {
+            if (p.uei) setSavedUEIs(prev => new Set(prev).add(p.uei));
+            loadSaved();
+        }
+        setSavingUEI(null);
+    };
 
     // NAICS picker
     const [naicsQuery, setNaicsQuery] = useState("");
@@ -376,11 +424,65 @@ export default function PartnersPage() {
                                             <Globe className="w-3 h-3" /> Website
                                         </a>
                                     )}
+                                    {p.uei && savedUEIs.has(p.uei) ? (
+                                        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded inline-flex items-center gap-1">
+                                            <CheckCircle2 className="w-3 h-3" /> Saved
+                                        </span>
+                                    ) : (
+                                        <button type="button" disabled={savingUEI === p.uei} onClick={() => savePartner(p, "potential")}
+                                            className="text-[10px] font-bold text-stone-700 bg-white border border-stone-200 hover:bg-stone-50 px-2 py-0.5 rounded inline-flex items-center gap-1 disabled:opacity-50">
+                                            <Plus className="w-3 h-3" /> {savingUEI === p.uei ? "Saving…" : "Save"}
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         </div>
                     ))}
                     </div>
+                </div>
+            )}
+
+            {/* Saved partners section */}
+            {savedPartners.length > 0 && (
+                <div className="mt-10">
+                    <h3 className="text-lg font-bold tracking-tight text-black mb-3 flex items-center gap-2">
+                        <Handshake className="w-5 h-5 text-emerald-600" /> Your Partners
+                        <span className="text-sm font-sans font-medium bg-stone-100 px-3 py-1 rounded-full text-stone-500 border border-stone-200">
+                            {savedPartners.length}
+                        </span>
+                    </h3>
+                    {(["active", "potential"] as const).map(status => {
+                        const group = savedPartners.filter(p => p.status === status);
+                        if (group.length === 0) return null;
+                        return (
+                            <div key={status} className="mb-6">
+                                <h4 className="text-[11px] font-bold uppercase tracking-widest text-stone-500 mb-2">
+                                    {status === "active" ? "Active Partners" : "Potential Partners"} · {group.length}
+                                </h4>
+                                <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-3">
+                                    {group.map(p => (
+                                        <Link key={p.id} href={`/partners/${p.id}`}
+                                            className={clsx(
+                                                "block bg-white border rounded-2xl p-4 hover:border-stone-400 transition-colors",
+                                                status === "active" ? "border-emerald-200" : "border-stone-200",
+                                            )}>
+                                            <div className="flex items-start justify-between gap-2 mb-1">
+                                                <h5 className="font-bold text-sm text-black">{p.company_name}</h5>
+                                                <span className={clsx(
+                                                    "text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full border flex-shrink-0",
+                                                    status === "active" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-blue-50 text-blue-700 border-blue-200",
+                                                )}>{status}</span>
+                                            </div>
+                                            <div className="flex items-center gap-2 flex-wrap text-xs text-stone-500">
+                                                {p.state && <span className="inline-flex items-center gap-1"><MapPin className="w-3 h-3" />{p.state}</span>}
+                                                {p.uei && <span className="text-[10px] font-mono text-stone-400">UEI: {p.uei}</span>}
+                                            </div>
+                                        </Link>
+                                    ))}
+                                </div>
+                            </div>
+                        );
+                    })}
                 </div>
             )}
         </div>

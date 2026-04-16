@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Clock, DollarSign, Eye } from "lucide-react";
 import clsx from "clsx";
 import {
@@ -56,6 +57,7 @@ function formatDeadline(deadline: string | null): { label: string; color: string
 }
 
 function PursuitCard({ pursuit, isOverlay = false }: { pursuit: Pursuit; isOverlay?: boolean }) {
+    const router = useRouter();
     const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
         id: pursuit.id,
         data: { stage: pursuit.stage },
@@ -68,6 +70,11 @@ function PursuitCard({ pursuit, isOverlay = false }: { pursuit: Pursuit; isOverl
             ref={isOverlay ? undefined : setNodeRef}
             {...(isOverlay ? {} : attributes)}
             {...(isOverlay ? {} : listeners)}
+            onDoubleClick={isOverlay ? undefined : (e) => {
+                e.stopPropagation();
+                router.push(`/pipeline/${pursuit.id}`);
+            }}
+            title={isOverlay ? undefined : "Double-click to open deal detail"}
             className={clsx(
                 "bg-white border border-stone-200 rounded-xl p-3 shadow-sm cursor-grab active:cursor-grabbing group",
                 isDragging && !isOverlay && "opacity-40",
@@ -112,8 +119,18 @@ function PursuitCard({ pursuit, isOverlay = false }: { pursuit: Pursuit; isOverl
     );
 }
 
+function formatVolume(n: number): string {
+    if (n >= 1_000_000_000) return `$${(n / 1_000_000_000).toFixed(1)}B`;
+    if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
+    if (n >= 1_000) return `$${Math.round(n / 1_000)}K`;
+    return `$${Math.round(n)}`;
+}
+
 function Column({ stage, items }: { stage: Stage; items: Pursuit[] }) {
     const { setNodeRef, isOver } = useDroppable({ id: stage.key });
+    // Sum award_amount across all pursuits in this stage. Opps without a number
+    // contribute $0 so the total is never falsely inflated.
+    const volume = items.reduce((sum, p) => sum + (p.opportunities?.award_amount || 0), 0);
 
     return (
         <div
@@ -123,14 +140,21 @@ function Column({ stage, items }: { stage: Stage; items: Pursuit[] }) {
                 isOver ? "border-black bg-stone-100" : "border-stone-200",
             )}
         >
-            <div className="px-4 py-3 border-b border-stone-200 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                    <span className={clsx("w-2 h-2 rounded-full", stage.dot)} />
-                    <span className={clsx("text-xs font-bold uppercase tracking-widest px-2 py-0.5 rounded-full border", stage.color)}>
-                        {stage.label}
-                    </span>
+            <div className="px-4 py-3 border-b border-stone-200">
+                <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-2">
+                        <span className={clsx("w-2 h-2 rounded-full", stage.dot)} />
+                        <span className={clsx("text-xs font-bold uppercase tracking-widest px-2 py-0.5 rounded-full border", stage.color)}>
+                            {stage.label}
+                        </span>
+                    </div>
+                    <span className="text-xs font-bold text-stone-500">{items.length}</span>
                 </div>
-                <span className="text-xs font-bold text-stone-500">{items.length}</span>
+                {volume > 0 && (
+                    <div className="text-[11px] font-semibold text-emerald-700 tracking-tight">
+                        {formatVolume(volume)} <span className="font-normal text-stone-400">total</span>
+                    </div>
+                )}
             </div>
             <div className="p-2 space-y-2 flex-1 min-h-[120px]">
                 {items.length === 0 ? (

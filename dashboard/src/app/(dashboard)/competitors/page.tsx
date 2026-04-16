@@ -165,7 +165,20 @@ export default function CompetitorsPage() {
         const competitorName = (data.company_name as string) || analysisName || getDomain(addUrl);
         const uei = (samData.uei as string) || addUei || null;
         const description = (data.company_summary as string) || (crawlData.description as string) || null;
-        const inferredNaics = (data.inferred_naics as string[]) || [];
+        // inferred_naics can come back as either ["541611", ...] or
+        // [{code, label, confidence, matched_keywords}, ...]. Extract the
+        // bare codes so the DB row matches the typed `string[]` contract.
+        const rawInferred = (data.inferred_naics as unknown[]) || [];
+        const inferredNaics = rawInferred
+            .map(item => {
+                if (typeof item === "string") return item;
+                if (item && typeof item === "object" && "code" in item) {
+                    const code = (item as { code: unknown }).code;
+                    return typeof code === "string" ? code : null;
+                }
+                return null;
+            })
+            .filter((c): c is string => !!c && /^\d{4,6}$/.test(c));
         const employeeCount = (crawlData.employee_signals as string) || (crawlData.employee_count as string) || null;
         const revenueEstimate = (crawlData.revenue_signals as string) || (crawlData.revenue_estimate as string) || null;
 
@@ -178,6 +191,36 @@ export default function CompetitorsPage() {
             federalPresence = "none";
         }
 
+        // Ask the keyword suggest endpoint for primary + secondary keywords based on
+        // the crawled company data. Fire-and-wait (30s cap) so the competitor gets
+        // saved with keywords baked into crawl_data for instant display on detail.
+        let suggestedPrimary: string[] = [];
+        let suggestedSecondary: string[] = [];
+        try {
+            const kwRes = await fetch("/api/keywords/suggest", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    company_name: competitorName,
+                    company_description: description,
+                    services: Array.isArray(crawlData.services) ? crawlData.services : [],
+                    differentiators: Array.isArray(crawlData.differentiators) ? crawlData.differentiators : [],
+                }),
+                signal: AbortSignal.timeout(30_000),
+            });
+            if (kwRes.ok) {
+                const body = await kwRes.json() as { primary?: string[]; secondary?: string[] };
+                suggestedPrimary = body.primary || [];
+                suggestedSecondary = body.secondary || [];
+            }
+        } catch { /* keyword extraction is best-effort */ }
+
+        const crawlDataWithKeywords = {
+            ...crawlData,
+            primary_keywords: suggestedPrimary,
+            secondary_keywords: suggestedSecondary,
+        };
+
         const { error } = await supabase.from("client_competitors").insert({
             user_profile_id: profileId,
             competitor_name: competitorName,
@@ -188,7 +231,7 @@ export default function CompetitorsPage() {
             employee_count: employeeCount,
             revenue_estimate: revenueEstimate,
             federal_presence: federalPresence,
-            crawl_data: crawlData,
+            crawl_data: crawlDataWithKeywords,
             last_analyzed_at: new Date().toISOString(),
             overlap_score: 0,
         });

@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import Image from "next/image";
-import { LayoutDashboard, Target, Layers, FileText, BarChart3, Mic, Users, Shield, CreditCard, Settings, LogOut, Menu, X, Lock, FolderOpen, Pencil } from "lucide-react";
+import { LayoutDashboard, Target, Layers, FileText, BarChart3, Mic, Users, Shield, CreditCard, Settings, LogOut, Menu, X, FolderOpen, Mail, Search } from "lucide-react";
 import clsx from "clsx";
 import { createSupabaseClient } from "@/lib/supabase/client";
 import QuickActions from "./QuickActions";
@@ -17,13 +17,14 @@ export default function Sidebar() {
 
     const navLinks = [
         { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-        { name: "Opportunities", href: "/matches", icon: Target },
+        { name: "Matches", href: "/matches", icon: Target },
+        { name: "Opportunities", href: "/opportunities", icon: Search },
         { name: "Pipeline", href: "/pipeline", icon: Layers },
         { name: "AI Proposals", href: "/ai-drafter/proposals", icon: FileText },
-        { name: "AI Drafter", href: "/ai-drafter", icon: Pencil },
+        { name: "Cap Statement", href: "/ai-drafter/capability-statement", icon: Mic },
+        { name: "Email Templates", href: "/ai-drafter", icon: Mail },
         { name: "Documents", href: "/documents", icon: FolderOpen },
         { name: "Market Intel", href: "/intelligence", icon: BarChart3 },
-        { name: "Cap Statement", href: "/ai-drafter/capability-statement", icon: Mic },
         { name: "Partners", href: "/partners", icon: Users },
         { name: "Competitors", href: "/competitors", icon: Shield },
     ];

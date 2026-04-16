@@ -31,7 +31,7 @@ export default function QuickActions({ onNavigate }: QuickActionsProps) {
     };
 
     const linkTiles = [
-        { name: "Quick Checker", href: "/check", icon: Zap },
+        { name: "Competitor Check", href: "/check", icon: Zap },
         { name: "AI Drafter", href: "/ai-drafter/proposals", icon: FileText },
         { name: "Cap Statement", href: "/ai-drafter/capability-statement", icon: Mic },
     ];

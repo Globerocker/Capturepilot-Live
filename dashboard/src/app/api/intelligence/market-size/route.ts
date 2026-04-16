@@ -117,10 +117,14 @@ export async function fetchLive(naicsCodes: string[], years: number) {
     const endDate = new Date().toISOString().split("T")[0];
     const startDate = new Date(Date.now() - years * 365 * 86400000).toISOString().split("T")[0];
 
+    // USASpending expects naics_codes as an array of plain strings.
+    // The previous object-wrapped shape { naics_code: "541611" } produced the
+    // API error "Invalid value in 'filters|naics_codes'" and silently yielded
+    // zeros — which is why the cache had total_spend=$0 for every NAICS.
     const filters: Record<string, unknown> = {
         time_period: [{ start_date: startDate, end_date: endDate }],
         award_type_codes: ["A", "B", "C", "D"],
-        naics_codes: naicsCodes.map(c => ({ naics_code: c })),
+        naics_codes: naicsCodes,
     };
 
     const [timeRes, agencyRes, stateRes, setAsideRes] = await Promise.all([

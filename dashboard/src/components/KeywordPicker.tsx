@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Sparkles, X, Plus } from "lucide-react";
+import { Sparkles, X, Plus, GripVertical } from "lucide-react";
 import clsx from "clsx";
 import { createSupabaseClient } from "@/lib/supabase/client";
 
@@ -166,20 +166,49 @@ export default function KeywordPicker({
         }
     };
 
+    const [dragOver, setDragOver] = useState<"primary" | "secondary" | null>(null);
+
+    // HTML5 drag-drop to move a chip between primary/secondary. The ↔ button
+    // stays as a keyboard-accessible fallback; drag is pure mouse-sugar.
+    const handleDragStart = (kw: string, from: "primary" | "secondary") => (e: React.DragEvent) => {
+        e.dataTransfer.setData("application/x-kwp", JSON.stringify({ kw, from }));
+        e.dataTransfer.effectAllowed = "move";
+    };
+    const handleDropOn = (bucket: "primary" | "secondary") => (e: React.DragEvent) => {
+        e.preventDefault();
+        setDragOver(null);
+        const raw = e.dataTransfer.getData("application/x-kwp");
+        if (!raw) return;
+        try {
+            const { kw, from } = JSON.parse(raw) as { kw: string; from: "primary" | "secondary" };
+            if (from === bucket) return;   // already there
+            moveToOther(kw, from);
+        } catch { /* ignore */ }
+    };
+    const handleDragOver = (bucket: "primary" | "secondary") => (e: React.DragEvent) => {
+        if (e.dataTransfer.types.includes("application/x-kwp")) {
+            e.preventDefault();
+            setDragOver(bucket);
+        }
+    };
+
     const renderChip = (kw: string, bucket: "primary" | "secondary") => {
         const label = labels.get(kw) || kw;
         const isPrimary = bucket === "primary";
         return (
             <span
                 key={kw}
+                draggable
+                onDragStart={handleDragStart(kw, bucket)}
                 className={clsx(
-                    "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs",
+                    "inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs cursor-grab active:cursor-grabbing select-none",
                     isPrimary
                         ? "bg-emerald-50 border-emerald-200 text-emerald-900"
                         : "bg-stone-50 border-stone-200 text-stone-700",
                 )}
-                title={kw}
+                title={`${kw} — drag to the other bucket, or use the arrows`}
             >
+                <GripVertical className="w-3 h-3 text-stone-400" />
                 {label}
                 <button
                     type="button"
@@ -218,9 +247,19 @@ export default function KeywordPicker({
                         </span>
                     </span>
                 </div>
-                <div className="min-h-[38px] rounded-xl border border-stone-200 bg-stone-50 px-2 py-1.5 flex flex-wrap gap-1.5">
+                <div
+                    onDragOver={handleDragOver("primary")}
+                    onDragLeave={() => setDragOver(null)}
+                    onDrop={handleDropOn("primary")}
+                    className={clsx(
+                        "min-h-[44px] rounded-xl border-2 px-2 py-1.5 flex flex-wrap gap-1.5 transition-colors",
+                        dragOver === "primary"
+                            ? "border-dashed border-emerald-500 bg-emerald-50"
+                            : "border-stone-200 bg-stone-50",
+                    )}
+                >
                     {primary.length === 0 && (
-                        <span className="text-xs text-stone-400 py-1">No primary keywords picked yet.</span>
+                        <span className="text-xs text-stone-400 py-1">Drop chips here or pick from the search below.</span>
                     )}
                     {primary.map(kw => renderChip(kw, "primary"))}
                 </div>
@@ -235,9 +274,19 @@ export default function KeywordPicker({
                         </span>
                     </span>
                 </div>
-                <div className="min-h-[38px] rounded-xl border border-stone-200 bg-stone-50 px-2 py-1.5 flex flex-wrap gap-1.5">
+                <div
+                    onDragOver={handleDragOver("secondary")}
+                    onDragLeave={() => setDragOver(null)}
+                    onDrop={handleDropOn("secondary")}
+                    className={clsx(
+                        "min-h-[44px] rounded-xl border-2 px-2 py-1.5 flex flex-wrap gap-1.5 transition-colors",
+                        dragOver === "secondary"
+                            ? "border-dashed border-stone-700 bg-stone-100"
+                            : "border-stone-200 bg-stone-50",
+                    )}
+                >
                     {secondary.length === 0 && (
-                        <span className="text-xs text-stone-400 py-1">No secondary keywords picked yet.</span>
+                        <span className="text-xs text-stone-400 py-1">Drop chips here or pick from the search below.</span>
                     )}
                     {secondary.map(kw => renderChip(kw, "secondary"))}
                 </div>
@@ -286,11 +335,6 @@ export default function KeywordPicker({
                             {loading && (
                                 <div className="px-3 py-2 text-xs text-stone-500">Searching…</div>
                             )}
-                            {!loading && results.length === 0 && (
-                                <div className="px-3 py-2 text-xs text-stone-500">
-                                    No keywords match. The library is curated — terms not in it may be added by your admin.
-                                </div>
-                            )}
                             {results.map(r => {
                                 const alreadyPicked = allSelected.has(r.keyword);
                                 return (
@@ -317,6 +361,28 @@ export default function KeywordPicker({
                                     </button>
                                 );
                             })}
+                            {!loading && query.trim().length >= 3 && (
+                                <button
+                                    type="button"
+                                    onClick={async () => {
+                                        const term = query.toLowerCase().trim().replace(/\s+/g, " ");
+                                        if (!/^[a-z0-9][a-z0-9\s\-]+$/.test(term)) return;
+                                        const res = await fetch("/api/keywords/add", {
+                                            method: "POST",
+                                            headers: { "Content-Type": "application/json" },
+                                            body: JSON.stringify({ keyword: term }),
+                                        });
+                                        if (!res.ok) return;
+                                        const data = await res.json() as { keyword: GovKeyword };
+                                        if (data?.keyword) add(data.keyword);
+                                    }}
+                                    className="w-full text-left px-3 py-2.5 text-xs flex items-center gap-2 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border-t border-emerald-200"
+                                >
+                                    <Plus className="w-3 h-3 flex-shrink-0" />
+                                    <span className="font-bold">Add &ldquo;{query.trim()}&rdquo; as new keyword</span>
+                                    <span className="ml-auto text-[10px] opacity-70">saves to your library</span>
+                                </button>
+                            )}
                         </div>
                     )}
                 </div>

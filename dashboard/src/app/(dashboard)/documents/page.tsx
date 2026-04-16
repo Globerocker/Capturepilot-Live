@@ -318,15 +318,34 @@ export default function DocumentsPage() {
                     )}
                 </div>
             ) : (
-                <div className="space-y-2">
-                    {filteredDocs.map(doc => {
-                        const meta = CATEGORY_META[doc.category];
+                <div className="space-y-5">
+                    {/* Folder view — docs grouped by category. Each category is a collapsible folder.
+                        This keeps the flat `category` column (no schema change) but renders a clearer
+                        folder-tree mental model. */}
+                    {CATEGORY_ORDER.filter(cat => filteredDocs.some(d => d.category === cat)).map(cat => {
+                        const group = filteredDocs.filter(d => d.category === cat);
+                        const meta = CATEGORY_META[cat];
                         const Icon = meta.icon;
+                        return (
+                            <section key={cat}>
+                                <div className={clsx("flex items-center gap-2 mb-2 px-1")}>
+                                    <div className={clsx("w-6 h-6 rounded-lg border flex items-center justify-center", meta.color)}>
+                                        <Icon className="w-3.5 h-3.5" />
+                                    </div>
+                                    <h3 className="text-xs font-bold uppercase tracking-widest text-stone-700">{meta.label}</h3>
+                                    <span className="text-[10px] font-bold bg-stone-100 text-stone-500 px-2 py-0.5 rounded-full border border-stone-200">
+                                        {group.length}
+                                    </span>
+                                </div>
+                                <div className="space-y-2 pl-2 border-l-2 border-stone-100">
+                    {group.map(doc => {
+                        const rowMeta = CATEGORY_META[doc.category];
+                        const RowIcon = rowMeta.icon;
                         return (
                             <div key={doc.id} className="bg-white border border-stone-200 hover:border-stone-300 rounded-xl sm:rounded-2xl p-3 sm:p-4 transition-all shadow-sm">
                                 <div className="flex items-start gap-3">
-                                    <div className={clsx("w-10 h-10 rounded-xl border flex items-center justify-center flex-shrink-0", meta.color)}>
-                                        <Icon className="w-5 h-5" />
+                                    <div className={clsx("w-10 h-10 rounded-xl border flex items-center justify-center flex-shrink-0", rowMeta.color)}>
+                                        <RowIcon className="w-5 h-5" />
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <p className="font-bold text-sm text-black truncate">{doc.name}</p>
@@ -335,7 +354,7 @@ export default function DocumentsPage() {
                                                 title="Change category"
                                                 value={doc.category}
                                                 onChange={e => updateCategory(doc.id, e.target.value as UserDocument["category"])}
-                                                className={clsx("text-[10px] font-bold px-2 py-0.5 rounded border uppercase tracking-widest", meta.color)}
+                                                className={clsx("text-[10px] font-bold px-2 py-0.5 rounded border uppercase tracking-widest", rowMeta.color)}
                                             >
                                                 {CATEGORY_ORDER.map(k => <option key={k} value={k}>{CATEGORY_META[k].label}</option>)}
                                             </select>
@@ -390,6 +409,10 @@ export default function DocumentsPage() {
                                     </div>
                                 )}
                             </div>
+                        );
+                    })}
+                                </div>
+                            </section>
                         );
                     })}
                 </div>

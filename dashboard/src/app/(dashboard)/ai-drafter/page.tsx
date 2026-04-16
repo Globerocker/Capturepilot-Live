@@ -48,16 +48,40 @@ function AiDrafterInner() {
     );
     const [profileId, setProfileId] = useState<string | null>(null);
 
+    const [authError, setAuthError] = useState<string | null>(null);
     useEffect(() => {
+        let cancelled = false;
+        const timeout = setTimeout(() => {
+            if (cancelled) return;
+            setAuthError("Taking too long to verify your session. Please refresh the page or sign in again.");
+        }, 8000);
         (async () => {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) { router.push("/login"); return; }
-            const { data: profile } = await supabase
-                .from("user_profiles").select("id").eq("auth_user_id", user.id).single();
-            if (!profile) { router.push("/onboard"); return; }
-            setProfileId((profile as { id: string }).id);
+            try {
+                const { data: { user } } = await supabase.auth.getUser();
+                if (cancelled) return;
+                if (!user) { router.push("/login"); return; }
+                const { data: profile } = await supabase
+                    .from("user_profiles").select("id").eq("auth_user_id", user.id).single();
+                if (cancelled) return;
+                if (!profile) { router.push("/onboard"); return; }
+                clearTimeout(timeout);
+                setProfileId((profile as { id: string }).id);
+            } catch (e) {
+                if (!cancelled) setAuthError((e as Error).message || "Session check failed.");
+            }
         })();
+        return () => { cancelled = true; clearTimeout(timeout); };
     }, [router]);
+
+    if (authError) {
+        return (
+            <div className="max-w-lg mx-auto mt-12 bg-white border border-amber-200 rounded-2xl p-6 text-sm">
+                <p className="font-bold text-amber-900 mb-2">Session check failed</p>
+                <p className="text-stone-600 mb-4">{authError}</p>
+                <button type="button" onClick={() => window.location.reload()} className="bg-black text-white px-4 py-2 rounded-xl text-xs font-bold">Reload</button>
+            </div>
+        );
+    }
 
     return (
         <div className="max-w-4xl mx-auto pb-12 animate-in fade-in duration-500 px-1">

@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowDown, ArrowUp, Loader2, RotateCcw, Save, Settings, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Loader2, Plus, RotateCcw, Save, Settings, Trash2, X } from "lucide-react";
 import clsx from "clsx";
-import { DEFAULT_STAGES, type PipelineStage, serializeStagesToNotes } from "@/lib/pipeline-stages";
+import { CUSTOM_STAGE_PALETTE, DEFAULT_STAGES, generateStageKey, type PipelineStage, serializeStagesToNotes } from "@/lib/pipeline-stages";
 import { createSupabaseClient } from "@/lib/supabase/client";
 
 const supabase = createSupabaseClient();
@@ -43,6 +43,26 @@ export default function StageSettings({ open, onClose, profileId, currentStages,
         setWorking(prev => prev.map((s, i) => (i === idx ? { ...s, label } : s)));
     };
 
+    const addStage = () => {
+        const existingKeys = new Set(working.map(s => s.key));
+        const key = generateStageKey("new_stage", existingKeys);
+        const customCount = working.filter(s => s.custom).length;
+        const palette = CUSTOM_STAGE_PALETTE[customCount % CUSTOM_STAGE_PALETTE.length];
+        setWorking(prev => [...prev, {
+            key,
+            label: "New Stage",
+            color: palette.color,
+            dot: palette.dot,
+            custom: true,
+        }]);
+    };
+
+    const removeStage = (idx: number) => {
+        const stage = working[idx];
+        if (!stage?.custom) return;   // default stages are not deletable
+        setWorking(prev => prev.filter((_, i) => i !== idx));
+    };
+
     const resetDefaults = () => setWorking(DEFAULT_STAGES);
 
     const save = async () => {
@@ -74,7 +94,7 @@ export default function StageSettings({ open, onClose, profileId, currentStages,
                     </button>
                 </div>
                 <p className="text-xs text-stone-500 mb-4">
-                    Rename and reorder your pipeline stages. Stage keys can&apos;t be removed in this version.
+                    Rename, reorder, add, or remove pipeline stages. Default stages can be renamed and reordered but not deleted — custom stages you add can be removed freely.
                 </p>
 
                 <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-1">
@@ -109,9 +129,29 @@ export default function StageSettings({ open, onClose, profileId, currentStages,
                                     <ArrowDown className="w-3 h-3" />
                                 </button>
                             </div>
+                            {stage.custom ? (
+                                <button
+                                    type="button"
+                                    title="Delete stage"
+                                    onClick={() => removeStage(idx)}
+                                    className="p-1 text-stone-400 hover:text-rose-600"
+                                >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                            ) : (
+                                <span className="w-5 flex-shrink-0" aria-hidden />
+                            )}
                         </div>
                     ))}
                 </div>
+
+                <button
+                    type="button"
+                    onClick={addStage}
+                    className="mt-3 w-full flex items-center justify-center gap-1.5 text-xs font-bold text-stone-600 border-2 border-dashed border-stone-200 hover:border-stone-400 hover:text-black rounded-xl py-2.5 transition-colors"
+                >
+                    <Plus className="w-3.5 h-3.5" /> Add Stage
+                </button>
 
                 {error && (
                     <p className="text-xs text-red-600 mt-3">{error}</p>

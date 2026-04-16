@@ -6,7 +6,19 @@ export interface PipelineStage {
     label: string;
     color: string;
     dot: string;
+    custom?: boolean;      // true when the user added the stage (not one of DEFAULT_STAGES)
 }
+
+// Palette for user-added custom stages. Cycles through so each new stage gets
+// a distinct visual without needing a color picker in the UI.
+export const CUSTOM_STAGE_PALETTE: Array<{ color: string; dot: string }> = [
+    { color: "bg-teal-50 border-teal-200 text-teal-700", dot: "bg-teal-500" },
+    { color: "bg-pink-50 border-pink-200 text-pink-700", dot: "bg-pink-500" },
+    { color: "bg-indigo-50 border-indigo-200 text-indigo-700", dot: "bg-indigo-500" },
+    { color: "bg-orange-50 border-orange-200 text-orange-700", dot: "bg-orange-500" },
+    { color: "bg-lime-50 border-lime-200 text-lime-700", dot: "bg-lime-500" },
+    { color: "bg-cyan-50 border-cyan-200 text-cyan-700", dot: "bg-cyan-500" },
+];
 
 export const DEFAULT_STAGES: PipelineStage[] = [
     { key: "discovered", label: "Discovered", color: "bg-stone-100 border-stone-200 text-stone-700", dot: "bg-stone-400" },
@@ -33,28 +45,41 @@ export function getStageInfo(stages: PipelineStage[], key: string): PipelineStag
 }
 
 // Extracts a customized stage list from user_profiles.notes (TEXT).
-// Notes may be plain text OR JSON containing { pipeline_stages: [{key,label}] }.
-// We only let users override label + order; color/dot stay tied to each stage key.
+// Notes may be plain text OR JSON containing { pipeline_stages: [{key,label,color?,dot?,custom?}] }.
+// Default stages use their baked-in color/dot; custom stages preserve saved color/dot.
 export function parseStagesFromNotes(notes: string | null | undefined): PipelineStage[] {
     if (!notes) return DEFAULT_STAGES;
     const trimmed = notes.trim();
     if (!trimmed.startsWith("{")) return DEFAULT_STAGES;
     try {
-        const parsed = JSON.parse(trimmed) as { pipeline_stages?: Array<{ key: string; label?: string }> };
+        const parsed = JSON.parse(trimmed) as { pipeline_stages?: Array<{ key: string; label?: string; color?: string; dot?: string; custom?: boolean }> };
         const override = parsed?.pipeline_stages;
         if (!Array.isArray(override) || override.length === 0) return DEFAULT_STAGES;
-        // Preserve ordering supplied by user but enforce defaults for unknown keys.
         const result: PipelineStage[] = [];
-        const seen = new Set<string>();
+        const seenDefault = new Set<string>();
+        let paletteIdx = 0;
         for (const item of override) {
+            if (!item.key || typeof item.key !== "string") continue;
             const base = DEFAULT_STAGES.find(s => s.key === item.key);
-            if (!base) continue;
-            result.push({ ...base, label: (item.label && item.label.trim()) || base.label });
-            seen.add(item.key);
+            if (base) {
+                result.push({ ...base, label: (item.label && item.label.trim()) || base.label });
+                seenDefault.add(item.key);
+            } else {
+                // Custom stage — use stored color/dot, or fall back to palette.
+                const palette = CUSTOM_STAGE_PALETTE[paletteIdx % CUSTOM_STAGE_PALETTE.length];
+                paletteIdx++;
+                result.push({
+                    key: item.key,
+                    label: (item.label && item.label.trim()) || item.key,
+                    color: item.color || palette.color,
+                    dot: item.dot || palette.dot,
+                    custom: true,
+                });
+            }
         }
         // Append any default stage not listed (so users never lose access to a stage).
         for (const base of DEFAULT_STAGES) {
-            if (!seen.has(base.key)) result.push(base);
+            if (!seenDefault.has(base.key)) result.push(base);
         }
         return result;
     } catch {
@@ -63,9 +88,14 @@ export function parseStagesFromNotes(notes: string | null | undefined): Pipeline
 }
 
 // Serializes an updated stage list back into the notes JSON, preserving any
-// other JSON keys already present.
+// other JSON keys already present. Custom stages carry their color/dot so they
+// survive a reload.
 export function serializeStagesToNotes(notes: string | null | undefined, stages: PipelineStage[]): string {
-    const payload = stages.map(s => ({ key: s.key, label: s.label }));
+    const payload = stages.map(s => (
+        s.custom
+            ? { key: s.key, label: s.label, color: s.color, dot: s.dot, custom: true }
+            : { key: s.key, label: s.label }
+    ));
     let base: Record<string, unknown> = {};
     if (notes && notes.trim().startsWith("{")) {
         try {
@@ -74,6 +104,20 @@ export function serializeStagesToNotes(notes: string | null | undefined, stages:
     }
     base.pipeline_stages = payload;
     return JSON.stringify(base);
+}
+
+// Generates a stable, unique stage key from a user-entered label. Falls back
+// to a time-based suffix if collisions would occur.
+export function generateStageKey(label: string, existingKeys: Set<string>): string {
+    const base = label
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "_")
+        .replace(/^_+|_+$/g, "")
+        .slice(0, 24) || "stage";
+    if (!existingKeys.has(base)) return base;
+    let i = 2;
+    while (existingKeys.has(`${base}_${i}`)) i++;
+    return `${base}_${i}`;
 }
 
 export function getNextStages(stages: PipelineStage[], currentKey: string): string[] {

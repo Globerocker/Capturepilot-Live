@@ -96,23 +96,70 @@ function coerceStringArray(raw: unknown): string[] {
 }
 
 interface LeaderItem { name: string; title?: string; bio?: string }
+
+// Common non-person strings the crawler mistakes for names/titles. We reject
+// entries where name or title matches these — they come from marketing copy,
+// section headers, or company/association names that look like "First Last".
+const NON_PERSON_PATTERNS = [
+    /\b(inc|llc|ltd|corp|corporation|company|group|association|foundation|partners|services|solutions|systems|industries|holdings)\b/i,
+    /\b(capabilities|offerings|directory|overview|mission|vision|about|contact|home|career|careers|news|press|blog|resources|products|solutions)\b/i,
+    /\b(department|division|bureau|agency|office)\b/i,
+    /^(the|our|your|their|this|that)\s/i,
+];
+
+function looksLikeCompanyOrSection(s: string): boolean {
+    if (!s) return true;
+    if (s.length < 3 || s.length > 80) return true;
+    for (const p of NON_PERSON_PATTERNS) if (p.test(s)) return true;
+    // All-caps single word is usually an acronym/label, not a name.
+    if (/^[A-Z]{2,}$/.test(s)) return true;
+    // Has digits — real names don't.
+    if (/\d/.test(s)) return true;
+    return false;
+}
+
+function looksLikePersonName(name: string): boolean {
+    if (!name) return false;
+    const trimmed = name.trim();
+    if (trimmed.length < 4) return false;
+    // Require at least one space (first + last) and reasonable word count.
+    const parts = trimmed.split(/\s+/);
+    if (parts.length < 2 || parts.length > 5) return false;
+    // Each part should start with a letter.
+    if (!parts.every(p => /^[A-Za-zÀ-ÿ]/.test(p))) return false;
+    return !looksLikeCompanyOrSection(trimmed);
+}
+
 function normalizeLeadership(raw: unknown): LeaderItem[] {
     if (!raw || !Array.isArray(raw)) return [];
     const out: LeaderItem[] = [];
+    const seen = new Set<string>();
     for (const item of raw) {
         if (typeof item === "string" && item.trim()) {
-            out.push({ name: item.trim() });
+            const t = item.trim();
+            if (!looksLikePersonName(t)) continue;
+            if (seen.has(t.toLowerCase())) continue;
+            seen.add(t.toLowerCase());
+            out.push({ name: t });
             continue;
         }
         if (item && typeof item === "object") {
             const obj = item as Record<string, unknown>;
             const name = String(obj.name || obj.fullName || obj.full_name || "").trim();
-            if (!name) continue;
-            out.push({
-                name,
-                title: obj.title || obj.role || obj.position ? String(obj.title || obj.role || obj.position) : undefined,
-                bio: obj.bio || obj.summary ? String(obj.bio || obj.summary) : undefined,
-            });
+            if (!name || !looksLikePersonName(name)) continue;
+            if (seen.has(name.toLowerCase())) continue;
+            seen.add(name.toLowerCase());
+
+            const rawTitle = obj.title || obj.role || obj.position;
+            let title = rawTitle ? String(rawTitle).trim() : undefined;
+            // Drop obviously-bad titles (nav text, section headers). A good title
+            // is usually a job-titles-ish phrase; reject ones with blacklist terms.
+            if (title && looksLikeCompanyOrSection(title)) title = undefined;
+
+            const rawBio = obj.bio || obj.summary;
+            const bio = rawBio ? String(rawBio).trim() : undefined;
+
+            out.push({ name, title, bio });
         }
     }
     return out;
@@ -161,8 +208,19 @@ export default function CompetitorDetailPage({ params }: { params: Promise<{ id:
             const comp = data as Competitor;
             setCompetitor(comp);
 
-            // Load opportunities with matching NAICS codes (competitor's likely bid targets)
-            const compNaics = Array.isArray(comp.naics_codes) ? comp.naics_codes.filter(c => typeof c === "string") : [];
+            // Load opportunities with matching NAICS codes (competitor's likely bid targets).
+            // Existing rows may have a mix of strings and legacy {code,label,...} objects —
+            // normalize both to bare code strings before hitting the opportunities table.
+            const compNaics = Array.isArray(comp.naics_codes)
+                ? comp.naics_codes.map((c: unknown) => {
+                    if (typeof c === "string") return c;
+                    if (c && typeof c === "object" && "code" in c) {
+                        const code = (c as { code: unknown }).code;
+                        return typeof code === "string" ? code : null;
+                    }
+                    return null;
+                }).filter((c): c is string => !!c)
+                : [];
             if (compNaics.length > 0) {
                 const { data: opps } = await supabase
                     .from("opportunities")
@@ -197,7 +255,19 @@ export default function CompetitorDetailPage({ params }: { params: Promise<{ id:
     const certifications = coerceStringArray(crawl.certifications);
     const locations = coerceStringArray(crawl.locations);
     const pastClients = coerceStringArray(crawl.past_clients);
-    const naicsCodes = Array.isArray(competitor.naics_codes) ? competitor.naics_codes.filter(c => typeof c === "string") : [];
+    const primaryKeywords = coerceStringArray(crawl.primary_keywords);
+    const secondaryKeywords = coerceStringArray(crawl.secondary_keywords);
+    // Accept both legacy shapes: ["541611"] or [{code:"541611",label:...,confidence:...}].
+    const naicsCodes = Array.isArray(competitor.naics_codes)
+        ? competitor.naics_codes.map((c: unknown) => {
+            if (typeof c === "string") return c;
+            if (c && typeof c === "object" && "code" in c) {
+                const code = (c as { code: unknown }).code;
+                return typeof code === "string" ? code : "";
+            }
+            return "";
+        }).filter(c => !!c)
+        : [];
 
     return (
         <div className="max-w-7xl mx-auto pb-12 space-y-6">
@@ -290,6 +360,41 @@ export default function CompetitorDetailPage({ params }: { params: Promise<{ id:
                     <p className="text-2xl font-black text-black capitalize">{competitor.federal_presence || "—"}</p>
                 </div>
             </div>
+
+            {/* Capability keywords (auto-extracted from crawl) */}
+            {(primaryKeywords.length > 0 || secondaryKeywords.length > 0) && (
+                <div className="bg-white border border-stone-200 rounded-2xl p-6">
+                    <div className="flex items-center gap-2 mb-4">
+                        <Target className="w-4 h-4 text-stone-400" />
+                        <h2 className="font-bold text-sm uppercase tracking-widest text-stone-700">Capability Keywords</h2>
+                        <span className="ml-auto text-[10px] uppercase tracking-wide text-stone-400">Auto-extracted from website</span>
+                    </div>
+                    {primaryKeywords.length > 0 && (
+                        <div className="mb-3">
+                            <p className="text-[10px] uppercase tracking-widest text-emerald-700 mb-1.5 font-bold">Primary</p>
+                            <div className="flex flex-wrap gap-1.5">
+                                {primaryKeywords.map((kw, i) => (
+                                    <span key={i} className="text-xs bg-emerald-50 text-emerald-900 border border-emerald-200 px-2.5 py-1 rounded-full font-medium">
+                                        {kw}
+                                    </span>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                    {secondaryKeywords.length > 0 && (
+                        <div>
+                            <p className="text-[10px] uppercase tracking-widest text-stone-500 mb-1.5 font-bold">Secondary</p>
+                            <div className="flex flex-wrap gap-1.5">
+                                {secondaryKeywords.map((kw, i) => (
+                                    <span key={i} className="text-xs bg-stone-50 text-stone-700 border border-stone-200 px-2.5 py-1 rounded-full">
+                                        {kw}
+                                    </span>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* Services — restructured with description field and row layout */}
             {services.length > 0 && (

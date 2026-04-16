@@ -56,24 +56,28 @@ export function extractDescription(soups: CheerioAPI[], texts: string[]): string
         if (ogDesc?.trim()) { description = ogDesc.trim(); break; }
     }
 
-    if (description.length < 100 && texts.length > 1) {
-        const aboutText = texts[1] || texts[0];
+    // If the meta description is short or missing, harvest 2-3 paragraphs from
+    // the About / Services pages so the capability-statement drafter has real
+    // content to work with. Previous cap of 500 chars produced ~23 lines of
+    // output for the cap statement — too thin. New cap: 4000 chars.
+    if (description.length < 300 && texts.length > 1) {
+        const aboutText = [texts[1], texts[2], texts[0]].filter(Boolean).join(" ");
         const sentences = aboutText.split(/(?<=[.!?])\s+/);
         const paras: string[] = [];
         for (const s of sentences) {
             const t = s.trim();
-            if (t.length > 50) {
+            if (t.length > 40) {
                 paras.push(t);
-                if (paras.join(" ").length > 300) break;
+                if (paras.join(" ").length > 3500) break;
             }
         }
         if (paras.length) {
-            const supplement = paras.join(" ").slice(0, 500);
+            const supplement = paras.join(" ").slice(0, 3500);
             description = description ? description + " " + supplement : supplement;
         }
     }
 
-    return description.slice(0, 1000);
+    return description.slice(0, 4000);
 }
 
 // ─── Services ──────────────────────────────────────────────────────────────

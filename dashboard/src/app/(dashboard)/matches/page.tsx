@@ -42,7 +42,6 @@ interface UserMatch extends MatchRow {
         place_of_performance_state: string;
         award_amount: number | null;
         estimated_value: number | null;
-        source: string | null;
     };
 }
 
@@ -138,7 +137,7 @@ export default function MyMatchesPage() {
             .from("user_matches")
             .select(
                 "id, score, classification, score_breakdown, is_saved, is_dismissed, " +
-                "opportunities!inner(id, title, agency, naics_code, psc_code, notice_type, response_deadline, posted_date, set_aside_code, place_of_performance_state, award_amount, estimated_value, source)",
+                "opportunities!inner(id, title, agency, naics_code, psc_code, notice_type, response_deadline, posted_date, set_aside_code, place_of_performance_state, award_amount, estimated_value)",
                 { count: "exact" }
             )
             .eq("user_profile_id", profileId)
@@ -375,15 +374,15 @@ export default function MyMatchesPage() {
         <div className="max-w-[1600px] mx-auto pb-12 animate-in fade-in duration-500 px-1">
             <header className="mb-6">
                 <h2 className="text-2xl sm:text-3xl font-bold tracking-tighter text-black flex items-center">
-                    <Target className="mr-2 sm:mr-3 w-6 h-6 sm:w-8 sm:h-8" /> Opportunities
+                    <Target className="mr-2 sm:mr-3 w-6 h-6 sm:w-8 sm:h-8" /> Your Matches
                     <span className="ml-3 text-sm font-sans font-medium bg-stone-100 px-3 py-1 rounded-full text-stone-500 border border-stone-200">
                         {totalCount.toLocaleString()}
                     </span>
                 </h2>
                 <div className="flex items-center justify-between mt-1">
                     <p className="text-stone-500 font-medium text-sm">
-                        Opportunities scored and ranked based on your complete profile
-                        <InfoTooltip text="Scores combine NAICS match, certifications, geography, past performance, contract value fit, and more. HOT = 70%+ alignment. WARM = 50-69%. COLD = 30-49%." />
+                        Opportunities scored against your profile. Browse every opportunity in <Link href="/opportunities" className="underline font-bold hover:text-black">Opportunities</Link>.
+                        <InfoTooltip text="Scores combine NAICS match, keywords, certifications, geography, past performance, contract value fit, and more. HOT = 70%+ alignment. WARM = 50-69%. COLD = 30-49%." />
                     </p>
                     <button
                         type="button"
