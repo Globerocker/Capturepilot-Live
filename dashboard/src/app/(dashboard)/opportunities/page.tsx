@@ -10,6 +10,21 @@ import { createPursuit, getUserProfileId } from "@/lib/pursue-utils";
 import { SkeletonTableRow } from "@/components/ui/Skeleton";
 import { cleanDescription } from "@/utils/cleanDescription";
 import { estimateContractValue } from "@/utils/estimateValue";
+import { useResizableColumns } from "@/hooks/useResizableColumns";
+
+// Default pixel widths for the Opportunities list-view columns.
+// Stored per-profile under `opportunities:colwidths:${profileId}` in localStorage.
+const OPP_COLUMN_DEFAULTS: Record<string, number> = {
+    posted_date: 110,
+    title: 360,
+    notice_type: 140,
+    naics_code: 100,
+    place_of_performance_state: 80,
+    award_amount: 120,
+    response_deadline: 120,
+    winability: 120,
+    data_rich: 100,
+};
 
 const supabase = createSupabaseClient();
 
@@ -101,6 +116,14 @@ export default function OpportunitiesPage() {
     useEffect(() => {
         getUserProfileId().then(id => setProfileId(id));
     }, []);
+
+    // Resizable column widths (persisted per profile in localStorage).
+    const { getWidth: getColWidth, getResizerProps: getColResizer, reset: resetColWidths } = useResizableColumns({
+        storageKey: profileId ? `opportunities:colwidths:${profileId}` : null,
+        defaults: OPP_COLUMN_DEFAULTS,
+        min: 60,
+        max: 900,
+    });
 
     // Check pursuit status when opportunity is selected
     useEffect(() => {
@@ -495,18 +518,56 @@ export default function OpportunitiesPage() {
                             {/* List View */}
                             {viewMode === "list" && (
                                 <div className="bg-white rounded-[32px] border border-stone-200 shadow-sm overflow-hidden mb-6 flex-shrink-0">
-                                    <table className="w-full text-left border-collapse">
+                                    <div className="flex items-center justify-end px-5 py-2 border-b border-stone-100 bg-stone-50">
+                                        <button
+                                            type="button"
+                                            onClick={resetColWidths}
+                                            title="Reset column widths"
+                                            className="text-[10px] text-stone-500 hover:text-black font-bold uppercase tracking-widest inline-flex items-center gap-1.5"
+                                        >
+                                            ↔ Reset widths
+                                        </button>
+                                    </div>
+                                    <div className="overflow-x-auto">
+                                    <table className="text-left border-collapse" style={{ tableLayout: "fixed", width: "max-content", minWidth: "100%" }}>
                                         <thead className="sticky top-0 z-10">
                                             <tr className="bg-stone-50 border-b border-stone-200 text-stone-500 text-[10px] uppercase tracking-wider">
-                                                <th className="py-4 px-5 font-bold cursor-pointer hover:text-black select-none" onClick={() => handleColumnSort("posted_date")}>Posted <SortIndicator col="posted_date" /></th>
-                                                <th className="py-4 px-5 font-bold">Title / Agency</th>
-                                                <th className="py-4 px-5 font-bold cursor-pointer hover:text-black select-none" onClick={() => handleColumnSort("notice_type")}>Type <SortIndicator col="notice_type" /></th>
-                                                <th className="py-4 px-5 font-bold cursor-pointer hover:text-black select-none" onClick={() => handleColumnSort("naics_code")}>NAICS <SortIndicator col="naics_code" /></th>
-                                                <th className="py-4 px-5 font-bold cursor-pointer hover:text-black select-none" onClick={() => handleColumnSort("place_of_performance_state")}>State <SortIndicator col="place_of_performance_state" /></th>
-                                                <th className="py-4 px-5 font-bold hidden xl:table-cell">Value</th>
-                                                <th className="py-4 px-5 font-bold cursor-pointer hover:text-black select-none" onClick={() => handleColumnSort("response_deadline")}>Deadline <SortIndicator col="response_deadline" /></th>
-                                                <th className="py-4 px-5 font-bold">Winability</th>
-                                                <th className="py-4 px-5 font-bold cursor-pointer hover:text-black select-none hidden 2xl:table-cell" onClick={() => handleColumnSort("data_rich")}>Data <SortIndicator col="data_rich" /></th>
+                                                <th className="relative py-4 px-5 font-bold cursor-pointer hover:text-black select-none" style={{ width: getColWidth("posted_date") }} onClick={() => handleColumnSort("posted_date")}>
+                                                    <span className="truncate pr-2 block">Posted <SortIndicator col="posted_date" /></span>
+                                                    <span {...getColResizer("posted_date")} className="group flex items-center justify-center hover:bg-stone-200/60"><span className="w-px h-4 bg-stone-300 group-hover:bg-stone-600 transition-colors" /></span>
+                                                </th>
+                                                <th className="relative py-4 px-5 font-bold" style={{ width: getColWidth("title") }}>
+                                                    <span className="truncate pr-2 block">Title / Agency</span>
+                                                    <span {...getColResizer("title")} className="group flex items-center justify-center hover:bg-stone-200/60"><span className="w-px h-4 bg-stone-300 group-hover:bg-stone-600 transition-colors" /></span>
+                                                </th>
+                                                <th className="relative py-4 px-5 font-bold cursor-pointer hover:text-black select-none" style={{ width: getColWidth("notice_type") }} onClick={() => handleColumnSort("notice_type")}>
+                                                    <span className="truncate pr-2 block">Type <SortIndicator col="notice_type" /></span>
+                                                    <span {...getColResizer("notice_type")} className="group flex items-center justify-center hover:bg-stone-200/60"><span className="w-px h-4 bg-stone-300 group-hover:bg-stone-600 transition-colors" /></span>
+                                                </th>
+                                                <th className="relative py-4 px-5 font-bold cursor-pointer hover:text-black select-none" style={{ width: getColWidth("naics_code") }} onClick={() => handleColumnSort("naics_code")}>
+                                                    <span className="truncate pr-2 block">NAICS <SortIndicator col="naics_code" /></span>
+                                                    <span {...getColResizer("naics_code")} className="group flex items-center justify-center hover:bg-stone-200/60"><span className="w-px h-4 bg-stone-300 group-hover:bg-stone-600 transition-colors" /></span>
+                                                </th>
+                                                <th className="relative py-4 px-5 font-bold cursor-pointer hover:text-black select-none" style={{ width: getColWidth("place_of_performance_state") }} onClick={() => handleColumnSort("place_of_performance_state")}>
+                                                    <span className="truncate pr-2 block">State <SortIndicator col="place_of_performance_state" /></span>
+                                                    <span {...getColResizer("place_of_performance_state")} className="group flex items-center justify-center hover:bg-stone-200/60"><span className="w-px h-4 bg-stone-300 group-hover:bg-stone-600 transition-colors" /></span>
+                                                </th>
+                                                <th className="relative py-4 px-5 font-bold" style={{ width: getColWidth("award_amount") }}>
+                                                    <span className="truncate pr-2 block">Value</span>
+                                                    <span {...getColResizer("award_amount")} className="group flex items-center justify-center hover:bg-stone-200/60"><span className="w-px h-4 bg-stone-300 group-hover:bg-stone-600 transition-colors" /></span>
+                                                </th>
+                                                <th className="relative py-4 px-5 font-bold cursor-pointer hover:text-black select-none" style={{ width: getColWidth("response_deadline") }} onClick={() => handleColumnSort("response_deadline")}>
+                                                    <span className="truncate pr-2 block">Deadline <SortIndicator col="response_deadline" /></span>
+                                                    <span {...getColResizer("response_deadline")} className="group flex items-center justify-center hover:bg-stone-200/60"><span className="w-px h-4 bg-stone-300 group-hover:bg-stone-600 transition-colors" /></span>
+                                                </th>
+                                                <th className="relative py-4 px-5 font-bold" style={{ width: getColWidth("winability") }}>
+                                                    <span className="truncate pr-2 block">Winability</span>
+                                                    <span {...getColResizer("winability")} className="group flex items-center justify-center hover:bg-stone-200/60"><span className="w-px h-4 bg-stone-300 group-hover:bg-stone-600 transition-colors" /></span>
+                                                </th>
+                                                <th className="relative py-4 px-5 font-bold cursor-pointer hover:text-black select-none" style={{ width: getColWidth("data_rich") }} onClick={() => handleColumnSort("data_rich")}>
+                                                    <span className="truncate pr-2 block">Data <SortIndicator col="data_rich" /></span>
+                                                    <span {...getColResizer("data_rich")} className="group flex items-center justify-center hover:bg-stone-200/60"><span className="w-px h-4 bg-stone-300 group-hover:bg-stone-600 transition-colors" /></span>
+                                                </th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-stone-100 text-sm">
@@ -516,12 +577,12 @@ export default function OpportunitiesPage() {
                                                 const dataScore = op._dataScore || 0;
                                                 return (
                                                     <tr key={op.id} onClick={() => setSelectedOpportunity(op)} onDoubleClick={() => router.push(`/opportunities/${op.id}`)} className={clsx("transition-all duration-150 group cursor-pointer", selectedOpportunity?.id === op.id ? "bg-stone-100" : "hover:bg-stone-50 hover:shadow-sm")}>
-                                                        <td className="py-3.5 px-5 font-mono text-xs text-stone-500">{op.posted_date ? new Date(op.posted_date).toLocaleDateString() : "---"}</td>
-                                                        <td className="py-3.5 px-5">
-                                                            <p className="font-bold text-black line-clamp-1 max-w-[200px] xl:max-w-md 2xl:max-w-2xl group-hover:text-stone-600">{op.title}</p>
+                                                        <td className="py-3.5 px-5 font-mono text-xs text-stone-500 overflow-hidden" style={{ width: getColWidth("posted_date") }}>{op.posted_date ? new Date(op.posted_date).toLocaleDateString() : "---"}</td>
+                                                        <td className="py-3.5 px-5 overflow-hidden" style={{ width: getColWidth("title") }}>
+                                                            <p className="font-bold text-black line-clamp-1 group-hover:text-stone-600">{op.title}</p>
                                                             <p className="text-stone-500 text-xs line-clamp-1 mt-0.5">{agencyName}</p>
                                                         </td>
-                                                        <td className="py-3.5 px-5">
+                                                        <td className="py-3.5 px-5 overflow-hidden" style={{ width: getColWidth("notice_type") }}>
                                                             <span className={clsx(
                                                                 "text-[9px] px-2 py-1 rounded border uppercase tracking-widest whitespace-nowrap",
                                                                 typeName === "Sources Sought" ? "bg-emerald-100 text-emerald-700 border-emerald-200" :
@@ -531,15 +592,15 @@ export default function OpportunitiesPage() {
                                                                 {typeName}
                                                             </span>
                                                         </td>
-                                                        <td className="py-3.5 px-5 font-mono font-bold text-xs">{op.naics_code || "---"}</td>
-                                                        <td className="py-3.5 px-5 font-mono text-xs">{op.place_of_performance_state || "---"}</td>
-                                                        <td className="py-3.5 px-5 font-mono font-bold text-xs hidden xl:table-cell">
+                                                        <td className="py-3.5 px-5 font-mono font-bold text-xs overflow-hidden" style={{ width: getColWidth("naics_code") }}>{op.naics_code || "---"}</td>
+                                                        <td className="py-3.5 px-5 font-mono text-xs overflow-hidden" style={{ width: getColWidth("place_of_performance_state") }}>{op.place_of_performance_state || "---"}</td>
+                                                        <td className="py-3.5 px-5 font-mono font-bold text-xs overflow-hidden" style={{ width: getColWidth("award_amount") }}>
                                                             {formatCurrency(op.award_amount) || <span className="text-stone-300">---</span>}
                                                         </td>
-                                                        <td className="py-3.5 px-5 font-bold text-stone-700 text-xs">
+                                                        <td className="py-3.5 px-5 font-bold text-stone-700 text-xs overflow-hidden" style={{ width: getColWidth("response_deadline") }}>
                                                             {op.response_deadline ? new Date(op.response_deadline).toLocaleDateString() : "TBD"}
                                                         </td>
-                                                        <td className="py-3.5 px-5">
+                                                        <td className="py-3.5 px-5 overflow-hidden" style={{ width: getColWidth("winability") }}>
                                                             {(() => {
                                                                 const win = getWinability(op);
                                                                 return (
@@ -549,7 +610,7 @@ export default function OpportunitiesPage() {
                                                                 );
                                                             })()}
                                                         </td>
-                                                        <td className="py-3.5 px-5 hidden 2xl:table-cell">
+                                                        <td className="py-3.5 px-5 overflow-hidden" style={{ width: getColWidth("data_rich") }}>
                                                             <div className="flex items-center space-x-1" title={`Data richness: ${dataScore}%`}>
                                                                 <div className="w-12 h-1.5 bg-stone-100 rounded-full overflow-hidden">
                                                                     <div className={clsx("h-full rounded-full", dataScore >= 60 ? "bg-green-500" : dataScore >= 30 ? "bg-amber-500" : "bg-stone-300")} style={{ width: `${dataScore}%` }} />
@@ -562,6 +623,7 @@ export default function OpportunitiesPage() {
                                             })}
                                         </tbody>
                                     </table>
+                                    </div>
                                 </div>
                             )}
 

@@ -651,6 +651,7 @@ export default function MyMatchesPage() {
                     onToggleSave={toggleSave}
                     onDismiss={dismissMatch}
                     pursuedIds={pursuedIds}
+                    profileId={profileId}
                 />
             )}
 

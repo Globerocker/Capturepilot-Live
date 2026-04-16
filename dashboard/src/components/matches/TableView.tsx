@@ -2,8 +2,9 @@
 
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
-import { Settings2, Bookmark, EyeOff, CheckCircle2, X, Check } from "lucide-react";
+import { Settings2, Bookmark, EyeOff, CheckCircle2, X, Check, RotateCcw } from "lucide-react";
 import clsx from "clsx";
+import { useResizableColumns } from "@/hooks/useResizableColumns";
 
 export interface MatchRow {
     id: string;
@@ -27,6 +28,7 @@ export interface ColumnDef {
     key: string;
     label: string;
     width?: string;
+    defaultWidth: number;   // px — used by the resizer hook
     render: (m: MatchRow) => React.ReactNode;
 }
 
@@ -39,7 +41,7 @@ const formatCurrency = (val: number | null | undefined) => {
 
 export const ALL_COLUMNS: ColumnDef[] = [
     {
-        key: "score", label: "Score", width: "w-20",
+        key: "score", label: "Score", defaultWidth: 80,
         render: (m) => (
             <span className={clsx(
                 "inline-flex items-center justify-center font-black text-xs px-2 py-1 rounded-md border",
@@ -50,7 +52,7 @@ export const ALL_COLUMNS: ColumnDef[] = [
         )
     },
     {
-        key: "classification", label: "Class", width: "w-24",
+        key: "classification", label: "Class", defaultWidth: 96,
         render: (m) => (
             <span className={clsx(
                 "text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-widest border",
@@ -61,7 +63,7 @@ export const ALL_COLUMNS: ColumnDef[] = [
         )
     },
     {
-        key: "title", label: "Title",
+        key: "title", label: "Title", defaultWidth: 320,
         render: (m) => (
             <Link href={`/opportunities/${m.opportunities?.id}`} className="font-bold text-black hover:underline line-clamp-2 text-xs">
                 {m.opportunities?.title || "—"}
@@ -69,19 +71,19 @@ export const ALL_COLUMNS: ColumnDef[] = [
         )
     },
     {
-        key: "agency", label: "Agency", width: "w-48",
+        key: "agency", label: "Agency", defaultWidth: 192,
         render: (m) => <span className="text-xs text-stone-600 line-clamp-2">{m.opportunities?.agency || "—"}</span>
     },
     {
-        key: "naics_code", label: "NAICS", width: "w-24",
+        key: "naics_code", label: "NAICS", defaultWidth: 96,
         render: (m) => <span className="font-mono text-xs text-stone-600">{m.opportunities?.naics_code || "—"}</span>
     },
     {
-        key: "notice_type", label: "Notice Type", width: "w-32",
+        key: "notice_type", label: "Notice Type", defaultWidth: 128,
         render: (m) => <span className="text-xs text-stone-600">{m.opportunities?.notice_type || "—"}</span>
     },
     {
-        key: "set_aside_code", label: "Set-Aside", width: "w-24",
+        key: "set_aside_code", label: "Set-Aside", defaultWidth: 96,
         render: (m) => (
             m.opportunities?.set_aside_code
                 ? <span className="text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded uppercase">{m.opportunities.set_aside_code}</span>
@@ -89,15 +91,15 @@ export const ALL_COLUMNS: ColumnDef[] = [
         )
     },
     {
-        key: "place_of_performance_state", label: "State", width: "w-16",
+        key: "place_of_performance_state", label: "State", defaultWidth: 72,
         render: (m) => <span className="font-mono text-xs text-stone-600">{m.opportunities?.place_of_performance_state || "—"}</span>
     },
     {
-        key: "award_amount", label: "Value", width: "w-24",
+        key: "award_amount", label: "Value", defaultWidth: 96,
         render: (m) => <span className="text-xs font-bold text-emerald-700">{formatCurrency(m.opportunities?.award_amount)}</span>
     },
     {
-        key: "response_deadline", label: "Deadline", width: "w-28",
+        key: "response_deadline", label: "Deadline", defaultWidth: 112,
         render: (m) => {
             const d = m.opportunities?.response_deadline;
             if (!d) return <span className="text-stone-300 text-xs">—</span>;
@@ -115,7 +117,7 @@ export const ALL_COLUMNS: ColumnDef[] = [
         }
     },
     {
-        key: "saved", label: "Saved", width: "w-16",
+        key: "saved", label: "Saved", defaultWidth: 72,
         render: (m) => m.is_saved ? <Bookmark className="w-3.5 h-3.5 text-amber-500 fill-current" /> : <span className="text-stone-300">—</span>
     },
 ];
@@ -132,6 +134,7 @@ export function TableView({
     onToggleSave,
     onDismiss,
     pursuedIds,
+    profileId,
 }: {
     matches: MatchRow[];
     selectedIds: Set<string>;
@@ -142,9 +145,24 @@ export function TableView({
     onToggleSave: (id: string, saved: boolean) => void;
     onDismiss: (id: string) => void;
     pursuedIds: Set<string>;
+    profileId?: string | null;
 }) {
     const [pickerOpen, setPickerOpen] = useState(false);
     const pickerRef = useRef<HTMLDivElement>(null);
+
+    // Default width map — fed to the resizable-columns hook. Stored per-profile
+    // in localStorage so each user's adjustments survive reloads.
+    const defaultWidths: Record<string, number> = ALL_COLUMNS.reduce((acc, c) => {
+        acc[c.key] = c.defaultWidth;
+        return acc;
+    }, {} as Record<string, number>);
+
+    const { getWidth, getResizerProps, reset: resetWidths } = useResizableColumns({
+        storageKey: profileId ? `matches:colwidths:${profileId}` : null,
+        defaults: defaultWidths,
+        min: 60,
+        max: 900,
+    });
 
     useEffect(() => {
         const h = (e: MouseEvent) => {
@@ -204,16 +222,25 @@ export function TableView({
                                     );
                                 })}
                             </div>
+                            <div className="border-t border-stone-100 mt-1 pt-1">
+                                <button
+                                    type="button"
+                                    onClick={() => { resetWidths(); setPickerOpen(false); }}
+                                    className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-stone-600 hover:bg-stone-50 text-left"
+                                >
+                                    <RotateCcw className="w-3 h-3" /> Reset column widths
+                                </button>
+                            </div>
                         </div>
                     )}
                 </div>
             </div>
 
             <div className="overflow-x-auto">
-                <table className="w-full">
+                <table className="text-left" style={{ tableLayout: "fixed", width: "max-content", minWidth: "100%" }}>
                     <thead>
                         <tr className="border-b border-stone-200 bg-stone-50">
-                            <th className="w-10 px-3 py-2">
+                            <th className="px-3 py-2" style={{ width: 40 }}>
                                 <input
                                     type="checkbox"
                                     checked={allSelectedOnPage}
@@ -223,11 +250,21 @@ export function TableView({
                                 />
                             </th>
                             {visibleCols.map(col => (
-                                <th key={col.key} className={clsx("text-left px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-stone-500", col.width)}>
-                                    {col.label}
+                                <th
+                                    key={col.key}
+                                    className="relative text-left px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-stone-500"
+                                    style={{ width: getWidth(col.key), minWidth: getWidth(col.key), maxWidth: getWidth(col.key) }}
+                                >
+                                    <div className="truncate pr-2">{col.label}</div>
+                                    <span
+                                        {...getResizerProps(col.key)}
+                                        className="group flex items-center justify-center hover:bg-stone-200/60"
+                                    >
+                                        <span className="w-px h-4 bg-stone-300 group-hover:bg-stone-600 transition-colors" />
+                                    </span>
                                 </th>
                             ))}
-                            <th className="w-24 px-3 py-2 text-right text-[10px] font-bold uppercase tracking-widest text-stone-500">Actions</th>
+                            <th className="px-3 py-2 text-right text-[10px] font-bold uppercase tracking-widest text-stone-500" style={{ width: 96 }}>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -235,7 +272,7 @@ export function TableView({
                             const isSelected = selectedIds.has(m.id);
                             return (
                                 <tr key={m.id} className={clsx("border-b border-stone-100 hover:bg-stone-50 transition-colors", isSelected && "bg-amber-50/30")}>
-                                    <td className="px-3 py-2">
+                                    <td className="px-3 py-2" style={{ width: 40 }}>
                                         <input
                                             type="checkbox"
                                             checked={isSelected}
@@ -244,9 +281,15 @@ export function TableView({
                                         />
                                     </td>
                                     {visibleCols.map(col => (
-                                        <td key={col.key} className="px-3 py-2 align-top">{col.render(m)}</td>
+                                        <td
+                                            key={col.key}
+                                            className="px-3 py-2 align-top overflow-hidden"
+                                            style={{ width: getWidth(col.key), minWidth: getWidth(col.key), maxWidth: getWidth(col.key) }}
+                                        >
+                                            {col.render(m)}
+                                        </td>
                                     ))}
-                                    <td className="px-3 py-2 text-right">
+                                    <td className="px-3 py-2 text-right" style={{ width: 96 }}>
                                         <div className="inline-flex items-center gap-0.5">
                                             {pursuedIds.has(m.opportunities?.id) && (
                                                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
