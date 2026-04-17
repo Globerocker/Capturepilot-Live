@@ -476,6 +476,12 @@ export default function CheckResultsPage() {
     const [saved, setSaved] = useState(false);
     const [saving, setSaving] = useState(false);
     const [naicsEditOpen, setNaicsEditOpen] = useState(false);
+    // "Save as Competitor" state — must sit with the other useStates above the
+    // early-return guards, otherwise the hook count differs between the loading
+    // render (12 hooks) and the loaded render (14), which throws
+    // "Rendered more hooks than during the previous render".
+    const [savingCompetitor, setSavingCompetitor] = useState(false);
+    const [competitorId, setCompetitorId] = useState<string | null>(null);
     const pollRef = useRef<number | null>(null);
 
     const analysisId = params.analysisId as string;
@@ -619,8 +625,6 @@ export default function CheckResultsPage() {
         window.open(`/api/prospects/pdf/${analysisId}`, "_blank");
     };
 
-    const [savingCompetitor, setSavingCompetitor] = useState(false);
-    const [competitorId, setCompetitorId] = useState<string | null>(null);
     const handleSaveAsCompetitor = async () => {
         setSavingCompetitor(true);
         try {
