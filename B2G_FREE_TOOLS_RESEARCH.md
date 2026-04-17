@@ -591,3 +591,391 @@ Ranked by value-to-effort ratio for your specific platform:
 | LinkedIn scraping | Legal risk too high. Apollo already covers this. |
 | GSA eBuy/Advantage APIs | No public APIs exist. |
 | Plausible/Umami | PostHog is strictly better for a SaaS product. |
+
+---
+
+# PART 2 — 2026-04-17 UPDATE: Additional Tools & Feature Gaps from Competitor Analysis
+
+Cross-referenced against `COMPETITIVE_ANALYSIS.md` and `AGENCY_COMPETITIVE_ANALYSIS.md`. Every item below is NEW (not already covered in sections 1–7 above).
+
+## 8. Additional Free Government Data APIs (Not Previously Covered)
+
+### 8.1 GSA CALC+ Ceiling Rates API — Labor Pricing Database **(HIGHEST-VALUE MISSING SOURCE)**
+- **URL**: https://open.gsa.gov/api/dx-calc-api/
+- **Endpoint**: `https://api.gsa.gov/acquisition/calc/v3/api/ceilingrates/`
+- **What it does**: Returns awarded labor ceiling rates for every labor category across all GSA MAS schedules. Query by labor category, education, experience, small-business status. Returns rate + min/max/average/schedule info.
+- **Free tier**: No auth required. No documented rate limit.
+- **B2G value**: **VERY HIGH**. This is the data behind GovWin IQ's premium labor pricing tier (15M+ rates) and HigherGov's Price Benchmarking tool (470K+ rates). The underlying data is **just the free CALC API**. We can rebuild their feature for $0.
+- **Integration effort**: EASY. REST/JSON, no auth. 1 day to wrap + cache.
+- **Use in CapturePilot**: New "Price-to-Win" tab on opportunity detail — shows median/p25/p75 ceiling rates for labor categories in the SOW. Major differentiator vs SMB-tier tools.
+
+### 8.2 Wage Determinations API (SAM.gov)
+- **URL**: https://open.gsa.gov/api/wdol/
+- **What it does**: Service Contract Act (SCA) and Davis-Bacon Act wage rates by county, state, labor category. Statutory minimums for federal service contracts.
+- **Free tier**: Uses same SAM.gov X-Api-Key we already have.
+- **B2G value**: HIGH. Janitorial, O&M, security guard, trades opps all carry WDs that dictate pricing floors. CLEATUS markets "wage determinations" as a chat-advisor capability.
+- **Integration effort**: EASY.
+- **Use**: On opp detail, auto-pull WD number from solicitation + show top 10 affected labor categories with rates.
+
+### 8.3 Federal Hierarchy Public API (SAM.gov)
+- **URL**: https://open.gsa.gov/api/fh-public-api/
+- **Endpoint**: `https://api.sam.gov/prod/federalorganizations/v1/`
+- **What it does**: Full org chart of every department, independent agency, sub-tier, office. Includes FPDS codes, DoDAAC, agency codes, active/inactive status.
+- **Free tier**: Same SAM key. 10 default / 100 max per page.
+- **B2G value**: HIGH. Replace hand-maintained agency list with authoritative source. Powers correct agency normalization across FPDS + USASpending.
+- **Integration effort**: EASY.
+
+### 8.4 Regulations.gov API v4
+- **URL**: https://open.gsa.gov/api/regulationsgov/
+- **What it does**: All federal rulemaking — dockets, documents, public comments. Full-text search.
+- **Free tier**: 1,000 requests/hour (free api.data.gov key).
+- **B2G value**: MEDIUM-HIGH. Early signals of policy changes creating contract opportunities (e.g., new CMMC rules drive cybersecurity demand).
+- **Use**: "Policy Watch" widget — flag dockets mentioning user-profile keywords.
+
+### 8.5 Federal Register API
+- **URL**: https://www.federalregister.gov/developers/documentation/api/v1
+- **What it does**: Every rule, proposed rule, executive order, notice since 1994. No API key required.
+- **Free tier**: Completely free.
+- **B2G value**: MEDIUM. EOs + agency notices precede big contract shifts.
+- **Use**: Daily cron — ingest new rules, AI-classify relevance to user's NAICS, surface top 3 on dashboard.
+
+### 8.6 eCFR API (Federal Acquisition Regulation)
+- **URL**: https://www.ecfr.gov/developers/documentation/api/v1
+- **What it does**: Entire Code of Federal Regulations in structured JSON/XML. Includes FAR (Title 48), DFARS.
+- **Free tier**: Free, no key.
+- **B2G value**: HIGH. Power a FAR/DFARS clause lookup — when a solicitation cites FAR 52.219-14, users see the full clause text inline. Missing feature everywhere except GovEagle.
+- **Use**: `/lib/far-lookup.ts` → given a FAR citation, return clause text. Display inline in opportunity detail.
+
+### 8.7 govinfo API (GPO)
+- **URL**: https://www.govinfo.gov/features/api | `https://api.govinfo.gov/`
+- **What it does**: Federal budget documents, congressional bills, congressional record, CRS reports, GAO reports, committee prints.
+- **Free tier**: Uses free api.data.gov key. Generous limits.
+- **B2G value**: HIGH. This is the agency budget source — ingesting "Budget of the United States" appropriations = raw material for our `agency_spend_forecast` table (migration 040).
+- **Use**: Replace hardcoded FY26 Q4 spend data with real refreshing ingested data.
+
+### 8.8 Congress.gov API (Library of Congress)
+- **URL**: https://gpo.congress.gov | https://github.com/LibraryOfCongress/api.congress.gov
+- **What it does**: Bills, amendments, committee reports, members, votes, CRS reports.
+- **Free tier**: **5,000 requests/hour** with free api.data.gov key (recently raised from 1,000).
+- **B2G value**: MEDIUM. Know when appropriations bills move, when authorizations create contract demand (CHIPS Act-style signals).
+- **Use**: "Legislative Signals" panel — bills in user's agencies that moved out of committee in last 30 days.
+
+### 8.9 GAO Bid Protests — RSS + Search **(DACIS KILLER)**
+- **URL**: https://www.gao.gov/legal/bid-protests/search | RSS https://www.gao.gov/rss
+- **What it does**: Bid protest docket (daily), full decision texts, outcomes (sustained/denied/dismissed).
+- **Free tier**: Free; no JSON API but RSS + scrapeable case pages.
+- **B2G value**: **VERY HIGH**. DACIS charges enterprise pricing for this. Protest data tells you: which contracts got delayed (recompete opportunity), which contractors challenge vs settle (capture intelligence), which agencies are vulnerable to protest patterns.
+- **Integration effort**: MEDIUM (RSS + Playwright/Firecrawl on case pages).
+- **Use**: "Protest Radar" nightly scrape. Tag every opp whose NAICS/agency has active related protests.
+
+### 8.10 DoD Daily Contract Announcements ≥$7.5M — war.gov
+- **URL**: https://www.war.gov/News/Contracts/
+- **What it does**: Every contract award ≥$7.5M announced daily at 5pm business days. Contractor, amount, location, agency, SOW.
+- **Free tier**: Free, HTML-scrapeable, daily.
+- **B2G value**: HIGH. Real-time "who just won what" — typically 3-6 months before FPDS.
+- **Use**: Daily cron → match by UEI to contractors table → surface on Competitors detail as "Recent Wins." Power a public marketing "Daily DoD Ticker."
+
+### 8.11 SBA Dynamic Small Business Search (DSBS)
+- **URL**: https://dsbs.sba.gov/ | data.gov https://catalog.data.gov/dataset/dynamic-small-business-search-dsbs-4f0da/
+- **What it does**: All SBA-certified 8(a), HUBZone, WOSB, EDWOSB, SDVOSB, SDB firms with capabilities narrative, NAICS, keywords, PoCs.
+- **Free tier**: Free; bulk CSV on data.gov (~300K rows).
+- **B2G value**: HIGH. Canonical source for the `tribal_contractors` / teaming directory we just built in migration 040. Replaces 800-row CSV with ~300K-row monthly refresh.
+- **Use**: Upgrade "Certified Teaming" tab from 800 to 300K firms — matches what CLEATUS markets as their "800K contractor database."
+
+### 8.12 SBA Certification Search API
+- **URL**: https://search.certifications.sba.gov/
+- **What it does**: Real-time status of SBA certifications (8(a), HUBZone, WOSB) for any UEI.
+- **Free tier**: Free web, scrapeable.
+- **Use**: Verify partner's current cert status before suggesting them for a set-aside bid.
+
+### 8.13 GLEIF LEI Lookup API
+- **URL**: https://www.gleif.org/en/lei-data/gleif-api | docs https://api.gleif.org/docs
+- **What it does**: Global Legal Entity Identifier lookup. 2.5M+ entities, 200+ jurisdictions. Company name, address, legal form, parent/ultimate-parent relationships.
+- **Free tier**: No key, no documented limit, free.
+- **B2G value**: MEDIUM. Disambiguate multi-subsidiary contractors (Northrop Grumman has 30+ LEI'd entities). Corporate hierarchy mapping.
+- **Use**: Enrich contractors with LEI + ultimate parent. Show "Corporate Family" on competitor detail.
+
+### 8.14 DSIP DoD SBIR/STTR API
+- **URL**: https://www.dodsbirsttr.mil/submissions/api/public/
+- **What it does**: Current DoD SBIR/STTR topics (Army/Navy/AF/DARPA/SOCOM), releases, status, document downloads.
+- **Free tier**: Public, unauthenticated endpoints.
+- **B2G value**: MEDIUM-HIGH. DoD SBIR goes through DSIP separately from civilian SBIR.gov and is higher-value (bigger budgets, primer-friendly).
+- **Integration effort**: MEDIUM (reverse-engineer topics-app endpoints or scrape).
+
+## 9. Additional GitHub Projects (Not Previously Covered)
+
+### 9.1 makegov/awesome-procurement-data
+- **URL**: https://github.com/makegov/awesome-procurement-data
+- **What**: Canonical curated list of every federal procurement data resource, API, tool. Links to PSC Selection Tool, FSCPSC, Part9 API, DIIG CSIS Lookup Tables, NASA 889-Compliance tool.
+- **Use**: Bookmark + periodically diff for new additions.
+
+### 9.2 nasa/889-Compliance-SAM-Tool
+- **URL**: https://github.com/nasa/889-Compliance-SAM-Tool-
+- **What**: Checks whether a SAM-registered entity uses Huawei/ZTE/Hikvision/Dahua/Hytera telecom (Section 889 of FY19 NDAA prohibits these for fed contracts).
+- **Use**: Add "Section 889 self-check" in onboarding + badge on profile if compliant.
+
+### 9.3 blueskylineassets/far-rag-api
+- **URL**: https://github.com/blueskylineassets/far-rag-api
+- **What**: Pre-vectorized semantic search of FAR Part 52 (617 clauses) designed for AI agents.
+- **Use**: Drop-in FAR clause RAG — "which clauses apply to my solicitation" feature.
+
+### 9.4 bengm/farse
+- **URL**: https://github.com/bengm/farse
+- **What**: Scrapes acquisition.gov → outputs a JSON file per FAR clause plus a `complete_far.json`.
+- **Use**: Easier than far-rag-api if you just want structured FAR data. Feed to gpt-4o-mini for clause Q&A.
+
+### 9.5 thepulsegovcon/part9-api
+- **URL**: https://thepulsegovcon.com/product/part9-api/
+- **What**: Consolidates opportunities from SAM.gov + Challenge.gov + Grants.gov + legacy FBO.gov into one API. Has a free tier.
+- **Use**: Add Challenge.gov (prize challenges — many small-business-friendly).
+
+### 9.6 dgtlmoon/changedetection.io
+- **URL**: https://github.com/dgtlmoon/changedetection.io (31K+ stars)
+- **What**: Self-hosted website change monitor. XPath/CSS-selector change detection, headless browser.
+- **Free tier**: Open source, self-host free.
+- **B2G value**: HIGH. Monitor:
+  - Competitor websites for cap-statement changes, new case studies, new hires
+  - Agency forecasts pages (most agencies post a quarterly forecast HTML page)
+  - Contract vehicle pages (SEWP, CIO-SP) for new task order notices
+- **Use**: Internal cron runs changedetection.io → `agency_forecast_changes` table. **This is BidPrime "Future Opps" for $0.**
+
+### 9.7 jpleger/pysam + mheadd/SamDotNet
+- Python / C# wrappers for SAM.gov API. Reference material for error-handling patterns.
+
+## 10. Additional AI / Document Parsing Tools
+
+### 10.1 Mistral OCR
+- **URL**: https://mistral.ai/pricing (mistral-ocr-latest endpoint)
+- **What**: Purpose-built OCR for complex documents — handles tables, math, multi-column, preserves layout into Markdown.
+- **Free tier**: Limited free tier. Paid ~$1 per 1,000 pages.
+- **B2G value**: HIGH. Cheaper and often better than Textract/Document AI on complex RFP PDFs.
+- **Use**: Replace/augment current attachment analysis — OCR first, then GPT-4o-mini for structured JSON extraction.
+
+### 10.2 AWS Textract — Free Tier
+- **URL**: https://aws.amazon.com/textract/pricing/
+- **Free tier**: 1,000 pages/month (first 3 months of new AWS accounts). Then $0.0015/page basic; $0.015/page Analyze Document.
+- **Use**: Specific table extraction (pricing templates, CLIN tables, evaluation criteria grids).
+
+### 10.3 Azure Document Intelligence
+- **URL**: https://azure.microsoft.com/en-us/pricing/details/document-intelligence/
+- **Free tier**: 500 pages/month (F0 SKU). Read model $1.50/1K paid.
+- **Use**: Alternative if Microsoft-stack.
+
+### 10.4 DeepSeek V3.2 / V4
+- **URL**: https://platform.deepseek.com
+- **Pricing**: No perpetual free, but extremely cheap: $0.14/M input, $0.28/M output. Cached: $0.03/M input.
+- **B2G value**: **VERY HIGH** for proposal writing. Comparable to Claude 3.5 Sonnet quality on structured outputs. Prompt caching gives 90% discount on consistent system prompts — perfect for "write this proposal section" flow.
+- **Use**: Secondary LLM for proposal drafting. Route long context (full RFPs) here, keep OpenAI for high-quality final pass.
+
+### 10.5 Qwen 2.5 / Qwen 3 (via Alibaba or OpenRouter)
+- **URL**: https://openrouter.ai/models?q=qwen
+- **Free tier**: Some Qwen models available free on OpenRouter. Paid ~$0.30/M input.
+- **Use**: Zero-shot classification of opportunities by type/complexity. Good Ollama-local option.
+
+## 11. Additional Notifications / Infrastructure
+
+### 11.1 Novu — Open-Source Notification Infrastructure
+- **URL**: https://novu.co | https://github.com/novuhq/novu (30K+ stars, MIT)
+- **Free tier**: Self-host free; cloud free tier = 30K notifications/month.
+- **What**: Unified email + SMS + push + in-app + Slack + Teams notifications with template management and user preferences.
+- **B2G value**: HIGH. Resend is email-only. Novu unifies all channels, adds in-app inbox widget, per-channel opt-in (compliance win).
+- **Use**: Multi-channel opportunity alerts. In-app notification bell (competitor feature in SamSearch, CLEATUS).
+
+### 11.2 Knock
+- **URL**: https://knock.app
+- **Free tier**: 10K notifications/month free forever.
+- Managed-only; alternative to Novu if not self-hosting.
+
+### 11.3 Apify — $5/month Forever-Free Credit
+- **URL**: https://apify.com
+- **Free tier**: $5 compute credit renews monthly. No CC required.
+- **Use**: Marketplace has pre-built actors for LinkedIn company pages, SAM.gov scrapers, news monitoring. $5/mo gets ~1K company enrichments.
+- Fallback when Apollo + Google Custom Search come up empty.
+
+### 11.4 Bright Data — 5K Requests/Month Free
+- **URL**: https://brightdata.com
+- **Free tier**: 5K requests/month on Web Scraper API.
+- Only option reliably bypassing anti-bot on some state procurement portals.
+
+---
+
+# 12. FEATURE GAP BACKLOG (vs. Software Competitors)
+
+Priority key: **P0** = table stakes · **P1** = differentiator · **P2** = nice-to-have
+
+## 12.1 P0 Features (Table Stakes — Every AI Competitor Has These)
+
+### 12.1.1 Capture Briefs (Auto-Generated)
+- **Competitors**: Sweetspot ("AI Capture Briefs"), GovDash, CLEATUS
+- **How**: One-click — pull opportunity + attachments + incumbent data + agency budget + past awards + competitor intel → 2–3 page "capture brief" covering program background, incumbent assessment, PWin, gaps, recommended actions.
+- **Powered by**: Existing inputs. New `/api/ai/capture-brief` endpoint orchestrating opportunity + strategic_scoring + past_awards + competitors into one LLM call. Render with jsPDF.
+- **Complexity**: **Small (~2 days)**
+
+### 12.1.2 Section L/M Compliance Matrix Generator
+- **Competitors**: GovDash ("solicitation shredding"), GovEagle, Sweetspot
+- **How**: Upload solicitation → AI parses Sections C (SOW), L (instructions), M (evaluation), H (special contract requirements) → generates a matrix: every "shall/must/will/required" → row with section ref, requirement text, assigned owner, status, proposal section. GovDash claims "95% content capture."
+- **Powered by**: Mistral OCR + DeepSeek V4 for requirement extraction + our `structured_requirements` pipeline. Export to XLSX with exceljs.
+- **Complexity**: **Medium (~1 week)**
+
+## 12.2 P1 Features (Differentiators)
+
+### 12.2.1 Recompete Radar
+- **Competitors**: SamSearch "Federal Recompetes", Fed-Spend "Recompete Radar", PrimeRFP
+- **How**: Pull expiring contracts from FPDS/USASpending → score recompete likelihood based on (a) agency history of recompeting vs extending, (b) period-of-performance end within 18 months, (c) market conditions. SamSearch assigns High/Medium confidence. **User sees opportunity 6–18 months before the RFP drops.**
+- **Powered by**: FPDS API + `usaspending-api` `/api/v2/search/spending_by_award/` with `period_of_performance_current_end_date` filter + new `agency_recompete_pattern` scoring table.
+- **Build**: 1 new cron (`/api/cron/recompete_scan`), 1 new table (`recompete_candidates`), scoring lib, UI page.
+- **Complexity**: **Medium**
+
+### 12.2.2 Form Fill Agent (Autonomous)
+- **Competitor**: Sweetspot "AI Form Fill" (launched July 2025; Oshkosh, Vannevar, Strider production users)
+- **How**: User uploads blank RFP/RFI/SF form → AI identifies every field (even unlabeled) → matches to validated company data (UEI, CAGE, DUNS, NAICS, certs, POCs, past perf) → fills it → flags gaps for human review. Claim: "zero compliance rejections."
+- **Powered by**: Mistral OCR or Docling + LLM field-detection + user_profiles cross-ref + SAM Entity API.
+- **Complexity**: **Large**
+
+### 12.2.3 Labor Rates / Price-to-Win Database (HigherGov/GovWin killer)
+- **Competitors**: GovWin IQ (15M rates, enterprise-only), HigherGov (470K rates, $500+/yr)
+- **How**: Ingest GSA CALC + 8(a) STARS III + TSA eFast + Alliant II + VETS 2 + SeaPort-NxG ceiling rates. Show by labor category + clearance + experience + education. Bundle "Price-to-Win" recommendation (20th percentile for LPTA, median for best-value).
+- **Powered by**: **The free CALC API** (§8.1). HigherGov's 470K "active prices" is essentially a cached CALC dump.
+- **Build**: 1 new table (`labor_rates`), nightly CALC cron, UI on opp detail.
+- **Complexity**: **Medium (~1 week)** — **biggest per-dollar-of-effort feature on this list**
+
+### 12.2.4 MCP Server for Claude/ChatGPT/Copilot
+- **Competitor**: GovTribe (only one)
+- **How**: MCP-compliant endpoint exposing: search_opportunities, get_opportunity_detail, search_contractors, get_agency_profile. Users add CapturePilot as connector in Claude Desktop → Claude can pull live CapturePilot data in conversation.
+- **Powered by**: Model Context Protocol (https://modelcontextprotocol.io).
+- **Build**: Wrap existing API routes in MCP server. Small Node/TS project.
+- **Complexity**: **Medium (~1 week)** — **unique differentiator at SMB price point**
+
+### 12.2.5 Zapier Integration
+- **Competitors**: HigherGov ($2.5K/yr+), CLEATUS, Fed-Spend
+- **How**: Build a Zapier app (free for public apps). Expose "Pursuit Added" trigger. Users fire Zaps to HubSpot / Salesforce / Dynamics 365 / monday / Pipedrive / SugarCRM / Zoho / ClickUp.
+- **Complexity**: **Small (1–2 weeks inc. Zapier approval)**
+
+### 12.2.6 eBuy / Task Order Import via Email Forwarding
+- **Competitors**: HigherGov (Standard tier), Federal Compass
+- **How**: User forwards eBuy/SEWP/CIO-SP/NIH CIO-CS/Symphony alerts to `pursuits@<user>.capturepilot.app`. Inbound parser → solicitation # + agency + response due + attachments → creates a pursuit. Bypasses lack of eBuy public API.
+- **Powered by**: Resend inbound email (or alternatives) + existing pursuit pipeline.
+- **Complexity**: **Medium**
+
+### 12.2.7 Market Watch (Saved Search → Weekly Digest)
+- **Competitor**: SamSearch
+- **How**: User saves a natural-language search → system runs weekly → Monday-morning digest with top 5 opportunities, top 3 competitors on similar work, 1 agency insight.
+- **Powered by**: Existing AI filter + matches + Sunday cron + email template.
+- **Complexity**: **Small (~1 week)**
+
+### 12.2.8 AI Capability Matrix (company → opportunity fit)
+- **Competitor**: Sweetspot
+- **How**: Cross-reference company capabilities (from capability statement) against opportunity requirements (from Section M evaluation criteria). Output matrix: strong/moderate/weak/gap per evaluation factor.
+- **Powered by**: capability_statement + structured_requirements + LLM comparison.
+- **Complexity**: **Small (~2-3 days)**
+
+### 12.2.9 24/7 AI Chat Advisor (CLEATUS GovCon Copilot equivalent)
+- **Competitor**: CLEATUS
+- **How**: Always-on chat with tool-use. Answers: "what FAR clauses apply?", "what's a typical CBA rate for HVAC in San Diego?", "who's the incumbent?". Tool calls to live SAM.gov, wage determinations, CALC, web search, user's document hub.
+- **Powered by**: GPT-4o-mini / Claude with function-calling; tools map to existing API routes + CALC + WD + far-rag-api.
+- **Complexity**: **Medium**
+
+### 12.2.10 Past-Performance Database (Derived from FPDS)
+- **Competitors**: GovWin IQ, DACIS, Federal Compass
+- **How**: For any UEI, show every completed contract, value, period of performance, modifications (extensions = satisfied customer), competitive vs sole-source, protest history.
+- **Powered by**: FPDS via `fpds` Python package + USASpending recipient endpoint + GAO RSS.
+- **Complexity**: **Medium**
+
+## 12.3 P2 Features (Nice-to-Have)
+
+### 12.3.1 Emerging Opps (Meeting Minutes AI Extraction)
+- **Competitor**: BidPrime via Ontopical
+- **How**: Ingest ~1M pages of municipal/school-board/transit-authority meeting minutes, agendas, videos per week. LLM extracts "approved $2.3M for upgraded HVAC at the high school" → pre-RFP alert.
+- **Complexity**: **Large** (big data pipeline, constant site-layout changes). MVP = top-20 metro areas.
+
+### 12.3.2 Browser Extension (SAM.gov Injection)
+- **Competitor**: Gov Contract Finder
+- **How**: Chrome/Edge/Firefox extension. Detects SAM.gov opp page → injects "Save to CapturePilot" + "viewed before" badge + AI match score.
+- **Complexity**: **Small-Medium (~1-2 weeks)**
+
+### 12.3.3 Mobile App
+- **Competitor**: Gov Contract Finder (only one)
+- Ship a PWA first (already possible via Next.js). Skip native.
+
+---
+
+# 13. MOONSHOTS (No Competitor Has These — Defensible for CapturePilot)
+
+## 13.1 Agency Forecast Change Detection
+- Use `changedetection.io` to monitor the quarterly-forecast HTML pages of every major agency (most publish to procurement-forecast.[agency].gov). Nightly diff. New line item → parse → match to user NAICS → alert.
+- **Why it matters**: Agencies add forecast items months before the RFP. First-mover advantage. No competitor monitors these pages automatically — they wait for SAM.gov 90 days later.
+- **Enabled by**: changedetection.io (§9.6) + existing NAICS matching.
+- **Complexity**: **Medium**
+
+## 13.2 Voice-First Capture Briefs
+- Mic button on iPhone (PWA) → user dictates "Brief me on the Fort Bragg logistics recompete" → Capture Brief pipeline runs → audio response via ElevenLabs/OpenAI TTS. Perfect for consultants driving between meetings.
+- **Why it matters**: Consulting-hybrid model targets consultants. Voice is a gap no competitor has addressed.
+- **Enabled by**: Whisper (already in stack) + capture brief + TTS.
+- **Complexity**: **Small (~1 week)**
+
+## 13.3 Slack/Teams Bot — "What RFPs Dropped Today?"
+- Slack bot users add to a channel. Morning digest ("3 HOT matches, 2 WARM") + responds to natural-language queries ("@capturepilot show me Army IT contracts this week").
+- **Why it matters**: Fed-Spend has Slack **alerts** (one-way). No competitor has conversational bot.
+- **Enabled by**: Slack Bolt + existing AI filter.
+- **Complexity**: **Medium (~2 weeks)**
+
+## 13.4 Predicted Past-Performance Rating (CPARS Proxy)
+- For any UEI, synthesize a past-perf rating from public signals: (1) FPDS mod count + extensions:terminations ratio, (2) subsequent award volume from same agency (retention = satisfaction), (3) GAO protests against them, (4) re-compete win rate on their own incumbent work.
+- **Why it matters**: Past perf is the #1 evaluation factor. Nobody can access real CPARS but a transparent public-data proxy is defensible and marketable.
+- **Enabled by**: FPDS + USASpending + GAO RSS.
+- **Complexity**: **Medium-Large**
+
+## 13.5 Agency Budget Burn Radar
+- Using govinfo + USASpending + agency obligation data, calculate each agency's FY burn rate vs target. Flag agencies under-spending at Q3/Q4 (they'll rush to obligate → opportunity boom).
+- **Why it matters**: Our new `agency_spend_forecast` (migration 040) hints at this. Make it real-time.
+- **Enabled by**: govinfo API + USASpending agency endpoints.
+- **Complexity**: **Medium**
+
+## 13.6 Protest Risk Score for Opportunities
+- For any opportunity, score agency's historical protest rate + incumbent's protest behavior + competition type. Output: "This opportunity has a 42% historical protest rate. Expect 60-90 day delay if awarded."
+- **Enabled by**: GAO RSS/scrape (§8.9).
+- **Complexity**: **Medium**
+
+## 13.7 Teaming Partner "Genetic Match"
+- Compatibility algorithm against DSBS's 300K+ firms: NAICS overlap (weighted by primary), PSC overlap, geographic radius, complementary cert (user is 8(a) → recommend WOSB if mixed set-aside), overlapping past agencies. Explainable.
+- **Why it matters**: Sweetspot + SamSearch do coarse matching; full 300K DSBS + weighted + explainable is unique.
+- **Enabled by**: DSBS bulk (§8.11) + SBA Cert Search (§8.12).
+- **Complexity**: **Medium**
+
+## 13.8 Compliance Copilot in Microsoft Word (GovEagle killer)
+- Native Word add-in (Office.js) in task pane. As user drafts a proposal section, compare to saved compliance matrix (§12.1.2) + flag missing requirements live. Insert boilerplate from capability statement.
+- **Why it matters**: GovEagle charges $15–60K/yr exclusively for this. Office.js add-ins are free to build. Enormous differentiator at SMB pricing.
+- **Enabled by**: Office.js + matrix + capability statement.
+- **Complexity**: **Medium-Large (~3-4 weeks)**
+
+## 13.9 Win Theme Auto-Generator from Past Awards
+- For any opp, analyze past similar awards (same NAICS/agency/size) via FPDS → find 3 incumbents → scrape their public case studies + capability statements → extract recurring themes ("on-time delivery", "DFARS compliance", "workforce diversity") → recommend 5 win themes.
+- **Why it matters**: Capture consultants charge $2-5K for this analysis per opportunity.
+- **Enabled by**: FPDS + Firecrawl + LLM.
+- **Complexity**: **Medium**
+
+## 13.10 Pre-Proposal Conference Intel Tracker
+- Most RFPs announce a pre-proposal conference or industry day. Scrape each opp's attachments for these refs → auto-calendar them → post-conference harvest the Q&A amendments (usually posted within 10 days) → inform user "the incumbent asked X; the agency clarified Y."
+- **Enabled by**: SAM.gov attachment parser + calendar.
+- **Complexity**: **Small**
+
+---
+
+# 14. TOP 10 HIGHEST-LEVERAGE NEXT ACTIONS (2026-04-17)
+
+Ordered by ROI (value delivered ÷ build effort):
+
+| Rank | Action | Effort | Why |
+|---|---|---|---|
+| 1 | **CALC Labor Rates ingestion** (§8.1 + §12.2.3) | 1-2 days | Unlocks HigherGov-class Price-to-Win feature |
+| 2 | **Capture Briefs auto-generator** (§12.1.1) | 2 days | Closes gap with every AI-native competitor |
+| 3 | **Compliance Matrix generator + XLSX export** (§12.1.2) | 1 week | P0 table stakes |
+| 4 | **Federal Hierarchy API integration** (§8.3) | 1 day | Fixes agency data quality everywhere |
+| 5 | **FAR Clause Inline Lookup** (§8.6 + §9.3) | 2-3 days | GovEagle does this for $15K/yr |
+| 6 | **DSBS bulk ingestion** (§8.11) | 3 days | Upgrades teaming from 800 to 300K firms |
+| 7 | **DoD Daily Contracts feed** (§8.10) | 1 day | Daily competitor-intelligence cron |
+| 8 | **MCP Server** (§12.2.4) | 1 week | Unique at SMB pricing |
+| 9 | **GAO Bid Protest tracker** (§8.9) | 1 week | "Protest Radar" is unique |
+| 10 | **DeepSeek V3.2 for proposal drafting** (§10.4) | 2 days | Cut LLM costs 70-90% |
+
+All free or near-free at CapturePilot's expected scale — compound without eating unit economics.

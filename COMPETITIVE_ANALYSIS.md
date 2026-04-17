@@ -893,6 +893,537 @@ Based on competitive analysis:
 
 ---
 
+## 10. COMPETITOR DEEP-DIVE — Contacts, Revenue, Lead Magnets, Sales Process
+
+**Added 2026-04-17.** Part 1 (sections 1–9) documents *what* each platform does. Part 2 documents *who runs it, how big they are, and how they acquire customers* — so we can (a) target specific decision-makers, (b) harvest their lead magnets for competitive study, and (c) replicate/outperform their acquisition plays.
+
+### How to use this section
+
+- **LinkedIn URLs**: personally verified (profile role matched). Use for cold outreach benchmarking or hire-poaching reference.
+- **Revenue estimates**: Growjo / Owler / Latka / ZoomInfo unless noted. Where disagreement is wide, range is shown.
+- **Lead magnets**: URLs listed so we can download and analyze every eBook, calculator, report, and tool they publish. Priority harvest list is at the bottom.
+- **Sales process**: "Demo-gated" = no pricing, must book a call. "Public" = tiers and numbers on the website. "Hybrid" = tiers shown + "contact sales" for higher plans.
+
+---
+
+### 10.1 Enterprise Tier
+
+#### GovWin IQ (Deltek)
+- **CEO (parent)**: Mike Corkery (Deltek CEO) — https://www.linkedin.com/in/mike-corkery-01989/
+- **Key product leads**: John Slye (Research Analyst Lead) https://www.linkedin.com/in/john-slye-3b389b2/ ; Deniece Peterson https://www.linkedin.com/in/deniecepeterson/
+- **Company LinkedIn**: https://www.linkedin.com/company/deltek | product page https://www.linkedin.com/products/deltek-govwin-iq/
+- **Est. Revenue**: Deltek overall ~$720M–$828M (Growjo/Zippia 2025); GovWin segment not broken out
+- **Employees**: Deltek ~4,000–4,900
+- **Funding / Ownership**: PE-owned by Roper Technologies (reacquired 2016 after Thoma Bravo)
+- **HQ**: Herndon, VA
+- **Sales Process**: **Demo-gated** — CTA "Try GovWin IQ for FREE" routes to contact form; phone (571) 521-7062; no self-serve signup
+- **Lead Magnets**:
+  - GovCon University — https://iq.govwin.com/neo/marketAnalysis/govcon-university
+  - Small Business Resource Center — https://iq.govwin.com/neo/marketAnalysis/section/Small-Business
+  - Clarity Government Contracting Industry Study (annual, gated)
+  - Guide to Government Contracting (PDF, gated)
+  - Customer case studies: AWS, MBP, C&S Companies, Henry Adams, Battelle, Fluor — on deltek.com/en/customers
+- **Homepage Claims**: "Market-Leading Government Contracting Intelligence" · "Confidently manage and grow your government business" · "The market-leading partner for U.S. and Canadian contractors"
+
+#### Bloomberg Government (BGOV)
+- **Head of BGOV**: Arielle Elliott (via LeadIQ)
+- **Company LinkedIn**: https://www.linkedin.com/company/bloomberg-government
+- **Est. Revenue**: $50M–$100M (Owler)
+- **Employees**: ~415
+- **HQ**: Washington, D.C. (1101 K St NW)
+- **Sales Process**: **Demo-gated** — zero public pricing; widely reported $6K–$10K+/user/year
+- **Lead Magnets**:
+  - BGOV Reports hub — https://about.bgov.com/resources/
+  - BGOV200 Top Federal Contractors Report (annual, free)
+  - Webinars library — https://about.bgov.com/webinars/
+  - Congressional Directory (print + digital)
+  - News.bgov.com (free news hub)
+- **Homepage Claims**: "All-in-one public affairs and government news platform" · "Trusted news, data, and analytics" · "Influence government action"
+
+#### EZGovOpps
+- **Founder/President**: Jamie Bratten — https://www.linkedin.com/in/ezgovopps/
+- **Company LinkedIn**: https://www.linkedin.com/company/ezgovopps
+- **Est. Revenue**: $870K–$6M (wide variance across aggregators)
+- **Employees**: ~11–19
+- **Funding**: Bootstrapped (founded 2008)
+- **HQ**: DC metro area
+- **Sales Process**: **Hybrid** — tiers public; free trial + card self-serve; "Schedule Demo" for upsell
+- **Lead Magnets**:
+  - Free Market Intelligence Trial
+  - Federal Contracting Blog — https://ezgovopps.com/blog/
+  - Weekly "EZGovOpps University" webinar series
+  - Small Business Guide (gated PDF)
+  - Agency Spotlight reports
+- **Homepage Claims**: "Affordable market intelligence for federal contractors" · "Nation's leader in affordable web-based government intelligence" · "Find and win more government contracts"
+
+#### Federal Compass
+- **Co-Founder/President/CEO**: Chad Ganske — https://www.linkedin.com/in/chadganske/
+- **Co-Founder/CPO**: Jim Sherwood — https://www.linkedin.com/in/jdsherwood/
+- **Company LinkedIn**: https://www.linkedin.com/company/federal-compass
+- **Est. Revenue**: $5M–$10M (implied from ~20 employees + 8,000 customers)
+- **Employees**: ~20–21
+- **Funding**: Bootstrapped
+- **HQ**: 2311 Wilson Blvd Ste 630, Arlington, VA
+- **Sales Process**: **Demo-gated** — primary CTA "Contact Sales"
+- **Lead Magnets**:
+  - "The Federal Compass Solution" eBook — https://www.federalcompass.com/lp/resources
+  - Federal opportunity / contract / agency / contractor / vehicle guide hubs
+- **Homepage Claims**: "The Winning Formula for Federal Contractors" · "Comprehensive software tools to guide strategy and power business development"
+
+#### DACIS (InfoBase Publishers)
+- **Founder/President**: Stuart McCutchan — https://www.linkedin.com/in/stuartmccutchan/
+- **CEO**: Eric Hess
+- **Company LinkedIn**: https://www.linkedin.com/company/infobase-publishers-inc-
+- **Est. Revenue**: not public (~$3M–$10M estimated; 28-year-old private firm)
+- **Employees**: ~10–50
+- **HQ**: 25050 Riding Plaza Ste 130, Chantilly, VA
+- **Sales Process**: **Demo-gated** — "Schedule Demo" + free trial
+- **Lead Magnets**: Free Trial page, DACIS News, leadership page, CrossSight due-diligence product page
+- **Homepage Claims**: "Bridge uncertainty. CrossSight due diligence is here!" · "Intelligence that works for you" · "Understand opportunities rather than merely identifying them"
+
+---
+
+### 10.2 Mid-Market Tier
+
+#### GovTribe (GovExec)
+- **Co-Founder (now EVP at GovExec)**: Nate Nash — https://www.linkedin.com/in/natenash/
+- **Co-Founder/CTO**: Jay Hariani
+- **Parent CEO (GovExec)**: Tim Hartman
+- **Company LinkedIn**: https://www.linkedin.com/company/govtribe
+- **Est. Revenue**: ~$576K (Growjo — likely understated post-GovExec acquisition)
+- **Employees**: ~19
+- **Funding / Ownership**: Acquired by GovExec (GrowthCurve Capital-backed) Aug 2021
+- **HQ**: Arlington, VA
+- **Sales Process**: **Hybrid** — Launch $1,350/yr, Launch Plus $1,800/yr, Growth $4,000/yr, Growth Plus $5,500/yr; 14-day free trial; self-serve signup
+- **Lead Magnets** (strong):
+  - The 2026 Guide to $50M in Five Years — https://resources.govtribe.com/fifty-in-five?hsLang=en
+  - Top 20 Opportunities Newsletter — https://share.hsforms.com/1oXx8eR9PSleOrnSA9uN0Vgcmcgn
+  - IDIQ Email Course (2-week) — https://resources.govtribe.com/govtribe-idiq-register-form?hsLang=en
+  - GovGuide Email Course (5-part) — https://resources.govexec.com/federal-govguide?hsLang=en
+  - GovCon Guide for Small Businesses — https://resources.govtribe.com/govtribe-small-business-guide-download?hsLang=en
+  - Teaming with Small Businesses Guide (for primes) — https://resources.govtribe.com/govtribe-small-business-guide-primes?hsLang=en
+  - User Guide — https://docs.govtribe.com/user-guide
+  - GovCon Roundup Newsletter — https://www.linkedin.com/newsletters/7368362826136023040/
+  - Zapier Integrations — https://zapier.com/apps/govtribe/integrations
+  - Resources hub — https://blog.govtribe.com/resources
+- **Homepage Claims**: "Grow Your Government Business" · "Federal Market Intelligence for Growing GovCons" · "The only data tool we can't live without"
+
+#### HigherGov
+- **Founder**: Justin Siken — https://www.linkedin.com/in/justin-siken-549a2773/
+- **Company LinkedIn**: https://www.linkedin.com/company/highergov/
+- **Est. Revenue**: not public (likely $2M–$5M)
+- **Employees**: 2–10
+- **Funding**: Bootstrapped
+- **HQ**: 70 Washington St, Brooklyn, NY (secondary: DC)
+- **Sales Process**: **Public + transparent** — Starter $500/yr, Standard $2,500/yr, Leader $5,000/yr; free trial; free search without signup
+- **Lead Magnets** (heavy SEO focus):
+  - News / Research hub — https://www.highergov.com/news/
+  - FED to SLED: Strategies and Considerations
+  - The Lowest Competition Federal Contracts
+  - Where to Find the 95% of Contract Opps Not in SAM
+  - GSA Schedule Access Increasingly a Must-Have
+  - What is Your GovCon Business Worth?
+  - Record $765 Billion in Federal Contracts Awarded in 2023
+  - 8(a) Graduation: A Survival Guide
+  - Guide to Winning Government Subcontracts
+  - Free opportunity/contract/grant search (no signup) — https://www.highergov.com/all/
+- **Homepage Claims**: "Tools to Win. Insights to Lead." · "Market intel and business development tools" · "Data and Insights You Will Only Find Here"
+
+#### BidPrime
+- **CEO/Co-Founder**: Stephen Hetzel — https://www.linkedin.com/in/stephenhetzel/
+- **VP Client Services**: Anna Barnett — https://www.linkedin.com/in/annabarnett319/
+- **Sr. Account Executive**: Brett Sudderth — https://www.linkedin.com/in/brett-sudderth-1412785/
+- **Company LinkedIn**: https://www.linkedin.com/company/bidprime
+- **Est. Revenue**: ~$5.8M (Growjo)
+- **Employees**: ~28–43
+- **Funding**: Bootstrapped (2009)
+- **HQ**: Austin, TX
+- **Sales Process**: **Hybrid** — tiers from $199/mo historically; free 3-day trial; self-serve signup + "Schedule Demo"
+- **Lead Magnets**:
+  - Big Bid Theory Podcast — https://www.bidprime.com/big-bid-theory-podcast/
+  - Bid Academy blog
+  - State/Industry bid reports (gated)
+- **Homepage Claims**: "Find Government Bids & RFPs Fast" · "One Search for Government Bids, RFPs, RFIs and Contracts" · "Your Best Bet for Bids"
+
+#### Govly
+- **Co-Founder/CEO**: Mike Weiland — https://www.linkedin.com/in/mikeweiland/
+- **Co-Founder/CTO**: Nick Weiland
+- **Company LinkedIn**: https://www.linkedin.com/company/govly
+- **Est. Revenue**: not public ($5M–$15M ARR estimated; $13M raised + 40 employees)
+- **Employees**: ~40
+- **Funding**: $13.1M total — Seed + $9.5M Series A (Nov 2023, Insight Partners led, with YC/FundersClub/NordicEye). **YC W22**
+- **HQ**: likely NYC area
+- **Sales Process**: **Demo-gated with freemium hook** — "Get a demo" + "Sign up free"; no public tiers
+- **Lead Magnets**:
+  - Blog — https://www.govly.com/blog
+  - Help Center — https://help.govly.com
+  - Customer case studies — https://www.govly.com/customers
+  - Status page — https://status.govly.com
+- **Homepage Claims**: "The AI platform that helps you win more government business" · "The #1 Market Network for Government Contractors" · "Access 3x more solicitations than competitors"
+
+---
+
+### 10.3 Budget / SMB Tier
+
+#### SamSearch
+- **Co-Founder**: Humam Hawara — https://www.linkedin.com/in/humam-hawara/ (Montreal; still student at Concordia)
+- **Company LinkedIn**: https://www.linkedin.com/company/sam-search
+- **Est. Revenue**: not public (likely <$2M ARR)
+- **Employees**: <10
+- **Funding**: bootstrapped/angel
+- **HQ**: Montreal, Canada
+- **Sales Process**: **Hybrid** — pricing page live; "Book Demo" + "Get Started Now"; self-serve signup
+- **Lead Magnets** — **BEST-IN-CLASS FREE-TOOL STRATEGY IN GOVCON (14+ interactive tools)**:
+  - MDA SHIELD Readiness Scorecard — https://samsearch.co/shield-readiness
+  - Win Probability Estimator — https://samsearch.co/win-probability-estimator
+  - Contract Vehicle Matchmaker — https://samsearch.co/contract-vehicle-matchmaker
+  - Small Business Size Standard Checker — https://samsearch.co/small-business-size-checker
+  - NAICS AI Lookup — https://samsearch.co/naics-ai-lookup
+  - Capability Statement Builder — https://samsearch.co/capability-statement-builder
+  - Contract Search (free) — https://samsearch.co/contracts
+  - Browse NAICS Codes — https://samsearch.co/naics
+  - Contract Statistics — https://samsearch.co/statistics
+  - ROI Calculator — https://samsearch.co/roi-calculator
+  - Wrap Rate Calculator — https://samsearch.co/wrap-rate-calculator
+  - GovCon Glossary — https://samsearch.co/glossary
+  - NAICS Chrome Extension (Chrome Web Store)
+  - Slack App — https://samsearch.co/slack
+  - Guides hub — https://samsearch.co/guides
+  - Implementation Plan — https://samsearch.co/implementation-plan
+  - Blog — https://samsearch.co/blog
+  - Set-Aside Contracts — https://samsearch.co/contracts/set-aside
+- **Homepage Claims**: "AI for Government Contracting" · "Turn months of manual work into minutes of strategic action" · "$1B+ in contracts won through SamSearch / 3x higher win rate"
+
+#### Gov Contract Finder (GRIF TECH LLC)
+- **Founder (implied)**: Derek Martinez
+- **Company LinkedIn**: https://www.linkedin.com/company/gov-contract-finder
+- **Est. Revenue**: not public (early/SMB)
+- **Employees**: <10
+- **Funding**: Bootstrapped
+- **HQ**: not stated
+- **Sales Process**: **Hybrid** — free account (no CC); "Find My Contract Matches" / "Book a Quick Demo" / "Create Free Account"
+- **Lead Magnets**:
+  - Free account signup
+  - Chrome extension (Bidding Assistant) — https://chromewebstore.google.com/detail/gov-contract-finder-biddi/fgnajpaobaffohjknadbgbkpklfjdkgf
+  - iOS + Android mobile apps
+  - Knowledge base, guides, glossary, Q&A, blog
+- **Homepage Claims**: "Stop Searching SAM.gov. Start Winning Contracts." · "AI scans federal opportunities daily" · "262K+ active contracts tracked — $750B+ in contract value"
+
+#### Fed-Spend
+- **Founder/CEO**: not publicly disclosed (2025 launch, no team page)
+- **Company LinkedIn**: not found
+- **Funding / HQ**: not disclosed
+- **Sales Process**: **Self-serve + transparent** — Researcher $49/mo, Professional $199/mo, Enterprise custom; 14-day free trial
+- **Lead Magnets** (heavy comparison-content strategy):
+  - Weekly newsletter
+  - Blog — https://fed-spend.com/blog
+  - USASpending.gov vs Fed-Spend — https://fed-spend.com/blog/usaspending-vs-fed-spend-comparison
+  - GovWin vs GovSpend vs GovTribe vs Bloomberg Pricing — https://fed-spend.com/blog/govwin-govspend-govtribe-bloomberg-pricing-compared-2026
+  - 25 Fastest-Growing Federal Contractors — https://fed-spend.com/blog/fastest-growing-federal-contractors-2026
+  - Palantir Government Contracts Deep Dive — https://fed-spend.com/blog/palantir-government-contracts-deep-dive
+  - Federal Spending Trackers Buyer's Guide — https://fed-spend.com/blog/federal-spending-tracker-tools-compared
+- **Homepage Claims**: "Federal Contract Intelligence. In Real Time." · "Deeper intelligence than Bloomberg Gov at a fraction of the cost" · "$7.2T in federal contracts tracked across 124 agencies"
+
+#### FindRFP
+- **Founder/CEO**: not disclosed (founded 1995)
+- **Company LinkedIn**: not active
+- **Est. Revenue**: likely <$5M
+- **HQ**: phone 952-736-1000 suggests Minnesota
+- **Sales Process**: **Hybrid** — Risk-Free Trial; subscription plans on /service/subscription.aspx
+- **Lead Magnets**: Government RFP 101, Search Tips, FAQ, blog, testimonials
+- **Homepage Claims**: "Pioneer & Industry Leader Since 1995" · "Government RFP, Bid & Contract Finder & Notification Service"
+
+#### BidNet Direct (SOVRA)
+- **Parent CEO (SOVRA)**: Tom Spengler (Aug 2025)
+- **Company LinkedIn**: https://www.linkedin.com/company/bidnet-by-sovra
+- **Est. Revenue**: not broken out (parent SOVRA formerly mdf commerce, ~CAD$100M+ pre-privatization)
+- **Employees (parent)**: ~400+
+- **Funding / Ownership**: KKR-backed after 2024 take-private
+- **HQ**: Latham, NY (BidNet); SOVRA Montreal
+- **Sales Process**: **Hybrid** — free buyer-side listings; paid supplier subscriptions; self-serve supplier signup
+- **Lead Magnets**:
+  - Early RFP Signals guide — https://bit.ly/4sfcKDq
+  - Industry-specific bid reports
+- **Homepage Claims**: "Find government bids matching your business" · "25,000+ daily open bids from 90,000+ government agencies" · "Trusted by 280,000+ suppliers"
+
+#### BidSync / Periscope S2G (SOVRA)
+- **Parent CEO**: Tom Spengler (SOVRA)
+- **Company LinkedIn**: https://www.linkedin.com/company/periscope-holdings
+- **HQ**: Austin, TX (legacy) / SOVRA Montreal
+- **Sales Process**: **Demo-gated**; split "For Buyers" / "For Suppliers"
+- **Status**: Rebranding to SOVRA (sovra.com); lead assets migrating
+- **Homepage Claims**: "SOVRA powers the critical work of public procurement" · "Modernize the way government buyers and suppliers find, connect, and transact"
+
+---
+
+### 10.4 AI-Native Tier
+
+#### Sweetspot (YC S23)
+- **Co-Founder/CEO**: Sachin Subramanian — https://www.linkedin.com/in/sachinsubramanian/
+- **Co-Founders**: Philip Kung, Andrew Arkhipov
+- **Company LinkedIn**: https://www.linkedin.com/company/sweetspotgov
+- **Est. Revenue**: $1.8M ARR (Latka 2024)
+- **Employees**: 12 (Latka)
+- **Funding**: $2.2M seed (Aug 2024, led by 1984 Ventures). **YC S23**
+- **HQ**: New York City
+- **Sales Process**: **Demo-gated** — no public pricing
+- **Lead Magnets**:
+  - Articles — https://www.sweetspot.so/articles/
+  - GovCon Glossary — https://www.sweetspot.so/glossary/
+  - GovCon Guides — https://www.sweetspot.so/govcon-guides/
+  - GovCon Workflows — https://www.sweetspot.so/govcon-workflows/
+  - ROI Calculator — https://www.sweetspot.so/roi-calculator/
+  - Comparison page — https://www.sweetspot.so/sweetspot-versus-other-govcon-software/
+  - Proposal Templates ("Coming Soon")
+- **Homepage Claims**: "AI for Government Contracting" · "Pursue 6x more RFP value without adding headcount" · "Replace your patchwork of tools with an integrated AI capture solution"
+
+#### GovDash (most-funded in category)
+- **CEO/Co-Founder**: Sean Doherty — https://www.linkedin.com/in/sean-m-doherty
+- **Co-Founders**: Curtis Mason (https://www.linkedin.com/in/curtis-mason-729376156/) and Timothy Goltser
+- **Senior team**: Gavin Kline — https://www.linkedin.com/in/gavinkline/
+- **Company LinkedIn**: https://www.linkedin.com/company/govdash
+- **Est. Revenue**: $3.8M (Latka 2024) → "seven figures in one month" (Mar 2026) → likely ~$15M+ ARR 2026
+- **Employees**: 59 (Jan 31, 2026)
+- **Funding**: $40M total — **YC W22**; Seed $12M (Northzone, YC); Series A $10M (Apr 2024, Northzone); Series B $30M (2025, BCI + Northzone + Mucker)
+- **HQ**: US (NYC area implied)
+- **Sales Process**: **Demo-gated** — "Book a Demo"; no public pricing
+- **Lead Magnets**:
+  - Case Studies — https://www.govdash.com/customer-stories
+  - Glossary — https://www.govdash.com/glossary
+  - Security — https://www.govdash.com/security
+  - Roadmap — https://www.govdash.com/roadmap
+  - Product Updates — https://www.govdash.com/product-updates
+  - Blog (Industry Reports, Intel Briefs, Case Studies, Articles) — https://www.govdash.com/blog
+  - Help Center — https://support.govdash.com/docs
+- **Homepage Claims**: "AI for Government Contracting" · "$5B+ in contract wins last year by customers" · "Win and manage government contracts"
+
+#### GovSignals
+- **CEO/Co-Founder**: Derek Hoyt — https://www.linkedin.com/in/derekhoyt/
+- **Co-Founders**: Conner Aldrich (CTO), Jeremy Doochin — https://www.linkedin.com/in/jeremydoochin/
+- **Company LinkedIn**: https://www.linkedin.com/company/govsignals
+- **Est. Revenue**: not public (seed stage)
+- **Employees**: <25
+- **Funding**: $5.5M Seed (Dec 2024, led by Unusual Ventures)
+- **HQ**: Washington DC / NYC
+- **Sales Process**: **Demo-gated** — "Get Started" / "See a Demo" / "Book a Call"
+- **Lead Magnets**:
+  - Articles — https://www.govsignals.ai/articles
+  - FedRAMP compliance announcement
+  - DIU Contract announcement
+  - Unusual Ventures funding article — https://www.unusual.vc/govsignals-the-ai-platform-government-contracting/
+- **Homepage Claims**: "The Only FedRAMP High AI Platform for Intelligence, Proposals, and Contracting" · "Pre-Award to Post-Award" · "200% more opportunities, +70% proposal output"
+
+#### CLEATUS (cleat.ai)
+- **CEO/Co-Founder**: Yigit Guney — https://www.linkedin.com/in/yigit-guney-90a80314a/
+- **Co-Founders**: Erik Sherman (CTO) — https://www.linkedin.com/in/erikksherman ; Mithat Cakmak (COO) — https://www.linkedin.com/in/mithat-cakmak/
+- **Company LinkedIn**: https://www.linkedin.com/company/cleatus-ai
+- **Est. Revenue**: not public (early)
+- **Employees**: <25
+- **HQ**: Washington DC / Arlington, VA
+- **Sales Process**: **Hybrid + transparent** — Starter/Essential/Enterprise tiers; 7-day free trial; 30-day satisfaction guarantee; "START FOR FREE" + "SCHEDULE DEMO"
+- **Lead Magnets** (extensive free tools — CapturePilot's closest product-marketing benchmark):
+  - AI-Powered FAR Navigator — https://www.cleat.ai/free-govcon-tools/far-navigator
+  - Government Intelligence Hub — https://www.cleat.ai/government
+  - Capability Statement Builder — https://www.cleat.ai/free-govcon-tools/capability-statement-builder
+  - Set-Asides Search Tool — https://www.cleat.ai/set-asides
+  - CLEATUS Capital FundMatch — https://www.cleat.ai/free-govcon-tools/fund-match
+  - PDF Form Filler — https://www.cleat.ai/free-govcon-tools/form-filler
+  - GovCon Glossary (498 terms) — https://www.cleat.ai/free-govcon-tools/glossary
+  - Blog — https://www.cleat.ai/blog
+  - Free Webinar — https://www.cleat.ai/demo/booking/webinar
+  - Case Studies — https://www.cleat.ai/case-studies
+  - Documentation — https://help.cleat.ai
+  - Product News — https://news.cleat.ai
+- **Homepage Claims**: "Find. Bid. Win! Government Contracts with AI" · "The simplest way to leverage AI for your GovCon business" · "500+ companies · $1B+ in contracts won"
+
+#### GovEagle
+- **CEO/Co-Founder**: Akash Mandavilli — https://www.linkedin.com/in/akashmandavilli/
+- **Co-Founder/CTO**: Gabe Villasana
+- **Company LinkedIn**: https://www.linkedin.com/company/goveagle1
+- **Est. Revenue**: not public (early)
+- **Funding**: $2.5M (Strategic Cyber Ventures + YC)
+- **HQ**: NYC
+- **Sales Process**: **Demo-gated** — "Book a Demo" + ROI Calculator
+- **Lead Magnets**: ROI Calculator https://www.goveagle.com/roi-calculator · Case studies https://www.goveagle.com/case-studies · Webinars · Blog https://www.goveagle.com/blog
+- **Homepage Claims**: "Win More Government Awards, Faster" · "Save 30–40% on RFIs and 15–25% on RFPs" · "Native Word, Excel, PowerPoint, SharePoint add-ins"
+
+#### Thalamus AI
+- **CEO/Co-Founder**: Bipul Vaibhav — https://www.linkedin.com/in/bipul-vaibhav-99a8b029/
+- **Co-Founders**: Harpreet Singh, Sudhanshu Bansal
+- **Company LinkedIn**: https://www.linkedin.com/company/thalamus-ai
+- **Funding**: not disclosed on Crunchbase
+- **HQ**: San Francisco
+- **Sales Process**: **Demo-gated via Calendly**
+- **Lead Magnets**: Blog https://blogs.thalamushq.ai · Trust page https://thalamushq.trust.site · YouTube (@Thalamus_AI)
+- **Homepage Claims**: "AI RFP & Proposal Platform: Compliant proposals. Trusted answers." · "First Proposal Draft in Minutes" · "99.9% RFP Response Accuracy. Zero hallucination"
+
+---
+
+### 10.5 Marketplace / Specialized
+
+#### GovShop (Public Spend Forum)
+- **Founder/CEO**: Raj Sharma — https://www.linkedin.com/in/raj-sharma/
+- **Co-Founder**: Jason Busch
+- **Company LinkedIn**: https://www.linkedin.com/company/govshop + https://www.linkedin.com/company/public-spend-forum
+- **HQ**: Arlington / DC
+- **Sales Process**: Free buyer tool (GovShop); paid consulting (PSF)
+- **Lead Magnets**:
+  - Emerging Tech Market Insights Services Guide — https://resources.publicspendforum.net/emerging-tech-market-insights-services-and-solutions-guide/
+  - Drone & Autonomy Market Report — https://links.publicspendforum.net/link/23zM7m-UFsFS8MbpN9MfX_Ai3r6Q8TQx_Wn8Xzhcbmc/email/
+  - AskPSF AI tool (free)
+  - AI-Powered Market Report Generator
+  - Innovation Ecosystem Dashboards
+  - Press Room — https://www.publicspendforum.net/about-us/press-room/
+- **Homepage Claims**: "Powered by Old-Fashioned Analysis and AI-MI™" · "See Markets. Build Industries. Move Faster." · "Global government market research tool for finding and connecting with suppliers"
+
+---
+
+### 10.6 Emerging Players
+
+#### Stotles (UK → expanding US)
+- **Co-Founder/CEO**: John Witt — https://www.linkedin.com/in/john-witt-mba/
+- **Co-Founder/COO**: Taj Kamranpour — https://www.linkedin.com/in/tajkamranpour/
+- **Co-Founder/CPO**: Carsten Schaltz
+- **Company LinkedIn**: https://uk.linkedin.com/company/stotles
+- **Est. Revenue**: $3.6M (Latka 2024)
+- **Employees**: ~60
+- **Funding**: $21.6M total — Series A $13M (May 2025, Headline + Acton, with Form Ventures, Seedcamp, GTMFund, FJLabs, 7Percent, SpeedInvest)
+- **HQ**: London, UK
+- **Sales Process**: **Hybrid freemium** — "Get started for free" + "Request a demo"; no public tiers
+- **Lead Magnets — 30+ gated reports (strongest lead-gen library in the competitive set)**:
+  - 2026 UK public sector market outlook — https://www.stotles.com/2026-market-outlook
+  - From 14 to 15: G-Cloud supplier playbook — https://www.stotles.com/resource/report/from-14-to-15-the-g-cloud-supplier-playbook
+  - How to grow your revenue at HETT — https://www.stotles.com/resource/report/how-to-grow-your-revenue-at-hett
+  - How to grow your revenue at DigiGov — https://www.stotles.com/resource/report/how-to-grow-your-revenue-at-digigov
+  - £6.3b in NHS capital budgets — https://www.stotles.com/resource/report/6-3-billion-in-nhs-capital-budgets-where-icbs-are-investing-in-2025-26
+  - Home Office 2030 digital agenda — https://www.stotles.com/resource/report/how-suppliers-can-win-work-in-the-home-offices-2030-digital-agenda
+  - NHS 10-Year Plan analysis — https://www.stotles.com/resource/report/fit-for-the-future-of-healthcare-an-outcome-focused-analysis-for-suppliers
+  - £47b digital government market — https://www.stotles.com/resource/report/win-in-the-growing-47b-digital-government-market
+  - £725b Infrastructure plan guide — https://www.stotles.com/resource/report/725b-opportunity-suppliers-guide-to-the-10-year-infrastructure-plan
+  - 2025 State of public sector procurement — https://www.stotles.com/resource/report/2025-state-of-public-sector-procurement
+  - £80b Procurement spend guide — http://www.stotles.com/resource/report/suppliers-guide-to-80b-in-confirmed-upcoming-procurement-spend
+  - AI and emerging tech in UK healthcare — http://www.stotles.com/resource/report/ai-and-emerging-technology-in-uk-healthcare
+  - MoD historic-budget report — https://www.stotles.com/resource/report/a-report-on-the-ministry-of-defences-historic-budget
+  - £1.3b lifeline for 30 UK councils — https://www.stotles.com/resource/report/1-3-billion-lifeline-for-30-uk-councils-in-2025-a-guide-for-suppliers-to-capitalise
+  - UK Procurement Act 2023 playbook — https://www.stotles.com/resource/report/the-uk-procurement-act-2023-your-2025-go-live-playbook
+  - Digital Outcomes 6 — http://www.stotles.com/resource/report/digital-outcomes-6-insights-for-a-winning-strategy
+  - EdTech autumn-budget report — https://www.stotles.com/resource/report/autumn-budget-spotlight-capitalise-on-ps11-2b-education-funding
+  - 2025 Public Sector strategy insights — https://www.stotles.com/resource/report/2024-insights-to-jumpstart-your-2025-public-sector-strategy
+  - Telecommunications 2025 — https://www.stotles.com/resource/report/unlocking-opportunities-for-telecommunications-suppliers-in-2025-autumn-budget-insights-27112024
+  - 2024 Autumn Budget spotlight — https://www.stotles.com/resource/report/2024-autumn-budget-spotlight-report-05112024
+  - Cloud & cybersecurity in the NHS — https://www.stotles.com/resource/report/cloud-and-cybersecurity-in-the-nhs-a-review-of-the-healthcare-systems-preferred-suppliers
+  - How to use G-Cloud 14 — https://www.stotles.com/resource/report/prepare-for-g-cloud-14
+  - £1.9b back office software opportunities — https://www.stotles.com/resource/report/discover-19b-of-back-office-software-opportunities
+  - Integrated Care Systems 2024/25 budgets — https://www.stotles.com/resource/report/integrated-care-systems-reveal-2024-25-budget-plans
+  - Green edge: Labour's sustainability procurement — https://www.stotles.com/resource/report/the-green-edge-capitalise-on-labours-sustainability-drive
+  - Central gov digital procurement plans — https://www.stotles.com/resource/report/central-government-authorities-update-digital-procurement-plans
+  - MoD commercial pipeline — https://www.stotles.com/resource/report/the-ministry-of-defence-reveal-commercial-pipeline
+  - Local Government supplier handbook — https://www.stotles.com/resource/report/local-government-supplier-handbook
+  - NHS England rankings — https://www.stotles.com/resource/report/nhs-england-rankings-reveal-buyer-health
+  - **UK Cyber Strategy (direct S3 PDF)** — https://stotles-public-assets.s3.eu-west-1.amazonaws.com/stotles_cyber_report.pdf
+  - **Digitising the NHS (direct S3 PDF)** — https://stotles-public-assets.s3.eu-west-1.amazonaws.com/stotles_ICS_report.pdf
+  - Stotles University (video tutorials)
+  - CPV codes finder tool
+  - Glossary
+- **Homepage Claims**: "Win public sector contracts & simplify government tendering" · "Generating public sector pipeline shouldn't be unpredictable" · "One public sector platform to create strategy, build pipeline, track tenders, win bids"
+
+#### GovSpend (Fedmine)
+- **CEO**: Nate Haskins (Jun 2023→) — https://www.linkedin.com/in/natehaskins/
+- **Founder / Chairman**: Jeff Rubenstein
+- **Exec**: Marc DiGeronimo — https://www.linkedin.com/in/marcdigeronimo/
+- **Company LinkedIn**: https://www.linkedin.com/company/govspendus | https://www.linkedin.com/company/fedmine-us
+- **Est. Revenue**: not broken out (likely $20M–$50M; 100+ employees)
+- **Funding / Ownership**: Trivest Partners (2021 PE acquisition); acquired Fedmine 2023
+- **HQ**: 5000 T-Rex Ave Ste 200, Boca Raton, FL
+- **Sales Process**: **Demo-gated** — "Request a Demo" + "Get Started"
+- **Lead Magnets**:
+  - Blog — https://govspend.com/blog
+  - Federal Budget FY 2027 analysis — https://govspend.com/blog/federal-budget-fy-2027-modest-shifts-no-major-disruptions-for-sled/
+  - FY 25 WOSB Share report — https://govspend.com/blog/fy-25-rising-federal-spend-declining-wosb-share/
+  - Airport Modernization opportunities — https://govspend.com/blog/airport-modernization-federal-atc-upgrades-signal-new-opportunities-for-vendors/
+  - SLED Financial Services Market Report — https://govspend.com/blog/market-report-the-latest-trends-in-sled-financial-services/
+  - State of Black American-Owned Businesses FY25 — https://govspend.com/blog/the-state-of-black-american-owned-businesses-in-fy25/
+  - SLED Cybersecurity Spending 2026 — https://govspend.com/blog/sled-cybersecurity-spending-in-2026-adapting-to-the-post-ms-isac-funding-era/
+  - Webinars library · Federal Learning Zone · Use Case Library · FAQ
+- **Homepage Claims**: "Your signal engine for public-sector growth" · "Ranked for relevance. Ready for action." · "Procurement intelligence for SLED and federal contractors"
+
+#### Pursuit (pursuit.us) — SLED-focused
+- **Co-Founder/CEO**: Mike Vichich — https://www.linkedin.com/in/mikevichich/
+- **Co-Founder/CTO**: Brandon Max — https://www.linkedin.com/in/brandonmax
+- **Company LinkedIn**: https://www.linkedin.com/company/pursuitus
+- **Employees**: <40
+- **HQ**: 112 S Main St Ste B, Ann Arbor, MI
+- **Sales Process**: **Demo-gated** — "Schedule Demo" + interactive tool "See 3 SLED Deals Your Team Is Missing"
+- **Lead Magnets**:
+  - Blog — https://www.pursuit.us/blog
+  - Case Studies — https://www.pursuit.us/case-studies (Revela, EM1)
+  - Podcast — https://www.pursuit.us/podcast
+  - RFP Go-no-go tool — https://www.pursuit.us/rfp-go-no-go
+  - Find Opportunities tool — https://www.pursuit.us/find-opportunities
+- **Homepage Claims**: "SLED Revenue. Delivered." · "Only platform that automatically finds SLED deals that convert into closed-won revenue" · "6–18 months earlier than RFPs · 110K+ SLED entities · 3x pipeline growth · 94% accuracy"
+
+---
+
+### 10.7 Cross-Cutting Findings (for CapturePilot positioning)
+
+| Finding | Implication for CapturePilot |
+|---|---|
+| **Lead-magnet depth leaders**: Stotles (30+ gated reports), SamSearch (14 interactive tools), GovTribe (7+ email courses + guides), CLEATUS (6 free interactive tools) | Our `/resources` hub is thin. Harvest their playbooks — see Appendix A below. |
+| **Pricing-transparency leaders**: HigherGov ($500–$5K public), Fed-Spend ($49–$199/mo public), GovTribe (tiers public), CLEATUS (tiers public) | Most enterprise/AI-native players are demo-gated. **Publishing prices is itself a differentiator** for SMB acquisition. |
+| **Most funded AI-natives**: GovDash $40M, Stotles $21.6M, Govly $13.1M, GovSignals $5.5M | GovDash is pulling away on revenue (~7-figure months). Sweetspot only $1.8M ARR despite YC + 12 staff. **The category has one clear leader, not a commoditized race**. |
+| **Bootstrapped-at-scale models**: HigherGov (2–10 people, transparent pricing, 8 thought-leadership pieces), EZGovOpps (15-yr-old, $6M rev), Federal Compass (20 people, 8K customers) | These are the unit-economics models CapturePilot should compare against. |
+| **Only S3-hosted PDFs** (ungated, harvestable): Stotles cyber_report + ICS_report (see URLs above) | Easy to analyze for positioning and design benchmarks. |
+| **Positioning whitespace**: Nobody leads with "deterministic scoring / explainable AI." Every AI-native has near-identical "AI for GovCon" hero | CapturePilot can own: *transparent rules-based scoring + consulting-hybrid*. |
+
+### Appendix A — Priority Lead-Magnet Harvest List (for download & analysis)
+
+**Immediate harvest (publicly downloadable, no gating):**
+1. Stotles UK Cyber Strategy PDF — https://stotles-public-assets.s3.eu-west-1.amazonaws.com/stotles_cyber_report.pdf
+2. Stotles Digitising the NHS PDF — https://stotles-public-assets.s3.eu-west-1.amazonaws.com/stotles_ICS_report.pdf
+3. BGOV200 Top Federal Contractors Report (annual) — https://about.bgov.com/resources/
+4. SamSearch Wrap Rate Calculator — https://samsearch.co/wrap-rate-calculator
+5. SamSearch NAICS AI Lookup — https://samsearch.co/naics-ai-lookup
+6. CLEATUS FAR Navigator — https://www.cleat.ai/free-govcon-tools/far-navigator
+7. CLEATUS GovCon Glossary (498 terms) — https://www.cleat.ai/free-govcon-tools/glossary
+8. Sweetspot ROI Calculator — https://www.sweetspot.so/roi-calculator/
+9. GovEagle ROI Calculator — https://www.goveagle.com/roi-calculator
+
+**Email-gated harvest (submit info@fillcart.de with disposable alias):**
+1. GovTribe "The 2026 Guide to $50M in Five Years" — https://resources.govtribe.com/fifty-in-five
+2. GovTribe GovCon Guide for Small Businesses — https://resources.govtribe.com/govtribe-small-business-guide-download
+3. GovTribe Teaming with Small Businesses (for primes) — https://resources.govtribe.com/govtribe-small-business-guide-primes
+4. HigherGov "Where to Find the 95% of Contract Opps Not in SAM"
+5. HigherGov "GSA Schedule Access Increasingly a Must-Have"
+6. HigherGov "8(a) Graduation: A Survival Guide"
+7. All 30 Stotles reports (UK-specific but template-worthy)
+8. Fed-Spend "Federal Spending Trackers Buyer's Guide" — https://fed-spend.com/blog/federal-spending-tracker-tools-compared
+9. GovWin "Clarity Government Contracting Industry Study" (annual)
+
+### Appendix B — LinkedIn Decision-Maker Target List
+
+Use for (a) cold outreach benchmarking / mutual-connection mapping, (b) competitive-hire research.
+
+| Segment | Person | Company | LinkedIn |
+|---|---|---|---|
+| AI-native, most funded | Sean Doherty, CEO | GovDash | https://www.linkedin.com/in/sean-m-doherty |
+| AI-native, bootstrapped | Justin Siken, Founder | HigherGov | https://www.linkedin.com/in/justin-siken-549a2773/ |
+| AI-native, YC | Sachin Subramanian, CEO | Sweetspot | https://www.linkedin.com/in/sachinsubramanian/ |
+| AI-native, FedRAMP-High | Derek Hoyt, CEO | GovSignals | https://www.linkedin.com/in/derekhoyt/ |
+| AI-native, transparent-pricing | Yigit Guney, CEO | CLEATUS | https://www.linkedin.com/in/yigit-guney-90a80314a/ |
+| Office-add-in niche | Akash Mandavilli, CEO | GovEagle | https://www.linkedin.com/in/akashmandavilli/ |
+| SMB AI-heavy | Humam Hawara, Co-Founder | SamSearch | https://www.linkedin.com/in/humam-hawara/ |
+| UK/international | John Witt, CEO | Stotles | https://www.linkedin.com/in/john-witt-mba/ |
+| Marketplace | Mike Weiland, CEO | Govly | https://www.linkedin.com/in/mikeweiland/ |
+| Marketplace | Raj Sharma, CEO | GovShop / PSF | https://www.linkedin.com/in/raj-sharma/ |
+| Enterprise intel | Deniece Peterson, Director of Federal Market Analysis | GovWin (Deltek) | https://www.linkedin.com/in/deniecepeterson/ |
+| Mid-market (acquired) | Nate Nash, EVP | GovTribe (GovExec) | https://www.linkedin.com/in/natenash/ |
+| Bootstrapped mid-market | Jamie Bratten, President | EZGovOpps | https://www.linkedin.com/in/ezgovopps/ |
+| Bootstrapped mid-market | Chad Ganske, CEO | Federal Compass | https://www.linkedin.com/in/chadganske/ |
+| SLED-focused | Mike Vichich, CEO | Pursuit | https://www.linkedin.com/in/mikevichich/ |
+| PE-backed SLED/fed | Nate Haskins, CEO | GovSpend | https://www.linkedin.com/in/natehaskins/ |
+
+---
+
 ## SOURCES
 
 - [GovWin IQ Federal Subscriptions](https://www.deltek.com/en/government-contracting/govwin/federal/subscriptions)
