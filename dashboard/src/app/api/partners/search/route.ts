@@ -76,7 +76,11 @@ export async function GET(req: NextRequest) {
         }
 
         const saMap: Record<string, string> = {
-            "8A": "2X", "SDVOSB": "QF", "WOSB": "A2", "HUBZONE": "27", "VOSB": "A5", "SDB": "XX",
+            // Short tokens from the UI → SAM Entity API sbaBusinessTypeCode.
+            // "TRIBAL" maps to "XW" (Tribally Owned Firm); ANC/NHO are separate
+            // codes (XS, XT) but we lean on XW as the most common umbrella.
+            "8A": "2X", "SDVOSB": "QF", "WOSB": "A2", "HUBZONE": "27",
+            "VOSB": "A5", "SDB": "XX", "TRIBAL": "XW",
         };
         const setAsideCode = setAside ? saMap[setAside.toUpperCase()] || "" : "";
 

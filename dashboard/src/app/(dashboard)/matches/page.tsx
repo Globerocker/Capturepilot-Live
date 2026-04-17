@@ -15,6 +15,7 @@ import { ListView } from "@/components/matches/ListView";
 import { AIFilterBar, type AIFilters } from "@/components/matches/AIFilterBar";
 import { BulkExportDialog } from "@/components/matches/BulkExportDialog";
 import SavedViews from "@/components/SavedViews";
+import { SET_ASIDE_OPTIONS, matchSetAside, setAsideBadgeTone } from "@/lib/set-aside-filters";
 
 const supabase = createSupabaseClient();
 
@@ -181,7 +182,7 @@ export default function MyMatchesPage() {
             filtered = filtered.filter(m => m.opportunities?.notice_type === filterNoticeType);
         }
         if (filterSetAside) {
-            filtered = filtered.filter(m => m.opportunities?.set_aside_code?.includes(filterSetAside));
+            filtered = filtered.filter(m => matchSetAside(m.opportunities?.set_aside_code, filterSetAside));
         }
         if (filterState) {
             filtered = filtered.filter(m => m.opportunities?.place_of_performance_state === filterState);
@@ -522,11 +523,9 @@ export default function MyMatchesPage() {
                         <p className="text-[10px] text-stone-500 uppercase mb-2">Set-Aside</p>
                         <select title="Set-Aside" className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black" value={filterSetAside} onChange={(e) => { setFilterSetAside(e.target.value); setPage(1); }}>
                             <option value="">All</option>
-                            <option value="SBA">Small Business</option>
-                            <option value="8A">8(a)</option>
-                            <option value="SDVOSB">SDVOSB</option>
-                            <option value="WOSB">WOSB</option>
-                            <option value="HUBZone">HUBZone</option>
+                            {SET_ASIDE_OPTIONS.map(o => (
+                                <option key={o.value} value={o.value}>{o.label}</option>
+                            ))}
                         </select>
                     </div>
                     <div className="flex-1 min-w-[100px]">
@@ -739,9 +738,19 @@ export default function MyMatchesPage() {
                                             )}>
                                                 {match.classification === "HOT" ? "Strong" : match.classification === "WARM" ? "Good" : "Possible"}
                                             </span>
-                                            {opp.set_aside_code && (
-                                                <span className="text-[9px] font-bold bg-blue-100 text-blue-600 border border-blue-200 px-2 py-0.5 rounded uppercase">{opp.set_aside_code}</span>
-                                            )}
+                                            {opp.set_aside_code && (() => {
+                                                const { tone } = setAsideBadgeTone(opp.set_aside_code);
+                                                const toneClass =
+                                                    tone === "violet" ? "bg-violet-100 text-violet-700 border-violet-200" :
+                                                    tone === "emerald" ? "bg-emerald-100 text-emerald-700 border-emerald-200" :
+                                                    tone === "amber" ? "bg-amber-100 text-amber-700 border-amber-200" :
+                                                    "bg-blue-100 text-blue-600 border-blue-200";
+                                                return (
+                                                    <span className={`text-[9px] font-bold border px-2 py-0.5 rounded uppercase ${toneClass}`}>
+                                                        {opp.set_aside_code}
+                                                    </span>
+                                                );
+                                            })()}
                                             {opp.notice_type && (
                                                 <span className={clsx("text-[9px] px-2 py-0.5 rounded border uppercase tracking-widest", getNoticeColor(opp.notice_type))}>
                                                     {opp.notice_type}

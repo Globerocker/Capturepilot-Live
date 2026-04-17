@@ -6,6 +6,7 @@ import { Activity, Target, Sparkles, ArrowRight, Loader2, Clock, Trophy, Search,
 import ServiceCTA from "@/components/ui/ServiceCTA";
 import { MarketIntelligence } from "@/components/MarketIntelligence";
 import { DashboardMarketCard } from "@/components/DashboardMarketCard";
+import { SpendRadarCard } from "@/components/SpendRadarCard";
 import { Skeleton, SkeletonKpiCard } from "@/components/ui/Skeleton";
 import clsx from "clsx";
 import Link from "next/link";
@@ -101,12 +102,13 @@ export default function UserDashboard() {
 
       const ACTIVE_STATUSES = ["ACTIVE", "EXPIRING_SOON", "MARKET_RESEARCH", "DISCOVERED"];
 
-      // Run all counts in parallel. Use !inner join + status/archive filters so counts
-      // match what the matches list actually displays (skipping orphaned/archived opps).
-      const [opsRes, hotRes, warmRes, urgentRes, topMatchRes] = await Promise.all([
-        // Total active opportunities
+      // Fire all 10 queries in a single parallel batch instead of two sequential Promise.all
+      // blocks — the second batch used to wait for counts to finish before starting.
+      const [
+        opsRes, hotRes, warmRes, urgentRes, topMatchRes,
+        pursuitRes, actionsRes, competitorRes, recentPipelineRes, recentActionsRes,
+      ] = await Promise.all([
         supabase.from("opportunities").select("*", { count: "exact", head: true }).eq("is_archived", false),
-        // HOT matches from user_matches
         profileId
           ? supabase.from("user_matches")
             .select("id, opportunities!inner(id)", { count: "exact", head: true })
@@ -116,7 +118,6 @@ export default function UserDashboard() {
             .eq("opportunities.is_archived", false)
             .in("opportunities.status", ACTIVE_STATUSES)
           : Promise.resolve({ count: 0 }),
-        // WARM matches
         profileId
           ? supabase.from("user_matches")
             .select("id, opportunities!inner(id)", { count: "exact", head: true })
@@ -126,12 +127,10 @@ export default function UserDashboard() {
             .eq("opportunities.is_archived", false)
             .in("opportunities.status", ACTIVE_STATUSES)
           : Promise.resolve({ count: 0 }),
-        // Urgent: deadlines in 7 days
         supabase.from("opportunities").select("*", { count: "exact", head: true })
           .eq("is_archived", false)
           .lte("response_deadline", new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString())
           .gte("response_deadline", today),
-        // Top matches from user_matches (joined with opportunities)
         profileId
           ? supabase.from("user_matches")
             .select("score, classification, opportunities!inner(id, title, agency, naics_code, notice_type, response_deadline, set_aside_code, status, is_archived)")
@@ -142,6 +141,32 @@ export default function UserDashboard() {
             .order("score", { ascending: false })
             .limit(8)
           : Promise.resolve({ data: [] }),
+        profileId
+          ? supabase.from("user_pursuits").select("stage").eq("user_profile_id", profileId)
+          : Promise.resolve({ data: [] }),
+        profileId
+          ? supabase.from("user_action_items").select("status, priority").eq("user_profile_id", profileId)
+          : Promise.resolve({ data: [] }),
+        profileId
+          ? supabase.from("client_competitors")
+            .select("*", { count: "exact", head: true })
+            .eq("user_profile_id", profileId)
+          : Promise.resolve({ count: 0 }),
+        profileId
+          ? supabase.from("user_pursuits")
+            .select("id, stage, opportunity_id, opportunities(id, title)")
+            .eq("user_profile_id", profileId)
+            .order("stage_changed_at", { ascending: false })
+            .limit(5)
+          : Promise.resolve({ data: [] }),
+        profileId
+          ? supabase.from("user_action_items")
+            .select("id, title, priority, opportunity_id")
+            .eq("user_profile_id", profileId)
+            .neq("status", "completed")
+            .order("priority", { ascending: false })
+            .limit(5)
+          : Promise.resolve({ data: [] }),
       ]);
 
       setOpsCount(opsRes.count || 0);
@@ -151,51 +176,28 @@ export default function UserDashboard() {
       setWarmMatchCount(warm);
       setTotalMatchCount(hot + warm);
       setUrgentCount(urgentRes.count || 0);
-      // Extract opportunity data from joined matches
       const topData = (topMatchRes.data || []) as unknown as Array<{ score: number; classification: string; opportunities: TopOpp }>;
       setTopOpps(topData.map(m => m.opportunities).filter(Boolean));
 
-      // Fetch pipeline, action items, competitors in parallel
-      if (profileId) {
-        const [pursuitRes, actionsRes, competitorRes, recentPipelineRes, recentActionsRes] = await Promise.all([
-          supabase.from("user_pursuits").select("stage").eq("user_profile_id", profileId),
-          supabase.from("user_action_items").select("status, priority").eq("user_profile_id", profileId),
-          supabase.from("client_competitors")
-            .select("*", { count: "exact", head: true })
-            .eq("user_profile_id", profileId),
-          supabase.from("user_pursuits")
-            .select("id, stage, opportunity_id, opportunities(id, title)")
-            .eq("user_profile_id", profileId)
-            .order("stage_changed_at", { ascending: false })
-            .limit(5),
-          supabase.from("user_action_items")
-            .select("id, title, priority, opportunity_id")
-            .eq("user_profile_id", profileId)
-            .neq("status", "completed")
-            .order("priority", { ascending: false })
-            .limit(5),
-        ]);
+      const pursuits = ((pursuitRes as { data: Array<{ stage: string }> | null }).data || []);
+      setPipelineCount(pursuits.length);
+      const stages: Record<string, number> = {};
+      pursuits.forEach(p => { stages[p.stage] = (stages[p.stage] || 0) + 1; });
+      setPipelineStages(stages);
 
-        const pursuits = (pursuitRes.data || []) as Array<{ stage: string }>;
-        setPipelineCount(pursuits.length);
-        const stages: Record<string, number> = {};
-        pursuits.forEach(p => { stages[p.stage] = (stages[p.stage] || 0) + 1; });
-        setPipelineStages(stages);
+      const actions = ((actionsRes as { data: Array<{ status: string; priority: string }> | null }).data || []);
+      setActionsPending(actions.filter(a => a.status !== "completed").length);
+      setActionsUrgent(actions.filter(a => a.priority === "high" && a.status !== "completed").length);
 
-        const actions = (actionsRes.data || []) as Array<{ status: string; priority: string }>;
-        setActionsPending(actions.filter(a => a.status !== "completed").length);
-        setActionsUrgent(actions.filter(a => a.priority === "high" && a.status !== "completed").length);
+      setCompetitorCount((competitorRes as { count: number | null }).count || 0);
 
-        setCompetitorCount((competitorRes as { count: number | null }).count || 0);
+      type RecentPursuit = { id: string; stage: string; opportunity_id: string; opportunities: { id: string; title: string } | null };
+      const recents = ((recentPipelineRes as { data: unknown[] | null }).data || []) as unknown as RecentPursuit[];
+      setRecentPipeline(recents.filter(r => r.opportunities).map(r => ({
+        id: r.id, stage: r.stage, title: r.opportunities!.title, opportunity_id: r.opportunity_id,
+      })));
 
-        type RecentPursuit = { id: string; stage: string; opportunity_id: string; opportunities: { id: string; title: string } | null };
-        const recents = (recentPipelineRes.data || []) as unknown as RecentPursuit[];
-        setRecentPipeline(recents.filter(r => r.opportunities).map(r => ({
-          id: r.id, stage: r.stage, title: r.opportunities!.title, opportunity_id: r.opportunity_id,
-        })));
-
-        setPendingActions((recentActionsRes.data || []) as Array<{ id: string; title: string; priority: string; opportunity_id: string }>);
-      }
+      setPendingActions(((recentActionsRes as { data: Array<{ id: string; title: string; priority: string; opportunity_id: string }> | null }).data || []));
 
       setLoading(false);
     }
@@ -280,6 +282,9 @@ export default function UserDashboard() {
           <DashboardMarketCard naicsCodes={profile.naics_codes} />
         </section>
       )}
+
+      {/* Year-End Spend Radar — Q4 unobligated-balance forecast, ranked by profile NAICS overlap */}
+      <SpendRadarCard />
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start mt-6">
         {/* LEFT COLUMN */}
         <div className="xl:col-span-8 flex flex-col gap-6">

@@ -5,10 +5,12 @@ import { useState, useEffect, useMemo, useRef, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { createSupabaseClient } from "@/lib/supabase/client";
-import { Users, Search, Loader2, Shield, Globe, MapPin, X, ChevronDown, Handshake, Plus, CheckCircle2 } from "lucide-react";
+import { Users, Search, Loader2, Shield, Globe, MapPin, X, ChevronDown, Handshake, Plus, CheckCircle2, Award } from "lucide-react";
 import clsx from "clsx";
 import { NAICS_CODES, searchNaics } from "@/lib/naics-codes";
 import { AwardCountBadge } from "@/components/AwardCountBadge";
+import { TribalPartnersPanel } from "@/components/TribalPartnersPanel";
+import { hasTribalMarker } from "@/lib/set-aside-filters";
 
 const supabase = createSupabaseClient();
 
@@ -56,6 +58,11 @@ function PartnersPageInner() {
     // The parameter filters the Saved Partners section (search results untouched).
     const statusFilter = (searchParams.get("status") as "active" | "potential" | null) || null;
     const [activeTab, setActiveTab] = useState<"search" | "saved">("search");
+    // Partner Search splits into two sources: live SAM.gov fan-out (existing) and
+    // the curated tribal_contractors directory seeded from SBA Certify. The toggle
+    // persists per-session only — we rebuild URL state off ?status= for deep links.
+    const [searchSource, setSearchSource] = useState<"sam" | "tribal">("sam");
+    const [profileNaics, setProfileNaics] = useState<string[]>([]);
     const [naicsCodes, setNaicsCodes] = useState<string[]>([]);
     const [states, setStates] = useState<string[]>([]);
     const [cert, setCert] = useState("");
@@ -78,27 +85,38 @@ function PartnersPageInner() {
 
     useEffect(() => { loadSaved(); }, []);
 
-    const savePartner = async (p: Partner, status: "active" | "potential") => {
-        setSavingUEI(p.uei);
+    // Shared save path. Both the SAM.gov cards and the Tribal Partners panel
+    // funnel through this so the savedUEIs set + toast flow stay consistent.
+    const savePartnerRaw = async (body: {
+        company_name: string;
+        website: string | null;
+        uei: string | null;
+        naics_codes: string[];
+        state: string | null;
+        certifications: string[];
+    }, status: "active" | "potential") => {
+        setSavingUEI(body.uei || body.company_name);
         const res = await fetch("/api/partners/save", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                company_name: p.company_name,
-                website: p.website || null,
-                uei: p.uei || null,
-                naics_codes: p.naics_codes || [],
-                state: p.state || null,
-                certifications: p.certifications || [],
-                status,
-            }),
+            body: JSON.stringify({ ...body, status }),
         });
         if (res.ok) {
-            if (p.uei) setSavedUEIs(prev => new Set(prev).add(p.uei));
+            if (body.uei) setSavedUEIs(prev => new Set(prev).add(body.uei!));
             loadSaved();
         }
         setSavingUEI(null);
     };
+
+    const savePartner = (p: Partner, status: "active" | "potential") =>
+        savePartnerRaw({
+            company_name: p.company_name,
+            website: p.website || null,
+            uei: p.uei || null,
+            naics_codes: p.naics_codes || [],
+            state: p.state || null,
+            certifications: p.certifications || [],
+        }, status);
 
     // NAICS picker
     const [naicsQuery, setNaicsQuery] = useState("");
@@ -120,7 +138,10 @@ function PartnersPageInner() {
                 .select("naics_codes, target_states, state")
                 .eq("auth_user_id", user.id)
                 .single();
-            if (data?.naics_codes?.length) setNaicsCodes(data.naics_codes.slice(0, 3));
+            if (data?.naics_codes?.length) {
+                setNaicsCodes(data.naics_codes.slice(0, 3));
+                setProfileNaics(data.naics_codes as string[]);
+            }
             if (data?.target_states?.length) setStates(data.target_states.slice(0, 5));
             else if (data?.state) setStates([data.state]);
         })();
@@ -222,6 +243,41 @@ function PartnersPageInner() {
 
             {/* Search Form — only visible in default Search view. */}
             {viewMode === "search" && (
+                <>
+            {/* Source toggle: live SAM.gov search vs. curated SBA-certified directory */}
+            <div className="inline-flex items-center bg-stone-100 border border-stone-200 rounded-xl p-1">
+                <button
+                    type="button"
+                    onClick={() => setSearchSource("sam")}
+                    className={clsx(
+                        "px-3 py-1.5 text-xs font-bold rounded-lg inline-flex items-center gap-1.5",
+                        searchSource === "sam" ? "bg-white text-black shadow-sm border border-stone-200" : "text-stone-500 hover:text-stone-700"
+                    )}
+                >
+                    <Globe className="w-3.5 h-3.5" /> SAM.gov Live
+                </button>
+                <button
+                    type="button"
+                    onClick={() => setSearchSource("tribal")}
+                    className={clsx(
+                        "px-3 py-1.5 text-xs font-bold rounded-lg inline-flex items-center gap-1.5",
+                        searchSource === "tribal" ? "bg-white text-black shadow-sm border border-stone-200" : "text-stone-500 hover:text-stone-700"
+                    )}
+                >
+                    <Award className="w-3.5 h-3.5 text-emerald-600" /> Certified Teaming <span className="text-[10px] font-medium text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-full ml-0.5">800+</span>
+                </button>
+            </div>
+
+            {searchSource === "tribal" && (
+                <TribalPartnersPanel
+                    profileNaics={profileNaics}
+                    savedUEIs={savedUEIs}
+                    savingUEI={savingUEI}
+                    onSave={savePartnerRaw}
+                />
+            )}
+
+            {searchSource === "sam" && (
                 <>
             {/* Search Form */}
             <div className="bg-white border border-stone-200 rounded-2xl p-5 space-y-4">
@@ -368,6 +424,7 @@ function PartnersPageInner() {
                             <option value="WOSB">WOSB (Women)</option>
                             <option value="HUBZONE">HUBZone</option>
                             <option value="VOSB">VOSB</option>
+                            <option value="TRIBAL">Tribal / Native-Owned</option>
                         </select>
                     </div>
 
@@ -427,6 +484,11 @@ function PartnersPageInner() {
                                     </div>
                                     {p.certifications.length > 0 && (
                                         <div className="flex gap-1 mt-2 flex-wrap">
+                                            {hasTribalMarker(p.certifications) && (
+                                                <span className="text-[9px] font-bold bg-violet-100 text-violet-700 border border-violet-200 px-2 py-0.5 rounded uppercase tracking-wide">
+                                                    Tribal / Native
+                                                </span>
+                                            )}
                                             {p.certifications.map((c, j) => (
                                                 <span key={j} className="text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded">{c}</span>
                                             ))}
@@ -471,6 +533,8 @@ function PartnersPageInner() {
                     ))}
                     </div>
                 </div>
+            )}
+                </>
             )}
                 </>
             )}

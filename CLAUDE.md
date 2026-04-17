@@ -2,7 +2,8 @@
 
 ## Stack
 - **Frontend**: Next.js 16.1.6 (Turbopack), React 19, Tailwind CSS 4, TypeScript 5
-- **Backend**: Supabase (Postgres), Vercel Serverless Functions
+- **Backend**: Supabase (Postgres), Vercel Serverless Functions (**Pro plan** — 40 cron limit, up to 300s maxDuration per route)
+- **Observability**: Vercel Speed Insights + Analytics wired into root layout (`@vercel/speed-insights`, `@vercel/analytics`)
 - **Python Tools**: SAM.gov ingestion, scoring, enrichment (in `/tools/`)
 - **APIs**: SAM.gov, USASpending, SBIR.gov, Apollo.io, Resend, OpenAI, Stripe
 
@@ -27,7 +28,7 @@ git push captiorpilot main && git push live main && git push globerocker main
 - SAM API key via `X-Api-Key` header (NOT URL params — `?api_key=` is deprecated and can cause rejections)
 - Apollo: use `mixed_companies/search` (free tier), NOT `mixed_people/search`
 - Never commit `.env`, `.env.local`, `.mcp.json`
-- When creating migrations, pick the next free number under `supabase/migrations/` (current latest: **034**)
+- When creating migrations, pick the next free number under `supabase/migrations/` (current latest: **041**)
 
 ## Architecture
 - `/dashboard/src/app/(public)/` — Public pages (login, signup, check, admin)
@@ -66,6 +67,20 @@ git push captiorpilot main && git push live main && git push globerocker main
 - `contractors` — 80K SAM.gov registered entities
 - `contacts` — 91K SAM.gov opportunity contacts
 - `naics_codes` / `psc_codes` — validation whitelists for ingestion
+
+## Recent major changes (2026-04-17 — teaming intelligence)
+
+**Three new tables via migrations 040 + 041**:
+
+- `tribal_contractors` — curated directory of ~800 SBA-certified 8(a)/HUBZone/tribal firms (seeded from `tools/data/tribal-list.csv` via `tools/24_ingest_tribal_contractors.mjs`). Indexed by UEI, NAICS array (GIN), certifications (GIN), state.
+- `prime_sblos` — Small Business Liaison Officer contacts at top-tier primes (BAE, Lockheed, Raytheon, GDIT, GE, Honeywell, Booz Allen, Leidos). Seeded in migration 041.
+- `agency_spend_forecast` — per-agency FY/period unobligated-balance forecast (10 rows FY2026 Q4 seeded in 041). Unique on (agency, fiscal_year, fiscal_period).
+
+**Partners page — "Certified Teaming" tab**: new source toggle above the SAM.gov search form that switches to the curated directory. Ranks by NAICS overlap with the caller's profile, lets users filter by cert (`8(a)`, `HUBZone`, `WOSB`, …) and save with the existing `savePartnerRaw` pipeline. Backed by `GET /api/partners/tribal`.
+
+**Dashboard — Year-End Spend Radar widget**: new indigo/amber gradient card rendered below `DashboardMarketCard`. Pulls from `agency_spend_forecast`, flags rows whose `hot_naics` overlap the user's profile with a prefix match, shows total unobligated $ + top-3 agencies first. Backed by `GET /api/spend-radar`.
+
+**Marketing site — Agency Pain Points resource**: `/resources/agency-pain-points` on `website/`. 8 pain-point cards, strengths-to-agencies matrix, 4-week action plan, structured-data (Article + FAQ + Breadcrumb JSON-LD). Added to `sitemap.ts`.
 
 ## Recent major changes (2026-04-16 — parallel agent sweep)
 

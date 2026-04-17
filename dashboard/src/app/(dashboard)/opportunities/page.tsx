@@ -13,6 +13,7 @@ import { estimateContractValue } from "@/utils/estimateValue";
 import { useResizableColumns } from "@/hooks/useResizableColumns";
 import { AIFilterBar, type AIFilters } from "@/components/matches/AIFilterBar";
 import SavedViews from "@/components/SavedViews";
+import { SET_ASIDE_OPTIONS, buildIlikeFilter, setAsideBadgeTone } from "@/lib/set-aside-filters";
 
 // Default pixel widths for the Opportunities list-view columns.
 // Stored per-profile under `opportunities:colwidths:${profileId}` in localStorage.
@@ -222,7 +223,12 @@ export default function OpportunitiesPage() {
                 query = query.eq("place_of_performance_state", filterState);
             }
             if (filterSetAside) {
-                query = query.ilike("set_aside_code", `%${filterSetAside}%`);
+                const orExpr = buildIlikeFilter(filterSetAside);
+                if (orExpr) {
+                    query = query.or(orExpr);
+                } else {
+                    query = query.ilike("set_aside_code", `%${filterSetAside}%`);
+                }
             }
 
             // Sorting via column headers
@@ -499,11 +505,9 @@ export default function OpportunitiesPage() {
                                     onChange={(e) => { setFilterSetAside(e.target.value); setPage(1); }}
                                 >
                                     <option value="">All</option>
-                                    <option value="SBA">Small Business (SBA)</option>
-                                    <option value="8A">8(a)</option>
-                                    <option value="SDVOSB">SDVOSB</option>
-                                    <option value="WOSB">WOSB</option>
-                                    <option value="HUBZone">HUBZone</option>
+                                    {SET_ASIDE_OPTIONS.map(o => (
+                                        <option key={o.value} value={o.value}>{o.label}</option>
+                                    ))}
                                 </select>
                             </div>
                             {(filterAgency || filterType || filterNaics || filterState || filterSetAside) && (
@@ -847,6 +851,20 @@ export default function OpportunitiesPage() {
                                 <p className="font-bold text-xs pt-0.5">
                                     {selectedOpportunity.set_aside_code || selectedOpportunity.set_asides?.code || "Unrestricted"}
                                 </p>
+                                {(() => {
+                                    const { tone, label } = setAsideBadgeTone(selectedOpportunity.set_aside_code);
+                                    if (!label) return null;
+                                    const toneClass =
+                                        tone === "violet" ? "bg-violet-100 text-violet-700 border-violet-200" :
+                                        tone === "emerald" ? "bg-emerald-100 text-emerald-700 border-emerald-200" :
+                                        tone === "amber" ? "bg-amber-100 text-amber-700 border-amber-200" :
+                                        "bg-blue-100 text-blue-700 border-blue-200";
+                                    return (
+                                        <span className={`mt-1.5 inline-flex items-center gap-1 text-[9px] font-bold border px-2 py-0.5 rounded uppercase ${toneClass}`}>
+                                            {label}
+                                        </span>
+                                    );
+                                })()}
                             </div>
                             <div className="bg-stone-50 border border-stone-200 p-3 rounded-xl border-l-4 border-l-stone-800">
                                 <p className="text-[10px] text-stone-400 uppercase tracking-widest mb-1">Deadline</p>
