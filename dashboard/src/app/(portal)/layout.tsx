@@ -11,6 +11,7 @@ import {
     MessageSquare,
 } from "lucide-react";
 import clsx from "clsx";
+import ImpersonationBanner from "@/components/ImpersonationBanner";
 
 const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -195,6 +196,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
 
             {/* Main Content */}
             <main className="flex-1 flex flex-col overflow-auto dot-grid-bg">
+                <ImpersonationBanner />
                 <div className="bg-emerald-600 text-white text-center py-2 px-4 text-xs font-medium flex-shrink-0">
                     Public Beta — All features unlocked free until May 9, 2026
                 </div>

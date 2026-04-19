@@ -1,0 +1,39 @@
+name: Release Notes Auto-Capture
+
+# Parses every new commit on main and upserts a release_notes row when the
+# subject line follows conventional-commit syntax with a user-visible type:
+#   feat(...): ...       → category=feature
+#   feat: ...            → category=feature
+#   perf(...): ...       → category=performance
+#   perf: ...            → category=performance
+#   integration(...): …  → category=integration
+#   fix(...): …          → category=fix (only if message includes "[release]" tag or is a notable fix)
+#
+# Highlights are extracted from the commit body — lines that start with "- "
+# become bullet points on the release-notes page. The summary is the second
+# paragraph of the body, or the subject if no body.
+#
+# Secrets needed:
+#   SUPABASE_URL           — NEXT_PUBLIC_SUPABASE_URL value
+#   SUPABASE_SERVICE_KEY   — service-role key (write access to release_notes)
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    if: github.repository_owner == 'Globerocker'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 50 # enough to read the commits in this push
+
+      - name: Parse commits + upsert release notes
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.event.after }}
+        run: node tools/changelog/capture-release-notes.mjs

@@ -196,6 +196,23 @@ export default function AdminClientsPage() {
                                 <div className="flex items-center gap-3 text-xs text-stone-500">
                                     <span className="inline-flex items-center gap-1"><ListTodo className="w-3.5 h-3.5" /> {client.pending_tasks} tasks</span>
                                     <span className="inline-flex items-center gap-1"><FileText className="w-3.5 h-3.5" /> {client.document_count} docs</span>
+                                    <button
+                                        type="button"
+                                        title="View portal as this client (30-min impersonation)"
+                                        onClick={async (e) => {
+                                            e.stopPropagation();
+                                            const res = await fetch("/api/admin/impersonate", {
+                                                method: "POST",
+                                                headers: { "Content-Type": "application/json" },
+                                                body: JSON.stringify({ user_profile_id: client.id }),
+                                            });
+                                            if (res.ok) window.location.href = "/portal";
+                                            else alert("Impersonation failed");
+                                        }}
+                                        className="inline-flex items-center gap-1 bg-stone-900 text-white text-[10px] font-bold px-2 py-1 rounded-full hover:bg-stone-700"
+                                    >
+                                        View as →
+                                    </button>
                                 </div>
                                 <ChevronDown className={clsx("w-4 h-4 text-stone-400 transition-transform cursor-pointer", expandedId === client.id && "rotate-180")} onClick={() => setExpandedId(expandedId === client.id ? null : client.id)} />
                             </div>

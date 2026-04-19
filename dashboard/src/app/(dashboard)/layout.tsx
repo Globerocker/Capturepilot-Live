@@ -5,6 +5,7 @@ import FeedbackWidget from "@/components/FeedbackWidget";
 import GlobalToast from "@/components/GlobalToast";
 import SupportChat from "@/components/SupportChat";
 import RunningJobsIndicator from "@/components/proposals/RunningJobsIndicator";
+import ImpersonationBanner from "@/components/ImpersonationBanner";
 // import { ReviewPrompt } from "@/components/ReviewPrompt"; // Disabled until Google Business Profile is set up
 
 export default function DashboardLayout({
@@ -18,6 +19,7 @@ export default function DashboardLayout({
         <Sidebar />
       </Suspense>
       <main className="flex-1 flex flex-col overflow-hidden lg:pl-2 pt-14 lg:pt-0">
+        <ImpersonationBanner />
         <div className="bg-emerald-600 text-white text-center py-2 px-4 text-xs font-medium">
           Public Beta — All features unlocked free until May 9, 2026. Give feedback to lock in $149/mo pricing (25% off forever).
         </div>
