@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
 import { callLLMJson } from "@/lib/llm/deepseek";
+import { fireWebhookEvent } from "@/lib/webhooks";
 
 export const maxDuration = 120;
 
@@ -187,6 +188,13 @@ export async function POST(req: NextRequest) {
         pwin_estimate: pwin,
         model_used: modelUsed,
     });
+
+    fireWebhookEvent(userProfileId, "capture_brief.generated", {
+        notice_id: noticeId,
+        opportunity_id: opportunityId,
+        pwin,
+        recommendation: brief.bid_no_bid_recommendation,
+    }).catch(() => { /* logged to webhook_deliveries */ });
 
     return NextResponse.json({
         brief,

@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { scoreOpportunity, type ProfileForScoring, type OpportunityForScoring, type KeywordEntry } from "@/lib/match-scoring";
+import { fireWebhookEvent } from "@/lib/webhooks";
 
 // Persist all matches with score above MIN_MATCH_SCORE. No hard cap.
 // Previous behavior capped at top 500, which hid ~99% of ~54k opportunities from users.
@@ -132,6 +133,19 @@ export async function POST() {
     const hot = top.filter(m => m.classification === "HOT").length;
     const warm = top.filter(m => m.classification === "WARM").length;
     const cold = top.filter(m => m.classification === "COLD").length;
+
+    // Fire webhook: one "match.hot" event with the top 10 HOT matches for
+    // this refresh. Subscribers get the list + score so they can Zap them.
+    if (hot > 0) {
+        const topHot = top.filter(m => m.classification === "HOT").slice(0, 10);
+        fireWebhookEvent(p.id as string, "match.hot", {
+            total_hot: hot,
+            matches: topHot.map(m => ({
+                opportunity_id: m.opportunity_id,
+                score: m.score,
+            })),
+        }).catch(() => { /* logged in webhook_deliveries */ });
+    }
 
     return NextResponse.json({
         success: true,

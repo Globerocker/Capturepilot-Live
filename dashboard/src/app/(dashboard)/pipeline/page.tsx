@@ -20,6 +20,7 @@ import {
     parseStagesFromNotes,
 } from "@/lib/pipeline-stages";
 import { logPipelineActivity } from "@/lib/pipeline-activity";
+import { dispatchEvent } from "@/lib/events-client";
 
 const supabase = createSupabaseClient();
 
@@ -164,6 +165,12 @@ export default function PipelinePage() {
                 fromValue: prev,
                 toValue: newStage,
             });
+            dispatchEvent("pursuit.stage_changed", {
+                pursuit_id: pursuit.id,
+                opportunity_id: pursuit.opportunity_id,
+                from_stage: prev,
+                to_stage: newStage,
+            });
         }
     };
 
@@ -201,6 +208,13 @@ export default function PipelinePage() {
                     activityType: "created",
                     toValue: "discovered",
                     description: `Created custom deal: ${customDeal.title.trim()}`,
+                });
+                dispatchEvent("pursuit.added", {
+                    pursuit_id: newPursuit.id,
+                    opportunity_id: opp.id,
+                    title: customDeal.title.trim(),
+                    stage: "discovered",
+                    custom_deal: true,
                 });
             }
 

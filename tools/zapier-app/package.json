@@ -1,0 +1,23 @@
+{
+    "name": "capturepilot-zapier",
+    "version": "1.0.0",
+    "description": "CapturePilot integration for Zapier — federal contracting triggers + actions.",
+    "main": "index.js",
+    "scripts": {
+        "test": "jest --testPathPattern=test",
+        "validate": "zapier validate",
+        "push": "zapier push",
+        "logs": "zapier logs --type=error",
+        "promote": "zapier promote"
+    },
+    "engines": {
+        "node": ">=18.0.0"
+    },
+    "dependencies": {
+        "zapier-platform-core": "^17.0.0"
+    },
+    "devDependencies": {
+        "zapier-platform-cli": "^17.0.0"
+    },
+    "private": true
+}
