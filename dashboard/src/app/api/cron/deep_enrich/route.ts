@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { extractFromUrl, isMistralConfigured } from "@/lib/llm/mistral-ocr";
 
 export const maxDuration = 300;
 
@@ -86,6 +87,10 @@ export async function GET(req: NextRequest) {
             }
 
             // ─── Step 2: Download + parse PDF attachments ───
+            // PRIMARY path: Mistral OCR (when MISTRAL_API_KEY is set). Produces
+            // clean Markdown with preserved layout + tables. Far better than the
+            // regex fallback for dense solicitations.
+            // FALLBACK: regex-based text extraction from raw PDF bytes.
             const links = (opp.resource_links || []) as string[];
             for (const link of links.slice(0, 3)) { // max 3 attachments per opp
                 if (Date.now() - startTime > 240_000) break;
@@ -94,6 +99,21 @@ export async function GET(req: NextRequest) {
                 // Only process PDF/DOCX links
                 const isPdf = link.toLowerCase().includes(".pdf") || link.includes("download");
                 if (!isPdf) continue;
+
+                // ─ Mistral OCR primary path ─
+                if (isMistralConfigured()) {
+                    try {
+                        const ocr = await extractFromUrl(link);
+                        if (ocr.full_markdown && ocr.full_markdown.length > 200) {
+                            fullText += ocr.full_markdown.slice(0, 20000) + " ";
+                            stats.attachments++;
+                            continue; // skip the regex fallback when OCR succeeded
+                        }
+                    } catch {
+                        // Fall through to regex path
+                        stats.errors++;
+                    }
+                }
 
                 try {
                     const attRes = await fetch(link, {
@@ -116,25 +136,19 @@ export async function GET(req: NextRequest) {
                             upsert: true,
                         });
 
-                        // Extract text from PDF using simple regex on raw bytes
-                        // This is a lightweight extraction — gets text streams from PDF
+                        // Regex-based fallback PDF text extraction
                         const rawText = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
                         const textChunks: string[] = [];
-
-                        // Extract text between BT/ET markers (PDF text objects)
                         const btEtRegex = /BT\s*([\s\S]*?)\s*ET/g;
                         let match;
                         while ((match = btEtRegex.exec(rawText)) !== null) {
                             const chunk = match[1];
-                            // Extract text from Tj and TJ operators
                             const tjRegex = /\(([^)]*)\)\s*Tj/g;
                             let tjMatch;
                             while ((tjMatch = tjRegex.exec(chunk)) !== null) {
                                 textChunks.push(tjMatch[1]);
                             }
                         }
-
-                        // Also try extracting readable ASCII strings
                         const asciiRegex = /[\x20-\x7E]{20,}/g;
                         let asciiMatch;
                         while ((asciiMatch = asciiRegex.exec(rawText)) !== null) {

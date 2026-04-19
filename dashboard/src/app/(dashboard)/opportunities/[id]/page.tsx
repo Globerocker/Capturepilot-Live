@@ -12,6 +12,9 @@ import OpportunityAttachments from "@/components/OpportunityAttachments";
 import StructuredRequirements from "@/components/StructuredRequirements";
 import { MarketIntelligence } from "@/components/MarketIntelligence";
 import { HistoricalWinners } from "@/components/HistoricalWinners";
+import ComplianceMatrixPanel from "@/components/opportunity/ComplianceMatrixPanel";
+import CapabilityMatrixPanel from "@/components/opportunity/CapabilityMatrixPanel";
+import VoiceBriefButton from "@/components/opportunity/VoiceBriefButton";
 import { estimateContractValue } from "@/utils/estimateValue";
 
 export const dynamic = 'force-dynamic';
@@ -473,6 +476,13 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                             </div>
                         </div>
                     )}
+
+                    {/* AI Capture tools — capability fit + compliance matrix + voice brief */}
+                    <div className="grid md:grid-cols-2 gap-4">
+                        <CapabilityMatrixPanel noticeId={opp.notice_id} />
+                        <ComplianceMatrixPanel noticeId={opp.notice_id} />
+                    </div>
+                    <VoiceBriefButton noticeId={opp.notice_id} title={opp.title} />
 
                     {/* 2. STRUCTURED REQUIREMENTS - auto-extracted from description */}
                     <StructuredRequirements dbRequirements={reqs} noticeId={opp.notice_id} />

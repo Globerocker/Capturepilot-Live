@@ -13,7 +13,9 @@ import {
     Webhook,
     AlertTriangle,
     CheckCircle2,
+    Slack,
 } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import clsx from "clsx";
 
 interface ApiToken {
@@ -54,6 +56,8 @@ export default function IntegrationsPage() {
     const [creatingToken, setCreatingToken] = useState(false);
     const [addingHook, setAddingHook] = useState(false);
     const [hookForm, setHookForm] = useState({ url: "", events: ["pursuit.added"] });
+    const searchParams = useSearchParams();
+    const slackStatus = searchParams?.get("slack");
 
     async function refresh() {
         setLoading(true);
@@ -270,6 +274,46 @@ export default function IntegrationsPage() {
                     </button>
                 </div>
                 <TokenList tokens={apiTokens} loading={loading} onRevoke={revokeToken} emptyHint="No API tokens yet." />
+            </section>
+
+            {/* ───────── Slack Section ───────── */}
+            <section className="bg-white rounded-2xl border border-stone-200 p-6 mb-6">
+                <div className="flex items-start justify-between mb-4 gap-3">
+                    <div>
+                        <h2 className="text-lg font-bold text-stone-900 flex items-center gap-2">
+                            <Slack className="w-5 h-5 text-purple-600" />
+                            Slack
+                        </h2>
+                        <p className="text-sm text-stone-500 mt-1 leading-relaxed">
+                            Install the CapturePilot Slack app in your workspace. Ask{" "}
+                            <code className="text-xs bg-stone-100 rounded px-1 py-0.5">/capturepilot hot</code>,{" "}
+                            <code className="text-xs bg-stone-100 rounded px-1 py-0.5">/capturepilot recompetes</code>, or{" "}
+                            <code className="text-xs bg-stone-100 rounded px-1 py-0.5">/capturepilot &lt;keyword&gt;</code>{" "}
+                            to query federal contracts straight from Slack.
+                        </p>
+                    </div>
+                    <a
+                        href="/api/slack/install"
+                        className="bg-purple-600 text-white px-4 py-2 rounded-full text-xs font-bold hover:bg-purple-700 inline-flex items-center gap-1.5 flex-shrink-0 whitespace-nowrap"
+                    >
+                        <Slack className="w-3 h-3" />
+                        Add to Slack
+                    </a>
+                </div>
+                {slackStatus === "installed" && (
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-xs text-emerald-800 flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4" />
+                        Slack app installed. Try <code className="bg-white/50 rounded px-1">/capturepilot hot</code> in any
+                        channel to test.
+                    </div>
+                )}
+                {slackStatus === "error" && (
+                    <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-xs text-red-800 flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4" />
+                        Slack install failed. Make sure <code className="bg-white/50 rounded px-1">SLACK_CLIENT_ID</code>{" "}
+                        and <code className="bg-white/50 rounded px-1">SLACK_CLIENT_SECRET</code> are set in Vercel.
+                    </div>
+                )}
             </section>
 
             {/* ───────── Webhooks Section ───────── */}

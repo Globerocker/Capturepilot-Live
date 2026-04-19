@@ -45,14 +45,49 @@ function admin() {
     );
 }
 
-async function handleQuery(query: string): Promise<string> {
+async function resolveWorkspaceUser(teamId: string | null): Promise<string | null> {
+    if (!teamId) return null;
+    const { data } = await admin()
+        .from("slack_installations")
+        .select("user_profile_id")
+        .eq("team_id", teamId)
+        .is("uninstalled_at", null)
+        .maybeSingle();
+    return (data?.user_profile_id as string | null) || null;
+}
+
+async function handleQuery(query: string, teamId: string | null): Promise<string> {
     const q = query.trim().toLowerCase();
     const db = admin();
+    const userProfileId = await resolveWorkspaceUser(teamId);
 
-    // "/capturepilot hot" → top HOT matches from any user tied to this workspace
-    // For MVP we surface the most-recent HOT classifications globally — ties to
-    // a specific user come with the OAuth install flow in a later iteration.
+    // If we know which CapturePilot account owns this workspace, surface
+    // THEIR HOT matches. Otherwise fall back to the generic active list.
     if (q === "hot" || q === "matches") {
+        if (userProfileId) {
+            const { data } = await db
+                .from("user_matches")
+                .select("score, opportunities!inner(title, department, response_deadline, award_amount)")
+                .eq("user_profile_id", userProfileId)
+                .eq("classification", "HOT")
+                .eq("is_dismissed", false)
+                .order("score", { ascending: false })
+                .limit(5);
+            if (data?.length) {
+                return (
+                    `*Your top ${data.length} HOT matches:*\n` +
+                    data
+                        .map((m, i) => {
+                            const raw = (m as Record<string, unknown>).opportunities;
+                            const o = (Array.isArray(raw) ? raw[0] : raw) as
+                                | { title?: string; department?: string; response_deadline?: string }
+                                | undefined;
+                            return `*${i + 1}. ${o?.title || "?"}* — ${o?.department || "Agency"} · due ${String(o?.response_deadline || "—").slice(0, 10)} · score ${Math.round((m.score as number) * 100)}`;
+                        })
+                        .join("\n")
+                );
+            }
+        }
         const { data } = await db
             .from("opportunities")
             .select("title, department, response_deadline, award_amount")
@@ -121,11 +156,10 @@ export async function POST(req: NextRequest) {
 
         if (body.type === "event_callback") {
             const event = body.event || {};
+            const teamId = (body.team_id as string | undefined) || null;
             if (event.type === "app_mention") {
-                // Echo a short acknowledgement; a richer reply would require
-                // chat.postMessage with a Slack bot token (installed workspace).
                 const text = String(event.text || "").replace(/<@[A-Z0-9]+>/g, "").trim();
-                const reply = await handleQuery(text);
+                const reply = await handleQuery(text, teamId);
                 return NextResponse.json({ text: reply });
             }
         }
@@ -138,8 +172,9 @@ export async function POST(req: NextRequest) {
         const params = new URLSearchParams(rawBody);
         const command = params.get("command") || "";
         const text = params.get("text") || "";
+        const teamId = params.get("team_id");
         if (command === "/capturepilot") {
-            const response = await handleQuery(text);
+            const response = await handleQuery(text, teamId);
             return NextResponse.json({
                 response_type: "ephemeral",
                 text: response,

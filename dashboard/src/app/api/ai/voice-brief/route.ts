@@ -51,12 +51,16 @@ export async function POST(req: NextRequest) {
 
     // ── Step 1: Get user text ──
     let userText = "";
+    let hintNoticeId: string | null = null;
     if (contentType.includes("application/json")) {
         const body = await req.json().catch(() => ({}));
         userText = String(body.text || "").trim();
+        hintNoticeId = typeof body.hint_notice_id === "string" ? body.hint_notice_id : null;
     } else if (contentType.includes("multipart/form-data")) {
         const form = await req.formData();
         const audioBlob = form.get("audio");
+        const hint = form.get("hint_notice_id");
+        if (typeof hint === "string") hintNoticeId = hint;
         if (!(audioBlob instanceof Blob)) {
             return NextResponse.json({ error: "audio field required" }, { status: 400 });
         }
@@ -83,9 +87,13 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Step 2: Resolve opportunity reference ──
-    // Look for a notice_id pattern, else hit the /api/mcp-style search under the hood.
-    const noticeMatch = userText.match(/\b[A-Z0-9]{8,}(?:-[A-Z0-9]+)*\b/);
-    let noticeId: string | null = noticeMatch ? noticeMatch[0] : null;
+    // Prefer hint from the calling page (e.g. opportunity detail), then look
+    // for a notice_id pattern in the transcript, then keyword-search.
+    let noticeId: string | null = hintNoticeId;
+    if (!noticeId) {
+        const noticeMatch = userText.match(/\b[A-Z0-9]{8,}(?:-[A-Z0-9]+)*\b/);
+        noticeId = noticeMatch ? noticeMatch[0] : null;
+    }
 
     if (!noticeId) {
         // Fallback: pick the top matching active opportunity by keyword
