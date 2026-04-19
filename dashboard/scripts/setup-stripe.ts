@@ -131,6 +131,16 @@ async function main() {
     // 5. Customer-facing promo code
     await findOrCreatePromoCode(betaCoupon.id, "BETA25");
 
+    // 6. Veteran-owned business discount — 20% off forever
+    const veteranCoupon = await findOrCreateCoupon(
+        "VETERAN20_FOREVER",
+        20,
+        "Veteran-Owned Business Discount (20% off forever)",
+    );
+
+    // 7. Customer-facing promo code (for manual entry; auto-applied in checkout for verified vets)
+    await findOrCreatePromoCode(veteranCoupon.id, "VETERAN20");
+
     console.log("\n" + "─".repeat(60));
     console.log("ENV VARS — paste these into Vercel (Test scope first):");
     console.log("─".repeat(60));
@@ -138,9 +148,12 @@ async function main() {
     console.log(`STRIPE_PRICE_YEARLY=${proYearly.id}`);
     console.log(`STRIPE_BETA_COUPON_ID=${betaCoupon.id}`);
     console.log(`STRIPE_BETA_PROMO_CODE=BETA25`);
+    console.log(`STRIPE_VETERAN_COUPON_ID=${veteranCoupon.id}`);
+    console.log(`STRIPE_VETERAN_PROMO_CODE=VETERAN20`);
     console.log("─".repeat(60));
     console.log("\nDone. Test the checkout flow with card 4242 4242 4242 4242.");
-    console.log("Apply promo BETA25 at checkout to verify the 25% discount.\n");
+    console.log("Apply promo BETA25 at checkout to verify the 25% beta discount.");
+    console.log("Verified veterans get 20% off auto-applied (no promo code needed).\n");
 }
 
 main().catch((e) => {

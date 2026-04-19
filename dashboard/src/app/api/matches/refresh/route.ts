@@ -32,7 +32,7 @@ export async function POST() {
         .from("user_profiles")
         .select("id, naics_codes, sba_certifications, state, target_states, revenue, " +
             "federal_awards_count, target_psc_codes, preferred_agencies, " +
-            "primary_keywords, secondary_keywords")
+            "primary_keywords, secondary_keywords, is_veteran_owned, veteran_cert_type")
         .eq("auth_user_id", user.id)
         .single();
 
@@ -70,6 +70,8 @@ export async function POST() {
         preferred_agencies: (p.preferred_agencies as string[]) || [],
         primary_keywords: toEntries(primaryKw),
         secondary_keywords: toEntries(secondaryKw),
+        is_veteran_owned: p.is_veteran_owned === true,
+        veteran_cert_type: (p.veteran_cert_type as string | null) || null,
     };
 
     // Load active opportunities (paginate). We fetch title/description/

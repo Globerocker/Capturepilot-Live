@@ -119,6 +119,69 @@ export function scoreCertBonus(userCerts: string[], oppSetAside: string | null):
     return 0.3;
 }
 
+/**
+ * Veteran-owned scoring boost.
+ * For veteran-owned firms (SDVOSB / VOSB), strongly surface:
+ *   - SDVOSB / VOSB set-asides  (+15 pts, up to 1.0)
+ *   - VA agency opportunities   (+10 pts)
+ *   - Service-disabled mentions in title/description (+5 pts)
+ *
+ * Returned value is in [0, 1]. Combined with the existing 140-pt scoring
+ * model via a multiplicative bump (see applyVeteranBoost below).
+ */
+export function scoreVeteranFit(
+    isVeteran: boolean,
+    veteranCertType: string | null,
+    opp: {
+        typeOfSetAside?: string | null;
+        typeOfSetAsideDescription?: string | null;
+        department?: string | null;
+        agency?: string | null;
+        title?: string | null;
+        description?: string | null;
+    }
+): number {
+    if (!isVeteran) return 0;
+
+    const setAside = String(opp.typeOfSetAside || opp.typeOfSetAsideDescription || "").toLowerCase();
+    const agency = String(opp.department || opp.agency || "").toLowerCase();
+    const title = String(opp.title || "").toLowerCase();
+    const desc = String(opp.description || "").toLowerCase();
+    const cert = (veteranCertType || "").toUpperCase();
+
+    let score = 0;
+
+    // Set-aside exclusivity
+    if (setAside.includes("sdvosb") || setAside.includes("service-disabled")) {
+        score += cert === "SDVOSB" ? 1.0 : 0.6;
+    } else if (setAside.includes("vosb") || setAside.includes("veteran-owned")) {
+        score += 0.7;
+    }
+
+    // VA agency bump (VA is the #1 SDVOSB buyer)
+    if (agency.includes("veterans affairs") || agency.includes("department of veterans")) {
+        score += 0.35;
+    }
+
+    // Title/desc mentions
+    if (title.includes("veteran") || desc.includes("veteran-owned")) {
+        score += 0.1;
+    }
+
+    return Math.min(1, score);
+}
+
+/**
+ * Apply veteran boost to a base score.
+ * Multiplicative: veteran_fit of 1.0 multiplies final score by 1.15 (15% bump),
+ * clamped to 1.0. So a WARM match (0.55) for a veteran on an SDVOSB set-aside
+ * becomes a HOT match (0.55 * 1.15 = 0.63), while a non-matching COLD stays COLD.
+ */
+export function applyVeteranBoost(baseScore: number, veteranFit: number): number {
+    const bump = 1 + veteranFit * 0.15;
+    return Math.min(1, baseScore * bump);
+}
+
 // ------------------------------------------------------------
 // Keyword matching (gov_keywords library)
 // ------------------------------------------------------------
@@ -215,6 +278,11 @@ export interface ProfileForScoring {
     // NAICS/keyword weight shift. Expanded with aliases from gov_keywords.
     primary_keywords?: KeywordEntry[];
     secondary_keywords?: KeywordEntry[];
+    // Veteran-owned bump — when true, opportunities with SDVOSB/VOSB set-asides
+    // or VA-agency sourcing get a multiplicative 0-15% score boost. Driven by
+    // user_profiles.is_veteran_owned + veteran_cert_type.
+    is_veteran_owned?: boolean;
+    veteran_cert_type?: string | null;
 }
 
 export interface OpportunityForScoring {
@@ -231,6 +299,10 @@ export interface OpportunityForScoring {
     title?: string | null;
     description?: string | null;
     structured_requirements?: unknown;
+    // Optional — used by scoreVeteranFit for veteran-owned profiles
+    department?: string | null;
+    typeOfSetAside?: string | null;
+    typeOfSetAsideDescription?: string | null;
 }
 
 export interface ScoredMatch {
@@ -355,6 +427,24 @@ export function scoreOpportunity(
     let total = base + naicsContribution + kwContribution;
     if (total > 1.0) total = 1.0;   // cap — keyword bonus can push over nominal max
 
+    // Veteran boost — multiplicative 0-15% bump for SDVOSB/VOSB profiles on
+    // veteran-relevant opportunities (set-aside match + VA agency + mentions).
+    const vetFit = scoreVeteranFit(
+        profile.is_veteran_owned === true,
+        profile.veteran_cert_type || null,
+        {
+            typeOfSetAside: opp.typeOfSetAside || opp.set_aside_code,
+            typeOfSetAsideDescription: opp.typeOfSetAsideDescription,
+            department: opp.department || opp.agency,
+            agency: opp.agency,
+            title: opp.title,
+            description: opp.description,
+        }
+    );
+    if (vetFit > 0) {
+        total = applyVeteranBoost(total, vetFit);
+    }
+
     if (total < 0.30) return null;
 
     const breakdown: Record<string, number> = {
@@ -372,6 +462,9 @@ export function scoreOpportunity(
     if (hasKeywords) {
         breakdown.keywords = Math.round(kwCombined * 100) / 100;
         breakdown.keyword_weight_shift = Math.round(kwEff * 100) / 100;
+    }
+    if (vetFit > 0) {
+        breakdown.veteran_boost = Math.round(vetFit * 100) / 100;
     }
 
     const result: ScoredMatch = {

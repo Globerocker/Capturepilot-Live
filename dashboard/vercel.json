@@ -74,6 +74,30 @@
         {
             "path": "/api/cron/discover_new_prospects",
             "schedule": "30 5 * * *"
+        },
+        {
+            "path": "/api/cron/ingest_dod_daily",
+            "schedule": "0 22 * * 1-5"
+        },
+        {
+            "path": "/api/cron/ingest_gao_protests",
+            "schedule": "30 10 * * *"
+        },
+        {
+            "path": "/api/cron/ingest_calc",
+            "schedule": "30 4 * * 0"
+        },
+        {
+            "path": "/api/cron/ingest_federal_hierarchy",
+            "schedule": "30 3 1 * *"
+        },
+        {
+            "path": "/api/cron/market_watch_digest",
+            "schedule": "0 9 * * 0"
+        },
+        {
+            "path": "/api/cron/recompete_scan",
+            "schedule": "0 5 * * 2"
         }
     ]
 }
