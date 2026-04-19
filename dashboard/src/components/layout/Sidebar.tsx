@@ -7,7 +7,7 @@ import Image from "next/image";
 import {
     LayoutDashboard, Target, Layers, FileText, BarChart3, Mic, Users, Shield,
     CreditCard, Settings, LogOut, Menu, X, FolderOpen, Mail, Search, Pencil,
-    Handshake, Clock, ChevronRight, Radar, Telescope,
+    Handshake, Clock, ChevronRight, Radar, Telescope, GraduationCap,
 } from "lucide-react";
 import clsx from "clsx";
 import { createSupabaseClient } from "@/lib/supabase/client";
@@ -61,6 +61,7 @@ export default function Sidebar() {
         { name: "Competitors", href: "/competitors", icon: Shield },
         { name: "Recompetes", href: "/recompetes", icon: Radar },
         { name: "Forecasts", href: "/forecasts", icon: Telescope },
+        { name: "Academy", href: "/academy", icon: GraduationCap },
     ];
 
     const bottomLinks = [

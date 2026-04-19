@@ -51,6 +51,58 @@ export function scoreSetAside(userCerts: string[], oppSetAside: string | null): 
     return 0.3;
 }
 
+/**
+ * Hard gate — returns true when the opportunity is a set-aside the user
+ * CANNOT legally bid on. The calling code should `return null` in that case
+ * so the opp never shows up as a match, regardless of NAICS / geo / etc.
+ *
+ * Rule: if the set-aside text names an SBA program and the user does NOT
+ * carry the matching certification, the user is disqualified. We explicitly
+ * exclude "small business" (which is a broad category, not a cert) so SB
+ * set-asides still score normally based on business size.
+ */
+export function isSetAsideDisqualified(userCerts: string[], oppSetAside: string | null): boolean {
+    if (!oppSetAside) return false;
+    const sa = oppSetAside.toLowerCase();
+    const certs = (userCerts || []).map(c => c.toLowerCase());
+
+    // Skip-list: broad categories or "no set-aside"
+    if (
+        sa.includes("no set") ||
+        sa === "none" ||
+        sa === "null" ||
+        sa.includes("unrestricted") ||
+        sa === "small business" ||
+        sa === "total small business"
+    ) {
+        return false;
+    }
+
+    const gate = (program: string, variants: string[]) => {
+        if (!sa.includes(program)) return false;
+        return !variants.some(v => certs.some(c => c.includes(v)));
+    };
+
+    if (gate("8(a)", ["8(a)", "8a"])) return true;
+    if (gate("8a sole", ["8(a)", "8a"])) return true;
+    if (gate("sdvosb", ["sdvosb"])) return true;
+    if (gate("service-disabled", ["sdvosb"])) return true;
+    if (gate("vosb", ["vosb", "sdvosb"])) return true;  // SDVOSBs also qualify for VOSB
+    if (gate("veteran-owned", ["vosb", "sdvosb"])) return true;
+    if (gate("hubzone", ["hubzone"])) return true;
+    if (gate("wosb", ["wosb", "edwosb"])) return true;
+    if (gate("women-owned", ["wosb", "edwosb"])) return true;
+    if (gate("edwosb", ["edwosb"])) return true;
+    if (gate("economically disadvantaged", ["edwosb"])) return true;
+
+    // Indian / tribal / native-american set-asides — only qualified if explicitly certified
+    if (gate("indian", ["indian economic enterprise", "iee", "8(a)"])) return true;
+    if (gate("native american", ["indian economic enterprise", "iee", "8(a)"])) return true;
+    if (gate("tribal", ["indian economic enterprise", "iee", "8(a)"])) return true;
+
+    return false;
+}
+
 export function scoreGeo(userState: string, targetStates: string[], oppState: string | null): number {
     // Nationwide: always full geo score
     if (targetStates?.includes("NATIONWIDE")) return 1.0;
@@ -332,7 +384,13 @@ export function scoreOpportunityLeadMagnet(
 ): ScoredMatch | null {
     const W = LEAD_MAGNET_WEIGHTS;
 
-    // HARD GATE: NAICS must match at least at 4-digit level (0.6+)
+    // HARD GATE #1: if this opp is set-aside-restricted and the user doesn't
+    // carry the matching cert, it's simply not biddable — exclude entirely.
+    if (isSetAsideDisqualified(profile.sba_certifications || [], opp.set_aside_code)) {
+        return null;
+    }
+
+    // HARD GATE #2: NAICS must match at least at 4-digit level (0.6+)
     // Without this, default scores from other factors let random opps through
     const naics = scoreNaics(profile.naics_codes || [], opp.naics_code);
     if (naics < 0.6) return null; // Reject if not even a 4-digit NAICS prefix match
@@ -374,6 +432,13 @@ export function scoreOpportunity(
     opp: OpportunityForScoring
 ): ScoredMatch | null {
     const W = SCORING_WEIGHTS;
+
+    // HARD GATE: if this opp is set-aside-restricted and the user doesn't
+    // qualify, we never classify it as a match — an SDVOSB-only opp can't
+    // be "won" by a non-veteran, so a 0.48 score would be misleading.
+    if (isSetAsideDisqualified(profile.sba_certifications || [], opp.set_aside_code)) {
+        return null;
+    }
 
     const naics = scoreNaics(profile.naics_codes || [], opp.naics_code);
     const nt = scoreNoticeType(opp.notice_type);

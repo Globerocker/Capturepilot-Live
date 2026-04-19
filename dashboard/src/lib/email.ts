@@ -404,6 +404,70 @@ export async function sendTaskNotification(
     });
 }
 
+// ─── Agency Pipeline Push — admin hand-picked opp for managed client ─
+export async function sendAgencyPipelineNotification(params: {
+    to: string;
+    contactName: string;
+    companyName: string;
+    oppTitle: string;
+    oppAgency: string;
+    oppResponseDeadline?: string | null;
+    oppNoticeId?: string | null;
+    pushedByName: string;
+    customerMessage?: string | null;
+    nextSteps?: string[];
+}) {
+    const {
+        to, contactName, oppTitle, oppAgency, oppResponseDeadline,
+        oppNoticeId, pushedByName, customerMessage, nextSteps,
+    } = params;
+
+    const deadlineLine = oppResponseDeadline
+        ? `<p style="color:${COLORS.stone700};font-size:13px;margin:4px 0 0;"><strong>Response deadline:</strong> ${new Date(oppResponseDeadline).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</p>`
+        : "";
+
+    const stepsHtml = (nextSteps && nextSteps.length > 0)
+        ? `<p style="font-size:14px;font-weight:700;color:${COLORS.black};margin:16px 0 8px;">What's next:</p>
+           <ul style="margin:0;padding-left:20px;color:${COLORS.stone700};font-size:14px;line-height:1.7;">
+             ${nextSteps.map(s => `<li>${s}</li>`).join("")}
+           </ul>`
+        : "";
+
+    const messageHtml = customerMessage
+        ? `<p style="color:${COLORS.stone700};font-size:14px;line-height:1.7;margin:16px 0 0;font-style:italic;">&ldquo;${customerMessage}&rdquo;<br><span style="font-size:12px;color:${COLORS.stone500};">— ${pushedByName}</span></p>`
+        : "";
+
+    const portalUrl = oppNoticeId
+        ? `${APP_URL}/portal/pipeline`
+        : `${APP_URL}/portal/pipeline`;
+
+    const html = emailTemplate({
+        category: await getEmailCategory("agency_pipeline_push"),
+        preheader: `${pushedByName} spotted a new opportunity and is actively pursuing it for you.`,
+        eyebrow: "Pipeline Update",
+        heading: `Hi ${contactName}, we've picked up a new opportunity for you`,
+        body: `
+            ${paragraph(`<strong>${pushedByName}</strong> just spotted a federal opportunity that looks like a strong fit — we've added it to your pipeline and are actively pursuing it.`)}
+            ${alertBox(`
+                <p style="font-size:16px;font-weight:700;color:${COLORS.black};margin:0;">${oppTitle}</p>
+                <p style="color:${COLORS.stone700};font-size:13px;margin:6px 0 0;"><strong>Agency:</strong> ${oppAgency}</p>
+                ${deadlineLine}
+            `)}
+            ${messageHtml}
+            ${stepsHtml}
+            ${paragraph("You'll see this in your pipeline in real time. Reply to this email or call us with any questions.")}
+        `,
+        cta: { label: "View in Your Pipeline", url: portalUrl },
+    });
+
+    return send("agency_pipeline_push", to, `New opportunity in your pipeline: ${oppTitle}`, html, {
+        contactName,
+        oppTitle,
+        oppAgency,
+        pushedByName,
+    });
+}
+
 // ─── Opportunity Alert ─────────────────────────────────────
 export async function sendOpportunityAlert(
     to: string,
