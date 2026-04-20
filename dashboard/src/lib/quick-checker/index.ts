@@ -268,6 +268,7 @@ export function toLegacyCrawlData(r: RunQuickCheckOutput): Record<string, unknow
         awards: ex.awards,
         capability_keywords: ex.capability_keywords,
         quick_checker_source: r.source,
+        quick_checker_errors: r.errors,
     };
 }
 

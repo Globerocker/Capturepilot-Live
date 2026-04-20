@@ -48,6 +48,16 @@ interface ExtractInput {
     markdown: string;
 }
 
+function cleanMarkdown(md: string, max = 1200): string {
+    return md
+        .replace(/!\[[^\]]*\]\([^)]+\)/g, "")            // strip image markdown
+        .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")         // flatten links
+        .replace(/[#*_`>]/g, "")                          // drop markdown glyphs
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, max);
+}
+
 function heuristicFallback(input: ExtractInput): QuickCheckerExtraction {
     const phones = extractPhones(input.markdown);
     const emails = extractEmails(input.markdown);
@@ -56,8 +66,8 @@ function heuristicFallback(input: ExtractInput): QuickCheckerExtraction {
         company_name: title,
         dba_name: null,
         tagline: input.metaTitle || null,
-        short_description: input.metaDescription || "",
-        long_description: input.markdown.slice(0, 1200),
+        short_description: input.metaDescription || cleanMarkdown(input.markdown, 200),
+        long_description: cleanMarkdown(input.markdown, 1200),
         industries_served: [],
         services: [],
         products: [],
@@ -107,31 +117,72 @@ export async function extractStructured(input: ExtractInput): Promise<{
     ].filter(Boolean).join("\n");
 
     try {
+        const schemaHint = `Return JSON with THIS EXACT shape (use null/[] for missing fields, never omit a key):
+{
+  "company_name": "string",
+  "dba_name": null,
+  "tagline": "string or null",
+  "short_description": "one sentence",
+  "long_description": "2-4 sentences",
+  "industries_served": ["healthcare","construction", ...],
+  "services": [{"name":"...","description":"..."}],
+  "products": ["product name"],
+  "differentiators": ["..."],
+  "capability_keywords": [{"keyword":"managed data services","tier":"primary"}, ...],
+  "leadership": [{"name":"...","title":"...","email":null,"phone":null,"linkedin_url":null,"is_decision_maker":true}],
+  "contacts": [{"email":"info@...","phone":null,"phone_type":"main"}],
+  "headquarters_city": null,
+  "headquarters_state": null,
+  "service_areas": [],
+  "founded_year": 2017,
+  "employee_count_estimate": null,
+  "certifications": [{"type":"VOSB","evidence":"...","confidence":0.9}],
+  "partnerships": [{"partner":"AWS","kind":"technology_partner"}],
+  "past_customers": ["..."],
+  "awards": ["..."],
+  "has_gov_experience": true,
+  "gov_experience_evidence": ["exact quote"],
+  "social_links": {"linkedin":null,"facebook":null,"twitter":null,"youtube":null}
+}`;
+
         const completion = await client.chat.completions.create({
             model: MODEL,
             temperature: 0,
             response_format: { type: "json_object" },
             messages: [
-                { role: "system", content: SYSTEM_PROMPT + "\n\nReturn strict JSON matching the schema. No prose, no markdown code fences." },
-                { role: "system", content: "Required JSON fields: " + JSON.stringify(Object.keys(QuickCheckerExtraction.shape)) },
+                { role: "system", content: SYSTEM_PROMPT },
+                { role: "system", content: schemaHint },
                 { role: "user", content: userContent },
             ],
         }, { timeout: 45_000 });
 
         const raw = completion.choices?.[0]?.message?.content || "{}";
         const cleaned = raw.replace(/^```json\s*/i, "").replace(/```$/i, "").trim();
-        const parsed = JSON.parse(cleaned);
-        const safe = QuickCheckerExtraction.safeParse(parsed);
-        if (safe.success) {
-            return { extraction: safe.data, model_used: MODEL, errors };
+        let parsed: Record<string, unknown> = {};
+        try { parsed = JSON.parse(cleaned); } catch {
+            errors.push(`LLM returned unparseable JSON (${cleaned.length} chars)`);
+            return { extraction: heuristicFallback(input), model_used: MODEL, errors };
         }
-        // Graceful merge — fill missing required fields from the fallback so the caller still
-        // gets a usable object.
-        errors.push("OpenAI output failed schema validation — merged with heuristic fallback");
+
+        // Deep-merge the LLM output into the heuristic fallback so we never return empty
+        // fields if the model DID supply them.
         const fallback = heuristicFallback(input);
-        const merged: QuickCheckerExtraction = { ...fallback, ...(parsed as Partial<QuickCheckerExtraction>) };
-        const reSafe = QuickCheckerExtraction.safeParse(merged);
-        return { extraction: reSafe.success ? reSafe.data : fallback, model_used: MODEL, errors };
+        const merged: Record<string, unknown> = { ...fallback };
+        for (const [k, v] of Object.entries(parsed)) {
+            if (v === null || v === undefined) continue;
+            if (Array.isArray(v) && v.length === 0) continue;
+            if (typeof v === "string" && v.trim() === "") continue;
+            merged[k] = v;
+        }
+
+        const safe = QuickCheckerExtraction.safeParse(merged);
+        if (safe.success) return { extraction: safe.data, model_used: MODEL, errors };
+
+        // Final fallback: cast the merged object. With `.default()` on everything the
+        // schema should accept almost anything, but just in case Zod still rejects,
+        // we still return a usable object.
+        errors.push(`Zod validation failed: ${safe.error.issues.slice(0, 3).map(i => `${i.path.join(".")}:${i.message}`).join("; ")}`);
+        return { extraction: merged as unknown as QuickCheckerExtraction, model_used: MODEL, errors };
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         errors.push(`OpenAI extraction failed: ${msg}`);
