@@ -5,7 +5,7 @@ import Link from "next/link";
 import { createBrowserClient } from "@supabase/ssr";
 import {
     Layers, Loader2, ExternalLink, Clock, ChevronDown, ChevronRight,
-    Search, MessageSquare, Save, Plus, ArrowRight,
+    Search, MessageSquare, Save, Plus, ArrowRight, LayoutGrid, List as ListIcon, DollarSign,
 } from "lucide-react";
 import clsx from "clsx";
 
@@ -101,6 +101,19 @@ export default function PortalPipeline() {
     const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
     const [searchLoading, setSearchLoading] = useState(false);
     const [addingOppId, setAddingOppId] = useState<string | null>(null);
+
+    // View mode — list (grouped by stage, existing) or kanban (columns).
+    // Persisted per-profile in localStorage so the agency client's preferred
+    // layout survives reloads. Added Apr 20 as part of the portal-pipeline
+    // parity work.
+    const [viewMode, setViewMode] = useState<"list" | "kanban">("list");
+    useEffect(() => {
+        const stored = typeof window !== "undefined" ? window.localStorage.getItem("portal_pipeline_view") : null;
+        if (stored === "list" || stored === "kanban") setViewMode(stored);
+    }, []);
+    useEffect(() => {
+        if (typeof window !== "undefined") window.localStorage.setItem("portal_pipeline_view", viewMode);
+    }, [viewMode]);
 
     /* ─── Load data ─── */
     useEffect(() => {
@@ -294,7 +307,31 @@ export default function PortalPipeline() {
                         {activeCount} active deals, {pursuits.length} total
                     </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                    <div className="inline-flex items-center bg-stone-100 border border-stone-200 rounded-xl p-1">
+                        <button
+                            type="button"
+                            onClick={() => setViewMode("list")}
+                            className={clsx(
+                                "px-2.5 py-1 text-xs font-bold rounded-lg inline-flex items-center gap-1.5",
+                                viewMode === "list" ? "bg-white text-black shadow-sm border border-stone-200" : "text-stone-500 hover:text-stone-700",
+                            )}
+                            title="List view"
+                        >
+                            <ListIcon className="w-3.5 h-3.5" /> List
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setViewMode("kanban")}
+                            className={clsx(
+                                "px-2.5 py-1 text-xs font-bold rounded-lg inline-flex items-center gap-1.5",
+                                viewMode === "kanban" ? "bg-white text-black shadow-sm border border-stone-200" : "text-stone-500 hover:text-stone-700",
+                            )}
+                            title="Kanban view"
+                        >
+                            <LayoutGrid className="w-3.5 h-3.5" /> Kanban
+                        </button>
+                    </div>
                     <button
                         type="button"
                         onClick={() => setShowAddSearch(!showAddSearch)}
@@ -407,8 +444,82 @@ export default function PortalPipeline() {
                 </div>
             )}
 
+            {/* Kanban view — horizontal columns per stage with compact cards. */}
+            {pursuits.length > 0 && viewMode === "kanban" && (
+                <div className="overflow-x-auto">
+                    <div className="flex gap-3 pb-4 min-w-max">
+                        {byStage.filter(s => !["lost", "no_bid"].includes(s.key)).map(stage => (
+                            <div key={stage.key} className={clsx("w-72 flex-shrink-0 rounded-2xl border", stage.border, stage.color)}>
+                                <div className="px-3 py-2.5 flex items-center justify-between">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                        <div className={clsx("w-2 h-2 rounded-full flex-shrink-0", stage.dot)} />
+                                        <span className={clsx("text-xs font-bold truncate", stage.text)}>{stage.label}</span>
+                                    </div>
+                                    <span className="text-[10px] font-bold text-stone-500 bg-white/70 px-1.5 py-0.5 rounded">
+                                        {stage.items.length}
+                                    </span>
+                                </div>
+                                <div className="space-y-2 px-2 pb-2 min-h-[60px]">
+                                    {stage.items.length === 0 && (
+                                        <p className="text-[10px] text-stone-400 italic text-center py-2">No deals</p>
+                                    )}
+                                    {stage.items.map(p => {
+                                        const opp = (Array.isArray(p.opportunity) ? p.opportunity[0] : p.opportunity) as Pursuit["opportunity"];
+                                        if (!opp) return null;
+                                        const daysLeft = opp.response_deadline
+                                            ? Math.ceil((new Date(opp.response_deadline).getTime() - Date.now()) / 86400000)
+                                            : null;
+                                        return (
+                                            <Link
+                                                key={p.id}
+                                                href={`/portal/opportunities/${p.opportunity_id}`}
+                                                className="block bg-white border border-stone-200 rounded-xl p-3 hover:border-emerald-300 hover:shadow-sm transition-all"
+                                            >
+                                                <p className="text-xs font-bold text-stone-900 line-clamp-2 leading-tight">{opp.title}</p>
+                                                <p className="text-[10px] text-stone-500 truncate mt-1">{opp.agency}</p>
+                                                <div className="flex items-center justify-between mt-2 gap-2">
+                                                    {opp.estimated_value > 0 ? (
+                                                        <span className="text-[10px] font-bold text-emerald-600 inline-flex items-center gap-0.5">
+                                                            <DollarSign className="w-2.5 h-2.5" />{fmtCurrency(opp.estimated_value).replace("$", "")}
+                                                        </span>
+                                                    ) : <span />}
+                                                    {daysLeft !== null && (
+                                                        <span className={clsx(
+                                                            "text-[10px] font-bold inline-flex items-center gap-0.5",
+                                                            daysLeft <= 0 ? "text-red-500" :
+                                                            daysLeft <= 7 ? "text-red-600" :
+                                                            daysLeft <= 30 ? "text-amber-600" : "text-stone-400"
+                                                        )}>
+                                                            <Clock className="w-2.5 h-2.5" />
+                                                            {daysLeft <= 0 ? "expired" : `${daysLeft}d`}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="mt-2 flex flex-wrap gap-1">
+                                                    {STAGES.filter(s => s.key !== p.stage && !["lost", "no_bid"].includes(s.key)).slice(0, 4).map(s => (
+                                                        <button
+                                                            key={s.key}
+                                                            type="button"
+                                                            onClick={(e) => { e.preventDefault(); changeStage(p.id, s.key); }}
+                                                            className="text-[9px] font-semibold text-stone-500 bg-stone-50 hover:bg-emerald-50 hover:text-emerald-700 border border-stone-200 hover:border-emerald-200 px-1.5 py-0.5 rounded"
+                                                            title={`Move to ${s.label}`}
+                                                        >
+                                                            → {s.label}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </Link>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
             {/* Pipeline Stages (list view, grouped) */}
-            {pursuits.length > 0 && (
+            {pursuits.length > 0 && viewMode === "list" && (
                 <div className="space-y-4">
                     {byStage.filter(s => s.items.length > 0).map(stage => {
                         const isCollapsed = collapsedStages.has(stage.key);

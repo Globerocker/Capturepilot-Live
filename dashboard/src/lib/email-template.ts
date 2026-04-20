@@ -58,6 +58,13 @@ interface EmailTemplateOptions {
      * - "marketing": commercial, CAN-SPAM unsubscribe link
      */
     category?: "transactional" | "marketing";
+    /**
+     * Optional tokenized unsubscribe URL. When provided on a marketing
+     * email, the footer link points at this URL (one-click, no login)
+     * instead of the settings page. Required for beta-invite + cold-
+     * outreach sends so CAN-SPAM compliance is real, not redirect-gated.
+     */
+    unsubscribeUrl?: string;
 }
 
 export function emailTemplate(options: EmailTemplateOptions): string {
@@ -70,6 +77,7 @@ export function emailTemplate(options: EmailTemplateOptions): string {
         secondaryCta,
         footerNote,
         category = "transactional",
+        unsubscribeUrl,
     } = options;
 
     const preheaderHtml = preheader
@@ -92,8 +100,14 @@ export function emailTemplate(options: EmailTemplateOptions): string {
         ? `<p style="margin:14px 0 0;"><a href="${secondaryCta.url}" style="color:${COLORS.stone500};font-size:13px;text-decoration:underline;">${secondaryCta.label}</a></p>`
         : "";
 
+    // Marketing emails MUST use a token-based one-click unsubscribe when we
+    // have one — falling back to the settings page would otherwise send the
+    // recipient through the login wall, which violates one-click unsub
+    // expectations (and broke in testing on Apr 20).
     const preferencesLink = category === "marketing"
-        ? `<a href="${APP_URL}/settings/notifications?unsubscribe=1" style="color:${COLORS.stone500};text-decoration:underline;">Unsubscribe</a>`
+        ? (unsubscribeUrl
+            ? `<a href="${unsubscribeUrl}" style="color:${COLORS.stone500};text-decoration:underline;">Unsubscribe</a>`
+            : `<a href="${APP_URL}/settings/notifications?unsubscribe=1" style="color:${COLORS.stone500};text-decoration:underline;">Unsubscribe</a>`)
         : `<a href="${APP_URL}/settings/notifications" style="color:${COLORS.stone500};text-decoration:underline;">Manage email preferences</a>`;
 
     return `<!DOCTYPE html>

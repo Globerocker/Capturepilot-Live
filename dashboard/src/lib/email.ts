@@ -270,6 +270,9 @@ export function renderBetaInviteEmail(params: BetaInviteRenderParams): { subject
     const { recipientName, companyName, personalNote, token, overrides } = params;
     const firstName = (recipientName || "").split(" ")[0] || "there";
     const signupUrl = `${APP_URL}/signup?invite=${token}`;
+    // Token-based unsubscribe — the invitee never needs to log in to opt out.
+    // See /api/invite/unsubscribe for the handler (added Apr 20).
+    const unsubscribeUrl = `${APP_URL}/api/invite/unsubscribe?token=${token}`;
 
     const subject = overrides?.subject?.trim() || BETA_INVITE_DEFAULTS.subject;
     const eyebrow = overrides?.eyebrow?.trim() || BETA_INVITE_DEFAULTS.eyebrow;
@@ -305,6 +308,7 @@ export function renderBetaInviteEmail(params: BetaInviteRenderParams): { subject
         `,
         cta: { label: ctaLabel, url: signupUrl },
         footerNote: "This invitation is personal to you — please don't forward the link.",
+        unsubscribeUrl,
     });
 
     return { subject, html };
@@ -481,6 +485,7 @@ export async function sendOutreachEmail(
         heading,
         body: body + outreachFooter(unsubscribeUrl),
         cta: { label: ctaLabel, url: ctaUrl },
+        unsubscribeUrl,
     });
 
     return send("outreach_" + ["intro", "followup", "final"][step], to, subject, html, {

@@ -15,6 +15,7 @@ import { HistoricalWinners } from "@/components/HistoricalWinners";
 import ComplianceMatrixPanel from "@/components/opportunity/ComplianceMatrixPanel";
 import CapabilityMatrixPanel from "@/components/opportunity/CapabilityMatrixPanel";
 import VoiceBriefButton from "@/components/opportunity/VoiceBriefButton";
+import SuggestedPartnersPanel from "@/components/opportunity/SuggestedPartnersPanel";
 import { estimateContractValue } from "@/utils/estimateValue";
 
 export const dynamic = 'force-dynamic';
@@ -530,6 +531,15 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                         <HistoricalWinners
                             naicsCode={opp.naics_code}
                             currentAwardee={opp.incumbent_contractor_name || opp.awardee || null}
+                        />
+                    )}
+
+                    {/* Suggested teaming partners — same NAICS, filterable by set-aside */}
+                    {opp.naics_code && (
+                        <SuggestedPartnersPanel
+                            naicsCode={opp.naics_code}
+                            setAsideCode={opp.set_aside_code}
+                            placeOfPerformanceState={opp.place_of_performance_state}
                         />
                     )}
 

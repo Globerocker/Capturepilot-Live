@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { createSupabaseClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Shield, Globe, ChevronRight, TrendingUp, Plus, LinkIcon, Users, Search, Building2, GitCompareArrows, X } from "lucide-react";
+import { Shield, Globe, ChevronRight, TrendingUp, Plus, LinkIcon, Users, Search, Building2, GitCompareArrows, X, RefreshCw } from "lucide-react";
 import { AnalysisProgressStepper, statusToStep } from "@/components/AnalysisProgressStepper";
 import BulkAddFromSam from "@/components/competitors/BulkAddFromSam";
 import ComparisonTable from "@/components/competitors/ComparisonTable";
@@ -73,6 +73,31 @@ export default function CompetitorsPage() {
     const [compareIds, setCompareIds] = useState<string[]>([]);
     const [showComparison, setShowComparison] = useState(false);
     const MAX_COMPARE = 4;
+
+    // Recrawl state — per-competitor so the spinner only runs on the card
+    // the user clicked, not all cards.
+    const [recrawlingId, setRecrawlingId] = useState<string | null>(null);
+    const [recrawlFlash, setRecrawlFlash] = useState<string>("");
+
+    async function handleRecrawl(compId: string) {
+        if (recrawlingId) return;
+        setRecrawlingId(compId);
+        setRecrawlFlash("");
+        try {
+            const res = await fetch(`/api/competitors/${compId}/refresh`, { method: "POST" });
+            const body = await res.json();
+            if (!res.ok) {
+                setRecrawlFlash(`Recrawl failed: ${body.error || res.status}`);
+            } else {
+                setRecrawlFlash("Competitor data refreshed.");
+                if (profileId) await loadCompetitors(profileId);
+            }
+        } catch (e) {
+            setRecrawlFlash(`Recrawl failed: ${(e as Error).message}`);
+        } finally {
+            setRecrawlingId(null);
+        }
+    }
 
     function toggleCompare(id: string) {
         setCompareIds(prev => {
@@ -370,6 +395,26 @@ export default function CompetitorsPage() {
                 </div>
             )}
 
+            {recrawlFlash && (
+                <div className={clsx(
+                    "text-sm rounded-xl px-4 py-2.5 flex items-center justify-between animate-in fade-in duration-300 border",
+                    recrawlFlash.startsWith("Recrawl failed")
+                        ? "bg-rose-50 border-rose-200 text-rose-700"
+                        : "bg-emerald-50 border-emerald-200 text-emerald-700",
+                )}>
+                    <span>{recrawlFlash}</span>
+                    <button
+                        type="button"
+                        aria-label="Dismiss"
+                        title="Dismiss"
+                        onClick={() => setRecrawlFlash("")}
+                        className="opacity-70 hover:opacity-100"
+                    >
+                        <X className="w-3.5 h-3.5" />
+                    </button>
+                </div>
+            )}
+
             {/* Add Competitor Form */}
             {!analyzing && (
                 <div className="bg-white border border-stone-200 rounded-2xl overflow-hidden">
@@ -587,6 +632,22 @@ export default function CompetitorsPage() {
 
                                     <ChevronRight className="w-4 h-4 text-stone-400 flex-shrink-0" />
                                 </Link>
+                                <button
+                                    type="button"
+                                    onClick={() => handleRecrawl(comp.id)}
+                                    disabled={recrawlingId === comp.id || !comp.website}
+                                    title={comp.website ? "Re-crawl website and refresh enrichment" : "Add a website first to enable recrawl"}
+                                    className={clsx(
+                                        "flex-shrink-0 inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1.5 rounded-lg border transition-colors",
+                                        recrawlingId === comp.id
+                                            ? "bg-stone-100 text-stone-500 border-stone-200 cursor-wait"
+                                            : "bg-white text-stone-600 border-stone-200 hover:border-emerald-300 hover:text-emerald-700 hover:bg-emerald-50",
+                                        !comp.website && "opacity-40 cursor-not-allowed",
+                                    )}
+                                >
+                                    <RefreshCw className={clsx("w-3 h-3", recrawlingId === comp.id && "animate-spin")} />
+                                    {recrawlingId === comp.id ? "Recrawling…" : "Recrawl"}
+                                </button>
                             </div>
                         </div>
                     );

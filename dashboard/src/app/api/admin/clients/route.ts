@@ -23,6 +23,7 @@ export async function POST(req: NextRequest) {
             email, password, company_name, contact_name, contact_phone,
             website, uei, cage_code, naics_codes, state, city,
             sba_certifications, notes, job_title,
+            primary_keywords, secondary_keywords, company_description,
         } = body;
 
         if (!email || !company_name) {
@@ -61,6 +62,9 @@ export async function POST(req: NextRequest) {
             state: state || null,
             city: city || null,
             notes: notes || null,
+            company_description: company_description || null,
+            primary_keywords: Array.isArray(primary_keywords) ? primary_keywords : [],
+            secondary_keywords: Array.isArray(secondary_keywords) ? secondary_keywords : [],
             account_type: "consulting",
             client_status: "active",
             client_since: new Date().toISOString(),
@@ -147,9 +151,20 @@ export async function POST(req: NextRequest) {
             metadata: { email, created_by: "admin" },
         });
 
-        // 4b. Auto-crawl opportunities for client's NAICS codes (fire and forget)
+        // 4b. Immediate website crawl + enrichment (fire-and-forget).
+        // Apr 20 review: "matching algorithm must immediately crawl websites
+        // upon sending an invitation email" — previously we only queued
+        // opportunity crawl, not the profile enrichment, so the customer saw
+        // a cold dashboard at first login.
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://app.capturepilot.com";
+        if (website) {
+            fetch(`${baseUrl}/api/admin/enrich-profile`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ user_profile_id: profileData.id }),
+            }).catch(() => {});
+        }
         if (naics_codes && naics_codes.length > 0) {
-            const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://app.capturepilot.com";
             fetch(`${baseUrl}/api/admin/crawl-opportunities`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -158,7 +173,7 @@ export async function POST(req: NextRequest) {
                     days_back: 90,
                     user_profile_id: profileData.id,
                 }),
-            }).catch(() => {}); // fire and forget
+            }).catch(() => {});
         }
 
         // 5. Send welcome email + Slack notification
@@ -293,7 +308,8 @@ export async function PATCH(req: NextRequest) {
         const allowed = ["company_name", "contact_name", "contact_phone", "job_title", "email", "website",
             "uei", "cage_code", "naics_codes", "sba_certifications", "state", "city",
             "notes", "client_status", "account_type", "company_description",
-            "employee_count", "revenue", "target_states", "address_line_1", "zip_code"];
+            "employee_count", "revenue", "target_states", "address_line_1", "zip_code",
+            "primary_keywords", "secondary_keywords"];
 
         const safeUpdates: Record<string, unknown> = {};
         for (const [k, v] of Object.entries(updates)) {

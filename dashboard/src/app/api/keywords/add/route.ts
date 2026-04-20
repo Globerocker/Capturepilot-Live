@@ -29,13 +29,20 @@ export async function POST(req: NextRequest) {
     let body: { keyword?: string } = {};
     try { body = await req.json(); } catch { /* default */ }
     const raw = (body.keyword || "").toString();
-    const normalized = raw.toLowerCase().trim().replace(/\s+/g, " ");
+    // Normalize: lowercase, collapse whitespace, strip most punctuation but keep
+    // hyphens, ampersands, slashes, and apostrophes — these show up in real govcon
+    // phrases ("24/7 support", "body armor", "research & development", "o&m").
+    const normalized = raw
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9\s\-&/']+/g, "")   // strip everything except allowed chars
+        .replace(/\s+/g, " ");
 
-    if (normalized.length < 3 || normalized.length > 60) {
-        return NextResponse.json({ error: "Keyword must be 3–60 characters." }, { status: 400 });
+    if (normalized.length < 2 || normalized.length > 80) {
+        return NextResponse.json({ error: "Keyword must be 2–80 characters." }, { status: 400 });
     }
-    if (!/^[a-z0-9][a-z0-9\s\-]+$/.test(normalized)) {
-        return NextResponse.json({ error: "Only letters, digits, spaces, and hyphens are allowed." }, { status: 400 });
+    if (!/[a-z0-9]/.test(normalized)) {
+        return NextResponse.json({ error: "Keyword must include a letter or digit." }, { status: 400 });
     }
 
     // Service client to bypass RLS for the existence check (insert still writes

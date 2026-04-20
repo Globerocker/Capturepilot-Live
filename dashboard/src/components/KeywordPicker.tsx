@@ -49,6 +49,10 @@ export default function KeywordPicker({
 
     // Keep labels for selected keywords so chips can render the pretty form.
     const [labels, setLabels] = useState<Map<string, string>>(new Map());
+    // Inline add-error shown under the free-text "Add as new keyword" button
+    // — previously the API silently failed and the user had no feedback.
+    const [addError, setAddError] = useState<string>("");
+    const [addingCustom, setAddingCustom] = useState(false);
 
     // Hydrate display labels for already-selected keywords on mount.
     useEffect(() => {
@@ -361,27 +365,50 @@ export default function KeywordPicker({
                                     </button>
                                 );
                             })}
-                            {!loading && query.trim().length >= 3 && (
+                            {!loading && query.trim().length >= 2 && (
                                 <button
                                     type="button"
+                                    disabled={addingCustom}
                                     onClick={async () => {
-                                        const term = query.toLowerCase().trim().replace(/\s+/g, " ");
-                                        if (!/^[a-z0-9][a-z0-9\s\-]+$/.test(term)) return;
-                                        const res = await fetch("/api/keywords/add", {
-                                            method: "POST",
-                                            headers: { "Content-Type": "application/json" },
-                                            body: JSON.stringify({ keyword: term }),
-                                        });
-                                        if (!res.ok) return;
-                                        const data = await res.json() as { keyword: GovKeyword };
-                                        if (data?.keyword) add(data.keyword);
+                                        setAddError("");
+                                        setAddingCustom(true);
+                                        const term = query
+                                            .toLowerCase()
+                                            .trim()
+                                            .replace(/\s+/g, " ");
+                                        try {
+                                            const res = await fetch("/api/keywords/add", {
+                                                method: "POST",
+                                                headers: { "Content-Type": "application/json" },
+                                                body: JSON.stringify({ keyword: term }),
+                                            });
+                                            const data = await res.json() as { keyword?: GovKeyword; error?: string };
+                                            if (!res.ok || !data.keyword) {
+                                                setAddError(data.error || `Couldn't add keyword (${res.status})`);
+                                            } else {
+                                                add(data.keyword);
+                                            }
+                                        } catch (e) {
+                                            setAddError((e as Error).message || "Network error");
+                                        } finally {
+                                            setAddingCustom(false);
+                                        }
                                     }}
-                                    className="w-full text-left px-3 py-2.5 text-xs flex items-center gap-2 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border-t border-emerald-200"
+                                    className="w-full text-left px-3 py-2.5 text-xs flex items-center gap-2 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border-t border-emerald-200 disabled:opacity-50"
                                 >
                                     <Plus className="w-3 h-3 flex-shrink-0" />
-                                    <span className="font-bold">Add &ldquo;{query.trim()}&rdquo; as new keyword</span>
-                                    <span className="ml-auto text-[10px] opacity-70">saves to your library</span>
+                                    <span className="font-bold">
+                                        {addingCustom ? "Adding…" : <>Add &ldquo;{query.trim()}&rdquo; as new keyword</>}
+                                    </span>
+                                    <span className="ml-auto text-[10px] opacity-70">
+                                        {query.trim().includes(" ") ? "multi-word" : "saves to library"}
+                                    </span>
                                 </button>
+                            )}
+                            {addError && (
+                                <div className="px-3 py-2 text-[11px] text-rose-700 bg-rose-50 border-t border-rose-200">
+                                    {addError}
+                                </div>
                             )}
                         </div>
                     )}
