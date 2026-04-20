@@ -1,25 +1,19 @@
 name: Release Notes Auto-Capture
 
 # Parses every new commit on main and upserts a release_notes row when the
-# subject line follows conventional-commit syntax with a user-visible type:
-#   feat(...): ...       → category=feature
-#   feat: ...            → category=feature
-#   perf(...): ...       → category=performance
-#   perf: ...            → category=performance
-#   integration(...): …  → category=integration
-#   fix(...): …          → category=fix (only if message includes "[release]" tag or is a notable fix)
+# subject line follows conventional-commit syntax with a user-visible type.
 #
-# Highlights are extracted from the commit body — lines that start with "- "
-# become bullet points on the release-notes page. The summary is the second
-# paragraph of the body, or the subject if no body.
+# Required secrets (set at repo → Settings → Secrets and variables → Actions):
+#   SUPABASE_URL           — NEXT_PUBLIC_SUPABASE_URL value (e.g. https://xxx.supabase.co)
+#   SUPABASE_SERVICE_KEY   — service-role key with write access to release_notes
 #
-# Secrets needed:
-#   SUPABASE_URL           — NEXT_PUBLIC_SUPABASE_URL value
-#   SUPABASE_SERVICE_KEY   — service-role key (write access to release_notes)
+# If the secrets aren't configured we SKIP the job (exit 0) instead of
+# failing — this keeps the workflow green until they're populated.
 
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   capture:
@@ -28,9 +22,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 50 # enough to read the commits in this push
+          fetch-depth: 50
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Check required secrets
+        id: check
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_KEY" ]; then
+            echo "::warning::SUPABASE_URL or SUPABASE_SERVICE_KEY not set — skipping release-notes capture. Add them at repo → Settings → Secrets and variables → Actions."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Parse commits + upsert release notes
+        if: steps.check.outputs.skip != 'true'
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
