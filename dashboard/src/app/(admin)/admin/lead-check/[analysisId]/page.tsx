@@ -8,8 +8,9 @@ import {
     ArrowRight, Globe, Phone, Mail, Loader2, Briefcase, Shield,
     TrendingUp, Award, ChevronDown, Clock, Unlock, ExternalLink, DollarSign,
     Linkedin, Facebook, Twitter, Save, FileDown, CheckCircle2, User, Building2, Hash,
-    Swords, AlertTriangle
+    Swords, AlertTriangle, UserPlus, Send
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
 import clsx from "clsx";
 import { LeadMagnetForm } from "@/components/LeadMagnetForm";
@@ -467,6 +468,7 @@ const IN_PROGRESS_STATUSES = new Set([
 
 export default function CheckResultsPage() {
     const params = useParams();
+    const router = useRouter();
     const [data, setData] = useState<AnalysisData | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
@@ -476,6 +478,11 @@ export default function CheckResultsPage() {
     const [saved, setSaved] = useState(false);
     const [saving, setSaving] = useState(false);
     const [naicsEditOpen, setNaicsEditOpen] = useState(false);
+    // Handoff state — sending a beta invite directly from the lead-check result.
+    // Per the Apr 20 review, the admin wanted a one-click path from
+    // "here's the lead" → "send them an invite" without re-typing.
+    const [handoffFlash, setHandoffFlash] = useState<string>("");
+    const [handoffBusy, setHandoffBusy] = useState<"invite" | "client" | null>(null);
     const pollRef = useRef<number | null>(null);
 
     const analysisId = params.analysisId as string;
@@ -614,6 +621,56 @@ export default function CheckResultsPage() {
         setSaving(false);
     };
 
+    // Handoff: send this lead a beta invite. Uses the resolved decision-maker
+    // email + company name so the admin doesn't re-type.
+    const handleSendInvite = async (contactEmail: string, contactName: string, companyName: string) => {
+        if (!contactEmail) { setHandoffFlash("No contact email found — run lead-check again or enter one manually on /admin/beta-invites."); return; }
+        setHandoffBusy("invite");
+        setHandoffFlash("");
+        try {
+            const res = await fetch("/api/admin/beta-invites", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    email: contactEmail,
+                    recipient_name: contactName || null,
+                    company_name: companyName || null,
+                }),
+            });
+            const body = await res.json();
+            if (res.ok && body.success) {
+                setHandoffFlash(`Beta invite sent to ${contactEmail}.`);
+            } else {
+                setHandoffFlash(`Invite failed: ${body.error || res.status}`);
+            }
+        } catch (e) {
+            setHandoffFlash(`Invite failed: ${(e as Error).message}`);
+        } finally {
+            setHandoffBusy(null);
+        }
+    };
+
+    // Handoff: jump to the consulting-client create form with everything
+    // prefilled from this analysis. Uses URL params so the clients page
+    // can rehydrate without a shared store.
+    const handleConvertToClient = (payload: {
+        email: string; companyName: string; contactName: string; contactPhone: string;
+        website: string; uei: string; state: string; naicsCodes: string[]; description: string;
+    }) => {
+        setHandoffBusy("client");
+        const qs = new URLSearchParams();
+        if (payload.email) qs.set("email", payload.email);
+        if (payload.companyName) qs.set("company_name", payload.companyName);
+        if (payload.contactName) qs.set("contact_name", payload.contactName);
+        if (payload.contactPhone) qs.set("contact_phone", payload.contactPhone);
+        if (payload.website) qs.set("website", payload.website);
+        if (payload.uei) qs.set("uei", payload.uei);
+        if (payload.state) qs.set("state", payload.state);
+        if (payload.naicsCodes.length) qs.set("naics_codes", payload.naicsCodes.join(","));
+        if (payload.description) qs.set("description", payload.description.slice(0, 1000));
+        router.push(`/admin/clients?prefill=1&${qs.toString()}`);
+    };
+
     const handleExportPdf = () => {
         window.open(`/api/prospects/pdf/${analysisId}`, "_blank");
     };
@@ -687,6 +744,82 @@ export default function CheckResultsPage() {
             </header>
 
             <main className="max-w-5xl mx-auto px-4 pb-12 space-y-6 sm:space-y-8">
+                {/* Admin Handoff Bar — beta invite + convert-to-client in one click. */}
+                {(() => {
+                    const crawlData = data.crawl_data || {};
+                    const profileData = data.inferred_profile || {};
+                    const samData = data.sam_data || {};
+                    const person = profileData.contact_person || (samData.points_of_contact || [])[0] || (crawlData.leadership || [])[0] || null;
+                    const email = person?.email
+                        || crawlData.contacts?.find(c => c.email && !/^(info|contact|support|admin|sales|hello|office|hr)@/i.test(c.email))?.email
+                        || "";
+                    const phone = person?.phone || samData.phone || crawlData.contacts?.find(c => c.phone)?.phone || "";
+                    const company = data.company_name || profileData.company_name || "";
+                    const website = data.website || "";
+                    const uei = samData.uei || profileData.uei || "";
+                    const state = samData.state || crawlData.detected_states?.[0] || "";
+                    const selectedNaics = (data.selected_naics_codes && data.selected_naics_codes.length > 0)
+                        ? data.selected_naics_codes
+                        : (data.inferred_naics || []).filter(n => n.confidence >= 0.4).map(n => n.code).slice(0, 6);
+                    return (
+                        <div className="bg-gradient-to-br from-blue-50 via-white to-emerald-50 border border-blue-200 rounded-2xl p-4 sm:p-5">
+                            <div className="flex items-start sm:items-center justify-between gap-4 flex-wrap">
+                                <div className="min-w-0">
+                                    <p className="text-[10px] font-bold uppercase tracking-widest text-blue-700 mb-0.5">Admin handoff</p>
+                                    <p className="text-sm text-stone-700">
+                                        Move this lead into the pipeline — we&apos;ll carry over the company, NAICS, decision maker, and contact info.
+                                    </p>
+                                    {!email && (
+                                        <p className="text-[11px] text-amber-700 mt-1 inline-flex items-center gap-1">
+                                            <AlertTriangle className="w-3 h-3" /> No direct decision-maker email detected. Beta invite button disabled.
+                                        </p>
+                                    )}
+                                </div>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <button
+                                        type="button"
+                                        disabled={!email || handoffBusy === "invite"}
+                                        onClick={() => handleSendInvite(email, person?.name || "", company)}
+                                        className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl disabled:opacity-50"
+                                    >
+                                        {handoffBusy === "invite" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                                        {handoffBusy === "invite" ? "Sending…" : "Send Beta Invite"}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        disabled={handoffBusy === "client"}
+                                        onClick={() => handleConvertToClient({
+                                            email: email,
+                                            companyName: company,
+                                            contactName: person?.name || "",
+                                            contactPhone: phone,
+                                            website,
+                                            uei,
+                                            state,
+                                            naicsCodes: selectedNaics,
+                                            description: data.company_summary || crawlData.description || "",
+                                        })}
+                                        className="inline-flex items-center gap-1.5 bg-black hover:bg-stone-800 text-white text-xs font-bold px-3.5 py-2 rounded-xl disabled:opacity-50"
+                                    >
+                                        {handoffBusy === "client" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserPlus className="w-3.5 h-3.5" />}
+                                        Convert to Consulting Client
+                                    </button>
+                                </div>
+                            </div>
+                            {handoffFlash && (
+                                <p className={clsx(
+                                    "text-xs mt-3 rounded-lg px-3 py-2 border inline-block",
+                                    handoffFlash.toLowerCase().includes("fail") || handoffFlash.toLowerCase().includes("no contact")
+                                        ? "bg-rose-50 border-rose-200 text-rose-700"
+                                        : "bg-emerald-50 border-emerald-200 text-emerald-700",
+                                )}>
+                                    {handoffFlash}
+                                </p>
+                            )}
+                        </div>
+                    );
+                })()}
+
                 {/* Company Profile Card */}
                 <div className="bg-white rounded-[28px] border border-stone-200 shadow-sm overflow-hidden">
                     <div className="bg-stone-50 border-b border-stone-100 px-5 sm:px-8 py-5 sm:py-6">

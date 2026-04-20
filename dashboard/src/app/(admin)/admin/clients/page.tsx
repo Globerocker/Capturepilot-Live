@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
     Plus, Users, Mail, Phone, Globe, Hash, ChevronDown, Search,
@@ -29,6 +30,15 @@ interface Client {
 }
 
 export default function AdminClientsPage() {
+    return (
+        <Suspense fallback={<div className="min-h-screen bg-stone-50 flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-stone-400" /></div>}>
+            <AdminClientsPageInner />
+        </Suspense>
+    );
+}
+
+function AdminClientsPageInner() {
+    const searchParams = useSearchParams();
     const [clients, setClients] = useState<Client[]>([]);
     const [loading, setLoading] = useState(true);
     const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -76,6 +86,26 @@ export default function AdminClientsPage() {
     };
 
     useEffect(() => { loadClients(); }, []);
+
+    // Hydrate the create form from ?prefill=1&email=…&company_name=… when a
+    // lead-check result deep-links here. Opens the form automatically so the
+    // admin lands right where they left off.
+    useEffect(() => {
+        if (searchParams.get("prefill") !== "1") return;
+        setForm(prev => ({
+            ...prev,
+            email: searchParams.get("email") || prev.email,
+            company_name: searchParams.get("company_name") || prev.company_name,
+            contact_name: searchParams.get("contact_name") || prev.contact_name,
+            contact_phone: searchParams.get("contact_phone") || prev.contact_phone,
+            website: searchParams.get("website") || prev.website,
+            uei: searchParams.get("uei") || prev.uei,
+            state: searchParams.get("state") || prev.state,
+            naics_codes: searchParams.get("naics_codes") || prev.naics_codes,
+            company_description: searchParams.get("description") || prev.company_description,
+        }));
+        setShowCreate(true);
+    }, [searchParams]);
 
     const handleAnalyzeWebsite = async () => {
         const site = form.website.trim();
