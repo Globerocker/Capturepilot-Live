@@ -7,7 +7,7 @@ import { createBrowserClient } from "@supabase/ssr";
 import {
     ArrowLeft, Building2, Mail, Phone, Globe, Hash, Save, Loader2,
     ListTodo, FileText, Users, Target, Briefcase, Clock, CheckCircle2,
-    AlertCircle, Plus, Send, ExternalLink, Layers,
+    AlertCircle, Plus, Send, ExternalLink, Layers, Sparkles,
 } from "lucide-react";
 import clsx from "clsx";
 import { MarketIntelligence } from "@/components/MarketIntelligence";
@@ -160,6 +160,12 @@ export default function ClientDetailPage() {
                         {profile.contact_phone && <span className="inline-flex items-center gap-0.5"><Phone className="w-3 h-3" />{profile.contact_phone}</span>}
                     </div>
                 </div>
+                <Link
+                    href={`/admin/clients/${clientId}/quick-checker`}
+                    className="inline-flex items-center gap-1.5 text-[10px] font-bold px-3 py-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 uppercase"
+                >
+                    <Sparkles className="w-3 h-3" /> Quick Checker
+                </Link>
                 <span className={clsx("text-[10px] font-bold px-3 py-1 rounded-lg border uppercase",
                     profile.client_status === "active" ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "bg-stone-100 text-stone-500 border-stone-200"
                 )}>{profile.client_status}</span>
