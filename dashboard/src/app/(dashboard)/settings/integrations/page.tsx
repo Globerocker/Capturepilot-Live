@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import {
     Copy,
     Key,
@@ -49,6 +49,14 @@ const EVENT_OPTIONS = [
 ];
 
 export default function IntegrationsPage() {
+    return (
+        <Suspense fallback={null}>
+            <IntegrationsPageContent />
+        </Suspense>
+    );
+}
+
+function IntegrationsPageContent() {
     const [tokens, setTokens] = useState<ApiToken[]>([]);
     const [webhooks, setWebhooks] = useState<WebhookEndpoint[]>([]);
     const [loading, setLoading] = useState(true);
