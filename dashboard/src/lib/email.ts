@@ -369,6 +369,127 @@ export async function sendTeamInviteEmail(
     });
 }
 
+// ─── Cold Outreach (prospect drip) ──────────────────────────
+// 3-step drip sent to newly-SAM-registered companies that an admin has
+// approved. Every message carries a CAN-SPAM compliant footer with
+// physical address + one-click unsubscribe. The list-unsubscribe header
+// is set by the send wrapper below so mail clients show the native
+// "Unsubscribe" button.
+
+// Physical address required by CAN-SPAM. Configurable via env; a sensible
+// default covers most deployments but admins should override.
+const MAILING_ADDRESS = process.env.OUTREACH_MAILING_ADDRESS
+    || "CapturePilot, 1209 Orange Street, Wilmington, DE 19801";
+
+export interface OutreachStep {
+    step: 0 | 1 | 2;
+    subject: string;
+    intro: string;
+    body: string;
+    ctaLabel: string;
+    ctaUrl: string;
+}
+
+// Builds the CAN-SPAM footer (physical address + unsubscribe link).
+// Kept at module scope so all three steps render an identical footer.
+function outreachFooter(unsubscribeUrl: string): string {
+    return `
+        <p style="color:${COLORS.stone500};font-size:11px;line-height:1.6;margin:24px 0 8px;">
+            You're receiving this email because you recently registered on SAM.gov as a federal contractor
+            and we think CapturePilot could help you win government work. If that's not a fit, no hard feelings —
+            <a href="${unsubscribeUrl}" style="color:${COLORS.stone500};text-decoration:underline;">unsubscribe with one click</a>
+            and we won't contact you again.
+        </p>
+        <p style="color:${COLORS.stone500};font-size:11px;line-height:1.6;margin:0;">
+            ${MAILING_ADDRESS}
+        </p>
+    `;
+}
+
+/**
+ * Sends a single outreach step. The send() wrapper adds the list-unsubscribe
+ * header automatically when we pass an unsubscribeUrl in mergeVars.
+ */
+export async function sendOutreachEmail(
+    to: string,
+    params: {
+        recipientName?: string | null;
+        companyName: string;
+        step: 0 | 1 | 2;
+        unsubscribeUrl: string;
+        introLine?: string;        // optional override for step 0
+    },
+): Promise<boolean> {
+    const { recipientName, companyName, step, unsubscribeUrl } = params;
+    const firstName = (recipientName || "").split(" ")[0];
+    const greeting = firstName ? `Hi ${firstName},` : `Hi there,`;
+
+    let subject = "";
+    let eyebrow = "";
+    let heading = "";
+    let body = "";
+    let ctaLabel = "See matching opportunities";
+    let ctaUrl = `${SITE_URL}/check?utm_source=outreach&utm_medium=email&utm_campaign=intro`;
+
+    if (step === 0) {
+        subject = `Quick question for ${companyName}`;
+        eyebrow = "Federal Contracting Tip";
+        heading = `${companyName}, congrats on your SAM registration`;
+        body = `
+            ${paragraph(greeting)}
+            ${paragraph(params.introLine || `I noticed <strong>${companyName}</strong> just registered on SAM.gov — welcome to federal contracting. Most new registrants never win a contract because they have no visibility into which of the 30,000+ open opportunities actually match them.`)}
+            ${paragraph(`CapturePilot scans every new opportunity daily and scores them against your NAICS, certifications, and past performance — so you only look at bids worth pursuing. Free to try, no credit card.`)}
+            ${featureBox(`
+                ${sectionLabel("What you get in the free check")}
+                <ul style="color:#065f46;font-size:14px;line-height:1.9;padding-left:20px;margin:0;">
+                    <li>List of open opportunities matching your NAICS + certs</li>
+                    <li>"Easy wins" — set-asides your competition can't touch</li>
+                    <li>Certification recommendations that unlock more contracts</li>
+                </ul>
+            `)}
+        `;
+        ctaLabel = "Run a free capability check";
+    } else if (step === 1) {
+        subject = `${companyName} — 2 opportunities matching your registration`;
+        eyebrow = "Follow-up";
+        heading = `A quick nudge on federal opportunities`;
+        body = `
+            ${paragraph(greeting)}
+            ${paragraph(`I sent you a note a few days back about CapturePilot — figured it was worth following up because <strong>opportunities in your NAICS are moving now</strong>. Sources Sought notices typically land 6-18 months before an actual award, so the early read matters.`)}
+            ${paragraph(`If you want a 30-second look at who's buying what you sell, the free capability check pulls live SAM.gov data for ${companyName}:`)}
+        `;
+        ctaLabel = "See my matches";
+        ctaUrl = `${SITE_URL}/check?utm_source=outreach&utm_medium=email&utm_campaign=followup`;
+    } else {
+        subject = `One last note from CapturePilot`;
+        eyebrow = "Last message";
+        heading = `Closing the loop`;
+        body = `
+            ${paragraph(greeting)}
+            ${paragraph(`This is the last email you'll get from me — I don't want to be that person.`)}
+            ${paragraph(`If federal contracting isn't a priority right now, totally fair. If it ever is, CapturePilot is at <a href="${SITE_URL}" style="color:${COLORS.emerald700};">capturepilot.com</a> — free tier available anytime.`)}
+            ${paragraph(`Either way, best of luck with ${companyName}.`)}
+        `;
+        ctaLabel = "Bookmark CapturePilot";
+        ctaUrl = `${SITE_URL}?utm_source=outreach&utm_medium=email&utm_campaign=final`;
+    }
+
+    const html = emailTemplate({
+        category: "marketing",
+        preheader: subject,
+        eyebrow,
+        heading,
+        body: body + outreachFooter(unsubscribeUrl),
+        cta: { label: ctaLabel, url: ctaUrl },
+    });
+
+    return send("outreach_" + ["intro", "followup", "final"][step], to, subject, html, {
+        firstName: firstName || "",
+        companyName,
+        unsubscribeUrl,
+    });
+}
+
 // ─── Task Notification ─────────────────────────────────────
 export async function sendTaskNotification(
     to: string,

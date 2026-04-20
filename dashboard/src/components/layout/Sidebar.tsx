@@ -7,7 +7,7 @@ import Image from "next/image";
 import {
     LayoutDashboard, Target, Layers, FileText, BarChart3, Mic, Users, Shield,
     CreditCard, Settings, LogOut, Menu, X, FolderOpen, Mail, Search, Pencil,
-    Handshake, Clock, ChevronRight, Radar, Telescope, GraduationCap,
+    Handshake, Clock, ChevronRight, Radar, Telescope, GraduationCap, Sparkles,
 } from "lucide-react";
 import clsx from "clsx";
 import { createSupabaseClient } from "@/lib/supabase/client";
@@ -56,6 +56,7 @@ export default function Sidebar() {
                 { name: "All Partners", href: "/partners", icon: Users, matchExact: true },
                 { name: "Active", href: "/partners?status=active", icon: Handshake },
                 { name: "Potential", href: "/partners?status=potential", icon: Clock },
+                { name: "Suggested", href: "/partners?status=suggested", icon: Sparkles },
             ],
         },
         { name: "Competitors", href: "/competitors", icon: Shield },

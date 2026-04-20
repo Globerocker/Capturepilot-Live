@@ -76,6 +76,14 @@
             "schedule": "30 5 * * *"
         },
         {
+            "path": "/api/cron/enrich_prospects",
+            "schedule": "0 7 * * *"
+        },
+        {
+            "path": "/api/cron/outreach_send",
+            "schedule": "0 14 * * 1-5"
+        },
+        {
             "path": "/api/cron/ingest_dod_daily",
             "schedule": "0 22 * * 1-5"
         },

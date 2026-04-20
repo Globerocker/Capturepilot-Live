@@ -56,7 +56,7 @@ function PartnersPageInner() {
     const searchParams = useSearchParams();
     // Sidebar flyout can deep-link to /partners?status=active or ?status=potential.
     // The parameter filters the Saved Partners section (search results untouched).
-    const statusFilter = (searchParams.get("status") as "active" | "potential" | null) || null;
+    const statusFilter = (searchParams.get("status") as "active" | "potential" | "suggested" | null) || null;
     const [activeTab, setActiveTab] = useState<"search" | "saved">("search");
     // Partner Search splits into two sources: live SAM.gov fan-out (existing) and
     // the curated tribal_contractors directory seeded from SBA Certify. The toggle
@@ -219,12 +219,16 @@ function PartnersPageInner() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [keyword]);
 
-    // Three distinct views controlled by ?status= query:
+    // Four distinct views controlled by ?status= query:
     //   null         → Partner Search (SAM.gov lookup + saved list at bottom)
     //   "active"     → Active Partners only (working with them now)
     //   "potential"  → Potential Partners only (shortlist to evaluate)
-    const viewMode: "search" | "active" | "potential" = statusFilter === "active"
-        ? "active" : statusFilter === "potential" ? "potential" : "search";
+    //   "suggested"  → AI-curated prospects from the outreach pipeline
+    const viewMode: "search" | "active" | "potential" | "suggested" =
+        statusFilter === "active" ? "active"
+        : statusFilter === "potential" ? "potential"
+        : statusFilter === "suggested" ? "suggested"
+        : "search";
 
     return (
         <div className="max-w-[1600px] mx-auto space-y-6 pb-12">
@@ -232,14 +236,18 @@ function PartnersPageInner() {
                 <h1 className="text-2xl font-bold flex items-center gap-2">
                     {viewMode === "search" ? <><Search className="w-6 h-6" /> Partner Search</>
                         : viewMode === "active" ? <><Handshake className="w-6 h-6 text-emerald-600" /> Active Partners</>
+                        : viewMode === "suggested" ? <><Award className="w-6 h-6 text-amber-600" /> Suggested Partners</>
                         : <><Users className="w-6 h-6" /> Potential Partners</>}
                 </h1>
                 <p className="text-sm text-stone-500 mt-1">
                     {viewMode === "search" && "Search SAM.gov for registered companies to team with on government contracts."}
                     {viewMode === "active" && "Partners you're currently working with. Click a card to open the relationship detail."}
                     {viewMode === "potential" && "Shortlist of companies you're evaluating for teaming. Click to drill in or promote to Active."}
+                    {viewMode === "suggested" && "Newly-SAM-registered companies that match your NAICS + certifications, surfaced by our outreach pipeline. Ranked by fit — top of the list overlaps most with your profile."}
                 </p>
             </div>
+
+            {viewMode === "suggested" && <SuggestedPartnersView savePartnerRaw={savePartnerRaw} savingUEI={savingUEI} savedUEIs={savedUEIs} />}
 
             {/* Search Form — only visible in default Search view. */}
             {viewMode === "search" && (
@@ -539,8 +547,8 @@ function PartnersPageInner() {
                 </>
             )}
 
-            {/* Saved partners section */}
-            {savedPartners.length > 0 && (
+            {/* Saved partners section — hidden in Suggested view (suggestions have their own layout) */}
+            {viewMode !== "suggested" && savedPartners.length > 0 && (
                 <div className="mt-10">
                     <h3 className="text-lg font-bold tracking-tight text-black mb-3 flex items-center gap-2">
                         <Handshake className="w-5 h-5 text-emerald-600" />
@@ -587,6 +595,162 @@ function PartnersPageInner() {
                     })}
                 </div>
             )}
+        </div>
+    );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Suggested Partners view — sourced from outreach_prospects (approved)
+// ─────────────────────────────────────────────────────────────
+interface SuggestedRow {
+    id: string;
+    uei: string | null;
+    company_name: string;
+    website: string | null;
+    state: string | null;
+    city: string | null;
+    naics_codes: string[];
+    certifications: string[];
+    registration_date: string | null;
+    match_score: number;
+    fit_score: number;
+    exact_naics: string[];
+    prefix_naics: string[];
+    matched_certs: string[];
+}
+
+function SuggestedPartnersView({
+    savePartnerRaw, savingUEI, savedUEIs,
+}: {
+    savePartnerRaw: (body: {
+        company_name: string; website: string | null; uei: string | null;
+        naics_codes: string[]; state: string | null; certifications: string[];
+    }, status: "active" | "potential") => Promise<void>;
+    savingUEI: string | null;
+    savedUEIs: Set<string>;
+}) {
+    const [rows, setRows] = useState<SuggestedRow[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [meta, setMeta] = useState<{ user_naics_count: number; user_cert_count: number } | null>(null);
+
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            try {
+                const res = await fetch("/api/partners/suggested?limit=50");
+                if (!res.ok) { if (!cancelled) setLoading(false); return; }
+                const body = await res.json() as { prospects: SuggestedRow[]; user_naics_count: number; user_cert_count: number };
+                if (!cancelled) {
+                    setRows(body.prospects || []);
+                    setMeta({ user_naics_count: body.user_naics_count, user_cert_count: body.user_cert_count });
+                    setLoading(false);
+                }
+            } catch { if (!cancelled) setLoading(false); }
+        })();
+        return () => { cancelled = true; };
+    }, []);
+
+    if (loading) {
+        return (
+            <div className="bg-white border border-stone-200 rounded-2xl p-8 flex justify-center">
+                <Loader2 className="w-6 h-6 animate-spin text-stone-400" />
+            </div>
+        );
+    }
+
+    if (rows.length === 0) {
+        return (
+            <div className="bg-white border border-stone-200 border-dashed rounded-2xl p-8 text-center">
+                <Award className="w-10 h-10 text-stone-300 mx-auto mb-3" />
+                <p className="text-sm text-stone-500 mb-1">No suggestions yet.</p>
+                <p className="text-xs text-stone-400 max-w-md mx-auto">
+                    The outreach pipeline surfaces approved prospects that match your NAICS
+                    ({meta?.user_naics_count || 0}) and certifications ({meta?.user_cert_count || 0}).
+                    Check back after the daily discovery cron runs, or ask an admin to approve more
+                    prospects from /admin/outreach.
+                </p>
+            </div>
+        );
+    }
+
+    return (
+        <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-3">
+            {rows.map(p => (
+                <div key={p.id} className="bg-white border border-stone-200 rounded-2xl p-5 hover:border-stone-300 transition-colors">
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                        <div className="min-w-0">
+                            <h3 className="font-bold text-sm text-black">{p.company_name}</h3>
+                            {p.state && (
+                                <p className="text-xs text-stone-500 inline-flex items-center gap-1 mt-0.5">
+                                    <MapPin className="w-3 h-3" />
+                                    {p.city ? `${p.city}, ${p.state}` : p.state}
+                                </p>
+                            )}
+                        </div>
+                        <span
+                            className={clsx(
+                                "text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded border flex-shrink-0",
+                                p.fit_score >= 6 ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                    : p.fit_score >= 3 ? "bg-amber-50 text-amber-700 border-amber-200"
+                                    : "bg-stone-50 text-stone-600 border-stone-200",
+                            )}
+                            title="Fit score: 3pts per exact NAICS, 1pt per 4-digit prefix, 2pts per matching cert"
+                        >
+                            {p.fit_score} fit
+                        </span>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap text-[10px] mb-2">
+                        {p.exact_naics.slice(0, 3).map(n => (
+                            <span key={n} className="font-mono bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded" title="Exact NAICS match">{n}</span>
+                        ))}
+                        {p.prefix_naics.slice(0, 2).map(n => (
+                            <span key={n} className="font-mono bg-blue-50 text-blue-600 border border-blue-100 px-1.5 py-0.5 rounded" title="4-digit prefix match">{n}</span>
+                        ))}
+                        {p.matched_certs.map(c => (
+                            <span key={c} className="font-bold bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded uppercase" title="Matching certification">{c}</span>
+                        ))}
+                    </div>
+                    {p.registration_date && (
+                        <p className="text-[10px] text-stone-400 mb-3">
+                            Registered {new Date(p.registration_date).toLocaleDateString()}
+                        </p>
+                    )}
+                    <div className="flex items-center gap-2">
+                        {p.website && (
+                            <a
+                                href={p.website.startsWith("http") ? p.website : `https://${p.website}`}
+                                target="_blank" rel="noopener noreferrer"
+                                className="text-[10px] font-bold text-stone-700 bg-white border border-stone-200 px-2 py-1 rounded hover:bg-stone-50 inline-flex items-center gap-1"
+                            >
+                                <Globe className="w-3 h-3" /> Website
+                            </a>
+                        )}
+                        <AwardCountBadge name={p.company_name} uei={p.uei} />
+                        <div className="flex-1" />
+                        {p.uei && savedUEIs.has(p.uei) ? (
+                            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded inline-flex items-center gap-1">
+                                <CheckCircle2 className="w-3 h-3" /> Saved
+                            </span>
+                        ) : (
+                            <button
+                                type="button"
+                                disabled={savingUEI === p.uei}
+                                onClick={() => savePartnerRaw({
+                                    company_name: p.company_name,
+                                    website: p.website,
+                                    uei: p.uei,
+                                    naics_codes: p.naics_codes,
+                                    state: p.state,
+                                    certifications: p.certifications,
+                                }, "potential")}
+                                className="text-[10px] font-bold text-stone-700 bg-white border border-stone-200 hover:bg-stone-50 px-2 py-1 rounded inline-flex items-center gap-1 disabled:opacity-50"
+                            >
+                                <Plus className="w-3 h-3" /> {savingUEI === p.uei ? "Saving…" : "Save"}
+                            </button>
+                        )}
+                    </div>
+                </div>
+            ))}
         </div>
     );
 }
