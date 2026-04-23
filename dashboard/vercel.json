@@ -25,7 +25,7 @@
         },
         {
             "path": "/api/cron/deep_enrich",
-            "schedule": "0 8 * * *"
+            "schedule": "0 */4 * * *"
         },
         {
             "path": "/api/cron/notify_matches",
@@ -57,7 +57,7 @@
         },
         {
             "path": "/api/cron/ai_strategy",
-            "schedule": "0 9 * * *"
+            "schedule": "15 */4 * * *"
         },
         {
             "path": "/api/cron/process_scheduled_emails",

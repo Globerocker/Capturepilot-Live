@@ -59,9 +59,11 @@ function PartnersPageInner() {
     const statusFilter = (searchParams.get("status") as "active" | "potential" | "suggested" | null) || null;
     const [activeTab, setActiveTab] = useState<"search" | "saved">("search");
     // Partner Search splits into two sources: live SAM.gov fan-out (existing) and
-    // the curated tribal_contractors directory seeded from SBA Certify. The toggle
-    // persists per-session only — we rebuild URL state off ?status= for deep links.
-    const [searchSource, setSearchSource] = useState<"sam" | "tribal">("sam");
+    // the curated tribal_contractors directory seeded from SBA Certify. The curated
+    // directory has richer capability narratives + NAICS overlap scoring, so we
+    // default to it. The toggle persists per-session only — we rebuild URL state
+    // off ?status= for deep links.
+    const [searchSource, setSearchSource] = useState<"sam" | "tribal">("tribal");
     const [profileNaics, setProfileNaics] = useState<string[]>([]);
     const [naicsCodes, setNaicsCodes] = useState<string[]>([]);
     const [states, setStates] = useState<string[]>([]);

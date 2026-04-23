@@ -42,13 +42,15 @@ export async function GET(req: NextRequest) {
         // - OR structured_requirements is empty {}
         // - AND is not archived
         // - ORDER by newest first (most relevant)
+        // ?limit= override for manual backfill runs; default 80 per cron run.
+        const limitParam = parseInt(req.nextUrl.searchParams.get("limit") || "80", 10);
         const { data: opps } = await db
             .from("opportunities")
             .select("notice_id, description, resource_links, structured_requirements, estimated_value")
             .eq("is_archived", false)
             .or("description.like.https://api.sam.gov%,structured_requirements.eq.{}")
             .order("posted_date", { ascending: false, nullsFirst: false })
-            .limit(50);
+            .limit(Math.min(Math.max(limitParam, 1), 200));
 
         if (!opps || opps.length === 0) {
             return NextResponse.json({ success: true, message: "Nothing to enrich", ...stats });

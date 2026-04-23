@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { createSupabaseClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Shield, Globe, ChevronRight, TrendingUp, Plus, LinkIcon, Users, Search, Building2, GitCompareArrows, X, RefreshCw } from "lucide-react";
+import { Shield, Globe, ChevronRight, TrendingUp, Plus, LinkIcon, Users, Search, Building2, GitCompareArrows, X, RefreshCw, Loader2 } from "lucide-react";
 import { AnalysisProgressStepper, statusToStep } from "@/components/AnalysisProgressStepper";
 import BulkAddFromSam from "@/components/competitors/BulkAddFromSam";
 import ComparisonTable from "@/components/competitors/ComparisonTable";
@@ -97,6 +97,31 @@ export default function CompetitorsPage() {
         } finally {
             setRecrawlingId(null);
         }
+    }
+
+    // Bulk recrawl runs the refresh endpoint against every competitor, serialized
+    // to avoid hammering the crawler worker. Per-card spinner visualizes progress.
+    const [bulkRecrawling, setBulkRecrawling] = useState(false);
+    const [bulkRecrawlDone, setBulkRecrawlDone] = useState<{ ok: number; fail: number } | null>(null);
+    async function handleBulkRecrawl() {
+        if (bulkRecrawling || competitors.length === 0) return;
+        if (!confirm(`Recrawl all ${competitors.length} competitors? This can take a few minutes.`)) return;
+        setBulkRecrawling(true);
+        setBulkRecrawlDone(null);
+        let ok = 0, fail = 0;
+        for (const c of competitors) {
+            setRecrawlingId(c.id);
+            try {
+                const res = await fetch(`/api/competitors/${c.id}/refresh`, { method: "POST" });
+                if (res.ok) ok++; else fail++;
+            } catch {
+                fail++;
+            }
+        }
+        setRecrawlingId(null);
+        setBulkRecrawling(false);
+        setBulkRecrawlDone({ ok, fail });
+        if (profileId) await loadCompetitors(profileId);
     }
 
     function toggleCompare(id: string) {
@@ -368,17 +393,48 @@ export default function CompetitorsPage() {
 
     return (
         <div className="max-w-[1600px] mx-auto space-y-6 animate-in fade-in duration-500 px-1">
-            <header>
-                <h2 className="text-2xl sm:text-3xl font-bold tracking-tighter text-black flex items-center">
-                    <Shield className="mr-2 sm:mr-3 w-6 h-6 sm:w-8 sm:h-8" /> Competitors
-                    <span className="ml-3 text-sm font-sans font-medium bg-stone-100 px-3 py-1 rounded-full text-stone-500 border border-stone-200">
-                        {competitors.length}
-                    </span>
-                </h2>
-                <p className="text-stone-500 mt-1 font-medium text-sm">
-                    Track and analyze your competitors. Add any company by URL for instant analysis.
-                </p>
+            <header className="flex items-start justify-between gap-4">
+                <div>
+                    <h2 className="text-2xl sm:text-3xl font-bold tracking-tighter text-black flex items-center">
+                        <Shield className="mr-2 sm:mr-3 w-6 h-6 sm:w-8 sm:h-8" /> Competitors
+                        <span className="ml-3 text-sm font-sans font-medium bg-stone-100 px-3 py-1 rounded-full text-stone-500 border border-stone-200">
+                            {competitors.length}
+                        </span>
+                    </h2>
+                    <p className="text-stone-500 mt-1 font-medium text-sm">
+                        Track and analyze your competitors. Add any company by URL for instant analysis.
+                    </p>
+                </div>
+                {competitors.length > 0 && (
+                    <button
+                        type="button"
+                        onClick={handleBulkRecrawl}
+                        disabled={bulkRecrawling}
+                        className="flex-shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-stone-200 bg-white text-sm font-medium text-stone-700 hover:bg-stone-50 hover:border-stone-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                        {bulkRecrawling ? (
+                            <>
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                Recrawling {competitors.length}…
+                            </>
+                        ) : (
+                            <>
+                                <RefreshCw className="w-4 h-4" />
+                                Bulk Recrawl
+                            </>
+                        )}
+                    </button>
+                )}
             </header>
+
+            {bulkRecrawlDone && (
+                <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm rounded-xl px-4 py-2.5 flex items-center justify-between animate-in fade-in duration-300">
+                    <span>Bulk recrawl complete — {bulkRecrawlDone.ok} refreshed{bulkRecrawlDone.fail > 0 ? `, ${bulkRecrawlDone.fail} failed` : ""}.</span>
+                    <button type="button" aria-label="Dismiss" title="Dismiss" onClick={() => setBulkRecrawlDone(null)} className="text-emerald-600 hover:text-emerald-900">
+                        <X className="w-3.5 h-3.5" />
+                    </button>
+                </div>
+            )}
 
             {bulkFlash && (
                 <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm rounded-xl px-4 py-2.5 flex items-center justify-between animate-in fade-in duration-300">

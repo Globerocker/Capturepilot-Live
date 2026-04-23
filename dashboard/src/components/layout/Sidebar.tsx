@@ -11,7 +11,6 @@ import {
 } from "lucide-react";
 import clsx from "clsx";
 import { createSupabaseClient } from "@/lib/supabase/client";
-import QuickActions from "./QuickActions";
 
 interface NavItem {
     name: string;
@@ -49,7 +48,6 @@ export default function Sidebar() {
             ],
         },
         { name: "Documents", href: "/documents", icon: FolderOpen },
-        { name: "Market Intel", href: "/intelligence", icon: BarChart3 },
         {
             name: "Partners", href: "/partners", icon: Users,
             children: [
@@ -155,39 +153,12 @@ export default function Sidebar() {
                     <ChevronRight className="h-3.5 w-3.5 opacity-40 group-hover:opacity-80 transition-opacity hidden lg:block" />
                 </Link>
 
-                {/* Mobile: inline expanded children (no hover, tap-friendly). */}
-                <div className="lg:hidden pl-8 mt-0.5 space-y-0.5">
-                    {item.children!.map(child => {
-                        const ChildIcon = child.icon;
-                        const childActive = isLinkActive(child.href, child.matchExact);
-                        return (
-                            <Link
-                                key={child.name}
-                                href={child.href}
-                                onClick={handleNavClick}
-                                className={clsx(
-                                    "flex items-center space-x-3 px-4 py-2 rounded-xl text-xs transition-colors",
-                                    childActive
-                                        ? "bg-emerald-500/10 text-emerald-400"
-                                        : "text-stone-500 hover:bg-stone-800/50 hover:text-stone-300",
-                                )}
-                            >
-                                <ChildIcon className="h-3.5 w-3.5" />
-                                <span>{child.name}</span>
-                            </Link>
-                        );
-                    })}
-                </div>
-
-                {/* Desktop: flyout menu anchored to the right of the sidebar. Visible on group hover.
-                    `group-hover:block` on Tailwind; a small buffer (pl-2, -translate-x-2) bridges the
-                    gap so the hover doesn't break when moving cursor between parent and panel. */}
-                <div className="hidden lg:group-hover:block absolute left-full top-0 ml-1 z-40 pt-0 min-w-[220px]">
-                    <div className="bg-stone-900 border border-stone-800 rounded-2xl shadow-2xl py-2">
-                        <div className="px-4 pb-1.5 mb-1 border-b border-stone-800/60 flex items-center gap-2">
-                            <Icon className="h-3.5 w-3.5 text-stone-500" />
-                            <span className="text-[10px] font-bold uppercase tracking-widest text-stone-500">{item.name}</span>
-                        </div>
+                {/* Expanded children when the parent is active — both mobile
+                    and desktop. Flyout-on-hover was confusing because it
+                    covered page content while the active route was loading;
+                    inline accordion is simpler and feels faster. */}
+                {isActive && (
+                    <div className="pl-8 mt-0.5 space-y-0.5">
                         {item.children!.map(child => {
                             const ChildIcon = child.icon;
                             const childActive = isLinkActive(child.href, child.matchExact);
@@ -197,19 +168,19 @@ export default function Sidebar() {
                                     href={child.href}
                                     onClick={handleNavClick}
                                     className={clsx(
-                                        "flex items-center space-x-3 px-4 py-2.5 mx-1 rounded-xl transition-colors text-sm",
+                                        "flex items-center space-x-3 px-4 py-2 rounded-xl text-xs transition-colors",
                                         childActive
                                             ? "bg-emerald-500/10 text-emerald-400"
-                                            : "text-stone-400 hover:bg-stone-800/60 hover:text-stone-200",
+                                            : "text-stone-500 hover:bg-stone-800/50 hover:text-stone-300",
                                     )}
                                 >
-                                    <ChildIcon className={clsx("h-4 w-4", childActive ? "text-emerald-400" : "text-stone-500")} />
-                                    <span className="font-medium">{child.name}</span>
+                                    <ChildIcon className="h-3.5 w-3.5" />
+                                    <span>{child.name}</span>
                                 </Link>
                             );
                         })}
                     </div>
-                </div>
+                )}
             </div>
         );
     };
@@ -235,17 +206,14 @@ export default function Sidebar() {
                 </button>
             </div>
 
-            {/* Navigation */}
-            <nav className="flex-1 px-3 lg:px-4 space-y-0.5 lg:overflow-visible overflow-y-auto">
+            {/* Navigation — scrollable so bottom links (Billing/Settings/Sign Out)
+                stay visible on 13" MacBook screens where the nav overflows. */}
+            <nav className="flex-1 px-3 lg:px-4 space-y-0.5 overflow-y-auto lg:pr-2 scrollbar-thin scrollbar-thumb-stone-800 scrollbar-track-transparent">
                 {navLinks.map(renderNavItem)}
             </nav>
 
-            {/* Bottom-anchored section: Quick Actions + nav footer */}
-            <div className="mt-auto">
-                {/* Quick Actions */}
-                <QuickActions onNavigate={handleNavClick} />
-
-                {/* Bottom links */}
+            {/* Bottom-anchored section: Billing + Settings + Sign Out */}
+            <div className="mt-auto pt-2">
                 <div className="px-3 lg:px-4 space-y-0.5 border-t border-stone-800/60 pt-3">
                     {bottomLinks.map((link) => {
                         const Icon = link.icon;

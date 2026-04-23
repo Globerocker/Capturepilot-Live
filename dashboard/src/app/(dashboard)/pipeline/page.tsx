@@ -253,12 +253,32 @@ export default function PipelinePage() {
         (groupedPursuits[s.key]?.length || 0) > 0 || ["discovered", "researching", "preparing", "submitted"].includes(s.key)
     );
 
-    // Pipeline stats (filtered)
+    // Pipeline stats (filtered). Per-stage weightings mirror the HubSpot-style
+    // probability bucketing so "weighted" reflects expected pipeline $ not gross.
+    const STAGE_WIN_PROB: Record<string, number> = {
+        discovered: 0.05,
+        researching: 0.15,
+        preparing: 0.30,
+        submitted: 0.50,
+        awarded: 1.00,
+        lost: 0,
+        no_bid: 0,
+    };
     const totalValue = filteredPursuits.reduce((sum, p) => {
         const opp = p.opportunities as Pursuit["opportunities"];
         return sum + (opp?.award_amount || 0);
     }, 0);
+    const weightedValue = filteredPursuits.reduce((sum, p) => {
+        const opp = p.opportunities as Pursuit["opportunities"];
+        const prob = STAGE_WIN_PROB[p.stage] ?? 0.15;
+        return sum + (opp?.award_amount || 0) * prob;
+    }, 0);
+    const wonValue = filteredPursuits
+        .filter(p => p.stage === "awarded")
+        .reduce((sum, p) => sum + (p.opportunities?.award_amount || 0), 0);
     const activePursuits = filteredPursuits.filter(p => !["awarded", "lost", "no_bid"].includes(p.stage)).length;
+    const fmtUsd = (n: number) =>
+        new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0, notation: n >= 1_000_000 ? "compact" : "standard" }).format(n);
 
     if (loading && pursuits.length === 0) {
         return (
@@ -614,6 +634,41 @@ export default function PipelinePage() {
                             })}
                         </div>
                     )}
+
+                    {/* HubSpot-style pipeline summary — sticky bottom bar */}
+                    <div className="sticky bottom-0 z-20 mt-4 -mx-1 px-1 pb-2">
+                        <div className="bg-white/95 backdrop-blur-md border border-stone-200 rounded-2xl shadow-lg px-5 py-3 flex flex-wrap items-center gap-x-8 gap-y-2 text-sm">
+                            <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Total deals</span>
+                                <span className="font-semibold text-stone-900">{filteredPursuits.length}</span>
+                            </div>
+                            <div className="h-4 w-px bg-stone-200 hidden sm:block" />
+                            <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Active</span>
+                                <span className="font-semibold text-stone-900">{activePursuits}</span>
+                            </div>
+                            <div className="h-4 w-px bg-stone-200 hidden sm:block" />
+                            <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Gross value</span>
+                                <span className="font-semibold text-stone-900 tabular-nums">{fmtUsd(totalValue)}</span>
+                            </div>
+                            <div className="h-4 w-px bg-stone-200 hidden sm:block" />
+                            <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-600">Weighted</span>
+                                <span className="font-semibold text-emerald-700 tabular-nums">{fmtUsd(weightedValue)}</span>
+                                <span className="text-[10px] text-stone-400">by stage-prob</span>
+                            </div>
+                            {wonValue > 0 && (
+                                <>
+                                    <div className="h-4 w-px bg-stone-200 hidden sm:block" />
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[10px] font-bold uppercase tracking-widest text-amber-600">Won</span>
+                                        <span className="font-semibold text-amber-700 tabular-nums">{fmtUsd(wonValue)}</span>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    </div>
 
                     {/* Bottom service CTA */}
                     <div className="mt-6">
