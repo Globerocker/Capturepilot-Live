@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
         // ai_win_strategy defaults to {} (empty JSON object) or null
         const { data: opps, error: fetchError } = await supabase
             .from("opportunities")
-            .select("id, notice_id, title, agency, notice_type, naics_code, set_aside_code, award_amount, place_of_performance_state, place_of_performance_city, response_deadline, posted_date, description, incumbent_contractor_name, incumbent_contractor_uei, structured_requirements, strategic_scoring, set_aside_types")
+            .select("id, notice_id, title, agency, notice_type, naics_code, set_aside_code, award_amount, place_of_performance_state, place_of_performance_city, response_deadline, posted_date, description, incumbent_contractor_name, incumbent_contractor_uei, structured_requirements, strategic_scoring")
             .or("ai_win_strategy.is.null,ai_win_strategy.eq.{}")
             .eq("is_archived", false)
             .order("response_deadline", { ascending: true, nullsFirst: false })

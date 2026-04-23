@@ -52,6 +52,24 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
         .eq("notice_id", opp.notice_id)
         .order("is_primary", { ascending: false });
 
+    // Fetch GAO protests relevant to this opportunity: matching agency AND
+    // (incumbent contractor name if known). Last 24 months — older protests
+    // rarely shape a live recompete.
+    const protestFilters: string[] = [];
+    if (opp.agency) protestFilters.push(`agency.ilike.%${String(opp.agency).split(" ")[0]}%`);
+    if (opp.incumbent_contractor_name) {
+        protestFilters.push(`protester.ilike.%${String(opp.incumbent_contractor_name).split(" ")[0]}%`);
+    }
+    const { data: protests } = protestFilters.length > 0
+        ? await supabase
+            .from("bid_protests")
+            .select("docket_number, protester, agency, decision_date, outcome, decision_url, summary")
+            .or(protestFilters.join(","))
+            .gte("decision_date", new Date(Date.now() - 2 * 365 * 86400_000).toISOString())
+            .order("decision_date", { ascending: false })
+            .limit(5)
+        : { data: null };
+
     // Also extract POC from SAM.gov raw_json as fallback
     const rawJson = opp.raw_json || {};
     const samPocs: SamContact[] = [];
@@ -113,7 +131,17 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
     const reqs = opp.structured_requirements || {};
     const strat = opp.strategic_scoring || {};
     const aiStrat = opp.ai_win_strategy || {};
-    const setAsides = opp.set_aside_types || {};
+    // Derive set-aside flags from the authoritative text column `set_aside_code`.
+    // (The legacy `set_aside_types` jsonb column was dropped in migration 053.)
+    const sac = String(opp.set_aside_code || "").toLowerCase();
+    const setAsides = {
+        total_small_business: /\bsba\b|total small|^sb$|total_small_business/.test(sac),
+        partial_small_business: /\bsbp\b|partial small/.test(sac),
+        "8a": /8\(a\)|\b8a\b|8an/.test(sac),
+        sdvosb: /sdvosb/.test(sac),
+        hubzone: /hubzone|\bhzc\b|\bhzs\b/.test(sac),
+        full_and_open: !sac || sac === "none" || sac === "unrestricted" || sac.includes("full and open"),
+    };
 
     // Helper formatting
     const rawValue = opp.estimated_value || opp.award_amount;
@@ -519,6 +547,40 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                                         </div>
                                     )}
                                 </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* GAO Bid-Protest Intel — only when we found matches on agency or incumbent */}
+                    {protests && protests.length > 0 && (
+                        <div className="bg-rose-50 rounded-2xl sm:rounded-3xl border border-rose-200 shadow-sm overflow-hidden">
+                            <div className="bg-rose-100/50 border-b border-rose-200 px-4 sm:px-8 py-4 sm:py-5">
+                                <h2 className="text-base sm:text-lg font-bold flex items-center text-rose-900">
+                                    <ShieldAlert className="w-5 h-5 mr-2 sm:mr-3 text-rose-600" /> Bid-Protest History (last 24 mo)
+                                    <InfoTooltip text="GAO bid-protest decisions filed against this agency or incumbent. Sustains flag vulnerabilities you can exploit in the recompete." />
+                                </h2>
+                            </div>
+                            <div className="p-4 sm:p-8 space-y-3">
+                                {protests.map((p: { docket_number: string; protester: string | null; agency: string | null; decision_date: string | null; outcome: string; decision_url: string | null; summary: string | null }) => (
+                                    <div key={p.docket_number} className="flex items-start gap-3 pb-3 border-b border-rose-100 last:border-b-0 last:pb-0">
+                                        <span className={clsx("text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded border mt-0.5",
+                                            p.outcome === "sustained" ? "bg-rose-600 text-white border-rose-700" :
+                                            p.outcome === "denied"    ? "bg-stone-100 text-stone-600 border-stone-300" :
+                                            p.outcome === "dismissed" ? "bg-stone-50 text-stone-500 border-stone-200" :
+                                                                        "bg-amber-50 text-amber-700 border-amber-200")}>
+                                            {p.outcome}
+                                        </span>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-semibold text-rose-900 truncate">{p.protester || "Unknown protester"}</p>
+                                            <p className="text-xs text-rose-700 mt-0.5">{p.agency || "—"} · <span className="font-mono">{p.docket_number}</span> · {p.decision_date ? new Date(p.decision_date).toLocaleDateString() : "—"}</p>
+                                            {p.decision_url && (
+                                                <a href={p.decision_url} target="_blank" rel="noreferrer" className="text-xs text-rose-600 hover:text-rose-800 inline-flex items-center gap-1 mt-1">
+                                                    Read decision <ExternalLink className="w-3 h-3" />
+                                                </a>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
                         </div>
                     )}

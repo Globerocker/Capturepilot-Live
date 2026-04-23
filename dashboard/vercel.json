@@ -110,6 +110,14 @@
         {
             "path": "/api/cron/forecast_change_detection",
             "schedule": "30 6 * * *"
+        },
+        {
+            "path": "/api/cron/ingest_subawards",
+            "schedule": "0 6 * * 4"
+        },
+        {
+            "path": "/api/cron/ingest_gsa_schedule",
+            "schedule": "0 5 * * 0"
         }
     ]
 }

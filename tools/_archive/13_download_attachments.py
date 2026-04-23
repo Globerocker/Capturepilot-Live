@@ -287,8 +287,7 @@ def process_opportunity(opp):
         # Merge - attachment data supplements but doesn't overwrite
         merged = {**all_reqs, **existing}
         sb.table("opportunities").update({
-            "structured_requirements": merged,
-            "requirements_extracted": all_reqs
+            "structured_requirements": merged
         }).eq("id", opp_id).execute()
 
     return ("ok", opp_id, downloaded)

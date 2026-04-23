@@ -591,11 +591,14 @@ def run_discovery_pipeline(opportunity_id=None, trigger_type="auto"):
             if len(opportunities) >= 5:
                 break
             opp_res = supabase.table("opportunities").select(
-                "id, title, naics_code, place_of_performance_state, place_of_performance_city, set_aside_code, enrichment_status"
+                "id, title, naics_code, place_of_performance_state, place_of_performance_city, set_aside_code"
             ).eq("id", oid).single().execute()
             if opp_res.data:
-                status = opp_res.data.get("enrichment_status", "none")
-                if status in (None, "none", "failed"):
+                # Enrichment status now tracked per-run via enrichment_jobs, not on opportunities.
+                job_probe = supabase.table("enrichment_jobs").select("id,status").eq(
+                    "opportunity_id", opp_res.data["id"]
+                ).in_("status", ["completed", "running"]).limit(1).execute()
+                if not job_probe.data:
                     opportunities.append(opp_res.data)
 
     if not opportunities:
@@ -610,12 +613,7 @@ def run_discovery_pipeline(opportunity_id=None, trigger_type="auto"):
     for opp in opportunities:
         opp_id = opp["id"]
 
-        # Update opportunity status
-        supabase.table("opportunities").update({
-            "enrichment_status": "running"
-        }).eq("id", opp_id).execute()
-
-        # Create enrichment job
+        # Create enrichment job — status lives on enrichment_jobs now.
         job_id = create_enrichment_job(supabase, opp_id, trigger_type)
         if not job_id:
             continue
@@ -629,18 +627,11 @@ def run_discovery_pipeline(opportunity_id=None, trigger_type="auto"):
         total_google += google_count
         serpapi_remaining -= (1 if google_count > 0 else 0)
 
-        # Update enrichment job
         supabase.table("enrichment_jobs").update({
             "contractors_found": sam_count + google_count,
             "status": "completed",
             "completed_at": datetime.utcnow().isoformat(),
         }).eq("id", job_id).execute()
-
-        # Mark opportunity discovery complete (enrichment continues in tool 8)
-        supabase.table("opportunities").update({
-            "enrichment_status": "completed",
-            "enrichment_completed_at": datetime.utcnow().isoformat(),
-        }).eq("id", opp_id).execute()
 
     print(f"\n🎉 Discovery Complete!")
     print(f"   Total SAM entities: {total_sam}")

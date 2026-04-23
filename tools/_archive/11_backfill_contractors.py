@@ -149,7 +149,7 @@ def backfill_opportunity_fields():
 
     while True:
         res = sb.table("opportunities") \
-            .select("id, raw_json, solicitation_number, place_of_performance_zip, place_of_performance_country, link") \
+            .select("id, raw_json, solicitation_number, place_of_performance_zip, link") \
             .not_.is_("raw_json", "null") \
             .range(offset, offset + BATCH_SIZE - 1) \
             .execute()
@@ -170,29 +170,17 @@ def backfill_opportunity_fields():
                 if sol_num:
                     update["solicitation_number"] = sol_num
 
-            # Place of performance details
+            # Place of performance zip only (country column dropped in migration 053)
             pop = raw.get("placeOfPerformance") or raw.get("place_of_performance") or {}
             if isinstance(pop, dict):
-                state_code = pop.get("state", {}).get("code", "") if isinstance(pop.get("state"), dict) else pop.get("state", "")
-                city = pop.get("city", {}).get("name", "") if isinstance(pop.get("city"), dict) else pop.get("city", "")
                 zip_code = pop.get("zip", "")
-                country = pop.get("country", {}).get("code", "") if isinstance(pop.get("country"), dict) else pop.get("country", "")
-
                 if not opp.get("place_of_performance_zip") and zip_code:
                     update["place_of_performance_zip"] = zip_code
-                if not opp.get("place_of_performance_country") and country:
-                    update["place_of_performance_country"] = country
 
             # SAM.gov link
             notice_id = raw.get("noticeId", "")
             if not opp.get("link") and notice_id:
                 update["link"] = f"https://sam.gov/opp/{notice_id}/view"
-
-            # Additional info link
-            if not opp.get("additional_info_link"):
-                add_info = raw.get("additionalInfoLink", "")
-                if add_info:
-                    update["additional_info_link"] = add_info
 
             if update:
                 sb.table("opportunities").update(update).eq("id", opp["id"]).execute()

@@ -48,7 +48,7 @@ def main():
                 "award_amount, place_of_performance_state, place_of_performance_city, "
                 "response_deadline, posted_date, description, "
                 "incumbent_contractor_name, incumbent_contractor_uei, "
-                "structured_requirements, strategic_scoring, set_aside_types") \
+                "structured_requirements, strategic_scoring") \
         .eq("ai_win_strategy", {}) \
         .eq("is_archived", False) \
         .order("response_deadline", desc=False) \

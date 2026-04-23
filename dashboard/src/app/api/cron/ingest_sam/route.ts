@@ -74,10 +74,13 @@ export async function GET(req: NextRequest) {
         const startTime = Date.now();
         console.log("Starting SAM Strategic Ingestion (daily)...");
 
-        // Date range: last 3 days
+        // Date range: last 7 days — wider window catches backfills +
+        // holiday-weekend drift. Upsert key (notice_id) keeps it idempotent
+        // so re-seeing a notice does nothing.
+        const windowDays = parseInt(req.nextUrl.searchParams.get("days") || "7", 10);
         const toDate = new Date();
         const fromDate = new Date();
-        fromDate.setDate(toDate.getDate() - 3);
+        fromDate.setDate(toDate.getDate() - windowDays);
         const fromStr = `${String(fromDate.getMonth() + 1).padStart(2, "0")}/${String(fromDate.getDate()).padStart(2, "0")}/${fromDate.getFullYear()}`;
         const toStr = `${String(toDate.getMonth() + 1).padStart(2, "0")}/${String(toDate.getDate()).padStart(2, "0")}/${toDate.getFullYear()}`;
 
@@ -94,7 +97,10 @@ export async function GET(req: NextRequest) {
         const limit = 1000;
         let totalProcessed = 0;
         let totalInserted = 0;
-        const ptypes = ["r", "p", "o", "k"];
+        // r=Sources Sought/RFI, p=Presolicitation, o=Solicitation,
+        // k=Combined Synopsis, u=Justification, i=Intent to Bundle,
+        // g=Sale of Surplus, s=Special Notice. Broad coverage = more leads.
+        const ptypes = ["r", "p", "o", "k", "u", "i", "s"];
 
         for (const ptype of ptypes) {
             // Check if we're running out of time (leave 30s buffer)
@@ -207,8 +213,8 @@ export async function GET(req: NextRequest) {
             }
         }
 
-        console.log(`Ingestion Complete. Processed: ${totalProcessed}. Upserted: ${totalInserted}`);
-        return NextResponse.json({ success: true, processed: totalProcessed, inserted: totalInserted });
+        console.log(`Ingestion Complete. Window=${windowDays}d Processed=${totalProcessed} Upserted=${totalInserted}`);
+        return NextResponse.json({ success: true, window_days: windowDays, processed: totalProcessed, inserted: totalInserted });
 
     } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : "Fatal Error";

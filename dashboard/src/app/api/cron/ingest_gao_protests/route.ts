@@ -13,7 +13,8 @@ export const maxDuration = 120;
  * decision date, and outcome (from the decision title prefix — e.g. "Denied",
  * "Dismissed", "Sustained"). Upsert by docket_number.
  */
-const RSS_URL = "https://www.gao.gov/rss/bidprotestdecisions.xml";
+// GAO moved their feed — new canonical URL is the generic decisions RSS.
+const RSS_URL = "https://www.gao.gov/assets/rss/decisions.xml";
 
 function getDb() {
     return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_KEY!);

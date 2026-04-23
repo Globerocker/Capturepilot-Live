@@ -87,11 +87,13 @@ def extract_attachment_intelligence():
         desc = op.get("description", "")
         extracted = analyze_text_for_requirements(desc)
         
-        # Even if empty, we save the empty JSON to mark it as processed if needed
+        # Even if empty, we save the empty JSON to mark it as processed if needed.
+        # (Column `requirements_extracted` on opportunities was merged into
+        #  structured_requirements in migration 053.)
         updates.append({
             "id": op["id"],
             "payload": {
-                "requirements_extracted": extracted
+                "structured_requirements": extracted
             }
         })
         

@@ -191,11 +191,13 @@ def orchestrate_enrichment(opportunity_id=None, trigger_type="auto"):
             if oid and oid not in seen and len(target_opportunities) < AUTO_OPPORTUNITIES_LIMIT:
                 seen.add(oid)
                 opp_res = supabase.table("opportunities").select(
-                    "id, title, naics_code, place_of_performance_state, place_of_performance_city, set_aside_code, enrichment_status"
+                    "id, title, naics_code, place_of_performance_state, place_of_performance_city, set_aside_code"
                 ).eq("id", oid).single().execute()
                 if opp_res.data:
-                    status = opp_res.data.get("enrichment_status", "none")
-                    if status in (None, "none", "failed"):
+                    job_probe = supabase.table("enrichment_jobs").select("id").eq(
+                        "opportunity_id", opp_res.data["id"]
+                    ).in_("status", ["completed", "running"]).limit(1).execute()
+                    if not job_probe.data:
                         target_opportunities.append(opp_res.data)
 
     if not target_opportunities:
@@ -214,11 +216,7 @@ def orchestrate_enrichment(opportunity_id=None, trigger_type="auto"):
         print(f"  [{i}/{len(target_opportunities)}] {opp_title}")
         print(f"{'─' * 60}")
 
-        # Update status
-        supabase.table("opportunities").update({
-            "enrichment_status": "running"
-        }).eq("id", opp_id).execute()
-
+        # Status is tracked per-run on enrichment_jobs (created inside tool7.run_discovery_pipeline).
         opp_result = {
             "opportunity_id": opp_id,
             "title": opp_title,
@@ -271,12 +269,7 @@ def orchestrate_enrichment(opportunity_id=None, trigger_type="auto"):
             print(f"  ❌ {error_msg}")
             opp_result["errors"].append(error_msg)
 
-        # --- Finalize opportunity ---
-        final_status = "completed" if not opp_result["errors"] else "partial"
-        supabase.table("opportunities").update({
-            "enrichment_status": final_status,
-            "enrichment_completed_at": datetime.utcnow().isoformat(),
-        }).eq("id", opp_id).execute()
+        # Per-run finalize happens on enrichment_jobs inside tool7 / tool8.
 
         results.append(opp_result)
 
