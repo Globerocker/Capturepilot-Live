@@ -158,41 +158,52 @@ export default function PortalOverview() {
     };
 
     return (
-        <div className="w-full space-y-6">
-            {/* Welcome */}
-            <div>
-                <p className="text-stone-400 text-xs uppercase tracking-widest font-medium mb-1">Overview</p>
-                <h1 className="text-2xl font-bold text-stone-900">
-                    Welcome, {(profile?.company_name as string) || (profile?.contact_name as string)}
-                </h1>
-                <p className="text-sm text-stone-500 mt-1">
-                    Here&apos;s your government contracting overview.
+        <div className="w-full 2xl:w-full 2xl:max-w-[1600px] mx-auto space-y-6 sm:space-y-8 animate-in fade-in duration-500">
+            {/* Welcome header — matches the self-service dashboard visually */}
+            <header>
+                <h2 className="text-2xl sm:text-3xl font-bold tracking-tighter text-black">
+                    Welcome back, {(profile?.company_name as string) || (profile?.contact_name as string) || "there"}
+                </h2>
+                <p className="text-stone-500 mt-1 sm:mt-2 font-medium text-sm sm:text-base">
+                    Your capture team is on it. Here&apos;s where things stand.
                 </p>
-            </div>
+            </header>
 
-            {/* Stats Grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                <Link href="/portal/opportunities" className="bg-white border border-stone-200 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all duration-200">
-                    <Briefcase className="w-5 h-5 text-emerald-500 mb-2" />
-                    <p className="text-2xl font-black text-emerald-600">{stats.matchedOpps}</p>
-                    <p className="text-xs text-stone-500">Matched Opportunities</p>
+            {/* KPI cards — same visual language as self-service dashboard */}
+            <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                <Link href="/portal/opportunities" className="bg-emerald-50 border border-emerald-200 rounded-[20px] sm:rounded-[24px] p-5 sm:p-6 hover:shadow-md transition-all">
+                    <div className="flex items-center justify-between mb-3">
+                        <Briefcase className="w-5 h-5 text-emerald-600" />
+                        <ArrowRight className="w-4 h-4 text-emerald-400" />
+                    </div>
+                    <p className="text-3xl sm:text-4xl font-black tracking-tighter text-emerald-700">{stats.matchedOpps}</p>
+                    <p className="text-[11px] text-emerald-700/70 mt-1 font-medium uppercase tracking-widest">Matched Opportunities</p>
                 </Link>
-                <Link href="/portal/pipeline" className="bg-white border border-stone-200 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all duration-200">
-                    <Layers className="w-5 h-5 text-emerald-500 mb-2" />
-                    <p className="text-2xl font-black text-emerald-600">{stats.pipelineDeals}</p>
-                    <p className="text-xs text-stone-500">Pipeline Deals</p>
+                <Link href="/portal/pipeline" className="bg-white border border-stone-200 rounded-[20px] sm:rounded-[24px] p-5 sm:p-6 hover:shadow-md hover:border-stone-300 transition-all">
+                    <div className="flex items-center justify-between mb-3">
+                        <Layers className="w-5 h-5 text-stone-500" />
+                        <ArrowRight className="w-4 h-4 text-stone-300" />
+                    </div>
+                    <p className="text-3xl sm:text-4xl font-black tracking-tighter text-stone-900">{stats.pipelineDeals}</p>
+                    <p className="text-[11px] text-stone-500 mt-1 font-medium uppercase tracking-widest">Pipeline Deals</p>
                 </Link>
-                <Link href="/portal/tasks" className="bg-white border border-stone-200 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all duration-200">
-                    <ListTodo className="w-5 h-5 text-emerald-500 mb-2" />
-                    <p className="text-2xl font-black text-emerald-600">{stats.pendingTasks}</p>
-                    <p className="text-xs text-stone-500">Pending Tasks</p>
+                <Link href="/portal/tasks" className="bg-white border border-stone-200 rounded-[20px] sm:rounded-[24px] p-5 sm:p-6 hover:shadow-md hover:border-stone-300 transition-all">
+                    <div className="flex items-center justify-between mb-3">
+                        <ListTodo className="w-5 h-5 text-stone-500" />
+                        <ArrowRight className="w-4 h-4 text-stone-300" />
+                    </div>
+                    <p className="text-3xl sm:text-4xl font-black tracking-tighter text-stone-900">{stats.pendingTasks}</p>
+                    <p className="text-[11px] text-stone-500 mt-1 font-medium uppercase tracking-widest">Pending Tasks</p>
                 </Link>
-                <Link href="/portal/documents" className="bg-white border border-stone-200 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all duration-200">
-                    <FileText className="w-5 h-5 text-emerald-500 mb-2" />
-                    <p className="text-2xl font-black text-emerald-600">{stats.docs}</p>
-                    <p className="text-xs text-stone-500">Documents</p>
+                <Link href="/portal/documents" className="bg-white border border-stone-200 rounded-[20px] sm:rounded-[24px] p-5 sm:p-6 hover:shadow-md hover:border-stone-300 transition-all">
+                    <div className="flex items-center justify-between mb-3">
+                        <FileText className="w-5 h-5 text-stone-500" />
+                        <ArrowRight className="w-4 h-4 text-stone-300" />
+                    </div>
+                    <p className="text-3xl sm:text-4xl font-black tracking-tighter text-stone-900">{stats.docs}</p>
+                    <p className="text-[11px] text-stone-500 mt-1 font-medium uppercase tracking-widest">Documents</p>
                 </Link>
-            </div>
+            </section>
 
             {/* Two-column: Top Opportunities + Upcoming Deadlines */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

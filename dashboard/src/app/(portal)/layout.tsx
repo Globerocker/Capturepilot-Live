@@ -7,7 +7,7 @@ import { createBrowserClient } from "@supabase/ssr";
 import Image from "next/image";
 import {
     LayoutDashboard, ListTodo, Briefcase, FileText,
-    LogOut, Loader2, Settings, Menu, X, Layers, FolderOpen, Users,
+    LogOut, Loader2, Settings, Menu, X, Layers, FolderOpen,
     MessageSquare,
 } from "lucide-react";
 import clsx from "clsx";
@@ -18,13 +18,17 @@ const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
+// Scope the consulting-portal nav down to what a managed client actually
+// uses: their own matches, pipeline, tasks assigned by the capture team,
+// messages, and documents. Competitors + Partners are admin-managed and
+// were duplicating work — removed from the portal nav. (Routes still
+// exist for direct links but aren't surfaced in the sidebar.)
 const NAV_ITEMS = [
     { href: "/portal", icon: LayoutDashboard, label: "Overview" },
     { href: "/portal/opportunities", icon: Briefcase, label: "Opportunities" },
     { href: "/portal/pipeline", icon: Layers, label: "Pipeline" },
     { href: "/portal/tasks", icon: ListTodo, label: "Tasks" },
     { href: "/portal/messages", icon: MessageSquare, label: "Messages" },
-    { href: "/portal/competitors", icon: Users, label: "Competitors" },
     { href: "/portal/documents", icon: FolderOpen, label: "Documents" },
     { href: "/portal/capability-statement", icon: FileText, label: "Capability Statement" },
     { href: "/portal/settings", icon: Settings, label: "Account" },
