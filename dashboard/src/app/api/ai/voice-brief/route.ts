@@ -1,34 +1,39 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
+import { createClient } from "@supabase/supabase-js";
+import { createJob, runStep, startJob, completeJob, failJob, requireProfileId } from "@/lib/background-jobs";
 
 export const maxDuration = 180;
 
 /**
  * POST /api/ai/voice-brief
- *   multipart/form-data:
- *     audio: <File>  — user's spoken request (e.g. "brief me on the Fort Bragg logistics recompete")
- *   OR  application/json:
- *     { text: string }  — skip Whisper, go straight to briefing + TTS
+ *   multipart/form-data: { audio: File, hint_notice_id?: string }
+ *   application/json:    { text: string, hint_notice_id?: string }
  *
- *   Query ?tts=0 returns { transcript, capture_brief } without audio.
+ * Creates a background job (kind=voice_brief), returns { jobId } immediately,
+ * and runs the 5-step pipeline in after():
+ *   1) transcribe (Whisper) or skip if text provided
+ *   2) resolve_opportunity
+ *   3) capture_brief (DeepSeek/OpenAI)
+ *   4) summarize_narration
+ *   5) tts + upload to Supabase Storage (voice-briefs bucket)
  *
- * Returns `audio/mpeg` with an MP3 TTS response narrating the capture brief,
- * plus X-Brief-JSON header (URL-encoded) with the full brief text for the UI.
- *
- * Pipeline:
- *   1. Whisper → transcript (unless text provided)
- *   2. Extract opportunity reference (notice_id OR keyword-search)
- *   3. Call existing /api/ai/capture-brief
- *   4. Summarize to ~150 spoken-words
- *   5. OpenAI TTS → MP3
- *
- * Needs OPENAI_API_KEY. Graceful 501 if missing.
+ * Client polls /api/jobs/[id] → final `job.result.audio_url` is a signed
+ * Supabase Storage URL for the generated MP3.
  */
 
 const WHISPER_URL = "https://api.openai.com/v1/audio/transcriptions";
 const TTS_URL = "https://api.openai.com/v1/audio/speech";
 const CHAT_URL = "https://api.openai.com/v1/chat/completions";
+
+function adminClient() {
+    return createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_KEY!,
+        { auth: { persistSession: false } },
+    );
+}
 
 export async function POST(req: NextRequest) {
     const openaiKey = process.env.OPENAI_API_KEY;
@@ -37,21 +42,21 @@ export async function POST(req: NextRequest) {
     }
 
     const cookieStore = await cookies();
-    const sb = createServerClient(
+    const sbAuth = createServerClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        { cookies: { getAll: () => cookieStore.getAll() } }
+        { cookies: { getAll: () => cookieStore.getAll() } },
     );
-    const { data: { user } } = await sb.auth.getUser();
+    const { data: { user } } = await sbAuth.auth.getUser();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const { searchParams } = new URL(req.url);
-    const withTts = searchParams.get("tts") !== "0";
+    // Parse body early so we can error fast if malformed
     const contentType = req.headers.get("content-type") || "";
-
-    // ── Step 1: Get user text ──
+    let audioBytes: ArrayBuffer | null = null;
+    let audioMime = "audio/webm";
     let userText = "";
     let hintNoticeId: string | null = null;
+
     if (contentType.includes("application/json")) {
         const body = await req.json().catch(() => ({}));
         userText = String(body.text || "").trim();
@@ -64,134 +69,226 @@ export async function POST(req: NextRequest) {
         if (!(audioBlob instanceof Blob)) {
             return NextResponse.json({ error: "audio field required" }, { status: 400 });
         }
-        const fd = new FormData();
-        fd.append("file", audioBlob, "speech.webm");
-        fd.append("model", "whisper-1");
-        fd.append("response_format", "text");
-        const res = await fetch(WHISPER_URL, {
-            method: "POST",
-            headers: { Authorization: `Bearer ${openaiKey}` },
-            body: fd,
-        });
-        if (!res.ok) {
-            const err = await res.text().catch(() => "");
-            return NextResponse.json({ error: `Whisper: ${res.status}`, detail: err.slice(0, 300) }, { status: 502 });
-        }
-        userText = (await res.text()).trim();
+        audioBytes = await audioBlob.arrayBuffer();
+        audioMime = audioBlob.type || "audio/webm";
     } else {
         return NextResponse.json({ error: "Send multipart/form-data with audio, or JSON with text" }, { status: 400 });
     }
 
-    if (!userText) {
-        return NextResponse.json({ error: "Empty transcript" }, { status: 400 });
+    if (!audioBytes && !userText) {
+        return NextResponse.json({ error: "Need either audio or text" }, { status: 400 });
     }
 
-    // ── Step 2: Resolve opportunity reference ──
-    // Prefer hint from the calling page (e.g. opportunity detail), then look
-    // for a notice_id pattern in the transcript, then keyword-search.
-    let noticeId: string | null = hintNoticeId;
-    if (!noticeId) {
-        const noticeMatch = userText.match(/\b[A-Z0-9]{8,}(?:-[A-Z0-9]+)*\b/);
-        noticeId = noticeMatch ? noticeMatch[0] : null;
-    }
+    const profileId = await requireProfileId(user.id);
+    const db = adminClient();
 
-    if (!noticeId) {
-        // Fallback: pick the top matching active opportunity by keyword
-        const { data: topOpp } = await sb
+    // Look up opp title for job title (hint_notice_id helps us label it)
+    let jobTitle = userText ? `Voice Brief: "${userText.slice(0, 60)}"` : "Voice Brief";
+    if (hintNoticeId) {
+        const { data: opp } = await db
             .from("opportunities")
-            .select("notice_id, title")
-            .or(`title.ilike.%${userText.slice(0, 80)}%,description.ilike.%${userText.slice(0, 80)}%`)
-            .in("status", ["ACTIVE", "EXPIRING_SOON", "DISCOVERED"])
-            .limit(1)
+            .select("id, title")
+            .eq("notice_id", hintNoticeId)
             .maybeSingle();
-        noticeId = (topOpp?.notice_id as string) || null;
+        if (opp?.title) jobTitle = `Voice Brief: ${(opp.title as string).slice(0, 70)}`;
     }
 
-    if (!noticeId) {
-        const narrated = `I couldn't find a matching opportunity for "${userText.slice(0, 100)}". Try naming a specific agency or solicitation number.`;
-        if (!withTts) return NextResponse.json({ transcript: userText, narration: narrated, brief: null });
-        return await narrate(narrated, openaiKey, userText, null);
-    }
+    const { jobId } = await createJob(profileId, {
+        kind: "voice_brief",
+        title: jobTitle,
+        notice_id: hintNoticeId,
+        steps: [
+            { key: "transcribe", label: "Transcribing audio (Whisper)" },
+            { key: "resolve", label: "Resolving opportunity" },
+            { key: "capture_brief", label: "Generating capture brief" },
+            { key: "summarize", label: "Summarizing to narration (~150 words)" },
+            { key: "tts", label: "Generating speech (OpenAI TTS)" },
+            { key: "upload", label: "Uploading audio to storage" },
+        ],
+    });
 
-    // ── Step 3: Call capture brief ──
+    // Clone the audio bytes before the response closes — ArrayBuffer isn't
+    // guaranteed to remain live after we send the response. Convert to Uint8Array.
+    const audioForBackground = audioBytes ? new Uint8Array(audioBytes) : null;
     const cookieHeader = req.headers.get("cookie") || "";
-    const base = process.env.NEXT_PUBLIC_APP_URL || `https://${req.headers.get("host")}`;
-    const briefRes = await fetch(`${base}/api/ai/capture-brief`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", cookie: cookieHeader },
-        body: JSON.stringify({ notice_id: noticeId }),
-    });
-    const briefData = await briefRes.json();
-    if (!briefRes.ok || !briefData.brief) {
-        return NextResponse.json({ error: briefData.error || "Failed to generate brief" }, { status: 500 });
-    }
+    const appBase = process.env.NEXT_PUBLIC_APP_URL || `https://${req.headers.get("host")}`;
 
-    // ── Step 4: Narrative summary — ~150 spoken words ──
-    const sumRes = await fetch(CHAT_URL, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${openaiKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-            model: "gpt-4o-mini",
-            temperature: 0.4,
-            max_tokens: 350,
-            messages: [
-                {
-                    role: "system",
-                    content: "You are narrating a capture brief to a consultant driving between meetings. Summarize in under 150 words, conversational. Open with PWin + bid/no-bid, then program, incumbent, top risk, top action. No lists — full sentences.",
+    after(async () => {
+        await startJob(jobId);
+        try {
+            // Step 1: Transcribe
+            const transcript = await runStep<string>(
+                jobId,
+                "transcribe",
+                async () => {
+                    if (userText) return userText;
+                    if (!audioForBackground) throw new Error("No audio or text");
+                    const fd = new FormData();
+                    fd.append("file", new Blob([audioForBackground as BlobPart], { type: audioMime }), "speech.webm");
+                    fd.append("model", "whisper-1");
+                    fd.append("response_format", "text");
+                    const r = await fetch(WHISPER_URL, {
+                        method: "POST",
+                        headers: { Authorization: `Bearer ${openaiKey}` },
+                        body: fd,
+                    });
+                    if (!r.ok) throw new Error(`Whisper ${r.status}`);
+                    return (await r.text()).trim();
                 },
-                { role: "user", content: JSON.stringify(briefData.brief) },
-            ],
-        }),
+                {
+                    skipIf: () => !!userText,
+                    detailOnDone: (t) => `${t.length} chars transcribed`,
+                },
+            ) || userText;
+
+            if (!transcript) throw new Error("Empty transcript");
+
+            // Step 2: Resolve opportunity
+            const resolved = await runStep<{ notice_id: string | null; title: string | null }>(
+                jobId,
+                "resolve",
+                async () => {
+                    let noticeId = hintNoticeId;
+                    if (!noticeId) {
+                        const m = transcript.match(/\b[A-Z0-9]{8,}(?:-[A-Z0-9]+)*\b/);
+                        noticeId = m ? m[0] : null;
+                    }
+                    if (!noticeId) {
+                        const { data: top } = await db
+                            .from("opportunities")
+                            .select("notice_id, title")
+                            .or(`title.ilike.%${transcript.slice(0, 80)}%,description.ilike.%${transcript.slice(0, 80)}%`)
+                            .in("status", ["ACTIVE", "EXPIRING_SOON", "DISCOVERED"])
+                            .limit(1)
+                            .maybeSingle();
+                        if (top) return { notice_id: top.notice_id as string, title: top.title as string };
+                        return { notice_id: null, title: null };
+                    }
+                    const { data: opp } = await db
+                        .from("opportunities")
+                        .select("title")
+                        .eq("notice_id", noticeId)
+                        .maybeSingle();
+                    return { notice_id: noticeId, title: (opp?.title as string) || null };
+                },
+                {
+                    detailOnDone: (r) => r.notice_id ? `Linked to ${r.title?.slice(0, 60) || r.notice_id}` : "No matching opportunity — will narrate the request back",
+                },
+            );
+
+            // Step 3: Capture brief (optional — skip if we have no notice)
+            const briefData: { brief: unknown; pwin: number | null } = { brief: null, pwin: null };
+            await runStep(
+                jobId,
+                "capture_brief",
+                async () => {
+                    if (!resolved?.notice_id) {
+                        return "skipped — no opportunity";
+                    }
+                    const br = await fetch(`${appBase}/api/ai/capture-brief`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json", cookie: cookieHeader },
+                        body: JSON.stringify({ notice_id: resolved.notice_id }),
+                    });
+                    const data = await br.json();
+                    if (br.ok && data.brief) {
+                        briefData.brief = data.brief;
+                        briefData.pwin = data.pwin ?? null;
+                        return `Brief generated (PWin ${data.pwin ?? "?"}%)`;
+                    }
+                    throw new Error(data.error || `capture-brief ${br.status}`);
+                },
+                {
+                    skipIf: () => !resolved?.notice_id,
+                    detailOnDone: (s) => s as string,
+                },
+            );
+
+            // Step 4: Narration summary
+            const narration = await runStep<string>(
+                jobId,
+                "summarize",
+                async () => {
+                    if (!briefData.brief) {
+                        return `I couldn't find a matching opportunity for "${transcript.slice(0, 120)}". Try naming a specific agency or solicitation number.`;
+                    }
+                    const r = await fetch(CHAT_URL, {
+                        method: "POST",
+                        headers: { Authorization: `Bearer ${openaiKey}`, "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            model: "gpt-4o-mini",
+                            temperature: 0.4,
+                            max_tokens: 350,
+                            messages: [
+                                {
+                                    role: "system",
+                                    content: "You are narrating a capture brief to a consultant driving between meetings. Summarize in under 150 words, conversational. Open with PWin + bid/no-bid, then program, incumbent, top risk, top action. No lists — full sentences.",
+                                },
+                                { role: "user", content: JSON.stringify(briefData.brief) },
+                            ],
+                        }),
+                    });
+                    const data = await r.json();
+                    return data.choices?.[0]?.message?.content || "Unable to summarize the brief.";
+                },
+                { detailOnDone: (t) => `${t.length} chars of narration` },
+            ) || "";
+
+            // Step 5: TTS
+            const mp3Bytes = await runStep<Uint8Array>(
+                jobId,
+                "tts",
+                async () => {
+                    const r = await fetch(TTS_URL, {
+                        method: "POST",
+                        headers: { Authorization: `Bearer ${openaiKey}`, "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            model: "tts-1",
+                            voice: "alloy",
+                            input: narration.slice(0, 4000),
+                            response_format: "mp3",
+                        }),
+                    });
+                    if (!r.ok) throw new Error(`TTS ${r.status}`);
+                    const buf = await r.arrayBuffer();
+                    return new Uint8Array(buf);
+                },
+                { detailOnDone: (b) => `${(b.byteLength / 1024).toFixed(0)} KB audio` },
+            );
+
+            // Step 6: Upload
+            let audioUrl: string | null = null;
+            await runStep(
+                jobId,
+                "upload",
+                async () => {
+                    if (!mp3Bytes) throw new Error("No audio to upload");
+                    const path = `${profileId}/${jobId}.mp3`;
+                    const { error: upErr } = await db.storage.from("voice-briefs").upload(path, mp3Bytes as BlobPart, {
+                        contentType: "audio/mpeg",
+                        upsert: true,
+                    });
+                    if (upErr) throw new Error(upErr.message);
+                    const signed = await db.storage.from("voice-briefs").createSignedUrl(path, 60 * 60 * 24); // 24h
+                    if (signed.error) throw new Error(signed.error.message);
+                    audioUrl = signed.data?.signedUrl || null;
+                    return `Uploaded ${path}`;
+                },
+                { detailOnDone: (s) => s as string },
+            );
+
+            await completeJob(jobId, {
+                transcript,
+                narration,
+                notice_id: resolved?.notice_id || null,
+                brief: briefData.brief,
+                pwin: briefData.pwin,
+                audio_url: audioUrl,
+            });
+        } catch (e) {
+            await failJob(jobId, (e as Error).message || "voice-brief failed").catch(() => { /* noop */ });
+        }
     });
-    const sumData = await sumRes.json();
-    const narration = sumData.choices?.[0]?.message?.content || "Unable to summarize the brief.";
 
-    if (!withTts) {
-        return NextResponse.json({
-            transcript: userText,
-            notice_id: noticeId,
-            pwin: briefData.pwin,
-            narration,
-            brief: briefData.brief,
-        });
-    }
-
-    return await narrate(narration, openaiKey, userText, briefData.brief);
-}
-
-async function narrate(
-    text: string,
-    openaiKey: string,
-    transcript: string,
-    briefJson: unknown
-): Promise<Response> {
-    const ttsRes = await fetch(TTS_URL, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${openaiKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-            model: "tts-1",
-            voice: "alloy",
-            input: text.slice(0, 4000),
-            response_format: "mp3",
-        }),
-    });
-    if (!ttsRes.ok) {
-        return NextResponse.json(
-            { error: `TTS: ${ttsRes.status}`, narration: text, transcript, brief: briefJson },
-            { status: 502 }
-        );
-    }
-
-    const buffer = await ttsRes.arrayBuffer();
-    const briefHeader = briefJson ? encodeURIComponent(JSON.stringify(briefJson)).slice(0, 8000) : "";
-    return new Response(buffer, {
-        status: 200,
-        headers: {
-            "Content-Type": "audio/mpeg",
-            "X-Transcript": encodeURIComponent(transcript).slice(0, 1000),
-            "X-Narration": encodeURIComponent(text).slice(0, 2000),
-            "X-Brief-JSON": briefHeader,
-            "Cache-Control": "no-store",
-        },
-    });
+    return NextResponse.json({ jobId });
 }

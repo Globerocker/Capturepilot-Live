@@ -118,6 +118,22 @@
         {
             "path": "/api/cron/ingest_gsa_schedule",
             "schedule": "0 5 * * 0"
+        },
+        {
+            "path": "/api/cron/bulk_enrich_descriptions",
+            "schedule": "*/15 * * * *"
+        },
+        {
+            "path": "/api/cron/bulk_enrich_ai",
+            "schedule": "*/30 * * * *"
+        },
+        {
+            "path": "/api/cron/enrich_apollo_contractors",
+            "schedule": "30 */2 * * *"
+        },
+        {
+            "path": "/api/cron/naics_stats_backfill",
+            "schedule": "0 3 * * 0"
         }
     ]
 }

@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
     const samKey = process.env.SAM_API_KEY;
     if (!samKey) return NextResponse.json({ error: "SAM_API_KEY missing" }, { status: 500 });
 
-    const batchSize = parseInt(req.nextUrl.searchParams.get("limit") || "25", 10);
+    const batchSize = parseInt(req.nextUrl.searchParams.get("limit") || "150", 10);
 
     // Target: active opportunities with resource_links set AND attachment_urls
     // null/empty AND (attachments_cached_until < now OR null).
