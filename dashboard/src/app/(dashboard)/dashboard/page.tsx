@@ -15,16 +15,19 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
-  // Get user profile
+  // Get user profile (notes carries dashboard_layout)
   const { data: profileData } = await supabase
     .from("user_profiles")
-    .select("id, company_name, naics_codes, sba_certifications, state, target_states, uei, cage_code, website, phone, employee_count, years_in_business, federal_awards_count")
+    .select("id, company_name, naics_codes, sba_certifications, state, target_states, uei, cage_code, website, phone, employee_count, years_in_business, federal_awards_count, notes")
     .eq("auth_user_id", user.id)
     .single();
 
   if (!profileData) {
     redirect("/onboard");
   }
+
+  const profileNotes = (profileData as unknown as { notes: Record<string, unknown> | null }).notes;
+  const initialLayout = (profileNotes?.dashboard_layout as { hidden?: string[]; order?: string[] } | undefined) || {};
 
   const today = new Date().toISOString().split("T")[0];
   const profileId = profileData.id as string;
@@ -128,5 +131,5 @@ export default async function DashboardPage() {
     pendingActions
   };
 
-  return <DashboardClient profile={profileData as any} stats={stats} />;
+  return <DashboardClient profile={profileData as any} stats={stats} initialLayout={initialLayout as any} />;
 }

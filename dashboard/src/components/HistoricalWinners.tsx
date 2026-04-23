@@ -90,12 +90,17 @@ export function HistoricalWinners({ naicsCode, currentAwardee, highlightSelf }: 
 
     return (
         <div className="bg-white border border-stone-200 rounded-2xl p-5 space-y-4">
-            <div className="flex items-center gap-2">
-                <Trophy className="w-4 h-4 text-amber-500" />
-                <h3 className="font-bold text-sm">Historical Winners</h3>
-                <span className="text-[9px] text-stone-400 uppercase tracking-widest">NAICS {naicsCode}</span>
+            <div className="flex items-start gap-2 flex-wrap">
+                <Trophy className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                    <h3 className="font-bold text-sm">Who typically wins contracts like this</h3>
+                    <p className="text-[11px] text-stone-500 mt-0.5 leading-tight">
+                        Companies that won contracts under the same NAICS code (<span className="font-mono">{naicsCode}</span>) across all federal agencies in the last 3 years.
+                        High concentration means a few incumbents dominate; fragmented means the market is competitive.
+                    </p>
+                </div>
                 <span className={clsx(
-                    "ml-auto text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded border",
+                    "text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded border flex-shrink-0",
                     marketShape.color,
                 )}>
                     {marketShape.label} Market

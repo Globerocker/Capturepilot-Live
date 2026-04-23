@@ -7,6 +7,8 @@ import ServiceCTA from "@/components/ui/ServiceCTA";
 import { MarketIntelligence } from "@/components/MarketIntelligence";
 import { DashboardMarketCard } from "@/components/DashboardMarketCard";
 import { SpendRadarCard } from "@/components/SpendRadarCard";
+import DashboardCustomizer from "@/components/dashboard/DashboardCustomizer";
+import { isHidden, type DashboardLayout } from "@/lib/dashboard-layout";
 import clsx from "clsx";
 import Link from "next/link";
 
@@ -53,6 +55,7 @@ interface DashboardClientProps {
     recentPipeline: Array<{ id: string; stage: string; title: string; opportunity_id: string }>;
     pendingActions: Array<{ id: string; title: string; priority: string; opportunity_id: string }>;
   };
+  initialLayout?: DashboardLayout;
 }
 
 function calculateProfileCompleteness(profile: UserProfile): { score: number; missing: string[] } {
@@ -75,9 +78,11 @@ function calculateProfileCompleteness(profile: UserProfile): { score: number; mi
   return { score: Math.round((completed / checks.length) * 100), missing };
 }
 
-export default function DashboardClient({ profile, stats }: DashboardClientProps) {
+export default function DashboardClient({ profile, stats, initialLayout }: DashboardClientProps) {
   const router = useRouter();
   const [generatingMatches, setGeneratingMatches] = useState(false);
+  const [layout, setLayout] = useState<DashboardLayout>(initialLayout || {});
+  const show = (id: Parameters<typeof isHidden>[1]) => !isHidden(layout, id);
 
   const {
     opsCount,
@@ -97,17 +102,25 @@ export default function DashboardClient({ profile, stats }: DashboardClientProps
 
   return (
     <div className="w-full 2xl:w-full 2xl:max-w-[1600px] mx-auto space-y-6 sm:space-y-8 animate-in fade-in duration-500 px-1">
-      {/* Welcome Header */}
-      <header>
-        <h2 className="text-2xl sm:text-3xl font-bold tracking-tighter text-black">
-          Welcome back, {profile?.company_name || "there"}
-        </h2>
-        <p className="text-stone-500 mt-1 sm:mt-2 font-medium text-sm sm:text-base">
-          Your contract matching dashboard
-        </p>
+      {/* Welcome Header — always shown; carries the Customize button */}
+      <header className="flex items-start justify-between gap-3">
+        <div>
+          {show("welcome") && (
+            <>
+              <h2 className="text-2xl sm:text-3xl font-bold tracking-tighter text-black">
+                Welcome back, {profile?.company_name || "there"}
+              </h2>
+              <p className="text-stone-500 mt-1 sm:mt-2 font-medium text-sm sm:text-base">
+                Your contract matching dashboard
+              </p>
+            </>
+          )}
+        </div>
+        <DashboardCustomizer initialLayout={layout} onLayoutChange={setLayout} />
       </header>
 
       {/* KPI Cards */}
+      {show("kpi_cards") && (
       <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <KpiCard
           title="Matched Opportunities"
@@ -140,21 +153,23 @@ export default function DashboardClient({ profile, stats }: DashboardClientProps
           href="/competitors"
         />
       </section>
+      )}
 
       {/* Compact market card */}
-      {profile && profile.naics_codes.length > 0 && (
+      {show("market_card") && profile && profile.naics_codes.length > 0 && (
         <section>
           <DashboardMarketCard naicsCodes={profile.naics_codes} />
         </section>
       )}
 
       {/* Year-End Spend Radar */}
-      <SpendRadarCard />
+      {show("spend_radar") && <SpendRadarCard />}
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start mt-6">
         {/* LEFT COLUMN */}
         <div className="xl:col-span-8 flex flex-col gap-6">
           {/* Quick Actions */}
+          {show("quick_actions") && (
           <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
             <Link href="/check" className="bg-gradient-to-br from-emerald-700 to-emerald-900 text-white rounded-[20px] sm:rounded-[24px] p-4 sm:p-5 hover:shadow-xl transition-all group">
               <Search className="w-5 h-5 mb-2 text-emerald-300 group-hover:text-white transition-colors" />
@@ -187,8 +202,10 @@ export default function DashboardClient({ profile, stats }: DashboardClientProps
               <p className="text-stone-400 text-[10px]">Build your statement</p>
             </Link>
           </section>
+          )}
 
           {/* Top Matching Opportunities */}
+          {show("top_opps") && (
           <section className="bg-white rounded-[24px] sm:rounded-[32px] p-5 sm:p-6 border border-stone-200 shadow-sm">
             <div className="flex flex-col gap-4 mb-4">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -288,12 +305,13 @@ export default function DashboardClient({ profile, stats }: DashboardClientProps
               </div>
             )}
           </section>
+          )}
         </div>
 
         {/* RIGHT COLUMN */}
         <div className="xl:col-span-4 flex flex-col gap-6">
           {/* Profile Summary */}
-          {profile && (
+          {show("profile_summary") && profile && (
             <section className="bg-white rounded-[24px] sm:rounded-[32px] p-5 sm:p-6 border border-stone-200 shadow-sm">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
                 <h3 className="font-bold text-base sm:text-lg flex items-center">
@@ -336,7 +354,7 @@ export default function DashboardClient({ profile, stats }: DashboardClientProps
           )}
 
           {/* Pipeline & Action Items Summary */}
-          {(pipelineCount > 0 || actionsPending > 0) && (
+          {show("pipeline_summary") && (pipelineCount > 0 || actionsPending > 0) && (
             <section className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <Link href="/pipeline" className="bg-white rounded-[24px] sm:rounded-[32px] p-5 sm:p-6 border border-stone-200 shadow-sm hover:shadow-md hover:border-stone-300 transition-all">
                 <div className="flex items-center justify-between mb-3">
@@ -380,7 +398,7 @@ export default function DashboardClient({ profile, stats }: DashboardClientProps
           )}
 
           {/* Action Items + Pipeline preview */}
-          {(pendingActions.length > 0 || recentPipeline.length > 0) && (
+          {show("action_items_summary") && (pendingActions.length > 0 || recentPipeline.length > 0) && (
             <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {/* Action Items Preview */}
               {pendingActions.length > 0 && (
