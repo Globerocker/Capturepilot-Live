@@ -16,8 +16,13 @@ export const maxDuration = 300;
  * Per-run budget: 50 opps. ~5-10s each due to SAM.gov rate limits.
  * 4 runs/hour * 50 = 200/hour => 10,856 backlog cleared in ~55 hours.
  */
-const BATCH_SIZE = 50;
+const BATCH_SIZE = 15;
+const REQUEST_GAP_MS = 400;   // ~2.5 req/sec to stay well under SAM's rate limit
 const SAM_API_KEY = process.env.SAM_API_KEY || "";
+
+function sleep(ms: number) {
+    return new Promise((r) => setTimeout(r, ms));
+}
 
 function admin() {
     return createClient(
@@ -75,8 +80,10 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ success: true, message: "No URL-descriptions left", ...stats });
     }
 
-    for (const opp of targets) {
+    for (let i = 0; i < targets.length; i++) {
+        const opp = targets[i];
         if (Date.now() - startTime > 270_000) break;
+        if (i > 0) await sleep(REQUEST_GAP_MS);
         try {
             const r = await fetch(opp.description, {
                 headers: { "X-Api-Key": SAM_API_KEY, Accept: "application/json" },
@@ -84,6 +91,8 @@ export async function GET(req: NextRequest) {
             });
             if (r.status === 403 || r.status === 429) {
                 stats.skipped_403++;
+                // Back off harder on rate-limit
+                await sleep(2000);
                 continue;
             }
             if (!r.ok) {
