@@ -68,7 +68,10 @@ async function apolloSearch(domainOrName: string): Promise<ApolloCompany | null>
 
 export async function GET(req: NextRequest) {
     const auth = req.headers.get("authorization");
-    if (process.env.CRON_SECRET && auth !== `Bearer ${process.env.CRON_SECRET}`) {
+    const serviceKey = process.env.SUPABASE_SERVICE_KEY;
+    const expectedCron = process.env.CRON_SECRET ? `Bearer ${process.env.CRON_SECRET}` : null;
+    const expectedSvc = serviceKey ? `Bearer ${serviceKey}` : null;
+    if ((expectedCron || expectedSvc) && auth !== expectedCron && auth !== expectedSvc) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     if (!process.env.APOLLO_API_KEY) {
