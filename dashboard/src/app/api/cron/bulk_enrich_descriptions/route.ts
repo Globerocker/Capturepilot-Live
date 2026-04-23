@@ -56,7 +56,7 @@ export async function GET(req: NextRequest) {
     const priorityIds = new Set<string>((priorityMatches || []).map((m: { opportunity_id: string }) => m.opportunity_id));
 
     // Pull candidates: URL descriptions, prefer priority then recent
-    const { data: candidates } = await db
+    const { data: candidates, error: qErr } = await db
         .from("opportunities")
         .select("id, notice_id, description")
         .eq("is_archived", false)
@@ -64,6 +64,9 @@ export async function GET(req: NextRequest) {
         .order("posted_date", { ascending: false, nullsFirst: false })
         .limit(BATCH_SIZE * 3);
 
+    if (qErr) {
+        return NextResponse.json({ error: "query failed", detail: qErr.message }, { status: 500 });
+    }
     const rows = (candidates || []) as Array<{ id: string; notice_id: string; description: string }>;
     const sorted = rows.sort((a, b) => (priorityIds.has(b.id) ? 1 : 0) - (priorityIds.has(a.id) ? 1 : 0));
     const targets = sorted.slice(0, BATCH_SIZE);
