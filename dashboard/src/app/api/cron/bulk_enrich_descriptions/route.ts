@@ -76,8 +76,8 @@ export async function GET(req: NextRequest) {
         if (Date.now() - startTime > 270_000) break;
         try {
             const r = await fetch(opp.description, {
-                headers: { "X-Api-Key": SAM_API_KEY },
-                signal: AbortSignal.timeout(12_000),
+                headers: { "X-Api-Key": SAM_API_KEY, Accept: "application/json" },
+                signal: AbortSignal.timeout(20_000),
             });
             if (r.status === 403 || r.status === 429) {
                 stats.skipped_403++;
@@ -87,8 +87,19 @@ export async function GET(req: NextRequest) {
                 stats.failed++;
                 continue;
             }
-            const html = await r.text();
-            const text = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 12_000);
+            // SAM's /v1/noticedesc returns JSON `{"description":"<HTML or plain>"}`.
+            // Extract the inner string, then strip any HTML tags from it.
+            const raw = await r.text();
+            let innerText = raw;
+            try {
+                const parsed = JSON.parse(raw) as { description?: string };
+                if (typeof parsed?.description === "string") {
+                    innerText = parsed.description;
+                }
+            } catch {
+                // Not JSON — use raw body as-is and let the tag-strip handle it.
+            }
+            const text = innerText.replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/\s+/g, " ").trim().slice(0, 12_000);
             if (text.length < 100) {
                 stats.skipped_short++;
                 continue;

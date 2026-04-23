@@ -65,12 +65,17 @@ async function enrichOne(
         if (flags.do_description && description.startsWith("https://api.sam.gov")) {
             try {
                 const r = await fetch(description, {
-                    headers: SAM_API_KEY ? { "X-Api-Key": SAM_API_KEY } : {},
-                    signal: AbortSignal.timeout(12_000),
+                    headers: SAM_API_KEY ? { "X-Api-Key": SAM_API_KEY, Accept: "application/json" } : { Accept: "application/json" },
+                    signal: AbortSignal.timeout(20_000),
                 });
                 if (r.ok) {
-                    const html = await r.text();
-                    const text = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 12_000);
+                    const raw = await r.text();
+                    let innerText = raw;
+                    try {
+                        const parsed = JSON.parse(raw) as { description?: string };
+                        if (typeof parsed?.description === "string") innerText = parsed.description;
+                    } catch { /* not JSON */ }
+                    const text = innerText.replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/\s+/g, " ").trim().slice(0, 12_000);
                     if (text.length > 100) {
                         description = text;
                         updates.description = text;

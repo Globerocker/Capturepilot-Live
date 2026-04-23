@@ -66,17 +66,23 @@ export async function GET(req: NextRequest) {
             let fullText = "";
 
             // ─── Step 1: Fetch description from SAM.gov URL ───
+            // SAM's /v1/noticedesc returns JSON: {"description":"<HTML>"}.
+            // We unwrap the JSON then strip HTML tags.
             const desc = opp.description || "";
             if (desc.startsWith("https://api.sam.gov")) {
                 try {
                     const descRes = await fetch(desc, {
-                        headers: SAM_API_KEY ? { "X-Api-Key": SAM_API_KEY } : {},
-                        signal: AbortSignal.timeout(10000),
+                        headers: SAM_API_KEY ? { "X-Api-Key": SAM_API_KEY, Accept: "application/json" } : { Accept: "application/json" },
+                        signal: AbortSignal.timeout(20000),
                     });
                     if (descRes.ok) {
-                        const html = await descRes.text();
-                        // Strip HTML tags
-                        const text = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().substring(0, 8000);
+                        const raw = await descRes.text();
+                        let innerText = raw;
+                        try {
+                            const parsed = JSON.parse(raw) as { description?: string };
+                            if (typeof parsed?.description === "string") innerText = parsed.description;
+                        } catch { /* fall through to raw */ }
+                        const text = innerText.replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/\s+/g, " ").trim().substring(0, 8000);
                         if (text.length > 50) {
                             updates.description = text;
                             fullText += text + " ";

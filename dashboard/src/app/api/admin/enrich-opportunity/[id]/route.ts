@@ -81,12 +81,17 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
                         return description;
                     }
                     const r = await fetch(description, {
-                        headers: SAM_API_KEY ? { "X-Api-Key": SAM_API_KEY } : {},
-                        signal: AbortSignal.timeout(15_000),
+                        headers: SAM_API_KEY ? { "X-Api-Key": SAM_API_KEY, Accept: "application/json" } : { Accept: "application/json" },
+                        signal: AbortSignal.timeout(20_000),
                     });
                     if (!r.ok) throw new Error(`SAM.gov returned ${r.status}`);
-                    const html = await r.text();
-                    const text = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 12_000);
+                    const raw = await r.text();
+                    let innerText = raw;
+                    try {
+                        const parsed = JSON.parse(raw) as { description?: string };
+                        if (typeof parsed?.description === "string") innerText = parsed.description;
+                    } catch { /* not JSON — use raw */ }
+                    const text = innerText.replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/\s+/g, " ").trim().slice(0, 12_000);
                     if (text.length < 100) throw new Error(`SAM.gov returned ${text.length} chars — too short`);
                     return text;
                 },
