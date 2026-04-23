@@ -2,17 +2,15 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Sparkles, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
+import { Sparkles, Loader2 } from "lucide-react";
 import clsx from "clsx";
+import LiveJobProgress, { type Job } from "@/components/jobs/LiveJobProgress";
 
 /**
- * On-demand AI Win Strategy trigger.
- * Calls /api/admin/enrich-opportunity/[id] which:
- *   1. Fetches description from SAM.gov if it's still a URL
- *   2. Extracts structured_requirements
- *   3. Computes strategic_scoring
- *   4. Generates ai_win_strategy via OpenAI
- * Then router.refresh() to re-render the detail page with new data.
+ * Generates an AI win strategy for one opportunity as a background job.
+ * Shows a live step-by-step progress stepper that persists across navigation
+ * (state is in the DB row `background_jobs`). On completion → router.refresh()
+ * to re-render the page with the new data.
  */
 export default function GenerateWinStrategyButton({
     opportunityId,
@@ -22,71 +20,60 @@ export default function GenerateWinStrategyButton({
     hasStrategy: boolean;
 }) {
     const router = useRouter();
-    const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
-    const [msg, setMsg] = useState<string | null>(null);
+    const [jobId, setJobId] = useState<string | null>(null);
+    const [kickoffErr, setKickoffErr] = useState<string | null>(null);
+    const [starting, setStarting] = useState(false);
 
     async function trigger() {
-        if (status === "loading") return;
-        setStatus("loading");
-        setMsg(null);
+        if (starting || jobId) return;
+        setStarting(true);
+        setKickoffErr(null);
         try {
             const res = await fetch(`/api/admin/enrich-opportunity/${opportunityId}`, { method: "POST" });
             const data = await res.json();
-            if (!res.ok || data.error) {
-                setStatus("error");
-                setMsg(data.error || `HTTP ${res.status}`);
-                return;
+            if (!res.ok || !data.jobId) {
+                throw new Error(data.error || `HTTP ${res.status}`);
             }
-            const fields = (data.after?.fields_updated as string[]) || [];
-            if (fields.includes("ai_win_strategy")) {
-                setStatus("done");
-                setMsg("Win strategy generated. Reloading…");
-            } else {
-                setStatus("done");
-                setMsg(`Enriched: ${fields.filter(f => f !== "last_crawled_at").join(", ") || "scoring + requirements"}`);
-            }
-            setTimeout(() => router.refresh(), 800);
+            setJobId(data.jobId);
         } catch (e) {
-            setStatus("error");
-            setMsg((e as Error).message);
+            setKickoffErr((e as Error).message);
+        } finally {
+            setStarting(false);
         }
     }
 
+    const handleComplete = (_job: Job) => {
+        setTimeout(() => router.refresh(), 600);
+    };
+
     return (
-        <div className="flex flex-col items-end gap-1">
-            <button
-                type="button"
-                onClick={trigger}
-                disabled={status === "loading"}
-                title={hasStrategy ? "Regenerate win strategy" : "Generate win strategy from current description"}
-                className={clsx(
-                    "inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-full border transition-colors",
-                    status === "loading"
-                        ? "bg-stone-800 text-stone-400 border-stone-700 cursor-wait"
-                        : status === "done"
-                            ? "bg-emerald-500/20 text-emerald-300 border-emerald-600/40"
-                            : status === "error"
-                                ? "bg-rose-500/20 text-rose-300 border-rose-600/40"
-                                : "bg-emerald-500/10 text-emerald-300 border-emerald-600/40 hover:bg-emerald-500/20",
-                )}
-            >
-                {status === "loading" && <Loader2 className="w-3 h-3 animate-spin" />}
-                {status === "done" && <CheckCircle2 className="w-3 h-3" />}
-                {status === "error" && <AlertCircle className="w-3 h-3" />}
-                {status === "idle" && <Sparkles className="w-3 h-3" />}
-                {status === "loading"
-                    ? "Generating…"
-                    : hasStrategy
-                        ? "Regenerate"
-                        : "Generate now"}
-            </button>
-            {msg && status !== "idle" && (
-                <p className={clsx(
-                    "text-[10px]",
-                    status === "error" ? "text-rose-300" : "text-stone-400",
-                )}>
-                    {msg}
-                </p>
+        <div className="flex flex-col items-end gap-2 w-full max-w-xs">
+            {!jobId && (
+                <button
+                    type="button"
+                    onClick={trigger}
+                    disabled={starting}
+                    title={hasStrategy ? "Regenerate win strategy" : "Generate win strategy from this opportunity's description + your profile"}
+                    className={clsx(
+                        "inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-full border transition-colors flex-shrink-0",
+                        starting
+                            ? "bg-stone-800 text-stone-400 border-stone-700 cursor-wait"
+                            : "bg-emerald-500/10 text-emerald-300 border-emerald-600/40 hover:bg-emerald-500/20",
+                    )}
+                >
+                    {starting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                    {starting ? "Starting…" : hasStrategy ? "Regenerate" : "Generate now"}
+                </button>
+            )}
+            {kickoffErr && !jobId && (
+                <p className="text-[10px] text-rose-300 text-right max-w-[200px]">{kickoffErr}</p>
+            )}
+            {jobId && (
+                <LiveJobProgress
+                    jobId={jobId}
+                    onComplete={handleComplete}
+                    className="w-full"
+                />
             )}
         </div>
     );

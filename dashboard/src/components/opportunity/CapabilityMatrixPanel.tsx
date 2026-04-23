@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Target, Loader2, RefreshCw, Trophy, AlertTriangle } from "lucide-react";
 import clsx from "clsx";
+import LiveJobProgress, { type Job } from "@/components/jobs/LiveJobProgress";
 
 interface MatrixRow {
     factor: string;
@@ -47,10 +48,12 @@ export default function CapabilityMatrixPanel({ noticeId }: { noticeId: string }
     const [matrix, setMatrix] = useState<CapabilityMatrix | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [jobId, setJobId] = useState<string | null>(null);
 
     async function generate(force = false) {
         setLoading(true);
         setError(null);
+        setJobId(null);
         try {
             const res = await fetch("/api/ai/capability-matrix", {
                 method: "POST",
@@ -58,14 +61,25 @@ export default function CapabilityMatrixPanel({ noticeId }: { noticeId: string }
                 body: JSON.stringify({ notice_id: noticeId, force }),
             });
             const data = await res.json();
-            if (data.matrix) setMatrix(data.matrix as CapabilityMatrix);
-            else setError(data.error || "Failed to generate matrix");
+            if (data.matrix) {
+                setMatrix(data.matrix as CapabilityMatrix);
+            } else if (data.jobId) {
+                setJobId(data.jobId);
+            } else {
+                setError(data.error || "Failed to generate matrix");
+            }
         } catch {
             setError("Network error — try again.");
         } finally {
             setLoading(false);
         }
     }
+
+    const handleJobComplete = (job: Job) => {
+        const r = job.result as { matrix?: CapabilityMatrix } | null;
+        if (r?.matrix) setMatrix(r.matrix);
+        setJobId(null);
+    };
 
     if (!matrix) {
         return (
@@ -80,15 +94,25 @@ export default function CapabilityMatrixPanel({ noticeId }: { noticeId: string }
                         </p>
                     </div>
                 </div>
-                <button
-                    type="button"
-                    onClick={() => generate(false)}
-                    disabled={loading}
-                    className="bg-emerald-600 text-white px-4 py-2 rounded-full text-xs font-bold hover:bg-emerald-700 disabled:opacity-50 inline-flex items-center gap-1.5"
-                >
-                    {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Target className="w-3 h-3" />}
-                    Assess My Fit
-                </button>
+                {!jobId && (
+                    <button
+                        type="button"
+                        onClick={() => generate(false)}
+                        disabled={loading}
+                        className="bg-emerald-600 text-white px-4 py-2 rounded-full text-xs font-bold hover:bg-emerald-700 disabled:opacity-50 inline-flex items-center gap-1.5"
+                    >
+                        {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Target className="w-3 h-3" />}
+                        {loading ? "Starting…" : "Assess My Fit"}
+                    </button>
+                )}
+                {jobId && (
+                    <LiveJobProgress
+                        jobId={jobId}
+                        onComplete={handleJobComplete}
+                        onFail={() => setJobId(null)}
+                        className="mt-3"
+                    />
+                )}
                 {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
             </div>
         );
@@ -114,16 +138,27 @@ export default function CapabilityMatrixPanel({ noticeId }: { noticeId: string }
                         {fit.label}
                     </span>
                 </div>
-                <button
-                    type="button"
-                    onClick={() => generate(true)}
-                    disabled={loading}
-                    className="bg-stone-100 text-stone-700 px-3 py-1.5 rounded-full text-xs font-bold hover:bg-stone-200 disabled:opacity-50 inline-flex items-center gap-1.5"
-                >
-                    {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-                    Regenerate
-                </button>
+                {!jobId && (
+                    <button
+                        type="button"
+                        onClick={() => generate(true)}
+                        disabled={loading}
+                        className="bg-stone-100 text-stone-700 px-3 py-1.5 rounded-full text-xs font-bold hover:bg-stone-200 disabled:opacity-50 inline-flex items-center gap-1.5"
+                    >
+                        {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                        Regenerate
+                    </button>
+                )}
             </div>
+
+            {jobId && (
+                <LiveJobProgress
+                    jobId={jobId}
+                    onComplete={handleJobComplete}
+                    onFail={() => setJobId(null)}
+                    className="mb-4"
+                />
+            )}
 
             {/* Count bar */}
             <div className="grid grid-cols-4 gap-2 mb-4">

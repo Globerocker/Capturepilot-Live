@@ -1,8 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
 import { callLLMJson } from "@/lib/llm/deepseek";
+import { createJob, runStep, startJob, completeJob, failJob } from "@/lib/background-jobs";
 
 export const maxDuration = 120;
 
@@ -146,91 +147,125 @@ export async function POST(req: NextRequest) {
         }
     }
 
-    const userMessage = [
-        "USER PROFILE:",
-        JSON.stringify(
-            {
-                company: p.company_name,
-                naics: p.naics_codes,
-                certs: p.sba_certifications,
-                years: p.years_in_business,
-                federal_awards: p.federal_awards_count,
-                revenue: p.revenue,
-                employees: p.employee_count,
-                veteran: p.is_veteran_owned ? p.veteran_cert_type : null,
-                capability_statement: ((p.capability_statement as string) || "").slice(0, 3000),
-            },
-            null,
-            2
-        ),
-        "",
-        "OPPORTUNITY:",
-        `Title: ${o.title}`,
-        "",
-        "SOLICITATION TEXT:",
-        ((o.description as string) || "").slice(0, 15000),
-        "",
-        "STRUCTURED REQUIREMENTS:",
-        o.structured_requirements ? JSON.stringify(o.structured_requirements).slice(0, 8000) : "(none)",
-        "",
-        "Generate the capability matrix JSON.",
-    ].join("\n");
-
-    let core: { opportunity_title: string; rows: MatrixRow[]; recommended_win_themes?: string[] };
-    try {
-        core = await callLLMJson(
-            [
-                { role: "system", content: SYSTEM_PROMPT },
-                { role: "user", content: userMessage },
-            ],
-            { temperature: 0.3, max_tokens: 3500 }
-        );
-    } catch (e) {
-        const msg = e instanceof Error ? e.message : "LLM call failed";
-        return NextResponse.json({ error: msg }, { status: 500 });
-    }
-
-    const rows = core.rows || [];
-    const counts = { strong: 0, moderate: 0, weak: 0, gap: 0 };
-    for (const r of rows) counts[r.assessment] = (counts[r.assessment] || 0) + 1;
-
-    const strengths = rows
-        .filter((r) => r.assessment === "strong")
-        .slice(0, 3)
-        .map((r) => `${r.factor}: ${r.user_strength}`);
-
-    const risks = rows
-        .filter((r) => r.assessment === "gap" || r.assessment === "weak")
-        .slice(0, 3)
-        .map((r) => `${r.factor}: ${r.gap_description || "gap"}`);
-
-    const overallFit = calcOverallFit(rows);
-
-    const matrix: CapabilityMatrix = {
-        opportunity_title: core.opportunity_title || ((o.title as string) ?? ""),
-        overall_fit: overallFit,
-        total_factors: rows.length,
-        strong_count: counts.strong,
-        moderate_count: counts.moderate,
-        weak_count: counts.weak,
-        gap_count: counts.gap,
-        top_risks: risks,
-        top_strengths: strengths,
-        recommended_win_themes: core.recommended_win_themes || [],
-        rows,
-    };
-
-    await admin.from("capability_matrices").insert({
-        user_profile_id: userProfileId,
+    const { jobId } = await createJob(userProfileId, {
+        kind: "capability_matrix",
+        title: `Capability Matrix: ${String(o.title || "Opportunity").slice(0, 80)}`,
         opportunity_id: opportunityId,
-        matrix_json: matrix,
-        overall_fit: overallFit,
+        notice_id: noticeId,
+        steps: [
+            { key: "prepare_context", label: "Building profile + opportunity context" },
+            { key: "llm_call", label: "Scoring factor-by-factor fit via LLM (can take up to 60s)" },
+            { key: "rank", label: "Ranking top strengths + gaps" },
+            { key: "persist", label: "Saving matrix to your account" },
+        ],
     });
 
-    return NextResponse.json({
-        matrix,
-        overall_fit: overallFit,
-        generated_at: new Date().toISOString(),
-        cached: false,
+    after(async () => {
+        await startJob(jobId);
+        try {
+            const userMessage = await runStep<string>(
+                jobId,
+                "prepare_context",
+                async () => [
+                    "USER PROFILE:",
+                    JSON.stringify({
+                        company: p.company_name,
+                        naics: p.naics_codes,
+                        certs: p.sba_certifications,
+                        years: p.years_in_business,
+                        federal_awards: p.federal_awards_count,
+                        revenue: p.revenue,
+                        employees: p.employee_count,
+                        veteran: p.is_veteran_owned ? p.veteran_cert_type : null,
+                        capability_statement: ((p.capability_statement as string) || "").slice(0, 3000),
+                    }, null, 2),
+                    "",
+                    "OPPORTUNITY:",
+                    `Title: ${o.title}`,
+                    "",
+                    "SOLICITATION TEXT:",
+                    ((o.description as string) || "").slice(0, 15000),
+                    "",
+                    "STRUCTURED REQUIREMENTS:",
+                    o.structured_requirements ? JSON.stringify(o.structured_requirements).slice(0, 8000) : "(none)",
+                    "",
+                    "Generate the capability matrix JSON.",
+                ].join("\n"),
+                { detailOnDone: (s) => `${s.length.toLocaleString()} chars of context` },
+            ) || "";
+
+            const core = await runStep<{ opportunity_title: string; rows: MatrixRow[]; recommended_win_themes?: string[] }>(
+                jobId,
+                "llm_call",
+                async () => callLLMJson(
+                    [
+                        { role: "system", content: SYSTEM_PROMPT },
+                        { role: "user", content: userMessage },
+                    ],
+                    { temperature: 0.3, max_tokens: 3500 },
+                ),
+                {
+                    detailOnStart: process.env.DEEPSEEK_API_KEY ? "Using DeepSeek V3" : "Using OpenAI gpt-4o-mini",
+                    detailOnDone: (c) => `${c.rows?.length ?? 0} factors scored`,
+                },
+            );
+            if (!core) throw new Error("LLM returned empty");
+
+            const matrix = await runStep<CapabilityMatrix>(
+                jobId,
+                "rank",
+                async () => {
+                    const rows = core.rows || [];
+                    const counts = { strong: 0, moderate: 0, weak: 0, gap: 0 };
+                    for (const r of rows) counts[r.assessment] = (counts[r.assessment] || 0) + 1;
+                    const strengths = rows
+                        .filter((r) => r.assessment === "strong")
+                        .slice(0, 3)
+                        .map((r) => `${r.factor}: ${r.user_strength}`);
+                    const risks = rows
+                        .filter((r) => r.assessment === "gap" || r.assessment === "weak")
+                        .slice(0, 3)
+                        .map((r) => `${r.factor}: ${r.gap_description || "gap"}`);
+                    const overallFit = calcOverallFit(rows);
+                    return {
+                        opportunity_title: core.opportunity_title || ((o.title as string) ?? ""),
+                        overall_fit: overallFit,
+                        total_factors: rows.length,
+                        strong_count: counts.strong,
+                        moderate_count: counts.moderate,
+                        weak_count: counts.weak,
+                        gap_count: counts.gap,
+                        top_risks: risks,
+                        top_strengths: strengths,
+                        recommended_win_themes: core.recommended_win_themes || [],
+                        rows,
+                    };
+                },
+                { detailOnDone: (m) => `Overall fit: ${m.overall_fit}  · ${m.strong_count} strong, ${m.gap_count} gaps` },
+            );
+
+            if (!matrix) throw new Error("Matrix not computed");
+
+            await runStep(
+                jobId,
+                "persist",
+                async () => {
+                    const { error: insErr } = await admin.from("capability_matrices").insert({
+                        user_profile_id: userProfileId,
+                        opportunity_id: opportunityId,
+                        matrix_json: matrix,
+                        overall_fit: matrix.overall_fit,
+                    });
+                    if (insErr) throw new Error(insErr.message);
+                    return "saved";
+                },
+            );
+
+            await completeJob(jobId, { matrix, overall_fit: matrix.overall_fit });
+        } catch (e) {
+            await failJob(jobId, (e as Error).message || "capability-matrix failed").catch(() => { /* noop */ });
+        }
     });
+
+    return NextResponse.json({ jobId });
 }

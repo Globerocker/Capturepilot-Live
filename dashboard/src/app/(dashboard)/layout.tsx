@@ -4,7 +4,7 @@ import UpgradeBanner from "@/components/UpgradeBanner";
 import FeedbackWidget from "@/components/FeedbackWidget";
 import GlobalToast from "@/components/GlobalToast";
 import SupportChat from "@/components/SupportChat";
-import RunningJobsIndicator from "@/components/proposals/RunningJobsIndicator";
+import GlobalJobsIndicator from "@/components/jobs/GlobalJobsIndicator";
 import ImpersonationBanner from "@/components/ImpersonationBanner";
 // import { ReviewPrompt } from "@/components/ReviewPrompt"; // Disabled until Google Business Profile is set up
 
@@ -31,7 +31,7 @@ export default function DashboardLayout({
       <FeedbackWidget />
       <GlobalToast />
       <SupportChat />
-      <RunningJobsIndicator />
+      <GlobalJobsIndicator />
       {/* <ReviewPrompt /> — disabled until Google Business Profile is set up */}
     </div>
   );

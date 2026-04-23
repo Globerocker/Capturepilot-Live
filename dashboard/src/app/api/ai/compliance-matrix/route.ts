@@ -1,8 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
 import { callLLMJson } from "@/lib/llm/deepseek";
+import { createJob, runStep, startJob, completeJob, failJob, requireProfileId } from "@/lib/background-jobs";
 
 export const maxDuration = 180;
 
@@ -10,26 +11,27 @@ export const maxDuration = 180;
  * POST /api/ai/compliance-matrix
  * Body: { notice_id: string; force?: boolean; export?: "xlsx" | "json" }
  *
- * Parses Section L (instructions) + Section M (evaluation) + Section C (SOW)
- * + special contract requirements from an opportunity's description +
- * structured_requirements. Outputs a compliance matrix:
- *   rows = every "shall / must / will / required" obligation
- *   cols = section, requirement text, obligation verb, owner, status,
- *          addressable-by-user (yes/no/partial), proposal section ref
+ * Job-based pipeline (returns jobId immediately, user polls /api/jobs/[id]):
+ *   1) fetch_opportunity
+ *   2) check_cache
+ *   3) llm_call  (30-60s)
+ *   4) compute_stats
+ *   5) persist
  *
- * Cached in compliance_matrices for 14 days. XLSX export uses exceljs
- * (already installed in the project).
+ * Legacy path (export="xlsx"): runs synchronously because it has to return
+ * the raw file, not a job. Cached matrix is used if available; otherwise
+ * generation happens inline.
  */
 
 interface ComplianceRow {
-    section: string;               // e.g. "L.3.2", "M.1", "C.4.1"
-    requirement: string;           // the obligation text
-    obligation_verb: string;       // "shall" | "must" | "will" | "required" | "should"
-    category: string;              // "technical" | "management" | "past_performance" | "pricing" | "admin"
-    owner: string;                 // "Capture Lead" | "Tech SME" | "Pricing" | "Contracts" | "Past Perf" | ...
+    section: string;
+    requirement: string;
+    obligation_verb: string;
+    category: string;
+    owner: string;
     addressable: "yes" | "no" | "partial" | "unknown";
     mitigation: string | null;
-    proposal_section_ref: string;  // "Vol II §3.1" etc
+    proposal_section_ref: string;
 }
 
 interface Matrix {
@@ -37,7 +39,7 @@ interface Matrix {
     total_requirements: number;
     by_category: Record<string, number>;
     by_owner: Record<string, number>;
-    compliance_score: number;       // % addressable
+    compliance_score: number;
     rows: ComplianceRow[];
 }
 
@@ -90,8 +92,31 @@ export async function POST(req: NextRequest) {
 
     const admin = createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+        process.env.SUPABASE_SERVICE_KEY!,
     );
+
+    // XLSX export path must be synchronous — serve from cache if available,
+    // otherwise generate inline (no streaming).
+    if (exportFormat === "xlsx") {
+        const { data: opp } = await admin
+            .from("opportunities")
+            .select("id, notice_id, title, description, structured_requirements")
+            .eq("notice_id", noticeId)
+            .single();
+        if (!opp) return NextResponse.json({ error: "Opportunity not found" }, { status: 404 });
+        const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+        const { data: cached } = await admin
+            .from("compliance_matrices")
+            .select("matrix_json")
+            .eq("opportunity_id", (opp as { id: string }).id)
+            .gt("generated_at", fourteenDaysAgo)
+            .order("generated_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+        if (cached) return buildXlsxResponse(cached.matrix_json as Matrix);
+        // No cache — instruct caller to generate first via the JSON path.
+        return NextResponse.json({ error: "No cached matrix — click Generate first" }, { status: 409 });
+    }
 
     const { data: opp } = await admin
         .from("opportunities")
@@ -100,31 +125,20 @@ export async function POST(req: NextRequest) {
         .single();
     if (!opp) return NextResponse.json({ error: "Opportunity not found" }, { status: 404 });
     const o = opp as Record<string, unknown>;
-    const opportunityId = o.id as string;
 
-    // Pull user profile for addressability scoring
-    const { data: profile } = await admin
-        .from("user_profiles")
-        .select("capability_statement, naics_codes, sba_certifications, federal_awards_count, years_in_business")
-        .eq("auth_user_id", user.id)
-        .single();
-    const p = (profile || {}) as Record<string, unknown>;
-
-    // Cache check — 14 day TTL
+    // Cache check before spinning up a job — returns the cached matrix directly
+    // so repeat clicks don't burn another LLM call.
     if (!force) {
         const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
         const { data: cached } = await admin
             .from("compliance_matrices")
             .select("matrix_json, compliance_score, generated_at, model_used")
-            .eq("opportunity_id", opportunityId)
+            .eq("opportunity_id", o.id as string)
             .gt("generated_at", fourteenDaysAgo)
             .order("generated_at", { ascending: false })
             .limit(1)
             .maybeSingle();
         if (cached) {
-            if (exportFormat === "xlsx") {
-                return buildXlsxResponse(cached.matrix_json as Matrix);
-            }
             return NextResponse.json({
                 matrix: cached.matrix_json,
                 compliance_score: cached.compliance_score,
@@ -135,89 +149,129 @@ export async function POST(req: NextRequest) {
         }
     }
 
-    const description = ((o.description as string) || "").slice(0, 20000);
-    const structured = o.structured_requirements
-        ? JSON.stringify(o.structured_requirements).slice(0, 10000)
-        : "";
+    const profileId = await requireProfileId(user.id);
+    const { data: profile } = await admin
+        .from("user_profiles")
+        .select("capability_statement, naics_codes, sba_certifications, federal_awards_count, years_in_business")
+        .eq("id", profileId)
+        .single();
 
-    const userMessage = [
-        `OPPORTUNITY TITLE: ${o.title}`,
-        "",
-        "USER PROFILE CONTEXT (to rate 'addressable'):",
-        JSON.stringify(
-            {
-                naics: p.naics_codes,
-                certs: p.sba_certifications,
-                federal_awards: p.federal_awards_count,
-                years_in_business: p.years_in_business,
-                capability_statement: ((p.capability_statement as string) || "").slice(0, 1500),
-            },
-            null,
-            2
-        ),
-        "",
-        "SOLICITATION TEXT:",
-        description,
-        "",
-        structured ? `STRUCTURED REQUIREMENTS:\n${structured}` : "",
-    ].join("\n");
-
-    let matrixCore: { opportunity_title: string; rows: ComplianceRow[] };
-    let modelUsed: string;
-    try {
-        matrixCore = await callLLMJson<{ opportunity_title: string; rows: ComplianceRow[] }>(
-            [
-                { role: "system", content: SYSTEM_PROMPT },
-                { role: "user", content: userMessage },
-            ],
-            { temperature: 0.2, max_tokens: 4000 }
-        );
-        modelUsed = process.env.DEEPSEEK_API_KEY ? "deepseek-chat" : "gpt-4o-mini";
-    } catch (e) {
-        const msg = e instanceof Error ? e.message : "LLM call failed";
-        return NextResponse.json({ error: msg }, { status: 500 });
-    }
-
-    const rows = matrixCore.rows || [];
-    const byCategory: Record<string, number> = {};
-    const byOwner: Record<string, number> = {};
-    let addressableCount = 0;
-    for (const r of rows) {
-        byCategory[r.category] = (byCategory[r.category] || 0) + 1;
-        byOwner[r.owner] = (byOwner[r.owner] || 0) + 1;
-        if (r.addressable === "yes") addressableCount += 1;
-        else if (r.addressable === "partial") addressableCount += 0.5;
-    }
-    const complianceScore = rows.length > 0 ? Math.round((addressableCount / rows.length) * 100) : 0;
-
-    const matrix: Matrix = {
-        opportunity_title: matrixCore.opportunity_title || ((o.title as string) ?? ""),
-        total_requirements: rows.length,
-        by_category: byCategory,
-        by_owner: byOwner,
-        compliance_score: complianceScore,
-        rows,
-    };
-
-    await admin.from("compliance_matrices").insert({
-        opportunity_id: opportunityId,
+    const { jobId } = await createJob(profileId, {
+        kind: "compliance_matrix",
+        title: `Compliance Matrix: ${String(o.title || "Opportunity").slice(0, 80)}`,
+        opportunity_id: o.id as string,
         notice_id: noticeId,
-        matrix_json: matrix,
-        compliance_score: complianceScore,
-        model_used: modelUsed,
+        steps: [
+            { key: "prepare_context", label: "Preparing opportunity context + your profile" },
+            { key: "llm_extract", label: "Extracting obligations via LLM (can take up to 60s)" },
+            { key: "score", label: "Scoring addressability + category + owner" },
+            { key: "persist", label: "Saving matrix to your account" },
+        ],
     });
 
-    if (exportFormat === "xlsx") {
-        return buildXlsxResponse(matrix);
-    }
+    after(async () => {
+        await startJob(jobId);
+        try {
+            const p = (profile || {}) as Record<string, unknown>;
+            const description = ((o.description as string) || "").slice(0, 20000);
+            const structured = o.structured_requirements
+                ? JSON.stringify(o.structured_requirements).slice(0, 10000)
+                : "";
 
-    return NextResponse.json({
-        matrix,
-        compliance_score: complianceScore,
-        generated_at: new Date().toISOString(),
-        model: modelUsed,
-        cached: false,
+            const userMessage = await runStep<string>(
+                jobId,
+                "prepare_context",
+                async () => [
+                    `OPPORTUNITY TITLE: ${o.title}`,
+                    "",
+                    "USER PROFILE CONTEXT (to rate 'addressable'):",
+                    JSON.stringify({
+                        naics: p.naics_codes,
+                        certs: p.sba_certifications,
+                        federal_awards: p.federal_awards_count,
+                        years_in_business: p.years_in_business,
+                        capability_statement: ((p.capability_statement as string) || "").slice(0, 1500),
+                    }, null, 2),
+                    "",
+                    "SOLICITATION TEXT:",
+                    description,
+                    "",
+                    structured ? `STRUCTURED REQUIREMENTS:\n${structured}` : "",
+                ].join("\n"),
+                { detailOnDone: (s) => `${s.length.toLocaleString()} chars of context` },
+            ) || "";
+
+            const matrixCore = await runStep<{ opportunity_title: string; rows: ComplianceRow[] }>(
+                jobId,
+                "llm_extract",
+                async () => callLLMJson<{ opportunity_title: string; rows: ComplianceRow[] }>(
+                    [
+                        { role: "system", content: SYSTEM_PROMPT },
+                        { role: "user", content: userMessage },
+                    ],
+                    { temperature: 0.2, max_tokens: 4000 },
+                ),
+                {
+                    detailOnStart: process.env.DEEPSEEK_API_KEY ? "Using DeepSeek V3" : "Using OpenAI gpt-4o-mini",
+                    detailOnDone: (m) => `${m.rows?.length ?? 0} obligations extracted`,
+                },
+            );
+
+            if (!matrixCore) throw new Error("LLM returned empty matrix");
+
+            const rows = matrixCore.rows || [];
+            const modelUsed = process.env.DEEPSEEK_API_KEY ? "deepseek-chat" : "gpt-4o-mini";
+
+            const matrix = await runStep<Matrix>(
+                jobId,
+                "score",
+                async () => {
+                    const byCategory: Record<string, number> = {};
+                    const byOwner: Record<string, number> = {};
+                    let addressableCount = 0;
+                    for (const r of rows) {
+                        byCategory[r.category] = (byCategory[r.category] || 0) + 1;
+                        byOwner[r.owner] = (byOwner[r.owner] || 0) + 1;
+                        if (r.addressable === "yes") addressableCount += 1;
+                        else if (r.addressable === "partial") addressableCount += 0.5;
+                    }
+                    const complianceScore = rows.length > 0 ? Math.round((addressableCount / rows.length) * 100) : 0;
+                    return {
+                        opportunity_title: matrixCore.opportunity_title || ((o.title as string) ?? ""),
+                        total_requirements: rows.length,
+                        by_category: byCategory,
+                        by_owner: byOwner,
+                        compliance_score: complianceScore,
+                        rows,
+                    };
+                },
+                { detailOnDone: (m) => `${m.compliance_score}% addressable · ${Object.keys(m.by_category).length} categories` },
+            );
+
+            await runStep(
+                jobId,
+                "persist",
+                async () => {
+                    if (!matrix) throw new Error("Matrix not computed");
+                    const { error: insErr } = await admin.from("compliance_matrices").insert({
+                        opportunity_id: o.id,
+                        notice_id: noticeId,
+                        matrix_json: matrix,
+                        compliance_score: matrix.compliance_score,
+                        model_used: modelUsed,
+                    });
+                    if (insErr) throw new Error(insErr.message);
+                    return "saved";
+                },
+            );
+
+            await completeJob(jobId, { matrix, compliance_score: matrix?.compliance_score });
+        } catch (e) {
+            await failJob(jobId, (e as Error).message || "compliance-matrix failed").catch(() => { /* already */ });
+        }
     });
+
+    return NextResponse.json({ jobId });
 }
 
 async function buildXlsxResponse(matrix: Matrix): Promise<Response> {
@@ -235,7 +289,6 @@ async function buildXlsxResponse(matrix: Matrix): Promise<Response> {
         { header: "Mitigation", key: "mitigation", width: 40 },
         { header: "Proposal Ref", key: "proposal_section_ref", width: 16 },
     ];
-    ws.getRow(1).font = { bold: true };
     ws.getRow(1).fill = {
         type: "pattern",
         pattern: "solid",

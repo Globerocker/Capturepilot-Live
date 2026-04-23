@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ClipboardCheck, Download, Loader2, RefreshCw } from "lucide-react";
 import clsx from "clsx";
+import LiveJobProgress, { type Job } from "@/components/jobs/LiveJobProgress";
 
 interface ComplianceRow {
     section: string;
@@ -36,10 +37,12 @@ export default function ComplianceMatrixPanel({ noticeId }: { noticeId: string }
     const [loading, setLoading] = useState(false);
     const [downloading, setDownloading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [jobId, setJobId] = useState<string | null>(null);
 
     async function generate(force = false) {
         setLoading(true);
         setError(null);
+        setJobId(null);
         try {
             const res = await fetch("/api/ai/compliance-matrix", {
                 method: "POST",
@@ -48,7 +51,10 @@ export default function ComplianceMatrixPanel({ noticeId }: { noticeId: string }
             });
             const data = await res.json();
             if (data.matrix) {
+                // Cached hit — no job needed
                 setMatrix(data.matrix as Matrix);
+            } else if (data.jobId) {
+                setJobId(data.jobId);
             } else {
                 setError(data.error || "Failed to generate matrix");
             }
@@ -58,6 +64,12 @@ export default function ComplianceMatrixPanel({ noticeId }: { noticeId: string }
             setLoading(false);
         }
     }
+
+    const handleJobComplete = (job: Job) => {
+        const result = job.result as { matrix?: Matrix } | null;
+        if (result?.matrix) setMatrix(result.matrix);
+        setJobId(null);
+    };
 
     async function downloadXlsx() {
         setDownloading(true);
@@ -93,15 +105,25 @@ export default function ComplianceMatrixPanel({ noticeId }: { noticeId: string }
                         </p>
                     </div>
                 </div>
-                <button
-                    type="button"
-                    onClick={() => generate(false)}
-                    disabled={loading}
-                    className="bg-emerald-600 text-white px-4 py-2 rounded-full text-xs font-bold hover:bg-emerald-700 disabled:opacity-50 inline-flex items-center gap-1.5"
-                >
-                    {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <ClipboardCheck className="w-3 h-3" />}
-                    Generate Matrix
-                </button>
+                {!jobId && (
+                    <button
+                        type="button"
+                        onClick={() => generate(false)}
+                        disabled={loading}
+                        className="bg-emerald-600 text-white px-4 py-2 rounded-full text-xs font-bold hover:bg-emerald-700 disabled:opacity-50 inline-flex items-center gap-1.5"
+                    >
+                        {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <ClipboardCheck className="w-3 h-3" />}
+                        {loading ? "Starting…" : "Generate Matrix"}
+                    </button>
+                )}
+                {jobId && (
+                    <LiveJobProgress
+                        jobId={jobId}
+                        onComplete={handleJobComplete}
+                        onFail={() => setJobId(null)}
+                        className="mt-2"
+                    />
+                )}
                 {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
             </div>
         );
@@ -141,6 +163,17 @@ export default function ComplianceMatrixPanel({ noticeId }: { noticeId: string }
                     </button>
                 </div>
             </div>
+
+            {/* Regeneration job progress sits above the (stale) matrix so the user
+                can still read the previous version while a new one builds. */}
+            {jobId && (
+                <LiveJobProgress
+                    jobId={jobId}
+                    onComplete={handleJobComplete}
+                    onFail={() => setJobId(null)}
+                    className="mb-4"
+                />
+            )}
 
             {/* Category + owner chips */}
             <div className="flex flex-wrap gap-1.5 mb-4">
