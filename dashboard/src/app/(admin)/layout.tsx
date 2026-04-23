@@ -8,7 +8,7 @@ import Image from "next/image";
 import {
     LayoutDashboard, Users, Briefcase, Target, UserCog,
     Wrench, Settings, LogOut, Loader2, Search, ChevronDown,
-    Menu, X, FileText, Bell, MessageSquare, Mail, Gift,
+    Menu, X, FileText, Bell, MessageSquare, Mail, Gift, Sparkles,
 } from "lucide-react";
 import clsx from "clsx";
 
@@ -28,6 +28,7 @@ const NAV = [
     { href: "/admin/users", icon: UserCog, label: "Users" },
     { href: "/admin/messages", icon: MessageSquare, label: "Messages" },
     { href: "/admin/emails", icon: Mail, label: "Emails" },
+    { href: "/admin/enrich", icon: Sparkles, label: "Bulk Enrich" },
     { href: "/admin/tools", icon: Wrench, label: "Tools" },
     { href: "/admin/settings", icon: Settings, label: "Settings" },
 ];

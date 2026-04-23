@@ -146,6 +146,11 @@ export async function GET(req: NextRequest) {
                         const popState = pop?.state && typeof pop.state === "object" ? (pop.state as Record<string, unknown>).code : null;
                         const popCity = pop?.city && typeof pop.city === "object" ? (pop.city as Record<string, unknown>).name : null;
 
+                        // SAM.gov's `resourceLinks` is the authoritative attachment
+                        // URL list. Previously we stored raw_json but left the
+                        // dedicated column empty, which is why deep_enrich and
+                        // download_attachments had almost nothing to chew on.
+                        const resourceLinks = Array.isArray(o.resourceLinks) ? o.resourceLinks : [];
                         return {
                             notice_id: o.noticeId,
                             title: o.title || null,
@@ -167,6 +172,7 @@ export async function GET(req: NextRequest) {
                             award_amount: award?.amount ? Number(award.amount) : null,
                             estimated_value: o.estimatedTotalValue ? Number(o.estimatedTotalValue) : (award?.amount ? Number(award.amount) : null),
                             link: o.uiLink || (o.noticeId ? `https://sam.gov/opp/${o.noticeId}/view` : null),
+                            resource_links: resourceLinks,
                             priority_flag: false,
                             is_archived: ["EXPIRED", "ARCHIVED", "DELETED"].includes(status),
                             raw_json: o,
