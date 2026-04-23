@@ -10,6 +10,30 @@ const NOTICE_TYPES = ["Sources Sought", "Presolicitation", "Solicitation", "Comb
 const SET_ASIDES = ["SBA", "8A", "SDVOSB", "WOSB", "HUBZone", "VSA"];
 const US_STATES = ["AL","AK","AZ","AR","CA","CO","CT","DC","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"];
 
+// Common free-text → canonical form so the LLM's output lands inside our allow-lists.
+const SET_ASIDE_ALIASES: Record<string, string> = {
+    "sba": "SBA", "small business": "SBA", "small_business": "SBA",
+    "8a": "8A", "8(a)": "8A", "8(a) sole source": "8A", "8(a) competed": "8A",
+    "sdvosb": "SDVOSB", "service-disabled veteran": "SDVOSB", "service disabled veteran": "SDVOSB", "veteran": "SDVOSB",
+    "wosb": "WOSB", "woman-owned": "WOSB", "women-owned": "WOSB", "edwosb": "WOSB",
+    "hubzone": "HUBZone", "hub zone": "HUBZone",
+    "vsa": "VSA", "vosb": "VSA", "veteran small business": "VSA",
+};
+const STATE_NAME_TO_CODE: Record<string, string> = {
+    "alabama": "AL", "alaska": "AK", "arizona": "AZ", "arkansas": "AR", "california": "CA",
+    "colorado": "CO", "connecticut": "CT", "delaware": "DE", "florida": "FL", "georgia": "GA",
+    "hawaii": "HI", "idaho": "ID", "illinois": "IL", "indiana": "IN", "iowa": "IA",
+    "kansas": "KS", "kentucky": "KY", "louisiana": "LA", "maine": "ME", "maryland": "MD",
+    "massachusetts": "MA", "michigan": "MI", "minnesota": "MN", "mississippi": "MS",
+    "missouri": "MO", "montana": "MT", "nebraska": "NE", "nevada": "NV",
+    "new hampshire": "NH", "new jersey": "NJ", "new mexico": "NM", "new york": "NY",
+    "north carolina": "NC", "north dakota": "ND", "ohio": "OH", "oklahoma": "OK",
+    "oregon": "OR", "pennsylvania": "PA", "rhode island": "RI", "south carolina": "SC",
+    "south dakota": "SD", "tennessee": "TN", "texas": "TX", "utah": "UT",
+    "vermont": "VT", "virginia": "VA", "washington": "WA", "west virginia": "WV",
+    "wisconsin": "WI", "wyoming": "WY", "district of columbia": "DC",
+};
+
 /**
  * POST /api/matches/ai-filter
  * Body: { prompt: string }
@@ -115,20 +139,38 @@ Return the JSON filter object.`;
             return NextResponse.json({ error: "Could not parse AI response" }, { status: 502 });
         }
 
-        // Sanitize — only keep known keys, and validate
+        // Sanitize — accept aliases + fuzzy variants so we don't silently drop
+        // values the LLM returns in slightly different casing / formats.
         const filters: Record<string, string | number> = {};
 
-        if (typeof parsed.naics_code === "string" && /^\d{4,6}$/.test(parsed.naics_code)) {
-            filters.naics_code = parsed.naics_code;
+        if (typeof parsed.naics_code === "string") {
+            const naics = parsed.naics_code.replace(/\D/g, "");
+            if (naics.length >= 4 && naics.length <= 6) filters.naics_code = naics;
         }
-        if (typeof parsed.set_aside === "string" && SET_ASIDES.includes(parsed.set_aside)) {
-            filters.set_aside = parsed.set_aside;
+        if (typeof parsed.set_aside === "string") {
+            const raw = parsed.set_aside.trim();
+            if (SET_ASIDES.includes(raw)) {
+                filters.set_aside = raw;
+            } else {
+                const alias = SET_ASIDE_ALIASES[raw.toLowerCase()];
+                if (alias) filters.set_aside = alias;
+            }
         }
-        if (typeof parsed.state === "string" && US_STATES.includes(parsed.state.toUpperCase())) {
-            filters.state = parsed.state.toUpperCase();
+        if (typeof parsed.state === "string") {
+            const raw = parsed.state.trim();
+            if (raw.length === 2 && US_STATES.includes(raw.toUpperCase())) {
+                filters.state = raw.toUpperCase();
+            } else {
+                const code = STATE_NAME_TO_CODE[raw.toLowerCase()];
+                if (code) filters.state = code;
+            }
         }
-        if (typeof parsed.notice_type === "string" && NOTICE_TYPES.includes(parsed.notice_type)) {
-            filters.notice_type = parsed.notice_type;
+        if (typeof parsed.notice_type === "string") {
+            const raw = parsed.notice_type.trim();
+            const match = NOTICE_TYPES.find(t => t.toLowerCase() === raw.toLowerCase());
+            if (match) filters.notice_type = match;
+            else if (raw.toLowerCase().includes("sources sought") || raw.toLowerCase() === "rfi") filters.notice_type = "Sources Sought";
+            else if (raw.toLowerCase().includes("presol")) filters.notice_type = "Presolicitation";
         }
         if (typeof parsed.min_score === "number" && parsed.min_score >= 0 && parsed.min_score <= 1) {
             filters.min_score = parsed.min_score;
@@ -138,6 +180,15 @@ Return the JSON filter object.`;
         }
         if (typeof parsed.keyword === "string" && parsed.keyword.length > 0 && parsed.keyword.length < 100) {
             filters.keyword = parsed.keyword;
+        }
+
+        // If nothing stuck, surface that to the UI so we don't look like we "did nothing".
+        if (Object.keys(filters).length === 0) {
+            return NextResponse.json({
+                filters,
+                warning: "No structured filters extracted. Try mentioning a specific agency, NAICS, state, or set-aside.",
+                raw_llm_output: raw,
+            });
         }
 
         return NextResponse.json({ filters });

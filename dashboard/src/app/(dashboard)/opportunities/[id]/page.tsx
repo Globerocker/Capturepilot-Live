@@ -16,6 +16,7 @@ import ComplianceMatrixPanel from "@/components/opportunity/ComplianceMatrixPane
 import CapabilityMatrixPanel from "@/components/opportunity/CapabilityMatrixPanel";
 import VoiceBriefButton from "@/components/opportunity/VoiceBriefButton";
 import SuggestedPartnersPanel from "@/components/opportunity/SuggestedPartnersPanel";
+import GenerateWinStrategyButton from "@/components/opportunity/GenerateWinStrategyButton";
 import { estimateContractValue } from "@/utils/estimateValue";
 
 export const dynamic = 'force-dynamic';
@@ -656,17 +657,21 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                     <div className="bg-stone-900 rounded-2xl sm:rounded-3xl text-white relative overflow-hidden shadow-xl border border-stone-800">
                         <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none"></div>
 
-                        <div className="px-4 sm:px-6 py-4 sm:py-5 border-b border-stone-800/50 flex items-center justify-between relative z-10">
+                        <div className="px-4 sm:px-6 py-4 sm:py-5 border-b border-stone-800/50 flex items-center justify-between gap-3 relative z-10">
                             <h2 className="text-[15px] font-bold flex items-center text-white">
                                 <Sparkles className="w-4 h-4 mr-2 text-emerald-400" /> AI Win Strategy
                             </h2>
+                            <GenerateWinStrategyButton
+                                opportunityId={opp.id}
+                                hasStrategy={!!aiStrat.summary}
+                            />
                         </div>
 
                         <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 relative z-10">
                             <div>
                                 <p className="text-[10px] text-stone-400 uppercase tracking-widest mb-2">Executive Summary</p>
                                 <p className="text-sm text-stone-300 leading-relaxed">
-                                    {aiStrat.summary || "No AI strategy generated yet. Execute Phase 4 document analysis tools to populate."}
+                                    {aiStrat.summary || "No AI strategy yet. Hit “Generate now” above to create one from this opportunity’s description + your profile. Takes ~20 seconds."}
                                 </p>
                             </div>
 

@@ -43,7 +43,14 @@ export function AIFilterBar({
                 throw new Error(j.error || "AI filter failed");
             }
             const data = await res.json();
-            onApply(data.filters || {}, prompt);
+            const filters = data.filters || {};
+            if (Object.keys(filters).length === 0) {
+                // Route returned OK but didn't extract anything — surface hint so the
+                // user doesn't think the button did nothing.
+                setError(data.warning || "No filters could be extracted. Try being more specific.");
+                return;
+            }
+            onApply(filters, prompt);
             setText("");
         } catch (e) {
             setError((e as Error).message);

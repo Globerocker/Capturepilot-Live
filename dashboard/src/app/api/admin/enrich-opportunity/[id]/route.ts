@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { cookies } from "next/headers";
+import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
 import OpenAI from "openai";
 import { computeStrategicScoring } from "@/lib/strategic-scoring";
@@ -31,6 +33,16 @@ const SAM_API_KEY = process.env.SAM_API_KEY || "";
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params;
     if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
+
+    // Gate on authenticated user (any onboarded customer may enrich on-demand).
+    const cookieStore = await cookies();
+    const sb = createServerClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        { cookies: { getAll: () => cookieStore.getAll() } },
+    );
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const admin = getAdmin();
     const { data: opp, error } = await admin

@@ -8,6 +8,7 @@ import {
     Tag, X, Plus, FileText, Award, ShieldCheck, Mail, Sparkles,
 } from "lucide-react";
 import clsx from "clsx";
+import AutoSyncedDocs from "@/components/documents/AutoSyncedDocs";
 
 const supabase = createSupabaseClient();
 
@@ -201,9 +202,12 @@ export default function DocumentsPage() {
                     </span>
                 </h2>
                 <p className="text-stone-500 font-medium text-sm mt-1">
-                    Upload proposals, cap statements, certs, and reference letters. Tag, search, and attach to pursuits.
+                    Every proposal, cap statement, email template, and uploaded file in one place. Search, tag, attach to pursuits.
                 </p>
             </header>
+
+            {/* Auto-synced from the rest of the account */}
+            {profileId && <AutoSyncedDocs profileId={profileId} />}
 
             {/* Upload */}
             <section className={clsx(
