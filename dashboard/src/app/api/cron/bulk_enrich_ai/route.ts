@@ -51,11 +51,16 @@ export async function GET(req: NextRequest) {
         .limit(200);
     const priorityIds = new Set<string>((priority || []).map((m: { opportunity_id: string }) => m.opportunity_id));
 
+    // Only pull candidates that actually have usable description text. The
+    // URL-stub and < 100 char rows were returning first on every run because
+    // they're the most-recently posted ones, wasting the whole batch.
     const { data: candidates } = await db
         .from("opportunities")
         .select("id, notice_id, title, agency, notice_type, naics_code, set_aside_code, award_amount, estimated_value, response_deadline, place_of_performance_state, place_of_performance_city, description, incumbent_contractor_name")
         .eq("is_archived", false)
         .or("ai_win_strategy.is.null,ai_win_strategy.eq.{}")
+        .not("description", "like", "https://api.sam.gov%")
+        .not("description", "is", null)
         .order("posted_date", { ascending: false, nullsFirst: false })
         .limit(BATCH_SIZE * 3);
 
