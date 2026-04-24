@@ -3,34 +3,113 @@ import { createClient } from "@supabase/supabase-js";
 
 export const maxDuration = 300;
 
+/**
+ * Strategic lifecycle cleanup. Runs weekly (Sunday 04:00 UTC).
+ *
+ * Transitions:
+ *   ACTIVE (deadline ≤ 7d)     → EXPIRING_SOON
+ *   ACTIVE/EXPIRING_SOON past  → EXPIRED
+ *   MARKET_RESEARCH past       → INTELLIGENCE (retention_protected=true)
+ *   EXPIRED > 120d             → ARCHIVED
+ *   ARCHIVED > 365d            → hard delete (via safeguarded view)
+ *   INTELLIGENCE > 730d, no solicitation → hard delete (via safeguarded view)
+ *
+ * Safeguards (enforced by SQL views 058):
+ *   Never deletes rows with user_pursuits, HOT/WARM/saved user_matches, or
+ *   opportunity_attachments carrying extracted_text > 500 chars.
+ *
+ * Side effects: deletes cached PDFs from the `opportunity-attachments` bucket
+ * when an opp is hard-deleted, logs every batch to `cleanup_log`.
+ */
+
 function getSupabase() {
     return createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_KEY!
+        process.env.SUPABASE_SERVICE_KEY!,
     );
 }
 
+async function logStep(
+    supabase: ReturnType<typeof getSupabase>,
+    kind: string,
+    ids: string[],
+    notes: Record<string, unknown> = {},
+) {
+    if (ids.length === 0) return;
+    await supabase.from("cleanup_log").insert({
+        kind,
+        row_count: ids.length,
+        opportunity_ids: ids,
+        notes,
+    });
+}
+
+/** Remove cached PDFs for opps about to be deleted. Best-effort.
+ *  Files are stored as `{notice_id}/{timestamp}.pdf` by deep_enrich — we list
+ *  each notice_id prefix and remove everything under it. Only opps that
+ *  actually have attachment records get probed, so the cost stays bounded. */
+async function purgeAttachmentStorage(
+    supabase: ReturnType<typeof getSupabase>,
+    oppIds: string[],
+): Promise<number> {
+    if (oppIds.length === 0) return 0;
+    const { data: withAttachments } = await supabase
+        .from("opportunity_attachments")
+        .select("opportunity_id")
+        .in("opportunity_id", oppIds);
+    const oppIdsWithFiles = [...new Set((withAttachments || []).map(
+        (r: { opportunity_id: string }) => r.opportunity_id,
+    ))];
+    if (oppIdsWithFiles.length === 0) return 0;
+    const { data: rows } = await supabase
+        .from("opportunities")
+        .select("notice_id")
+        .in("id", oppIdsWithFiles)
+        .not("notice_id", "is", null);
+    const noticeIds = (rows || [])
+        .map((r: { notice_id: string | null }) => r.notice_id)
+        .filter((n): n is string => !!n);
+    let removed = 0;
+    for (const noticeId of noticeIds) {
+        try {
+            const { data: files } = await supabase.storage
+                .from("opportunity-attachments")
+                .list(noticeId, { limit: 100 });
+            if (!files || files.length === 0) continue;
+            const paths = files.map((f) => `${noticeId}/${f.name}`);
+            const { data: rm } = await supabase.storage
+                .from("opportunity-attachments")
+                .remove(paths);
+            removed += rm?.length || 0;
+        } catch {
+            // ignore — missing folder is fine
+        }
+    }
+    return removed;
+}
+
 export async function GET(req: NextRequest) {
+    // Dual auth: Vercel cron OR Supabase pg_cron service key
     const authHeader = req.headers.get("authorization");
-    if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    const serviceKey = process.env.SUPABASE_SERVICE_KEY;
+    const expectedCron = process.env.CRON_SECRET ? `Bearer ${process.env.CRON_SECRET}` : null;
+    const expectedSvc = serviceKey ? `Bearer ${serviceKey}` : null;
+    if ((expectedCron || expectedSvc) && authHeader !== expectedCron && authHeader !== expectedSvc) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    try {
-        const supabase = getSupabase();
-        console.log("Starting Strategic Lifecycle Cleanup...");
+    const supabase = getSupabase();
+    const startTime = Date.now();
 
+    try {
         const now = new Date();
         const sevenDaysOut = new Date(now.getTime() + 7 * 86400000).toISOString();
         const nowIso = now.toISOString();
         const days120Ago = new Date(now.getTime() - 120 * 86400000).toISOString();
-        const months12Ago = new Date(now.getTime() - 365 * 86400000).toISOString();
-        const months24Ago = new Date(now.getTime() - 730 * 86400000).toISOString();
 
         const stats: Record<string, number> = {};
 
-        // 1. ACTIVE → EXPIRING_SOON (deadline within 7 days)
-        stats.expiring_soon = 0;
+        // 1. ACTIVE → EXPIRING_SOON
         const { data: expSoon } = await supabase
             .from("opportunities").select("id")
             .eq("status", "ACTIVE")
@@ -41,9 +120,10 @@ export async function GET(req: NextRequest) {
             const ids = expSoon.map(r => r.id);
             await supabase.from("opportunities").update({ status: "EXPIRING_SOON" }).in("id", ids);
             stats.expiring_soon = ids.length;
+            await logStep(supabase, "transition_expiring_soon", ids);
         }
 
-        // 2. ACTIVE/EXPIRING_SOON → EXPIRED (deadline passed)
+        // 2. ACTIVE / EXPIRING_SOON → EXPIRED
         stats.expired = 0;
         for (const s of ["ACTIVE", "EXPIRING_SOON"]) {
             const { data } = await supabase
@@ -55,11 +135,11 @@ export async function GET(req: NextRequest) {
                 const ids = data.map(r => r.id);
                 await supabase.from("opportunities").update({ status: "EXPIRED" }).in("id", ids);
                 stats.expired += ids.length;
+                await logStep(supabase, "transition_expired", ids, { from: s });
             }
         }
 
-        // 3. MARKET_RESEARCH → INTELLIGENCE (Sources Sought past deadline)
-        stats.intelligence = 0;
+        // 3. MARKET_RESEARCH → INTELLIGENCE (sources-sought past deadline)
         const { data: mrData } = await supabase
             .from("opportunities").select("id")
             .eq("status", "MARKET_RESEARCH")
@@ -73,10 +153,10 @@ export async function GET(req: NextRequest) {
                 retention_reason: "intelligence",
             }).in("id", ids);
             stats.intelligence = ids.length;
+            await logStep(supabase, "transition_intelligence", ids);
         }
 
-        // 4. EXPIRED → ARCHIVED (deadline > 120 days, not protected)
-        stats.archived = 0;
+        // 4. EXPIRED → ARCHIVED (>120d, not protected)
         const { data: archData } = await supabase
             .from("opportunities").select("id")
             .eq("status", "EXPIRED")
@@ -87,45 +167,45 @@ export async function GET(req: NextRequest) {
             const ids = archData.map(r => r.id);
             await supabase.from("opportunities").update({ status: "ARCHIVED" }).in("id", ids);
             stats.archived = ids.length;
+            await logStep(supabase, "transition_archived", ids);
         }
 
-        // 5. DELETE: ARCHIVED > 12 months, not protected
+        // 5. Hard-delete ARCHIVED rows (safeguarded view — no pursuits, no
+        //    HOT/WARM matches, no extracted attachments).
         stats.deleted = 0;
+        stats.storage_purged = 0;
         const { data: delData } = await supabase
-            .from("opportunities").select("id")
-            .eq("status", "ARCHIVED")
-            .lt("status_changed_at", months12Ago)
-            .eq("retention_protected", false)
+            .from("opportunities_deletable_archived")
+            .select("id")
             .limit(1000);
         if (delData?.length) {
-            const ids = delData.map(r => r.id);
+            const ids = delData.map((r: { id: string }) => r.id);
+            stats.storage_purged += await purgeAttachmentStorage(supabase, ids);
             await supabase.from("opportunities").delete().in("id", ids);
             stats.deleted = ids.length;
+            await logStep(supabase, "hard_delete_archived", ids, { storage_purged: stats.storage_purged });
         }
 
-        // 6. DELETE: INTELLIGENCE > 24 months, no linked solicitation
+        // 6. Hard-delete stale INTELLIGENCE rows (safeguarded view)
         stats.intel_deleted = 0;
         const { data: intelDel } = await supabase
-            .from("opportunities").select("id")
-            .eq("status", "INTELLIGENCE")
-            .lt("posted_date", months24Ago)
-            .is("related_notice_id", null)
-            .eq("retention_protected", false)
+            .from("opportunities_deletable_intelligence")
+            .select("id")
             .limit(1000);
         if (intelDel?.length) {
-            const ids = intelDel.map(r => r.id);
+            const ids = intelDel.map((r: { id: string }) => r.id);
+            const purged = await purgeAttachmentStorage(supabase, ids);
+            stats.storage_purged += purged;
             await supabase.from("opportunities").delete().in("id", ids);
             stats.intel_deleted = ids.length;
+            await logStep(supabase, "hard_delete_intelligence", ids, { storage_purged: purged });
         }
 
         // 7. Flag LOW_QUALITY contractors
         stats.flagged = 0;
         const { data: lowQ } = await supabase
             .from("contractors").select("id")
-            .is("website", null)
-            .is("phone", null)
-            .is("city", null)
-            .is("state", null)
+            .is("website", null).is("phone", null).is("city", null).is("state", null)
             .neq("data_quality_flag", "LOW_QUALITY")
             .limit(1000);
         if (lowQ?.length) {
@@ -134,7 +214,7 @@ export async function GET(req: NextRequest) {
             stats.flagged = ids.length;
         }
 
-        // Legacy compat: archive any is_archived=false with past deadlines + no status
+        // 8. Legacy: anything missing status but past deadline → EXPIRED
         const { data: legacyExpired } = await supabase
             .from("opportunities").select("id")
             .lt("response_deadline", nowIso)
@@ -147,22 +227,26 @@ export async function GET(req: NextRequest) {
             stats.legacy_archived = ids.length;
         }
 
-        // 8. Stale match cleanup — remove matches for expired/archived opportunities
-        stats.stale_matches = 0;
+        // 9. Stale match cleanup
         const { data: staleMatches } = await supabase
             .from("user_matches")
             .select("id, opportunity:opportunities!inner(status)")
             .in("opportunity.status", ["ARCHIVED", "DELETED"])
-            .limit(1000);
+            .limit(2000);
         if (staleMatches?.length) {
             const ids = staleMatches.map(m => m.id);
             await supabase.from("user_matches").delete().in("id", ids);
             stats.stale_matches = ids.length;
         }
 
-        console.log("Lifecycle Cleanup Complete:", stats);
-        return NextResponse.json({ success: true, ...stats });
+        const elapsed_ms = Date.now() - startTime;
+        await supabase.from("cleanup_log").insert({
+            kind: "run_summary",
+            row_count: 0,
+            notes: { ...stats, elapsed_ms },
+        });
 
+        return NextResponse.json({ success: true, ...stats, elapsed_ms });
     } catch (error: unknown) {
         const msg = error instanceof Error ? error.message : "Unknown error";
         console.error("Cleanup Error:", error);
