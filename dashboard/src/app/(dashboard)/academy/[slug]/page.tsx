@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Clock, GraduationCap } from "lucide-react";
+import { ArrowLeft, Clock, GraduationCap, Film } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -9,12 +9,37 @@ interface Article {
     slug: string;
     title: string;
     excerpt: string | null;
-    body_md: string;
+    body_md: string | null;
     category: string;
     reading_minutes: number | null;
     cover_image_url: string | null;
     author_name: string | null;
     published_at: string | null;
+    content_type: "article" | "video" | null;
+    video_url: string | null;
+    video_provider: string | null;
+    video_embed_id: string | null;
+    duration_seconds: number | null;
+    thumbnail_url: string | null;
+}
+
+function videoEmbedSrc(provider: string | null, embedId: string | null, url: string | null): string | null {
+    if (embedId) {
+        if (provider === "youtube") return `https://www.youtube.com/embed/${embedId}?rel=0`;
+        if (provider === "vimeo")   return `https://player.vimeo.com/video/${embedId}`;
+        if (provider === "loom")    return `https://www.loom.com/embed/${embedId}`;
+    }
+    // Fallback: if no embedId was extracted but we have a URL that looks like an embed, use it
+    if (url && /\/embed\//.test(url)) return url;
+    return null;
+}
+
+function formatDuration(seconds: number | null): string | null {
+    if (!seconds) return null;
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    if (m === 0) return `${s}s`;
+    return s === 0 ? `${m} min` : `${m}:${s.toString().padStart(2, "0")}`;
 }
 
 /**
@@ -99,7 +124,7 @@ export default async function AcademyArticlePage({ params }: { params: Promise<{
     );
     const { data } = await sb
         .from("academy_articles")
-        .select("slug, title, excerpt, body_md, category, reading_minutes, cover_image_url, author_name, published_at")
+        .select("slug, title, excerpt, body_md, category, reading_minutes, cover_image_url, author_name, published_at, content_type, video_url, video_provider, video_embed_id, duration_seconds, thumbnail_url")
         .eq("slug", slug)
         .not("published_at", "is", null)
         .maybeSingle();
@@ -107,7 +132,10 @@ export default async function AcademyArticlePage({ params }: { params: Promise<{
     const article = data as Article | null;
     if (!article) return notFound();
 
-    const html = renderMarkdown(article.body_md);
+    const isVideo = article.content_type === "video";
+    const embedSrc = isVideo ? videoEmbedSrc(article.video_provider, article.video_embed_id, article.video_url) : null;
+    const html = article.body_md ? renderMarkdown(article.body_md) : null;
+    const durationLabel = formatDuration(article.duration_seconds);
 
     return (
         <article className="max-w-3xl mx-auto pb-16 px-1 animate-in fade-in duration-500">
@@ -119,13 +147,19 @@ export default async function AcademyArticlePage({ params }: { params: Promise<{
                 Back to Academy
             </Link>
 
-            <header className="mb-8">
+            <header className="mb-6">
                 <div className="flex items-center gap-2 mb-4">
-                    <GraduationCap className="w-4 h-4 text-emerald-600" />
+                    {isVideo ? <Film className="w-4 h-4 text-indigo-600" /> : <GraduationCap className="w-4 h-4 text-emerald-600" />}
                     <span className="text-[10px] font-bold uppercase tracking-wider text-stone-500">
-                        {article.category}
+                        {isVideo ? "Video" : article.category}
                     </span>
-                    {article.reading_minutes && (
+                    {isVideo && durationLabel && (
+                        <span className="text-[10px] text-stone-400 inline-flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            {durationLabel}
+                        </span>
+                    )}
+                    {!isVideo && article.reading_minutes && (
                         <span className="text-[10px] text-stone-400 inline-flex items-center gap-1">
                             <Clock className="w-3 h-3" />
                             {article.reading_minutes} min read
@@ -150,7 +184,36 @@ export default async function AcademyArticlePage({ params }: { params: Promise<{
                 </p>
             </header>
 
-            <div className="prose prose-stone max-w-none" dangerouslySetInnerHTML={{ __html: html }} />
+            {isVideo && embedSrc && (
+                <div className="relative aspect-video bg-black rounded-2xl overflow-hidden shadow-lg mb-8">
+                    <iframe
+                        src={embedSrc}
+                        title={article.title}
+                        className="absolute inset-0 w-full h-full"
+                        frameBorder={0}
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                    />
+                </div>
+            )}
+
+            {isVideo && !embedSrc && article.video_url && (
+                <div className="mb-8 bg-stone-50 border border-stone-200 rounded-2xl p-6 text-center">
+                    <p className="text-sm text-stone-600 mb-3">This video can&apos;t be embedded inline.</p>
+                    <a
+                        href={article.video_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-sm font-bold"
+                    >
+                        <Film className="w-4 h-4" /> Open video
+                    </a>
+                </div>
+            )}
+
+            {html && (
+                <div className="prose prose-stone max-w-none" dangerouslySetInnerHTML={{ __html: html }} />
+            )}
         </article>
     );
 }

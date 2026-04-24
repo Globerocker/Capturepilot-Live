@@ -6,9 +6,20 @@ import Link from "next/link";
 import {
     Plus, Users, Mail, Phone, Globe, Hash, ChevronDown, Search,
     ListTodo, FileText, Loader2, Building2, Send, Sparkles, CheckCircle2, AlertTriangle,
+    UserCog, Shield,
 } from "lucide-react";
 import clsx from "clsx";
 import KeywordPicker from "@/components/KeywordPicker";
+
+type AccountType = "consulting" | "self_service" | "admin";
+
+function formatTimeAgo(iso: string): string {
+    const diff = Date.now() - new Date(iso).getTime();
+    if (diff < 3600_000) return `${Math.max(0, Math.floor(diff / 60_000))}m ago`;
+    if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
+    if (diff < 2_592_000_000) return `${Math.floor(diff / 86_400_000)}d ago`;
+    return new Date(iso).toLocaleDateString();
+}
 
 interface Client {
     id: string;
@@ -21,12 +32,14 @@ interface Client {
     cage_code: string | null;
     naics_codes: string[];
     state: string | null;
+    account_type: AccountType;
     client_status: string;
     client_since: string | null;
     total_tasks: number;
     pending_tasks: number;
     document_count: number;
     notes: string | null;
+    last_login: string | null;
 }
 
 export default function AdminClientsPage() {
@@ -47,6 +60,9 @@ function AdminClientsPageInner() {
     const [createResult, setCreateResult] = useState<string>("");
     const [searchQuery, setSearchQuery] = useState("");
     const [bulkSending, setBulkSending] = useState(false);
+    const [accountTab, setAccountTab] = useState<"all" | AccountType>(
+        (searchParams.get("tab") as "all" | AccountType) || "consulting"
+    );
 
     // Create form — extended on Apr 20 to carry capability keywords +
     // company_description so the admin can ship a fully-primed profile
@@ -78,14 +94,15 @@ function AdminClientsPageInner() {
     const [taskForm, setTaskForm] = useState({ title: "", description: "", priority: "medium", category: "general", due_date: "", notify: true });
     const [showTaskForm, setShowTaskForm] = useState<string | null>(null);
 
-    const loadClients = async () => {
-        const res = await fetch("/api/admin/clients");
+    const loadClients = async (tab: "all" | AccountType = accountTab) => {
+        setLoading(true);
+        const res = await fetch(`/api/admin/clients?account_type=${tab}`);
         const data = await res.json();
         setClients(data.clients || []);
         setLoading(false);
     };
 
-    useEffect(() => { loadClients(); }, []);
+    useEffect(() => { loadClients(accountTab); }, [accountTab]);
 
     // Hydrate the create form from ?prefill=1&email=…&company_name=… when a
     // lead-check result deep-links here. Opens the form automatically so the
@@ -239,17 +256,28 @@ function AdminClientsPageInner() {
         return <div className="min-h-screen bg-stone-50 flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-stone-400" /></div>;
     }
 
+    const tabMeta: Record<"all" | AccountType, { label: string; icon: React.ComponentType<{ className?: string }>; hint: string }> = {
+        all:          { label: "All accounts",  icon: Users,   hint: "Consulting clients + self-service users + admins" },
+        consulting:   { label: "Clients",       icon: Users,   hint: "Managed consulting clients (portal + tasks + docs)" },
+        self_service: { label: "Self-service",  icon: UserCog, hint: "SaaS users who onboarded themselves" },
+        admin:        { label: "Admins",        icon: Shield,  hint: "Internal team accounts" },
+    };
+
+    const currentMeta = tabMeta[accountTab];
+
     return (
-        <div className="min-h-screen bg-stone-50 p-6 sm:p-8">
-            <div className="w-full space-y-6">
-                <div className="flex items-center justify-between">
-                    <div>
-                        <h1 className="text-2xl font-bold text-stone-900 flex items-center gap-2">
-                            <Users className="w-6 h-6" /> Consulting Clients
-                        </h1>
-                        <p className="text-sm text-stone-500 mt-1">{clients.length} active clients</p>
-                    </div>
-                    <div className="flex gap-2">
+        <div className="w-full max-w-7xl mx-auto space-y-6">
+            {/* Header */}
+            <div className="flex items-start justify-between gap-4 flex-wrap">
+                <div>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-stone-400 mb-1.5">Customers</p>
+                    <h1 className="text-2xl font-bold text-stone-900 flex items-center gap-2">
+                        <Users className="w-6 h-6" /> People
+                    </h1>
+                    <p className="text-sm text-stone-500 mt-1">{currentMeta.hint} · {clients.length} {clients.length === 1 ? "person" : "people"}</p>
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                    {accountTab === "consulting" && (
                         <button type="button" onClick={async () => {
                             if (!confirm(`Send opportunity update email to all ${clients.length} active clients?`)) return;
                             setBulkSending(true);
@@ -264,23 +292,50 @@ function AdminClientsPageInner() {
                             setCreateResult(`Sent opportunity updates to ${clients.filter(c => c.client_status === "active").length} clients`);
                         }}
                         disabled={bulkSending}
-                        className="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-bold inline-flex items-center gap-1.5 hover:bg-blue-700 disabled:opacity-50">
+                        className="bg-white border border-stone-200 hover:border-stone-300 text-stone-700 px-4 py-2 rounded-xl text-sm font-bold inline-flex items-center gap-1.5 disabled:opacity-50">
                             <Mail className="w-4 h-4" /> {bulkSending ? "Sending..." : "Bulk Email"}
                         </button>
+                    )}
+                    {accountTab === "consulting" && (
                         <button type="button" onClick={() => setShowCreate(!showCreate)}
-                            className="bg-black text-white px-4 py-2 rounded-xl text-sm font-bold inline-flex items-center gap-1.5 hover:bg-stone-800 transition-colors">
+                            className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-sm font-bold inline-flex items-center gap-1.5 hover:bg-emerald-700 transition-colors shadow-sm">
                             <Plus className="w-4 h-4" /> New Client
                         </button>
-                    </div>
+                    )}
                 </div>
+            </div>
 
-                {/* Search */}
-                <div className="relative">
-                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
-                    <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                        placeholder="Search by company name, email, or NAICS..."
-                        className="w-full pl-9 pr-3 py-2.5 border border-stone-300 rounded-xl text-sm focus:outline-none focus:border-black bg-white" />
-                </div>
+            {/* Account-type tabs */}
+            <div className="bg-white border border-stone-200 rounded-2xl p-1 inline-flex flex-wrap gap-0.5">
+                {(["all", "consulting", "self_service", "admin"] as const).map(key => {
+                    const meta = tabMeta[key];
+                    const Icon = meta.icon;
+                    const active = accountTab === key;
+                    return (
+                        <button
+                            key={key}
+                            type="button"
+                            onClick={() => setAccountTab(key)}
+                            className={clsx(
+                                "inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all",
+                                active
+                                    ? "bg-stone-900 text-white shadow-sm"
+                                    : "text-stone-500 hover:text-stone-800 hover:bg-stone-50"
+                            )}
+                        >
+                            <Icon className="w-3.5 h-3.5" /> {meta.label}
+                        </button>
+                    );
+                })}
+            </div>
+
+            {/* Search */}
+            <div className="relative">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+                <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                    placeholder="Search by company name, email, or NAICS…"
+                    className="w-full pl-9 pr-3 py-2.5 border border-stone-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 bg-white" />
+            </div>
 
                 {createResult && (
                     <div className={clsx("p-4 rounded-xl text-sm font-medium", createResult.startsWith("Error") ? "bg-red-50 text-red-700 border border-red-200" : "bg-emerald-50 text-emerald-700 border border-emerald-200")}>
@@ -418,8 +473,13 @@ function AdminClientsPageInner() {
                                     {client.company_name.charAt(0).toUpperCase()}
                                 </Link>
                                 <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setExpandedId(expandedId === client.id ? null : client.id)}>
-                                    <div className="flex items-center gap-2">
-                                        <Link href={`/admin/clients/${client.id}`} className="font-bold text-sm text-black hover:underline">{client.company_name}</Link>
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <Link href={`/admin/clients/${client.id}`} className="font-bold text-sm text-black hover:underline">{client.company_name || client.email}</Link>
+                                        <span className={clsx("text-[9px] font-bold px-2 py-0.5 rounded uppercase",
+                                            client.account_type === "admin" ? "bg-red-50 text-red-700 border border-red-100" :
+                                            client.account_type === "consulting" ? "bg-violet-50 text-violet-700 border border-violet-100" :
+                                            "bg-stone-100 text-stone-600 border border-stone-200"
+                                        )}>{client.account_type === "self_service" ? "SaaS" : client.account_type}</span>
                                         <span className={clsx("text-[10px] font-bold px-2 py-0.5 rounded border uppercase",
                                             client.client_status === "active" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
                                             "bg-stone-100 text-stone-500 border-stone-200"
@@ -431,8 +491,17 @@ function AdminClientsPageInner() {
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-3 text-xs text-stone-500">
-                                    <span className="inline-flex items-center gap-1"><ListTodo className="w-3.5 h-3.5" /> {client.pending_tasks} tasks</span>
-                                    <span className="inline-flex items-center gap-1"><FileText className="w-3.5 h-3.5" /> {client.document_count} docs</span>
+                                    {client.account_type === "consulting" && (
+                                        <>
+                                            <span className="inline-flex items-center gap-1"><ListTodo className="w-3.5 h-3.5" /> {client.pending_tasks} tasks</span>
+                                            <span className="inline-flex items-center gap-1"><FileText className="w-3.5 h-3.5" /> {client.document_count} docs</span>
+                                        </>
+                                    )}
+                                    {client.last_login && (
+                                        <span className="hidden sm:inline text-[10px] text-stone-400">
+                                            Last login {formatTimeAgo(client.last_login)}
+                                        </span>
+                                    )}
                                     <button
                                         type="button"
                                         title="View portal as this client (30-min impersonation)"
@@ -503,13 +572,20 @@ function AdminClientsPageInner() {
                     ))}
                 </div>
 
-                {clients.length === 0 && (
-                    <div className="bg-white border border-stone-200 rounded-2xl p-12 text-center">
-                        <Users className="w-12 h-12 text-stone-300 mx-auto mb-4" />
-                        <p className="text-stone-500 text-sm">No consulting clients yet. Click &quot;New Client&quot; to create the first one.</p>
-                    </div>
-                )}
-            </div>
+            {clients.length === 0 && (
+                <div className="bg-white border border-stone-200 rounded-2xl p-12 text-center">
+                    <Users className="w-12 h-12 text-stone-300 mx-auto mb-4" />
+                    <p className="text-stone-500 text-sm">
+                        {accountTab === "consulting"
+                            ? "No consulting clients yet. Click “New Client” to create the first one."
+                            : accountTab === "self_service"
+                                ? "No self-service users yet. They sign up via the public /signup page."
+                                : accountTab === "admin"
+                                    ? "No admin accounts yet. Change a user’s account type from their detail page."
+                                    : "No accounts match this filter."}
+                    </p>
+                </div>
+            )}
         </div>
     );
 }

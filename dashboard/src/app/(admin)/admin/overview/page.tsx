@@ -40,7 +40,7 @@ export default function AdminOverview() {
     }, []);
 
     if (loading) {
-        return <div className="min-h-screen bg-stone-50 flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-stone-400" /></div>;
+        return <div className="flex items-center justify-center py-24"><Loader2 className="w-8 h-8 animate-spin text-stone-400" /></div>;
     }
 
     const activeClients = clients.filter(c => c.client_status === "active");
@@ -70,28 +70,25 @@ export default function AdminOverview() {
     };
 
     return (
-        <div className="min-h-screen bg-stone-50 p-6 sm:p-8">
-            <div className="w-full space-y-6">
-                {/* Header */}
-                <div className="flex items-center justify-between">
-                    <div>
-                        <p className="text-stone-400 text-xs uppercase tracking-widest font-medium mb-2">Admin Console</p>
-                        <h1 className="text-2xl font-bold text-stone-900 flex items-center gap-2">
-                            <BarChart3 className="w-6 h-6" /> Dashboard
-                        </h1>
-                    </div>
-                    <div className="flex gap-2">
-                        <Link href="/admin/clients" className="bg-black text-white px-4 py-2 rounded-xl text-sm font-bold inline-flex items-center gap-1.5 hover:bg-stone-800">
-                            <Users className="w-4 h-4" /> Clients
-                        </Link>
-                        <Link href="/admin/lead-check" className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-sm font-bold inline-flex items-center gap-1.5 hover:bg-emerald-700">
-                            <Search className="w-4 h-4" /> Lead Check
-                        </Link>
-                        <Link href="/admin/leads" className="bg-white text-stone-700 border border-stone-200 px-4 py-2 rounded-xl text-sm font-bold inline-flex items-center gap-1.5 hover:bg-stone-50">
-                            <Eye className="w-4 h-4" /> Leads
-                        </Link>
-                    </div>
+        <div className="w-full max-w-7xl mx-auto space-y-6">
+            {/* Header */}
+            <div className="flex items-start justify-between flex-wrap gap-4">
+                <div>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-stone-400 mb-1.5">Overview</p>
+                    <h1 className="text-2xl font-bold text-stone-900 flex items-center gap-2">
+                        <BarChart3 className="w-6 h-6" /> Dashboard
+                    </h1>
+                    <p className="text-sm text-stone-500 mt-1">At-a-glance health for every account and pipeline stage.</p>
                 </div>
+                <div className="flex gap-2 flex-wrap">
+                    <Link href="/admin/clients" className="bg-stone-900 text-white px-4 py-2 rounded-xl text-sm font-bold inline-flex items-center gap-1.5 hover:bg-stone-800 transition-colors">
+                        <Users className="w-4 h-4" /> People
+                    </Link>
+                    <Link href="/admin/leads" className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-sm font-bold inline-flex items-center gap-1.5 hover:bg-emerald-700 transition-colors shadow-sm">
+                        <Search className="w-4 h-4" /> Leads &amp; Quick Check
+                    </Link>
+                </div>
+            </div>
 
                 {/* KPI Cards */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -262,9 +259,8 @@ export default function AdminOverview() {
                                         </tr>
                                     );
                                 })}
-                            </tbody>
-                        </table>
-                    </div>
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>

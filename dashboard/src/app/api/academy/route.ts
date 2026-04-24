@@ -28,8 +28,8 @@ export async function GET(req: NextRequest) {
     // Single-article mode
     if (slug) {
         const cols = publicMode
-            ? "slug, title, excerpt, category, reading_minutes, cover_image_url, author_name, published_at"
-            : "slug, title, excerpt, body_md, category, reading_minutes, cover_image_url, author_name, published_at, featured";
+            ? "slug, title, excerpt, category, reading_minutes, cover_image_url, author_name, published_at, content_type, duration_seconds, thumbnail_url"
+            : "slug, title, excerpt, body_md, category, reading_minutes, cover_image_url, author_name, published_at, featured, content_type, video_url, video_provider, video_embed_id, duration_seconds, thumbnail_url";
         const { data, error } = await admin
             .from("academy_articles")
             .select(cols)
@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
     // List mode
     let query = admin
         .from("academy_articles")
-        .select("slug, title, excerpt, category, reading_minutes, featured, cover_image_url, author_name, published_at")
+        .select("slug, title, excerpt, category, reading_minutes, featured, cover_image_url, author_name, published_at, content_type, duration_seconds, thumbnail_url")
         .not("published_at", "is", null)
         .order("featured", { ascending: false })
         .order("published_at", { ascending: false })

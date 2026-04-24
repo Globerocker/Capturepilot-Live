@@ -229,13 +229,20 @@ export async function POST(req: NextRequest) {
 }
 
 /**
- * GET /api/admin/clients — List all consulting clients
+ * GET /api/admin/clients — List user_profiles.
+ *
+ * Backward-compatible: default behaviour (no query params) still returns
+ * consulting clients only, so existing callers keep working. Pass
+ * ?account_type=all to include self_service + admin profiles too — used
+ * by the merged People view.
  */
-export async function GET() {
+export async function GET(req: NextRequest) {
     try {
         const admin = getAdmin();
+        const { searchParams } = new URL(req.url);
+        const accountType = searchParams.get("account_type") || "consulting";
 
-        const { data, error } = await admin
+        let query = admin
             .from("user_profiles")
             .select(`
                 id, auth_user_id, company_name, email, contact_name, contact_phone,
@@ -243,26 +250,39 @@ export async function GET() {
                 state, city, account_type, client_status, client_since,
                 onboarding_complete, plan_tier, created_at, notes
             `)
-            .eq("account_type", "consulting")
             .order("created_at", { ascending: false });
 
-        if (error) {
-            return NextResponse.json({ error: error.message }, { status: 500 });
+        if (accountType !== "all") {
+            query = query.eq("account_type", accountType);
         }
 
-        // Get last login from auth users
-        const authIds = (data || []).map(c => c.auth_user_id).filter(Boolean);
+        const { data, error } = await query;
+        if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+        // Get last login from auth users (single list call + map lookup — no N+1).
         const loginMap = new Map<string, string>();
-        if (authIds.length > 0) {
-            const { data: authUsers } = await admin.auth.admin.listUsers({ page: 1, perPage: 100 });
-            for (const u of authUsers?.users || []) {
-                if (u.last_sign_in_at) loginMap.set(u.id, u.last_sign_in_at);
-            }
+        const { data: authUsers } = await admin.auth.admin.listUsers({ page: 1, perPage: 500 });
+        for (const u of authUsers?.users || []) {
+            if (u.last_sign_in_at) loginMap.set(u.id, u.last_sign_in_at);
         }
 
-        // Get match counts + competitor counts
+        // Only consulting clients use the client_* tables — for other account
+        // types we skip the per-row stat queries entirely so the page stays
+        // fast even with many self-service users.
         const clientsWithStats = await Promise.all(
             (data || []).map(async (client) => {
+                if (client.account_type !== "consulting") {
+                    return {
+                        ...client,
+                        total_tasks: 0,
+                        pending_tasks: 0,
+                        document_count: 0,
+                        match_count: 0,
+                        competitor_count: 0,
+                        activity_count: 0,
+                        last_login: loginMap.get(client.auth_user_id) || null,
+                    };
+                }
                 const [taskRes, pendingRes, docRes, matchRes, compRes, activityRes] = await Promise.all([
                     admin.from("client_tasks").select("id", { count: "exact", head: true }).eq("user_profile_id", client.id),
                     admin.from("client_tasks").select("id", { count: "exact", head: true }).eq("user_profile_id", client.id).in("status", ["pending", "in_progress", "waiting_client"]),

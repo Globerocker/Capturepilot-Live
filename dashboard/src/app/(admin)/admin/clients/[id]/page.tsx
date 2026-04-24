@@ -8,6 +8,7 @@ import {
     ArrowLeft, Building2, Mail, Phone, Globe, Hash, Save, Loader2,
     ListTodo, FileText, Users, Target, Briefcase, Clock, CheckCircle2,
     AlertCircle, Plus, Send, ExternalLink, Layers, Sparkles,
+    Key, Shield, LogOut as LogOutIcon, Trash2, UserCog,
 } from "lucide-react";
 import clsx from "clsx";
 import { MarketIntelligence } from "@/components/MarketIntelligence";
@@ -19,6 +20,7 @@ const supabase = createBrowserClient(
 
 interface ClientProfile {
     id: string;
+    auth_user_id: string | null;
     company_name: string;
     contact_name: string;
     contact_phone: string;
@@ -34,7 +36,7 @@ interface ClientProfile {
     zip_code: string;
     notes: string;
     client_status: string;
-    account_type: string;
+    account_type: "consulting" | "self_service" | "admin";
     employee_count: string;
     revenue: string;
     target_states: string[];
@@ -130,6 +132,119 @@ export default function ClientDetailPage() {
         // Reload tasks
         const { data } = await supabase.from("client_tasks").select("*").eq("user_profile_id", clientId).order("created_at", { ascending: false });
         setTasks((data || []) as Array<Record<string, unknown>>);
+    };
+
+    // ─── User-account actions ──────────────────────────────────────────────
+    // These used to live on the separate /admin/users page. Folded here so the
+    // admin doesn't have to bounce between two tabs to manage the same person.
+    const [accountBusy, setAccountBusy] = useState<null | "password" | "account_type" | "status" | "delete" | "impersonate">(null);
+    const [accountMessage, setAccountMessage] = useState<null | { kind: "ok" | "err"; text: string }>(null);
+
+    const handleResetPassword = async () => {
+        if (!profile?.auth_user_id) { setAccountMessage({ kind: "err", text: "No auth user on this profile." }); return; }
+        const next = prompt("Set a new password for this user (min 10 chars)");
+        if (!next || next.length < 10) return;
+        setAccountBusy("password");
+        try {
+            const res = await fetch("/api/admin/users", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ auth_id: profile.auth_user_id, password: next }),
+            });
+            const data = await res.json();
+            setAccountMessage(res.ok
+                ? { kind: "ok", text: "Password reset — the user should be notified out-of-band." }
+                : { kind: "err", text: data.error || "Password reset failed" });
+        } finally {
+            setAccountBusy(null);
+        }
+    };
+
+    const handleChangeAccountType = async (next: "consulting" | "self_service" | "admin") => {
+        if (!profile || profile.account_type === next) return;
+        setAccountBusy("account_type");
+        try {
+            const res = await fetch("/api/admin/clients", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ user_profile_id: clientId, account_type: next }),
+            });
+            const data = await res.json();
+            if (res.ok) {
+                setProfile(p => (p ? { ...p, account_type: next } : p));
+                setAccountMessage({ kind: "ok", text: `Account type changed to ${next}.` });
+            } else {
+                setAccountMessage({ kind: "err", text: data.error || "Update failed" });
+            }
+        } finally {
+            setAccountBusy(null);
+        }
+    };
+
+    const handleToggleStatus = async () => {
+        if (!profile) return;
+        const next = profile.client_status === "active" ? "churned" : "active";
+        setAccountBusy("status");
+        try {
+            const res = await fetch("/api/admin/clients", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ user_profile_id: clientId, client_status: next }),
+            });
+            const data = await res.json();
+            if (res.ok) {
+                setProfile(p => (p ? { ...p, client_status: next } : p));
+                setAccountMessage({ kind: "ok", text: next === "active" ? "Account re-activated." : "Account deactivated." });
+            } else {
+                setAccountMessage({ kind: "err", text: data.error || "Update failed" });
+            }
+        } finally {
+            setAccountBusy(null);
+        }
+    };
+
+    const handleImpersonate = async () => {
+        setAccountBusy("impersonate");
+        try {
+            const res = await fetch("/api/admin/impersonate", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ user_profile_id: clientId }),
+            });
+            if (res.ok) window.location.href = "/portal";
+            else {
+                const data = await res.json().catch(() => ({}));
+                setAccountMessage({ kind: "err", text: data.error || "Impersonation failed" });
+                setAccountBusy(null);
+            }
+        } catch (e) {
+            setAccountMessage({ kind: "err", text: e instanceof Error ? e.message : "Impersonation failed" });
+            setAccountBusy(null);
+        }
+    };
+
+    const handleDeleteAccount = async () => {
+        if (!profile?.auth_user_id) { setAccountMessage({ kind: "err", text: "No auth user on this profile." }); return; }
+        const confirmed = prompt(`Type the email "${profile.email}" to permanently delete this account and all linked data.`);
+        if (confirmed !== profile.email) return;
+        setAccountBusy("delete");
+        try {
+            const res = await fetch("/api/admin/users", {
+                method: "DELETE",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ auth_id: profile.auth_user_id }),
+            });
+            const data = await res.json();
+            if (res.ok) {
+                window.location.href = "/admin/clients";
+            } else {
+                setAccountMessage({ kind: "err", text: data.error || "Delete failed" });
+                setAccountBusy(null);
+            }
+        } catch (e) {
+            setAccountMessage({ kind: "err", text: e instanceof Error ? e.message : "Delete failed" });
+            setAccountBusy(null);
+        }
     };
 
     if (loading) return <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-stone-400" /></div>;
@@ -251,29 +366,124 @@ export default function ClientDetailPage() {
                         </button>
                     </div>
 
-                    {/* Top Matches */}
-                    <div className="bg-white border border-stone-200 rounded-xl p-5">
-                        <h3 className="font-bold text-sm mb-3">Top Matches ({matches.length})</h3>
-                        <div className="space-y-2 max-h-80 overflow-y-auto">
-                            {matches.slice(0, 10).map((m, i) => {
-                                const opp = (Array.isArray(m.opportunity) ? m.opportunity[0] : m.opportunity) as Record<string, unknown>;
-                                return (
-                                    <div key={i} className="flex items-center gap-2 text-xs p-2 rounded-lg hover:bg-stone-50">
-                                        <span className={clsx("font-black w-8 text-center",
-                                            Number(m.score) >= 0.7 ? "text-emerald-600" : Number(m.score) >= 0.5 ? "text-amber-600" : "text-blue-600"
-                                        )}>{Math.round(Number(m.score) * 100)}</span>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="font-medium truncate">{String(opp?.title || "")}</p>
-                                            <p className="text-[10px] text-stone-400 truncate">{String(opp?.agency || "")}</p>
+                    {/* Right column: Matches + User Account */}
+                    <div className="space-y-4">
+                        <div className="bg-white border border-stone-200 rounded-xl p-5">
+                            <h3 className="font-bold text-sm mb-3">Top Matches ({matches.length})</h3>
+                            <div className="space-y-2 max-h-80 overflow-y-auto">
+                                {matches.slice(0, 10).map((m, i) => {
+                                    const opp = (Array.isArray(m.opportunity) ? m.opportunity[0] : m.opportunity) as Record<string, unknown>;
+                                    return (
+                                        <div key={i} className="flex items-center gap-2 text-xs p-2 rounded-lg hover:bg-stone-50">
+                                            <span className={clsx("font-black w-8 text-center",
+                                                Number(m.score) >= 0.7 ? "text-emerald-600" : Number(m.score) >= 0.5 ? "text-amber-600" : "text-blue-600"
+                                            )}>{Math.round(Number(m.score) * 100)}</span>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="font-medium truncate">{String(opp?.title || "")}</p>
+                                                <p className="text-[10px] text-stone-400 truncate">{String(opp?.agency || "")}</p>
+                                            </div>
+                                            {String(opp?.notice_id || "") !== "" && (
+                                                <a href={`https://sam.gov/opp/${String(opp?.notice_id)}/view`} target="_blank" rel="noopener noreferrer" title="SAM.gov" className="text-blue-600">
+                                                    <ExternalLink className="w-3 h-3" />
+                                                </a>
+                                            )}
                                         </div>
-                                        {String(opp?.notice_id || "") !== "" && (
-                                            <a href={`https://sam.gov/opp/${String(opp?.notice_id)}/view`} target="_blank" rel="noopener noreferrer" title="SAM.gov" className="text-blue-600">
-                                                <ExternalLink className="w-3 h-3" />
-                                            </a>
-                                        )}
-                                    </div>
-                                );
-                            })}
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        {/* User-account actions — password, impersonate, account type, deactivate, delete */}
+                        <div className="bg-white border border-stone-200 rounded-xl p-5 space-y-4">
+                            <div className="flex items-center gap-2">
+                                <UserCog className="w-4 h-4 text-stone-500" />
+                                <h3 className="font-bold text-sm">User account</h3>
+                                <span className={clsx("ml-auto text-[9px] font-bold px-2 py-0.5 rounded uppercase",
+                                    profile.account_type === "admin" ? "bg-red-50 text-red-700 border border-red-100" :
+                                    profile.account_type === "consulting" ? "bg-violet-50 text-violet-700 border border-violet-100" :
+                                    "bg-stone-100 text-stone-600 border border-stone-200"
+                                )}>{profile.account_type === "self_service" ? "SaaS" : profile.account_type}</span>
+                            </div>
+
+                            {accountMessage && (
+                                <div className={clsx(
+                                    "text-xs rounded-lg px-3 py-2 border",
+                                    accountMessage.kind === "ok" ? "bg-emerald-50 text-emerald-700 border-emerald-100" : "bg-red-50 text-red-700 border-red-100"
+                                )}>
+                                    {accountMessage.text}
+                                </div>
+                            )}
+
+                            <div className="grid grid-cols-2 gap-2">
+                                <button
+                                    type="button"
+                                    onClick={handleImpersonate}
+                                    disabled={accountBusy !== null}
+                                    className="inline-flex items-center justify-center gap-1.5 text-xs font-semibold bg-stone-900 text-white hover:bg-stone-800 disabled:opacity-50 px-3 py-2 rounded-lg transition-colors"
+                                >
+                                    {accountBusy === "impersonate" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <LogOutIcon className="w-3.5 h-3.5" />}
+                                    View as user
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleResetPassword}
+                                    disabled={accountBusy !== null || !profile.auth_user_id}
+                                    className="inline-flex items-center justify-center gap-1.5 text-xs font-semibold bg-white border border-stone-200 hover:border-stone-300 text-stone-700 disabled:opacity-50 px-3 py-2 rounded-lg transition-colors"
+                                >
+                                    {accountBusy === "password" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Key className="w-3.5 h-3.5" />}
+                                    Reset password
+                                </button>
+                            </div>
+
+                            <div>
+                                <label htmlFor="account-type-select" className="text-[10px] font-bold uppercase tracking-widest text-stone-500 mb-1.5 block">Account type</label>
+                                <div className="inline-flex items-center bg-stone-100 rounded-lg p-1 gap-0.5 w-full">
+                                    {(["self_service", "consulting", "admin"] as const).map(t => (
+                                        <button
+                                            key={t}
+                                            id="account-type-select"
+                                            type="button"
+                                            onClick={() => handleChangeAccountType(t)}
+                                            disabled={accountBusy !== null}
+                                            className={clsx(
+                                                "flex-1 px-2.5 py-1.5 rounded-md text-[11px] font-semibold transition-all disabled:opacity-50",
+                                                profile.account_type === t
+                                                    ? "bg-white text-stone-900 shadow-sm"
+                                                    : "text-stone-500 hover:text-stone-800"
+                                            )}
+                                        >
+                                            {t === "self_service" ? "SaaS" : t === "consulting" ? "Consulting" : "Admin"}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="flex items-center justify-between gap-2 pt-2 border-t border-stone-100">
+                                <button
+                                    type="button"
+                                    onClick={handleToggleStatus}
+                                    disabled={accountBusy !== null}
+                                    className={clsx(
+                                        "inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50",
+                                        profile.client_status === "active"
+                                            ? "text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-100"
+                                            : "text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-100"
+                                    )}
+                                >
+                                    {accountBusy === "status" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Shield className="w-3.5 h-3.5" />}
+                                    {profile.client_status === "active" ? "Deactivate" : "Re-activate"}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleDeleteAccount}
+                                    disabled={accountBusy !== null || !profile.auth_user_id}
+                                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-red-600 hover:text-red-700 hover:bg-red-50 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                                    title="Permanently delete this auth user + profile (confirmation required)"
+                                >
+                                    {accountBusy === "delete" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                                    Delete account
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
