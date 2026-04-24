@@ -44,6 +44,40 @@ async function logStep(
     });
 }
 
+/** UPDATE in chunks of 100 UUIDs to stay under PostgREST/CDN URL limits (~16KB).
+ *  Silently skips chunks that error so one bad row doesn't block the rest. */
+async function updateInChunks(
+    supabase: ReturnType<typeof getSupabase>,
+    table: string,
+    ids: string[],
+    patch: Record<string, unknown>,
+    chunkSize = 100,
+): Promise<number> {
+    let ok = 0;
+    for (let i = 0; i < ids.length; i += chunkSize) {
+        const slice = ids.slice(i, i + chunkSize);
+        const { error } = await supabase.from(table).update(patch).in("id", slice);
+        if (!error) ok += slice.length;
+    }
+    return ok;
+}
+
+/** DELETE in chunks of 100 UUIDs (same URL-length reason). */
+async function deleteInChunks(
+    supabase: ReturnType<typeof getSupabase>,
+    table: string,
+    ids: string[],
+    chunkSize = 100,
+): Promise<number> {
+    let ok = 0;
+    for (let i = 0; i < ids.length; i += chunkSize) {
+        const slice = ids.slice(i, i + chunkSize);
+        const { error } = await supabase.from(table).delete().in("id", slice);
+        if (!error) ok += slice.length;
+    }
+    return ok;
+}
+
 /** Remove cached PDFs for opps about to be deleted. Best-effort.
  *  Files are stored as `{notice_id}/{timestamp}.pdf` by deep_enrich — we list
  *  each notice_id prefix and remove everything under it. Only opps that
@@ -118,8 +152,7 @@ export async function GET(req: NextRequest) {
             .limit(2000);
         if (expSoon?.length) {
             const ids = expSoon.map(r => r.id);
-            await supabase.from("opportunities").update({ status: "EXPIRING_SOON" }).in("id", ids);
-            stats.expiring_soon = ids.length;
+            stats.expiring_soon = await updateInChunks(supabase, "opportunities", ids, { status: "EXPIRING_SOON" });
             await logStep(supabase, "transition_expiring_soon", ids);
         }
 
@@ -133,8 +166,7 @@ export async function GET(req: NextRequest) {
                 .limit(2000);
             if (data?.length) {
                 const ids = data.map(r => r.id);
-                await supabase.from("opportunities").update({ status: "EXPIRED" }).in("id", ids);
-                stats.expired += ids.length;
+                stats.expired += await updateInChunks(supabase, "opportunities", ids, { status: "EXPIRED" });
                 await logStep(supabase, "transition_expired", ids, { from: s });
             }
         }
@@ -147,12 +179,11 @@ export async function GET(req: NextRequest) {
             .limit(2000);
         if (mrData?.length) {
             const ids = mrData.map(r => r.id);
-            await supabase.from("opportunities").update({
+            stats.intelligence = await updateInChunks(supabase, "opportunities", ids, {
                 status: "INTELLIGENCE",
                 retention_protected: true,
                 retention_reason: "intelligence",
-            }).in("id", ids);
-            stats.intelligence = ids.length;
+            });
             await logStep(supabase, "transition_intelligence", ids);
         }
 
@@ -165,8 +196,7 @@ export async function GET(req: NextRequest) {
             .limit(2000);
         if (archData?.length) {
             const ids = archData.map(r => r.id);
-            await supabase.from("opportunities").update({ status: "ARCHIVED" }).in("id", ids);
-            stats.archived = ids.length;
+            stats.archived = await updateInChunks(supabase, "opportunities", ids, { status: "ARCHIVED" });
             await logStep(supabase, "transition_archived", ids);
         }
 
@@ -181,8 +211,7 @@ export async function GET(req: NextRequest) {
         if (delData?.length) {
             const ids = delData.map((r: { id: string }) => r.id);
             stats.storage_purged += await purgeAttachmentStorage(supabase, ids);
-            await supabase.from("opportunities").delete().in("id", ids);
-            stats.deleted = ids.length;
+            stats.deleted = await deleteInChunks(supabase, "opportunities", ids);
             await logStep(supabase, "hard_delete_archived", ids, { storage_purged: stats.storage_purged });
         }
 
@@ -196,8 +225,7 @@ export async function GET(req: NextRequest) {
             const ids = intelDel.map((r: { id: string }) => r.id);
             const purged = await purgeAttachmentStorage(supabase, ids);
             stats.storage_purged += purged;
-            await supabase.from("opportunities").delete().in("id", ids);
-            stats.intel_deleted = ids.length;
+            stats.intel_deleted = await deleteInChunks(supabase, "opportunities", ids);
             await logStep(supabase, "hard_delete_intelligence", ids, { storage_purged: purged });
         }
 
@@ -210,8 +238,7 @@ export async function GET(req: NextRequest) {
             .limit(1000);
         if (lowQ?.length) {
             const ids = lowQ.map(c => c.id);
-            await supabase.from("contractors").update({ data_quality_flag: "LOW_QUALITY" }).in("id", ids);
-            stats.flagged = ids.length;
+            stats.flagged = await updateInChunks(supabase, "contractors", ids, { data_quality_flag: "LOW_QUALITY" });
         }
 
         // 8. Legacy: anything missing status but past deadline → EXPIRED
@@ -223,8 +250,7 @@ export async function GET(req: NextRequest) {
             .limit(2000);
         if (legacyExpired?.length) {
             const ids = legacyExpired.map(r => r.id);
-            await supabase.from("opportunities").update({ is_archived: true, status: "EXPIRED" }).in("id", ids);
-            stats.legacy_archived = ids.length;
+            stats.legacy_archived = await updateInChunks(supabase, "opportunities", ids, { is_archived: true, status: "EXPIRED" });
         }
 
         // 9. Stale match cleanup
@@ -235,8 +261,7 @@ export async function GET(req: NextRequest) {
             .limit(2000);
         if (staleMatches?.length) {
             const ids = staleMatches.map(m => m.id);
-            await supabase.from("user_matches").delete().in("id", ids);
-            stats.stale_matches = ids.length;
+            stats.stale_matches = await deleteInChunks(supabase, "user_matches", ids);
         }
 
         const elapsed_ms = Date.now() - startTime;
