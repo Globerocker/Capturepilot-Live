@@ -72,6 +72,10 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ success: true, message: "No opportunities need strategies", ...stats });
     }
 
+    // Watermark IDs we want to skip — written in one batch at the end so the
+    // next run's query stops returning them.
+    const skippedShortIds: string[] = [];
+
     for (const opp of targets) {
         if (Date.now() - startTime > 270_000) break;
         const description = String(opp.description || "");
@@ -81,6 +85,7 @@ export async function GET(req: NextRequest) {
         }
         if (description.length < 100) {
             stats.skipped_short++;
+            skippedShortIds.push(opp.id as string);
             continue;
         }
         try {
@@ -117,6 +122,19 @@ JSON:
             }
         } catch {
             stats.failed++;
+        }
+    }
+
+    // Persist sentinel for short-description rows so the next batch query
+    // skips them. Uses chunked UPDATE (URL length cap).
+    if (skippedShortIds.length > 0) {
+        const sentinel = {
+            _skipped: "description_too_short",
+            _skipped_at: new Date().toISOString(),
+        };
+        for (let i = 0; i < skippedShortIds.length; i += 100) {
+            const slice = skippedShortIds.slice(i, i + 100);
+            await db.from("opportunities").update({ ai_win_strategy: sentinel }).in("id", slice);
         }
     }
 
