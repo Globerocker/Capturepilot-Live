@@ -133,7 +133,11 @@ export async function GET(req: NextRequest) {
             && !(o.structured_requirements?._analyzed_attachments_at),
         );
     }
-    // Fill remaining slots with recent opps that have resource_links but no attachment-analysis yet
+    // Fill remaining slots with recent opps that have resource_links but no
+    // attachment-analysis watermark yet. We query aggressively (need * 30)
+    // because most recent opps either have empty resource_links (nothing SAM
+    // attached) or are already watermarked, so we need a deep pool to find
+    // fresh ones.
     if (candidates.length < BATCH_SIZE) {
         const need = BATCH_SIZE - candidates.length;
         const { data: recentOpps } = await db
@@ -141,13 +145,14 @@ export async function GET(req: NextRequest) {
             .select("id, notice_id, title, description, resource_links, structured_requirements, ai_win_strategy")
             .eq("is_archived", false)
             .not("resource_links", "is", null)
+            .neq("resource_links", "[]")
+            .filter("structured_requirements->>_analyzed_attachments_at", "is", null)
             .order("posted_date", { ascending: false, nullsFirst: false })
-            .limit(need * 5);
+            .limit(need * 30);
         const alreadyIncluded = new Set(candidates.map(c => c.id));
         const extra = ((recentOpps || []) as typeof candidates).filter(o =>
             !alreadyIncluded.has(o.id)
-            && Array.isArray(o.resource_links) && (o.resource_links as unknown[]).length > 0
-            && !(o.structured_requirements?._analyzed_attachments_at),
+            && Array.isArray(o.resource_links) && (o.resource_links as unknown[]).length > 0,
         ).slice(0, need);
         candidates.push(...extra);
     }
