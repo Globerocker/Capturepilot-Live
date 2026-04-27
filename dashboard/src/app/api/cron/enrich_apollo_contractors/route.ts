@@ -4,19 +4,24 @@ import { createClient } from "@supabase/supabase-js";
 export const maxDuration = 300;
 
 /**
- * Apollo.io contact enrichment for contractors we don't have detailed contact
- * data on. Apollo's mixed_companies/search works on free tier — we look up
- * by website OR company name and pull primary POC email, title, phone, LinkedIn.
+ * Apollo.io enrichment for contractors with federal award history.
  *
- * Runs every 2h via vercel.json. 25 contractors/run = ~300/day at current
- * rate limits.
+ * Two-step lookup per contractor:
+ *   1) /api/v1/mixed_companies/search  →  org metadata (LinkedIn, employees,
+ *      domain). Free-tier compatible.
+ *   2) /api/v1/people/match           →  primary contact email + phone +
+ *      title using the SAM POC name we already have. Requires a paid Apollo
+ *      plan; we degrade gracefully on 402/403 and still keep the org match.
  *
- * Priority:
- *   1) Contractors linked to opportunity_contractors rows (SAM POC flagged us)
- *   2) Contractors that are incumbent_contractor_uei on an active opp
- *   3) Rest: by federal_awards_count DESC (bigger players first)
+ * Audience filter (Apr 2026): we only target contractors with
+ * `federal_awards_count > 0`. Without award history the row isn't worth
+ * spending an Apollo credit on, and our re-engagement campaigns don't use
+ * non-awardees anyway.
+ *
+ * Schedule: every 2h via vercel.json. 50 contractors/run = ~600/day.
+ * Priority order: incumbents on active opps, then biggest award counts.
  */
-const BATCH_SIZE = 25;
+const BATCH_SIZE = 50;
 
 function admin() {
     return createClient(
@@ -40,11 +45,22 @@ interface ApolloCompany {
     organization_raw_address?: string;
 }
 
-async function apolloSearch(domainOrName: string): Promise<ApolloCompany | null> {
+interface ApolloPerson {
+    id?: string;
+    first_name?: string;
+    last_name?: string;
+    name?: string;
+    title?: string;
+    email?: string;
+    phone_numbers?: Array<{ raw_number?: string; sanitized_number?: string }>;
+    linkedin_url?: string;
+    seniority?: string;
+}
+
+async function apolloCompany(domainOrName: string): Promise<ApolloCompany | null> {
     const key = process.env.APOLLO_API_KEY;
     if (!key) throw new Error("APOLLO_API_KEY not configured");
 
-    // Use free-tier-compatible endpoint mixed_companies/search
     const res = await fetch("https://api.apollo.io/api/v1/mixed_companies/search", {
         method: "POST",
         headers: {
@@ -62,8 +78,55 @@ async function apolloSearch(domainOrName: string): Promise<ApolloCompany | null>
     if (!res.ok) return null;
     const data = await res.json();
     const orgs = (data?.accounts || data?.organizations || []) as ApolloCompany[];
-    if (!orgs.length) return null;
-    return orgs[0];
+    return orgs[0] || null;
+}
+
+/**
+ * Look up a specific person at a known org. Returns `{ person, blocked }`.
+ * `blocked = true` means the API key is on a tier that doesn't expose the
+ * endpoint (402/403); the caller should stop trying for the rest of the run.
+ */
+async function apolloPersonMatch(args: {
+    firstName: string;
+    lastName: string;
+    domain?: string | null;
+    orgName?: string | null;
+}): Promise<{ person: ApolloPerson | null; blocked: boolean }> {
+    const key = process.env.APOLLO_API_KEY!;
+    const body: Record<string, unknown> = {
+        first_name: args.firstName,
+        last_name: args.lastName,
+        reveal_personal_emails: true,
+        reveal_phone_number: true,
+    };
+    if (args.domain) body.domain = args.domain;
+    if (args.orgName) body.organization_name = args.orgName;
+
+    const res = await fetch("https://api.apollo.io/api/v1/people/match", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Cache-Control": "no-cache",
+            "X-Api-Key": key,
+        },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(15_000),
+    });
+
+    // Endpoint not available on this Apollo plan — stop calling it for this run.
+    if (res.status === 402 || res.status === 403) {
+        return { person: null, blocked: true };
+    }
+    if (!res.ok) return { person: null, blocked: false };
+    const data = await res.json();
+    return { person: (data?.person || null) as ApolloPerson | null, blocked: false };
+}
+
+function splitName(full: string): { first: string; last: string } | null {
+    const parts = full.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return null;
+    if (parts.length === 1) return { first: parts[0], last: "" };
+    return { first: parts[0], last: parts[parts.length - 1] };
 }
 
 export async function GET(req: NextRequest) {
@@ -80,22 +143,33 @@ export async function GET(req: NextRequest) {
 
     const db = admin();
     const startTime = Date.now();
-    const stats = { enriched: 0, not_found: 0, failed: 0 };
+    const stats = {
+        company_matched: 0,
+        person_matched: 0,
+        not_found: 0,
+        failed: 0,
+        person_endpoint_blocked: false,
+    };
+    let personEndpointBlocked = false;
 
-    // Priority 1: incumbents of active opps
+    // Priority 1: incumbents on active opportunities (we want their email yesterday).
     const { data: incumbentRows } = await db
         .from("opportunities")
         .select("incumbent_contractor_uei")
         .eq("is_archived", false)
         .not("incumbent_contractor_uei", "is", null)
         .limit(200);
-    const priorityUeis = new Set<string>((incumbentRows || []).map((o: { incumbent_contractor_uei: string }) => o.incumbent_contractor_uei));
+    const priorityUeis = new Set<string>(
+        (incumbentRows || []).map((o: { incumbent_contractor_uei: string }) => o.incumbent_contractor_uei)
+    );
 
-    // Candidates: have website OR company_name, not apollo_enriched yet
+    // Audience: only contractors that have actually won federal work.
+    // Skips the 70k+ inactive SAM rows where Apollo would just churn credits.
     const { data: candidates } = await db
         .from("contractors")
-        .select("id, uei, company_name, business_url, website, city, state, federal_awards_count, apollo_enriched")
+        .select("id, uei, company_name, business_url, website, city, state, federal_awards_count, primary_poc_name, primary_poc_email")
         .neq("apollo_enriched", true)
+        .gt("federal_awards_count", 0)
         .or("business_url.not.is.null,website.not.is.null,company_name.not.is.null")
         .order("federal_awards_count", { ascending: false, nullsFirst: false })
         .limit(BATCH_SIZE * 3);
@@ -116,36 +190,78 @@ export async function GET(req: NextRequest) {
         if (Date.now() - startTime > 270_000) break;
         const website = ((c.business_url as string) || (c.website as string) || "").trim();
         const name = (c.company_name as string) || "";
-        const lookup = website ? website.replace(/^https?:\/\//, "").split("/")[0].toLowerCase() : name;
+        const domain = website ? website.replace(/^https?:\/\//, "").split("/")[0].toLowerCase() : "";
+        const lookup = domain || name;
         if (!lookup) { stats.failed++; continue; }
+
         try {
-            const match = await apolloSearch(lookup);
-            if (!match) {
+            const company = await apolloCompany(lookup);
+            if (!company) {
                 await db
                     .from("contractors")
-                    .update({ apollo_enriched: true, last_enriched_at: new Date().toISOString(), enrichment_source: "apollo_miss" })
+                    .update({
+                        apollo_enriched: true,
+                        last_enriched_at: new Date().toISOString(),
+                        enrichment_source: "apollo_miss",
+                    })
                     .eq("id", c.id);
                 stats.not_found++;
                 continue;
             }
+
             const update: Record<string, unknown> = {
                 apollo_enriched: true,
                 last_enriched_at: new Date().toISOString(),
-                enrichment_source: "apollo",
+                enrichment_source: "apollo_company",
             };
-            const domain = match.website_url || match.primary_domain || website;
-            if (domain) update.website = domain;
-            if (match.phone) update.phone = match.phone;
-            if (match.linkedin_url) update.company_linkedin = match.linkedin_url;
-            if (match.estimated_num_employees) update.employee_count = match.estimated_num_employees;
-            if (!c.city && match.city) update.city = match.city;
-            if (!c.state && match.state) update.state = match.state;
+            const finalDomain = company.website_url || company.primary_domain || domain;
+            if (finalDomain) update.website = finalDomain;
+            if (company.phone) update.main_phone = company.phone;
+            if (company.linkedin_url) update.company_linkedin = company.linkedin_url;
+            if (company.estimated_num_employees) update.employee_count = company.estimated_num_employees;
+            if (!c.city && company.city) update.city = company.city;
+            if (!c.state && company.state) update.state = company.state;
+            stats.company_matched++;
+
+            // Step 2 — person enrichment if we have a SAM POC name and the
+            // endpoint hasn't been blocked yet on this run.
+            const pocName = (c.primary_poc_name as string | null) || "";
+            if (pocName && !personEndpointBlocked && !c.primary_poc_email) {
+                const split = splitName(pocName);
+                if (split && split.first && split.last) {
+                    const { person, blocked } = await apolloPersonMatch({
+                        firstName: split.first,
+                        lastName: split.last,
+                        domain: finalDomain ? finalDomain.replace(/^https?:\/\//, "").split("/")[0] : null,
+                        orgName: company.name || name,
+                    });
+                    if (blocked) {
+                        personEndpointBlocked = true;
+                        stats.person_endpoint_blocked = true;
+                    } else if (person) {
+                        if (person.email) update.primary_poc_email = person.email;
+                        if (person.title) update.primary_poc_title = person.title;
+                        if (person.linkedin_url) update.owner_linkedin = person.linkedin_url;
+                        const phone = person.phone_numbers?.find(p => p.sanitized_number || p.raw_number);
+                        if (phone) update.direct_phone = phone.sanitized_number || phone.raw_number;
+                        if (person.email || person.title || person.linkedin_url) {
+                            update.enrichment_source = "apollo";
+                            stats.person_matched++;
+                        }
+                    }
+                }
+            }
+
             await db.from("contractors").update(update).eq("id", c.id);
-            stats.enriched++;
         } catch {
             stats.failed++;
         }
     }
 
-    return NextResponse.json({ success: true, ...stats, elapsed_ms: Date.now() - startTime });
+    return NextResponse.json({
+        success: true,
+        ...stats,
+        elapsed_ms: Date.now() - startTime,
+        batch_attempted: targets.length,
+    });
 }

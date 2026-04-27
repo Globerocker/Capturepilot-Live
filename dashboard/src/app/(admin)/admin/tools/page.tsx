@@ -44,6 +44,11 @@ export default function AdminTools() {
     const [idiqSearching, setIdiqSearching] = useState(false);
     const [idiqResult, setIdiqResult] = useState<string>("");
 
+    // Bulk contractor-enrichment runner
+    const [bulkEnrichRunning, setBulkEnrichRunning] = useState(false);
+    const [bulkEnrichPasses, setBulkEnrichPasses] = useState("4");
+    const [bulkEnrichResult, setBulkEnrichResult] = useState<string>("");
+
     const handleCrawl = async () => {
         const codes = naicsCodes.split(",").map(s => s.trim()).filter(Boolean);
         if (codes.length === 0) return;
@@ -119,6 +124,66 @@ export default function AdminTools() {
                 </div>
             </div>
 
+            {/* Bulk contractor enrichment runner */}
+            <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+                <div className="bg-stone-50 border-b border-stone-100 px-5 py-3 flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-stone-400" />
+                    <h2 className="font-bold text-sm">Bulk Contractor Enrichment (Apollo)</h2>
+                </div>
+                <div className="p-5 space-y-3">
+                    <p className="text-xs text-stone-500">
+                        Runs the contractor-enrichment cron on demand. Targets only contractors with federal awards. Each pass = 50 contractors. Pulls company data + tries to fill primary POC email/phone/title via Apollo people-match.
+                    </p>
+                    <div className="flex gap-2">
+                        <select
+                            value={bulkEnrichPasses}
+                            onChange={e => setBulkEnrichPasses(e.target.value)}
+                            title="How many cron passes to run back-to-back"
+                            className="border border-stone-300 rounded-lg px-3 py-2 text-sm"
+                        >
+                            <option value="1">1 pass — 50 contractors</option>
+                            <option value="2">2 passes — 100 contractors</option>
+                            <option value="4">4 passes — 200 contractors</option>
+                            <option value="6">6 passes — 300 contractors (max)</option>
+                        </select>
+                        <button
+                            type="button"
+                            onClick={async () => {
+                                setBulkEnrichRunning(true);
+                                setBulkEnrichResult("");
+                                try {
+                                    const res = await fetch(`/api/admin/enrich-contractors?passes=${bulkEnrichPasses}`, { method: "POST" });
+                                    const data = await res.json();
+                                    if (!res.ok) {
+                                        setBulkEnrichResult(`Error: ${data.error || res.statusText}`);
+                                    } else {
+                                        const t = data.totals || {};
+                                        const blocked = data.person_endpoint_blocked ? " (Apollo people-match blocked on this plan)" : "";
+                                        setBulkEnrichResult(`Done in ${data.passes_run} pass(es). Company-matched: ${t.company_matched ?? 0} · Person-matched: ${t.person_matched ?? 0} · Misses: ${t.not_found ?? 0} · Failed: ${t.failed ?? 0}${blocked}`);
+                                    }
+                                } catch (err: unknown) {
+                                    setBulkEnrichResult(`Error: ${err instanceof Error ? err.message : "Network request failed"}`);
+                                }
+                                setBulkEnrichRunning(false);
+                            }}
+                            disabled={bulkEnrichRunning}
+                            className="bg-stone-900 text-white px-4 py-2 rounded-lg text-sm font-bold inline-flex items-center gap-1.5 disabled:opacity-50"
+                        >
+                            {bulkEnrichRunning ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                            {bulkEnrichRunning ? "Running…" : "Run now"}
+                        </button>
+                    </div>
+                    {bulkEnrichResult && (
+                        <p className={clsx(
+                            "text-xs font-medium",
+                            bulkEnrichResult.startsWith("Error") ? "text-red-600" : "text-emerald-700"
+                        )}>
+                            {bulkEnrichResult}
+                        </p>
+                    )}
+                </div>
+            </div>
+
             {/* NAICS Crawler */}
             <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
                 <div className="bg-stone-50 border-b border-stone-100 px-5 py-3 flex items-center gap-2">
@@ -131,7 +196,7 @@ export default function AdminTools() {
                         <input value={naicsCodes} onChange={e => setNaicsCodes(e.target.value)}
                             placeholder="NAICS codes (comma separated, e.g. 237120, 541330)"
                             className="flex-1 border border-stone-300 rounded-lg px-3 py-2 text-sm" />
-                        <select value={crawlDays} onChange={e => setCrawlDays(e.target.value)}
+                        <select value={crawlDays} onChange={e => setCrawlDays(e.target.value)} title="Lookback window"
                             className="border border-stone-300 rounded-lg px-3 py-2 text-sm">
                             <option value="30">30 days</option>
                             <option value="90">90 days</option>
@@ -181,7 +246,7 @@ export default function AdminTools() {
                         <input value={emailProfileId} onChange={e => setEmailProfileId(e.target.value)}
                             placeholder="User Profile ID (UUID)"
                             className="flex-1 border border-stone-300 rounded-lg px-3 py-2 text-sm font-mono" />
-                        <select value={emailType} onChange={e => setEmailType(e.target.value)}
+                        <select value={emailType} onChange={e => setEmailType(e.target.value)} title="Email type"
                             className="border border-stone-300 rounded-lg px-3 py-2 text-sm">
                             <option value="opportunities">Opportunity Alert</option>
                             <option value="custom">Custom Email</option>
