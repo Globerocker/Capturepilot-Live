@@ -44,10 +44,19 @@ export default function AdminTools() {
     const [idiqSearching, setIdiqSearching] = useState(false);
     const [idiqResult, setIdiqResult] = useState<string>("");
 
-    // Bulk contractor-enrichment runner
+    // Bulk contractor-enrichment runner (Apollo)
     const [bulkEnrichRunning, setBulkEnrichRunning] = useState(false);
     const [bulkEnrichPasses, setBulkEnrichPasses] = useState("4");
     const [bulkEnrichResult, setBulkEnrichResult] = useState<string>("");
+
+    // Lapsed-award audience: website-crawler enrichment for re-engagement campaigns
+    const [campaignSilent, setCampaignSilent] = useState("12");
+    const [campaignLimit, setCampaignLimit] = useState("20");
+    const [campaignAudience, setCampaignAudience] = useState<{ total_audience: number; missing_email: number; crawlable_now: number; ready_to_email: number } | null>(null);
+    const [campaignRunning, setCampaignRunning] = useState(false);
+    const [campaignPreviewing, setCampaignPreviewing] = useState(false);
+    const [campaignResult, setCampaignResult] = useState<string>("");
+    const [campaignSample, setCampaignSample] = useState<Array<{ company: string; email?: string; name?: string; title?: string }>>([]);
 
     const handleCrawl = async () => {
         const codes = naicsCodes.split(",").map(s => s.trim()).filter(Boolean);
@@ -180,6 +189,132 @@ export default function AdminTools() {
                         )}>
                             {bulkEnrichResult}
                         </p>
+                    )}
+                </div>
+            </div>
+
+            {/* Re-engagement campaign audience: lapsed-award winners */}
+            <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+                <div className="bg-stone-50 border-b border-stone-100 px-5 py-3 flex items-center gap-2">
+                    <Search className="w-4 h-4 text-stone-400" />
+                    <h2 className="font-bold text-sm">Re-engagement Audience — Website Crawl</h2>
+                </div>
+                <div className="p-5 space-y-3">
+                    <p className="text-xs text-stone-500">
+                        Targets contractors who won at least one federal award (USAspending) but have been silent for N+ months. Crawls each company website to extract CEO/owner name, title, email, phone, and LinkedIn — useful when Apollo can&apos;t reveal the email. Designed for personalized outreach campaigns.
+                    </p>
+
+                    <div className="flex flex-wrap items-end gap-2">
+                        <div>
+                            <label htmlFor="silent-months" className="block text-[10px] uppercase tracking-wider text-stone-500 mb-1">Silent months</label>
+                            <select
+                                id="silent-months"
+                                title="How long since last award counts as silent"
+                                value={campaignSilent}
+                                onChange={e => { setCampaignSilent(e.target.value); setCampaignAudience(null); }}
+                                className="border border-stone-300 rounded-lg px-3 py-2 text-sm"
+                            >
+                                <option value="6">6 months</option>
+                                <option value="12">12 months</option>
+                                <option value="18">18 months</option>
+                                <option value="24">24 months</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label htmlFor="campaign-limit" className="block text-[10px] uppercase tracking-wider text-stone-500 mb-1">Batch size</label>
+                            <select
+                                id="campaign-limit"
+                                title="Contractors per run"
+                                value={campaignLimit}
+                                onChange={e => setCampaignLimit(e.target.value)}
+                                className="border border-stone-300 rounded-lg px-3 py-2 text-sm"
+                            >
+                                <option value="10">10 (fast)</option>
+                                <option value="20">20</option>
+                                <option value="30">30 (slow)</option>
+                            </select>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={async () => {
+                                setCampaignPreviewing(true);
+                                setCampaignAudience(null);
+                                try {
+                                    const res = await fetch(`/api/admin/enrich-campaign-audience?silent_months=${campaignSilent}`);
+                                    const data = await res.json();
+                                    if (res.ok) setCampaignAudience(data);
+                                    else setCampaignResult(`Error: ${data.error || res.statusText}`);
+                                } catch (err: unknown) {
+                                    setCampaignResult(`Error: ${err instanceof Error ? err.message : "Network request failed"}`);
+                                }
+                                setCampaignPreviewing(false);
+                            }}
+                            disabled={campaignPreviewing || campaignRunning}
+                            className="bg-white border border-stone-200 hover:border-stone-300 text-stone-700 px-4 py-2 rounded-lg text-sm font-bold inline-flex items-center gap-1.5 disabled:opacity-50"
+                        >
+                            {campaignPreviewing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                            Preview audience
+                        </button>
+                        <button
+                            type="button"
+                            onClick={async () => {
+                                setCampaignRunning(true);
+                                setCampaignResult("");
+                                setCampaignSample([]);
+                                try {
+                                    const res = await fetch(`/api/admin/enrich-campaign-audience?silent_months=${campaignSilent}&limit=${campaignLimit}`, { method: "POST" });
+                                    const data = await res.json();
+                                    if (!res.ok) {
+                                        setCampaignResult(`Error: ${data.error || res.statusText}`);
+                                    } else {
+                                        setCampaignResult(`Crawled ${data.processed} sites — found ${data.emails_found} emails, ${data.executive_found} executives. ${data.crawl_failed} crawls failed, ${data.skipped_no_website} skipped.`);
+                                        setCampaignSample(data.sample || []);
+                                    }
+                                } catch (err: unknown) {
+                                    setCampaignResult(`Error: ${err instanceof Error ? err.message : "Network request failed"}`);
+                                }
+                                setCampaignRunning(false);
+                            }}
+                            disabled={campaignRunning || campaignPreviewing}
+                            className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-bold inline-flex items-center gap-1.5 hover:bg-emerald-700 disabled:opacity-50"
+                        >
+                            {campaignRunning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                            {campaignRunning ? "Crawling…" : "Crawl batch"}
+                        </button>
+                    </div>
+
+                    {campaignAudience && (
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs bg-stone-50 border border-stone-100 rounded-lg p-3">
+                            <div><p className="text-stone-400 uppercase text-[9px]">Total audience</p><p className="text-lg font-bold text-stone-900">{campaignAudience.total_audience.toLocaleString()}</p></div>
+                            <div><p className="text-stone-400 uppercase text-[9px]">Already have email</p><p className="text-lg font-bold text-emerald-700">{campaignAudience.ready_to_email.toLocaleString()}</p></div>
+                            <div><p className="text-stone-400 uppercase text-[9px]">Missing email</p><p className="text-lg font-bold text-amber-700">{campaignAudience.missing_email.toLocaleString()}</p></div>
+                            <div><p className="text-stone-400 uppercase text-[9px]">Crawlable now</p><p className="text-lg font-bold text-blue-700">{campaignAudience.crawlable_now.toLocaleString()}</p></div>
+                        </div>
+                    )}
+
+                    {campaignResult && (
+                        <p className={clsx(
+                            "text-xs font-medium",
+                            campaignResult.startsWith("Error") ? "text-red-600" : "text-emerald-700"
+                        )}>
+                            {campaignResult}
+                        </p>
+                    )}
+
+                    {campaignSample.length > 0 && (
+                        <div className="border border-stone-100 rounded-lg overflow-hidden">
+                            <div className="bg-stone-50 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-stone-500">Sample of new contacts</div>
+                            <ul className="divide-y divide-stone-100">
+                                {campaignSample.map((s, i) => (
+                                    <li key={i} className="px-3 py-2 text-xs flex flex-wrap items-center gap-2">
+                                        <span className="font-bold text-stone-900">{s.company}</span>
+                                        {s.name && <span className="text-stone-600">{s.name}</span>}
+                                        {s.title && <span className="text-stone-400 italic">{s.title}</span>}
+                                        {s.email && <span className="ml-auto font-mono text-emerald-700">{s.email}</span>}
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
                     )}
                 </div>
             </div>
