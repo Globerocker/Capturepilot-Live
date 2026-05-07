@@ -56,9 +56,12 @@ function pdfRegexExtract(bytes: Uint8Array): string {
     return chunks.join(" ").replace(/\s+/g, " ").trim();
 }
 
+// Skip Mistral OCR for PDFs over this size — its markdown response scales
+// with page count and on a 1024 MB Lambda the heap blows up before return.
+const MISTRAL_PDF_BYTES_CAP = 4 * 1024 * 1024;
+
 async function extractPdf(bytes: Uint8Array, url: string): Promise<{ text: string; ocr: boolean }> {
-    // Prefer Mistral OCR when configured
-    if (isMistralConfigured()) {
+    if (isMistralConfigured() && bytes.byteLength <= MISTRAL_PDF_BYTES_CAP && url) {
         try {
             const ocr = await mistralExtractFromUrl(url);
             if (ocr.full_markdown && ocr.full_markdown.length > 200) {
@@ -177,8 +180,9 @@ export async function fetchAndExtract(
         const resolvedName = nameFromHeader || guessedName;
         const kind = kindOf(resolvedName, contentType);
         const buf = new Uint8Array(await res.arrayBuffer());
-        // For PDFs we want the URL so Mistral OCR can fetch it directly
-        if (kind === "pdf" && isMistralConfigured()) {
+        // For PDFs we want the URL so Mistral OCR can fetch it directly.
+        // Skip Mistral on big PDFs to avoid OOM — fall back to regex extract.
+        if (kind === "pdf" && isMistralConfigured() && buf.byteLength <= MISTRAL_PDF_BYTES_CAP) {
             try {
                 const ocr = await mistralExtractFromUrl(url);
                 if (ocr.full_markdown && ocr.full_markdown.length > 200) {

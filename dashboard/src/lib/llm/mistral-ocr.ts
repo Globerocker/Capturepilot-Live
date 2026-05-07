@@ -70,17 +70,28 @@ async function postOcr(body: Record<string, unknown>): Promise<MistralOcrRespons
     return (await res.json()) as MistralOcrResponse;
 }
 
+// Hard cap at 60 KB — downstream consumers slice to 40 KB anyway, so anything
+// larger is just heap pressure that risks OOMing the route.
+const MAX_OCR_MARKDOWN_BYTES = 60_000;
+
 function combinePages(resp: MistralOcrResponse): OcrResult {
-    const pages: OcrPage[] = (resp.pages || []).map((p, i) => ({
-        index: p.index ?? i,
-        markdown: p.markdown || "",
-        images: p.images,
-    }));
+    const rawPages = resp.pages || [];
+    const pageCount = rawPages.length;
+    let buf = "";
+    for (const p of rawPages) {
+        if (buf.length >= MAX_OCR_MARKDOWN_BYTES) break;
+        const md = p.markdown || "";
+        buf += (buf ? "\n\n---\n\n" : "") + md;
+    }
+    if (buf.length > MAX_OCR_MARKDOWN_BYTES) buf = buf.slice(0, MAX_OCR_MARKDOWN_BYTES);
+    // Drop the array references on the source object so the GC can reclaim
+    // page strings before the next iteration of the calling loop.
+    (resp as { pages?: unknown }).pages = undefined;
     return {
         model: resp.model || "mistral-ocr-latest",
-        pages,
-        full_markdown: pages.map((p) => p.markdown).join("\n\n---\n\n"),
-        page_count: pages.length,
+        pages: [], // intentionally empty: callers only use full_markdown
+        full_markdown: buf,
+        page_count: pageCount,
     };
 }
 
