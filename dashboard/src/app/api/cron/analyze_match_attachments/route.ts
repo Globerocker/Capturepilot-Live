@@ -144,11 +144,14 @@ export async function GET(req: NextRequest) {
     // fresh ones.
     if (candidates.length < BATCH_SIZE) {
         const need = BATCH_SIZE - candidates.length;
+        // PostgREST drops `not.is.null` when combined with `neq.[]` on the
+        // same column, so the route was getting back rows with null
+        // resource_links (then filtered out in JS, leaving 0 candidates).
+        // `neq.[]` alone correctly excludes both empty arrays and nulls.
         const { data: recentOpps } = await db
             .from("opportunities")
             .select("id, notice_id, title, description, resource_links, structured_requirements, ai_win_strategy")
             .eq("is_archived", false)
-            .not("resource_links", "is", null)
             .neq("resource_links", "[]")
             .filter("structured_requirements->>_analyzed_attachments_at", "is", null)
             .order("posted_date", { ascending: false, nullsFirst: false })
