@@ -135,5 +135,10 @@
             "path": "/api/cron/naics_stats_backfill",
             "schedule": "0 3 * * 0"
         }
-    ]
+    ],
+    "functions": {
+        "src/app/api/cron/analyze_match_attachments/route.ts": {
+            "memory": 3008
+        }
+    }
 }
