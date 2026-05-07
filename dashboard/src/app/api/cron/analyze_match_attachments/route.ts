@@ -28,8 +28,12 @@ export const maxDuration = 300;
  * ~100 opps so we cover it in under 3 hours.
  */
 
-const BATCH_SIZE = 4;
-const MAX_DOCS_PER_OPP = 3;
+// Smaller numbers because Vercel's 1024 MB Lambda OOMs on bigger batches —
+// PDF buffers + Mistral OCR markdown + JSZip heap accumulate across docs.
+// 2 opps × 2 docs = 4 attachments/run instead of 12.
+const BATCH_SIZE = 2;
+const MAX_DOCS_PER_OPP = 2;
+const MAX_DOC_BYTES = 8 * 1024 * 1024; // skip downloads > 8 MB
 const SAM_API_KEY = process.env.SAM_API_KEY || "";
 
 function admin() {
@@ -101,7 +105,7 @@ export async function GET(req: NextRequest) {
 
     const db = admin();
     const startTime = Date.now();
-    const stats = { opps_processed: 0, docs_extracted: 0, llm_calls: 0, failures: 0, no_resource_links: 0 };
+    const stats = { opps_processed: 0, docs_extracted: 0, llm_calls: 0, failures: 0, no_resource_links: 0, oversized_skipped: 0 };
 
     // Priority: HOT, WARM, recent
     // 1) Collect HOT+WARM opportunity_ids
@@ -162,8 +166,10 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ success: true, message: "Nothing to analyze", ...stats });
     }
 
+    try {
     for (const opp of targets) {
         if (Date.now() - startTime > 270_000) break;
+        console.log(`[analyze_match_attachments] opp ${opp.id} (${(opp.title || "").slice(0, 60)})`);
 
         const links = (opp.resource_links as string[]) || [];
         if (links.length === 0) { stats.no_resource_links++; continue; }
@@ -173,7 +179,12 @@ export async function GET(req: NextRequest) {
         for (const url of links.slice(0, MAX_DOCS_PER_OPP)) {
             if (Date.now() - startTime > 260_000) break;
             try {
-                const ext = await fetchAndExtract(url, { samApiKey: SAM_API_KEY });
+                let ext = await fetchAndExtract(url, { samApiKey: SAM_API_KEY });
+                if (ext.bytes > MAX_DOC_BYTES) {
+                    console.log(`[analyze_match_attachments] skip oversized ${ext.filename} (${ext.bytes} bytes)`);
+                    stats.oversized_skipped++;
+                    continue;
+                }
                 if (ext.text && ext.text.length > 100) {
                     docTexts.push({ filename: ext.filename, text: ext.text, kind: ext.kind });
                     stats.docs_extracted++;
@@ -189,7 +200,10 @@ export async function GET(req: NextRequest) {
                         downloaded_at: new Date().toISOString(),
                     }, { onConflict: "opportunity_id,filename", ignoreDuplicates: false });
                 }
-            } catch {
+                // Drop the buffer so the heap can shrink before the next doc.
+                ext = null as unknown as typeof ext;
+            } catch (e) {
+                console.error(`[analyze_match_attachments] doc failure: ${(e as Error).message}`);
                 stats.failures++;
             }
         }
@@ -271,6 +285,10 @@ export async function GET(req: NextRequest) {
 
         await db.from("opportunities").update(updates).eq("id", opp.id);
         stats.opps_processed++;
+    }
+    } catch (e) {
+        console.error(`[analyze_match_attachments] fatal: ${(e as Error).message}`, e);
+        return NextResponse.json({ error: (e as Error).message, ...stats, elapsed_ms: Date.now() - startTime }, { status: 500 });
     }
 
     return NextResponse.json({ success: true, ...stats, elapsed_ms: Date.now() - startTime });
