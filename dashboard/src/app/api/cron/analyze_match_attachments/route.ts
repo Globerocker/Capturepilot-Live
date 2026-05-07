@@ -144,18 +144,14 @@ export async function GET(req: NextRequest) {
     // fresh ones.
     if (candidates.length < BATCH_SIZE) {
         const need = BATCH_SIZE - candidates.length;
-        // PostgREST `neq.[]` on a jsonb column returns rows where
-        // resource_links is NULL too — broken behavior. Skip the SQL filter
-        // entirely and rely on the watermark filter + JS filter below to
-        // pull from the 4,861 eligible pool. Pull need*200 to ensure we
-        // get enough non-null rows even if 95% have null resource_links.
+        // Query the view (migration 060) so the jsonb_array_length>0 filter
+        // is enforced server-side. PostgREST's filter syntax can't express
+        // that on jsonb columns without false-matching null rows.
         const { data: recentOpps } = await db
-            .from("opportunities")
+            .from("opportunities_attachable")
             .select("id, notice_id, title, description, resource_links, structured_requirements, ai_win_strategy")
-            .eq("is_archived", false)
-            .filter("structured_requirements->>_analyzed_attachments_at", "is", null)
             .order("posted_date", { ascending: false, nullsFirst: false })
-            .limit(need * 200);
+            .limit(need * 5);
         const alreadyIncluded = new Set(candidates.map(c => c.id));
         const extra = ((recentOpps || []) as typeof candidates).filter(o =>
             !alreadyIncluded.has(o.id)
