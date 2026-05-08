@@ -63,8 +63,13 @@ const PTYPE_LABELS: Record<string, string> = {
 };
 
 export async function GET(req: NextRequest) {
+    // Dual auth: Vercel cron OR Supabase pg_cron service-key bearer
+    // (Vercel's scheduler has silently stopped firing this — pg_cron now backs it up)
     const authHeader = req.headers.get("authorization");
-    if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    const serviceKey = process.env.SUPABASE_SERVICE_KEY;
+    const expectedCron = process.env.CRON_SECRET ? `Bearer ${process.env.CRON_SECRET}` : null;
+    const expectedSvc = serviceKey ? `Bearer ${serviceKey}` : null;
+    if ((expectedCron || expectedSvc) && authHeader !== expectedCron && authHeader !== expectedSvc) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
