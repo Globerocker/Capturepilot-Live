@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 
 export const maxDuration = 30;
 
@@ -72,5 +73,26 @@ export async function GET(req: NextRequest) {
             ? (b.opportunitiesData[0] as Record<string, unknown>).title
             : null;
     }
+
+    // Persist the summary to internal_config so callers without direct
+    // Vercel-log access can read it back via PostgREST.
+    try {
+        const sb = createClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.SUPABASE_SERVICE_KEY!,
+            { auth: { persistSession: false } },
+        );
+        await sb.from("internal_config").upsert(
+            {
+                key: "sam_debug_last_response",
+                value: JSON.stringify({ ...summary, captured_at: new Date().toISOString() }),
+                updated_at: new Date().toISOString(),
+            },
+            { onConflict: "key" },
+        );
+    } catch (e) {
+        summary.persist_error = e instanceof Error ? e.message : "unknown";
+    }
+
     return NextResponse.json(summary);
 }
