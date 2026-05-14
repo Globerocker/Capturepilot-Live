@@ -126,7 +126,14 @@ export async function GET(req: NextRequest) {
                 });
 
                 if (!res.ok) {
-                    console.error(`SAM API Error: ${res.status}`);
+                    // Capture body so we know if it's 403 (quota), 401 (bad key),
+                    // 429 (burst), or something else. Previous "Error: 403" was
+                    // useless for diagnosis.
+                    const body = await res.text().catch(() => "<unreadable>");
+                    console.error(`SAM API Error: ${res.status} ${res.statusText} — ptype=${ptype} offset=${offset} body=${body.slice(0, 400)}`);
+                    if (res.status === 429 || res.status === 403) {
+                        console.error("Likely SAM rate-limit hit. ingest_sam aborting — quota probably consumed by other SAM-hitting crons. Reschedule or upgrade SAM key.");
+                    }
                     break;
                 }
 

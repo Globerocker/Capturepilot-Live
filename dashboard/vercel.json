@@ -5,7 +5,7 @@
     "crons": [
         {
             "path": "/api/cron/ingest_sam",
-            "schedule": "0 2 * * *"
+            "schedule": "30 0 * * *"
         },
         {
             "path": "/api/cron/score_matches",
@@ -121,7 +121,7 @@
         },
         {
             "path": "/api/cron/bulk_enrich_descriptions",
-            "schedule": "*/15 * * * *"
+            "schedule": "10,40 1-23 * * *"
         },
         {
             "path": "/api/cron/bulk_enrich_ai",
@@ -134,6 +134,10 @@
         {
             "path": "/api/cron/naics_stats_backfill",
             "schedule": "0 3 * * 0"
+        },
+        {
+            "path": "/api/cron/ingest_fpds_awards",
+            "schedule": "0 4 * * 0"
         }
     ],
     "functions": {
