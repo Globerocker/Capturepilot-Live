@@ -20,6 +20,8 @@ import GenerateWinStrategyButton from "@/components/opportunity/GenerateWinStrat
 import OpportunityTimeline from "@/components/opportunity/OpportunityTimeline";
 import { PastAwardsPanel } from "@/components/PastAwardsPanel";
 import GovTribeAwardsCard from "@/components/opportunity/GovTribeAwardsCard";
+import GovTribeSubAwardsCard from "@/components/opportunity/GovTribeSubAwardsCard";
+import GovTribeForecastCard from "@/components/opportunity/GovTribeForecastCard";
 import { estimateContractValue } from "@/utils/estimateValue";
 
 export const dynamic = 'force-dynamic';
@@ -573,9 +575,15 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                                         />
                                     </div>
                                     <GovTribeAwardsCard query={opp.incumbent_contractor_name} />
+                                    <GovTribeSubAwardsCard query={opp.incumbent_contractor_name} />
                                 </div>
                             )}
                         </div>
+                    )}
+
+                    {/* Upcoming forecasts in the same NAICS — heads-up on related future RFPs */}
+                    {opp.naics_code && (
+                        <GovTribeForecastCard naicsCode={opp.naics_code} />
                     )}
 
                     {/* GAO Bid-Protest Intel — only when we found matches on agency or incumbent */}

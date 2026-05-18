@@ -8,6 +8,7 @@ import { MarketIntelligence } from "@/components/MarketIntelligence";
 import { DashboardMarketCard } from "@/components/DashboardMarketCard";
 import { SpendRadarCard } from "@/components/SpendRadarCard";
 import DashboardCustomizer from "@/components/dashboard/DashboardCustomizer";
+import GovTribeActivityCard from "@/components/dashboard/GovTribeActivityCard";
 import { isHidden, type DashboardLayout } from "@/lib/dashboard-layout";
 import clsx from "clsx";
 import Link from "next/link";
@@ -164,6 +165,9 @@ export default function DashboardClient({ profile, stats, initialLayout }: Dashb
 
       {/* Year-End Spend Radar */}
       {show("spend_radar") && <SpendRadarCard />}
+
+      {/* Federal Market Pulse — last 14 days via GovTribe */}
+      <GovTribeActivityCard days={14} naicsIds={profile?.naics_codes && profile.naics_codes.length > 0 ? profile.naics_codes : undefined} />
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start mt-6">
         {/* LEFT COLUMN */}
