@@ -15,3 +15,5 @@ venv2/
 __pycache__/
 .DS_Store
 *.pyc
+*.tsbuildinfo
+.tsc-precommit.tsbuildinfo

@@ -919,3 +919,59 @@ export async function sendEduCapabilityStatementEmail(to: string, contactName: s
         blogUrl: `${SITE_URL}/blog/capability-statement-guide`,
     });
 }
+
+// ─── Startup Pack Delivery (one-time purchase confirmation) ─────────────────
+export async function sendStartupPackDeliveryEmail(
+    to: string,
+    data: {
+        companyName: string;
+        downloadUrl: string;
+        amountPaidCents: number;
+    },
+) {
+    const { companyName, downloadUrl, amountPaidCents } = data;
+    const priceLabel = `$${(amountPaidCents / 100).toFixed(0)}`;
+
+    const html = emailTemplate({
+        category: await getEmailCategory("startup_pack_delivery"),
+        preheader: `Your B2B Federal Startup Pack is ready. Open your download library now.`,
+        eyebrow: "Order Confirmed",
+        heading: `Welcome to the Startup Pack, ${companyName}`,
+        body: `
+            ${paragraph("Thank you for your purchase — your downloads are live and waiting for you.")}
+            ${featureBox(`
+                ${sectionLabel("What you get")}
+                <ul style="color:#065f46;font-size:14px;line-height:1.9;padding-left:20px;margin:0;">
+                    <li>Capability statement templates (DOCX, Canva, PDF walkthrough)</li>
+                    <li>Sources Sought response playbook + fill-in-the-blank template</li>
+                    <li>Bid / No-Bid decision matrix &amp; PWin calculator</li>
+                    <li>8(a) / HUBZone / WOSB / SDVOSB eligibility worksheets</li>
+                    <li>10 contracting-officer outreach email templates</li>
+                    <li>Price-to-Win worksheet + FY2026 labor rate benchmarks</li>
+                    <li><strong>Bonus:</strong> 30-min founder onboarding call (Calendly link inside)</li>
+                </ul>
+            `)}
+            ${paragraph("Bookmark the link below — your access doesn't expire. Use it as your personal federal-contracting library.")}
+            ${contentCard(`
+                ${sectionLabel("Order details")}
+                <table role="presentation" style="width:100%;border-collapse:collapse;font-size:13px;color:${COLORS.stone700};">
+                    <tbody>
+                        <tr><td style="padding:4px 0;">Amount paid</td><td style="padding:4px 0;text-align:right;font-weight:700;">${priceLabel} USD</td></tr>
+                        <tr><td style="padding:4px 0;">Access</td><td style="padding:4px 0;text-align:right;font-weight:700;">Lifetime, instant</td></tr>
+                        <tr><td style="padding:4px 0;">Refund policy</td><td style="padding:4px 0;text-align:right;font-weight:700;">7-day, no questions</td></tr>
+                    </tbody>
+                </table>
+            `)}
+        `,
+        cta: { label: "Open My Downloads", url: downloadUrl },
+        secondaryCta: { label: "Schedule onboarding call", url: "https://calendly.com/capturepilot/startup-pack-onboarding" },
+        footerNote: "Need help or want a refund? Just reply to this email — we'll handle it within 24 hours.",
+    });
+
+    return send("startup_pack_delivery", to, `Your B2B Startup Pack is ready · ${companyName}`, html, {
+        companyName,
+        downloadUrl,
+        priceLabel,
+    });
+}
+

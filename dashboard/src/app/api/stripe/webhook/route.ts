@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import Stripe from "stripe";
-import { sendPaymentFailedEmail, sendSubscriptionCanceledEmail } from "@/lib/email";
+import { sendPaymentFailedEmail, sendStartupPackDeliveryEmail, sendSubscriptionCanceledEmail } from "@/lib/email";
 import {
     onTrialStarted,
     onSubscriptionActivated,
@@ -41,6 +41,60 @@ export async function POST(request: Request) {
     switch (event.type) {
         case "checkout.session.completed": {
             const session = event.data.object as Stripe.Checkout.Session;
+
+            // ─── Startup Pack one-time purchase ──────────────────────────────
+            // Identified by metadata.product = "startup_pack" (set in /api/startup-pack/checkout).
+            if (session.metadata?.product === "startup_pack") {
+                const analysisId = session.metadata.analysis_id || session.client_reference_id || null;
+                const email = session.customer_email
+                    || (session.customer_details?.email || "")
+                    || "";
+                const companyName = session.metadata.company_name
+                    || session.customer_details?.name
+                    || "";
+                const amountPaid = session.amount_total ?? 0;
+
+                // Insert the purchase record — its access_token will gate the download page
+                const { data: purchase } = await admin
+                    .from("startup_pack_purchases")
+                    .insert({
+                        analysis_id: analysisId,
+                        email,
+                        company_name: companyName,
+                        amount_paid_cents: amountPaid,
+                        currency: session.currency || "usd",
+                        stripe_session_id: session.id,
+                        stripe_payment_intent: typeof session.payment_intent === "string" ? session.payment_intent : null,
+                        metadata: { offer_expired: session.metadata.offer_expired === "true" },
+                    })
+                    .select("id, access_token")
+                    .single();
+
+                // Mark the originating analysis row
+                if (analysisId) {
+                    await admin
+                        .from("company_analyses")
+                        .update({
+                            startup_pack_unlocked_at: new Date().toISOString(),
+                            startup_pack_stripe_session_id: session.id,
+                        })
+                        .eq("id", analysisId);
+                }
+
+                // Deliver the pack — instant Resend email with download link
+                if (email && purchase?.access_token) {
+                    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://app.capturepilot.com";
+                    const downloadUrl = `${baseUrl}/startup-pack/download/${purchase.access_token}`;
+                    sendStartupPackDeliveryEmail(email, {
+                        companyName: companyName || "Founder",
+                        downloadUrl,
+                        amountPaidCents: amountPaid,
+                    }).catch(err => console.error("Startup pack delivery email failed:", err));
+                }
+                break;
+            }
+
+            // ─── Subscription checkout (existing pro/sub flow) ──────────────
             if (session.customer && session.subscription) {
                 // Get subscription to check trial end
                 const subscription = await stripe.subscriptions.retrieve(session.subscription as string);

@@ -14,9 +14,9 @@ import Image from "next/image";
 import clsx from "clsx";
 import { LeadMagnetForm } from "@/components/LeadMagnetForm";
 import { OpportunityLandscape, ConversionBottomSection, type OpportunityStats } from "@/components/OpportunityLandscape";
-import NaicsSelectionGate from "@/components/NaicsSelectionGate";
 import ReadinessScoreCard from "@/components/ReadinessScoreCard";
 import NaicsEditModal from "@/components/NaicsEditModal";
+import StartupPackOfferCard from "@/components/StartupPackOfferCard";
 
 interface CertRecommendation {
     cert: string;
@@ -141,6 +141,11 @@ interface AnalysisData {
     crawler_confidence?: number;
     is_saved?: boolean;
     error_message?: string;
+    created_at?: string;
+    lead_email?: string | null;
+    lead_phone?: string | null;
+    lead_captured_at?: string | null;
+    startup_pack_unlocked_at?: string | null;
 }
 
 function CompetitorCard({ comp, rank }: { comp: CompetitorData; rank: number }) {
@@ -695,6 +700,17 @@ export default function CheckResultsPage() {
         return `$${amount.toLocaleString()}`;
     };
 
+    // ── Soft-gate state ───────────────────────────────────────────────────────
+    // The user sees Score + 3 matches before submitting the LeadMagnetForm.
+    // After submit, everything else unlocks. updatedMatches is set by the form's
+    // onUpdate callback (handleSubmit -> /api/lead-magnet/confirm).
+    const leadCaptured = !!data.lead_captured_at || !!data.lead_email || updatedMatches !== null;
+    const unlocked = leadCaptured;
+    const visibleMatches = unlocked ? matches : matches.slice(0, 3);
+    const gatedMatchCount = matches.length - visibleMatches.length;
+    const startupPackOwned = !!data.startup_pack_unlocked_at;
+    const analysisCreatedAt = data.created_at || new Date().toISOString();
+
     return (
         <div className="min-h-screen bg-stone-50">
             {/* Header */}
@@ -966,10 +982,23 @@ export default function CheckResultsPage() {
                     <ReadinessScoreCard score={readinessScore} breakdown={readinessBreakdown} />
                 )}
 
-                {/* Your Federal Opportunity Landscape — big numbers + bar charts + pitch */}
-                <OpportunityLandscape stats={data.opportunity_stats} />
+                {/* LEAD CAPTURE — only show until the user submits */}
+                {!leadCaptured && (
+                    <LeadMagnetForm
+                        analysisId={analysisId}
+                        inferredProfile={profile}
+                        inferredNaics={naics}
+                        crawlerConfidence={data.crawler_confidence}
+                        requireContact
+                        onUpdate={(d) => {
+                            setUpdatedMatches(d.updated_matches as MatchData[]);
+                            setUpdatedCertRecs(d.cert_recommendations as CertRecommendation[]);
+                            setUpdatedEasyWins(d.easy_wins as EasyWin[]);
+                        }}
+                    />
+                )}
 
-                {/* Top Matching Opportunities (up to 10) */}
+                {/* Top Matching Opportunities — first 3 always visible, rest gated */}
                 <div>
                     <h2 className="font-bold text-lg flex items-center mb-2 px-1">
                         <Target className="w-5 h-5 mr-2" /> Best Matching Opportunities
@@ -988,10 +1017,31 @@ export default function CheckResultsPage() {
                     )}
 
                     {matches.length > 0 ? (
-                        <div className="space-y-3">
-                            {matches.map((match, i) => (
+                        <div className="space-y-3 relative">
+                            {visibleMatches.map((match, i) => (
                                 <MatchCard key={match.opportunity_id} match={match} rank={i + 1} />
                             ))}
+                            {!unlocked && gatedMatchCount > 0 && (
+                                <div className="relative">
+                                    {/* Render the next match blurred + locked overlay */}
+                                    <div className="pointer-events-none select-none filter blur-[3px] opacity-50">
+                                        {matches.slice(3, 5).map((match, i) => (
+                                            <MatchCard key={match.opportunity_id} match={match} rank={i + 4} />
+                                        ))}
+                                    </div>
+                                    <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-4">
+                                        <div className="bg-white border-2 border-emerald-300 shadow-xl rounded-2xl px-6 py-5 max-w-sm">
+                                            <Unlock className="w-6 h-6 text-emerald-600 mx-auto mb-2" />
+                                            <p className="font-black text-base text-stone-900">
+                                                +{gatedMatchCount} more opportunities locked
+                                            </p>
+                                            <p className="text-xs text-stone-500 mt-1.5 leading-relaxed">
+                                                Submit your email above to unlock all matches, the full readiness breakdown and your $70 founder pack.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     ) : (
                         <div className="bg-stone-50 border border-stone-200 border-dashed rounded-2xl p-8 text-center">
@@ -1002,8 +1052,22 @@ export default function CheckResultsPage() {
                     )}
                 </div>
 
-                {/* Top 5 Competitors */}
-                {data.competitors && data.competitors.length > 0 && (
+                {/* STARTUP PACK OFFER — only shown once we have the lead */}
+                {leadCaptured && (
+                    <StartupPackOfferCard
+                        analysisId={analysisId}
+                        analysisCreatedAt={analysisCreatedAt}
+                        leadEmail={data.lead_email || (profile.email as string | undefined)}
+                        alreadyOwned={startupPackOwned}
+                        downloadUrl={startupPackOwned ? `/startup-pack/success?aid=${analysisId}` : undefined}
+                    />
+                )}
+
+                {/* Your Federal Opportunity Landscape — moved below the offer */}
+                {unlocked && <OpportunityLandscape stats={data.opportunity_stats} />}
+
+                {/* Top 5 Competitors — gated */}
+                {unlocked && data.competitors && data.competitors.length > 0 && (
                     <div>
                         <h2 className="font-bold text-lg flex items-center mb-4 px-1">
                             <Swords className="w-5 h-5 mr-2" /> Top {data.competitors.length} Competitors
@@ -1022,11 +1086,11 @@ export default function CheckResultsPage() {
                     </div>
                 )}
 
-                {/* Urgency / conversion bottom section */}
-                <ConversionBottomSection stats={data.opportunity_stats} />
+                {/* Urgency / conversion bottom section — gated */}
+                {unlocked && <ConversionBottomSection stats={data.opportunity_stats} />}
 
-                {/* Easy Wins Section */}
-                {easyWins.length > 0 && (
+                {/* Easy Wins Section — gated */}
+                {unlocked && easyWins.length > 0 && (
                     <div className="bg-white rounded-[28px] border border-stone-200 shadow-sm overflow-hidden">
                         <div className="bg-stone-50 border-b border-stone-100 px-5 sm:px-8 py-4">
                             <h2 className="font-bold text-base flex items-center">
@@ -1060,8 +1124,8 @@ export default function CheckResultsPage() {
                     </div>
                 )}
 
-                {/* Certification Recommendations */}
-                {certRecs.length > 0 && (
+                {/* Certification Recommendations — gated */}
+                {unlocked && certRecs.length > 0 && (
                     <div className="bg-white rounded-[28px] border border-stone-200 shadow-sm overflow-hidden">
                         <div className="bg-stone-50 border-b border-stone-100 px-5 sm:px-8 py-4">
                             <h2 className="font-bold text-base flex items-center">
@@ -1162,6 +1226,31 @@ export default function CheckResultsPage() {
                                 </div>
                             ))}
                         </div>
+                    </div>
+                )}
+
+                {/* Last-chance lead capture — only shown when gate is still active */}
+                {!leadCaptured && (
+                    <div className="bg-gradient-to-br from-emerald-50 to-blue-50 border-2 border-emerald-300 rounded-[28px] p-6 sm:p-8 text-center shadow-md">
+                        <Unlock className="w-8 h-8 text-emerald-600 mx-auto mb-2" />
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-700">Still Locked</p>
+                        <h3 className="font-black text-xl sm:text-2xl text-stone-900 mt-1">
+                            Unlock the rest of your report
+                        </h3>
+                        <p className="text-sm text-stone-600 mt-2 max-w-md mx-auto">
+                            7 more matches, federal landscape stats, competitor intel, easy-wins checklist and certification roadmap.
+                            Plus your $70 founder-pack offer — but only for the next few days.
+                        </p>
+                        <a
+                            href="#lead-form"
+                            onClick={(e) => {
+                                e.preventDefault();
+                                document.querySelector("input[type=email]")?.scrollIntoView({ behavior: "smooth", block: "center" });
+                            }}
+                            className="mt-4 inline-flex items-center gap-2 bg-gradient-to-r from-emerald-600 to-blue-600 text-white px-6 py-3 rounded-2xl font-bold text-sm shadow-md hover:opacity-95 transition-all"
+                        >
+                            <Mail className="w-4 h-4" /> Send My Full Report
+                        </a>
                     </div>
                 )}
 

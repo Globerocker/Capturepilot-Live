@@ -13,12 +13,36 @@ import { onQuickCheckerComplete } from "@/lib/hubspot";
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
-        const { analysis_id, email, company_name, state, naics_codes, sba_certifications } = body;
+        const {
+            analysis_id,
+            email,
+            phone,
+            contact_name,
+            company_name,
+            state,
+            naics_codes,
+            sba_certifications,
+            employee_count,
+            years_in_business,
+            annual_revenue_band,
+        } = body as {
+            analysis_id?: string;
+            email?: string;
+            phone?: string;
+            contact_name?: string;
+            company_name?: string;
+            state?: string;
+            naics_codes?: string[];
+            sba_certifications?: string[];
+            employee_count?: number;
+            years_in_business?: number;
+            annual_revenue_band?: string;
+        };
 
         if (!analysis_id) {
             return NextResponse.json({ error: "analysis_id is required" }, { status: 400 });
         }
-        // Email is optional — sales reps may not have it
+        // Email is optional at the API level (sales reps may not have it) — UI enforces it.
 
         const sb = createClient(
             process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -170,23 +194,44 @@ export async function POST(request: NextRequest) {
             });
         }
 
-        // Update corrected profile in inferred_profile
-        const updatedProfile = {
-            ...(analysis.inferred_profile as Record<string, unknown> || {}),
-            company_name: company_name || undefined,
+        // Update corrected profile in inferred_profile — merge nested contact_person carefully
+        const existingProfile = (analysis.inferred_profile as Record<string, unknown>) || {};
+        const existingContact = (existingProfile.contact_person as Record<string, unknown> | null) || null;
+        const mergedContact = (contact_name || phone || email)
+            ? {
+                ...(existingContact || {}),
+                ...(contact_name ? { name: contact_name } : {}),
+                ...(email ? { email } : {}),
+                ...(phone ? { phone, mobile_phone: phone } : {}),
+                source: existingContact?.source || "user_confirmed",
+            }
+            : existingContact;
+
+        const updatedProfile: Record<string, unknown> = {
+            ...existingProfile,
+            company_name: company_name || existingProfile.company_name,
             state,
             naics_codes: correctedProfile.naics_codes,
             sba_certifications: correctedProfile.sba_certifications,
+            contact_person: mergedContact,
+            ...(employee_count ? { employee_count } : {}),
+            ...(years_in_business ? { years_in_business } : {}),
+            ...(annual_revenue_band ? { annual_revenue_band } : {}),
         };
 
-        // Save updates
+        // Save updates — also write the explicit lead-capture columns from migration 062
         const updatePayload: Record<string, unknown> = {
             preview_matches: topMatches,
             inferred_profile: updatedProfile,
             cert_recommendations: certRecommendations,
             easy_wins: easyWins,
+            lead_captured_at: new Date().toISOString(),
         };
         if (email) updatePayload.lead_email = email;
+        if (phone) updatePayload.lead_phone = phone;
+        if (employee_count) updatePayload.employee_count = employee_count;
+        if (years_in_business) updatePayload.years_in_business = years_in_business;
+        if (annual_revenue_band) updatePayload.annual_revenue_band = annual_revenue_band;
 
         await sb.from("company_analyses").update(updatePayload).eq("id", analysis_id);
 
@@ -196,16 +241,19 @@ export async function POST(request: NextRequest) {
                 ? Math.round((topMatches as Array<Record<string, unknown>>).reduce((sum, m) => sum + Number(m.score || 0), 0) / topMatches.length * 100)
                 : 0;
 
-            let finalPhone = "";
+            // Prefer the user-provided phone; fall back to Apollo enrichment only if nothing is known.
+            let finalPhone = phone ? String(phone) : "";
             try {
                 // Auto-Enrich via Apollo before pushing to HubSpot
                 const { data: latestAnalysis } = await sb.from("company_analyses").select("website, inferred_profile").eq("id", analysis_id).single();
                 const domain = latestAnalysis?.website ? String(latestAnalysis.website).replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0] : "";
-                const contactName = String((latestAnalysis?.inferred_profile as any)?.contact_person?.name || "");
-                finalPhone = String((latestAnalysis?.inferred_profile as any)?.contact_person?.phone || "");
+                const apolloContactName = contact_name || String((latestAnalysis?.inferred_profile as any)?.contact_person?.name || "");
+                if (!finalPhone) {
+                    finalPhone = String((latestAnalysis?.inferred_profile as any)?.contact_person?.phone || "");
+                }
 
-                if (domain && contactName && !finalPhone) {
-                    const nameParts = contactName.trim().split(/\s+/);
+                if (domain && apolloContactName && !finalPhone) {
+                    const nameParts = apolloContactName.trim().split(/\s+/);
                     const firstName = nameParts[0];
                     const lastName = nameParts.slice(1).join(" ");
                     const apolloKey = process.env.APOLLO_API_KEY;

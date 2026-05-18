@@ -73,5 +73,10 @@ export async function GET(
         is_saved: ((data.inferred_profile || {}) as Record<string, unknown>).is_saved === true,
         error_message: data.error_message,
         created_at: data.created_at,
+        // ── New lead-capture + startup-pack state (migration 062) ──
+        lead_email: data.lead_email || null,
+        lead_phone: data.lead_phone || null,
+        lead_captured_at: data.lead_captured_at || null,
+        startup_pack_unlocked_at: data.startup_pack_unlocked_at || null,
     });
 }

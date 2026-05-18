@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# Pre-commit hook — runs `tsc --noEmit` only against subprojects that have staged
+# TypeScript/TSX changes. Keeps commits fast: if you only edited Python or SQL,
+# no type-check runs.
+#
+# Setup (one-time, per machine):
+#   git config core.hooksPath .githooks
+#
+# Bypass for an emergency hot-fix (uses sparingly):
+#   git commit --no-verify
+
+set -e
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+# Subprojects with their own tsconfig.json — check each independently.
+PROJECTS=("dashboard" "website" "americurial")
+
+# Collect staged files (added/copied/modified/renamed)
+STAGED=$(git diff --cached --name-only --diff-filter=ACMR || true)
+if [ -z "$STAGED" ]; then
+    exit 0
+fi
+
+FAILED=0
+for project in "${PROJECTS[@]}"; do
+    # Any staged .ts/.tsx file under this subproject?
+    if echo "$STAGED" | grep -qE "^${project}/.*\.(ts|tsx)$"; then
+        if [ ! -f "$project/tsconfig.json" ]; then
+            continue
+        fi
+        echo "🧪 pre-commit · tsc --noEmit (${project})"
+        if ! ( cd "$project" && npx --no-install tsc --noEmit --incremental --tsBuildInfoFile .tsc-precommit.tsbuildinfo ); then
+            echo ""
+            echo "❌ TypeScript errors in ${project}/. Commit aborted."
+            echo "   Fix the errors above, or — only if you know what you're doing — re-run with: git commit --no-verify"
+            FAILED=1
+        fi
+    fi
+done
+
+exit $FAILED
