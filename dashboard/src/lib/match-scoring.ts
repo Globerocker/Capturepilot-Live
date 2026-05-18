@@ -335,6 +335,25 @@ export interface ProfileForScoring {
     // user_profiles.is_veteran_owned + veteran_cert_type.
     is_veteran_owned?: boolean;
     veteran_cert_type?: string | null;
+    // Size signals — used to disqualify generic "small business" set-asides for
+    // firms that clearly are NOT small. SBA size standards vary by NAICS, but
+    // ≥500 employees / ≥$25M revenue is a safe blanket cutoff for the lead
+    // magnet. Specific certs (8a, HUBZone, WOSB, SDVOSB) override the size check.
+    employee_count?: number | null;
+    annual_revenue_band?: string | null;
+}
+
+/**
+ * Returns true when the firm is too large to credibly bid on broad
+ * "small business" set-asides. Used together with the existing
+ * `isSetAsideDisqualified` to filter out matches that would embarrass the
+ * lead magnet (e.g. a 500-person firm shown as a fit for SB-set-aside work).
+ */
+export function isSizeTooLargeForSmallBiz(profile: ProfileForScoring): boolean {
+    const employees = profile.employee_count || 0;
+    if (employees >= 500) return true;
+    if (profile.annual_revenue_band === "25m_plus") return true;
+    return false;
 }
 
 export interface OpportunityForScoring {
@@ -387,6 +406,19 @@ export function scoreOpportunityLeadMagnet(
     // HARD GATE #1: if this opp is set-aside-restricted and the user doesn't
     // carry the matching cert, it's simply not biddable — exclude entirely.
     if (isSetAsideDisqualified(profile.sba_certifications || [], opp.set_aside_code)) {
+        return null;
+    }
+
+    // HARD GATE #1b: if the firm is too large to credibly bid on a broad
+    // "small business" set-aside, exclude it. Specific certs (8a, HUBZone, etc.)
+    // override this — those are governed by isSetAsideDisqualified above.
+    const setAsideLower = (opp.set_aside_code || "").toLowerCase();
+    const isGenericSmallBiz = setAsideLower === "small business" ||
+        setAsideLower === "total small business" ||
+        setAsideLower.includes("total_small_business") ||
+        setAsideLower === "sba" ||
+        setAsideLower === "tsb";
+    if (isGenericSmallBiz && isSizeTooLargeForSmallBiz(profile)) {
         return null;
     }
 

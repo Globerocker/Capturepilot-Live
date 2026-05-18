@@ -7,19 +7,20 @@ import Image from "next/image";
 import {
     Loader2, FileText, Search, Scale, Award, Trophy, Mail, DollarSign, Video,
     ExternalLink, Download, CheckCircle2, ArrowRight, AlertCircle, Sparkles, PlayCircle,
+    ClipboardCheck, BookOpen, Building2,
 } from "lucide-react";
 import clsx from "clsx";
 import {
     STARTUP_PACK_SECTIONS,
     STARTUP_PACK_ASSETS,
-    type AssetCategory,
+    PRODUCT_NAME,
     type StartupPackAsset,
     type AssetSection,
     resolveDriveLinks,
 } from "@/lib/startup-pack-assets";
 
 const ICON_MAP: Record<AssetSection["icon"], React.ComponentType<{ className?: string }>> = {
-    FileText, Search, Scale, Award, Trophy, Mail, DollarSign, Video,
+    FileText, Search, Scale, Award, Trophy, Mail, DollarSign, Video, ClipboardCheck, BookOpen, Building2,
 };
 
 interface AccessData {
@@ -79,7 +80,7 @@ export default function StartupPackDownloadPage() {
                     <h2 className="font-bold text-lg mb-1">Access Link Invalid</h2>
                     <p className="text-sm text-stone-500 mb-5">{error || "Your access token couldn't be verified."}</p>
                     <p className="text-xs text-stone-400 mb-5">
-                        If you recently purchased the Startup Pack, check your inbox for the confirmation email — it has the right link.
+                        If you recently purchased the Launch Kit, check your inbox for the confirmation email — it has the right link.
                         Otherwise reply to <a href="mailto:support@capturepilot.com" className="underline">support@capturepilot.com</a> and we&apos;ll resend it.
                     </p>
                     <Link href="/check" className="bg-black text-white px-5 py-2.5 rounded-2xl font-bold text-sm">
@@ -101,7 +102,7 @@ export default function StartupPackDownloadPage() {
                 <Link href="/check" className="flex items-center space-x-2">
                     <Image src="/logo.png" alt="CP" width={20} height={20} className="rounded" />
                     <span className="font-bold text-base">CapturePilot</span>
-                    <span className="text-[9px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full uppercase">Startup Pack</span>
+                    <span className="text-[9px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full uppercase">Launch Kit</span>
                 </Link>
                 <a href="mailto:support@capturepilot.com" className="text-xs text-stone-500 hover:text-stone-700 inline-flex items-center gap-1">
                     <Mail className="w-3 h-3" /> Support
@@ -116,7 +117,7 @@ export default function StartupPackDownloadPage() {
                         <p className="text-[10px] font-bold uppercase tracking-widest text-amber-200">Order Confirmed</p>
                     </div>
                     <h1 className="font-black text-3xl sm:text-4xl leading-tight">
-                        Welcome to the Pack, {buyer}.
+                        Welcome to the {PRODUCT_NAME}, {buyer}.
                     </h1>
                     <p className="text-white/85 text-base sm:text-lg mt-3 max-w-2xl leading-relaxed">
                         Bookmark this page — it&apos;s your permanent download library. Every template, playbook and worksheet you need to

@@ -17,6 +17,8 @@ import { OpportunityLandscape, ConversionBottomSection, type OpportunityStats } 
 import ReadinessScoreCard from "@/components/ReadinessScoreCard";
 import NaicsEditModal from "@/components/NaicsEditModal";
 import StartupPackOfferCard from "@/components/StartupPackOfferCard";
+import ConfirmFoundDataStep from "@/components/ConfirmFoundDataStep";
+import InlineCTA from "@/components/InlineCTA";
 
 interface CertRecommendation {
     cert: string;
@@ -453,6 +455,9 @@ function MatchCard({ match, rank }: { match: MatchData; rank: number }) {
                             <ExternalLink className="w-3.5 h-3.5" /> View on SAM.gov
                         </a>
                     )}
+
+                    {/* Inline CTA — bid help for the user's first concrete opportunity */}
+                    <InlineCTA variant="bid_help" opportunityTitle={match.title} />
                 </div>
             )}
         </div>
@@ -585,6 +590,39 @@ export default function CheckResultsPage() {
                     </Link>
                 </div>
             </div>
+        );
+    }
+
+    // AWAITING CONFIRMATION — the user reviews crawler output BEFORE we score.
+    // This is the new mid-funnel step added 2026-05-18.
+    if (data.status === "awaiting_confirmation") {
+        return (
+            <ConfirmFoundDataStep
+                analysisId={analysisId}
+                companyName={data.company_name}
+                website={data.website}
+                inferredNaics={data.inferred_naics || []}
+                inferredProfile={data.inferred_profile || {}}
+                crawlerConfidence={data.crawler_confidence}
+                onSubmitted={() => {
+                    // Optimistically flip status so the polling render takes over
+                    setData((prev) => prev ? { ...prev, status: "scoring" } : prev);
+                    if (pollRef.current) clearTimeout(pollRef.current);
+                    const poll = async () => {
+                        try {
+                            const res = await fetch(`/api/analyze-company/status/${analysisId}`, { cache: "no-store" });
+                            if (res.ok) {
+                                const next = (await res.json()) as AnalysisData;
+                                setData(next);
+                                if (IN_PROGRESS_STATUSES.has(next.status)) {
+                                    pollRef.current = window.setTimeout(poll, 3000);
+                                }
+                            }
+                        } catch { /* ignore */ }
+                    };
+                    pollRef.current = window.setTimeout(poll, 2000);
+                }}
+            />
         );
     }
 
@@ -982,6 +1020,11 @@ export default function CheckResultsPage() {
                     <ReadinessScoreCard score={readinessScore} breakdown={readinessBreakdown} />
                 )}
 
+                {/* Inline CTA — fires when SAM.gov is the #1 fix. Most leads land here. */}
+                {!hasSam && (
+                    <InlineCTA variant="sam_registration" analysisId={analysisId} />
+                )}
+
                 {/* LEAD CAPTURE — only show until the user submits */}
                 {!leadCaptured && (
                     <LeadMagnetForm
@@ -1036,7 +1079,7 @@ export default function CheckResultsPage() {
                                                 +{gatedMatchCount} more opportunities locked
                                             </p>
                                             <p className="text-xs text-stone-500 mt-1.5 leading-relaxed">
-                                                Submit your email above to unlock all matches, the full readiness breakdown and your $70 founder pack.
+                                                Submit your email above to unlock all matches, the full readiness breakdown and your $70 Federal Launch Kit.
                                             </p>
                                         </div>
                                     </div>
@@ -1239,7 +1282,7 @@ export default function CheckResultsPage() {
                         </h3>
                         <p className="text-sm text-stone-600 mt-2 max-w-md mx-auto">
                             7 more matches, federal landscape stats, competitor intel, easy-wins checklist and certification roadmap.
-                            Plus your $70 founder-pack offer — but only for the next few days.
+                            Plus your $70 Federal Launch Kit offer — but only for the next few days.
                         </p>
                         <a
                             href="#lead-form"
@@ -1252,6 +1295,11 @@ export default function CheckResultsPage() {
                             <Mail className="w-4 h-4" /> Send My Full Report
                         </a>
                     </div>
+                )}
+
+                {/* Done-For-You — highest-ticket CTA, shown only to unlocked leads */}
+                {unlocked && (
+                    <InlineCTA variant="done_for_you" analysisId={analysisId} />
                 )}
 
                 {/* Bottom Actions */}

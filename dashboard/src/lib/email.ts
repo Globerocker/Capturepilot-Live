@@ -934,9 +934,9 @@ export async function sendStartupPackDeliveryEmail(
 
     const html = emailTemplate({
         category: await getEmailCategory("startup_pack_delivery"),
-        preheader: `Your B2B Federal Startup Pack is ready. Open your download library now.`,
+        preheader: `Your Federal Launch Kit is ready. Open your download library now.`,
         eyebrow: "Order Confirmed",
-        heading: `Welcome to the Startup Pack, ${companyName}`,
+        heading: `Welcome to the Federal Launch Kit, ${companyName}`,
         body: `
             ${paragraph("Thank you for your purchase — your downloads are live and waiting for you.")}
             ${featureBox(`
@@ -968,7 +968,7 @@ export async function sendStartupPackDeliveryEmail(
         footerNote: "Need help or want a refund? Just reply to this email — we'll handle it within 24 hours.",
     });
 
-    return send("startup_pack_delivery", to, `Your B2B Startup Pack is ready · ${companyName}`, html, {
+    return send("startup_pack_delivery", to, `Your Federal Launch Kit is ready · ${companyName}`, html, {
         companyName,
         downloadUrl,
         priceLabel,

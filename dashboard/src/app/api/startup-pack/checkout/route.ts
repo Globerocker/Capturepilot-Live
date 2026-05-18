@@ -22,7 +22,7 @@ function getAdmin() {
  * POST /api/startup-pack/checkout
  * Body: { analysis_id?: string, email?: string }
  *
- * Creates a Stripe Checkout Session for the one-time $70 Startup Pack purchase.
+ * Creates a Stripe Checkout Session for the one-time $70 Federal Launch Kit purchase.
  * If `analysis_id` is supplied, we attach it as Stripe metadata + client_reference_id
  * so the webhook can write `startup_pack_unlocked_at` back to that company_analyses row.
  *
@@ -80,10 +80,12 @@ export async function POST(request: NextRequest) {
                         currency: "usd",
                         unit_amount: unitAmount,
                         product_data: {
-                            name: "CapturePilot — B2B Federal Startup Pack",
+                            name: "CapturePilot — Federal Launch Kit",
                             description:
-                                "Capability statement templates, Sources Sought playbooks, certification worksheets, " +
-                                "outreach sequences, pricing toolkit + 30-min founder onboarding call. Instant access.",
+                                "SAM.gov registration walkthrough, capability statement templates, solicitation-type " +
+                                "playbooks (Sources Sought / RFI / RFP / RFQ / IDIQ), certification worksheets, " +
+                                "outreach scripts, pricing toolkit, internal best-practice library + 30-min founder call. " +
+                                "Instant access. Lifetime use. 7-day refund.",
                         },
                     },
                 },
@@ -101,7 +103,7 @@ export async function POST(request: NextRequest) {
                     product: "startup_pack",
                     analysis_id: analysis_id || "",
                 },
-                description: "CapturePilot — B2B Federal Startup Pack",
+                description: "CapturePilot — Federal Launch Kit",
             },
             success_url: analysis_id
                 ? `${baseUrl}/startup-pack/success?aid=${analysis_id}&session_id={CHECKOUT_SESSION_ID}`

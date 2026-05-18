@@ -762,162 +762,25 @@ async function runAnalysisPipeline(analysisId: string, initialCompanyName: strin
         inferredNaics.sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
         inferredNaics = inferredNaics.slice(0, 5);
 
-        await sb.from("company_analyses").update({ status: "scoring", inferred_naics: inferredNaics }).eq("id", analysisId);
-
-        // Step 4: Build temporary profile for scoring
+        // Build the initial inferred profile snapshot (everything the user
+        // gets a chance to confirm/correct before we score).
         const certifications = (crawlData.certifications as { type: string; confidence: number }[]) || [];
         const locations = (crawlData.locations as { state?: string }[]) || [];
         const detectedStates = (crawlData.detected_states as string[]) || [];
         const samCerts = samData ? (samData.sba_certifications as string[]) : [];
 
-        const tempProfile: ProfileForScoring = {
-            naics_codes: inferredNaics.map(n => n.code),
-            sba_certifications: [
-                ...(samCerts || []),
-                ...certifications.filter(c => c.confidence > 0.7).map(c => c.type),
-            ].filter((v, i, a) => a.indexOf(v) === i),
-            state: samData?.state as string || locations[0]?.state || detectedStates[0] || "",
-            target_states: [
-                ...(samData?.state ? [samData.state as string] : []),
-                ...detectedStates,
-            ].filter((v, i, a) => a.indexOf(v) === i),
-            revenue: null,
-            federal_awards_count: usaspendingData?.award_count || 0,
-            target_psc_codes: [],
-            preferred_agencies: usaspendingData?.agencies || [],
-        };
+        const initialCertifications = [
+            ...(samCerts || []),
+            ...certifications.filter(c => c.confidence > 0.7).map(c => c.type),
+        ].filter((v, i, a) => a.indexOf(v) === i);
 
-        // Step 5: On-demand NAICS crawl if we lack coverage
-        const naicsCodesToCheck = inferredNaics.map(n => n.code).slice(0, 5);
-        if (naicsCodesToCheck.length > 0) {
-            const { count: naicsOppCount } = await sb
-                .from("opportunities")
-                .select("id", { count: "exact", head: true })
-                .in("naics_code", naicsCodesToCheck)
-                .eq("is_archived", false);
+        const initialTargetStates = [
+            ...(samData?.state ? [samData.state as string] : []),
+            ...detectedStates,
+        ].filter((v, i, a) => a.indexOf(v) === i);
 
-            if ((naicsOppCount || 0) < 10) {
-                await sb.from("company_analyses").update({ status: "finding_opportunities" }).eq("id", analysisId);
-                try {
-                    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://app.capturepilot.com";
-                    await fetch(`${baseUrl}/api/opportunities/search-naics`, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ naics_codes: naicsCodesToCheck, min_results: 10, days_back: 180 }),
-                        signal: AbortSignal.timeout(60000),
-                    });
-                } catch { /* timeout ok */ }
-            }
-        }
+        const initialState = (samData?.state as string) || locations[0]?.state || detectedStates[0] || "";
 
-        // Step 6: Score against opportunities — ONLY matching NAICS codes (not all 40K+)
-        const primaryNaics = inferredNaics.slice(0, 5).map(n => n.code);
-        const allOpps: OpportunityForScoring[] = [];
-
-        // Fetch opportunities that match the company's primary NAICS codes only
-        if (primaryNaics.length > 0) {
-            let offset = 0;
-            const batchSize = 1000;
-            while (true) {
-                const { data: batch } = await sb
-                    .from("opportunities")
-                    .select("id, naics_code, psc_code, notice_type, agency, set_aside_code, place_of_performance_state, award_amount, response_deadline")
-                    .eq("is_archived", false)
-                    .in("naics_code", primaryNaics)
-                    .range(offset, offset + batchSize - 1);
-                if (!batch || batch.length === 0) break;
-                allOpps.push(...(batch as unknown as OpportunityForScoring[]));
-                if (batch.length < batchSize) break;
-                offset += batchSize;
-            }
-        }
-
-        const scoredMatches: { opportunity_id: string; title?: string; agency?: string; naics_code?: string; set_aside_code?: string; response_deadline?: string; notice_type?: string; award_amount?: number; notice_id?: string; place_of_performance_state?: string; description_url?: string; score: number; classification: string; score_breakdown: Record<string, number> }[] = [];
-
-        for (const opp of allOpps) {
-            const result = scoreOpportunityLeadMagnet(tempProfile, opp);
-            if (result) {
-                scoredMatches.push({ ...result });
-            }
-        }
-
-        scoredMatches.sort((a, b) => b.score - a.score);
-        // Take top 40 candidates (will deduplicate after enrichment with titles)
-        const topCandidates = scoredMatches.slice(0, 40);
-
-        // Enrich candidates with full opportunity details, then deduplicate by title
-        let topMatches = topCandidates;
-        if (topCandidates.length > 0) {
-            const oppIds = topCandidates.map(m => m.opportunity_id);
-            const { data: oppDetails } = await sb
-                .from("opportunities")
-                .select("id, title, agency, naics_code, set_aside_code, response_deadline, notice_type, award_amount, notice_id, place_of_performance_state, description")
-                .in("id", oppIds);
-
-            if (oppDetails) {
-                const detailMap = new Map(oppDetails.map(o => [o.id, o]));
-                for (const match of topMatches) {
-                    const detail = detailMap.get(match.opportunity_id);
-                    if (detail) {
-                        match.title = detail.title;
-                        match.agency = detail.agency;
-                        match.naics_code = detail.naics_code;
-                        match.set_aside_code = detail.set_aside_code;
-                        match.response_deadline = detail.response_deadline;
-                        match.notice_type = detail.notice_type;
-                        match.award_amount = detail.award_amount;
-                        match.notice_id = detail.notice_id;
-                        match.place_of_performance_state = detail.place_of_performance_state;
-                        match.description_url = detail.description;
-                    }
-                }
-            }
-        }
-
-        // Deduplicate by title — SAM.gov posts amendments with different notice_ids but same title
-        const seenTitles = new Set<string>();
-        topMatches = topCandidates.filter(m => {
-            const title = (m.title || "").toLowerCase().trim().replace(/\s+/g, " ").slice(0, 60);
-            if (!title || seenTitles.has(title)) return false;
-            seenTitles.add(title);
-            return true;
-        }).slice(0, 10);
-
-        await sb.from("company_analyses").update({ status: "generating" }).eq("id", analysisId);
-
-        // Certification recommendations
-        const oppIdsForCerts = allOpps.slice(0, 500).map(o => o.id);
-        const oppTitleMap = new Map<string, string>();
-        if (oppIdsForCerts.length > 0) {
-            for (let i = 0; i < oppIdsForCerts.length; i += 100) {
-                const chunk = oppIdsForCerts.slice(i, i + 100);
-                const { data: titleBatch } = await sb
-                    .from("opportunities")
-                    .select("id, title")
-                    .in("id", chunk);
-                if (titleBatch) {
-                    for (const o of titleBatch) oppTitleMap.set(o.id, o.title);
-                }
-            }
-        }
-        const oppsWithTitles = allOpps.map(o => ({
-            ...o,
-            title: oppTitleMap.get(o.id) || undefined,
-        }));
-
-        const certRecommendations = generateCertRecommendations(
-            tempProfile.sba_certifications,
-            oppsWithTitles,
-            tempProfile.naics_codes,
-        );
-
-        // Easy wins
-        const easyWins = computeEasyWins(crawlData, samData, inferredNaics, tempProfile);
-
-        // Generate company summary
-        const summary = await generateSummary(companyName, description, services, certifications);
-
-        // Build inferred profile for onboarding pre-fill
         const contacts = (crawlData.contacts as { email?: string; phone?: string }[]) || [];
         const employeeSignals = crawlData.employee_signals as { estimate: number } | null;
         const foundingYear = crawlData.founding_year as number | null;
@@ -928,21 +791,21 @@ async function runAnalysisPipeline(analysisId: string, initialCompanyName: strin
             return ["ceo", "owner", "president", "founder"].some(k => t.includes(k));
         }) || leadership[0];
 
-        // Apollo People Enrichment — get mobile/direct phone for the decision-maker
         const samPocs = samData ? (samData.points_of_contact as { name: string; title: string; email?: string; phone?: string }[]) || [] : [];
         const decisionMaker = primaryLeader || samPocs[0] || null;
-        let apolloEnrichment: { mobile_phone?: string; direct_phone?: string; email?: string; linkedin_url?: string; title?: string } | null = null;
 
+        // Apollo enrichment for decision-maker — done early so the confirmation
+        // step can display a pre-filled phone. Best-effort; failures are silent.
+        let apolloEnrichment: { mobile_phone?: string; direct_phone?: string; email?: string; linkedin_url?: string; title?: string } | null = null;
         if (decisionMaker) {
             const nameParts = decisionMaker.name.trim().split(/\s+/);
             const firstName = nameParts[0] || "";
             const lastName = nameParts.slice(1).join(" ") || "";
             const domain = website.replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "");
-
             apolloEnrichment = await enrichPersonApollo(firstName, lastName, domain, companyName);
         }
 
-        const inferredProfile: Record<string, unknown> = {
+        const initialInferredProfile: Record<string, unknown> = {
             company_name: samData?.company_name || companyName,
             dba_name: samData?.dba_name || null,
             website,
@@ -950,16 +813,17 @@ async function runAnalysisPipeline(analysisId: string, initialCompanyName: strin
             cage_code: samData?.cage_code || (crawlData.detected_cage_code as string) || null,
             address_line_1: samData?.address_line_1 || null,
             city: samData?.city || null,
-            state: samData?.state || detectedStates[0] || null,
+            state: initialState,
             zip_code: samData?.zip_code || null,
-            phone: samData?.phone || primaryLeader?.phone || contacts.find(c => c.phone)?.phone || null,
+            phone: (samData?.phone as string) || primaryLeader?.phone || contacts.find(c => c.phone)?.phone || null,
             email: primaryLeader?.email || contacts.find(c => c.email)?.email || null,
             naics_codes: inferredNaics.map(n => n.code),
-            sba_certifications: tempProfile.sba_certifications,
+            sba_certifications: initialCertifications,
             employee_count: employeeSignals?.estimate || null,
             years_in_business: foundingYear ? new Date().getFullYear() - foundingYear : null,
+            annual_revenue_band: null,
             has_bonding: certifications.some(c => c.type === "bonding"),
-            target_states: tempProfile.target_states,
+            target_states: initialTargetStates,
             contact_person: decisionMaker ? {
                 name: decisionMaker.name,
                 title: apolloEnrichment?.title || decisionMaker.title,
@@ -984,43 +848,28 @@ async function runAnalysisPipeline(analysisId: string, initialCompanyName: strin
             } : null,
         };
 
-        // ── Find Top 3 Competitors via USASpending ──
-        // Strategy: filter by SAME NAICS as the analyzed company, prefer competitors in the
-        // same state when possible, then enrich with SAM website lookups so users can click through.
-        await sb.from("company_analyses").update({ status: "finding_competitors" }).eq("id", analysisId);
-        const competitors = await findCompetitors(
-            companyName,
-            inferredNaics.slice(0, 3).map(n => n.code),
-            (samData?.state as string) || detectedStates[0] || null,
-        );
-
-        // ── Government Contracting Readiness Score (0-10) ──
-        const { score: readinessScore, breakdown: readinessBreakdown } = computeReadinessScore({
-            samData,
-            crawlData,
-            certifications,
-            usaspendingAwardCount: usaspendingData?.award_count || 0,
-        });
-
-        // Save everything — mark complete
-        const finalFallbackEmail = apolloEnrichment?.email || decisionMaker?.email || inferredProfile.email;
+        // PAUSE THE PIPELINE — user reviews + confirms the data, then
+        // /api/analyze-company/confirm fires runPostConfirmationPipeline() to
+        // continue. This was added 2026-05-18 because crawler defaults
+        // (employee count, NAICS, etc.) often look wrong, and showing the
+        // user the raw output before scoring was killing conversion.
+        // If we already have a lead email from earlier passes (e.g. a SAM POC),
+        // preserve it on the first row write so the confirmation page can show
+        // it pre-filled.
+        const finalFallbackEmail = (apolloEnrichment?.email as string | undefined)
+            || (decisionMaker?.email as string | undefined)
+            || ((initialInferredProfile.email as string | undefined));
         const { data: currentRecord } = await sb.from("company_analyses").select("lead_email").eq("id", analysisId).maybeSingle();
         const emailUpdate = !currentRecord?.lead_email && finalFallbackEmail ? { lead_email: finalFallbackEmail } : {};
 
         await sb.from("company_analyses").update({
-            status: "complete",
-            company_summary: summary,
-            preview_matches: topMatches,
-            inferred_profile: inferredProfile,
+            status: "awaiting_confirmation",
             inferred_naics: inferredNaics,
+            inferred_profile: initialInferredProfile,
             crawl_data: crawlData,
-            cert_recommendations: certRecommendations,
-            easy_wins: easyWins,
-            readiness_score: readinessScore,
-            readiness_breakdown: readinessBreakdown,
-            competitors: competitors,
-            ...emailUpdate
+            ...emailUpdate,
         }).eq("id", analysisId);
+        // Pipeline pauses here. /api/analyze-company/confirm resumes it.
 
     } catch (error) {
         console.error("Pipeline error:", error);

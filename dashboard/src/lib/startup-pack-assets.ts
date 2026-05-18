@@ -1,5 +1,5 @@
 /**
- * Single source of truth for the $70 B2B Startup Pack — list of digital goods.
+ * Single source of truth for the $70 Federal Launch Kit — list of digital goods.
  *
  * Each asset points at a Google Drive folder/file. The buyer lands on
  * /startup-pack/download/[token] and sees these grouped by category.
@@ -14,14 +14,23 @@
  * KEEP THIS FILE SAFE TO COMMIT — these are public-share links anyway, no secrets.
  */
 
+// ──────────────────────────────────────────────────────────────────────────────
+// PRODUCT NAMING (single source of truth)
+// ──────────────────────────────────────────────────────────────────────────────
+export const PRODUCT_NAME = "Federal Launch Kit";
+export const PRODUCT_TAGLINE = "Win your first federal contract.";
+export const PRODUCT_SUBTITLE = "Every template, playbook, checklist and script you need to land your first federal contract — bundled.";
+
 export type AssetCategory =
+    | "sam_gov"
     | "capability_statement"
-    | "sources_sought"
+    | "solicitation_playbooks"
     | "bid_no_bid"
     | "certifications"
     | "past_performance"
     | "outreach"
     | "pricing"
+    | "best_practices"
     | "onboarding";
 
 export interface StartupPackAsset {
@@ -49,24 +58,30 @@ export interface AssetSection {
     category: AssetCategory;
     label: string;
     description: string;
-    icon: "FileText" | "Search" | "Scale" | "Award" | "Trophy" | "Mail" | "DollarSign" | "Video";
+    icon: "FileText" | "Search" | "Scale" | "Award" | "Trophy" | "Mail" | "DollarSign" | "Video" | "ClipboardCheck" | "BookOpen" | "Building2";
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// SECTION HEADERS (ordered)
+// SECTION HEADERS (ordered — what user sees on the download page)
 // ──────────────────────────────────────────────────────────────────────────────
 export const STARTUP_PACK_SECTIONS: AssetSection[] = [
     {
+        category: "sam_gov",
+        label: "SAM.gov Registration Kit",
+        description: "Step-by-step walkthrough of registering your business — the #1 blocker for first-time federal bidders.",
+        icon: "Building2",
+    },
+    {
         category: "capability_statement",
         label: "Capability Statement Kit",
-        description: "The single most-used document for federal contracting. Branded templates + a written walkthrough.",
+        description: "The single most-used document in federal contracting. Branded templates + written walkthrough.",
         icon: "FileText",
     },
     {
-        category: "sources_sought",
-        label: "Sources Sought Playbook",
-        description: "Win contracts 6–18 months before they're competed. Step-by-step response templates.",
-        icon: "Search",
+        category: "solicitation_playbooks",
+        label: "Solicitation-Type Playbooks",
+        description: "A dedicated playbook for every notice type — Sources Sought, RFI, Pre-Solicitation, Solicitation, RFQ, IDIQ task orders.",
+        icon: "BookOpen",
     },
     {
         category: "bid_no_bid",
@@ -88,15 +103,21 @@ export const STARTUP_PACK_SECTIONS: AssetSection[] = [
     },
     {
         category: "outreach",
-        label: "Contracting Officer Outreach Sequences",
-        description: "10 proven email templates for the entire capture cycle — RFI through award.",
+        label: "Contracting Officer Outreach Library",
+        description: "20+ proven email + LinkedIn scripts for the entire capture cycle — RFI through award.",
         icon: "Mail",
     },
     {
         category: "pricing",
-        label: "Price-to-Win Worksheet",
+        label: "Price-to-Win Toolkit",
         description: "Build defensible federal pricing without leaving 30% on the table.",
         icon: "DollarSign",
+    },
+    {
+        category: "best_practices",
+        label: "Internal Best-Practice Library",
+        description: "Our own consulting playbooks — capture maturity, color-team reviews, debrief tactics, FAR clauses.",
+        icon: "ClipboardCheck",
     },
     {
         category: "onboarding",
@@ -113,6 +134,42 @@ export const STARTUP_PACK_SECTIONS: AssetSection[] = [
 // Empty `gdriveUrl: ""` strings render a "Coming Soon" disabled state.
 // ──────────────────────────────────────────────────────────────────────────────
 export const STARTUP_PACK_ASSETS: StartupPackAsset[] = [
+    // ── SAM.gov Registration Kit ─────────────────────────────────────────────
+    {
+        id: "sam-registration-walkthrough",
+        category: "sam_gov",
+        title: "SAM.gov Registration — Step-by-Step Walkthrough",
+        description: "Every screen of the SAM.gov registration with annotated screenshots. The fastest path from zero to active registration.",
+        format: "PDF",
+        sizeHint: "32 pages",
+        gdriveUrl: "",
+        badge: "Start Here",
+    },
+    {
+        id: "sam-registration-checklist",
+        category: "sam_gov",
+        title: "SAM.gov Pre-Registration Checklist",
+        description: "Every document, identifier and field you need ready BEFORE starting registration. Saves the 2-week DUNS/UEI back-and-forth.",
+        format: "XLSX",
+        gdriveUrl: "",
+    },
+    {
+        id: "sam-naics-picker",
+        category: "sam_gov",
+        title: "NAICS Code Picker for SAM.gov",
+        description: "How to pick the right primary + secondary NAICS codes during registration — these determine 80% of your matches.",
+        format: "PDF",
+        gdriveUrl: "",
+    },
+    {
+        id: "sam-renewal-reminder-template",
+        category: "sam_gov",
+        title: "SAM.gov Annual Renewal Reminder Kit",
+        description: "Calendar templates + email reminders so your registration never expires (the #1 cause of bid rejection).",
+        format: "DOCX",
+        gdriveUrl: "",
+    },
+
     // ── Capability Statement Kit ─────────────────────────────────────────────
     {
         id: "cap-statement-docx",
@@ -121,7 +178,7 @@ export const STARTUP_PACK_ASSETS: StartupPackAsset[] = [
         description: "One-page Word template branded to federal expectations. Drop in your details and ship.",
         format: "DOCX",
         sizeHint: "1 page",
-        gdriveUrl: "", // TODO: paste Drive URL
+        gdriveUrl: "",
         badge: "Most Popular",
     },
     {
@@ -131,7 +188,7 @@ export const STARTUP_PACK_ASSETS: StartupPackAsset[] = [
         description: "Three styled Canva variants (modern / classic / federal). Edit colors + logo in 10 minutes.",
         format: "Canva",
         sizeHint: "3 variants",
-        gdriveUrl: "", // TODO
+        gdriveUrl: "",
     },
     {
         id: "cap-statement-walkthrough",
@@ -140,27 +197,64 @@ export const STARTUP_PACK_ASSETS: StartupPackAsset[] = [
         description: "12-page written walkthrough — exactly what to put in each section, with annotated examples.",
         format: "PDF",
         sizeHint: "12 pages",
-        gdriveUrl: "", // TODO
+        gdriveUrl: "",
     },
 
-    // ── Sources Sought Playbook ──────────────────────────────────────────────
+    // ── Solicitation-Type Playbooks ──────────────────────────────────────────
     {
-        id: "sources-sought-playbook",
-        category: "sources_sought",
-        title: "Sources Sought Response Playbook",
-        description: "Why these are the highest-leverage notices in federal contracting and how to respond to win them.",
+        id: "playbook-sources-sought",
+        category: "solicitation_playbooks",
+        title: "Sources Sought / RFI Playbook",
+        description: "Highest-leverage notices in federal — respond 6–18 months before competition opens. Template + scoring rubric inside.",
         format: "PDF",
         sizeHint: "24 pages",
-        gdriveUrl: "", // TODO
-        badge: "Quick Win",
+        gdriveUrl: "",
+        badge: "Highest ROI",
     },
     {
-        id: "sources-sought-template",
-        category: "sources_sought",
-        title: "Sources Sought Response — Fill-in-the-Blank Template",
-        description: "Pre-formatted Word doc with every required section. Replace yellow placeholders, send.",
-        format: "DOCX",
-        gdriveUrl: "", // TODO
+        id: "playbook-pre-solicitation",
+        category: "solicitation_playbooks",
+        title: "Pre-Solicitation Playbook",
+        description: "What to do in the 30–60 day window between announcement and live RFP — pre-bid conferences, Q&A submissions, capture moves.",
+        format: "PDF",
+        sizeHint: "18 pages",
+        gdriveUrl: "",
+    },
+    {
+        id: "playbook-solicitation",
+        category: "solicitation_playbooks",
+        title: "Solicitation / RFP Response Playbook",
+        description: "Section L/M decoding, compliance matrix template, color-team review schedule, submission-day checklist.",
+        format: "PDF",
+        sizeHint: "32 pages",
+        gdriveUrl: "",
+    },
+    {
+        id: "playbook-rfq",
+        category: "solicitation_playbooks",
+        title: "RFQ (Request for Quote) Playbook",
+        description: "Fast-turn quoting on micro-purchases and SAP buys. Pricing strategy for opportunities ≤$250K.",
+        format: "PDF",
+        sizeHint: "12 pages",
+        gdriveUrl: "",
+    },
+    {
+        id: "playbook-idiq-task-order",
+        category: "solicitation_playbooks",
+        title: "IDIQ / GWAC Task-Order Playbook",
+        description: "Win the IDIQ seat AND the task orders. How task-order competition actually works post-award.",
+        format: "PDF",
+        sizeHint: "20 pages",
+        gdriveUrl: "",
+    },
+    {
+        id: "playbook-debrief",
+        category: "solicitation_playbooks",
+        title: "Post-Award Debrief Playbook",
+        description: "How to request, attend, and weaponize the debrief — even when you lost. Includes protest-decision flowchart.",
+        format: "PDF",
+        sizeHint: "14 pages",
+        gdriveUrl: "",
     },
 
     // ── Bid / No-Bid Decision Toolkit ────────────────────────────────────────
@@ -171,7 +265,7 @@ export const STARTUP_PACK_ASSETS: StartupPackAsset[] = [
         description: "10-factor scoring sheet. Score an opportunity in 5 minutes — go/no-go answer at the bottom.",
         format: "XLSX",
         sizeHint: "1 sheet",
-        gdriveUrl: "", // TODO
+        gdriveUrl: "",
     },
     {
         id: "pwin-calculator",
@@ -179,7 +273,15 @@ export const STARTUP_PACK_ASSETS: StartupPackAsset[] = [
         title: "PWin (Probability of Win) Calculator",
         description: "The exact 10-factor model used by GovCon consultants — customer fit, past perf, price-to-win, capture maturity.",
         format: "XLSX",
-        gdriveUrl: "", // TODO
+        gdriveUrl: "",
+    },
+    {
+        id: "competitive-bid-analysis",
+        category: "bid_no_bid",
+        title: "Competitive Bid Analysis Worksheet",
+        description: "Map the incumbent + likely bidders for every RFP. Find the wedge before you commit.",
+        format: "XLSX",
+        gdriveUrl: "",
     },
 
     // ── Certifications ────────────────────────────────────────────────────────
@@ -189,7 +291,7 @@ export const STARTUP_PACK_ASSETS: StartupPackAsset[] = [
         title: "8(a) Certification Self-Assessment",
         description: "Eligibility checklist + document prep list. Know in 10 minutes if you qualify.",
         format: "XLSX",
-        gdriveUrl: "", // TODO
+        gdriveUrl: "",
     },
     {
         id: "cert-hubzone",
@@ -197,7 +299,7 @@ export const STARTUP_PACK_ASSETS: StartupPackAsset[] = [
         title: "HUBZone Eligibility Worksheet",
         description: "Map check + employee residency calculator + document prep list.",
         format: "XLSX",
-        gdriveUrl: "", // TODO
+        gdriveUrl: "",
     },
     {
         id: "cert-wosb",
@@ -205,7 +307,7 @@ export const STARTUP_PACK_ASSETS: StartupPackAsset[] = [
         title: "WOSB / EDWOSB Self-Cert Pack",
         description: "Required forms + sample affidavits. Self-certification path explained.",
         format: "XLSX",
-        gdriveUrl: "", // TODO
+        gdriveUrl: "",
     },
     {
         id: "cert-sdvosb",
@@ -213,7 +315,7 @@ export const STARTUP_PACK_ASSETS: StartupPackAsset[] = [
         title: "VOSB / SDVOSB CVE Application Guide",
         description: "Step-by-step CVE application walkthrough. Common rejection reasons + how to avoid them.",
         format: "PDF",
-        gdriveUrl: "", // TODO
+        gdriveUrl: "",
     },
 
     // ── Past Performance ─────────────────────────────────────────────────────
@@ -223,7 +325,7 @@ export const STARTUP_PACK_ASSETS: StartupPackAsset[] = [
         title: "Past-Performance Reference Template",
         description: "The exact 1-page format contracting officers expect. Includes scoring rubric.",
         format: "DOCX",
-        gdriveUrl: "", // TODO
+        gdriveUrl: "",
     },
     {
         id: "past-perf-commercial",
@@ -232,18 +334,27 @@ export const STARTUP_PACK_ASSETS: StartupPackAsset[] = [
         description: "How to position non-federal experience without overselling. With before/after examples.",
         format: "PDF",
         sizeHint: "8 pages",
-        gdriveUrl: "", // TODO
+        gdriveUrl: "",
     },
 
     // ── Outreach ─────────────────────────────────────────────────────────────
     {
-        id: "outreach-sequences",
+        id: "outreach-co-sequences",
         category: "outreach",
         title: "10 Contracting Officer Email Templates",
-        description: "Cold outreach, RFI follow-up, post-award debrief — the full cycle.",
+        description: "Cold outreach, RFI follow-up, post-award debrief — the full capture cycle.",
         format: "DOCX",
         sizeHint: "10 templates",
-        gdriveUrl: "", // TODO
+        gdriveUrl: "",
+    },
+    {
+        id: "outreach-cor-templates",
+        category: "outreach",
+        title: "COR / Program Manager Scripts",
+        description: "5 templates for engaging Contracting Officer Representatives and PMs — the actual decision influencers.",
+        format: "DOCX",
+        sizeHint: "5 templates",
+        gdriveUrl: "",
     },
     {
         id: "outreach-linkedin",
@@ -251,7 +362,16 @@ export const STARTUP_PACK_ASSETS: StartupPackAsset[] = [
         title: "LinkedIn Outreach Scripts for KO/COR",
         description: "Connection request + 3-touch DM sequence that opens conversations with contracting officers.",
         format: "PDF",
-        gdriveUrl: "", // TODO
+        gdriveUrl: "",
+    },
+    {
+        id: "outreach-industry-day",
+        category: "outreach",
+        title: "Industry Day & Pre-Bid Conference Playbook",
+        description: "How to maximize the 4 hours that decide your win rate on every contract.",
+        format: "PDF",
+        sizeHint: "10 pages",
+        gdriveUrl: "",
     },
 
     // ── Pricing ───────────────────────────────────────────────────────────────
@@ -262,26 +382,78 @@ export const STARTUP_PACK_ASSETS: StartupPackAsset[] = [
         description: "Wrap rates, indirect cost calculation, competitive price banding. Built-in formulas.",
         format: "XLSX",
         sizeHint: "5 sheets",
-        gdriveUrl: "", // TODO
+        gdriveUrl: "",
     },
     {
         id: "labor-rates",
         category: "pricing",
-        title: "Federal Labor Rate Benchmarks",
+        title: "Federal Labor Rate Benchmarks (FY2026)",
         description: "Current GSA-schedule rate ranges by labor category. Updated for FY2026.",
         format: "PDF",
-        gdriveUrl: "", // TODO
+        gdriveUrl: "",
+    },
+    {
+        id: "indirect-rate-calc",
+        category: "pricing",
+        title: "Indirect Rate Calculator",
+        description: "G&A + fringe + overhead in one workbook. Defensible rates for any cost-reimbursable contract.",
+        format: "XLSX",
+        gdriveUrl: "",
+    },
+
+    // ── Internal Best-Practice Library ───────────────────────────────────────
+    {
+        id: "bp-capture-maturity",
+        category: "best_practices",
+        title: "Capture Maturity Self-Audit",
+        description: "Our internal scorecard — score your firm on the 7 capability dimensions that predict win rate.",
+        format: "XLSX",
+        gdriveUrl: "",
+    },
+    {
+        id: "bp-color-team-reviews",
+        category: "best_practices",
+        title: "Color-Team Review Templates",
+        description: "Pink, Red, Gold review checklists + scoring rubrics. Used inside CapturePilot for every managed-client bid.",
+        format: "DOCX",
+        sizeHint: "3 templates",
+        gdriveUrl: "",
+    },
+    {
+        id: "bp-far-decoder",
+        category: "best_practices",
+        title: "FAR Clause Quick-Reference Decoder",
+        description: "Plain-English translations of the 50 most common FAR clauses you'll see in federal contracts.",
+        format: "PDF",
+        sizeHint: "24 pages",
+        gdriveUrl: "",
+    },
+    {
+        id: "bp-teaming-agreement",
+        category: "best_practices",
+        title: "Teaming Agreement Template",
+        description: "Mutually-fair teaming agreement we use with our own subs. Lawyer-reviewed.",
+        format: "DOCX",
+        gdriveUrl: "",
+    },
+    {
+        id: "bp-compliance-matrix",
+        category: "best_practices",
+        title: "Compliance Matrix Template",
+        description: "The exact L/M/Section-cross-walk we use internally for every RFP response.",
+        format: "XLSX",
+        gdriveUrl: "",
     },
 
     // ── Onboarding call ──────────────────────────────────────────────────────
     {
         id: "founder-call",
         category: "onboarding",
-        title: "Book your 30-min onboarding call",
+        title: "Book your 30-min founder onboarding call",
         description: "Walk through your first Sources Sought response live with our capture lead.",
         format: "Calendly",
-        gdriveUrl: "https://calendly.com/capturepilot/startup-pack-onboarding",
-        badge: "Free with pack",
+        gdriveUrl: "https://calendly.com/capturepilot/launch-kit-onboarding",
+        badge: "Free with kit",
     },
 ];
 

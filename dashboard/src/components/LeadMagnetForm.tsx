@@ -247,7 +247,7 @@ export function LeadMagnetForm({ analysisId, inferredProfile, inferredNaics, cra
                         </h2>
                         <p className="text-xs text-emerald-800/80 mt-0.5">
                             {requireContact
-                                ? "Confirm what we detected and we'll email your full readiness report, all matches and a $70 founder-pack offer."
+                                ? "Confirm what we detected and we'll email your full readiness report, all matches and a $70 Federal Launch Kit offer."
                                 : "Correct NAICS codes and state for better matches."}
                         </p>
                     </div>

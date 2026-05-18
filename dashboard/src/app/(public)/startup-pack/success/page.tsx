@@ -100,7 +100,7 @@ function SuccessContent() {
             </div>
             <h1 className="font-bold text-lg">Payment received</h1>
             <p className="text-sm text-stone-500 mt-2">
-                Provisioning your Startup Pack download library…
+                Provisioning your Federal Launch Kit download library…
             </p>
             <Loader2 className="w-6 h-6 text-stone-400 animate-spin mx-auto mt-5" />
         </div>

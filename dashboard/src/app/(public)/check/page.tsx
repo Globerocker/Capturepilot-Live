@@ -91,7 +91,7 @@ const TESTIMONIALS = [
 const FAQS = [
     {
         q: "Is this really free?",
-        a: "Yes. The Quick Check is the entry point of our platform. You give us your website, we give you a complete federal readiness report. No credit card, no signup wall — submit your email if you want the full report and the $70 founder pack offer.",
+        a: "Yes. The Quick Check is the entry point of our platform. You give us your website, we give you a complete federal readiness report. No credit card, no signup wall — submit your email if you want the full report and the $70 Federal Launch Kit offer.",
     },
     {
         q: "How accurate is the NAICS classification?",
@@ -106,8 +106,8 @@ const FAQS = [
         a: "No. The Quick Check works for anyone with a website. If you aren't registered, we'll tell you that's the #1 thing to fix and walk you through it.",
     },
     {
-        q: "What's the $70 Startup Pack on the result page?",
-        a: "An optional one-time purchase. Capability statement templates, Sources Sought playbooks, certification eligibility worksheets, CO outreach scripts, pricing toolkit, plus a 30-min founder onboarding call. The pack is $70 for 7 days after your check, $150 after that.",
+        q: "What's the $70 Federal Launch Kit on the result page?",
+        a: "An optional one-time purchase. SAM.gov registration walkthroughs, capability statement templates, playbooks for every solicitation type (Sources Sought, RFI, Pre-Sol, RFP, RFQ, IDIQ task orders), certification eligibility worksheets, our internal best-practice library, CO outreach scripts, pricing toolkit, plus a 30-min founder onboarding call. The kit is $70 for 7 days after your check, $150 after that.",
     },
     {
         q: "Will you spam me?",
@@ -270,7 +270,7 @@ function CheckContent() {
                     href="/startup-pack"
                     className="text-xs text-stone-500 hover:text-stone-800 inline-flex items-center gap-1"
                 >
-                    Skip to founder pack <ArrowRight className="w-3 h-3" />
+                    Skip to Launch Kit <ArrowRight className="w-3 h-3" />
                 </Link>
             </header>
 

@@ -8,6 +8,7 @@ import {
     STARTUP_PACK_PRICE_CENTS,
     STARTUP_PACK_FULL_PRICE_CENTS,
     STARTUP_PACK_OFFER_DAYS,
+    PRODUCT_NAME,
 } from "@/lib/startup-pack-assets";
 
 interface Props {
@@ -78,7 +79,7 @@ export default function StartupPackOfferCard({ analysisId, analysisCreatedAt, le
                     </div>
                     <div className="flex-1 text-center sm:text-left">
                         <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-700">Already Yours</p>
-                        <h3 className="font-black text-lg sm:text-xl text-emerald-900 mt-0.5">B2B Startup Pack — Unlocked</h3>
+                        <h3 className="font-black text-lg sm:text-xl text-emerald-900 mt-0.5">Federal Launch Kit — Unlocked</h3>
                         <p className="text-sm text-emerald-800/80 mt-0.5">All templates, playbooks &amp; worksheets are waiting in your download library.</p>
                     </div>
                     {downloadUrl && (
@@ -103,7 +104,7 @@ export default function StartupPackOfferCard({ analysisId, analysisCreatedAt, le
                     <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Offer Expired</p>
                     <h3 className="font-bold text-lg text-stone-700 mt-1">The 50% launch pricing has ended</h3>
                     <p className="text-sm text-stone-500 mt-2 max-w-md mx-auto">
-                        The B2B Startup Pack is still available at full price ({fmtPrice(STARTUP_PACK_FULL_PRICE_CENTS)}).
+                        The Federal Launch Kit is still available at full price ({fmtPrice(STARTUP_PACK_FULL_PRICE_CENTS)}).
                         Drop us a line and we&apos;ll send a fresh window next time we run the promo.
                     </p>
                     <button
@@ -153,12 +154,12 @@ export default function StartupPackOfferCard({ analysisId, analysisCreatedAt, le
                                 Unlock with your free check
                             </p>
                             <h3 className="font-black text-2xl sm:text-3xl leading-tight">
-                                The B2B Federal Startup Pack
+                                The {PRODUCT_NAME}
                             </h3>
                             <p className="text-white/85 text-sm sm:text-base mt-3 leading-relaxed">
-                                Capability statement templates, Sources Sought playbooks, certification eligibility worksheets,
-                                contracting-officer outreach sequences and a 30-min founder call — everything you need to land
-                                your first federal contract, in one bundle.
+                                SAM.gov registration walkthroughs, capability statement templates, playbooks for every
+                                solicitation type, certification worksheets, our internal best-practice library and a
+                                30-min founder call — bundled. Everything you need to land your first federal contract.
                             </p>
 
                             <div className="flex items-baseline gap-3 mt-6">
