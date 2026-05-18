@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import Stripe from "stripe";
-import {
-    STARTUP_PACK_PRICE_CENTS,
-    STARTUP_PACK_FULL_PRICE_CENTS,
-    STARTUP_PACK_OFFER_DAYS,
-} from "@/lib/startup-pack-assets";
+import { STARTUP_PACK_PRICE_CENTS } from "@/lib/startup-pack-assets";
 
 function getStripe() {
     return new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: "2026-02-25.clover" });
@@ -26,7 +22,8 @@ function getAdmin() {
  * If `analysis_id` is supplied, we attach it as Stripe metadata + client_reference_id
  * so the webhook can write `startup_pack_unlocked_at` back to that company_analyses row.
  *
- * If the analysis is older than 7 days, the offer expired and we charge the full price.
+ * Price is always $70 — we removed the time-based fallback to full price after
+ * the 7-day window so the UI promise is never broken.
  */
 export async function POST(request: NextRequest) {
     try {
@@ -36,14 +33,13 @@ export async function POST(request: NextRequest) {
 
         let email: string | undefined = bodyEmail?.trim() || undefined;
         let companyName: string | undefined;
-        let offerExpired = false;
 
-        // Look up the analysis row when we have an ID — we want company name + email + age
+        // Look up the analysis row when we have an ID — we want company name + email
         if (analysis_id) {
             const sb = getAdmin();
             const { data: analysis } = await sb
                 .from("company_analyses")
-                .select("id, company_name, lead_email, created_at, startup_pack_unlocked_at")
+                .select("id, company_name, lead_email, startup_pack_unlocked_at")
                 .eq("id", analysis_id)
                 .maybeSingle();
 
@@ -58,17 +54,10 @@ export async function POST(request: NextRequest) {
                         url: `${baseUrl}/startup-pack/success?aid=${analysis_id}`,
                     });
                 }
-
-                // Age check
-                const createdAt = new Date(analysis.created_at as string).getTime();
-                const cutoff = Date.now() - STARTUP_PACK_OFFER_DAYS * 86400_000;
-                if (createdAt < cutoff) {
-                    offerExpired = true;
-                }
             }
         }
 
-        const unitAmount = offerExpired ? STARTUP_PACK_FULL_PRICE_CENTS : STARTUP_PACK_PRICE_CENTS;
+        const unitAmount = STARTUP_PACK_PRICE_CENTS;
 
         const session = await stripe.checkout.sessions.create({
             mode: "payment",
@@ -96,7 +85,6 @@ export async function POST(request: NextRequest) {
                 product: "startup_pack",
                 analysis_id: analysis_id || "",
                 company_name: companyName || "",
-                offer_expired: offerExpired ? "true" : "false",
             },
             payment_intent_data: {
                 metadata: {
@@ -118,7 +106,6 @@ export async function POST(request: NextRequest) {
             url: session.url,
             session_id: session.id,
             amount_cents: unitAmount,
-            offer_expired: offerExpired,
         });
     } catch (e) {
         console.error("Startup pack checkout error:", e);

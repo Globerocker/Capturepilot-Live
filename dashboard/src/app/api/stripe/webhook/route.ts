@@ -65,7 +65,7 @@ export async function POST(request: Request) {
                         currency: session.currency || "usd",
                         stripe_session_id: session.id,
                         stripe_payment_intent: typeof session.payment_intent === "string" ? session.payment_intent : null,
-                        metadata: { offer_expired: session.metadata.offer_expired === "true" },
+                        metadata: {},
                     })
                     .select("id, access_token")
                     .single();

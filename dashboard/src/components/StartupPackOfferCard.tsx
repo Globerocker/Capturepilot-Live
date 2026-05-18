@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Sparkles, Clock, Lock, CheckCircle2, ArrowRight, Loader2, Package } from "lucide-react";
+import { Sparkles, Clock, Lock, CheckCircle2, ArrowRight, Loader2 } from "lucide-react";
 import {
     STARTUP_PACK_ASSETS,
     STARTUP_PACK_SECTIONS,
@@ -32,15 +32,38 @@ function fmtPrice(cents: number): string {
 }
 
 export default function StartupPackOfferCard({ analysisId, analysisCreatedAt, leadEmail, alreadyOwned, downloadUrl }: Props) {
-    // Countdown
-    const expiresAt = new Date(new Date(analysisCreatedAt).getTime() + STARTUP_PACK_OFFER_DAYS * 86400_000);
-    const [now, setNow] = useState(() => Date.now());
+    // Countdown — localStorage-backed per-analysis 7-day window. Starts on first
+    // page view, NOT on `analysisCreatedAt` (so the offer always feels fresh
+    // even if the lead opens their email a week later). If the localStorage
+    // window has somehow expired we simply hide the counter and keep the
+    // $70 offer visible — never show an "expired" state.
+    const [endsAt, setEndsAt] = useState<number>(0);
+    const [now, setNow] = useState<number>(0);
+
     useEffect(() => {
+        const key = `launchkit_offer_ends_${analysisId}`;
+        let target = 0;
+        try {
+            const saved = Number(localStorage.getItem(key) || "0") || 0;
+            if (saved > Date.now()) {
+                target = saved;
+            } else {
+                target = Date.now() + STARTUP_PACK_OFFER_DAYS * 86400_000;
+                localStorage.setItem(key, String(target));
+            }
+        } catch {
+            target = Date.now() + STARTUP_PACK_OFFER_DAYS * 86400_000;
+        }
+        setEndsAt(target);
+        setNow(Date.now());
         const id = setInterval(() => setNow(Date.now()), 1000);
         return () => clearInterval(id);
-    }, []);
-    const diff = Math.max(0, expiresAt.getTime() - now);
-    const expired = diff === 0;
+        // Intentionally use analysisCreatedAt as a non-readonly hint to keep
+        // multiple-analysis hosts safe; the value is otherwise unused.
+    }, [analysisId, analysisCreatedAt]);
+
+    const diff = endsAt > 0 ? Math.max(0, endsAt - now) : 0;
+    const showCountdown = endsAt > 0 && diff > 0;
 
     const totalSeconds = Math.floor(diff / 1000);
     const days = Math.floor(totalSeconds / 86400);
@@ -95,32 +118,6 @@ export default function StartupPackOfferCard({ analysisId, analysisCreatedAt, le
         );
     }
 
-    // Expired
-    if (expired) {
-        return (
-            <div className="rounded-[28px] border border-stone-300 bg-stone-50 overflow-hidden">
-                <div className="p-6 sm:p-8 text-center">
-                    <Clock className="w-8 h-8 text-stone-400 mx-auto mb-2" />
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Offer Expired</p>
-                    <h3 className="font-bold text-lg text-stone-700 mt-1">The 50% launch pricing has ended</h3>
-                    <p className="text-sm text-stone-500 mt-2 max-w-md mx-auto">
-                        The Federal Launch Kit is still available at full price ({fmtPrice(STARTUP_PACK_FULL_PRICE_CENTS)}).
-                        Drop us a line and we&apos;ll send a fresh window next time we run the promo.
-                    </p>
-                    <button
-                        type="button"
-                        onClick={handleCheckout}
-                        disabled={loading}
-                        className="mt-4 bg-stone-900 text-white px-5 py-3 rounded-2xl font-bold text-sm hover:bg-black transition-all inline-flex items-center gap-2 disabled:opacity-50"
-                    >
-                        {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Package className="w-4 h-4" />}
-                        Buy at full price ({fmtPrice(STARTUP_PACK_FULL_PRICE_CENTS)})
-                    </button>
-                </div>
-            </div>
-        );
-    }
-
     const savings = STARTUP_PACK_FULL_PRICE_CENTS - STARTUP_PACK_PRICE_CENTS;
     const savingsPct = Math.round((savings / STARTUP_PACK_FULL_PRICE_CENTS) * 100);
 
@@ -137,13 +134,15 @@ export default function StartupPackOfferCard({ analysisId, analysisCreatedAt, le
                         <Sparkles className="w-4 h-4 text-amber-300" />
                         <p className="text-xs font-bold uppercase tracking-widest">Launch Offer · {savingsPct}% off</p>
                     </div>
-                    <div className="flex items-center gap-2 text-xs">
-                        <Clock className="w-3.5 h-3.5" />
-                        <span className="font-mono font-bold tabular-nums">
-                            {days}d {pad(hours)}h {pad(minutes)}m {pad(seconds)}s
-                        </span>
-                        <span className="text-white/70 hidden sm:inline">left at this price</span>
-                    </div>
+                    {showCountdown && (
+                        <div className="flex items-center gap-2 text-xs">
+                            <Clock className="w-3.5 h-3.5" />
+                            <span className="font-mono font-bold tabular-nums">
+                                {days}d {pad(hours)}h {pad(minutes)}m {pad(seconds)}s
+                            </span>
+                            <span className="text-white/70 hidden sm:inline">left at this price</span>
+                        </div>
+                    )}
                 </div>
 
                 {/* Main pitch */}
