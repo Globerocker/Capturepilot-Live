@@ -59,6 +59,7 @@ async function lookupSamEntity(uei: string) {
 
         const response = await fetch(`${SAM_ENTITY_URL}?${params.toString()}`, {
             headers: { "X-Api-Key": SAM_API_KEY },
+            signal: AbortSignal.timeout(10000),
         });
 
         if (!response.ok) return null;
@@ -150,6 +151,7 @@ async function searchSamByName(companyName: string): Promise<string | null> {
 
         const response = await fetch(`${SAM_ENTITY_URL}?${params.toString()}`, {
             headers: { "X-Api-Key": SAM_API_KEY },
+            signal: AbortSignal.timeout(10000),
         });
 
         if (!response.ok) return null;
@@ -338,6 +340,12 @@ async function enrichPersonApollo(
                 "X-Api-Key": APOLLO_API_KEY,
             },
             body: JSON.stringify(payload),
+            // 6s hard timeout — Apollo occasionally hangs on slow paths,
+            // and this call sits in the critical path between NAICS classify
+            // and the awaiting_confirmation status flip. Without a timeout
+            // the worker dies on Vercel's 120s function ceiling and the row
+            // stays stuck at "classifying" forever.
+            signal: AbortSignal.timeout(6000),
         });
 
         if (!res.ok) {
@@ -391,6 +399,7 @@ async function lookupUsaSpending(companyName: string, uei?: string): Promise<Usa
         const response = await fetch("https://api.usaspending.gov/api/v2/search/spending_by_award/", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
+            signal: AbortSignal.timeout(12000),
             body: JSON.stringify({
                 filters: {
                     recipient_search_text: [searchText],
@@ -794,16 +803,12 @@ async function runAnalysisPipeline(analysisId: string, initialCompanyName: strin
         const samPocs = samData ? (samData.points_of_contact as { name: string; title: string; email?: string; phone?: string }[]) || [] : [];
         const decisionMaker = primaryLeader || samPocs[0] || null;
 
-        // Apollo enrichment for decision-maker — done early so the confirmation
-        // step can display a pre-filled phone. Best-effort; failures are silent.
-        let apolloEnrichment: { mobile_phone?: string; direct_phone?: string; email?: string; linkedin_url?: string; title?: string } | null = null;
-        if (decisionMaker) {
-            const nameParts = decisionMaker.name.trim().split(/\s+/);
-            const firstName = nameParts[0] || "";
-            const lastName = nameParts.slice(1).join(" ") || "";
-            const domain = website.replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "");
-            apolloEnrichment = await enrichPersonApollo(firstName, lastName, domain, companyName);
-        }
+        // NOTE: Apollo decision-maker enrichment runs AFTER the awaiting_confirmation
+        // status flip below, fire-and-forget. The earlier inline call sat in the
+        // critical path and occasionally hung the worker (no native timeout on the
+        // Apollo SDK fetch), leaving the row stuck on "classifying" until Vercel
+        // killed the function at 120s. Apollo data is non-critical for the confirm
+        // step itself — phone numbers are used by the LeadMagnetForm a step later.
 
         const initialInferredProfile: Record<string, unknown> = {
             company_name: samData?.company_name || companyName,
@@ -826,15 +831,12 @@ async function runAnalysisPipeline(analysisId: string, initialCompanyName: strin
             target_states: initialTargetStates,
             contact_person: decisionMaker ? {
                 name: decisionMaker.name,
-                title: apolloEnrichment?.title || decisionMaker.title,
-                email: apolloEnrichment?.email || decisionMaker.email,
+                title: decisionMaker.title,
+                email: decisionMaker.email,
                 phone: decisionMaker.phone,
-                mobile_phone: apolloEnrichment?.mobile_phone || undefined,
-                direct_phone: apolloEnrichment?.direct_phone || undefined,
-                linkedin_url: apolloEnrichment?.linkedin_url || undefined,
-                source: apolloEnrichment ? "apollo" : (samPocs.length > 0 ? "sam_gov" : "website"),
+                source: samPocs.length > 0 ? "sam_gov" : "website",
             } : null,
-            apollo_enrichment: apolloEnrichment,
+            apollo_enrichment: null,
             gov_spending: usaspendingData ? {
                 award_count: usaspendingData.award_count,
                 total_value: usaspendingData.total_value,
@@ -856,8 +858,7 @@ async function runAnalysisPipeline(analysisId: string, initialCompanyName: strin
         // If we already have a lead email from earlier passes (e.g. a SAM POC),
         // preserve it on the first row write so the confirmation page can show
         // it pre-filled.
-        const finalFallbackEmail = (apolloEnrichment?.email as string | undefined)
-            || (decisionMaker?.email as string | undefined)
+        const finalFallbackEmail = (decisionMaker?.email as string | undefined)
             || ((initialInferredProfile.email as string | undefined));
         const { data: currentRecord } = await sb.from("company_analyses").select("lead_email").eq("id", analysisId).maybeSingle();
         const emailUpdate = !currentRecord?.lead_email && finalFallbackEmail ? { lead_email: finalFallbackEmail } : {};
@@ -870,6 +871,39 @@ async function runAnalysisPipeline(analysisId: string, initialCompanyName: strin
             ...emailUpdate,
         }).eq("id", analysisId);
         // Pipeline pauses here. /api/analyze-company/confirm resumes it.
+
+        // Fire-and-forget Apollo enrichment — patches contact_person on the
+        // existing row once it lands. The user is already on the confirm page
+        // by the time this completes; if Apollo hangs we just never patch.
+        if (decisionMaker) {
+            const nameParts = decisionMaker.name.trim().split(/\s+/);
+            const firstName = nameParts[0] || "";
+            const lastName = nameParts.slice(1).join(" ") || "";
+            const domain = website.replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "");
+            enrichPersonApollo(firstName, lastName, domain, companyName)
+                .then(async (enriched) => {
+                    if (!enriched) return;
+                    const { data: row } = await sb.from("company_analyses").select("inferred_profile").eq("id", analysisId).maybeSingle();
+                    const profile = (row?.inferred_profile || {}) as Record<string, unknown>;
+                    const existingContact = (profile.contact_person as Record<string, unknown> | null) || {};
+                    await sb.from("company_analyses").update({
+                        inferred_profile: {
+                            ...profile,
+                            contact_person: {
+                                ...existingContact,
+                                title: enriched.title || existingContact.title,
+                                email: enriched.email || existingContact.email,
+                                mobile_phone: enriched.mobile_phone || existingContact.mobile_phone,
+                                direct_phone: enriched.direct_phone || existingContact.direct_phone,
+                                linkedin_url: enriched.linkedin_url || existingContact.linkedin_url,
+                                source: "apollo",
+                            },
+                            apollo_enrichment: enriched,
+                        },
+                    }).eq("id", analysisId);
+                })
+                .catch(() => { /* swallow — Apollo is non-critical */ });
+        }
 
     } catch (error) {
         console.error("Pipeline error:", error);

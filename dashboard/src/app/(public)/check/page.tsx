@@ -119,9 +119,8 @@ function CheckContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const [website, setWebsite] = useState("");
-    const [companyName, setCompanyName] = useState("");
+    const [samRegistered, setSamRegistered] = useState<"yes" | "no" | null>(null);
     const [uei, setUei] = useState("");
-    const [showOptional, setShowOptional] = useState(false);
     const [capFile, setCapFile] = useState<File | null>(null);
     const [running, setRunning] = useState(false);
     const [step, setStep] = useState(0);
@@ -134,7 +133,6 @@ function CheckContent() {
 
     const autoWebsite = searchParams.get("website") || "";
     const autoUei = searchParams.get("uei") || "";
-    const autoCompanyName = searchParams.get("company_name") || "";
 
     const stopPolling = useCallback(() => {
         if (pollRef.current) {
@@ -171,14 +169,15 @@ function CheckContent() {
 
     useEffect(() => {
         if (startedRef.current) return;
-        if (autoWebsite && autoCompanyName) {
+        if (autoWebsite) {
             startedRef.current = true;
             setWebsite(autoWebsite);
-            setCompanyName(autoCompanyName);
-            runAnalysis(autoWebsite, autoUei, autoCompanyName, null);
+            // Auto-start assumes SAM-registered yes when a UEI is supplied
+            setSamRegistered(autoUei ? "yes" : "no");
+            runAnalysis(autoWebsite, autoUei, null);
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [autoWebsite, autoUei, autoCompanyName]);
+    }, [autoWebsite, autoUei]);
 
     useEffect(() => () => stopPolling(), [stopPolling]);
 
@@ -188,19 +187,18 @@ function CheckContent() {
         } catch { return url; }
     }
 
-    function runAnalysis(site: string, ueiVal: string, name: string, file: File | null) {
+    function runAnalysis(site: string, ueiVal: string, file: File | null) {
         let url = site.trim();
         if (!/^https?:\/\//i.test(url)) url = "https://" + url;
         setRunning(true);
         setError("");
         setStep(0);
-        setDisplayName(name.trim() || getDomain(url));
+        setDisplayName(getDomain(url));
         fetch("/api/analyze-company", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 website: url,
-                company_name: name.trim() || undefined,
                 uei: ueiVal || undefined,
             }),
         })
@@ -237,8 +235,12 @@ function CheckContent() {
 
     function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
-        if (!website.trim() || !companyName.trim()) return;
-        runAnalysis(website.trim(), uei.trim().toUpperCase(), companyName, capFile);
+        if (!website.trim()) return;
+        if (samRegistered === null) {
+            setError("Please answer: are you registered on SAM.gov?");
+            return;
+        }
+        runAnalysis(website.trim(), uei.trim().toUpperCase(), capFile);
     }
 
     function scrollToForm() {
@@ -334,21 +336,6 @@ function CheckContent() {
                             <form onSubmit={handleSubmit} className="space-y-3">
                                 <div>
                                     <label className="block text-xs font-bold text-stone-600 mb-1.5">
-                                        Company name <span className="text-emerald-600">*</span>
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={companyName}
-                                        onChange={(e) => setCompanyName(e.target.value)}
-                                        className="w-full px-4 py-3 rounded-xl border-2 border-stone-200 text-sm focus:outline-none focus:ring-4 focus:ring-emerald-100 focus:border-emerald-500"
-                                        placeholder="Acme Logistics Inc."
-                                        required
-                                        autoFocus
-                                    />
-                                    <p className="text-[10px] text-stone-400 mt-1">Helps us pull your SAM.gov registration accurately.</p>
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-stone-600 mb-1.5">
                                         Your website <span className="text-emerald-600">*</span>
                                     </label>
                                     <div className="relative">
@@ -360,70 +347,98 @@ function CheckContent() {
                                             className="w-full pl-10 pr-4 py-3 rounded-xl border-2 border-stone-200 text-sm focus:outline-none focus:ring-4 focus:ring-emerald-100 focus:border-emerald-500"
                                             placeholder="www.acmelogistics.com"
                                             required
+                                            autoFocus
                                         />
                                     </div>
                                 </div>
 
-                                {!showOptional ? (
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowOptional(true)}
-                                        className="text-xs text-stone-500 hover:text-stone-800 underline"
-                                    >
-                                        + Add UEI or capability statement (optional)
-                                    </button>
-                                ) : (
-                                    <div className="space-y-3 border-t border-stone-100 pt-3">
-                                        <div>
-                                            <label className="block text-xs font-bold text-stone-600 mb-1.5">UEI <span className="text-stone-400 font-normal">(optional)</span></label>
-                                            <input
-                                                type="text"
-                                                value={uei}
-                                                onChange={(e) => setUei(e.target.value.toUpperCase())}
-                                                className="w-full px-4 py-3 rounded-xl border-2 border-stone-200 text-sm focus:outline-none focus:ring-4 focus:ring-emerald-100 focus:border-emerald-500 font-mono"
-                                                placeholder="ABC123456789"
-                                                maxLength={12}
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs font-bold text-stone-600 mb-1.5">
-                                                Capability statement <span className="text-stone-400 font-normal">(optional · PDF or DOCX)</span>
-                                            </label>
-                                            <label
-                                                className={clsx(
-                                                    "block w-full px-4 py-3 rounded-xl border-2 border-dashed text-sm cursor-pointer transition-colors",
-                                                    capFile
-                                                        ? "bg-emerald-50 border-emerald-300 text-emerald-700"
-                                                        : "bg-stone-50 border-stone-300 text-stone-500 hover:border-emerald-300 hover:bg-emerald-50/40",
-                                                )}
-                                            >
-                                                <input
-                                                    type="file"
-                                                    accept=".pdf,.docx,.doc,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                                                    onChange={(e) => {
-                                                        const f = e.target.files?.[0];
-                                                        if (!f) { setCapFile(null); return; }
-                                                        if (f.size > 10 * 1024 * 1024) {
-                                                            setError("Capability statement must be under 10 MB");
-                                                            return;
-                                                        }
-                                                        setError("");
-                                                        setCapFile(f);
-                                                    }}
-                                                    className="hidden"
-                                                />
-                                                {capFile ? (
-                                                    <span className="flex items-center justify-between gap-2">
-                                                        <span className="truncate font-bold">{capFile.name}</span>
-                                                        <span className="text-[10px] text-emerald-600 flex-shrink-0">{(capFile.size / 1024).toFixed(0)} KB</span>
-                                                    </span>
-                                                ) : (
-                                                    <span>Click to upload — better AI summaries per match</span>
-                                                )}
-                                            </label>
-                                        </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-stone-600 mb-1.5">
+                                        Are you registered on SAM.gov? <span className="text-emerald-600">*</span>
+                                    </label>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => setSamRegistered("yes")}
+                                            className={clsx(
+                                                "px-4 py-3 rounded-xl border-2 text-sm font-bold transition-all",
+                                                samRegistered === "yes"
+                                                    ? "bg-emerald-50 text-emerald-700 border-emerald-500"
+                                                    : "bg-white text-stone-500 border-stone-200 hover:border-emerald-300",
+                                            )}
+                                        >
+                                            ✓ Yes
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => { setSamRegistered("no"); setUei(""); }}
+                                            className={clsx(
+                                                "px-4 py-3 rounded-xl border-2 text-sm font-bold transition-all",
+                                                samRegistered === "no"
+                                                    ? "bg-stone-100 text-stone-800 border-stone-400"
+                                                    : "bg-white text-stone-500 border-stone-200 hover:border-stone-400",
+                                            )}
+                                        >
+                                            Not yet
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {samRegistered === "yes" && (
+                                    <div className="animate-in fade-in slide-in-from-top-1 duration-200">
+                                        <label className="block text-xs font-bold text-stone-600 mb-1.5">
+                                            UEI <span className="text-stone-400 font-normal">(optional · helps us match faster)</span>
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={uei}
+                                            onChange={(e) => setUei(e.target.value.toUpperCase())}
+                                            className="w-full px-4 py-3 rounded-xl border-2 border-stone-200 text-sm focus:outline-none focus:ring-4 focus:ring-emerald-100 focus:border-emerald-500 font-mono"
+                                            placeholder="ABC123456789"
+                                            maxLength={12}
+                                        />
                                     </div>
                                 )}
+
+                                <div>
+                                    <label className="block text-xs font-bold text-stone-600 mb-1.5">
+                                        Capability statement <span className="text-stone-400 font-normal">(optional · improves AI match summaries)</span>
+                                    </label>
+                                    <label
+                                        className={clsx(
+                                            "block w-full px-4 py-4 rounded-xl border-2 border-dashed text-sm cursor-pointer transition-colors",
+                                            capFile
+                                                ? "bg-emerald-50 border-emerald-300 text-emerald-700"
+                                                : "bg-stone-50 border-stone-300 text-stone-500 hover:border-emerald-300 hover:bg-emerald-50/40",
+                                        )}
+                                    >
+                                        <input
+                                            type="file"
+                                            accept=".pdf,.docx,.doc,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                                            onChange={(e) => {
+                                                const f = e.target.files?.[0];
+                                                if (!f) { setCapFile(null); return; }
+                                                if (f.size > 10 * 1024 * 1024) {
+                                                    setError("Capability statement must be under 10 MB");
+                                                    return;
+                                                }
+                                                setError("");
+                                                setCapFile(f);
+                                            }}
+                                            className="hidden"
+                                        />
+                                        {capFile ? (
+                                            <span className="flex items-center justify-between gap-2">
+                                                <span className="truncate font-bold">📄 {capFile.name}</span>
+                                                <span className="text-[10px] text-emerald-600 flex-shrink-0">{(capFile.size / 1024).toFixed(0)} KB · uploaded</span>
+                                            </span>
+                                        ) : (
+                                            <span className="flex items-center justify-center gap-2">
+                                                <span>📄 Click to upload (PDF, DOCX, ≤10 MB)</span>
+                                            </span>
+                                        )}
+                                    </label>
+                                </div>
 
                                 {error && (
                                     <div className="bg-red-50 text-red-600 text-xs p-3 rounded-xl border border-red-200">

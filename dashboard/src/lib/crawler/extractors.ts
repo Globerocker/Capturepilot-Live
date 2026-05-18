@@ -23,16 +23,55 @@ function findAll(re: RegExp, text: string): RegExpMatchArray[] {
 
 // ─── Company Name ──────────────────────────────────────────────────────────
 
-export function extractCompanyName(soups: CheerioAPI[]): string {
+/**
+ * Extract a legal company name from a footer copyright line.
+ * Matches "© 2024 ACME Logistics, Inc.", "Copyright © Acme Holdings LLC. All rights reserved.", etc.
+ * Footer is the most authoritative source for the LEGAL name (Inc/LLC/Corp suffix)
+ * because that's where the lawyers put it. Marketing names live in <title> / og.
+ */
+function extractLegalNameFromFooter(soups: CheerioAPI[]): string {
+    // Match copyright lines. We want the legal entity name, not the year.
+    // Examples we should catch:
+    //   "© 2024 Acme Logistics, Inc."
+    //   "Copyright © 2024 Acme Holdings LLC. All rights reserved."
+    //   "© Acme Logistics, Inc. 2024"
+    //   "©2024 ACME LOGISTICS"
+    const copyrightRe = /(?:©|copyright\s*©?|&copy;)\s*(?:\d{4}\s*[-–]?\s*\d{0,4}\s+)?([A-Z][A-Za-z0-9&.\-' ]{2,80}?(?:,?\s*(?:Inc|LLC|L\.L\.C\.|Corp|Co|Company|Ltd|Holdings|Group|Partners|GmbH|Incorporated)\.?)?)(?:\s+\d{4})?(?:\.?\s+all\s+rights)?/i;
+
     for (const $ of soups) {
-        // og:site_name is the cleanest source
+        // Prefer semantic <footer>; fall back to common class names if missing.
+        const footerEls = $('footer, [class*="footer" i], [id*="footer" i]');
+        if (footerEls.length === 0) continue;
+
+        const footerText = footerEls.first().text().replace(/\s+/g, " ").slice(0, 600);
+        if (!footerText) continue;
+
+        const m = copyrightRe.exec(footerText);
+        if (m && m[1]) {
+            const cleaned = m[1].trim().replace(/\.$/, "").replace(/\s+/g, " ");
+            if (cleaned.length > 2 && cleaned.length < 80) {
+                return cleaned;
+            }
+        }
+    }
+    return "";
+}
+
+export function extractCompanyName(soups: CheerioAPI[]): string {
+    // 1. Footer copyright — most authoritative for the LEGAL name
+    const footerName = extractLegalNameFromFooter(soups);
+    if (footerName) return footerName;
+
+    // 2. og:site_name — cleanest marketing source
+    for (const $ of soups) {
         const siteName = $('meta[property="og:site_name"]').attr("content");
         if (siteName?.trim() && siteName.trim().length > 1 && siteName.trim().length < 80) {
             return siteName.trim();
         }
     }
+
+    // 3. <title> tag with common-suffix stripping
     for (const $ of soups) {
-        // <title> tag, strip common suffixes like " | Home", " - Welcome"
         const title = $("title").text().trim();
         if (title && title.length > 1) {
             const cleaned = title
