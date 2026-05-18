@@ -16,6 +16,7 @@
     "@mendable/firecrawl-js": "^4.18.3",
     "@pdfme/common": "^6.0.6",
     "@pdfme/generator": "^6.0.6",
+    "@react-pdf/renderer": "^4.5.1",
     "@sentry/nextjs": "^10.47.0",
     "@stripe/stripe-js": "^8.9.0",
     "@supabase/ssr": "^0.8.0",
