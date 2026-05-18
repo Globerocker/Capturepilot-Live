@@ -19,6 +19,7 @@ import SuggestedPartnersPanel from "@/components/opportunity/SuggestedPartnersPa
 import GenerateWinStrategyButton from "@/components/opportunity/GenerateWinStrategyButton";
 import OpportunityTimeline from "@/components/opportunity/OpportunityTimeline";
 import { PastAwardsPanel } from "@/components/PastAwardsPanel";
+import GovTribeAwardsCard from "@/components/opportunity/GovTribeAwardsCard";
 import { estimateContractValue } from "@/utils/estimateValue";
 
 export const dynamic = 'force-dynamic';
@@ -560,15 +561,18 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                                 </div>
                             </div>
                             {opp.incumbent_contractor_name && (
-                                <div className="border-t border-amber-200 bg-white/60 px-4 sm:px-8 py-4 sm:py-6">
-                                    <p className="text-[10px] text-amber-700 uppercase tracking-widest mb-3 flex items-center gap-1.5">
-                                        <Award className="w-3.5 h-3.5" /> Recipient — Federal Awards History
-                                        <InfoTooltip text="Live pull from USASpending.gov: every federal contract this recipient has won in the last 5 years, including task orders / child awards under their IDV vehicles." />
-                                    </p>
-                                    <PastAwardsPanel
-                                        name={opp.incumbent_contractor_name}
-                                        uei={opp.incumbent_contractor_uei}
-                                    />
+                                <div className="border-t border-amber-200 bg-white/60 px-4 sm:px-8 py-4 sm:py-6 space-y-5">
+                                    <div>
+                                        <p className="text-[10px] text-amber-700 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                                            <Award className="w-3.5 h-3.5" /> Recipient — Federal Awards History
+                                            <InfoTooltip text="Live pull from USASpending.gov: every federal contract this recipient has won in the last 5 years, including task orders / child awards under their IDV vehicles." />
+                                        </p>
+                                        <PastAwardsPanel
+                                            name={opp.incumbent_contractor_name}
+                                            uei={opp.incumbent_contractor_uei}
+                                        />
+                                    </div>
+                                    <GovTribeAwardsCard query={opp.incumbent_contractor_name} />
                                 </div>
                             )}
                         </div>
