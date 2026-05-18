@@ -17,6 +17,8 @@ import CapabilityMatrixPanel from "@/components/opportunity/CapabilityMatrixPane
 import VoiceBriefButton from "@/components/opportunity/VoiceBriefButton";
 import SuggestedPartnersPanel from "@/components/opportunity/SuggestedPartnersPanel";
 import GenerateWinStrategyButton from "@/components/opportunity/GenerateWinStrategyButton";
+import OpportunityTimeline from "@/components/opportunity/OpportunityTimeline";
+import { PastAwardsPanel } from "@/components/PastAwardsPanel";
 import { estimateContractValue } from "@/utils/estimateValue";
 
 export const dynamic = 'force-dynamic';
@@ -306,6 +308,14 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                 </div>
             </div>
 
+            {/* Timeline */}
+            <OpportunityTimeline
+                posted_date={opp.posted_date}
+                response_deadline={opp.response_deadline}
+                award_date={opp.award_date}
+                pop_end={(reqs?.period_of_performance_end as string) || null}
+            />
+
             {/* Key Points + Action Items */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
                 {/* Key Points */}
@@ -549,6 +559,18 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                                     )}
                                 </div>
                             </div>
+                            {opp.incumbent_contractor_name && (
+                                <div className="border-t border-amber-200 bg-white/60 px-4 sm:px-8 py-4 sm:py-6">
+                                    <p className="text-[10px] text-amber-700 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                                        <Award className="w-3.5 h-3.5" /> Recipient — Federal Awards History
+                                        <InfoTooltip text="Live pull from USASpending.gov: every federal contract this recipient has won in the last 5 years, including task orders / child awards under their IDV vehicles." />
+                                    </p>
+                                    <PastAwardsPanel
+                                        name={opp.incumbent_contractor_name}
+                                        uei={opp.incumbent_contractor_uei}
+                                    />
+                                </div>
+                            )}
                         </div>
                     )}
 
