@@ -125,6 +125,15 @@ async function extractZip(bytes: Uint8Array): Promise<{ text: string; sub_files:
     return { text: combined.slice(0, 40_000), sub_files: subFiles };
 }
 
+/**
+ * Public helper: extract text from raw bytes (e.g. an uploaded file in an API route).
+ * Used by /api/analyze-company/upload-cap-statement to pull text out of a
+ * user-supplied capability statement before passing it to OpenAI.
+ */
+export async function extractFromBytes(bytes: Uint8Array, filename: string): Promise<ExtractResult> {
+    return extractOne(bytes, filename);
+}
+
 async function extractOne(bytes: Uint8Array, filename: string, kind?: ExtractResult["kind"]): Promise<ExtractResult> {
     const resolvedKind = kind || kindOf(filename);
     const base: Omit<ExtractResult, "text"> = {

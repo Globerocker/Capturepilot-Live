@@ -1,6 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
+import { cookies } from "next/headers";
+import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
 import { jsPDF } from "jspdf";
+
+/** Returns true when the current session belongs to an admin user. */
+async function isAdminSession(): Promise<boolean> {
+    try {
+        const cookieStore = await cookies();
+        const sb = createServerClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+            { cookies: { getAll: () => cookieStore.getAll() } },
+        );
+        const { data: { user } } = await sb.auth.getUser();
+        if (!user) return false;
+        const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_KEY!);
+        const { data: profile } = await admin.from("user_profiles").select("account_type").eq("auth_user_id", user.id).maybeSingle();
+        return (profile as { account_type?: string } | null)?.account_type === "admin";
+    } catch {
+        return false;
+    }
+}
 
 /**
  * GET /api/prospects/pdf/{analysisId}
@@ -18,7 +39,7 @@ const BOOK_CALL_URL = "https://meetings-na2.hubspot.com/americurial/intro-call";
 const SITE_URL = "https://capturepilot.com";
 
 export async function GET(
-    _request: NextRequest,
+    request: NextRequest,
     { params }: { params: Promise<{ analysisId: string }> }
 ) {
     const { analysisId } = await params;
@@ -36,6 +57,50 @@ export async function GET(
 
     if (error || !data) {
         return NextResponse.json({ error: "Analysis not found" }, { status: 404 });
+    }
+
+    // ── Lead gate ─────────────────────────────────────────────────────────
+    // PDF download is gated behind email capture. Either the row already has
+    // a lead_email (from the LeadMagnetForm or Confirm step) OR the caller
+    // passed ?email=...&name=... query params which we'll persist immediately.
+    const url = new URL(request.url);
+    const queryEmail = url.searchParams.get("email")?.trim() || "";
+    const queryName = url.searchParams.get("name")?.trim() || "";
+
+    let leadEmail = (data.lead_email as string | null) || null;
+
+    if (!leadEmail && queryEmail) {
+        // Validate, then persist so the next download is friction-free
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(queryEmail)) {
+            return NextResponse.json({ error: "Invalid email" }, { status: 400 });
+        }
+        const profilePatch = (data.inferred_profile || {}) as Record<string, unknown>;
+        const existingContact = (profilePatch.contact_person as Record<string, unknown> | null) || null;
+        await sb.from("company_analyses").update({
+            lead_email: queryEmail,
+            lead_captured_at: data.lead_captured_at || new Date().toISOString(),
+            inferred_profile: {
+                ...profilePatch,
+                contact_person: {
+                    ...(existingContact || {}),
+                    ...(queryName ? { name: queryName } : {}),
+                    email: queryEmail,
+                    source: existingContact?.source || "pdf_gate",
+                },
+            },
+        }).eq("id", analysisId);
+        leadEmail = queryEmail;
+    }
+
+    if (!leadEmail) {
+        // Admin bypass — internal users can always download regardless of capture status
+        const isAdmin = await isAdminSession();
+        if (!isAdmin) {
+            return NextResponse.json({
+                error: "Email required to download the PDF",
+                code: "LEAD_GATE_REQUIRED",
+            }, { status: 403 });
+        }
     }
 
     // ── Data extraction ──────────────────────────────────────────────────

@@ -119,8 +119,10 @@ function CheckContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const [website, setWebsite] = useState("");
+    const [companyName, setCompanyName] = useState("");
     const [uei, setUei] = useState("");
-    const [showUei, setShowUei] = useState(false);
+    const [showOptional, setShowOptional] = useState(false);
+    const [capFile, setCapFile] = useState<File | null>(null);
     const [running, setRunning] = useState(false);
     const [step, setStep] = useState(0);
     const [error, setError] = useState("");
@@ -132,6 +134,7 @@ function CheckContent() {
 
     const autoWebsite = searchParams.get("website") || "";
     const autoUei = searchParams.get("uei") || "";
+    const autoCompanyName = searchParams.get("company_name") || "";
 
     const stopPolling = useCallback(() => {
         if (pollRef.current) {
@@ -168,13 +171,14 @@ function CheckContent() {
 
     useEffect(() => {
         if (startedRef.current) return;
-        if (autoWebsite) {
+        if (autoWebsite && autoCompanyName) {
             startedRef.current = true;
             setWebsite(autoWebsite);
-            runAnalysis(autoWebsite, autoUei);
+            setCompanyName(autoCompanyName);
+            runAnalysis(autoWebsite, autoUei, autoCompanyName, null);
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [autoWebsite, autoUei]);
+    }, [autoWebsite, autoUei, autoCompanyName]);
 
     useEffect(() => () => stopPolling(), [stopPolling]);
 
@@ -184,17 +188,21 @@ function CheckContent() {
         } catch { return url; }
     }
 
-    function runAnalysis(site: string, ueiVal: string) {
+    function runAnalysis(site: string, ueiVal: string, name: string, file: File | null) {
         let url = site.trim();
         if (!/^https?:\/\//i.test(url)) url = "https://" + url;
         setRunning(true);
         setError("");
         setStep(0);
-        setDisplayName(getDomain(url));
+        setDisplayName(name.trim() || getDomain(url));
         fetch("/api/analyze-company", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ website: url, uei: ueiVal || undefined }),
+            body: JSON.stringify({
+                website: url,
+                company_name: name.trim() || undefined,
+                uei: ueiVal || undefined,
+            }),
         })
             .then(async (res) => {
                 if (!res.ok) {
@@ -203,9 +211,23 @@ function CheckContent() {
                 }
                 return res.json();
             })
-            .then((data) => {
-                if (data.analysis_id) startPolling(data.analysis_id);
-                else { setError("Failed to start analysis."); setRunning(false); }
+            .then(async (data) => {
+                if (!data.analysis_id) {
+                    setError("Failed to start analysis.");
+                    setRunning(false);
+                    return;
+                }
+                // Optional capability statement upload — fire-and-forget, fails silently.
+                if (file) {
+                    try {
+                        const fd = new FormData();
+                        fd.append("file", file);
+                        fd.append("analysis_id", data.analysis_id);
+                        fetch("/api/analyze-company/upload-cap-statement", { method: "POST", body: fd })
+                            .catch(() => { /* swallow — upload is best-effort */ });
+                    } catch { /* ignore */ }
+                }
+                startPolling(data.analysis_id);
             })
             .catch((err) => {
                 setError(err.message || "Something went wrong.");
@@ -215,8 +237,8 @@ function CheckContent() {
 
     function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
-        if (!website.trim()) return;
-        runAnalysis(website.trim(), uei.trim().toUpperCase());
+        if (!website.trim() || !companyName.trim()) return;
+        runAnalysis(website.trim(), uei.trim().toUpperCase(), companyName, capFile);
     }
 
     function scrollToForm() {
@@ -311,7 +333,24 @@ function CheckContent() {
                             </p>
                             <form onSubmit={handleSubmit} className="space-y-3">
                                 <div>
-                                    <label className="block text-xs font-bold text-stone-600 mb-1.5">Your website</label>
+                                    <label className="block text-xs font-bold text-stone-600 mb-1.5">
+                                        Company name <span className="text-emerald-600">*</span>
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={companyName}
+                                        onChange={(e) => setCompanyName(e.target.value)}
+                                        className="w-full px-4 py-3 rounded-xl border-2 border-stone-200 text-sm focus:outline-none focus:ring-4 focus:ring-emerald-100 focus:border-emerald-500"
+                                        placeholder="Acme Logistics Inc."
+                                        required
+                                        autoFocus
+                                    />
+                                    <p className="text-[10px] text-stone-400 mt-1">Helps us pull your SAM.gov registration accurately.</p>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-stone-600 mb-1.5">
+                                        Your website <span className="text-emerald-600">*</span>
+                                    </label>
                                     <div className="relative">
                                         <Globe className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
                                         <input
@@ -321,31 +360,69 @@ function CheckContent() {
                                             className="w-full pl-10 pr-4 py-3 rounded-xl border-2 border-stone-200 text-sm focus:outline-none focus:ring-4 focus:ring-emerald-100 focus:border-emerald-500"
                                             placeholder="www.acmelogistics.com"
                                             required
-                                            autoFocus
                                         />
                                     </div>
                                 </div>
 
-                                {showUei ? (
-                                    <div>
-                                        <label className="block text-xs font-bold text-stone-600 mb-1.5">UEI (Optional)</label>
-                                        <input
-                                            type="text"
-                                            value={uei}
-                                            onChange={(e) => setUei(e.target.value.toUpperCase())}
-                                            className="w-full px-4 py-3 rounded-xl border-2 border-stone-200 text-sm focus:outline-none focus:ring-4 focus:ring-emerald-100 focus:border-emerald-500 font-mono"
-                                            placeholder="ABC123456789"
-                                            maxLength={12}
-                                        />
-                                    </div>
-                                ) : (
+                                {!showOptional ? (
                                     <button
                                         type="button"
-                                        onClick={() => setShowUei(true)}
+                                        onClick={() => setShowOptional(true)}
                                         className="text-xs text-stone-500 hover:text-stone-800 underline"
                                     >
-                                        + Add UEI if you have one (optional)
+                                        + Add UEI or capability statement (optional)
                                     </button>
+                                ) : (
+                                    <div className="space-y-3 border-t border-stone-100 pt-3">
+                                        <div>
+                                            <label className="block text-xs font-bold text-stone-600 mb-1.5">UEI <span className="text-stone-400 font-normal">(optional)</span></label>
+                                            <input
+                                                type="text"
+                                                value={uei}
+                                                onChange={(e) => setUei(e.target.value.toUpperCase())}
+                                                className="w-full px-4 py-3 rounded-xl border-2 border-stone-200 text-sm focus:outline-none focus:ring-4 focus:ring-emerald-100 focus:border-emerald-500 font-mono"
+                                                placeholder="ABC123456789"
+                                                maxLength={12}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-stone-600 mb-1.5">
+                                                Capability statement <span className="text-stone-400 font-normal">(optional · PDF or DOCX)</span>
+                                            </label>
+                                            <label
+                                                className={clsx(
+                                                    "block w-full px-4 py-3 rounded-xl border-2 border-dashed text-sm cursor-pointer transition-colors",
+                                                    capFile
+                                                        ? "bg-emerald-50 border-emerald-300 text-emerald-700"
+                                                        : "bg-stone-50 border-stone-300 text-stone-500 hover:border-emerald-300 hover:bg-emerald-50/40",
+                                                )}
+                                            >
+                                                <input
+                                                    type="file"
+                                                    accept=".pdf,.docx,.doc,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                                                    onChange={(e) => {
+                                                        const f = e.target.files?.[0];
+                                                        if (!f) { setCapFile(null); return; }
+                                                        if (f.size > 10 * 1024 * 1024) {
+                                                            setError("Capability statement must be under 10 MB");
+                                                            return;
+                                                        }
+                                                        setError("");
+                                                        setCapFile(f);
+                                                    }}
+                                                    className="hidden"
+                                                />
+                                                {capFile ? (
+                                                    <span className="flex items-center justify-between gap-2">
+                                                        <span className="truncate font-bold">{capFile.name}</span>
+                                                        <span className="text-[10px] text-emerald-600 flex-shrink-0">{(capFile.size / 1024).toFixed(0)} KB</span>
+                                                    </span>
+                                                ) : (
+                                                    <span>Click to upload — better AI summaries per match</span>
+                                                )}
+                                            </label>
+                                        </div>
+                                    </div>
                                 )}
 
                                 {error && (

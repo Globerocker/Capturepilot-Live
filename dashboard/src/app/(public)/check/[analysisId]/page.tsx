@@ -664,8 +664,40 @@ export default function CheckResultsPage() {
         setSaving(false);
     };
 
+    const [pdfGateOpen, setPdfGateOpen] = useState(false);
+    const [pdfEmail, setPdfEmail] = useState("");
+    const [pdfName, setPdfName] = useState("");
+    const [pdfError, setPdfError] = useState("");
+
     const handleExportPdf = () => {
-        window.open(`/api/prospects/pdf/${analysisId}`, "_blank");
+        // If we already captured a lead, bypass the gate
+        if (data.lead_email) {
+            window.open(`/api/prospects/pdf/${analysisId}`, "_blank");
+            return;
+        }
+        // Prefill from anything we already know (Apollo / SAM)
+        const contact = (data.inferred_profile?.contact_person || {}) as Record<string, string>;
+        setPdfEmail(contact.email || (data.inferred_profile?.email as string) || "");
+        setPdfName(contact.name || "");
+        setPdfError("");
+        setPdfGateOpen(true);
+    };
+
+    const submitPdfGate = () => {
+        const email = pdfEmail.trim();
+        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            setPdfError("Please enter a valid email");
+            return;
+        }
+        if (!pdfName.trim()) {
+            setPdfError("Please enter your name");
+            return;
+        }
+        const qs = new URLSearchParams({ email, name: pdfName.trim() }).toString();
+        window.open(`/api/prospects/pdf/${analysisId}?${qs}`, "_blank");
+        setPdfGateOpen(false);
+        // Locally flip the lead flag so subsequent clicks bypass the modal
+        setData(prev => prev ? { ...prev, lead_email: email } : prev);
     };
 
     const handleSaveAsCompetitor = async () => {
@@ -1329,6 +1361,66 @@ export default function CheckResultsPage() {
                     onClose={() => setNaicsEditOpen(false)}
                     onSaved={handleNaicsEditSaved}
                 />
+            )}
+
+            {/* PDF download gate — captures email + name before opening the PDF */}
+            {pdfGateOpen && (
+                <div
+                    className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center px-4"
+                    onClick={() => setPdfGateOpen(false)}
+                >
+                    <div
+                        className="bg-white rounded-[28px] shadow-xl max-w-md w-full p-6 sm:p-7"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-center gap-2 mb-1">
+                            <FileDown className="w-4 h-4 text-emerald-600" />
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-700">Download PDF Report</p>
+                        </div>
+                        <h2 className="font-black text-xl text-stone-900">Where should we send your report?</h2>
+                        <p className="text-sm text-stone-500 mt-2">
+                            We&apos;ll generate a personalized PDF with your readiness score, top matches and recommended next steps.
+                        </p>
+                        <div className="mt-5 space-y-3">
+                            <div>
+                                <label className="block text-xs font-bold text-stone-600 mb-1.5">Your name</label>
+                                <input
+                                    type="text"
+                                    value={pdfName}
+                                    onChange={(e) => setPdfName(e.target.value)}
+                                    placeholder="Jane Doe"
+                                    className="w-full px-4 py-2.5 rounded-xl border-2 border-stone-200 text-sm focus:outline-none focus:ring-4 focus:ring-emerald-100 focus:border-emerald-500"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-stone-600 mb-1.5">Work email</label>
+                                <input
+                                    type="email"
+                                    value={pdfEmail}
+                                    onChange={(e) => setPdfEmail(e.target.value)}
+                                    placeholder="you@company.com"
+                                    className="w-full px-4 py-2.5 rounded-xl border-2 border-stone-200 text-sm focus:outline-none focus:ring-4 focus:ring-emerald-100 focus:border-emerald-500"
+                                    autoFocus
+                                />
+                            </div>
+                            {pdfError && (
+                                <div className="bg-red-50 text-red-600 text-xs p-2.5 rounded-lg border border-red-200">
+                                    {pdfError}
+                                </div>
+                            )}
+                            <button
+                                type="button"
+                                onClick={submitPdfGate}
+                                className="w-full bg-gradient-to-r from-emerald-600 to-blue-600 text-white py-3 rounded-2xl font-black text-sm hover:opacity-95 transition-all flex items-center justify-center gap-2 shadow-md"
+                            >
+                                <FileDown className="w-4 h-4" /> Download My PDF Report
+                            </button>
+                            <p className="text-[10px] text-stone-400 text-center">
+                                Used to send your report. No spam · Unsubscribe anytime.
+                            </p>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

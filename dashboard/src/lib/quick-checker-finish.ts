@@ -54,6 +54,102 @@ interface ScoredMatch {
     score_breakdown: Record<string, number>;
 }
 
+interface MatchForAi {
+    opportunity_id: string;
+    title?: string;
+    agency?: string;
+    naics_code?: string;
+    set_aside_code?: string;
+    notice_type?: string;
+    award_amount?: number;
+    description_url?: string;
+}
+
+interface CompanyContextForAi {
+    companyName: string;
+    description: string;
+    services: string[];
+    naicsCodes: string[];
+    certifications: string[];
+    state: string;
+    employeeCount: number | null;
+    yearsInBusiness: number | null;
+    capStatementText: string;
+}
+
+/**
+ * Generate a 2-3 sentence "why this opportunity fits YOUR company specifically"
+ * blurb for a single match. Falls back to a deterministic 1-liner if OpenAI
+ * is not configured or the call errors out.
+ */
+async function generateMatchSummary(
+    company: CompanyContextForAi,
+    match: MatchForAi,
+): Promise<string> {
+    const openaiKey = process.env.OPENAI_API_KEY;
+
+    // Deterministic fallback — no OpenAI required
+    const fallback = (() => {
+        const sa = match.set_aside_code ? ` (set-aside: ${match.set_aside_code})` : "";
+        const naicsMatch = match.naics_code && company.naicsCodes.includes(match.naics_code)
+            ? ` Direct NAICS match (${match.naics_code}).`
+            : "";
+        return `Match for ${company.companyName} at ${match.agency || "this agency"}${sa}.${naicsMatch}`;
+    })();
+
+    if (!openaiKey) return fallback;
+
+    const capStatementHint = company.capStatementText
+        ? `\nCAPABILITY STATEMENT EXCERPT (verbatim from user-uploaded doc, first 1500 chars):\n${company.capStatementText.slice(0, 1500)}`
+        : "";
+
+    const userMsg = [
+        `COMPANY: ${company.companyName}`,
+        `DESCRIPTION: ${company.description || "(no website description)"}`,
+        `SERVICES: ${company.services.slice(0, 8).join(", ") || "(none extracted)"}`,
+        `NAICS: ${company.naicsCodes.join(", ") || "(none)"}`,
+        `CERTIFICATIONS: ${company.certifications.join(", ") || "(none)"}`,
+        `STATE: ${company.state || "(unknown)"}`,
+        `SIZE: ${company.employeeCount ? `${company.employeeCount} employees` : "(unknown)"}${company.yearsInBusiness ? ` · ${company.yearsInBusiness} yrs in business` : ""}`,
+        capStatementHint,
+        ``,
+        `OPPORTUNITY:`,
+        `  Title: ${match.title || "(no title)"}`,
+        `  Agency: ${match.agency || "(unknown)"}`,
+        `  Notice type: ${match.notice_type || "(unknown)"}`,
+        `  NAICS: ${match.naics_code || "(none)"}`,
+        `  Set-aside: ${match.set_aside_code || "(open)"}`,
+        match.award_amount ? `  Estimated value: $${match.award_amount.toLocaleString()}` : "",
+        match.description_url ? `  Description snippet: ${String(match.description_url).slice(0, 600)}` : "",
+    ].filter(Boolean).join("\n");
+
+    try {
+        const res = await fetch("https://api.openai.com/v1/chat/completions", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${openaiKey}` },
+            body: JSON.stringify({
+                model: "gpt-4o-mini",
+                messages: [
+                    {
+                        role: "system",
+                        content: "You write personalized 2-sentence federal-contracting fit summaries for a small-business lead-magnet. Write IN SECOND PERSON (you / your company). Reference specific things about the company (their services, certifications, state, size) AND the opportunity (agency, set-aside, NAICS). Avoid filler. NEVER invent facts about the company that aren't in the input. Cap output at 350 characters.",
+                    },
+                    { role: "user", content: userMsg },
+                ],
+                max_tokens: 140,
+                temperature: 0.4,
+            }),
+            signal: AbortSignal.timeout(15000),
+        });
+        if (!res.ok) return fallback;
+        const data = await res.json();
+        const text = (data.choices?.[0]?.message?.content || "").trim();
+        return text || fallback;
+    } catch {
+        return fallback;
+    }
+}
+
 async function generateSummary(
     companyName: string,
     description: string,
@@ -308,6 +404,33 @@ export async function runPostConfirmationPipeline(analysisId: string): Promise<v
 
         await sb.from("company_analyses").update({ status: "generating" }).eq("id", analysisId);
 
+        // ── AI per-match summaries ────────────────────────────────────────────
+        // For each of the top matches, generate a 2-sentence "why this fits YOU"
+        // blurb. Runs in parallel. If OPENAI is not configured we fall back to a
+        // deterministic line so the UI never shows an empty state.
+        const description = (crawlData.description as string) || "";
+        const services = (crawlData.services as string[]) || [];
+        const companyContext: CompanyContextForAi = {
+            companyName,
+            description,
+            services,
+            naicsCodes: tempProfile.naics_codes,
+            certifications: tempProfile.sba_certifications,
+            state: tempProfile.state || "",
+            employeeCount: tempProfile.employee_count ?? null,
+            yearsInBusiness: (inferredProfile.years_in_business as number) || null,
+            capStatementText: (inferredProfile.cap_statement_text as string) || "",
+        };
+        const summaryEntries = await Promise.all(
+            topMatches.map(async (m) => {
+                const summary = await generateMatchSummary(companyContext, m);
+                return [m.opportunity_id, summary] as const;
+            }),
+        );
+        const aiMatchSummaries: Record<string, string> = Object.fromEntries(summaryEntries);
+        // Persist progressively so the UI can render summaries as we go
+        await sb.from("company_analyses").update({ ai_match_summaries: aiMatchSummaries }).eq("id", analysisId);
+
         // Cert recommendations (need titles for primary opps)
         const oppIdsForCerts = allOpps.slice(0, 500).map(o => o.id);
         const oppTitleMap = new Map<string, string>();
@@ -332,9 +455,7 @@ export async function runPostConfirmationPipeline(analysisId: string): Promise<v
         // Easy wins (post-confirmation: use confirmed profile)
         const easyWins = computeEasyWins(crawlData, samData, inferredNaics, tempProfile);
 
-        // Generate company summary
-        const description = (crawlData.description as string) || "";
-        const services = (crawlData.services as string[]) || [];
+        // Generate company summary — reuses description/services declared above for AI summaries
         const summary = await generateSummary(companyName, description, services, certifications);
 
         // Find Top 3 Competitors via USASpending
