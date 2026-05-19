@@ -267,6 +267,10 @@ export function toLegacyCrawlData(r: RunQuickCheckOutput): Record<string, unknow
         partnerships: ex.partnerships,
         awards: ex.awards,
         capability_keywords: ex.capability_keywords,
+        // NAICS suggestions from the crawler's own gpt-4o-mini run — surfacing
+        // these lets the downstream analyze-company route skip its redundant
+        // gpt-4o NAICS call (was the #1 bottleneck — 10-25s wasted per analysis).
+        naics_suggestions: r.naics_suggestions,
         quick_checker_source: r.source,
         quick_checker_errors: r.errors,
     };

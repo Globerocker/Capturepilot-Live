@@ -30,7 +30,10 @@ export async function analyzeCompany(
     try {
         const result = await runQuickCheck(website, {
             companyName: companyName || undefined,
-            maxPages: 5,
+            // Cut from 5 → 3: homepage + 2 most-interesting links. Each extra
+            // page adds ~3-8s of Firecrawl latency and disproportionately
+            // little extra signal — the markdown is already 40k-capped.
+            maxPages: 3,
         });
         const legacy = toLegacyCrawlData(result) as unknown as CrawlData;
         const success = (result.raw_pages.length > 0) && (

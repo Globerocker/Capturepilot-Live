@@ -8,11 +8,11 @@ interface AnalysisProgressStepperProps {
 }
 
 const steps = [
-    { icon: Globe, label: "Crawling website", description: "Scanning your website for services, certifications & contact info..." },
-    { icon: Database, label: "Enriching data", description: "Checking SAM.gov registration & federal award history..." },
-    { icon: Target, label: "Classifying industry", description: "Identifying your NAICS codes using AI..." },
-    { icon: Search, label: "Finding opportunities", description: "Searching SAM.gov for matching government contracts..." },
-    { icon: Sparkles, label: "Generating results", description: "Scoring matches & building your report..." },
+    { icon: Globe, label: "Crawling website", description: "Reading your homepage + 2 sub-pages via Firecrawl. ~5-15 sec." },
+    { icon: Database, label: "Enriching data", description: "SAM.gov registration + USASpending award history. ~10-20 sec." },
+    { icon: Target, label: "Classifying industry", description: "Inferring your NAICS codes from the scraped content. ~5-15 sec." },
+    { icon: Search, label: "Finding opportunities", description: "Scoring 40,000+ federal contracts against your profile. ~10-20 sec." },
+    { icon: Sparkles, label: "Generating results", description: "Writing personalized fit summaries for each match. ~10-15 sec." },
 ];
 
 // Map API status strings to step numbers

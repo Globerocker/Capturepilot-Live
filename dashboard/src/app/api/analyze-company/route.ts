@@ -737,9 +737,36 @@ async function runAnalysisPipeline(analysisId: string, initialCompanyName: strin
             }
         }
 
-        // OpenAI classification — primary source for the rest
+        // Crawler-supplied suggestions — the unified Quick Checker pipeline ran
+        // gpt-4o-mini against the markdown a few seconds ago, so we already have
+        // good candidates. Use them directly to avoid a second gpt-4o call (was
+        // adding 10-25s per analysis and frequently pushing us past Vercel's
+        // 120s function ceiling, leaving the row stuck at "classifying").
+        const crawlerNaics = (crawlData.naics_suggestions as Array<{
+            code: string; label?: string; confidence?: number; reasoning?: string;
+        }> | undefined) || [];
         let aiSucceeded = false;
-        if (process.env.OPENAI_API_KEY) {
+        for (const c of crawlerNaics) {
+            if (!isValidNaicsCode(c.code)) continue;
+            aiSucceeded = true;
+            const conf = typeof c.confidence === "number" ? c.confidence : 0.8;
+            const existing = inferredNaics.find(x => x.code === c.code);
+            if (existing) {
+                existing.confidence = Math.max(existing.confidence, conf);
+            } else {
+                inferredNaics.push({
+                    code: c.code,
+                    label: c.label || labelForCode(c.code),
+                    confidence: Math.min(conf, 0.95),
+                    matched_keywords: c.reasoning ? [c.reasoning] : ["Crawler AI classification"],
+                });
+            }
+        }
+
+        // FALLBACK 1: explicit gpt-4o classification — only when the crawler
+        // produced nothing usable. Rare path; the crawler step almost always
+        // succeeds on real sites.
+        if (!aiSucceeded && process.env.OPENAI_API_KEY) {
             const aiNaics = await inferNaicsOpenAI(companyName, description, services, pageContent);
             if (aiNaics.length > 0) {
                 aiSucceeded = true;
@@ -747,7 +774,6 @@ async function runAnalysisPipeline(analysisId: string, initialCompanyName: strin
                     if (!isValidNaicsCode(ai.code)) continue;
                     const existing = inferredNaics.find(x => x.code === ai.code);
                     if (existing) {
-                        // Already have it from SAM/USA — keep the higher confidence
                         existing.confidence = Math.max(existing.confidence, ai.confidence);
                     } else {
                         inferredNaics.push({
@@ -761,7 +787,7 @@ async function runAnalysisPipeline(analysisId: string, initialCompanyName: strin
             }
         }
 
-        // FALLBACK: keyword classifier — only if AI failed AND we have nothing from SAM/USA
+        // FALLBACK 2: pure-keyword classifier — only when both AI paths failed.
         if (!aiSucceeded && inferredNaics.length === 0) {
             const keywordResults = classifyNaics(description, services, pageContent);
             inferredNaics.push(...keywordResults);
