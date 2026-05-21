@@ -7,7 +7,10 @@ import { generateCertRecommendations } from "@/lib/cert-recommendations";
 import { analyzeCompany } from "@/lib/crawler";
 import { findCompetitors, computeReadinessScore } from "@/lib/quick-checker-helpers";
 
-export const maxDuration = 120;
+// Pro plan ceiling. The pipeline runs in after() so it shares this budget.
+// We were getting silent kills at 120s on slow Firecrawl + OpenAI runs that
+// left rows pinned at "classifying" with no error.
+export const maxDuration = 300;
 
 const SAM_API_KEY = process.env.SAM_API_KEY || "";
 const SAM_ENTITY_URL = "https://api.sam.gov/entity-information/v3/entities";
@@ -600,86 +603,108 @@ async function runAnalysisPipeline(analysisId: string, initialCompanyName: strin
     let uei = initialUei;
 
     try {
-        // IF we have UEI, ALWAYS fetch SAM first to resolve authoritative info
-        let samData: Record<string, unknown> | null = null;
-        if (uei && uei.length === 12) {
-            samData = await lookupSamEntity(uei);
-            if (samData) {
-                companyName = (samData.company_name as string) || companyName;
-
-                await sb.from("company_analyses").update({ 
-                    sam_data: samData, 
-                    company_name: companyName,
-                    uei: uei
-                }).eq("id", analysisId);
-            }
-        }
-
-        // Step 1: Crawl company website with CheerioCrawler (if we have a website)
-        let crawlData: Record<string, unknown> = {};
-        if (website) {
-            try {
-                const crawlResult = await analyzeCompany(companyName, website);
-                if (crawlResult.success && crawlResult.data) {
-                    crawlData = crawlResult.data as unknown as Record<string, unknown>;
-                }
-                if (crawlResult.errors.length > 0) {
-                    console.warn("Crawl warnings:", crawlResult.errors);
-                }
-            } catch (e) {
+        // Parallel boot:
+        // - If we already have a UEI, fetch SAM in parallel with the crawl.
+        // - Crawl the website (Firecrawl + OpenAI extraction + OpenAI NAICS).
+        // - Pre-warm valid NAICS DB whitelist for the classify step.
+        // Burning these in parallel saves 10-25s of wall-clock and is what
+        // killed us at the 120s Vercel ceiling on slow analyses.
+        const initialSamPromise: Promise<Record<string, unknown> | null> = (uei && uei.length === 12)
+            ? lookupSamEntity(uei)
+            : Promise.resolve(null);
+        const crawlPromise: Promise<{ success: boolean; data: Record<string, unknown>; errors: string[] }> = website
+            ? analyzeCompany(companyName, website).then(r => ({ success: r.success, data: r.data as unknown as Record<string, unknown>, errors: r.errors })).catch(e => {
                 console.error("Crawler error:", e);
+                return { success: false, data: {} as Record<string, unknown>, errors: [(e as Error).message || "crawl failed"] };
+            })
+            : Promise.resolve({ success: false, data: {} as Record<string, unknown>, errors: [] });
+        const validNaicsPromise: Promise<Set<string> | null> = (async () => {
+            try {
+                const { data } = await sb.from("naics_codes").select("code");
+                return new Set(((data || []) as { code: string }[]).map(r => r.code));
+            } catch {
+                return null;
             }
-        }
+        })();
+
+        const [samFromUei, crawlResult, validDbCodes] = await Promise.all([
+            initialSamPromise,
+            crawlPromise,
+            validNaicsPromise,
+        ]);
+
+        let samData: Record<string, unknown> | null = samFromUei;
+        if (samData) companyName = (samData.company_name as string) || companyName;
+
+        const crawlData: Record<string, unknown> = crawlResult.data || {};
+        if (crawlResult.errors.length > 0) console.warn("Crawl warnings:", crawlResult.errors);
 
         // Auto-detect company name from crawled website — only if user didn't provide one
         const crawledName = crawlData.company_name as string | undefined;
         if (!userProvidedName && crawledName && crawledName.length > 1) {
             companyName = crawledName;
-            await sb.from("company_analyses").update({ company_name: companyName }).eq("id", analysisId);
         }
 
         // Auto-detect UEI from crawl data if user didn't provide one
         const detectedUei = crawlData.detected_uei as string | null;
         if (!uei && detectedUei && detectedUei.length === 12) {
             uei = detectedUei;
-            await sb.from("company_analyses").update({ uei }).eq("id", analysisId);
         }
 
-        await sb.from("company_analyses").update({ status: "enriching", crawl_data: crawlData }).eq("id", analysisId);
+        // Persist what we have so far in one write (status="enriching"). Saves
+        // a roundtrip vs. the previous N sequential updates and gives the
+        // result page something concrete to render even if we die later.
+        await sb.from("company_analyses").update({
+            status: "enriching",
+            crawl_data: crawlData,
+            company_name: companyName,
+            ...(uei ? { uei } : {}),
+            ...(samData ? { sam_data: samData } : {}),
+        }).eq("id", analysisId);
 
-        // Step 2: SAM.gov lookup
-        // First try by UEI (if we have one from user input, crawl detection, or pre-fetched above)
-        // If no UEI, search SAM.gov by company name to find their registration
-        if (!samData && uei && uei.length === 12) {
-            samData = await lookupSamEntity(uei);
-        }
+        // Step 2: Remaining SAM lookup (by name) + USASpending in parallel.
+        // SAM-by-name is sequential (search → entity), but it can run alongside
+        // USASpending which only needs the company name.
+        const samByNamePromise: Promise<{ sam: Record<string, unknown> | null; uei: string | null }> = (!samData && companyName.length >= 3)
+            ? (async () => {
+                const discoveredUei = await searchSamByName(companyName);
+                if (!discoveredUei) return { sam: null, uei: null };
+                const sam = await lookupSamEntity(discoveredUei);
+                return { sam, uei: sam ? discoveredUei : null };
+            })().catch(() => ({ sam: null, uei: null as string | null }))
+            : Promise.resolve({ sam: null, uei: null as string | null });
 
-        if (!samData && companyName.length >= 3) {
-            // Search SAM.gov by company name to discover their UEI
-            const discoveredUei = await searchSamByName(companyName);
-            if (discoveredUei) {
-                uei = discoveredUei;
-                samData = await lookupSamEntity(uei);
-                if (samData) {
-                    await sb.from("company_analyses").update({ uei }).eq("id", analysisId);
-                }
+        // First USASpending pass uses whatever UEI we already have (may be null).
+        // If samByName finds a UEI, we'll do a quick second pass — cheap (single
+        // POST, 12s timeout) but more precise.
+        const initialUsaPromise: Promise<UsaSpendingData | null> = lookupUsaSpending(companyName, uei || undefined).catch(() => null);
+
+        const [samByName, initialUsa] = await Promise.all([samByNamePromise, initialUsaPromise]);
+
+        let usaspendingData: UsaSpendingData | null = initialUsa;
+        if (samByName.sam && !samData) {
+            samData = samByName.sam;
+            if (samByName.uei) uei = samByName.uei;
+            if (samData.company_name) companyName = samData.company_name as string;
+            // Re-run USASpending with the now-resolved UEI for precision.
+            const refined = await lookupUsaSpending(companyName, uei || undefined).catch(() => null);
+            if (refined && (refined.award_count > (usaspendingData?.award_count || 0))) {
+                usaspendingData = refined;
             }
         }
+        if (usaspendingData) crawlData.usaspending_data = usaspendingData;
 
-        if (samData) {
-            // SAM.gov data provides authoritative company name and state
-            if (samData.company_name) companyName = samData.company_name as string;
-            await sb.from("company_analyses").update({ sam_data: samData, company_name: companyName }).eq("id", analysisId);
-        }
-
-        // USASpending enrichment — prefer UEI-based lookup for precision
-        let usaspendingData: UsaSpendingData | null = null;
-        usaspendingData = await lookupUsaSpending(companyName, uei || undefined);
-        if (usaspendingData) {
-            crawlData.usaspending_data = usaspendingData;
-        }
-
-        await sb.from("company_analyses").update({ status: "classifying" }).eq("id", analysisId);
+        // Flip status to classifying and persist anything new we learned in the
+        // enrichment block (sam_data via by-name search, USASpending data, the
+        // possibly-updated company_name/uei). If the function gets killed
+        // during classification, the row still has all this data.
+        await sb.from("company_analyses").update({
+            status: "classifying",
+            company_name: companyName,
+            crawl_data: crawlData,
+            ...(uei ? { uei } : {}),
+            ...(samData ? { sam_data: samData } : {}),
+        }).eq("id", analysisId);
 
         // Step 3: NAICS classification — AI-FIRST
         // We call OpenAI gpt-4o with the full company context (name, description, services,
@@ -691,13 +716,7 @@ async function runAnalysisPipeline(analysisId: string, initialCompanyName: strin
         const samNaics = samData ? (samData.naics_codes as string[]) : undefined;
         const usaNaics = usaspendingData?.naics_from_awards || [];
 
-        // Load valid NAICS codes from DB to validate any AI-returned codes
-        let validDbCodes: Set<string> | null = null;
-        try {
-            const { data: dbCodes } = await sb.from("naics_codes").select("code");
-            validDbCodes = new Set((dbCodes || []).map((r: { code: string }) => r.code));
-        } catch { /* fallback to static file */ }
-
+        // validDbCodes was pre-warmed in the parallel boot block above.
         const isValidNaicsCode = (code: string): boolean => {
             if (validDbCodes?.has(code)) return true;
             return NAICS_CODES.some((n: { code: string }) => n.code === code);

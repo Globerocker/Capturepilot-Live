@@ -159,7 +159,20 @@ function CheckContent() {
                     return;
                 }
                 setStep(statusToStep(data.status));
-                if (data.status === "complete") {
+                // Hand off to the result page as soon as the pipeline has
+                // produced something the user can interact with. The result
+                // page handles the confirm step, the in-progress UI for the
+                // post-confirm scoring phase, and the final report — so any
+                // status past "classifying" belongs there.
+                const HANDOFF_STATUSES = new Set([
+                    "awaiting_confirmation",
+                    "scoring",
+                    "finding_opportunities",
+                    "finding_competitors",
+                    "generating",
+                    "complete",
+                ]);
+                if (HANDOFF_STATUSES.has(data.status)) {
                     stopPolling();
                     router.push(`/check/${id}`);
                 }
