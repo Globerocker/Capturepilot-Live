@@ -80,14 +80,6 @@
             "schedule": "0 14 * * 1-5"
         },
         {
-            "path": "/api/cron/ingest_dod_contracts",
-            "schedule": "0 22 * * 1-5"
-        },
-        {
-            "path": "/api/cron/ingest_gao_protests_v2",
-            "schedule": "30 10 * * *"
-        },
-        {
             "path": "/api/cron/ingest_calc",
             "schedule": "30 4 * * 0"
         },
@@ -162,6 +154,14 @@
         {
             "path": "/api/cron/ingest_gsa_elibrary",
             "schedule": "0 10 * * 3"
+        },
+        {
+            "path": "/api/cron/ingest_sec_filings_primes",
+            "schedule": "0 11 * * 4"
+        },
+        {
+            "path": "/api/cron/sync_govtribe_activity",
+            "schedule": "0 13 * * *"
         }
     ],
     "functions": {
