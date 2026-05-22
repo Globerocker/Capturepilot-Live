@@ -502,14 +502,22 @@ function PageHeader({ companyName, pageEyebrow, logoUrl }: { companyName: string
 }
 
 function PageFooter({ generatedAt }: { generatedAt: string }) {
+    // Flat structure — react-pdf 4.x has a quirk where a `fixed` + absolute
+    // View containing a NESTED View child doesn't get re-emitted on every
+    // page break. Keeping every child as a direct <Text> at the top level
+    // of the footer View makes the `fixed` re-emit work reliably.
     return (
         <View style={s.pageFooter} fixed>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                <Text style={{ color: COLOR.primary }}>CapturePilot</Text>
-                <Text style={s.pageFooterMuted}>· app.capturepilot.com</Text>
-            </View>
-            <Text style={s.pageFooterMuted}>Generated {fmtDate(generatedAt)}</Text>
-            <Text render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`} />
+            <Text style={{ color: COLOR.primary, fontFamily: FONT.bold, fontSize: 8 }}>
+                CapturePilot · app.capturepilot.com
+            </Text>
+            <Text style={s.pageFooterMuted}>
+                Federal Readiness Report · {fmtDate(generatedAt)}
+            </Text>
+            <Text
+                style={{ fontFamily: FONT.bold, fontSize: 8, color: COLOR.ink }}
+                render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`}
+            />
         </View>
     );
 }
