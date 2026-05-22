@@ -55,13 +55,52 @@ create index if not exists idx_opps_needs_ai_strategy
            or ai_win_strategy::text = '{}');
 
 
--- --- 2) government_contacts email unique fix ----------------
--- Add a plain unique partial index that PostgREST can use as onConflict.
--- Keep the legacy lower(email) one — it doesn't hurt (and migrations
--- shouldn't drop columns/indexes that other code may rely on).
-create unique index if not exists ux_gov_contacts_email_plain
-    on public.government_contacts (email)
-    where email is not null and email <> '';
+-- --- 2) government_contacts upsert fixes --------------------
+-- PostgREST's `onConflict:"col"` reads from pg_constraint, NOT from
+-- pg_index. The two unique entries created in migration 065 were
+-- `create unique index ... where ...` (partial expression indexes),
+-- which Postgres-the-database treats as unique but PostgREST can't
+-- match against an ON CONFLICT spec. Result: every upsert from the
+-- cron returned "no unique or exclusion constraint matching the ON
+-- CONFLICT specification" and 0 rows landed.
+--
+-- Fix: add real UNIQUE CONSTRAINTS on the two dedup columns. We use
+-- non-partial constraints — Postgres treats multiple NULLs as distinct
+-- under its default UNIQUE semantics, so contacts without a path or
+-- email don't collide.
+do $$
+begin
+    if not exists (
+        select 1 from pg_constraint
+        where conname = 'uq_gov_contacts_highergov_path'
+          and conrelid = 'public.government_contacts'::regclass
+    ) then
+        alter table public.government_contacts
+            add constraint uq_gov_contacts_highergov_path
+            unique (highergov_path);
+    end if;
+exception when duplicate_table or duplicate_object then
+    -- ignore race
+end $$;
+
+-- For email we keep it case-insensitive via the existing lower(email)
+-- index; the new constraint is on the raw column for PostgREST. The
+-- HigherGov cron normalizes email to lower() before insert, so the two
+-- indexes stay consistent.
+do $$
+begin
+    if not exists (
+        select 1 from pg_constraint
+        where conname = 'uq_gov_contacts_email'
+          and conrelid = 'public.government_contacts'::regclass
+    ) then
+        alter table public.government_contacts
+            add constraint uq_gov_contacts_email
+            unique (email);
+    end if;
+exception when duplicate_table or duplicate_object then
+    -- ignore race
+end $$;
 
 
 -- --- 3) cron_runs telemetry table ---------------------------
