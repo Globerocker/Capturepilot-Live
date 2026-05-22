@@ -10,7 +10,8 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import clsx from "clsx";
-import { AnalysisProgressStepper, statusToStep } from "@/components/AnalysisProgressStepper";
+import { statusToStep } from "@/components/AnalysisProgressStepper";
+import AnalysisLoadingScreen from "@/components/AnalysisLoadingScreen";
 
 // Big-claim numbers reused across the marketing site
 const STATS = [
@@ -124,6 +125,7 @@ function CheckContent() {
     const [capFile, setCapFile] = useState<File | null>(null);
     const [running, setRunning] = useState(false);
     const [step, setStep] = useState(0);
+    const [currentStatus, setCurrentStatus] = useState<string>("crawling");
     const [error, setError] = useState("");
     const [displayName, setDisplayName] = useState("");
     const [openFaq, setOpenFaq] = useState<number | null>(0);
@@ -159,6 +161,7 @@ function CheckContent() {
                     return;
                 }
                 setStep(statusToStep(data.status));
+                setCurrentStatus(data.status);
                 // Hand off to the result page as soon as the pipeline has
                 // produced something the user can interact with. The result
                 // page handles the confirm step, the in-progress UI for the
@@ -206,6 +209,7 @@ function CheckContent() {
         setRunning(true);
         setError("");
         setStep(0);
+        setCurrentStatus("crawling");
         setDisplayName(getDomain(url));
         fetch("/api/analyze-company", {
             method: "POST",
@@ -277,32 +281,23 @@ function CheckContent() {
     // ── Running state ────────────────────────────────────────────────────────
     if (running) {
         return (
-            <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-stone-50 to-blue-50 flex items-center justify-center px-4">
-                <div className="max-w-md mx-auto w-full">
-                    <div className="text-center mb-8">
-                        <div className="flex items-center justify-center gap-2 mb-4">
-                            <Image src="/logo.png" alt="CapturePilot" width={20} height={20} className="rounded" />
-                            <span className="font-bold text-lg">CapturePilot</span>
-                        </div>
-                        <h2 className="font-bold text-xl sm:text-2xl mb-2">
-                            Analyzing {displayName}
-                        </h2>
-                        <p className="text-sm text-stone-500">Crawling website &amp; matching against federal opportunities…</p>
+            <div>
+                <AnalysisLoadingScreen
+                    companyName={displayName}
+                    status={currentStatus || "crawling"}
+                />
+                {error && (
+                    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 max-w-md w-[calc(100%-2rem)] bg-red-50 border border-red-200 rounded-2xl p-4 text-center shadow-lg">
+                        <p className="text-sm text-red-600 mb-3">{error}</p>
+                        <button
+                            type="button"
+                            onClick={() => { setRunning(false); setError(""); stopPolling(); }}
+                            className="bg-black text-white px-5 py-2 rounded-xl text-sm font-bold"
+                        >
+                            Try Again
+                        </button>
                     </div>
-                    <AnalysisProgressStepper currentStep={step} />
-                    {error && (
-                        <div className="mt-6 bg-red-50 border border-red-200 rounded-2xl p-4 text-center">
-                            <p className="text-sm text-red-600 mb-3">{error}</p>
-                            <button
-                                type="button"
-                                onClick={() => { setRunning(false); setError(""); stopPolling(); }}
-                                className="bg-black text-white px-5 py-2 rounded-xl text-sm font-bold"
-                            >
-                                Try Again
-                            </button>
-                        </div>
-                    )}
-                </div>
+                )}
             </div>
         );
     }
