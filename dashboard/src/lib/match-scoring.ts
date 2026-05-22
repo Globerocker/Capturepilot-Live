@@ -424,10 +424,20 @@ export function scoreOpportunityLeadMagnet(
         return null;
     }
 
-    // HARD GATE #2: NAICS must match at least at 4-digit level (0.6+)
-    // Without this, default scores from other factors let random opps through
+    // HARD GATE #2: NAICS must match at least at 3-digit sub-sector level (0.3+).
+    // 4-digit (0.6) is preferred; 3-digit (0.3) sub-sector matches are allowed
+    // when other signals (keywords, geo, set-aside) carry weight. Anything
+    // below 3-digit (different sub-sector entirely) is rejected — those are
+    // genuinely unrelated industries.
+    //
+    // Empirical reason for the relaxation: niche 6-digit codes like 115116
+    // (Farm Management Services) have almost no exact opportunities in our
+    // DB, but the same 3-digit prefix 115 (Support Activities for Ag & Forestry)
+    // has 40+ active opps that are extremely relevant to a precision-ag firm.
+    // The lower NAICS contribution (0.3 vs 0.6) plus the final 0.30 floor
+    // ensures only matches with real signal elsewhere actually surface.
     const naics = scoreNaics(profile.naics_codes || [], opp.naics_code);
-    if (naics < 0.6) return null; // Reject if not even a 4-digit NAICS prefix match
+    if (naics < 0.3) return null;
 
     const nt = scoreNoticeType(opp.notice_type);
     if (nt === null) return null;

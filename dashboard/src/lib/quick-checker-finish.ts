@@ -420,36 +420,63 @@ export async function runPostConfirmationPipeline(analysisId: string): Promise<v
                 offset += batchSize;
             }
 
-            // Broader 4-digit-prefix pass — if the exact 6-digit NAICS has
-            // sparse coverage (common for niche codes like 115116 Farm
-            // Management Services, where our DB has 0 opps but plenty of
-            // adjacent 11xxxx ag-services opps), pull in everything that
-            // shares the 4-digit prefix. scoreNaics() already returns 0.6
-            // for prefix matches vs 1.0 for exact, so ranking stays sane.
+            // Broader prefix passes — if the exact 6-digit NAICS has sparse
+            // coverage (common for niche codes like 115116 Farm Management
+            // Services where our DB has 0 opps), step UP the NAICS hierarchy:
+            //   1) 4-digit prefix (industry group, e.g. 1151 Support Activities
+            //      for Crop Production) — scoreNaics returns 0.6.
+            //   2) 3-digit prefix (sub-sector, e.g. 115 Support Activities for
+            //      Agriculture & Forestry) — scoreNaics returns 0.3.
+            // Each pass is FILTERED to active opportunities only (future
+            // deadlines OR no deadline / Sources-Sought-style notices) so we
+            // don't waste budget loading expired or Award-Notice rows that
+            // the scorer would just reject downstream.
+            const nowIso = new Date().toISOString();
+            const fetchByPrefix = async (prefix: string, soft: boolean) => {
+                let poffset = 0;
+                const collected: OpportunityForScoring[] = [];
+                while (true) {
+                    let q = sb
+                        .from("opportunities")
+                        .select("id, naics_code, psc_code, notice_type, agency, set_aside_code, place_of_performance_state, award_amount, response_deadline")
+                        .eq("is_archived", false)
+                        .like("naics_code", `${prefix}%`);
+                    if (soft) {
+                        // Active-deadline filter: future OR no deadline (SAM
+                        // often leaves deadline null for Sources Sought
+                        // pre-RFI activity).
+                        q = q.or(`response_deadline.gte.${nowIso},response_deadline.is.null`);
+                    }
+                    const { data: pbatch } = await q.range(poffset, poffset + batchSize - 1);
+                    if (!pbatch || pbatch.length === 0) break;
+                    collected.push(...(pbatch as unknown as OpportunityForScoring[]));
+                    if (pbatch.length < batchSize) break;
+                    poffset += batchSize;
+                    if (poffset >= batchSize) break;
+                }
+                return collected;
+            };
+
+            const ensureUnique = (cands: OpportunityForScoring[], exactSet: Set<string>) => {
+                for (const opp of cands) {
+                    if (!exactSet.has(opp.id)) {
+                        allOpps.push(opp);
+                        exactSet.add(opp.id);
+                    }
+                }
+            };
+
             if (allOpps.length < 50) {
-                const prefixes = Array.from(new Set(primaryNaics.map(c => c.slice(0, 4)))).filter(Boolean);
                 const exactSet = new Set(allOpps.map(o => o.id));
-                for (const prefix of prefixes) {
-                    let poffset = 0;
-                    while (true) {
-                        const { data: pbatch } = await sb
-                            .from("opportunities")
-                            .select("id, naics_code, psc_code, notice_type, agency, set_aside_code, place_of_performance_state, award_amount, response_deadline")
-                            .eq("is_archived", false)
-                            .like("naics_code", `${prefix}%`)
-                            .range(poffset, poffset + batchSize - 1);
-                        if (!pbatch || pbatch.length === 0) break;
-                        for (const opp of pbatch as unknown as OpportunityForScoring[]) {
-                            if (!exactSet.has(opp.id)) {
-                                allOpps.push(opp);
-                                exactSet.add(opp.id);
-                            }
-                        }
-                        if (pbatch.length < batchSize) break;
-                        poffset += batchSize;
-                        // Don't keep paging on the broad query — first 1000
-                        // prefix-matched opps is plenty for the 4-digit fallback.
-                        if (poffset >= batchSize) break;
+                const prefixes4 = Array.from(new Set(primaryNaics.map(c => c.slice(0, 4)))).filter(Boolean);
+                for (const p of prefixes4) {
+                    ensureUnique(await fetchByPrefix(p, true), exactSet);
+                }
+                // Still sparse? Step up to 3-digit sub-sector.
+                if (allOpps.length < 25) {
+                    const prefixes3 = Array.from(new Set(primaryNaics.map(c => c.slice(0, 3)))).filter(Boolean);
+                    for (const p of prefixes3) {
+                        ensureUnique(await fetchByPrefix(p, true), exactSet);
                     }
                 }
             }
