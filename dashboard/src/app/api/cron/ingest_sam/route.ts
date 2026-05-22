@@ -75,9 +75,18 @@ export async function GET(req: NextRequest) {
 
     try {
         const supabase = getSupabase();
-        const SAM_API_KEY = process.env.SAM_API_KEY!;
+        // Primary key + optional backup. If the primary returns 401/403 mid-run
+        // (revoked / quota exhausted), we swap to the secondary and keep going
+        // — silently losing a whole day of opps because one key flipped is the
+        // exact failure mode that put us 9 days behind on 2026-05-13.
+        const SAM_KEYS = [process.env.SAM_API_KEY, process.env.SAM_API_KEY_2]
+            .filter((k): k is string => !!k && k.length > 10);
+        if (SAM_KEYS.length === 0) {
+            return NextResponse.json({ error: "No SAM_API_KEY configured" }, { status: 500 });
+        }
+        let activeKeyIdx = 0;
         const startTime = Date.now();
-        console.log("Starting SAM Strategic Ingestion (daily)...");
+        console.log(`Starting SAM Strategic Ingestion (daily) — ${SAM_KEYS.length} key(s) available...`);
 
         // Date range: last 7 days — wider window catches backfills +
         // holiday-weekend drift. Upsert key (notice_id) keeps it idempotent
@@ -121,18 +130,29 @@ export async function GET(req: NextRequest) {
             while (keepFetching) {
                 const url = `https://api.sam.gov/opportunities/v2/search?postedFrom=${fromStr}&postedTo=${toStr}&limit=${limit}&offset=${offset}&ptype=${ptype}`;
 
-                const res = await fetch(url, {
-                    headers: { "X-Api-Key": SAM_API_KEY },
+                let res = await fetch(url, {
+                    headers: { "X-Api-Key": SAM_KEYS[activeKeyIdx]! },
                 });
+
+                // Auth/quota failure on the active key → try the next available
+                // one before giving up on the whole ptype.
+                if ((res.status === 401 || res.status === 403 || res.status === 429) && activeKeyIdx < SAM_KEYS.length - 1) {
+                    const failed = activeKeyIdx;
+                    activeKeyIdx += 1;
+                    console.warn(`SAM key #${failed} returned ${res.status} — rotating to key #${activeKeyIdx}`);
+                    res = await fetch(url, {
+                        headers: { "X-Api-Key": SAM_KEYS[activeKeyIdx]! },
+                    });
+                }
 
                 if (!res.ok) {
                     // Capture body so we know if it's 403 (quota), 401 (bad key),
                     // 429 (burst), or something else. Previous "Error: 403" was
                     // useless for diagnosis.
                     const body = await res.text().catch(() => "<unreadable>");
-                    console.error(`SAM API Error: ${res.status} ${res.statusText} — ptype=${ptype} offset=${offset} body=${body.slice(0, 400)}`);
+                    console.error(`SAM API Error: ${res.status} ${res.statusText} — ptype=${ptype} offset=${offset} key#${activeKeyIdx} body=${body.slice(0, 400)}`);
                     if (res.status === 429 || res.status === 403) {
-                        console.error("Likely SAM rate-limit hit. ingest_sam aborting — quota probably consumed by other SAM-hitting crons. Reschedule or upgrade SAM key.");
+                        console.error("All SAM keys exhausted or rate-limited. Aborting this ptype.");
                     }
                     break;
                 }
