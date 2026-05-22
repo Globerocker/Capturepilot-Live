@@ -150,6 +150,10 @@
         {
             "path": "/api/cron/enrich_gov_contacts_apollo",
             "schedule": "0 8 * * *"
+        },
+        {
+            "path": "/api/cron/ingest_rss",
+            "schedule": "30 2 * * *"
         }
     ],
     "functions": {
