@@ -313,7 +313,7 @@ export async function POST(
     }
 
     // Idempotency: if the pipeline already finished, don't re-run.
-    if (["awaiting_confirmation", "scoring", "finding_opportunities", "finding_competitors", "generating", "complete"].includes(seed.status as string)) {
+    if (["awaiting_naics_selection", "scoring", "finding_opportunities", "finding_competitors", "generating", "complete"].includes(seed.status as string)) {
         return NextResponse.json({ success: true, status: seed.status, note: "already past classify" });
     }
 
@@ -546,7 +546,7 @@ export async function POST(
         const emailUpdate = !currentRecord?.lead_email && finalFallbackEmail ? { lead_email: finalFallbackEmail } : {};
 
         await sb.from("company_analyses").update({
-            status: "awaiting_confirmation",
+            status: "awaiting_naics_selection",
             inferred_naics: inferredNaics,
             inferred_profile: initialInferredProfile,
             crawl_data: crawlData,
@@ -584,7 +584,7 @@ export async function POST(
                 .catch(() => {});
         }
 
-        return NextResponse.json({ success: true, status: "awaiting_confirmation", analysis_id: analysisId });
+        return NextResponse.json({ success: true, status: "awaiting_naics_selection", analysis_id: analysisId });
 
     } catch (error) {
         console.error("Pipeline error:", error);

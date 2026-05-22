@@ -595,7 +595,7 @@ export default function CheckResultsPage() {
 
     // AWAITING CONFIRMATION — the user reviews crawler output BEFORE we score.
     // This is the new mid-funnel step added 2026-05-18.
-    if (data.status === "awaiting_confirmation") {
+    if (data.status === "awaiting_naics_selection") {
         return (
             <ConfirmFoundDataStep
                 analysisId={analysisId}

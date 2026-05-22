@@ -79,9 +79,9 @@ export async function POST(request: NextRequest) {
         }
 
         // Allow re-running confirmation even after the pipeline is past
-        // awaiting_confirmation — supports "Edit & re-score" from the result
+        // awaiting_naics_selection — supports "Edit & re-score" from the result
         // page. If status is "scoring" or later, we still re-run the pipeline.
-        if (!["awaiting_confirmation", "scoring", "finding_opportunities", "finding_competitors", "generating", "complete", "error"].includes(analysis.status as string)) {
+        if (!["awaiting_naics_selection", "scoring", "finding_opportunities", "finding_competitors", "generating", "complete", "error"].includes(analysis.status as string)) {
             return NextResponse.json({ error: `Cannot confirm in status ${analysis.status}` }, { status: 409 });
         }
 

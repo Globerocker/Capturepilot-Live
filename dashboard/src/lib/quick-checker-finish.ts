@@ -1,6 +1,6 @@
 /**
  * Finishes the Quick Checker pipeline AFTER the user has confirmed/corrected
- * what the crawler found (status → "awaiting_confirmation").
+ * what the crawler found (status → "awaiting_naics_selection").
  *
  * The post-confirmation steps:
  *   - score opportunities against the corrected profile (size-aware!)
