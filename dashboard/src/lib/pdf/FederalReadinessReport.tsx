@@ -163,17 +163,23 @@ const s = StyleSheet.create({
     },
     pageFooter: {
         position: "absolute",
-        bottom: 24,
+        bottom: 20,
         left: PAGE.padding,
         right: PAGE.padding,
         flexDirection: "row",
         justifyContent: "space-between",
         alignItems: "center",
-        paddingTop: 8,
-        borderTopWidth: 0.5,
-        borderTopColor: COLOR.line,
-        fontSize: 7,
+        paddingTop: 9,
+        borderTopWidth: 1,
+        borderTopColor: COLOR.primary,
+        fontSize: 8,
+        color: COLOR.ink,
+        fontFamily: FONT.bold,
+    },
+    pageFooterMuted: {
+        fontSize: 8,
         color: COLOR.muted,
+        fontFamily: FONT.body,
     },
 
     // Typography
@@ -498,7 +504,11 @@ function PageHeader({ companyName, pageEyebrow, logoUrl }: { companyName: string
 function PageFooter({ generatedAt }: { generatedAt: string }) {
     return (
         <View style={s.pageFooter} fixed>
-            <Text>Federal Readiness Report · Generated {fmtDate(generatedAt)}</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Text style={{ color: COLOR.primary }}>CapturePilot</Text>
+                <Text style={s.pageFooterMuted}>· app.capturepilot.com</Text>
+            </View>
+            <Text style={s.pageFooterMuted}>Generated {fmtDate(generatedAt)}</Text>
             <Text render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`} />
         </View>
     );
@@ -526,6 +536,70 @@ function ScoreRing({ score }: { score: number }) {
             {/* Centered number — manually positioned because @react-pdf <Text> in Svg
                 has no easy centering primitive */}
         </Svg>
+    );
+}
+
+// Compact MatchCard — used for matches #4–#N. Drops the description excerpt
+// + score-breakdown bars so we can fit 3-4 per page. Keeps the score badge,
+// chips row, matched keywords and AI summary because those are the highest
+// signal-per-pt items for a quick scan.
+function MatchCardCompact({ match, rank }: { match: ReportMatch; rank: number }) {
+    const band = classColor(match.classification);
+    const deadlineInfo = (() => {
+        if (!match.response_deadline) return null;
+        const dt = new Date(match.response_deadline).getTime();
+        if (Number.isNaN(dt)) return null;
+        const days = Math.round((dt - Date.now()) / (1000 * 60 * 60 * 24));
+        if (days < 0) return null;
+        if (days <= 7) return { label: `Closes ${days}d`, urgent: true };
+        if (days <= 30) return { label: `Closes ${days}d`, urgent: false };
+        return null;
+    })();
+    return (
+        <View style={[s.card, { paddingVertical: 9, marginBottom: 7 }]} wrap={false}>
+            <View style={s.matchHeader}>
+                <Text style={s.matchRank}>#{rank}</Text>
+                <View style={[s.matchScoreWrap, { backgroundColor: band }]}>
+                    <Text style={s.matchScoreText}>{Math.round(match.score * 100)}</Text>
+                </View>
+                <Text style={s.matchTitle}>{match.title || "Untitled Opportunity"}</Text>
+            </View>
+            <Text style={s.matchAgency}>{match.agency || "Federal Agency"}</Text>
+            <View style={s.chipsRow}>
+                <Text style={[s.chipBoldBase, { color: band, borderColor: band }]}>{match.classification}</Text>
+                {match.set_aside_code ? <Text style={s.chip}>{match.set_aside_code}</Text> : null}
+                {match.naics_code ? <Text style={s.chip}>NAICS {match.naics_code}</Text> : null}
+                {match.place_of_performance_state ? <Text style={s.chip}>{match.place_of_performance_state}</Text> : null}
+                {match.response_deadline ? <Text style={s.chip}>Due {fmtDate(match.response_deadline)}</Text> : null}
+                {match.award_amount && match.award_amount > 0 ? <Text style={s.chip}>~{fmtCurrency(match.award_amount)}</Text> : null}
+                {deadlineInfo ? (
+                    <Text style={[s.chipBoldBase, {
+                        color: deadlineInfo.urgent ? COLOR.red : COLOR.amber,
+                        borderColor: deadlineInfo.urgent ? COLOR.red : COLOR.amber,
+                    }]}>{deadlineInfo.label}</Text>
+                ) : null}
+            </View>
+            {match.matched_keywords && match.matched_keywords.length > 0 ? (
+                <View style={{ ...s.chipsRow, marginTop: 4 }}>
+                    {match.matched_keywords.slice(0, 3).map(kw => (
+                        <Text key={kw} style={s.chipKw}>&quot;{kw}&quot;</Text>
+                    ))}
+                </View>
+            ) : null}
+            {match.ai_fit_summary ? (
+                <View style={[s.aiBox, { paddingVertical: 4, marginTop: 4, marginBottom: 0 }]}>
+                    <Text style={[s.aiBoxBody, { fontSize: SIZE.sm }]}>{match.ai_fit_summary}</Text>
+                </View>
+            ) : null}
+            {match.notice_id ? (
+                <Link
+                    src={`https://sam.gov/opp/${match.notice_id}/view`}
+                    style={{ fontSize: SIZE.xs, color: COLOR.accent, textDecoration: "none", marginTop: 5 }}
+                >
+                    View on SAM.gov →
+                </Link>
+            ) : null}
+        </View>
     );
 }
 
@@ -695,8 +769,30 @@ export function FederalReadinessReport(props: ReportInput) {
     const score = readinessScore ?? 0;
     const ringColor = bandColor(score);
 
-    const matchesA = matches.slice(0, 5);
-    const matchesB = matches.slice(5, 10);
+    // Score floor — internal reports should NEVER show fits below 40%.
+    // A 35% match is technically a match but reads as "we surfaced something
+    // weak because we ran out of strong ones." Hide them entirely so the
+    // user only ever shares respectable matches.
+    const qualifiedMatches = matches.filter(m => (m.score || 0) >= 0.40);
+    // Top 3 get the full hero treatment (description excerpt + score bars).
+    // The rest get a compact card so we can fit 3-4 per page.
+    const matchesHero = qualifiedMatches.slice(0, 3);
+    const matchesCompact = qualifiedMatches.slice(3);
+
+    // Clearbit Logo API — free, no-auth, returns a square PNG of any domain's
+    // brand logo (when known). When the analyzed company has a website, we
+    // hotlink to /logo/{domain}, letting the customer's own brand mark appear
+    // on the cover so this PDF feels owned by THEM, not by us. Falls through
+    // to no-logo when Clearbit doesn't have the domain.
+    const companyLogoUrl = (() => {
+        try {
+            const host = new URL(website.startsWith("http") ? website : `https://${website}`).hostname.replace(/^www\./, "");
+            if (!host) return null;
+            return `https://logo.clearbit.com/${host}`;
+        } catch {
+            return null;
+        }
+    })();
 
     return (
         <Document
@@ -712,8 +808,22 @@ export function FederalReadinessReport(props: ReportInput) {
 
                 <View style={s.coverIntro}>
                     <Text style={s.eyebrow}>Federal Readiness Report</Text>
-                    <Text style={s.h1}>{companyName}</Text>
-                    <Text style={s.muted}>{website.replace(/^https?:\/\//, "")}{state ? ` · ${state}` : ""}{city ? `, ${city}` : ""}</Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
+                        {companyLogoUrl ? (
+                            /* Clearbit's logo CDN returns a 24×24+ PNG when
+                               the domain is known. We retry-via-fetch inside
+                               react-pdf and silently degrade to no-logo if
+                               the request 404s — never blocking the render. */
+                            <Image
+                                src={companyLogoUrl}
+                                style={{ width: 56, height: 56, borderRadius: 8, borderWidth: 0.5, borderColor: COLOR.line }}
+                            />
+                        ) : null}
+                        <View style={{ flex: 1 }}>
+                            <Text style={s.h1}>{companyName}</Text>
+                            <Text style={s.muted}>{website.replace(/^https?:\/\//, "")}{state ? ` · ${state}` : ""}{city ? `, ${city}` : ""}</Text>
+                        </View>
+                    </View>
                 </View>
 
                 {/* Hero: score ring + interpretation */}
@@ -839,10 +949,11 @@ export function FederalReadinessReport(props: ReportInput) {
                 <PageFooter generatedAt={generatedAt} />
             </Page>
 
-            {/* ── PAGE · READINESS BREAKDOWN ───────────────────────────────────
+            {/* ── PAGE · READINESS BREAKDOWN + ACTION RECS ───────────────────
                 Split off the cover so all 8 factors render together on one page
-                with breathing room — they used to orphan onto page 2 with only
-                one factor visible, which looked broken. */}
+                with breathing room. The "available points" rows are the
+                actionable items — we surface them again at the bottom as a
+                punch-list with a CTA to grab the Launch Kit. */}
             {readinessFactors.length > 0 ? (
                 <Page size="A4" style={s.page}>
                     <PageHeader companyName={companyName} pageEyebrow="Readiness Breakdown" logoUrl={logoUrl} />
@@ -871,35 +982,78 @@ export function FederalReadinessReport(props: ReportInput) {
                             </View>
                         ))}
                     </View>
+
+                    {/* Quick-action punch-list — the "available" factors
+                        re-summarized as a do-this list, then a CTA. */}
+                    {(() => {
+                        const todo = readinessFactors.filter(f => !f.present).slice(0, 4);
+                        if (todo.length === 0) return null;
+                        return (
+                            <View style={{ marginTop: 18, padding: 12, backgroundColor: COLOR.surface, borderRadius: 8, borderWidth: 0.5, borderColor: COLOR.line }}>
+                                <Text style={s.eyebrow}>Closest wins</Text>
+                                <Text style={[s.h3, { marginBottom: 6 }]}>Fix these {todo.length} things first</Text>
+                                <Text style={{ ...s.muted, marginBottom: 8 }}>
+                                    Tackling these in order is the fastest path from {(readinessScore ?? 0).toFixed(1)} → {Math.min(10, (readinessScore ?? 0) + todo.reduce((a, f) => a + f.points, 0)).toFixed(1)} on your readiness score.
+                                </Text>
+                                {todo.map((f, i) => (
+                                    <View key={i} style={{ flexDirection: "row", alignItems: "flex-start", gap: 6, marginBottom: 4 }}>
+                                        <Text style={{ fontSize: SIZE.sm, fontFamily: FONT.bold, color: COLOR.primary, width: 16 }}>{i + 1}.</Text>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={{ fontSize: SIZE.sm, fontFamily: FONT.bold, color: COLOR.ink }}>
+                                                {f.label}
+                                            </Text>
+                                            {f.detail ? (
+                                                <Text style={{ fontSize: SIZE.xs, color: COLOR.muted }}>{f.detail}</Text>
+                                            ) : null}
+                                        </View>
+                                        <Text style={{ fontSize: SIZE.sm, fontFamily: FONT.bold, color: COLOR.amber }}>+{f.points}</Text>
+                                    </View>
+                                ))}
+                                <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 0.5, borderTopColor: COLOR.line }}>
+                                    <Text style={{ ...s.muted, marginBottom: 6 }}>
+                                        Want the playbook? The Federal Launch Kit includes step-by-step walkthroughs for every item above — SAM.gov registration, capability statement, certification applications, CO outreach scripts.
+                                    </Text>
+                                    <Link src={launchKitUrl} style={[s.ctaButton, { fontSize: SIZE.sm }]}>
+                                        Unlock the $70 Launch Kit →
+                                    </Link>
+                                </View>
+                            </View>
+                        );
+                    })()}
+
                     <PageFooter generatedAt={generatedAt} />
                 </Page>
             ) : null}
 
-            {/* ── PAGE 2 · TOP MATCHES #1–5 ────────────────────────────────── */}
-            {matchesA.length > 0 ? (
+            {/* ── PAGE · TOP 3 MATCHES (HERO) ──────────────────────────────── */}
+            {matchesHero.length > 0 ? (
                 <Page size="A4" style={s.page}>
                     <PageHeader companyName={companyName} pageEyebrow="Top Matching Opportunities" logoUrl={logoUrl} />
                     <Text style={s.eyebrow}>Best Matching Opportunities</Text>
-                    <Text style={s.h2}>{matches.length} federal contracts, scored for you</Text>
+                    <Text style={s.h2}>Top {matchesHero.length} for {companyName.length > 30 ? "you" : companyName}</Text>
                     <Text style={{ ...s.muted, marginBottom: 12 }}>
-                        Scored against your NAICS codes, certifications, state and company size. Each match
-                        includes a personalized fit explanation generated specifically for {companyName}.
+                        Filtered to matches scoring ≥ 40% — these are the contracts worth your team&apos;s capture
+                        budget this week. Each one carries a personalized fit explanation, deadline countdown,
+                        and the matching signals that drove the score.
                     </Text>
-                    {matchesA.map((m, i) => (
+                    {matchesHero.map((m, i) => (
                         <MatchCard key={m.opportunity_id} match={m} rank={i + 1} />
                     ))}
                     <PageFooter generatedAt={generatedAt} />
                 </Page>
             ) : null}
 
-            {/* ── PAGE 3 · TOP MATCHES #6–10 ───────────────────────────────── */}
-            {matchesB.length > 0 ? (
+            {/* ── PAGE · MATCHES #4 ONWARD (COMPACT, 3+/page) ─────────────── */}
+            {matchesCompact.length > 0 ? (
                 <Page size="A4" style={s.page}>
-                    <PageHeader companyName={companyName} pageEyebrow="Top Matching Opportunities" logoUrl={logoUrl} />
-                    <Text style={s.eyebrow}>More Matching Opportunities</Text>
-                    <Text style={s.h2}>Matches #6 — #{5 + matchesB.length}</Text>
-                    {matchesB.map((m, i) => (
-                        <MatchCard key={m.opportunity_id} match={m} rank={6 + i} />
+                    <PageHeader companyName={companyName} pageEyebrow="More Matching Opportunities" logoUrl={logoUrl} />
+                    <Text style={s.eyebrow}>The rest of your shortlist</Text>
+                    <Text style={s.h2}>Matches #4 — #{3 + matchesCompact.length}</Text>
+                    <Text style={{ ...s.muted, marginBottom: 10 }}>
+                        Same scoring engine, condensed view. Hit each SAM.gov link to pull the full solicitation.
+                    </Text>
+                    {matchesCompact.map((m, i) => (
+                        <MatchCardCompact key={m.opportunity_id} match={m} rank={4 + i} />
                     ))}
                     <PageFooter generatedAt={generatedAt} />
                 </Page>

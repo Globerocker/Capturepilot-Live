@@ -20,7 +20,13 @@ export const SCORING_WEIGHTS = {
 export function scoreNaics(userNaics: string[], oppNaics: string | null): number {
     if (!oppNaics || !userNaics?.length) return 0.0;
     if (userNaics.includes(oppNaics)) return 1.0;
-    if (userNaics.some(n => n.substring(0, 4) === oppNaics.substring(0, 4))) return 0.6;
+    // 4-digit (NAICS industry-group) match — a 517110 user on a 517112 opp is
+    // the same sub-industry, just a different specialization. Bumped 0.6 → 0.8
+    // so these matches surface as HOT/WARM instead of COLD when the rest of
+    // the profile (keywords, geo, set-aside) lines up.
+    if (userNaics.some(n => n.substring(0, 4) === oppNaics.substring(0, 4))) return 0.8;
+    // 3-digit (sub-sector) match stays at 0.3 — adjacent industries, weaker
+    // signal, only surfaces when other signals carry weight.
     if (userNaics.some(n => n.substring(0, 3) === oppNaics.substring(0, 3))) return 0.3;
     return 0.0;
 }
