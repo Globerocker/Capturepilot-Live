@@ -1025,37 +1025,35 @@ export async function POST(request: NextRequest) {
             analysisId = analysis.id;
         }
 
-        // Kick off the pipeline in a SEPARATE serverless invocation. We used
-        // to do this via after(), but on Vercel's older Node runtime the
-        // after() budget didn't honor our maxDuration override and the
-        // function was being silently killed mid-classify, leaving rows
-        // pinned at status="classifying" forever with no error.
+        // NOTE: the pipeline lives in POST /api/analyze-company/run/[id]
+        // and is triggered by the CLIENT after this response lands. We tried
+        // two server-side patterns and both failed silently on Vercel:
         //
-        // The new /run/[id] endpoint runs the work synchronously inside its
-        // own function lifecycle, so it gets the full maxDuration=300s budget.
-        // We DO NOT await the fetch — it's fire-and-forget. The client polls
-        // /status/[id] for progress.
-        const baseUrl = process.env.NEXT_PUBLIC_APP_URL
-            || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null)
-            || request.nextUrl.origin;
-        fetch(`${baseUrl}/api/analyze-company/run/${analysisId}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            // Detach immediately — don't keep the parent handler alive.
-            // 1s connect timeout is enough to start the worker; the worker
-            // itself runs to completion independently of this fetch.
-            signal: AbortSignal.timeout(1000),
-        }).catch(() => { /* expected: timeout aborts the response read */ });
-
-        // Used in autonomous re-pipeline fallback below; suppress unused warning.
+        //   1. after(() => runAnalysisPipeline(...))
+        //   2. fetch(/api/analyze-company/run/:id) (fire-and-forget)
+        //
+        // In both, the worker was getting killed mid-classify with no error
+        // (SIGTERM-style — the JS catch handler never ran). Verified on prod:
+        // calling /run/:id directly from curl completes in ~33s and writes
+        // awaiting_confirmation; same call kicked off server-side never
+        // completed.
+        //
+        // The fix is to have the browser fire the /run request. As long as
+        // the browser opens the connection, Vercel keeps the worker alive
+        // independently of the parent — even if the user closes the tab,
+        // the worker continues running because Vercel doesn't propagate
+        // client disconnects to running functions.
         void userProvidedName;
         void runAnalysisPipeline;
 
-        // Return immediately with the analysis ID
+        // Return immediately with the analysis ID — the client is expected
+        // to POST /api/analyze-company/run/[id] right after this returns.
         return NextResponse.json({
             success: true,
             analysis_id: analysisId,
             status: "crawling",
+            // Explicit signal to the client that it must trigger the worker.
+            run_url: `/api/analyze-company/run/${analysisId}`,
         });
 
     } catch (error) {

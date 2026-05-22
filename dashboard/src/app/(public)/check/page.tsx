@@ -228,6 +228,20 @@ function CheckContent() {
                     setRunning(false);
                     return;
                 }
+                // Trigger the heavy pipeline from the client. We tried
+                // server-side after() and server-side fire-and-forget fetch
+                // and both got silently killed on Vercel mid-classify. The
+                // client-initiated fetch survives because the browser holds
+                // the connection open until the worker responds (Vercel
+                // doesn't propagate the browser disconnect, so even if the
+                // user navigates away the worker still runs to completion).
+                //
+                // We do NOT await this — polling handles progress.
+                fetch(data.run_url || `/api/analyze-company/run/${data.analysis_id}`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                }).catch(() => { /* swallow — polling will surface any failure */ });
+
                 // Optional capability statement upload — fire-and-forget, fails silently.
                 if (file) {
                     try {

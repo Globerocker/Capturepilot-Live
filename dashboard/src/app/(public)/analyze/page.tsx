@@ -95,6 +95,12 @@ function AnalyzeContent() {
             })
             .then((data) => {
                 if (data.analysis_id) {
+                    // Client-trigger the worker; server-side fire-and-forget
+                    // dies on Vercel. See route.ts for why.
+                    fetch(data.run_url || `/api/analyze-company/run/${data.analysis_id}`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                    }).catch(() => {});
                     startPolling(data.analysis_id);
                 } else {
                     setError("Failed to start analysis.");
