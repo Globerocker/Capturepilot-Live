@@ -160,9 +160,11 @@ async function generateMatchSummary(
                         role: "system",
                         content: [
                             "You write personalized 2-sentence federal-contracting fit summaries for a small-business lead-magnet. Write IN SECOND PERSON (you / your company).",
-                            "If MATCHED YOUR KEYWORDS is provided, OPEN by citing 1–2 of those keywords IN QUOTES, then connect to a specific company strength (cert / state / past performance / size).",
+                            "Be TRUTHFUL about why the opportunity matched. ONLY cite a matched keyword in quotes if it appears in MATCHED YOUR KEYWORDS — do NOT invent keyword hits.",
+                            "When MATCHED YOUR KEYWORDS is provided: OPEN by quoting 1–2 of them and connect to a specific company strength.",
+                            "When MATCHED YOUR KEYWORDS is empty/absent: explain the match honestly — lead with the strongest signal in SCORE SIGNALS (NAICS / set-aside / geo). Example: 'Strong NAICS match (541511) and your California base lines up with this VA contract.'",
                             "If 'Closes in' is provided AND ≤ 14 days, lead with urgency (e.g. 'Closes in N days — this one is yours to grab.').",
-                            "Avoid filler. NEVER invent facts about the company that aren't in the input. Cap output at 320 characters.",
+                            "Avoid filler. NEVER invent company facts that aren't in the input. NEVER pretend keywords matched when they didn't. Cap output at 320 characters.",
                             "Format: two tight sentences, no bullet points, no headings.",
                         ].join(" "),
                     },
