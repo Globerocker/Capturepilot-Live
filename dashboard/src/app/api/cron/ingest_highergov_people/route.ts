@@ -127,18 +127,23 @@ export async function GET(req: NextRequest) {
             totalPages = data.meta?.pagination?.pages || totalPages;
             if (people.length === 0) break;
 
-            // Build upsert rows. Two dedup keys: email (when present) and
-            // highergov_path (always present). We upsert on the strongest
-            // available key — email first, fallback to highergov_path.
-            const rowsWithEmail: Record<string, unknown>[] = [];
-            const rowsByPath: Record<string, unknown>[] = [];
+            // Build upsert rows. Every HigherGov person has a stable `path`,
+            // so we dedup on that exclusively. (The legacy email-keyed branch
+            // was silently failing because the unique index is on
+            // `lower(email)` — an expression index that PostgREST's
+            // `onConflict: "email"` can't address.)
+            const rows: Record<string, unknown>[] = [];
+            const seenPaths = new Set<string>();
             for (const p of people) {
                 const name = p.contact_name?.trim()
                     || [p.contact_first_name, p.contact_last_name].filter(Boolean).join(" ").trim()
                     || "Unknown";
                 const email = (p.contact_email || "").trim().toLowerCase() || null;
                 const agency = p.agency || {};
-                const row = {
+                const path = p.path?.trim() || null;
+                if (!path || seenPaths.has(path)) continue;
+                seenPaths.add(path);
+                rows.push({
                     name,
                     first_name: p.contact_first_name?.trim() || null,
                     last_name: p.contact_last_name?.trim() || null,
@@ -154,38 +159,22 @@ export async function GET(req: NextRequest) {
                     agency_domain: extractDomain(email),
                     source: "highergov",
                     contact_type: p.contact_type?.trim() || null,
-                    highergov_path: p.path?.trim() || null,
+                    highergov_path: path,
                     last_seen_at: p.last_seen || null,
-                };
-                if (email) rowsWithEmail.push(row);
-                else if (row.highergov_path) rowsByPath.push(row);
+                });
             }
 
-            totalProcessed += rowsWithEmail.length + rowsByPath.length;
+            totalProcessed += rows.length;
 
-            // Two upsert passes: one keyed on email, one on highergov_path.
-            // Postgres unique indexes are partial (`where email is not null`)
-            // so we keep them separate to avoid ON CONFLICT spec mismatch.
-            if (rowsWithEmail.length > 0) {
+            if (rows.length > 0) {
                 const { error } = await supabase
                     .from("government_contacts")
-                    .upsert(rowsWithEmail, { onConflict: "email", ignoreDuplicates: false });
+                    .upsert(rows, { onConflict: "highergov_path", ignoreDuplicates: false });
                 if (error) {
-                    console.error("Upsert (email) error:", error.message);
+                    console.error("Upsert error:", error.message);
                     errorCount++;
                 } else {
-                    totalUpserted += rowsWithEmail.length;
-                }
-            }
-            if (rowsByPath.length > 0) {
-                const { error } = await supabase
-                    .from("government_contacts")
-                    .upsert(rowsByPath, { onConflict: "highergov_path", ignoreDuplicates: false });
-                if (error) {
-                    console.error("Upsert (path) error:", error.message);
-                    errorCount++;
-                } else {
-                    totalUpserted += rowsByPath.length;
+                    totalUpserted += rows.length;
                 }
             }
             if (errorCount >= 3) break;
