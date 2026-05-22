@@ -711,15 +711,12 @@ function MatchCard({ match, rank }: { match: ReportMatch; rank: number }) {
                 </View>
             ) : null}
 
-            {/* Description excerpt — only when we have real text, not a URL */}
-            {descSnippet ? (
-                <View style={{ marginTop: 6 }}>
-                    <Text style={s.label}>From the solicitation</Text>
-                    <Text style={[s.body, { fontSize: SIZE.sm, marginTop: 3, color: COLOR.muted }]}>
-                        {descSnippet}
-                    </Text>
-                </View>
-            ) : null}
+            {/* Description excerpt removed from hero — the AI summary
+                ("Why this fits you") covers the same ground in personalized
+                language, and we link to the SAM.gov source. Dropping the
+                excerpt cuts ~100pt and lets 2 hero cards fit per page
+                instead of 1. */}
+            {descSnippet ? null : null}
 
             {/* Score breakdown — small bars so the reader sees WHY this scored */}
             {Object.keys(bd).length > 0 ? (
