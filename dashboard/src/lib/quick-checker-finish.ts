@@ -404,6 +404,7 @@ export async function runPostConfirmationPipeline(analysisId: string): Promise<v
         const allOpps: OpportunityForScoring[] = [];
 
         if (primaryNaics.length > 0) {
+            // Exact-NAICS pass
             let offset = 0;
             const batchSize = 1000;
             while (true) {
@@ -417,6 +418,40 @@ export async function runPostConfirmationPipeline(analysisId: string): Promise<v
                 allOpps.push(...(batch as unknown as OpportunityForScoring[]));
                 if (batch.length < batchSize) break;
                 offset += batchSize;
+            }
+
+            // Broader 4-digit-prefix pass — if the exact 6-digit NAICS has
+            // sparse coverage (common for niche codes like 115116 Farm
+            // Management Services, where our DB has 0 opps but plenty of
+            // adjacent 11xxxx ag-services opps), pull in everything that
+            // shares the 4-digit prefix. scoreNaics() already returns 0.6
+            // for prefix matches vs 1.0 for exact, so ranking stays sane.
+            if (allOpps.length < 50) {
+                const prefixes = Array.from(new Set(primaryNaics.map(c => c.slice(0, 4)))).filter(Boolean);
+                const exactSet = new Set(allOpps.map(o => o.id));
+                for (const prefix of prefixes) {
+                    let poffset = 0;
+                    while (true) {
+                        const { data: pbatch } = await sb
+                            .from("opportunities")
+                            .select("id, naics_code, psc_code, notice_type, agency, set_aside_code, place_of_performance_state, award_amount, response_deadline")
+                            .eq("is_archived", false)
+                            .like("naics_code", `${prefix}%`)
+                            .range(poffset, poffset + batchSize - 1);
+                        if (!pbatch || pbatch.length === 0) break;
+                        for (const opp of pbatch as unknown as OpportunityForScoring[]) {
+                            if (!exactSet.has(opp.id)) {
+                                allOpps.push(opp);
+                                exactSet.add(opp.id);
+                            }
+                        }
+                        if (pbatch.length < batchSize) break;
+                        poffset += batchSize;
+                        // Don't keep paging on the broad query — first 1000
+                        // prefix-matched opps is plenty for the 4-digit fallback.
+                        if (poffset >= batchSize) break;
+                    }
+                }
             }
         }
 
