@@ -595,7 +595,9 @@ export default function CheckResultsPage() {
 
     // AWAITING CONFIRMATION — the user reviews crawler output BEFORE we score.
     // This is the new mid-funnel step added 2026-05-18.
-    if (data.status === "awaiting_naics_selection") {
+    if (data.status === "awaiting_confirmation") {
+        const crawl = data.crawl_data as unknown as Record<string, unknown> | undefined;
+        const capabilityKeywords = ((crawl?.capability_keywords as Array<{ keyword: string; tier?: "primary" | "secondary" }>) || []);
         return (
             <ConfirmFoundDataStep
                 analysisId={analysisId}
@@ -603,6 +605,7 @@ export default function CheckResultsPage() {
                 website={data.website}
                 inferredNaics={data.inferred_naics || []}
                 inferredProfile={data.inferred_profile || {}}
+                capabilityKeywords={capabilityKeywords}
                 crawlerConfidence={data.crawler_confidence}
                 onSubmitted={() => {
                     // Optimistically flip status so the polling render takes over

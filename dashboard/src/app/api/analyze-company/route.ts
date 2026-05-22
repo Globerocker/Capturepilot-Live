@@ -345,7 +345,7 @@ async function enrichPersonApollo(
             body: JSON.stringify(payload),
             // 6s hard timeout — Apollo occasionally hangs on slow paths,
             // and this call sits in the critical path between NAICS classify
-            // and the awaiting_naics_selection status flip. Without a timeout
+            // and the awaiting_confirmation status flip. Without a timeout
             // the worker dies on Vercel's 120s function ceiling and the row
             // stays stuck at "classifying" forever.
             signal: AbortSignal.timeout(6000),
@@ -848,7 +848,7 @@ async function runAnalysisPipeline(analysisId: string, initialCompanyName: strin
         const samPocs = samData ? (samData.points_of_contact as { name: string; title: string; email?: string; phone?: string }[]) || [] : [];
         const decisionMaker = primaryLeader || samPocs[0] || null;
 
-        // NOTE: Apollo decision-maker enrichment runs AFTER the awaiting_naics_selection
+        // NOTE: Apollo decision-maker enrichment runs AFTER the awaiting_confirmation
         // status flip below, fire-and-forget. The earlier inline call sat in the
         // critical path and occasionally hung the worker (no native timeout on the
         // Apollo SDK fetch), leaving the row stuck on "classifying" until Vercel
@@ -882,6 +882,28 @@ async function runAnalysisPipeline(analysisId: string, initialCompanyName: strin
                 source: samPocs.length > 0 ? "sam_gov" : "website",
             } : null,
             apollo_enrichment: null,
+            // Pre-fill keyword matching from the crawler's capability_keywords
+            // extraction (primary tier → primary_keywords, secondary → secondary).
+            // The user can edit these on the confirm step. Aliases get hydrated
+            // from gov_keywords at score time.
+            primary_keywords: (() => {
+                const cks = (crawlData.capability_keywords as Array<{ keyword: string; tier?: "primary" | "secondary" }> | undefined) || [];
+                return cks
+                    .filter(k => k.tier === "primary" || !k.tier)
+                    .map(k => ({ keyword: String(k.keyword || "").trim().toLowerCase() }))
+                    .filter(k => k.keyword.length >= 2)
+                    .filter((v, i, a) => a.findIndex(x => x.keyword === v.keyword) === i)
+                    .slice(0, 8);
+            })(),
+            secondary_keywords: (() => {
+                const cks = (crawlData.capability_keywords as Array<{ keyword: string; tier?: "primary" | "secondary" }> | undefined) || [];
+                return cks
+                    .filter(k => k.tier === "secondary")
+                    .map(k => ({ keyword: String(k.keyword || "").trim().toLowerCase() }))
+                    .filter(k => k.keyword.length >= 2)
+                    .filter((v, i, a) => a.findIndex(x => x.keyword === v.keyword) === i)
+                    .slice(0, 12);
+            })(),
             gov_spending: usaspendingData ? {
                 award_count: usaspendingData.award_count,
                 total_value: usaspendingData.total_value,
@@ -909,7 +931,7 @@ async function runAnalysisPipeline(analysisId: string, initialCompanyName: strin
         const emailUpdate = !currentRecord?.lead_email && finalFallbackEmail ? { lead_email: finalFallbackEmail } : {};
 
         await sb.from("company_analyses").update({
-            status: "awaiting_naics_selection",
+            status: "awaiting_confirmation",
             inferred_naics: inferredNaics,
             inferred_profile: initialInferredProfile,
             crawl_data: crawlData,
@@ -1035,7 +1057,7 @@ export async function POST(request: NextRequest) {
         // In both, the worker was getting killed mid-classify with no error
         // (SIGTERM-style — the JS catch handler never ran). Verified on prod:
         // calling /run/:id directly from curl completes in ~33s and writes
-        // awaiting_naics_selection; same call kicked off server-side never
+        // awaiting_confirmation; same call kicked off server-side never
         // completed.
         //
         // The fix is to have the browser fire the /run request. As long as

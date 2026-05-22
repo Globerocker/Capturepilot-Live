@@ -50,7 +50,14 @@ interface InferredProfile {
     years_in_business?: number | null;
     annual_revenue_band?: string | null;
     target_states?: string[];
+    primary_keywords?: Array<{ keyword: string; aliases?: string[] }>;
+    secondary_keywords?: Array<{ keyword: string; aliases?: string[] }>;
     [key: string]: unknown;
+}
+
+interface CapabilityKeywordSuggestion {
+    keyword: string;
+    tier?: "primary" | "secondary";
 }
 
 interface Props {
@@ -59,6 +66,8 @@ interface Props {
     website: string;
     inferredNaics: InferredNaicsItem[];
     inferredProfile: InferredProfile;
+    /** Crawler-extracted capability keywords used to pre-fill the keywords field. */
+    capabilityKeywords?: CapabilityKeywordSuggestion[];
     crawlerConfidence?: number;
     /** Called immediately after a successful submit, so the parent can flip to a polling state. */
     onSubmitted: () => void;
@@ -79,6 +88,7 @@ export default function ConfirmFoundDataStep({
     website,
     inferredNaics,
     inferredProfile,
+    capabilityKeywords,
     crawlerConfidence,
     onSubmitted,
 }: Props) {
@@ -86,6 +96,15 @@ export default function ConfirmFoundDataStep({
 
     const [companyName, setCompanyName] = useState(inferredProfile.company_name || initialCompanyName || "");
     const [state, setState] = useState(inferredProfile.state || "");
+    const [targetStates, setTargetStates] = useState<string[]>(() => {
+        // Default to whatever the pipeline pre-filled (SAM + crawler-detected),
+        // OR fall back to the primary state if we have one.
+        const initial = inferredProfile.target_states || [];
+        if (initial.length > 0) return initial;
+        const primary = inferredProfile.state;
+        return primary ? [primary] : [];
+    });
+    const [stateSearch, setStateSearch] = useState("");
     const [employeeCount, setEmployeeCount] = useState<string>(
         inferredProfile.employee_count ? String(inferredProfile.employee_count) : ""
     );
@@ -99,6 +118,21 @@ export default function ConfirmFoundDataStep({
             : inferredNaics.map(n => n.code)
     );
     const [selectedCerts, setSelectedCerts] = useState<string[]>(inferredProfile.sba_certifications || []);
+
+    // Keywords for opportunity matching beyond NAICS. Pre-fill from the crawler's
+    // capability_keywords extraction (primary tier first, then secondary).
+    const initialKeywords = useMemo(() => {
+        const fromProfile = (inferredProfile.primary_keywords || []).map(k => k.keyword);
+        if (fromProfile.length > 0) return fromProfile;
+        // Sort crawler suggestions: primary tier first, then secondary, dedup by keyword.
+        const fromCrawler = (capabilityKeywords || [])
+            .sort((a, b) => (a.tier === "primary" ? 0 : 1) - (b.tier === "primary" ? 0 : 1))
+            .map(k => k.keyword.trim().toLowerCase())
+            .filter((v, i, a) => v && a.indexOf(v) === i);
+        return fromCrawler;
+    }, [inferredProfile.primary_keywords, capabilityKeywords]);
+    const [keywords, setKeywords] = useState<string[]>(initialKeywords);
+    const [keywordInput, setKeywordInput] = useState("");
     const [naicsSearch, setNaicsSearch] = useState("");
     const [showNaicsPicker, setShowNaicsPicker] = useState(false);
     const [submitting, setSubmitting] = useState(false);
@@ -134,6 +168,48 @@ export default function ConfirmFoundDataStep({
         setSelectedCerts(prev => prev.includes(key) ? prev.filter(c => c !== key) : [...prev, key]);
     }
 
+    function toggleTargetState(code: string) {
+        setTargetStates(prev => prev.includes(code) ? prev.filter(c => c !== code) : [...prev, code]);
+    }
+    function selectAllStates() {
+        setTargetStates([...US_STATES]);
+    }
+    function clearTargetStates() {
+        setTargetStates([]);
+    }
+    const filteredStateOptions = useMemo(() => {
+        const q = stateSearch.trim().toUpperCase();
+        if (!q) return US_STATES.filter(s => !targetStates.includes(s));
+        return US_STATES.filter(s => !targetStates.includes(s) && s.startsWith(q));
+    }, [stateSearch, targetStates]);
+
+    function addKeyword(raw: string) {
+        const cleaned = raw.trim().toLowerCase();
+        if (!cleaned || cleaned.length < 2) return;
+        setKeywords(prev => prev.includes(cleaned) ? prev : [...prev, cleaned].slice(0, 25));
+        setKeywordInput("");
+    }
+    function removeKeyword(kw: string) {
+        setKeywords(prev => prev.filter(k => k !== kw));
+    }
+    function handleKeywordKey(e: React.KeyboardEvent<HTMLInputElement>) {
+        if (e.key === "Enter" || e.key === ",") {
+            e.preventDefault();
+            addKeyword(keywordInput);
+        } else if (e.key === "Backspace" && keywordInput === "" && keywords.length > 0) {
+            // Quick backspace removes the last chip when input is empty
+            setKeywords(prev => prev.slice(0, -1));
+        }
+    }
+    const keywordSuggestions = useMemo(() => {
+        const have = new Set(keywords);
+        return (capabilityKeywords || [])
+            .map(k => k.keyword.trim().toLowerCase())
+            .filter(k => k.length >= 2 && !have.has(k))
+            .filter((v, i, a) => a.indexOf(v) === i)
+            .slice(0, 8);
+    }, [capabilityKeywords, keywords]);
+
     function validate(): string | null {
         if (!companyName.trim()) return "Confirm your company name";
         if (selectedNaics.length === 0) return "Pick at least one industry (NAICS) code";
@@ -151,6 +227,10 @@ export default function ConfirmFoundDataStep({
         setError("");
         setSubmitting(true);
         try {
+            // If the user didn't pick any target states explicitly, default
+            // to their primary state so geo scoring still has something
+            // to match against.
+            const effectiveTargetStates = targetStates.length > 0 ? targetStates : (state ? [state] : []);
             const res = await fetch("/api/analyze-company/confirm", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -158,11 +238,14 @@ export default function ConfirmFoundDataStep({
                     analysis_id: analysisId,
                     company_name: companyName.trim(),
                     state,
+                    target_states: effectiveTargetStates,
                     naics_codes: selectedNaics,
                     sba_certifications: selectedCerts,
                     employee_count: employeeCount ? Number(employeeCount) : undefined,
                     years_in_business: yearsInBusiness ? Number(yearsInBusiness) : undefined,
                     annual_revenue_band: revenueBand || undefined,
+                    // Send keywords as entries so the scoring code can hydrate aliases later.
+                    primary_keywords: keywords.map(k => ({ keyword: k })),
                 }),
             });
             if (!res.ok) {
@@ -302,15 +385,24 @@ export default function ConfirmFoundDataStep({
                     </div>
 
                     {/* Location */}
-                    <div className="p-5 sm:p-7 border-b border-stone-100 space-y-4">
+                    <div className="p-5 sm:p-7 border-b border-stone-100 space-y-5">
                         <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Where you work</p>
                         <div>
                             <label className="block text-xs font-bold text-stone-600 mb-1.5">
                                 <MapPin className="w-3 h-3 inline mr-1" /> Primary state
+                                <span className="text-stone-400 font-normal ml-1">— your HQ</span>
                             </label>
                             <select
                                 value={state}
-                                onChange={(e) => setState(e.target.value)}
+                                onChange={(e) => {
+                                    const v = e.target.value;
+                                    setState(v);
+                                    // Auto-add the primary state to target states so geo
+                                    // scoring covers it by default.
+                                    if (v && !targetStates.includes(v)) {
+                                        setTargetStates(prev => [...prev, v]);
+                                    }
+                                }}
                                 aria-label="Primary state"
                                 className="w-full sm:w-1/3 px-3 py-2.5 rounded-xl border-2 border-stone-200 text-sm bg-white focus:outline-none focus:ring-4 focus:ring-emerald-100 focus:border-emerald-500"
                             >
@@ -318,6 +410,146 @@ export default function ConfirmFoundDataStep({
                                 {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
                             </select>
                         </div>
+
+                        <div>
+                            <div className="flex items-baseline justify-between gap-2 mb-1.5 flex-wrap">
+                                <label className="block text-xs font-bold text-stone-600">
+                                    <MapPin className="w-3 h-3 inline mr-1" /> Target states for bidding
+                                    <span className="text-stone-400 font-normal ml-1">— pick every state you can perform in</span>
+                                </label>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={selectAllStates}
+                                        className="text-[11px] text-emerald-700 hover:text-emerald-900 font-bold"
+                                    >
+                                        Nationwide (all 50)
+                                    </button>
+                                    {targetStates.length > 0 && (
+                                        <>
+                                            <span className="text-stone-300">·</span>
+                                            <button
+                                                type="button"
+                                                onClick={clearTargetStates}
+                                                className="text-[11px] text-stone-500 hover:text-red-600"
+                                            >
+                                                Clear
+                                            </button>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+                            {targetStates.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5 mb-2">
+                                    {targetStates.map(s => (
+                                        <button
+                                            key={s}
+                                            type="button"
+                                            onClick={() => toggleTargetState(s)}
+                                            className="font-mono text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-1 rounded-md hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors inline-flex items-center gap-1"
+                                            title={`Remove ${s}`}
+                                        >
+                                            {s}
+                                            <span className="text-emerald-400 text-[10px]">✕</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                            <div className="border border-stone-200 rounded-xl overflow-hidden">
+                                <div className="relative">
+                                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+                                    <input
+                                        type="text"
+                                        value={stateSearch}
+                                        onChange={(e) => setStateSearch(e.target.value.toUpperCase())}
+                                        placeholder="Search states (e.g. CA, TX)…"
+                                        className="w-full pl-9 pr-4 py-2 text-sm border-b border-stone-200 focus:outline-none focus:ring-2 focus:ring-emerald-100 uppercase"
+                                    />
+                                </div>
+                                <div className="max-h-32 overflow-y-auto p-2 flex flex-wrap gap-1.5">
+                                    {filteredStateOptions.length === 0 ? (
+                                        <p className="text-xs text-stone-400 p-2">No states left to add.</p>
+                                    ) : (
+                                        filteredStateOptions.map(s => (
+                                            <button
+                                                key={s}
+                                                type="button"
+                                                onClick={() => toggleTargetState(s)}
+                                                className="font-mono text-[11px] font-bold text-stone-600 border border-stone-200 hover:bg-emerald-50 hover:text-emerald-800 hover:border-emerald-300 px-2 py-1 rounded-md transition-colors"
+                                            >
+                                                + {s}
+                                            </button>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Capability keywords */}
+                    <div className="p-5 sm:p-7 border-b border-stone-100 space-y-4">
+                        <div className="flex items-baseline justify-between flex-wrap gap-2">
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
+                                <Sparkles className="w-3 h-3 inline mr-1" /> Matching keywords
+                            </p>
+                            <p className="text-[10px] text-stone-400">
+                                NAICS alone misses good fits — these phrases sharpen the match
+                            </p>
+                        </div>
+
+                        {keywords.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5">
+                                {keywords.map(kw => (
+                                    <button
+                                        key={kw}
+                                        type="button"
+                                        onClick={() => removeKeyword(kw)}
+                                        className="text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 px-2.5 py-1 rounded-lg hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors inline-flex items-center gap-1"
+                                        title={`Remove "${kw}"`}
+                                    >
+                                        {kw}
+                                        <span className="text-emerald-400 text-[10px]">✕</span>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+
+                        <div>
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    value={keywordInput}
+                                    onChange={(e) => setKeywordInput(e.target.value)}
+                                    onKeyDown={handleKeywordKey}
+                                    onBlur={() => keywordInput && addKeyword(keywordInput)}
+                                    placeholder="Type a keyword and press Enter — e.g. precision agriculture, drone imagery, soil analytics"
+                                    className="w-full px-3 py-2.5 rounded-xl border-2 border-stone-200 text-sm focus:outline-none focus:ring-4 focus:ring-emerald-100 focus:border-emerald-500"
+                                />
+                            </div>
+                            <p className="text-[11px] text-stone-400 mt-1.5">
+                                Hit Enter, comma, or click outside to add. Backspace on an empty box removes the last chip.
+                            </p>
+                        </div>
+
+                        {keywordSuggestions.length > 0 && (
+                            <div>
+                                <p className="text-[10px] text-stone-400 uppercase tracking-wider font-bold mb-1.5">
+                                    Suggestions from your site
+                                </p>
+                                <div className="flex flex-wrap gap-1.5">
+                                    {keywordSuggestions.map(kw => (
+                                        <button
+                                            key={kw}
+                                            type="button"
+                                            onClick={() => addKeyword(kw)}
+                                            className="text-xs text-stone-600 border border-stone-200 hover:bg-emerald-50 hover:text-emerald-800 hover:border-emerald-300 px-2.5 py-1 rounded-lg transition-colors inline-flex items-center gap-1"
+                                        >
+                                            <Plus className="w-3 h-3" /> {kw}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {/* Industry / NAICS */}

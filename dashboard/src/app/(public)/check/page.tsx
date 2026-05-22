@@ -165,7 +165,7 @@ function CheckContent() {
                 // post-confirm scoring phase, and the final report — so any
                 // status past "classifying" belongs there.
                 const HANDOFF_STATUSES = new Set([
-                    "awaiting_naics_selection",
+                    "awaiting_confirmation",
                     "scoring",
                     "finding_opportunities",
                     "finding_competitors",

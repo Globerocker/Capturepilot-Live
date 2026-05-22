@@ -21,9 +21,9 @@ export function statusToStep(status: string): number {
         case "crawling": return 0;
         case "enriching": return 1;
         case "classifying": return 2;
-        // awaiting_naics_selection means we're past classification; show step 2 as
+        // awaiting_confirmation means we're past classification; show step 2 as
         // active while the /check page redirects to /check/[id]'s confirm UI.
-        case "awaiting_naics_selection": return 2;
+        case "awaiting_confirmation": return 2;
         case "finding_opportunities": return 3;
         case "scoring": return 3;
         case "finding_competitors": return 3;

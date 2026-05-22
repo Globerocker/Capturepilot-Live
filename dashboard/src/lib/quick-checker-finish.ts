@@ -1,6 +1,6 @@
 /**
  * Finishes the Quick Checker pipeline AFTER the user has confirmed/corrected
- * what the crawler found (status → "awaiting_naics_selection").
+ * what the crawler found (status → "awaiting_confirmation").
  *
  * The post-confirmation steps:
  *   - score opportunities against the corrected profile (size-aware!)
@@ -295,6 +295,33 @@ export async function runPostConfirmationPipeline(analysisId: string): Promise<v
         const certifications = (crawlData.certifications as { type: string; confidence: number }[]) || [];
         const detectedStates = (crawlData.detected_states as string[]) || [];
 
+        // Hydrate keyword aliases from the gov_keywords library so the scorer
+        // can match variant phrasings (e.g. "AI" -> ["artificial intelligence",
+        // "machine learning"]). The user-supplied keyword arrays only carry
+        // canonical terms; aliases live in the library.
+        const rawPrimary = (inferredProfile.primary_keywords as Array<{ keyword: string; aliases?: string[] }> | undefined) || [];
+        const rawSecondary = (inferredProfile.secondary_keywords as Array<{ keyword: string; aliases?: string[] }> | undefined) || [];
+        const allKeywordTerms = [...rawPrimary, ...rawSecondary].map(k => k.keyword).filter(Boolean);
+        const aliasLookup = new Map<string, string[]>();
+        if (allKeywordTerms.length > 0) {
+            try {
+                const { data: libRows } = await sb
+                    .from("gov_keywords")
+                    .select("keyword, aliases")
+                    .in("keyword", allKeywordTerms);
+                for (const row of (libRows || []) as Array<{ keyword: string; aliases?: string[] }>) {
+                    if (Array.isArray(row.aliases) && row.aliases.length > 0) {
+                        aliasLookup.set(row.keyword, row.aliases);
+                    }
+                }
+            } catch { /* best-effort */ }
+        }
+        const hydrateKeywords = (kws: Array<{ keyword: string; aliases?: string[] }>) =>
+            kws.map(k => ({
+                keyword: k.keyword,
+                aliases: k.aliases?.length ? k.aliases : aliasLookup.get(k.keyword) || [],
+            }));
+
         const tempProfile: ProfileForScoring = {
             naics_codes: ((inferredProfile.naics_codes as string[]) || inferredNaics.map(n => n.code)),
             sba_certifications: ((inferredProfile.sba_certifications as string[]) || []),
@@ -310,6 +337,9 @@ export async function runPostConfirmationPipeline(analysisId: string): Promise<v
             // ── Size-aware scoring (added in 2026-05-18 sprint) ──
             employee_count: (inferredProfile.employee_count as number) || null,
             annual_revenue_band: (inferredProfile.annual_revenue_band as string) || null,
+            // ── Keyword matching (gov_keywords-driven) ──
+            primary_keywords: rawPrimary.length > 0 ? hydrateKeywords(rawPrimary) : undefined,
+            secondary_keywords: rawSecondary.length > 0 ? hydrateKeywords(rawSecondary) : undefined,
         };
 
         // On-demand NAICS crawl when we lack coverage in DB

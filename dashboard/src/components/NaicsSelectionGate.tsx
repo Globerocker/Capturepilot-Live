@@ -18,7 +18,7 @@ interface Props {
 }
 
 /**
- * NAICS selection step — shown when analysis is in "awaiting_naics_selection".
+ * NAICS selection step — shown when analysis is in "awaiting_confirmation".
  * Lets the user pick 1-2 codes from the detected list, then calls the
  * select-naics endpoint to resume scoring.
  */

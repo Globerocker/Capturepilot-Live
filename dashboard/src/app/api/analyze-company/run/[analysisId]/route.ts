@@ -313,7 +313,7 @@ export async function POST(
     }
 
     // Idempotency: if the pipeline already finished, don't re-run.
-    if (["awaiting_naics_selection", "scoring", "finding_opportunities", "finding_competitors", "generating", "complete"].includes(seed.status as string)) {
+    if (["awaiting_confirmation", "scoring", "finding_opportunities", "finding_competitors", "generating", "complete"].includes(seed.status as string)) {
         return NextResponse.json({ success: true, status: seed.status, note: "already past classify" });
     }
 
@@ -526,6 +526,24 @@ export async function POST(
                 source: samPocs.length > 0 ? "sam_gov" : "website",
             } : null,
             apollo_enrichment: null,
+            primary_keywords: (() => {
+                const cks = (crawlData.capability_keywords as Array<{ keyword: string; tier?: "primary" | "secondary" }> | undefined) || [];
+                return cks
+                    .filter(k => k.tier === "primary" || !k.tier)
+                    .map(k => ({ keyword: String(k.keyword || "").trim().toLowerCase() }))
+                    .filter(k => k.keyword.length >= 2)
+                    .filter((v, i, a) => a.findIndex(x => x.keyword === v.keyword) === i)
+                    .slice(0, 8);
+            })(),
+            secondary_keywords: (() => {
+                const cks = (crawlData.capability_keywords as Array<{ keyword: string; tier?: "primary" | "secondary" }> | undefined) || [];
+                return cks
+                    .filter(k => k.tier === "secondary")
+                    .map(k => ({ keyword: String(k.keyword || "").trim().toLowerCase() }))
+                    .filter(k => k.keyword.length >= 2)
+                    .filter((v, i, a) => a.findIndex(x => x.keyword === v.keyword) === i)
+                    .slice(0, 12);
+            })(),
             gov_spending: usaspendingData ? {
                 award_count: usaspendingData.award_count,
                 total_value: usaspendingData.total_value,
@@ -546,7 +564,7 @@ export async function POST(
         const emailUpdate = !currentRecord?.lead_email && finalFallbackEmail ? { lead_email: finalFallbackEmail } : {};
 
         await sb.from("company_analyses").update({
-            status: "awaiting_naics_selection",
+            status: "awaiting_confirmation",
             inferred_naics: inferredNaics,
             inferred_profile: initialInferredProfile,
             crawl_data: crawlData,
@@ -584,7 +602,7 @@ export async function POST(
                 .catch(() => {});
         }
 
-        return NextResponse.json({ success: true, status: "awaiting_naics_selection", analysis_id: analysisId });
+        return NextResponse.json({ success: true, status: "awaiting_confirmation", analysis_id: analysisId });
 
     } catch (error) {
         console.error("Pipeline error:", error);
