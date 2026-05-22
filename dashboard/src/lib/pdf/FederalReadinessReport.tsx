@@ -548,10 +548,29 @@ function MatchCard({ match, rank }: { match: ReportMatch; rank: number }) {
     // Description snippet — first ~280 chars, useful when the AI summary
     // is missing or the reader wants the source line.
     const descSnippet = (() => {
-        const raw = match.description?.trim();
+        let raw = (match.description || "").trim();
         if (!raw) return null;
-        // Skip pure URLs (some SAM rows have description= a noticedesc API URL)
+        // Skip pure URLs (some SAM rows have description= a noticedesc API URL).
         if (/^https?:\/\//.test(raw)) return null;
+        // Some SAM rows store the description as a JSON-encoded blob like
+        // `{"description":"  (ii) ..."}`. Unwrap that so the PDF doesn't
+        // expose the raw JSON to the reader.
+        if (raw.startsWith("{") && raw.includes('"description"')) {
+            try {
+                const parsed = JSON.parse(raw);
+                if (parsed && typeof parsed.description === "string") {
+                    raw = parsed.description.trim();
+                }
+            } catch {
+                // If JSON.parse fails (e.g. truncated payload), do a best-
+                // effort regex extraction so we don't show curly braces.
+                const m = raw.match(/"description"\s*:\s*"([^"]+)"/);
+                if (m && m[1]) raw = m[1].trim();
+            }
+        }
+        // Collapse \n / &nbsp; / multiple whitespace runs to single spaces.
+        raw = raw.replace(/\\n+/g, " ").replace(/&nbsp;/gi, " ").replace(/\s+/g, " ").trim();
+        if (!raw || raw.length < 20) return null;
         return raw.length > 280 ? raw.slice(0, 280).trim() + "…" : raw;
     })();
 
@@ -702,14 +721,23 @@ export function FederalReadinessReport(props: ReportInput) {
                     <View style={s.coverScoreCol}>
                         <View style={{ position: "relative", width: 140, height: 140 }}>
                             <ScoreRing score={score} />
+                            {/* The score number sits in a smaller absolute box
+                                centered higher in the ring so the "OUT OF 10"
+                                caption can live BELOW the number without
+                                overlapping. */}
                             <View style={{
-                                position: "absolute", left: 0, top: 0, width: 140, height: 140,
+                                position: "absolute", left: 0, top: 38, width: 140, height: 50,
                                 alignItems: "center", justifyContent: "center",
                             }}>
-                                <Text style={{ fontFamily: FONT.bold, fontSize: 38, color: ringColor }}>
+                                <Text style={{ fontFamily: FONT.bold, fontSize: 38, color: ringColor, lineHeight: 1 }}>
                                     {score.toFixed(1)}
                                 </Text>
-                                <Text style={{ fontSize: 7, color: COLOR.muted, marginTop: 2, letterSpacing: 1 }}>
+                            </View>
+                            <View style={{
+                                position: "absolute", left: 0, top: 84, width: 140,
+                                alignItems: "center",
+                            }}>
+                                <Text style={{ fontSize: 7, color: COLOR.muted, letterSpacing: 1.5, fontFamily: FONT.bold }}>
                                     OUT OF 10
                                 </Text>
                             </View>
@@ -808,34 +836,44 @@ export function FederalReadinessReport(props: ReportInput) {
                     </View>
                 </View>
 
-                {/* Readiness breakdown */}
-                <Text style={s.h3}>Readiness breakdown</Text>
-                <Text style={{ ...s.muted, marginBottom: 6 }}>{readinessInterpretation}</Text>
-                <View>
-                    {readinessFactors.slice(0, 8).map((f, i) => (
-                        <View key={i} style={s.factor}>
-                            <View style={[s.factorIcon, {
-                                backgroundColor: f.present ? COLOR.primary : COLOR.dim,
-                            }]}>
-                                <Text style={s.factorIconText}>{f.present ? "✓" : "·"}</Text>
-                            </View>
-                            <View style={s.factorBody}>
-                                <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                                    <Text style={{ ...s.factorLabel, color: f.present ? COLOR.ink : COLOR.muted }}>
-                                        {f.label}
-                                    </Text>
-                                    <Text style={{ ...s.factorPoints, color: f.present ? COLOR.primary : COLOR.amber }}>
-                                        {f.present ? `+${f.points}` : `+${f.points} available`}
-                                    </Text>
-                                </View>
-                                {f.detail ? <Text style={s.factorDetail}>{f.detail}</Text> : null}
-                            </View>
-                        </View>
-                    ))}
-                </View>
-
                 <PageFooter generatedAt={generatedAt} />
             </Page>
+
+            {/* ── PAGE · READINESS BREAKDOWN ───────────────────────────────────
+                Split off the cover so all 8 factors render together on one page
+                with breathing room — they used to orphan onto page 2 with only
+                one factor visible, which looked broken. */}
+            {readinessFactors.length > 0 ? (
+                <Page size="A4" style={s.page}>
+                    <PageHeader companyName={companyName} pageEyebrow="Readiness Breakdown" logoUrl={logoUrl} />
+                    <Text style={s.eyebrow}>Where you stand</Text>
+                    <Text style={s.h2}>Readiness breakdown — score = {(readinessScore ?? 0).toFixed(1)} / 10</Text>
+                    <Text style={{ ...s.muted, marginBottom: 14 }}>{readinessInterpretation}</Text>
+                    <View>
+                        {readinessFactors.map((f, i) => (
+                            <View key={i} style={s.factor}>
+                                <View style={[s.factorIcon, {
+                                    backgroundColor: f.present ? COLOR.primary : COLOR.dim,
+                                }]}>
+                                    <Text style={s.factorIconText}>{f.present ? "✓" : "·"}</Text>
+                                </View>
+                                <View style={s.factorBody}>
+                                    <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                                        <Text style={{ ...s.factorLabel, color: f.present ? COLOR.ink : COLOR.muted }}>
+                                            {f.label}
+                                        </Text>
+                                        <Text style={{ ...s.factorPoints, color: f.present ? COLOR.primary : COLOR.amber }}>
+                                            {f.present ? `+${f.points}` : `+${f.points} available`}
+                                        </Text>
+                                    </View>
+                                    {f.detail ? <Text style={s.factorDetail}>{f.detail}</Text> : null}
+                                </View>
+                            </View>
+                        ))}
+                    </View>
+                    <PageFooter generatedAt={generatedAt} />
+                </Page>
+            ) : null}
 
             {/* ── PAGE 2 · TOP MATCHES #1–5 ────────────────────────────────── */}
             {matchesA.length > 0 ? (
