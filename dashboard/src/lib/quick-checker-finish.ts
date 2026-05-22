@@ -52,6 +52,7 @@ interface ScoredMatch {
     score: number;
     classification: string;
     score_breakdown: Record<string, number>;
+    matched_keywords?: string[];
 }
 
 interface MatchForAi {
@@ -63,6 +64,9 @@ interface MatchForAi {
     notice_type?: string;
     award_amount?: number;
     description_url?: string;
+    response_deadline?: string;
+    matched_keywords?: string[];
+    score_breakdown?: Record<string, number>;
 }
 
 interface CompanyContextForAi {
@@ -103,6 +107,25 @@ async function generateMatchSummary(
         ? `\nCAPABILITY STATEMENT EXCERPT (verbatim from user-uploaded doc, first 1500 chars):\n${company.capStatementText.slice(0, 1500)}`
         : "";
 
+    // Deadline countdown — added when within 30 days so the model can lead
+    // with urgency ("closes in 9 days") on time-sensitive opportunities.
+    const deadlineHint = (() => {
+        if (!match.response_deadline) return "";
+        const dt = new Date(match.response_deadline).getTime();
+        if (Number.isNaN(dt)) return "";
+        const days = Math.round((dt - Date.now()) / (1000 * 60 * 60 * 24));
+        if (days < 0 || days > 30) return "";
+        return `  Closes in: ${days} day${days === 1 ? "" : "s"}`;
+    })();
+
+    const matchedKwHint = (match.matched_keywords && match.matched_keywords.length > 0)
+        ? `  MATCHED YOUR KEYWORDS: ${match.matched_keywords.join(", ")}`
+        : "";
+
+    const scoreHint = (match.score_breakdown && Object.keys(match.score_breakdown).length > 0)
+        ? `  SCORE SIGNALS: NAICS=${Math.round((match.score_breakdown.naics || 0) * 100)}% · keywords=${Math.round((match.score_breakdown.keywords || 0) * 100)}% · geo=${Math.round((match.score_breakdown.geo || 0) * 100)}% · set-aside=${Math.round((match.score_breakdown.set_aside || 0) * 100)}%`
+        : "";
+
     const userMsg = [
         `COMPANY: ${company.companyName}`,
         `DESCRIPTION: ${company.description || "(no website description)"}`,
@@ -120,6 +143,9 @@ async function generateMatchSummary(
         `  NAICS: ${match.naics_code || "(none)"}`,
         `  Set-aside: ${match.set_aside_code || "(open)"}`,
         match.award_amount ? `  Estimated value: $${match.award_amount.toLocaleString()}` : "",
+        deadlineHint,
+        matchedKwHint,
+        scoreHint,
         match.description_url ? `  Description snippet: ${String(match.description_url).slice(0, 600)}` : "",
     ].filter(Boolean).join("\n");
 
@@ -132,12 +158,18 @@ async function generateMatchSummary(
                 messages: [
                     {
                         role: "system",
-                        content: "You write personalized 2-sentence federal-contracting fit summaries for a small-business lead-magnet. Write IN SECOND PERSON (you / your company). Reference specific things about the company (their services, certifications, state, size) AND the opportunity (agency, set-aside, NAICS). Avoid filler. NEVER invent facts about the company that aren't in the input. Cap output at 350 characters.",
+                        content: [
+                            "You write personalized 2-sentence federal-contracting fit summaries for a small-business lead-magnet. Write IN SECOND PERSON (you / your company).",
+                            "If MATCHED YOUR KEYWORDS is provided, OPEN by citing 1–2 of those keywords IN QUOTES, then connect to a specific company strength (cert / state / past performance / size).",
+                            "If 'Closes in' is provided AND ≤ 14 days, lead with urgency (e.g. 'Closes in N days — this one is yours to grab.').",
+                            "Avoid filler. NEVER invent facts about the company that aren't in the input. Cap output at 320 characters.",
+                            "Format: two tight sentences, no bullet points, no headings.",
+                        ].join(" "),
                     },
                     { role: "user", content: userMsg },
                 ],
-                max_tokens: 140,
-                temperature: 0.4,
+                max_tokens: 160,
+                temperature: 0.35,
             }),
             signal: AbortSignal.timeout(15000),
         });
@@ -386,6 +418,8 @@ export async function runPostConfirmationPipeline(analysisId: string): Promise<v
             }
         }
 
+        // Pass 1: score without keyword/description signal — we only have the
+        // base columns here. This narrows the field from ~thousands to ~40 fast.
         const scoredMatches: ScoredMatch[] = [];
         for (const opp of allOpps) {
             const result = scoreOpportunityLeadMagnet(tempProfile, opp);
@@ -394,38 +428,74 @@ export async function runPostConfirmationPipeline(analysisId: string): Promise<v
         scoredMatches.sort((a, b) => b.score - a.score);
         const topCandidates = scoredMatches.slice(0, 40);
 
-        // Enrich top candidates
+        // Enrich top candidates (title, description, structured_requirements)
+        // — needed for both keyword matching AND the UI's "Why this fits" panel.
         let topMatches = topCandidates;
         if (topCandidates.length > 0) {
             const oppIds = topCandidates.map(m => m.opportunity_id);
             const { data: oppDetails } = await sb
                 .from("opportunities")
-                .select("id, title, agency, naics_code, set_aside_code, response_deadline, notice_type, award_amount, notice_id, place_of_performance_state, description")
+                .select("id, title, agency, naics_code, set_aside_code, response_deadline, notice_type, award_amount, notice_id, place_of_performance_state, description, structured_requirements")
                 .in("id", oppIds);
 
             if (oppDetails) {
                 const detailMap = new Map(oppDetails.map(o => [o.id, o]));
+
+                // Pass 2: re-score the top 40 with the enriched title +
+                // description so keyword matching + deadline boost actually
+                // fires. The re-rank moves keyword-strong matches up even if
+                // their NAICS code didn't match perfectly.
+                const rescored: ScoredMatch[] = [];
                 for (const match of topMatches) {
                     const detail = detailMap.get(match.opportunity_id);
-                    if (detail) {
-                        match.title = detail.title;
-                        match.agency = detail.agency;
-                        match.naics_code = detail.naics_code;
-                        match.set_aside_code = detail.set_aside_code;
-                        match.response_deadline = detail.response_deadline;
-                        match.notice_type = detail.notice_type;
-                        match.award_amount = detail.award_amount;
-                        match.notice_id = detail.notice_id;
-                        match.place_of_performance_state = detail.place_of_performance_state;
-                        match.description_url = detail.description;
+                    if (!detail) {
+                        rescored.push(match);
+                        continue;
+                    }
+                    const enrichedOpp: OpportunityForScoring = {
+                        id: detail.id,
+                        naics_code: detail.naics_code,
+                        psc_code: null,
+                        notice_type: detail.notice_type,
+                        agency: detail.agency,
+                        set_aside_code: detail.set_aside_code,
+                        place_of_performance_state: detail.place_of_performance_state,
+                        award_amount: detail.award_amount,
+                        response_deadline: detail.response_deadline,
+                        title: detail.title,
+                        description: detail.description,
+                        structured_requirements: detail.structured_requirements,
+                    } as OpportunityForScoring;
+                    const r2 = scoreOpportunityLeadMagnet(tempProfile, enrichedOpp);
+                    if (r2) {
+                        // Carry the enrichment fields onto the rescored entry
+                        // so the downstream UI gets everything it needs.
+                        rescored.push({
+                            ...r2,
+                            // Pull-through fields for the result page.
+                            title: detail.title,
+                            agency: detail.agency,
+                            naics_code: detail.naics_code,
+                            set_aside_code: detail.set_aside_code,
+                            response_deadline: detail.response_deadline,
+                            notice_type: detail.notice_type,
+                            award_amount: detail.award_amount,
+                            notice_id: detail.notice_id,
+                            place_of_performance_state: detail.place_of_performance_state,
+                            description_url: detail.description,
+                        } as ScoredMatch);
+                    } else {
+                        rescored.push(match);
                     }
                 }
+                rescored.sort((a, b) => b.score - a.score);
+                topMatches = rescored;
             }
         }
 
         // Deduplicate by title
         const seenTitles = new Set<string>();
-        topMatches = topCandidates.filter(m => {
+        topMatches = topMatches.filter(m => {
             const title = (m.title || "").toLowerCase().trim().replace(/\s+/g, " ").slice(0, 60);
             if (!title || seenTitles.has(title)) return false;
             seenTitles.add(title);

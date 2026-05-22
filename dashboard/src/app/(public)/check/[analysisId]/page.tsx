@@ -52,6 +52,7 @@ interface MatchData {
     score: number;
     classification: string;
     score_breakdown: Record<string, number>;
+    matched_keywords?: string[];
     ai_fit_summary?: string;
 }
 
@@ -291,7 +292,130 @@ function getNextSteps(noticeType?: string): string[] {
     ];
 }
 
-function MatchCard({ match, rank }: { match: MatchData; rank: number }) {
+// Render a description snippet (max ~280 chars) with the user's matched
+// keywords + their primary NAICS labels bolded. Keeps the visible text
+// short so the card stays compact while still showing WHY it's a match.
+function HighlightedSnippet({ text, terms, maxLen = 280 }: { text: string; terms: string[]; maxLen?: number }) {
+    if (!text) return null;
+    const lc = text.toLowerCase();
+    // Pick a snippet centered on the first matched term so the keyword is visible.
+    let start = 0;
+    let firstHit = -1;
+    for (const t of terms) {
+        if (!t) continue;
+        const idx = lc.indexOf(t.toLowerCase());
+        if (idx >= 0 && (firstHit === -1 || idx < firstHit)) firstHit = idx;
+    }
+    if (firstHit >= 0 && text.length > maxLen) {
+        start = Math.max(0, firstHit - 60);
+        // Snap to word boundary
+        const space = text.indexOf(" ", start);
+        if (space >= 0 && space - start < 25) start = space + 1;
+    }
+    let snippet = text.slice(start, start + maxLen).trim();
+    if (start > 0) snippet = "…" + snippet;
+    if (start + maxLen < text.length) snippet = snippet + "…";
+
+    if (terms.length === 0) {
+        return <span>{snippet}</span>;
+    }
+    // Build a single case-insensitive regex from the unique terms.
+    const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const uniqTerms = Array.from(new Set(terms.map(t => t.toLowerCase()))).filter(t => t.length >= 2);
+    if (uniqTerms.length === 0) return <span>{snippet}</span>;
+    const re = new RegExp(`(${uniqTerms.map(escapeRe).join("|")})`, "gi");
+    const parts = snippet.split(re);
+    return (
+        <span>
+            {parts.map((part, i) =>
+                re.test(part) && uniqTerms.includes(part.toLowerCase())
+                    ? <strong key={i} className="bg-yellow-100 text-emerald-900 px-0.5 rounded">{part}</strong>
+                    : <span key={i}>{part}</span>
+            )}
+        </span>
+    );
+}
+
+// "Why this match" — explicit chip breakdown so the user sees the signals,
+// not just a single AI sentence.
+function WhyMatchPanel({ match, userNaicsLabels }: { match: MatchData; userNaicsLabels: Record<string, string> }) {
+    const bd = match.score_breakdown || {};
+    const reasons: Array<{ key: string; chip: React.ReactNode }> = [];
+
+    // NAICS — show user's matching NAICS label when we can.
+    if (match.naics_code && (bd.naics || 0) >= 0.6) {
+        const label = userNaicsLabels[match.naics_code];
+        const exact = (bd.naics || 0) >= 0.99;
+        reasons.push({
+            key: "naics",
+            chip: (
+                <span className="text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded-md">
+                    {exact ? "Exact NAICS" : "Adjacent NAICS"} <span className="font-mono">{match.naics_code}</span>{label ? <> — {label}</> : null}
+                </span>
+            ),
+        });
+    }
+
+    // Matched keywords
+    for (const kw of (match.matched_keywords || []).slice(0, 4)) {
+        reasons.push({
+            key: `kw-${kw}`,
+            chip: (
+                <span className="text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-md">
+                    keyword <span className="italic">&ldquo;{kw}&rdquo;</span>
+                </span>
+            ),
+        });
+    }
+
+    // Set-aside (only chip when the user actually qualifies for it)
+    if (match.set_aside_code && (bd.set_aside || 0) >= 0.7) {
+        reasons.push({
+            key: "set_aside",
+            chip: (
+                <span className="text-[10px] font-bold bg-blue-50 text-blue-800 border border-blue-200 px-2 py-0.5 rounded-md">
+                    {match.set_aside_code} set-aside fits you
+                </span>
+            ),
+        });
+    }
+
+    // Geo
+    if ((bd.geo || 0) >= 0.9) {
+        reasons.push({
+            key: "geo",
+            chip: (
+                <span className="text-[10px] font-bold bg-stone-50 text-stone-700 border border-stone-200 px-2 py-0.5 rounded-md">
+                    Location {match.place_of_performance_state || "matches"}
+                </span>
+            ),
+        });
+    }
+
+    // Deadline urgency
+    if ((bd.deadline_boost || 0) > 0 && match.response_deadline) {
+        const days = Math.round((new Date(match.response_deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+        if (days >= 1 && days <= 14) {
+            reasons.push({
+                key: "deadline",
+                chip: (
+                    <span className="text-[10px] font-bold bg-red-50 text-red-700 border border-red-200 px-2 py-0.5 rounded-md">
+                        Closes in {days}d — promoted
+                    </span>
+                ),
+            });
+        }
+    }
+
+    if (reasons.length === 0) return null;
+    return (
+        <div className="flex flex-wrap items-center gap-1.5">
+            {reasons.map(r => <span key={r.key}>{r.chip}</span>)}
+        </div>
+    );
+}
+
+function MatchCard({ match, rank, hero, userNaicsLabels }: { match: MatchData; rank: number; hero?: boolean; userNaicsLabels?: Record<string, string> }) {
     const [expanded, setExpanded] = useState(false);
 
     const samUrl = match.notice_id
@@ -303,6 +427,132 @@ function MatchCard({ match, rank }: { match: MatchData; rank: number }) {
         if (amount >= 1_000) return `$${(amount / 1_000).toFixed(0)}K`;
         return `$${amount.toLocaleString()}`;
     };
+
+    // Deadline countdown — only show when within 30 days. Color-coded.
+    const deadlineInfo = (() => {
+        if (!match.response_deadline) return null;
+        const dt = new Date(match.response_deadline).getTime();
+        if (Number.isNaN(dt)) return null;
+        const days = Math.round((dt - Date.now()) / (1000 * 60 * 60 * 24));
+        if (days < 0) return { days, label: "Closed", tone: "stone" as const };
+        if (days <= 7) return { days, label: `Closes in ${days}d`, tone: "red" as const };
+        if (days <= 30) return { days, label: `Closes in ${days}d`, tone: "amber" as const };
+        return { days, label: `Closes in ${days}d`, tone: "stone" as const };
+    })();
+
+    if (hero) {
+        // Highlight signals from matched_keywords + the user's NAICS label
+        const highlightTerms = [
+            ...(match.matched_keywords || []),
+            ...(match.naics_code && userNaicsLabels?.[match.naics_code] ? [userNaicsLabels[match.naics_code]] : []),
+        ];
+
+        return (
+            <div className="bg-white border border-stone-200 rounded-2xl shadow-md overflow-hidden">
+                <div className="p-5 sm:p-6 space-y-3">
+                    {/* Top row: rank + score + classification + deadline */}
+                    <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                            <div className={clsx(
+                                "w-12 h-12 rounded-xl font-black text-base flex items-center justify-center flex-shrink-0",
+                                match.score >= 0.70 ? "bg-gradient-to-br from-emerald-500 to-blue-600 text-white" :
+                                match.score >= 0.50 ? "bg-gradient-to-br from-amber-400 to-amber-600 text-white" :
+                                "bg-gradient-to-br from-blue-400 to-blue-600 text-white"
+                            )}>
+                                {Math.round(match.score * 100)}
+                            </div>
+                            <div>
+                                <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
+                                    <span className="text-[10px] font-bold text-stone-400">#{rank}</span>
+                                    <span className={clsx(
+                                        "text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-widest border",
+                                        match.classification === "HOT" ? "bg-red-50 text-red-600 border-red-200" :
+                                        match.classification === "WARM" ? "bg-amber-50 text-amber-600 border-amber-200" :
+                                        "bg-blue-50 text-blue-600 border-blue-200"
+                                    )}>
+                                        {match.classification}
+                                    </span>
+                                    {match.set_aside_code && (
+                                        <span className="text-[9px] font-bold bg-blue-100 text-blue-700 border border-blue-200 px-2 py-0.5 rounded">
+                                            {match.set_aside_code}
+                                        </span>
+                                    )}
+                                    {match.award_amount && match.award_amount > 0 && (
+                                        <span className="text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded">
+                                            {formatCurrency(match.award_amount)}
+                                        </span>
+                                    )}
+                                </div>
+                                <p className="text-[11px] text-stone-500">{match.agency || "Federal Agency"}</p>
+                            </div>
+                        </div>
+                        {deadlineInfo && (
+                            <span className={clsx(
+                                "text-[10px] font-bold px-2.5 py-1 rounded-lg inline-flex items-center gap-1 flex-shrink-0 border",
+                                deadlineInfo.tone === "red" ? "bg-red-50 text-red-700 border-red-200" :
+                                deadlineInfo.tone === "amber" ? "bg-amber-50 text-amber-800 border-amber-200" :
+                                "bg-stone-50 text-stone-600 border-stone-200"
+                            )}>
+                                <Clock className="w-3 h-3" />
+                                {deadlineInfo.label}
+                            </span>
+                        )}
+                    </div>
+
+                    {/* Title */}
+                    <h3 className="font-bold text-base sm:text-lg text-stone-900 leading-snug">
+                        {match.title || "Untitled Opportunity"}
+                    </h3>
+
+                    {/* Why this match — explicit chip breakdown */}
+                    {userNaicsLabels && (
+                        <WhyMatchPanel match={match} userNaicsLabels={userNaicsLabels} />
+                    )}
+
+                    {/* Highlighted description snippet */}
+                    {match.description_url && (
+                        <p className="text-sm text-stone-700 leading-relaxed">
+                            <HighlightedSnippet text={String(match.description_url)} terms={highlightTerms} maxLen={280} />
+                        </p>
+                    )}
+
+                    {/* AI fit summary */}
+                    {match.ai_fit_summary && (
+                        <div className="bg-gradient-to-br from-emerald-50 to-blue-50 border border-emerald-100 rounded-xl p-3">
+                            <div className="flex items-start gap-2">
+                                <Sparkles className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0 mt-0.5" />
+                                <div className="min-w-0">
+                                    <p className="text-[9px] font-bold uppercase tracking-widest text-emerald-700 mb-0.5">Strategist&apos;s take</p>
+                                    <p className="text-xs text-stone-700 leading-relaxed">{match.ai_fit_summary}</p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Footer: key facts + actions */}
+                    <div className="flex items-center justify-between gap-3 pt-2 border-t border-stone-100">
+                        <div className="flex items-center gap-3 text-[11px] text-stone-500 flex-wrap min-w-0">
+                            {match.notice_type && <span>{match.notice_type}</span>}
+                            {match.naics_code && <span>·</span>}
+                            {match.naics_code && <span className="font-mono">NAICS {match.naics_code}</span>}
+                            {match.place_of_performance_state && <span>·</span>}
+                            {match.place_of_performance_state && <span>{match.place_of_performance_state}</span>}
+                        </div>
+                        {samUrl && (
+                            <a
+                                href={samUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1.5 text-xs font-bold text-white bg-stone-900 hover:bg-stone-700 px-3 py-1.5 rounded-lg transition-colors flex-shrink-0"
+                            >
+                                View on SAM.gov <ExternalLink className="w-3 h-3" />
+                            </a>
+                        )}
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="bg-white border border-stone-200 rounded-2xl shadow-sm overflow-hidden transition-all">
@@ -731,6 +981,12 @@ export default function CheckResultsPage() {
     }));
     const naics = data.inferred_naics || [];
     const selectedCodes = data.selected_naics_codes || [];
+    // Build a NAICS-code-to-label map so MatchCard can show "541511 — Custom
+    // Computer Programming" instead of just the bare code.
+    const userNaicsLabels: Record<string, string> = {};
+    for (const n of naics) {
+        if (n.code) userNaicsLabels[n.code] = n.label || n.code;
+    }
     const readinessScore = typeof data.readiness_score === "number" ? data.readiness_score : null;
     const readinessBreakdown = data.readiness_breakdown || null;
     const certs = crawl.certifications || [];
@@ -1097,14 +1353,26 @@ export default function CheckResultsPage() {
                     {matches.length > 0 ? (
                         <div className="space-y-3 relative">
                             {visibleMatches.map((match, i) => (
-                                <MatchCard key={match.opportunity_id} match={match} rank={i + 1} />
+                                <MatchCard
+                                    key={match.opportunity_id}
+                                    match={match}
+                                    rank={i + 1}
+                                    hero
+                                    userNaicsLabels={userNaicsLabels}
+                                />
                             ))}
                             {!unlocked && gatedMatchCount > 0 && (
                                 <div className="relative">
                                     {/* Render the next match blurred + locked overlay */}
                                     <div className="pointer-events-none select-none filter blur-[3px] opacity-50">
                                         {matches.slice(3, 5).map((match, i) => (
-                                            <MatchCard key={match.opportunity_id} match={match} rank={i + 4} />
+                                            <MatchCard
+                                                key={match.opportunity_id}
+                                                match={match}
+                                                rank={i + 4}
+                                                hero
+                                                userNaicsLabels={userNaicsLabels}
+                                            />
                                         ))}
                                     </div>
                                     <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-4">

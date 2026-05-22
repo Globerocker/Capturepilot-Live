@@ -381,6 +381,8 @@ export interface ScoredMatch {
     score: number;
     classification: string;
     score_breakdown: Record<string, number>;
+    /** Canonical keywords that matched in title/description/requirements. */
+    matched_keywords?: string[];
 }
 
 // Relaxed weights for lead magnet — emphasizes data actually available from a web crawl
@@ -437,25 +439,84 @@ export function scoreOpportunityLeadMagnet(
     const pp = scorePastPerf(profile.federal_awards_count || 0);
     const cb = scoreCertBonus(profile.sba_certifications || [], opp.set_aside_code);
 
-    const total = W.naics * naics + W.set_aside * sa + W.geo * geo +
-        W.past_perf * pp + W.notice_type * nt +
-        W.deadline * dl + W.cert_bonus * cb;
+    // Keyword matching — enabled when the profile has primary or secondary keywords
+    // AND we have title or description text on the opp to match against.
+    const hasKeywords = (profile.primary_keywords?.length || 0) > 0 ||
+        (profile.secondary_keywords?.length || 0) > 0;
+    const hasMatchableText = Boolean(opp.title || opp.description);
+    let kwCombined = 0;
+    let kwMatched: string[] = [];
+    if (hasKeywords && hasMatchableText) {
+        const kw = scoreKeywords(
+            profile.primary_keywords || [],
+            profile.secondary_keywords || [],
+            opp,
+        );
+        kwCombined = kw.combined;
+        kwMatched = kw.matched;
+    }
+
+    // Base contribution (no NAICS / no keyword)
+    const base = W.set_aside * sa + W.geo * geo + W.past_perf * pp +
+        W.notice_type * nt + W.deadline * dl + W.cert_bonus * cb;
+
+    // NAICS/keyword weight shift. When NAICS is strong, keywords are
+    // refinement bonus (0.05 + light shift). When NAICS is weak, keywords
+    // absorb the unused NAICS weight so niches with distinctive vocabulary
+    // still surface even if their NAICS code doesn't match.
+    let naicsContribution = W.naics * naics;
+    let kwContribution = 0;
+    if (hasKeywords) {
+        naicsContribution = W.naics * naics;
+        const kwWeight = 0.05 + W.naics * (1 - naics);
+        kwContribution = kwWeight * kwCombined;
+    }
+
+    let total = base + naicsContribution + kwContribution;
+
+    // Deadline-aware reranking: bias the model toward time-sensitive
+    // already-strong matches so the top-5 lead with opportunities the user
+    // can actually act on this week. Triggers only when:
+    //   - the response deadline is between 1 and 14 days out, AND
+    //   - the base score is already strong (≥ 0.55) — we don't want to
+    //     promote weak matches just because they're closing.
+    // Boost is up to +12% (linear): closer deadline = bigger bonus.
+    let deadlineBoost = 0;
+    if (total >= 0.55 && opp.response_deadline) {
+        const dt = new Date(opp.response_deadline).getTime();
+        if (!Number.isNaN(dt)) {
+            const daysOut = (dt - Date.now()) / (1000 * 60 * 60 * 24);
+            if (daysOut >= 1 && daysOut <= 14) {
+                deadlineBoost = 0.12 * (1 - (daysOut - 1) / 13); // 12% at 1d, ~0% at 14d
+                total = Math.min(1.0, total + deadlineBoost);
+            }
+        }
+    }
 
     if (total < 0.30) return null;
+
+    const breakdown: Record<string, number> = {
+        naics: Math.round(naics * 100) / 100,
+        set_aside: Math.round(sa * 100) / 100,
+        geo: Math.round(geo * 100) / 100,
+        past_performance: Math.round(pp * 100) / 100,
+        notice_type: Math.round(nt * 100) / 100,
+        deadline: Math.round(dl * 100) / 100,
+        cert_bonus: Math.round(cb * 100) / 100,
+    };
+    if (hasKeywords) {
+        breakdown.keywords = Math.round(kwCombined * 100) / 100;
+    }
+    if (deadlineBoost > 0) {
+        breakdown.deadline_boost = Math.round(deadlineBoost * 100) / 100;
+    }
 
     return {
         opportunity_id: opp.id,
         score: Math.round(total * 10000) / 10000,
         classification: total >= 0.60 ? "HOT" : total >= 0.40 ? "WARM" : "COLD",
-        score_breakdown: {
-            naics: Math.round(naics * 100) / 100,
-            set_aside: Math.round(sa * 100) / 100,
-            geo: Math.round(geo * 100) / 100,
-            past_performance: Math.round(pp * 100) / 100,
-            notice_type: Math.round(nt * 100) / 100,
-            deadline: Math.round(dl * 100) / 100,
-            cert_bonus: Math.round(cb * 100) / 100,
-        },
+        score_breakdown: breakdown,
+        matched_keywords: kwMatched.length > 0 ? kwMatched : undefined,
     };
 }
 
