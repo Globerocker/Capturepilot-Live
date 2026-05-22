@@ -162,16 +162,18 @@ const s = StyleSheet.create({
         letterSpacing: 1.2,
     },
     pageFooter: {
-        position: "absolute",
-        bottom: 20,
-        left: PAGE.padding,
-        right: PAGE.padding,
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "center",
+        // In-flow at the end of each Page (no position: absolute, no `fixed`
+        // prop). marginTop:auto pushes us to the bottom of the flex column
+        // when there's room; on dense pages we sit right after the last
+        // content block. Either way the green border line + brand text are
+        // always visible, which is what the user actually asked for.
+        marginTop: "auto",
         paddingTop: 9,
         borderTopWidth: 1,
         borderTopColor: COLOR.primary,
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
         fontSize: 8,
         color: COLOR.ink,
         fontFamily: FONT.bold,
@@ -502,12 +504,12 @@ function PageHeader({ companyName, pageEyebrow, logoUrl }: { companyName: string
 }
 
 function PageFooter({ generatedAt }: { generatedAt: string }) {
-    // Flat structure — react-pdf 4.x has a quirk where a `fixed` + absolute
-    // View containing a NESTED View child doesn't get re-emitted on every
-    // page break. Keeping every child as a direct <Text> at the top level
-    // of the footer View makes the `fixed` re-emit work reliably.
+    // No `fixed` prop, no position: absolute. react-pdf 4.x ate both
+    // combinations silently (footer disappeared from every page). The
+    // PageFooter is mounted directly at the bottom of each Page's children
+    // — natural document flow — so we don't need any positioning tricks.
     return (
-        <View style={s.pageFooter} fixed>
+        <View style={s.pageFooter}>
             <Text style={{ color: COLOR.primary, fontFamily: FONT.bold, fontSize: 8 }}>
                 CapturePilot · app.capturepilot.com
             </Text>
