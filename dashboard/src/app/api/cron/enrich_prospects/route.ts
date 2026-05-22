@@ -18,8 +18,12 @@ export const maxDuration = 300;
  */
 export async function GET(req: NextRequest) {
     const auth = req.headers.get("authorization");
-    if (process.env.CRON_SECRET && auth !== `Bearer ${process.env.CRON_SECRET}`) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (process.env.CRON_SECRET) {
+        const expectedCron = `Bearer ${process.env.CRON_SECRET}`;
+        const expectedSvc = process.env.SUPABASE_SERVICE_KEY ? `Bearer ${process.env.SUPABASE_SERVICE_KEY}` : null;
+        if (auth !== expectedCron && auth !== expectedSvc) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
     }
 
     const admin = createClient(

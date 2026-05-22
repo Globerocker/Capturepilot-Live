@@ -32,8 +32,12 @@ interface ApolloOrg {
 
 export async function GET(req: NextRequest) {
     const authHeader = req.headers.get("authorization");
-    if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (process.env.CRON_SECRET) {
+        const expectedCron = `Bearer ${process.env.CRON_SECRET}`;
+        const expectedSvc = process.env.SUPABASE_SERVICE_KEY ? `Bearer ${process.env.SUPABASE_SERVICE_KEY}` : null;
+        if (authHeader !== expectedCron && authHeader !== expectedSvc) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
     }
 
     const APOLLO_API_KEY = process.env.APOLLO_API_KEY;
