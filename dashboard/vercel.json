@@ -48,10 +48,6 @@
             "schedule": "0 13 * * *"
         },
         {
-            "path": "/api/cron/beta_deadline",
-            "schedule": "0 12 * * *"
-        },
-        {
             "path": "/api/cron/strategic_scoring",
             "schedule": "0 7 * * *"
         },
@@ -84,11 +80,11 @@
             "schedule": "0 14 * * 1-5"
         },
         {
-            "path": "/api/cron/ingest_dod_daily",
+            "path": "/api/cron/ingest_dod_contracts",
             "schedule": "0 22 * * 1-5"
         },
         {
-            "path": "/api/cron/ingest_gao_protests",
+            "path": "/api/cron/ingest_gao_protests_v2",
             "schedule": "30 10 * * *"
         },
         {
@@ -154,6 +150,18 @@
         {
             "path": "/api/cron/ingest_rss",
             "schedule": "30 2 * * *"
+        },
+        {
+            "path": "/api/cron/compute_past_performance_stats",
+            "schedule": "0 8 * * 1"
+        },
+        {
+            "path": "/api/cron/ingest_dol_wage_determinations",
+            "schedule": "0 9 * * 2"
+        },
+        {
+            "path": "/api/cron/ingest_gsa_elibrary",
+            "schedule": "0 10 * * 3"
         }
     ],
     "functions": {
