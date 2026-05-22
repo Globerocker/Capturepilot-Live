@@ -514,7 +514,7 @@ function PageFooter({ generatedAt }: { generatedAt: string }) {
                 CapturePilot · app.capturepilot.com
             </Text>
             <Text style={s.pageFooterMuted}>
-                Federal Readiness Report · {fmtDate(generatedAt)}
+                B2G Audit · {fmtDate(generatedAt)}
             </Text>
             <Text
                 style={{ fontFamily: FONT.bold, fontSize: 8, color: COLOR.ink }}
@@ -803,18 +803,18 @@ export function FederalReadinessReport(props: ReportInput) {
 
     return (
         <Document
-            title={`${companyName} — Federal Readiness Report`}
+            title={`${companyName} — B2G Audit`}
             author="CapturePilot"
-            subject="Federal Contracting Readiness Report"
+            subject="B2G (Business-to-Government) Audit"
             creator="CapturePilot"
             producer="CapturePilot"
         >
             {/* ── PAGE 1 · COVER + READINESS ──────────────────────────────── */}
             <Page size="A4" style={s.page}>
-                <PageHeader companyName={companyName} pageEyebrow="Federal Readiness Report" logoUrl={logoUrl} />
+                <PageHeader companyName={companyName} pageEyebrow="B2G Audit" logoUrl={logoUrl} />
 
                 <View style={s.coverIntro}>
-                    <Text style={s.eyebrow}>Federal Readiness Report</Text>
+                    <Text style={s.eyebrow}>B2G Audit · Federal Contracting Readiness</Text>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
                         {companyLogoUrl ? (
                             /* Clearbit's logo CDN returns a 24×24+ PNG when
@@ -1187,68 +1187,72 @@ export function FederalReadinessReport(props: ReportInput) {
                 <PageFooter generatedAt={generatedAt} />
             </Page>
 
-            {/* ── PAGE 5 · NEXT STEPS + CTAS ───────────────────────────────── */}
+            {/* ── PAGE · NEXT STEPS — meeting CTA as the hero ──────────────── */}
             <Page size="A4" style={s.page}>
                 <PageHeader companyName={companyName} pageEyebrow="Next Steps" logoUrl={logoUrl} />
 
-                <Text style={s.eyebrow}>Where to go from here</Text>
-                <Text style={s.h2}>Your 30-day action plan</Text>
+                <Text style={s.eyebrow}>What to do this week</Text>
+                <Text style={s.h2}>Turn this audit into a contract</Text>
                 <Text style={{ ...s.muted, marginBottom: 14 }}>
-                    The fastest path from this report to your first federal contract.
+                    You have the data. Now you need a partner who&apos;s won contracts in your NAICS before.
+                    Book 30 minutes with a B2G strategist — we&apos;ll walk through this audit, pick the 2
+                    matches worth pursuing first, and tell you in 5 minutes whether it&apos;s realistic for
+                    your size, certs and state.
                 </Text>
 
-                <View style={s.card}>
-                    <Text style={s.h3}>Week 1 — Fundamentals</Text>
-                    <Text style={s.body}>
-                        {samRegistered
-                            ? "• Confirm SAM.gov registration is current (annual renewal)."
-                            : "• Start your SAM.gov registration. Allow 7–14 days for activation."}
-                    </Text>
-                    <Text style={s.body}>• Polish your capability statement — one-page PDF, federal format.</Text>
-                    <Text style={s.body}>• Confirm your NAICS codes match what you actually sell.</Text>
-                </View>
-                <View style={s.card}>
-                    <Text style={s.h3}>Week 2 — First responses</Text>
-                    <Text style={s.body}>• Pick the top 2 Sources Sought matches from this report.</Text>
-                    <Text style={s.body}>• Draft a 1-page response — focus on capability, not pricing.</Text>
-                    <Text style={s.body}>• Submit before the deadline. Track in a simple spreadsheet.</Text>
-                </View>
-                <View style={s.card}>
-                    <Text style={s.h3}>Week 3–4 — Build the pipeline</Text>
-                    <Text style={s.body}>• Reach out to one Contracting Officer per week.</Text>
-                    <Text style={s.body}>• Identify one IDIQ / GWAC vehicle worth pursuing.</Text>
-                    <Text style={s.body}>• Sign up for SAM.gov daily alerts on your NAICS codes.</Text>
-                </View>
-
-                {/* CTA — Launch Kit */}
+                {/* Hero meeting CTA — the document's primary call-to-action */}
                 <View style={s.ctaCard}>
-                    <Text style={s.ctaEyebrow}>Skip the research — get the toolkit</Text>
-                    <Text style={s.ctaHead}>Federal Launch Kit · $70</Text>
+                    <Text style={s.ctaEyebrow}>Book a meeting · Free · 30 minutes</Text>
+                    <Text style={s.ctaHead}>Talk to a B2G strategist this week</Text>
                     <Text style={s.ctaBody}>
-                        SAM.gov registration walkthrough, capability statement templates, Sources Sought
-                        playbook, certification eligibility worksheets, CO outreach scripts, pricing
-                        toolkit, internal best-practice library + 30-min founder onboarding call.
-                        Instant access, lifetime use, 7-day refund.
+                        Bring this PDF to the call. We&apos;ll review your readiness score, prioritize the
+                        top opportunities, and identify the 2-3 gaps standing between you and your first
+                        federal contract. If we can&apos;t add value in 5 minutes, we&apos;ll say so and end
+                        the call early. No pitch, no slides, no obligation.
                     </Text>
-                    <Link src={launchKitUrl} style={s.ctaButton}>
-                        Unlock the Launch Kit
+                    <Link src={strategyCallUrl} style={[s.ctaButton, { fontSize: SIZE.md }]}>
+                        Book my 30-min strategist call
                     </Link>
+                    <Text style={{ fontSize: SIZE.xs, color: "#a7f3d0", marginTop: 8 }}>
+                        Slots open within 48 hours. Your AE will email a calendar link the same day.
+                    </Text>
                 </View>
 
-                {/* CTA — Strategy Call */}
-                <View style={s.ctaCardLight}>
-                    <Text style={{ ...s.eyebrow, color: COLOR.ink }}>Done-for-you</Text>
-                    <Text style={{ ...s.h3, marginBottom: 6 }}>Have us run capture for you</Text>
-                    <Text style={s.body}>
-                        Our managed-capture team handles SAM, response writing, color-team reviews and
-                        submission for $4–8k/month. Book a 30-min strategy call and we&apos;ll tell you
-                        in 5 minutes whether it&apos;s a fit.
+                <Text style={[s.eyebrow, { marginTop: 18 }]}>If you&apos;d rather DIY</Text>
+                <Text style={[s.h3, { marginBottom: 6 }]}>30-day self-serve action plan</Text>
+                <View style={[s.card, { marginBottom: 6, paddingVertical: 8 }]}>
+                    <Text style={[s.h3, { fontSize: SIZE.md, marginBottom: 2 }]}>Week 1 — Foundation</Text>
+                    <Text style={[s.body, { fontSize: SIZE.sm }]}>
+                        {samRegistered
+                            ? "Confirm SAM.gov registration is current  ·  Tighten your capability statement  ·  Lock in your final NAICS list."
+                            : "Start SAM.gov registration (7-14 days)  ·  Draft a 1-page capability statement  ·  Confirm NAICS codes match what you sell."}
                     </Text>
-                    <Link
-                        src={strategyCallUrl}
-                        style={{ ...s.ctaButton, backgroundColor: COLOR.ink, color: "#fff", marginTop: 10 }}
-                    >
-                        Book a strategy call
+                </View>
+                <View style={[s.card, { marginBottom: 6, paddingVertical: 8 }]}>
+                    <Text style={[s.h3, { fontSize: SIZE.md, marginBottom: 2 }]}>Week 2 — First responses</Text>
+                    <Text style={[s.body, { fontSize: SIZE.sm }]}>
+                        Pick 2 Sources Sought from this audit  ·  Draft a 1-page response per opp  ·
+                        Submit before deadline; track in a sheet.
+                    </Text>
+                </View>
+                <View style={[s.card, { marginBottom: 10, paddingVertical: 8 }]}>
+                    <Text style={[s.h3, { fontSize: SIZE.md, marginBottom: 2 }]}>Week 3–4 — Build the pipeline</Text>
+                    <Text style={[s.body, { fontSize: SIZE.sm }]}>
+                        One Contracting Officer outreach per week  ·  Identify one IDIQ / GWAC vehicle  ·
+                        Subscribe to SAM.gov daily alerts on your NAICS.
+                    </Text>
+                </View>
+
+                {/* Secondary CTA — Launch Kit (smaller now, hero is the call) */}
+                <View style={[s.ctaCardLight, { marginTop: 8 }]}>
+                    <Text style={[s.eyebrow, { color: COLOR.ink }]}>Prefer to do it yourself?</Text>
+                    <Text style={[s.h3, { marginBottom: 4 }]}>Federal Launch Kit · $70</Text>
+                    <Text style={[s.body, { fontSize: SIZE.sm }]}>
+                        Same playbook our managed-capture team uses — SAM walkthrough, capability statement
+                        templates, Sources Sought scripts, certification worksheets. Instant download.
+                    </Text>
+                    <Link src={launchKitUrl} style={[s.ctaButton, { fontSize: SIZE.sm }]}>
+                        Get the Launch Kit
                     </Link>
                 </View>
 

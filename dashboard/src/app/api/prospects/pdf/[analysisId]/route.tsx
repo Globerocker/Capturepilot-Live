@@ -229,11 +229,14 @@ export async function GET(
     try {
         const buffer = await renderToBuffer(<FederalReadinessReport {...input} />);
         const safeName = input.companyName.replace(/[^\w\s-]/g, "_").replace(/\s+/g, "_").slice(0, 60);
+        // Filename reads as a strategic document for internal sharing —
+        // "B2G_Audit" instead of the generic "FederalReadinessReport".
+        const filename = `${safeName}_B2G_Audit.pdf`;
         return new NextResponse(buffer as unknown as BodyInit, {
             status: 200,
             headers: {
                 "Content-Type": "application/pdf",
-                "Content-Disposition": `inline; filename="${safeName}_FederalReadinessReport.pdf"`,
+                "Content-Disposition": `inline; filename="${filename}"`,
                 "Cache-Control": "no-store",
             },
         });
