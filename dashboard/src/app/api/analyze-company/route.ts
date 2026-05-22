@@ -1025,10 +1025,31 @@ export async function POST(request: NextRequest) {
             analysisId = analysis.id;
         }
 
-        // Run the full pipeline in the background after response is sent
-        after(async () => {
-            await runAnalysisPipeline(analysisId, companyName, website, uei, userProvidedName);
-        });
+        // Kick off the pipeline in a SEPARATE serverless invocation. We used
+        // to do this via after(), but on Vercel's older Node runtime the
+        // after() budget didn't honor our maxDuration override and the
+        // function was being silently killed mid-classify, leaving rows
+        // pinned at status="classifying" forever with no error.
+        //
+        // The new /run/[id] endpoint runs the work synchronously inside its
+        // own function lifecycle, so it gets the full maxDuration=300s budget.
+        // We DO NOT await the fetch — it's fire-and-forget. The client polls
+        // /status/[id] for progress.
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL
+            || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null)
+            || request.nextUrl.origin;
+        fetch(`${baseUrl}/api/analyze-company/run/${analysisId}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            // Detach immediately — don't keep the parent handler alive.
+            // 1s connect timeout is enough to start the worker; the worker
+            // itself runs to completion independently of this fetch.
+            signal: AbortSignal.timeout(1000),
+        }).catch(() => { /* expected: timeout aborts the response read */ });
+
+        // Used in autonomous re-pipeline fallback below; suppress unused warning.
+        void userProvidedName;
+        void runAnalysisPipeline;
 
         // Return immediately with the analysis ID
         return NextResponse.json({
