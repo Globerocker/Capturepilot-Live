@@ -93,6 +93,7 @@ export async function GET(req: NextRequest) {
         let totalUpserted = 0;
         let totalPages = 0;
         let errorCount = 0;
+        const errorSamples: string[] = [];
 
         while (true) {
             if (Date.now() - startTime > 270_000) {
@@ -173,6 +174,7 @@ export async function GET(req: NextRequest) {
                 if (error) {
                     console.error("Upsert error:", error.message);
                     errorCount++;
+                    if (errorSamples.length < 3) errorSamples.push(error.message.slice(0, 240));
                 } else {
                     totalUpserted += rows.length;
                 }
@@ -197,6 +199,8 @@ export async function GET(req: NextRequest) {
             total_pages_available: totalPages,
             processed: totalProcessed,
             upserted: totalUpserted,
+            error_count: errorCount,
+            error_samples: errorSamples,
             elapsed_ms: Date.now() - startTime,
         });
     } catch (error) {

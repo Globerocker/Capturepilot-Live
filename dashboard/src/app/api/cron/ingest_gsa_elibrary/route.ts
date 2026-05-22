@@ -88,7 +88,7 @@ async function GET_handler(req: NextRequest): Promise<NextResponse> {
     // Prioritize contractors we haven't checked recently with award history
     const { data: cands, error } = await db
         .from("contractors")
-        .select("uei, legal_business_name, state")
+        .select("uei, company_name, state")
         .gt("federal_awards_count", 5)
         .order("federal_awards_count", { ascending: false })
         .limit(max);
@@ -98,7 +98,7 @@ async function GET_handler(req: NextRequest): Promise<NextResponse> {
 
     for (const c of cands || []) {
         if (Date.now() - t0 > 270_000) break;
-        const name = (c as { legal_business_name?: string }).legal_business_name;
+        const name = (c as { company_name?: string }).company_name;
         const uei = (c as { uei?: string }).uei;
         const state = (c as { state?: string }).state;
         if (!name) continue;
