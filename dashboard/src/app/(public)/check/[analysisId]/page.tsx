@@ -758,6 +758,15 @@ export default function CheckResultsPage() {
     // "Rendered more hooks than during the previous render".
     const [savingCompetitor, setSavingCompetitor] = useState(false);
     const [competitorId, setCompetitorId] = useState<string | null>(null);
+    // PDF-export gate state — MUST be declared with the other hooks at the top
+    // of the component. These were previously declared inline AFTER the early
+    // conditional returns (loading / awaiting_confirmation / in-progress),
+    // which caused React error #310 "rendered more hooks than during the
+    // previous render" the first time status flipped to "complete".
+    const [pdfGateOpen, setPdfGateOpen] = useState(false);
+    const [pdfEmail, setPdfEmail] = useState("");
+    const [pdfName, setPdfName] = useState("");
+    const [pdfError, setPdfError] = useState("");
     const pollRef = useRef<number | null>(null);
 
     const analysisId = params.analysisId as string;
@@ -921,11 +930,6 @@ export default function CheckResultsPage() {
         } catch { /* ignore */ }
         setSaving(false);
     };
-
-    const [pdfGateOpen, setPdfGateOpen] = useState(false);
-    const [pdfEmail, setPdfEmail] = useState("");
-    const [pdfName, setPdfName] = useState("");
-    const [pdfError, setPdfError] = useState("");
 
     const handleExportPdf = () => {
         // If we already captured a lead, bypass the gate
