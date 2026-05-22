@@ -596,7 +596,7 @@ function MatchCardCompact({ match, rank }: { match: ReportMatch; rank: number })
                     src={`https://sam.gov/opp/${match.notice_id}/view`}
                     style={{ fontSize: SIZE.xs, color: COLOR.accent, textDecoration: "none", marginTop: 5 }}
                 >
-                    View on SAM.gov →
+                    View on SAM.gov
                 </Link>
             ) : null}
         </View>
@@ -744,7 +744,7 @@ function MatchCard({ match, rank }: { match: ReportMatch; rank: number }) {
                     src={`https://sam.gov/opp/${match.notice_id}/view`}
                     style={{ fontSize: SIZE.sm, color: COLOR.accent, textDecoration: "none", marginTop: 8 }}
                 >
-                    View full solicitation on SAM.gov →
+                    View full solicitation on SAM.gov
                 </Link>
             ) : null}
         </View>
@@ -993,7 +993,7 @@ export function FederalReadinessReport(props: ReportInput) {
                                 <Text style={s.eyebrow}>Closest wins</Text>
                                 <Text style={[s.h3, { marginBottom: 6 }]}>Fix these {todo.length} things first</Text>
                                 <Text style={{ ...s.muted, marginBottom: 8 }}>
-                                    Tackling these in order is the fastest path from {(readinessScore ?? 0).toFixed(1)} → {Math.min(10, (readinessScore ?? 0) + todo.reduce((a, f) => a + f.points, 0)).toFixed(1)} on your readiness score.
+                                    Tackling these in order is the fastest path from {(readinessScore ?? 0).toFixed(1)} to {Math.min(10, (readinessScore ?? 0) + todo.reduce((a, f) => a + f.points, 0)).toFixed(1)} on your readiness score.
                                 </Text>
                                 {todo.map((f, i) => (
                                     <View key={i} style={{ flexDirection: "row", alignItems: "flex-start", gap: 6, marginBottom: 4 }}>
@@ -1014,7 +1014,7 @@ export function FederalReadinessReport(props: ReportInput) {
                                         Want the playbook? The Federal Launch Kit includes step-by-step walkthroughs for every item above — SAM.gov registration, capability statement, certification applications, CO outreach scripts.
                                     </Text>
                                     <Link src={launchKitUrl} style={[s.ctaButton, { fontSize: SIZE.sm }]}>
-                                        Unlock the $70 Launch Kit →
+                                        Unlock the $70 Launch Kit
                                     </Link>
                                 </View>
                             </View>
@@ -1032,7 +1032,7 @@ export function FederalReadinessReport(props: ReportInput) {
                     <Text style={s.eyebrow}>Best Matching Opportunities</Text>
                     <Text style={s.h2}>Top {matchesHero.length} for {companyName.length > 30 ? "you" : companyName}</Text>
                     <Text style={{ ...s.muted, marginBottom: 12 }}>
-                        Filtered to matches scoring ≥ 40% — these are the contracts worth your team&apos;s capture
+                        Filtered to matches scoring at least 40% — these are the contracts worth your team&apos;s capture
                         budget this week. Each one carries a personalized fit explanation, deadline countdown,
                         and the matching signals that drove the score.
                     </Text>
@@ -1224,7 +1224,7 @@ export function FederalReadinessReport(props: ReportInput) {
                         Instant access, lifetime use, 7-day refund.
                     </Text>
                     <Link src={launchKitUrl} style={s.ctaButton}>
-                        Unlock the Launch Kit →
+                        Unlock the Launch Kit
                     </Link>
                 </View>
 
@@ -1241,7 +1241,7 @@ export function FederalReadinessReport(props: ReportInput) {
                         src={strategyCallUrl}
                         style={{ ...s.ctaButton, backgroundColor: COLOR.ink, color: "#fff", marginTop: 10 }}
                     >
-                        Book a strategy call →
+                        Book a strategy call
                     </Link>
                 </View>
 
