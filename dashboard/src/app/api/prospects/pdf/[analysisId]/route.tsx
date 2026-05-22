@@ -25,8 +25,12 @@ export const runtime = "nodejs";
  * review of any analysis stays friction-free.
  */
 
-const LAUNCH_KIT_URL = "https://capturepilot-v3.vercel.app/startup-pack";
+// Public landing URLs — must point at the live customer-facing domains, NOT
+// the Vercel preview. The previous string `capturepilot-v3.vercel.app` made
+// every downloaded PDF send recipients into an internal preview deployment.
+const LAUNCH_KIT_URL = "https://app.capturepilot.com/startup-pack";
 const STRATEGY_CALL_URL = "https://calendly.com/capturepilot/strategy-call";
+const LOGO_URL = "https://app.capturepilot.com/logo.png";
 
 async function isAdminSession(): Promise<boolean> {
     try {
@@ -125,6 +129,9 @@ export async function GET(
         score: Number(m.score) || 0,
         classification: String(m.classification || "WARM"),
         ai_fit_summary: (m.ai_fit_summary as string) || aiSummaries[String(m.opportunity_id)] || undefined,
+        matched_keywords: Array.isArray(m.matched_keywords) ? (m.matched_keywords as string[]).slice(0, 5) : undefined,
+        score_breakdown: m.score_breakdown as Record<string, number> | undefined,
+        description: (m.description_url as string) || undefined,
     }));
 
     const naicsCodes = ((data.inferred_naics || []) as Record<string, unknown>[]).map(n => ({
@@ -154,6 +161,41 @@ export async function GET(
         category: w.category as string | undefined,
     } satisfies ReportEasyWin));
 
+    // Competitors winning in this profile's NAICS — surfaces the actual
+    // small businesses you'll be bidding against so the internal reader can
+    // immediately gauge the field. Top 5 max.
+    const competitors = ((data.competitors || []) as Record<string, unknown>[]).slice(0, 5).map(c => ({
+        name: String(c.name || ""),
+        state: (c.state as string) || null,
+        sam_registered: Boolean(c.sam_registered),
+        total_awards: Number(c.total_awards) || 0,
+        award_count: Number(c.award_count) || 0,
+        naics_overlap_pct: Number(c.naics_overlap_pct) || 0,
+        top_agency: (c.top_agency as string) || null,
+        strengths: Array.isArray(c.strengths) ? (c.strengths as string[]).slice(0, 3) : [],
+    }));
+
+    // Pull the user's primary + secondary keywords so the report can show
+    // them as a profile chip row and reference them when a match cites one.
+    const primaryKeywords = ((profile.primary_keywords || []) as Array<{ keyword?: string }>)
+        .map(k => String(k?.keyword || "").trim().toLowerCase())
+        .filter(k => k.length >= 2);
+    const secondaryKeywords = ((profile.secondary_keywords || []) as Array<{ keyword?: string }>)
+        .map(k => String(k?.keyword || "").trim().toLowerCase())
+        .filter(k => k.length >= 2);
+
+    // USASpending past-award snapshot — when present, gives the report a
+    // credible "you've done federal work before" credit on the profile page.
+    const govSpending = (profile.gov_spending as {
+        award_count?: number;
+        total_value?: number;
+        agencies?: string[];
+        last_award_title?: string | null;
+        last_award_amount?: number | null;
+        last_award_agency?: string | null;
+        last_award_date?: string | null;
+    } | null) || null;
+
     const input: ReportInput = {
         companyName: String(data.company_name || "Your Company"),
         website: String(data.website || ""),
@@ -172,10 +214,16 @@ export async function GET(
         matches,
         certRecommendations,
         easyWins,
+        competitors,
+        primaryKeywords,
+        secondaryKeywords,
+        targetStates: ((profile.target_states as string[]) || []).slice(0, 12),
+        govSpending,
         summary: String(data.company_summary || ""),
         generatedAt: new Date().toISOString(),
         launchKitUrl: LAUNCH_KIT_URL,
         strategyCallUrl: STRATEGY_CALL_URL,
+        logoUrl: LOGO_URL,
     };
 
     try {
