@@ -1218,41 +1218,43 @@ export function FederalReadinessReport(props: ReportInput) {
                     </Text>
                 </View>
 
-                <Text style={[s.eyebrow, { marginTop: 18 }]}>If you&apos;d rather DIY</Text>
-                <Text style={[s.h3, { marginBottom: 6 }]}>30-day self-serve action plan</Text>
-                <View style={[s.card, { marginBottom: 6, paddingVertical: 8 }]}>
-                    <Text style={[s.h3, { fontSize: SIZE.md, marginBottom: 2 }]}>Week 1 — Foundation</Text>
-                    <Text style={[s.body, { fontSize: SIZE.sm }]}>
-                        {samRegistered
-                            ? "Confirm SAM.gov registration is current  ·  Tighten your capability statement  ·  Lock in your final NAICS list."
-                            : "Start SAM.gov registration (7-14 days)  ·  Draft a 1-page capability statement  ·  Confirm NAICS codes match what you sell."}
-                    </Text>
-                </View>
-                <View style={[s.card, { marginBottom: 6, paddingVertical: 8 }]}>
-                    <Text style={[s.h3, { fontSize: SIZE.md, marginBottom: 2 }]}>Week 2 — First responses</Text>
-                    <Text style={[s.body, { fontSize: SIZE.sm }]}>
-                        Pick 2 Sources Sought from this audit  ·  Draft a 1-page response per opp  ·
-                        Submit before deadline; track in a sheet.
-                    </Text>
-                </View>
-                <View style={[s.card, { marginBottom: 10, paddingVertical: 8 }]}>
-                    <Text style={[s.h3, { fontSize: SIZE.md, marginBottom: 2 }]}>Week 3–4 — Build the pipeline</Text>
-                    <Text style={[s.body, { fontSize: SIZE.sm }]}>
-                        One Contracting Officer outreach per week  ·  Identify one IDIQ / GWAC vehicle  ·
-                        Subscribe to SAM.gov daily alerts on your NAICS.
-                    </Text>
+                {/* Consolidated 30-day plan — one card, three rows, max signal per pt */}
+                <Text style={[s.eyebrow, { marginTop: 14 }]}>If you&apos;d rather DIY</Text>
+                <View style={[s.card, { paddingVertical: 10, marginBottom: 8 }]}>
+                    <Text style={[s.h3, { marginBottom: 6 }]}>30-day self-serve action plan</Text>
+                    <View style={{ flexDirection: "row", gap: 6, marginBottom: 4 }}>
+                        <Text style={{ width: 70, fontSize: SIZE.sm, fontFamily: FONT.bold, color: COLOR.primary }}>Week 1</Text>
+                        <Text style={[s.body, { flex: 1, fontSize: SIZE.sm }]}>
+                            {samRegistered
+                                ? "Confirm SAM.gov is current  ·  Tighten capability statement  ·  Lock NAICS list."
+                                : "Start SAM.gov registration (7-14 days)  ·  Draft 1-page capability statement  ·  Confirm NAICS."}
+                        </Text>
+                    </View>
+                    <View style={{ flexDirection: "row", gap: 6, marginBottom: 4 }}>
+                        <Text style={{ width: 70, fontSize: SIZE.sm, fontFamily: FONT.bold, color: COLOR.primary }}>Week 2</Text>
+                        <Text style={[s.body, { flex: 1, fontSize: SIZE.sm }]}>
+                            Pick 2 Sources Sought from this audit  ·  Draft a 1-page response each  ·  Submit before deadline.
+                        </Text>
+                    </View>
+                    <View style={{ flexDirection: "row", gap: 6 }}>
+                        <Text style={{ width: 70, fontSize: SIZE.sm, fontFamily: FONT.bold, color: COLOR.primary }}>Weeks 3-4</Text>
+                        <Text style={[s.body, { flex: 1, fontSize: SIZE.sm }]}>
+                            One CO outreach per week  ·  Identify one IDIQ / GWAC vehicle  ·  Daily SAM.gov alerts on your NAICS.
+                        </Text>
+                    </View>
                 </View>
 
-                {/* Secondary CTA — Launch Kit (smaller now, hero is the call) */}
-                <View style={[s.ctaCardLight, { marginTop: 8 }]}>
-                    <Text style={[s.eyebrow, { color: COLOR.ink }]}>Prefer to do it yourself?</Text>
-                    <Text style={[s.h3, { marginBottom: 4 }]}>Federal Launch Kit · $70</Text>
-                    <Text style={[s.body, { fontSize: SIZE.sm }]}>
-                        Same playbook our managed-capture team uses — SAM walkthrough, capability statement
-                        templates, Sources Sought scripts, certification worksheets. Instant download.
-                    </Text>
-                    <Link src={launchKitUrl} style={[s.ctaButton, { fontSize: SIZE.sm }]}>
-                        Get the Launch Kit
+                {/* Secondary CTA — Launch Kit (compact one-liner row) */}
+                <View style={[s.ctaCardLight, { paddingVertical: 10, flexDirection: "row", alignItems: "center", gap: 12 }]}>
+                    <View style={{ flex: 1 }}>
+                        <Text style={[s.h3, { marginBottom: 2, fontSize: SIZE.md }]}>Federal Launch Kit · $70</Text>
+                        <Text style={[s.body, { fontSize: SIZE.sm }]}>
+                            Our managed-capture team&apos;s playbook — SAM walkthrough, capability templates,
+                            CO scripts. Instant download.
+                        </Text>
+                    </View>
+                    <Link src={launchKitUrl} style={[s.ctaButton, { fontSize: SIZE.sm, marginTop: 0, flexShrink: 0 }]}>
+                        Get the Kit
                     </Link>
                 </View>
 
