@@ -18,6 +18,7 @@ import ReadinessScoreCard from "@/components/ReadinessScoreCard";
 import NaicsEditModal from "@/components/NaicsEditModal";
 import StartupPackOfferCard from "@/components/StartupPackOfferCard";
 import ConfirmFoundDataStep from "@/components/ConfirmFoundDataStep";
+import AnalysisLoadingScreen from "@/components/AnalysisLoadingScreen";
 import InlineCTA from "@/components/InlineCTA";
 
 interface CertRecommendation {
@@ -879,25 +880,14 @@ export default function CheckResultsPage() {
         );
     }
 
-    // Pipeline still running — show lightweight progress state
+    // Pipeline still running — show the detailed progress UI with per-stage
+    // descriptions, an overall progress bar, and a time-remaining countdown.
     if (IN_PROGRESS_STATUSES.has(data.status)) {
-        const stageLabel: Record<string, string> = {
-            crawling: "Crawling your website...",
-            enriching: "Enriching with SAM.gov data...",
-            classifying: "Classifying your industries...",
-            scoring: "Scoring opportunities...",
-            finding_opportunities: "Finding opportunities...",
-            finding_competitors: "Finding your competitors...",
-            generating: "Generating insights...",
-        };
         return (
-            <div className="min-h-screen bg-stone-50 flex items-center justify-center px-4">
-                <div className="text-center max-w-md">
-                    <Loader2 className="w-10 h-10 text-emerald-500 animate-spin mx-auto mb-4" />
-                    <h2 className="font-bold text-lg mb-1">Analyzing {data.company_name}</h2>
-                    <p className="text-sm text-stone-500">{stageLabel[data.status] || "Processing..."}</p>
-                </div>
-            </div>
+            <AnalysisLoadingScreen
+                companyName={data.company_name}
+                status={data.status}
+            />
         );
     }
 
