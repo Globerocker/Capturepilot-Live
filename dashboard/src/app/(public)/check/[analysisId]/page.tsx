@@ -296,40 +296,55 @@ function getNextSteps(noticeType?: string): string[] {
 // Render a description snippet (max ~280 chars) with the user's matched
 // keywords + their primary NAICS labels bolded. Keeps the visible text
 // short so the card stays compact while still showing WHY it's a match.
-function HighlightedSnippet({ text, terms, maxLen = 280 }: { text: string; terms: string[]; maxLen?: number }) {
-    if (!text) return null;
-    const lc = text.toLowerCase();
+//
+// Defensive: returns null on any unexpected input (string-coerce just in
+// case a caller passes a non-string description_url payload from SAM).
+function HighlightedSnippet({ text, terms, maxLen = 280 }: { text: string | null | undefined; terms: string[]; maxLen?: number }) {
+    const safeText = typeof text === "string" ? text : (text == null ? "" : String(text));
+    if (!safeText) return null;
+    const safeTerms = (terms || []).map(t => (typeof t === "string" ? t : "")).filter(Boolean);
+
+    const lc = safeText.toLowerCase();
     // Pick a snippet centered on the first matched term so the keyword is visible.
     let start = 0;
     let firstHit = -1;
-    for (const t of terms) {
-        if (!t) continue;
+    for (const t of safeTerms) {
         const idx = lc.indexOf(t.toLowerCase());
         if (idx >= 0 && (firstHit === -1 || idx < firstHit)) firstHit = idx;
     }
-    if (firstHit >= 0 && text.length > maxLen) {
+    if (firstHit >= 0 && safeText.length > maxLen) {
         start = Math.max(0, firstHit - 60);
-        // Snap to word boundary
-        const space = text.indexOf(" ", start);
+        const space = safeText.indexOf(" ", start);
         if (space >= 0 && space - start < 25) start = space + 1;
     }
-    let snippet = text.slice(start, start + maxLen).trim();
+    let snippet = safeText.slice(start, start + maxLen).trim();
     if (start > 0) snippet = "…" + snippet;
-    if (start + maxLen < text.length) snippet = snippet + "…";
+    if (start + maxLen < safeText.length) snippet = snippet + "…";
 
-    if (terms.length === 0) {
+    if (safeTerms.length === 0) return <span>{snippet}</span>;
+
+    // Build the dedup'd lowercase term list — used both for the split regex
+    // AND for the per-part highlight check (no stateful `re.test()` in the
+    // map loop, which was buggy with the `g` flag's lastIndex behavior).
+    const uniqTerms = Array.from(new Set(safeTerms.map(t => t.toLowerCase()))).filter(t => t.length >= 2);
+    if (uniqTerms.length === 0) return <span>{snippet}</span>;
+
+    const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    let parts: string[];
+    try {
+        const re = new RegExp(`(${uniqTerms.map(escapeRe).join("|")})`, "gi");
+        parts = snippet.split(re);
+    } catch {
+        // If for any reason the regex blows up (unicode edge cases, etc.),
+        // fall back to the plain unbolded snippet rather than crashing the
+        // entire result page.
         return <span>{snippet}</span>;
     }
-    // Build a single case-insensitive regex from the unique terms.
-    const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const uniqTerms = Array.from(new Set(terms.map(t => t.toLowerCase()))).filter(t => t.length >= 2);
-    if (uniqTerms.length === 0) return <span>{snippet}</span>;
-    const re = new RegExp(`(${uniqTerms.map(escapeRe).join("|")})`, "gi");
-    const parts = snippet.split(re);
+    const termSet = new Set(uniqTerms);
     return (
         <span>
             {parts.map((part, i) =>
-                re.test(part) && uniqTerms.includes(part.toLowerCase())
+                termSet.has(part.toLowerCase())
                     ? <strong key={i} className="bg-yellow-100 text-emerald-900 px-0.5 rounded">{part}</strong>
                     : <span key={i}>{part}</span>
             )}
