@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, KeyboardEvent, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseClient } from "@/lib/supabase/client";
-import { Search, Filter, Loader2, LayoutGrid, List, Download, X, Building, Target, FileText, Link as LinkIcon, Sparkles, ChevronLeft, ChevronRight, Flame, ChevronUp, ChevronDown, Sprout, Leaf, Sun, Award, Trophy, Layers, CheckCircle2 } from "lucide-react";
+import { Search, Filter, Loader2, LayoutGrid, List, Download, X, Building, Target, FileText, Link as LinkIcon, Sparkles, ChevronLeft, ChevronRight, Flame, ChevronUp, ChevronDown, Sprout, Leaf, Sun, Award, Trophy, Layers, CheckCircle2, MapPin } from "lucide-react";
 import clsx from "clsx";
 import Link from "next/link";
 import { createPursuit, getUserProfileId } from "@/lib/pursue-utils";
@@ -13,6 +13,7 @@ import { estimateContractValue } from "@/utils/estimateValue";
 import { useResizableColumns } from "@/hooks/useResizableColumns";
 import { AIFilterBar, type AIFilters } from "@/components/matches/AIFilterBar";
 import SavedViews from "@/components/SavedViews";
+import SourceLevelSwitcher, { SOURCE_LEVEL_VALUES as SHARED_SOURCE_LEVEL_VALUES, type SourceLevel } from "@/components/SourceLevelSwitcher";
 import { SET_ASIDE_OPTIONS, buildIlikeFilter, setAsideBadgeTone } from "@/lib/set-aside-filters";
 
 // Default pixel widths for the Opportunities list-view columns.
@@ -93,6 +94,10 @@ export default function OpportunitiesClient({ initialOpportunities, initialCount
     // Removed EASY_WINS / HAS_MATCHES — those were duplicating /matches functionality.
     // Opportunities is for browsing the full 57k corpus; match-scored filtering lives on /matches.
     const [quickFilter, setQuickFilter] = useState<"ALL" | "SOURCES_SOUGHT" | "ENRICHED">("ALL");
+
+    // Source-Level switcher (Federal vs State+Local+Education vs All).
+    // Maps to opportunities.source values from migration 064.
+    const [sourceLevel, setSourceLevel] = useState<SourceLevel>("ALL");
 
     // Sort — column header click-to-sort
     const [sortCol, setSortCol] = useState<string>("posted_date");
@@ -217,6 +222,12 @@ export default function OpportunitiesClient({ initialOpportunities, initialCount
 
             query = query.eq("is_archived", false);
 
+            // Source-Level filter (Federal vs SLED vs All)
+            const levelValues = SHARED_SOURCE_LEVEL_VALUES[sourceLevel];
+            if (levelValues) {
+                query = query.in("source", levelValues);
+            }
+
             // Quick filters
             if (quickFilter === "SOURCES_SOUGHT") {
                 query = query.eq("notice_type", "Sources Sought");
@@ -310,7 +321,7 @@ export default function OpportunitiesClient({ initialOpportunities, initialCount
         } finally {
             setLoading(false);
         }
-    }, [page, activeSearch, quickFilter, pageSize, filterAgency, filterType, filterNaics, filterState, filterSetAside, sortCol, sortDir, samPassthrough]);
+    }, [page, activeSearch, quickFilter, pageSize, filterAgency, filterType, filterNaics, filterState, filterSetAside, sortCol, sortDir, samPassthrough, sourceLevel]);
 
     const isInitialMount = useRef(true);
 
@@ -398,11 +409,14 @@ export default function OpportunitiesClient({ initialOpportunities, initialCount
                             </p>
                         </div>
                         <div className="flex space-x-3 items-center">
+                            {/* View toggle — list view is desktop-only since it
+                                relies on resizable columns. Hidden below sm so
+                                phones don't get the squashed table. */}
                             <div className="flex items-center bg-stone-100 p-1 rounded-full border border-stone-200">
                                 <button type="button" title="Grid View" onClick={() => setViewMode("grid")} className={clsx("p-2 rounded-full transition-all", viewMode === "grid" ? "bg-white shadow-sm text-black" : "text-stone-500 hover:text-black")}>
                                     <LayoutGrid className="w-4 h-4" />
                                 </button>
-                                <button type="button" title="List View" onClick={() => setViewMode("list")} className={clsx("p-2 rounded-full transition-all", viewMode === "list" ? "bg-white shadow-sm text-black" : "text-stone-500 hover:text-black")}>
+                                <button type="button" title="List View (desktop)" onClick={() => setViewMode("list")} className={clsx("hidden sm:inline-flex p-2 rounded-full transition-all", viewMode === "list" ? "bg-white shadow-sm text-black" : "text-stone-500 hover:text-black")}>
                                     <List className="w-4 h-4" />
                                 </button>
                             </div>
@@ -466,7 +480,7 @@ export default function OpportunitiesClient({ initialOpportunities, initialCount
                         onClear={() => setActiveSavedViewId(null)}
                     />
 
-                    {/* Quick Filters + Sort Bar */}
+                    {/* Quick Filters + Source-Level Switcher + Sort Bar */}
                     <section className="bg-stone-50 border border-stone-200 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4 mb-6">
                         <div className="flex items-center space-x-2 flex-wrap gap-2">
                             {([
@@ -488,6 +502,11 @@ export default function OpportunitiesClient({ initialOpportunities, initialCount
                                 </button>
                             ))}
                         </div>
+
+                        <SourceLevelSwitcher
+                            value={sourceLevel}
+                            onChange={(next) => { setSourceLevel(next); setPage(1); }}
+                        />
 
                         <div className="flex items-center gap-3 text-xs text-stone-500">
                             <span>Sort by column headers</span>
@@ -801,7 +820,10 @@ export default function OpportunitiesClient({ initialOpportunities, initialCount
                                                         <div className="flex items-center space-x-2">
                                                             <span className="font-mono font-bold text-xs">{op.naics_code || "N/A"}</span>
                                                             {op.place_of_performance_state && (
-                                                                <span className="font-mono text-xs bg-stone-100 border border-stone-200 px-2 py-0.5 rounded-full font-bold">{op.place_of_performance_state}</span>
+                                                                <span className="inline-flex items-center gap-1 text-[11px] bg-sky-50 text-sky-700 border border-sky-200 px-2 py-0.5 rounded-full font-semibold">
+                                                                    <MapPin className="w-3 h-3" />
+                                                                    {op.place_of_performance_state}
+                                                                </span>
                                                             )}
                                                         </div>
                                                         <span className="font-bold text-xs text-stone-700">

@@ -264,6 +264,51 @@ export async function GET(req: NextRequest) {
             stats.stale_matches = await deleteInChunks(supabase, "user_matches", ids);
         }
 
+        // Audit-log retention — prune client_activity_log entries older
+        // than 90 days. Uses the purge_old_activity_log() function from
+        // migration 071 so the retention window is in one place.
+        try {
+            const { data: purged, error: purgeErr } = await supabase.rpc("purge_old_activity_log");
+            if (!purgeErr && typeof purged === "number" && purged > 0) {
+                stats.activity_log_purged = purged;
+                await logStep(supabase, "activity_log_purge", [], { row_count: purged });
+            }
+        } catch (e) {
+            console.warn("audit-log purge failed (non-fatal):", e);
+        }
+
+        // GDPR — process any deletion requests whose 7-day grace window
+        // has expired. We hard-delete the auth user + cascade to profile
+        // and write a final cleanup_log entry so it's auditable.
+        try {
+            const { data: due } = await supabase
+                .from("account_deletion_requests")
+                .select("id, auth_user_id, user_profile_id")
+                .is("completed_at", null)
+                .is("cancelled_at", null)
+                .lte("grace_window_ends_at", new Date().toISOString())
+                .limit(20);
+            const overdue = (due as Array<{ id: string; auth_user_id: string; user_profile_id: string | null }> | null) || [];
+            let processed = 0;
+            for (const r of overdue) {
+                try {
+                    await supabase.auth.admin.deleteUser(r.auth_user_id);
+                    await supabase.from("account_deletion_requests")
+                        .update({ completed_at: new Date().toISOString() })
+                        .eq("id", r.id);
+                    processed++;
+                } catch (e) {
+                    console.warn("deletion request failed:", r.id, e);
+                }
+            }
+            if (processed > 0) {
+                stats.gdpr_deletions = processed;
+                await logStep(supabase, "gdpr_deletion", overdue.slice(0, processed).map(r => r.user_profile_id || r.id), { processed });
+            }
+        } catch (e) {
+            console.warn("gdpr cleanup failed (non-fatal):", e);
+        }
+
         const elapsed_ms = Date.now() - startTime;
         await supabase.from("cleanup_log").insert({
             kind: "run_summary",

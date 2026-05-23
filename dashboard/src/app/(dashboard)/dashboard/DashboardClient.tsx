@@ -6,10 +6,12 @@ import { Target, Sparkles, ArrowRight, Loader2, Search, Shield, BarChart3, Layer
 import ServiceCTA from "@/components/ui/ServiceCTA";
 import { MarketIntelligence } from "@/components/MarketIntelligence";
 import { DashboardMarketCard } from "@/components/DashboardMarketCard";
+import { PipelineForecastCard } from "@/components/PipelineForecastCard";
 import { SpendRadarCard } from "@/components/SpendRadarCard";
 import DashboardCustomizer from "@/components/dashboard/DashboardCustomizer";
 import GovTribeActivityCard from "@/components/dashboard/GovTribeActivityCard";
 import { isHidden, type DashboardLayout } from "@/lib/dashboard-layout";
+import LiveOpportunityCount from "@/components/LiveOpportunityCount";
 import clsx from "clsx";
 import Link from "next/link";
 
@@ -124,6 +126,12 @@ export default function DashboardClient({ profile, stats, initialLayout }: Dashb
         <DashboardCustomizer initialLayout={layout} onLayoutChange={setLayout} />
       </header>
 
+      {/* Live opportunity counter — full active corpus + breakdown.
+          Auto-refreshes every 60s so churn (new + expiring) shows up live. */}
+      {!isHidden(layout, "live_counter") && (
+        <LiveOpportunityCount variant="rich" />
+      )}
+
       {/* "This Week" hero strip — surfaces velocity (new opps + new matches)
           and routes to /matches with the URL-state filters from Tag 2. */}
       <section className="bg-gradient-to-br from-stone-900 via-stone-900 to-black text-white rounded-[24px] sm:rounded-[28px] p-5 sm:p-6 shadow-lg">
@@ -229,6 +237,10 @@ export default function DashboardClient({ profile, stats, initialLayout }: Dashb
 
       {/* Year-End Spend Radar */}
       {show("spend_radar") && <SpendRadarCard />}
+
+      {/* Pipeline forecast — PWin-weighted revenue by fiscal quarter,
+          driven by the active pursuits in user_pursuits. */}
+      {show("pipeline_forecast") && <PipelineForecastCard />}
 
       {/* Federal Market Pulse — last 14 days via GovTribe */}
       <GovTribeActivityCard days={14} naicsIds={profile?.naics_codes && profile.naics_codes.length > 0 ? profile.naics_codes : undefined} />

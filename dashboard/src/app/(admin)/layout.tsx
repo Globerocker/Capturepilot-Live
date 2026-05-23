@@ -9,7 +9,7 @@ import {
     LayoutDashboard, Users, Briefcase, Target,
     Wrench, Settings, LogOut, Loader2, Search, ChevronRight,
     Menu, X, MessageSquare, Mail, Gift, Sparkles, Activity,
-    GraduationCap, ExternalLink, ShieldCheck, Globe,
+    GraduationCap, ExternalLink, ShieldCheck, Globe, Eye,
 } from "lucide-react";
 import clsx from "clsx";
 
@@ -318,14 +318,29 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                             </span>
                         ))}
                     </nav>
-                    <Link
-                        href="/dashboard"
-                        className="inline-flex items-center gap-1.5 text-xs font-medium text-stone-500 hover:text-emerald-600 transition-colors"
-                        title="Open the customer-facing app"
-                    >
-                        <ExternalLink className="w-3.5 h-3.5" />
-                        View customer app
-                    </Link>
+                    {/* "View as customer" — drops the admin into their own
+                        /dashboard so they can see what a SaaS user sees with
+                        their own profile. To impersonate a SPECIFIC client,
+                        open that client and click "View as user" — handled
+                        per-row in /admin/clients. */}
+                    <div className="flex items-center gap-3">
+                        <Link
+                            href="/portal"
+                            className="inline-flex items-center gap-1.5 text-xs font-medium text-stone-500 hover:text-emerald-600 transition-colors"
+                            title="Open the consulting-portal view (admin's own portal)"
+                        >
+                            <Eye className="w-3.5 h-3.5" />
+                            View as portal
+                        </Link>
+                        <Link
+                            href="/dashboard"
+                            className="inline-flex items-center gap-1.5 text-xs font-medium text-stone-500 hover:text-emerald-600 transition-colors"
+                            title="Open your customer-facing dashboard (admin's own SaaS view)"
+                        >
+                            <Eye className="w-3.5 h-3.5" />
+                            View as customer
+                        </Link>
+                    </div>
                 </div>
 
                 {/* Inner rounded panel — matches SaaS dashboard "rounded-l-[40px]" look */}

@@ -11,6 +11,8 @@ import {
     DragOverlay,
     DragStartEvent,
     PointerSensor,
+    TouchSensor,
+    KeyboardSensor,
     useSensor,
     useSensors,
     useDraggable,
@@ -136,7 +138,10 @@ function Column({ stage, items }: { stage: Stage; items: Pursuit[] }) {
         <div
             ref={setNodeRef}
             className={clsx(
-                "flex-shrink-0 w-72 bg-stone-50 rounded-2xl border transition-colors flex flex-col",
+                // Narrower on phones (w-64), full-width on desktop (w-72).
+                // snap-start lets the horizontal scroll lock onto whole
+                // columns on mobile so users can swipe between stages.
+                "flex-shrink-0 w-64 sm:w-72 snap-start bg-stone-50 rounded-2xl border transition-colors flex flex-col",
                 isOver ? "border-black bg-stone-100" : "border-stone-200",
             )}
         >
@@ -169,8 +174,16 @@ function Column({ stage, items }: { stage: Stage; items: Pursuit[] }) {
 
 export default function KanbanBoard({ pursuits, stages, onMove }: Props) {
     const [activePursuit, setActivePursuit] = useState<Pursuit | null>(null);
-    // Require a small pointer movement before starting drag so clicks on links still work.
-    const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+    // Mouse/trackpad uses PointerSensor with a 6px slop so clicks on links
+    // still register. Touch devices use TouchSensor with a slight delay so
+    // a tap-to-scroll on the column doesn't accidentally pick up a card.
+    // Keyboard sensor is for accessibility — Space/Enter to lift, arrows
+    // to navigate columns.
+    const sensors = useSensors(
+        useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+        useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
+        useSensor(KeyboardSensor),
+    );
 
     const grouped = stages.reduce((acc, s) => {
         acc[s.key] = pursuits.filter((p) => p.stage === s.key);
@@ -194,7 +207,7 @@ export default function KanbanBoard({ pursuits, stages, onMove }: Props) {
 
     return (
         <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-            <div className="flex gap-3 overflow-x-auto pb-4 -mx-1 px-1">
+            <div className="flex gap-3 overflow-x-auto pb-4 -mx-1 px-1 snap-x snap-mandatory sm:snap-none">
                 {stages.map((s) => (
                     <Column key={s.key} stage={s} items={grouped[s.key] || []} />
                 ))}

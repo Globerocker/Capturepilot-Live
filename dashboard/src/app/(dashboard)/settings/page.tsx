@@ -209,6 +209,30 @@ export default function SettingsPage() {
     const [userEmail, setUserEmail] = useState("");
     const [profile, setProfile] = useState<Profile | null>(null);
     const [naicsSearch, setNaicsSearch] = useState("");
+
+    // Active-section tracker for the sticky nav — IntersectionObserver-driven
+    // so the highlighted tab follows the user as they scroll. Falls back to
+    // anchor-only behavior if IO isn't available (very old browsers).
+    const [activeSection, setActiveSection] = useState<string>("account");
+    useEffect(() => {
+        if (typeof window === "undefined" || !("IntersectionObserver" in window)) return;
+        const sectionIds = ["account", "profile", "subscription", "invoices", "password", "danger-zone"];
+        const els = sectionIds
+            .map(id => document.getElementById(id))
+            .filter((e): e is HTMLElement => !!e);
+        if (els.length === 0) return;
+        const io = new IntersectionObserver(
+            (entries) => {
+                const hit = entries
+                    .filter(e => e.isIntersecting)
+                    .sort((a, b) => (a.boundingClientRect.top - b.boundingClientRect.top))[0];
+                if (hit?.target.id) setActiveSection(hit.target.id);
+            },
+            { rootMargin: "-30% 0px -55% 0px", threshold: 0 },
+        );
+        els.forEach(el => io.observe(el));
+        return () => io.disconnect();
+    }, [loading]);
     const [pscSearch, setPscSearch] = useState("");
     const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
@@ -432,21 +456,34 @@ export default function SettingsPage() {
         setPasswordSaving(false);
     };
 
-    /* ---- Delete account ---- */
+    /* ---- Delete account — GDPR-style 7-day deletion request.
+       Submitting creates a row in account_deletion_requests; the weekly
+       db_cleanup cron does the actual auth.users.deleteUser() once the
+       grace window expires. User can cancel until then via DELETE on
+       the same endpoint. */
     const handleDeleteAccount = async () => {
         if (deleteConfirmText !== "DELETE") return;
         setDeleting(true);
         try {
-            const res = await fetch("/api/admin/delete-account", { method: "POST" });
+            const res = await fetch("/api/account/delete-request", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({}),
+            });
+            const body = await res.json().catch(() => ({}));
             if (res.ok) {
-                await supabase.auth.signOut();
-                router.push("/login");
+                alert(
+                    "Deletion scheduled. Your account will be permanently removed in 7 days. " +
+                    "You can cancel any time before then from this same Settings page.",
+                );
+                setShowDeleteModal(false);
+                setDeleteConfirmText("");
             } else {
-                alert("Failed to delete account. Please contact support.");
-                setDeleting(false);
+                alert(body.error || "Failed to schedule deletion. Please contact support.");
             }
         } catch {
-            alert("Failed to delete account. Please contact support.");
+            alert("Failed to schedule deletion. Please contact support.");
+        } finally {
             setDeleting(false);
         }
     };
@@ -532,7 +569,7 @@ export default function SettingsPage() {
                 </button>
             </header>
 
-            {/* ---- Sticky section nav ---- */}
+            {/* ---- Sticky section nav (active state follows scroll) ---- */}
             <nav
                 className="sticky top-0 z-20 -mx-1 px-1 py-2 bg-stone-50/95 backdrop-blur border-b border-stone-200 flex gap-1 overflow-x-auto"
                 aria-label="Settings sections"
@@ -544,15 +581,27 @@ export default function SettingsPage() {
                     { id: "invoices", label: "Invoices" },
                     { id: "password", label: "Password" },
                     { id: "danger-zone", label: "Danger Zone" },
-                ].map(({ id, label }) => (
-                    <a
-                        key={id}
-                        href={`#${id}`}
-                        className="shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold text-stone-600 hover:bg-stone-100 hover:text-black transition"
-                    >
-                        {label}
-                    </a>
-                ))}
+                ].map(({ id, label }) => {
+                    const isActive = activeSection === id;
+                    return (
+                        <a
+                            key={id}
+                            href={`#${id}`}
+                            onClick={() => setActiveSection(id)}
+                            className={clsx(
+                                "shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition",
+                                isActive
+                                    ? id === "danger-zone"
+                                        ? "bg-red-600 text-white shadow-sm"
+                                        : "bg-black text-white shadow-sm"
+                                    : "text-stone-600 hover:bg-stone-100 hover:text-black",
+                            )}
+                            aria-current={isActive ? "true" : undefined}
+                        >
+                            {label}
+                        </a>
+                    );
+                })}
             </nav>
 
             {/* ================================================================ */}
@@ -568,7 +617,7 @@ export default function SettingsPage() {
 
                 {/* LEFT COLUMN */}
                 <div className="w-full lg:w-1/2 flex flex-col gap-6">
-                    <section id="account" className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
+                    <section id="account" className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7 scroll-mt-20">
 
                 <p className="text-stone-400 text-xs uppercase tracking-widest font-bold mb-4">Account Overview</p>
                 <div className="space-y-0">
@@ -631,7 +680,7 @@ export default function SettingsPage() {
             {/* ================================================================ */}
             
 
-                    <section id="profile" className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
+                    <section id="profile" className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7 scroll-mt-20">
 
                 <p className="text-stone-400 text-xs uppercase tracking-widest font-bold mb-4">Profile Settings</p>
                 <div className="space-y-4">
@@ -760,7 +809,7 @@ export default function SettingsPage() {
             
                     {showAdvanced && (<>
                         {/* Capacity & Experience */}
-                        <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
+                        <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7 scroll-mt-20">
 
                 <h3 className="font-bold text-base sm:text-lg flex items-center mb-4">
                     <Briefcase className="w-5 h-5 mr-2 text-stone-400" /> Capacity & Experience
@@ -852,7 +901,7 @@ export default function SettingsPage() {
 
            
                         {/* Industry */}
-                        <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
+                        <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7 scroll-mt-20">
 
                 <h3 className="font-bold text-base sm:text-lg flex items-center mb-4">
                     <Shield className="w-5 h-5 mr-2 text-stone-400" /> Industry & Certifications
@@ -935,7 +984,7 @@ export default function SettingsPage() {
 
 
                         {/* PSC Codes & Clearances */}
-                        <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
+                        <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7 scroll-mt-20">
 
                 <h3 className="font-bold text-base sm:text-lg flex items-center mb-4">
                     <Shield className="w-5 h-5 mr-2 text-stone-400" /> Service Codes & Clearances
@@ -1002,7 +1051,7 @@ export default function SettingsPage() {
 
             
                         {/* Preferred Agencies & Contract Preferences */}
-                        <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
+                        <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7 scroll-mt-20">
 
                 <h3 className="font-bold text-base sm:text-lg flex items-center mb-4">
                     <Building className="w-5 h-5 mr-2 text-stone-400" /> Targeting Preferences
@@ -1078,7 +1127,7 @@ export default function SettingsPage() {
                     </>)}
 
                     {/* Target States */}
-                    <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
+                    <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7 scroll-mt-20">
 
                 <h3 className="font-bold text-base sm:text-lg flex items-center mb-4">
                     <MapPin className="w-5 h-5 mr-2 text-stone-400" /> Target States
@@ -1127,7 +1176,7 @@ export default function SettingsPage() {
                     {/* Team — invite teammates, manage roles, see seat usage */}
                     <TeamManagement />
 
-                    <section id="subscription" className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
+                    <section id="subscription" className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7 scroll-mt-20">
 
                 <p className="text-stone-400 text-xs uppercase tracking-widest font-bold mb-4">Subscription</p>
 
@@ -1313,7 +1362,7 @@ export default function SettingsPage() {
            
 
                     {/* Invoices */}
-                    <section id="invoices" className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
+                    <section id="invoices" className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7 scroll-mt-20">
 
                 <button
                     type="button"
@@ -1438,7 +1487,7 @@ export default function SettingsPage() {
                 const missing = checks.filter(([ok]) => !ok).map(([, label]) => label);
 
                 return (
-                    <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
+                    <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7 scroll-mt-20">
 
                         <div className="flex items-center justify-between mb-3">
                             <h3 className="font-bold text-base sm:text-lg flex items-center">
@@ -1471,7 +1520,7 @@ export default function SettingsPage() {
             
 
                     {/* Notifications */}
-                    <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
+                    <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7 scroll-mt-20">
 
                 <h3 className="font-bold text-base sm:text-lg flex items-center mb-4">
                     <Bell className="w-5 h-5 mr-2 text-stone-400" /> Notifications
@@ -1515,7 +1564,7 @@ export default function SettingsPage() {
             
 
                     {/* Password */}
-                    <section id="password" className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
+                    <section id="password" className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7 scroll-mt-20">
 
                 <p className="text-stone-400 text-xs uppercase tracking-widest font-bold mb-4">Password</p>
                 <div className="space-y-4">
@@ -1577,7 +1626,7 @@ export default function SettingsPage() {
            
 
                     {/* Google Login */}
-                    <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
+                    <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7 scroll-mt-20">
 
                 <h3 className="font-bold text-base sm:text-lg flex items-center mb-2">
                     Quick Login
@@ -1598,15 +1647,38 @@ export default function SettingsPage() {
 
            
 
+                    {/* Privacy & Data — GDPR-aligned: export everything, or
+                        request deletion with a 7-day grace window. Deletion
+                        runs via the weekly db_cleanup cron so users can cancel
+                        before it actually goes through. */}
+                    <section id="privacy-data" className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7 scroll-mt-20">
+                        <p className="text-stone-500 text-xs uppercase tracking-widest font-bold mb-4">Your Data</p>
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3 pb-3 border-b border-stone-100">
+                            <div>
+                                <p className="font-medium text-sm text-stone-800">Export your data</p>
+                                <p className="text-xs text-stone-500 mt-0.5">
+                                    Download every row tied to your account as a single JSON file. GDPR Article 20.
+                                </p>
+                            </div>
+                            <a
+                                href="/api/account/data-export"
+                                download
+                                className="inline-flex items-center bg-white text-stone-700 font-bold px-5 py-2.5 rounded-full text-xs border border-stone-200 hover:bg-stone-50 transition-all self-start sm:self-auto"
+                            >
+                                Download JSON
+                            </a>
+                        </div>
+                    </section>
+
                     {/* Danger Zone */}
-                    <section id="danger-zone" className="bg-white rounded-2xl border border-red-200 shadow-sm p-5 sm:p-7">
+                    <section id="danger-zone" className="bg-white rounded-2xl border border-red-200 shadow-sm p-5 sm:p-7 scroll-mt-20">
 
                 <p className="text-red-500 text-xs uppercase tracking-widest font-bold mb-4">Danger Zone</p>
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                     <div>
                         <p className="font-medium text-sm text-stone-800">Delete Account</p>
                         <p className="text-xs text-stone-500 mt-0.5">
-                            Permanently delete your account and all associated data. This action cannot be undone.
+                            Schedule permanent deletion. We honor a 7-day grace window — you can cancel any time before then. After 7 days, every row tied to your account is removed.
                         </p>
                     </div>
                     <button
