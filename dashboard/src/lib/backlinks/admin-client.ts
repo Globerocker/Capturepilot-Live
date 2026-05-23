@@ -40,9 +40,4 @@ export async function recordAgentRun(
     .eq("name", name);
 }
 
-export function authorizeCron(authHeader: string | null): boolean {
-  if (!process.env.CRON_SECRET) return true; // dev mode — allow
-  const expectedCron = `Bearer ${process.env.CRON_SECRET}`;
-  const expectedSvc = process.env.SUPABASE_SERVICE_KEY ? `Bearer ${process.env.SUPABASE_SERVICE_KEY}` : null;
-  return authHeader === expectedCron || authHeader === expectedSvc;
-}
+export { isAuthorizedCron as authorizeCron } from "@/lib/cron-auth";

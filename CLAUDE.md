@@ -28,7 +28,8 @@ git push captiorpilot main && git push live main && git push globerocker main
 - SAM API key via `X-Api-Key` header (NOT URL params — `?api_key=` is deprecated and can cause rejections)
 - Apollo: use `mixed_companies/search` (free tier), NOT `mixed_people/search`
 - Never commit `.env`, `.env.local`, `.mcp.json`
-- When creating migrations, pick the next free number under `supabase/migrations/` (current latest: **041**)
+- When creating migrations, pick the next free number under `supabase/migrations/` (current latest: **070**)
+- **Cron handlers must use `guardCron(req)` from `@/lib/cron-auth`** — fail-closed in production. See [CRON.md](CRON.md) for the complete cron + agent reference.
 
 ## Architecture
 - `/dashboard/src/app/(public)/` — Public pages (login, signup, check, admin)
@@ -46,13 +47,19 @@ git push captiorpilot main && git push live main && git push globerocker main
 - `consulting` — Managed clients (portal view, admin-onboarded, skip onboarding)
 - `admin` — Internal team
 
-## Cron Schedule (UTC)
-- 02:00 daily: `ingest_sam` — fetch new SAM.gov opportunities
-- 03:00 daily: `score_matches` — score opportunities for all users
-- 04:00 weekly Sun: `db_cleanup` — lifecycle management
-- 05:00 daily: `enrich` — contractor enrichment orchestrator
-- 06:00 daily: `backfill_requirements` — extract requirements from raw_json
-- 1st monthly: `monthly_awards` — fetch award + forecast notices
+## Cron Schedule
+**Full reference: [CRON.md](CRON.md)** — every scheduled task with what it does, what it writes, where the handler lives.
+
+35 scheduled crons (Pro limit 40, 5 slots free). High-level groups:
+- **Ingest** (8) — SAM.gov, Grants.gov, RSS, HigherGov, monthly awards
+- **Scoring** (3) — score_matches, naics_stats_backfill, past_performance_stats
+- **Enrichment orchestrator** (1 cron drives 8 sub-tasks every 5-10 min)
+- **Backlinks orchestrator** (1 cron drives 5 sub-agents daily by day-of-week)
+- **Apollo/USAspending enrichment** (3)
+- **Email + notifications** (5) — notify_matches, trial_reminders, scheduled_emails, market_watch_digest, outreach_send
+- **Prospect pipeline** (2) — discover_new_prospects, enrich_prospects
+- **Intelligence + tracking** (8) — FPDS, subawards, GSA schedule, eLibrary, CALC, DoL wage, SEC filings, forecast change detection
+- **Other** (5) — db_cleanup, competitor_monitor, recompete_scan, sync_govtribe_activity, **publish_next_blog** (auto-publishes from `website/blog-topics.json`)
 
 ## Database (Supabase)
 - `opportunities` — 37K+ federal opportunities with lifecycle status (ACTIVE/EXPIRING_SOON/MARKET_RESEARCH/DISCOVERED/EXPIRED/AWARDED)
