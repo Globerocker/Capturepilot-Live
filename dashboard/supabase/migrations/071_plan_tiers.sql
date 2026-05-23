@@ -13,7 +13,7 @@ create table if not exists public.plan_tiers (
     id           bigserial primary key,
     code         text not null unique,             -- e.g. 'free', 'starter', 'pro', 'enterprise'
     label        text not null,                     -- 'Free', 'Starter', 'Pro'
-    monthly_usd  integer not null default 0,
+    monthly_usd  integer,                            -- null → custom pricing (enterprise/consulting)
     yearly_usd   integer,                            -- null → no annual option
     sort_order   integer not null default 0,
     is_public    boolean not null default true,     -- enterprise sometimes hidden
