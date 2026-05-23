@@ -48,6 +48,8 @@ function setStoredConsent(decision: "accepted_all" | "essential_only") {
         decided_at: new Date().toISOString(),
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    // Let other components (e.g. MetaPixel) react to consent changes live.
+    window.dispatchEvent(new CustomEvent("cp:consent-changed", { detail: { decision } }));
 }
 
 export function CookieConsent() {

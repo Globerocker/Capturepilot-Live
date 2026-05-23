@@ -18,6 +18,7 @@ import clsx from "clsx";
 import InvoicesSection from "@/components/billing/InvoicesSection";
 import CancelFlow from "@/components/billing/CancelFlow";
 import { VETERAN_DISCOUNT_PERCENT, discountedPrice, veteranCertLabel } from "@/lib/veteran";
+import { track } from "@/lib/analytics";
 
 const supabase = createSupabaseClient();
 
@@ -179,6 +180,8 @@ function BillingPageContent() {
   useEffect(() => {
     if (searchParams.get("success") === "true") {
       setToast({ type: "success", message: "Subscription activated! Welcome to Pro." });
+      // Meta Pixel conversion — Stripe redirected here after a successful checkout.
+      track("pro_upgrade", { veteran: searchParams.get("veteran") === "1" });
     } else if (searchParams.get("canceled") === "true") {
       setToast({ type: "canceled", message: "Checkout canceled. No charges were made." });
     }

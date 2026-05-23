@@ -7,6 +7,7 @@ import Image from "next/image";
 import { ArrowRight, CheckCircle2, Loader2, Gift } from "lucide-react";
 import clsx from "clsx";
 import { createSupabaseClient } from "@/lib/supabase/client";
+import { track } from "@/lib/analytics";
 
 interface InviteDetails {
   email: string;
@@ -115,6 +116,7 @@ function SignupPageContent() {
       setLoading(false);
     } else {
       if (inviteToken) await claimInvite(data.user?.id);
+      track("signup_completed", { source: inviteToken ? "beta_invite" : "signup" });
       // Fire-and-forget HubSpot sync — do not block redirect
       fetch("/api/hubspot/sync-contact", {
         method: "POST",

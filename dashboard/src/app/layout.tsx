@@ -3,6 +3,7 @@ import { Inter, Courier_Prime } from "next/font/google";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { Analytics } from "@vercel/analytics/next";
 import { CookieConsent } from "@/components/CookieConsent";
+import MetaPixel from "@/components/MetaPixel";
 import "./globals.css";
 
 const inter = Inter({
@@ -36,6 +37,7 @@ export default function RootLayout({
       >
         {children}
         <CookieConsent />
+        <MetaPixel />
         <SpeedInsights />
         <Analytics />
         {/* HubSpot Tracking Code — Portal 245197783 */}
