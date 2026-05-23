@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import OpenAI from "openai";
+import { guardCron } from "@/lib/cron-auth";
 
 export const maxDuration = 300;
 
@@ -16,14 +17,8 @@ function sleep(ms: number) {
 }
 
 export async function GET(req: NextRequest) {
-    const authHeader = req.headers.get("authorization");
-    if (process.env.CRON_SECRET) {
-        const expectedCron = `Bearer ${process.env.CRON_SECRET}`;
-        const expectedSvc = process.env.SUPABASE_SERVICE_KEY ? `Bearer ${process.env.SUPABASE_SERVICE_KEY}` : null;
-        if (authHeader !== expectedCron && authHeader !== expectedSvc) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-        }
-    }
+    const denied = guardCron(req);
+    if (denied) return denied;
 
     const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
     if (!OPENAI_API_KEY) {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { sendBetaDeadlineEmail } from "@/lib/email";
+import { guardCron } from "@/lib/cron-auth";
 
 export const maxDuration = 60;
 
@@ -23,14 +24,8 @@ const SEND_DATES = ["2026-05-01", "2026-05-05", "2026-05-08"];
  * Uses promo code BETA25 for 25% off forever.
  */
 export async function GET(req: NextRequest) {
-    const authHeader = req.headers.get("authorization");
-    if (process.env.CRON_SECRET) {
-        const expectedCron = `Bearer ${process.env.CRON_SECRET}`;
-        const expectedSvc = process.env.SUPABASE_SERVICE_KEY ? `Bearer ${process.env.SUPABASE_SERVICE_KEY}` : null;
-        if (authHeader !== expectedCron && authHeader !== expectedSvc) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-        }
-    }
+    const denied = guardCron(req);
+    if (denied) return denied;
 
     const db = getDb();
     const now = new Date();

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { extractFromUrl, isMistralConfigured } from "@/lib/llm/mistral-ocr";
+import { guardCron } from "@/lib/cron-auth";
 
 export const maxDuration = 300;
 
@@ -27,14 +28,8 @@ const SAM_API_KEY = process.env.SAM_API_KEY || "";
  * Processes ~50 opportunities per run (within 5-min Vercel limit).
  */
 export async function GET(req: NextRequest) {
-    const authHeader = req.headers.get("authorization");
-    if (process.env.CRON_SECRET) {
-        const expectedCron = `Bearer ${process.env.CRON_SECRET}`;
-        const expectedSvc = process.env.SUPABASE_SERVICE_KEY ? `Bearer ${process.env.SUPABASE_SERVICE_KEY}` : null;
-        if (authHeader !== expectedCron && authHeader !== expectedSvc) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-        }
-    }
+    const denied = guardCron(req);
+    if (denied) return denied;
 
     const db = getDb();
     const startTime = Date.now();

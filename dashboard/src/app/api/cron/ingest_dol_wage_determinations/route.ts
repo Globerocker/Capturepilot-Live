@@ -22,6 +22,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { withCronTelemetry } from "@/lib/cron-telemetry";
+import { guardCron } from "@/lib/cron-auth";
 
 export const maxDuration = 300;
 
@@ -71,14 +72,8 @@ async function fetchPage(page: number, size: number): Promise<SgsResult[]> {
 }
 
 async function GET_handler(req: NextRequest): Promise<NextResponse> {
-    const authHeader = req.headers.get("authorization");
-    if (process.env.CRON_SECRET) {
-        const expectedCron = `Bearer ${process.env.CRON_SECRET}`;
-        const expectedSvc = process.env.SUPABASE_SERVICE_KEY ? `Bearer ${process.env.SUPABASE_SERVICE_KEY}` : null;
-        if (authHeader !== expectedCron && authHeader !== expectedSvc) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-        }
-    }
+    const denied = guardCron(req);
+    if (denied) return denied;
 
     const t0 = Date.now();
     const db = getDb();

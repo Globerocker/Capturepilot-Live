@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isAuthorizedCron } from "@/lib/cron-auth";
 
 export const maxDuration = 300;
 
@@ -66,15 +67,8 @@ function tasksDueAt(d: Date): TaskName[] {
   return due;
 }
 
-function authorize(authHeader: string | null): boolean {
-  if (!process.env.CRON_SECRET) return true;
-  const expectedCron = `Bearer ${process.env.CRON_SECRET}`;
-  const expectedSvc = process.env.SUPABASE_SERVICE_KEY ? `Bearer ${process.env.SUPABASE_SERVICE_KEY}` : null;
-  return authHeader === expectedCron || authHeader === expectedSvc;
-}
-
 export async function GET(req: NextRequest) {
-  if (!authorize(req.headers.get("authorization"))) {
+  if (!isAuthorizedCron(req.headers.get("authorization"))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { sendTrialExpiringEmail } from "@/lib/email";
+import { guardCron } from "@/lib/cron-auth";
 
 export const maxDuration = 60;
 
@@ -17,14 +18,8 @@ function getDb() {
  * Sends emails at 3-day and 1-day marks (deduplicated via client_activity_log).
  */
 export async function GET(req: NextRequest) {
-    const authHeader = req.headers.get("authorization");
-    if (process.env.CRON_SECRET) {
-        const expectedCron = `Bearer ${process.env.CRON_SECRET}`;
-        const expectedSvc = process.env.SUPABASE_SERVICE_KEY ? `Bearer ${process.env.SUPABASE_SERVICE_KEY}` : null;
-        if (authHeader !== expectedCron && authHeader !== expectedSvc) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-        }
-    }
+    const denied = guardCron(req);
+    if (denied) return denied;
 
     const db = getDb();
     let sent = 0;
