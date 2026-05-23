@@ -5,9 +5,40 @@ import Link from "next/link";
 import {
     Users, Briefcase, ListTodo, BarChart3, Loader2,
     ArrowRight, UserPlus, Search, Eye, Clock, FileText,
-    Activity, TrendingUp, Shield, AlertCircle,
+    Activity, TrendingUp, Shield, AlertCircle, CheckCircle2,
+    Database, Sparkles, ExternalLink,
 } from "lucide-react";
 import clsx from "clsx";
+
+interface CronStat {
+    route: string;
+    last_run: string | null;
+    last_status: string | null;
+    last_error: string | null;
+    last_rows_out: number | null;
+    last_success: string | null;
+    hours_since_success: number | null;
+}
+
+interface DbStats {
+    generated_at: string;
+    opportunities: {
+        total_estimated: number;
+        active_estimated: number;
+        expiring_in_7d_exact: number;
+        expired_estimated: number;
+        latest_added: { posted_date: string | null; created_at: string | null; title: string | null; agency: string | null; notice_id: string | null } | null;
+    };
+    enrichment: {
+        denominator: number;
+        strategic_scoring: { populated: number; pct: number };
+        ai_win_strategy: { populated: number; pct: number };
+        structured_requirements: { populated: number; pct: number };
+    };
+    crons: CronStat[];
+    recent_logins: Array<{ email: string | undefined; last_sign_in_at: string | undefined; created_at: string }>;
+    recent_activity: Array<{ id: string; user_profile_id: string; action: string; description: string; created_at: string }>;
+}
 
 interface ClientData {
     id: string;
@@ -29,12 +60,27 @@ interface ClientData {
 export default function AdminOverview() {
     const [clients, setClients] = useState<ClientData[]>([]);
     const [loading, setLoading] = useState(true);
+    const [dbStats, setDbStats] = useState<DbStats | null>(null);
+    const [dbStatsError, setDbStatsError] = useState<string | null>(null);
 
     useEffect(() => {
         (async () => {
-            const res = await fetch("/api/admin/clients");
-            const data = await res.json();
-            setClients(data.clients || []);
+            // Clients power the bottom table; the DB-stats endpoint feeds the
+            // new Data Health panel. Run both in parallel — neither blocks the
+            // other so a slow stats query doesn't delay the client list.
+            const [clientsRes, statsRes] = await Promise.allSettled([
+                fetch("/api/admin/clients").then(r => r.json()),
+                fetch("/api/admin/db-stats", { cache: "no-store" }).then(r => r.json()),
+            ]);
+            if (clientsRes.status === "fulfilled") {
+                setClients(clientsRes.value.clients || []);
+            }
+            if (statsRes.status === "fulfilled") {
+                if (statsRes.value.error) setDbStatsError(statsRes.value.error);
+                else setDbStats(statsRes.value as DbStats);
+            } else {
+                setDbStatsError("Failed to load DB stats");
+            }
             setLoading(false);
         })();
     }, []);
@@ -123,6 +169,139 @@ export default function AdminOverview() {
                         <p className="text-[10px] text-stone-500 uppercase">Active 7d</p>
                     </div>
                 </div>
+
+                {/* Data Health — pipeline freshness + enrichment completeness + cron status.
+                    Lives on the overview so a stale ingest or empty enrichment field is
+                    visible without having to dig into /admin/crons or /admin/health. */}
+                {dbStatsError && (
+                    <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 text-sm text-rose-700">
+                        Could not load DB stats: {dbStatsError}
+                    </div>
+                )}
+                {dbStats && (
+                    <div className="bg-white border border-stone-200 rounded-2xl overflow-hidden">
+                        <div className="px-5 py-3 border-b border-stone-100 flex items-center justify-between">
+                            <h2 className="font-bold text-sm flex items-center gap-2">
+                                <Database className="w-4 h-4 text-stone-400" /> Data Health
+                            </h2>
+                            <Link href="/admin/crons" className="text-[11px] text-blue-600 hover:underline inline-flex items-center gap-1">
+                                Full cron telemetry <ExternalLink className="w-3 h-3" />
+                            </Link>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-0 divide-y md:divide-y-0 md:divide-x divide-stone-100">
+                            {/* Opportunities pipeline */}
+                            <div className="p-5">
+                                <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400 mb-2">Opportunities pipeline</p>
+                                <p className="text-2xl font-black">{dbStats.opportunities.active_estimated.toLocaleString()}</p>
+                                <p className="text-xs text-stone-500">active (of ~{dbStats.opportunities.total_estimated.toLocaleString()})</p>
+                                <div className="mt-3 space-y-1 text-xs">
+                                    <div className="flex justify-between">
+                                        <span className="text-stone-500">Expiring in 7d</span>
+                                        <span className={clsx("font-bold", dbStats.opportunities.expiring_in_7d_exact > 0 ? "text-amber-600" : "text-stone-400")}>
+                                            {dbStats.opportunities.expiring_in_7d_exact}
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-stone-500">Expired (cleanup eligible)</span>
+                                        <span className="text-stone-700">{dbStats.opportunities.expired_estimated.toLocaleString()}</span>
+                                    </div>
+                                    {dbStats.opportunities.latest_added && (
+                                        <div className="mt-2 pt-2 border-t border-stone-100">
+                                            <p className="text-[10px] text-stone-400 uppercase">Newest row</p>
+                                            <p className="text-[11px] text-stone-600 truncate">{dbStats.opportunities.latest_added.title || dbStats.opportunities.latest_added.notice_id}</p>
+                                            <p className="text-[10px] text-stone-400">{timeAgo(dbStats.opportunities.latest_added.created_at)}</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Enrichment completeness */}
+                            <div className="p-5">
+                                <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400 mb-2 flex items-center gap-1">
+                                    <Sparkles className="w-3 h-3" /> Enrichment coverage
+                                </p>
+                                {[
+                                    { label: "Strategic scoring", stat: dbStats.enrichment.strategic_scoring },
+                                    { label: "AI win strategy", stat: dbStats.enrichment.ai_win_strategy },
+                                    { label: "Structured reqs", stat: dbStats.enrichment.structured_requirements },
+                                ].map(({ label, stat }) => (
+                                    <div key={label} className="mb-2 last:mb-0">
+                                        <div className="flex justify-between text-xs">
+                                            <span className="text-stone-600">{label}</span>
+                                            <span className={clsx("font-bold", stat.pct >= 80 ? "text-emerald-600" : stat.pct >= 40 ? "text-amber-600" : "text-rose-600")}>
+                                                {stat.pct}%
+                                            </span>
+                                        </div>
+                                        <div className="w-full h-1.5 bg-stone-100 rounded-full overflow-hidden mt-1">
+                                            <div className={clsx(
+                                                "h-full",
+                                                stat.pct >= 80 ? "bg-emerald-500" : stat.pct >= 40 ? "bg-amber-500" : "bg-rose-500",
+                                            )} style={{ width: `${Math.min(100, stat.pct)}%` }} />
+                                        </div>
+                                        <p className="text-[10px] text-stone-400 mt-0.5">
+                                            {stat.populated.toLocaleString()} / {dbStats.enrichment.denominator.toLocaleString()} active
+                                        </p>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Critical crons — stalest first */}
+                            <div className="p-5">
+                                <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400 mb-2">Critical crons (stalest first)</p>
+                                <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                                    {dbStats.crons.slice(0, 8).map(c => {
+                                        const stale = c.hours_since_success != null && c.hours_since_success > 36;
+                                        const failedRecent = c.last_status === "error";
+                                        const Icon = failedRecent ? AlertCircle : stale ? Clock : CheckCircle2;
+                                        const tone = failedRecent ? "text-rose-600" : stale ? "text-amber-600" : "text-emerald-600";
+                                        return (
+                                            <div key={c.route} className="flex items-center gap-2 text-xs">
+                                                <Icon className={clsx("w-3 h-3 flex-shrink-0", tone)} />
+                                                <span className="flex-1 truncate font-mono text-[11px] text-stone-600">{c.route.replace("/api/cron/", "")}</span>
+                                                <span className={clsx("text-[10px]", tone)}>
+                                                    {c.last_success ? `${c.hours_since_success}h` : "never"}
+                                                </span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Recent logins + recent activity log — bottom strip */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-0 border-t border-stone-100 divide-y md:divide-y-0 md:divide-x divide-stone-100">
+                            <div className="p-5">
+                                <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400 mb-2">Recent sign-ins (last 10)</p>
+                                <div className="space-y-1 max-h-32 overflow-y-auto">
+                                    {dbStats.recent_logins.length === 0 && (
+                                        <p className="text-xs text-stone-400">No recent sign-ins.</p>
+                                    )}
+                                    {dbStats.recent_logins.map((u, i) => (
+                                        <div key={i} className="flex items-center justify-between text-xs">
+                                            <span className="text-stone-700 truncate flex-1">{u.email || "(no email)"}</span>
+                                            <span className="text-stone-400 text-[10px] flex-shrink-0">{timeAgo(u.last_sign_in_at || null)}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                            <div className="p-5">
+                                <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400 mb-2">Recent admin activity</p>
+                                <div className="space-y-1 max-h-32 overflow-y-auto">
+                                    {dbStats.recent_activity.length === 0 && (
+                                        <p className="text-xs text-stone-400">No activity logged yet.</p>
+                                    )}
+                                    {dbStats.recent_activity.slice(0, 8).map(a => (
+                                        <div key={a.id} className="text-xs">
+                                            <p className="text-stone-700 truncate"><span className="text-stone-400 font-mono">{a.action}</span> · {a.description}</p>
+                                            <p className="text-[10px] text-stone-400">{timeAgo(a.created_at)}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Attention Needed + Quick Actions */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

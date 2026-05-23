@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import clsx from "clsx";
 import {
   Bot, Play, Loader2, ExternalLink, Mail, Sparkles, CheckCircle2, Circle,
@@ -323,16 +324,20 @@ export default function BacklinksPage() {
                   </div>
                   <div className="space-y-2 max-h-[70vh] overflow-y-auto pr-1">
                     {grouped[col.key].map(p => (
-                      <button
+                      <div
                         key={p.id}
-                        onClick={() => setSelected(p)}
                         className={clsx(
-                          "w-full text-left bg-white border rounded-lg p-2.5 hover:border-emerald-300 transition-colors",
+                          "group bg-white border rounded-lg p-2.5 hover:border-emerald-300 transition-colors",
                           selected?.id === p.id ? "border-emerald-400 ring-1 ring-emerald-200" : "border-stone-200",
                         )}
                       >
                         <div className="flex items-start justify-between mb-1">
-                          <span className="text-xs font-semibold text-stone-900 truncate flex-1">{p.domain}</span>
+                          <Link
+                            href={`/admin/backlinks/${p.id}`}
+                            className="text-xs font-semibold text-stone-900 truncate flex-1 hover:text-emerald-700"
+                          >
+                            {p.domain}
+                          </Link>
                           {p.tier && (
                             <span className={clsx(
                               "text-[10px] px-1 py-0.5 rounded ml-1 font-medium",
@@ -344,22 +349,31 @@ export default function BacklinksPage() {
                             )}>T{p.tier}</span>
                           )}
                         </div>
-                        <div className="flex items-center gap-2 text-[10px] text-stone-500">
-                          {p.authority_score !== null && (
-                            <span className="inline-flex items-center gap-0.5">
-                              <TrendingUp className="w-2.5 h-2.5" /> AS {p.authority_score}
-                            </span>
-                          )}
-                          {p.backlink_contacts?.length > 0 && (
-                            <span className="inline-flex items-center gap-0.5">
-                              <Mail className="w-2.5 h-2.5" /> {p.backlink_contacts.length}
-                            </span>
-                          )}
-                          {p.backlink_outreach?.length > 0 && (
-                            <span className="text-purple-600 font-medium">draft</span>
-                          )}
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 text-[10px] text-stone-500 min-w-0">
+                            {p.authority_score !== null && (
+                              <span className="inline-flex items-center gap-0.5">
+                                <TrendingUp className="w-2.5 h-2.5" /> AS {p.authority_score}
+                              </span>
+                            )}
+                            {p.backlink_contacts?.length > 0 && (
+                              <span className="inline-flex items-center gap-0.5">
+                                <Mail className="w-2.5 h-2.5" /> {p.backlink_contacts.length}
+                              </span>
+                            )}
+                            {p.backlink_outreach?.length > 0 && (
+                              <span className="text-purple-600 font-medium">draft</span>
+                            )}
+                          </div>
+                          <button
+                            onClick={() => setSelected(p)}
+                            className="opacity-0 group-hover:opacity-100 text-[10px] text-stone-500 hover:text-stone-900"
+                            title="Quick preview"
+                          >
+                            preview
+                          </button>
                         </div>
-                      </button>
+                      </div>
                     ))}
                     {grouped[col.key].length === 0 && (
                       <div className="text-[11px] text-stone-400 italic text-center py-4">empty</div>
