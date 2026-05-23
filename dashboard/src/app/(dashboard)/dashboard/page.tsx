@@ -34,6 +34,7 @@ export default async function DashboardPage() {
   const ACTIVE_STATUSES = ["ACTIVE", "EXPIRING_SOON", "MARKET_RESEARCH", "DISCOVERED"];
 
   // Fetch all dashboard data in parallel on the server
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
   const [
     opsRes,
     hotRes,
@@ -45,6 +46,8 @@ export default async function DashboardPage() {
     competitorRes,
     recentPipelineRes,
     recentActionsRes,
+    newOpps7dRes,
+    newMatches7dRes,
   ] = await Promise.all([
     supabase.from("opportunities").select("*", { count: "exact", head: true }).eq("is_archived", false),
     supabase.from("user_matches")
@@ -87,7 +90,18 @@ export default async function DashboardPage() {
       .neq("status", "completed")
       .order("priority", { ascending: false })
       .limit(5),
+    // New opportunities in the last 7 days — proves ingestion is alive.
+    supabase.from("opportunities").select("*", { count: "exact", head: true })
+      .eq("is_archived", false)
+      .gte("created_at", sevenDaysAgo),
+    // New matches scored in the last 7 days for this user.
+    supabase.from("user_matches").select("*", { count: "exact", head: true })
+      .eq("user_profile_id", profileId)
+      .eq("is_dismissed", false)
+      .gte("scored_at", sevenDaysAgo),
   ]);
+  const newOpps7d = newOpps7dRes.count || 0;
+  const newMatches7d = newMatches7dRes.count || 0;
 
   const opsCount = opsRes.count || 0;
   const hotMatchCount = hotRes.count || 0;
@@ -128,7 +142,9 @@ export default async function DashboardPage() {
     actionsUrgent,
     competitorCount,
     recentPipeline,
-    pendingActions
+    pendingActions,
+    newOpps7d,
+    newMatches7d,
   };
 
   return <DashboardClient profile={profileData as any} stats={stats} initialLayout={initialLayout as any} />;

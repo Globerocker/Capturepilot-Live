@@ -55,6 +55,8 @@ interface DashboardClientProps {
     competitorCount: number;
     recentPipeline: Array<{ id: string; stage: string; title: string; opportunity_id: string }>;
     pendingActions: Array<{ id: string; title: string; priority: string; opportunity_id: string }>;
+    newOpps7d: number;
+    newMatches7d: number;
   };
   initialLayout?: DashboardLayout;
 }
@@ -98,7 +100,9 @@ export default function DashboardClient({ profile, stats, initialLayout }: Dashb
     actionsUrgent,
     competitorCount,
     recentPipeline,
-    pendingActions
+    pendingActions,
+    newOpps7d,
+    newMatches7d
   } = stats;
 
   return (
@@ -119,6 +123,66 @@ export default function DashboardClient({ profile, stats, initialLayout }: Dashb
         </div>
         <DashboardCustomizer initialLayout={layout} onLayoutChange={setLayout} />
       </header>
+
+      {/* "This Week" hero strip — surfaces velocity (new opps + new matches)
+          and routes to /matches with the URL-state filters from Tag 2. */}
+      <section className="bg-gradient-to-br from-stone-900 via-stone-900 to-black text-white rounded-[24px] sm:rounded-[28px] p-5 sm:p-6 shadow-lg">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4 sm:mb-5">
+          <div>
+            <p className="text-[10px] uppercase tracking-widest text-emerald-300/80 font-semibold">This Week</p>
+            <h3 className="text-lg sm:text-xl font-bold tracking-tight">What&apos;s new in your pipeline</h3>
+          </div>
+          <button
+            type="button"
+            onClick={async () => {
+              setGeneratingMatches(true);
+              try {
+                await fetch("/api/matches/refresh", { method: "POST" });
+                router.refresh();
+              } catch { /* ignore */ }
+              finally { setGeneratingMatches(false); }
+            }}
+            disabled={generatingMatches}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold bg-white text-stone-900 hover:bg-stone-100 disabled:opacity-60 transition self-start sm:self-auto"
+          >
+            {generatingMatches ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Refreshing…</> : <><Sparkles className="w-3.5 h-3.5" /> Refresh matches</>}
+          </button>
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <Link href="/matches" className="bg-white/5 hover:bg-white/10 rounded-[16px] sm:rounded-[20px] p-4 border border-white/10 transition">
+            <p className="text-2xl sm:text-3xl font-black leading-none">{newMatches7d}</p>
+            <p className="text-[10px] uppercase tracking-widest text-stone-400 mt-2">New matches</p>
+            <p className="text-[10px] text-stone-500 mt-0.5">last 7 days</p>
+          </Link>
+          <Link href="/matches?max_deadline=7" className="bg-amber-900/30 hover:bg-amber-900/40 rounded-[16px] sm:rounded-[20px] p-4 border border-amber-700/40 transition">
+            <p className="text-2xl sm:text-3xl font-black leading-none text-amber-200">{urgentCount}</p>
+            <p className="text-[10px] uppercase tracking-widest text-amber-300/90 mt-2">Expiring soon</p>
+            <p className="text-[10px] text-amber-400/70 mt-0.5">deadline ≤ 7 days</p>
+          </Link>
+          <Link href="/matches?filter=HOT" className="bg-rose-900/30 hover:bg-rose-900/40 rounded-[16px] sm:rounded-[20px] p-4 border border-rose-700/40 transition">
+            <p className="text-2xl sm:text-3xl font-black leading-none text-rose-200">{hotMatchCount}</p>
+            <p className="text-[10px] uppercase tracking-widest text-rose-300/90 mt-2">Strong matches</p>
+            <p className="text-[10px] text-rose-400/70 mt-0.5">≥ 70% fit score</p>
+          </Link>
+          <Link href="/opportunities" className="bg-emerald-900/30 hover:bg-emerald-900/40 rounded-[16px] sm:rounded-[20px] p-4 border border-emerald-700/40 transition">
+            <p className="text-2xl sm:text-3xl font-black leading-none text-emerald-200">{newOpps7d.toLocaleString()}</p>
+            <p className="text-[10px] uppercase tracking-widest text-emerald-300/90 mt-2">New opportunities</p>
+            <p className="text-[10px] text-emerald-400/70 mt-0.5">ingested last 7 days</p>
+          </Link>
+        </div>
+
+        {/* Quick filter pills — pre-built deep links into /matches via Tag-2 URL state */}
+        <div className="flex flex-wrap gap-1.5 mt-4 sm:mt-5">
+          <span className="text-[10px] uppercase tracking-widest text-stone-400 self-center mr-1">Jump to:</span>
+          <Link href="/matches?notice_type=Sources%20Sought" className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-white/10 hover:bg-white/20 transition">Sources Sought</Link>
+          <Link href="/matches?notice_type=Presolicitation" className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-white/10 hover:bg-white/20 transition">Pre-Sol</Link>
+          <Link href="/matches?set_aside=8(a)" className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-white/10 hover:bg-white/20 transition">8(a)</Link>
+          <Link href="/matches?set_aside=HUBZone" className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-white/10 hover:bg-white/20 transition">HUBZone</Link>
+          <Link href="/matches?set_aside=WOSB" className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-white/10 hover:bg-white/20 transition">WOSB</Link>
+          <Link href="/matches?set_aside=SDVOSB" className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-white/10 hover:bg-white/20 transition">SDVOSB</Link>
+          <Link href="/matches?filter=SAVED" className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-white/10 hover:bg-white/20 transition">⭐ Saved</Link>
+        </div>
+      </section>
 
       {/* KPI Cards */}
       {show("kpi_cards") && (
