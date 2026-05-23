@@ -40,6 +40,10 @@ interface Client {
     document_count: number;
     notes: string | null;
     last_login: string | null;
+    activity_score?: number | null;
+    saved_match_count?: number;
+    active_pursuit_count?: number;
+    match_count?: number;
 }
 
 export default function AdminClientsPage() {
@@ -530,6 +534,22 @@ function AdminClientsPageInner() {
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-3 text-xs text-stone-500">
+                                    {/* 1-10 activity score — color-coded pill so dormant users
+                                        jump out at a glance. Admin accounts return null score
+                                        and we just skip the pill for them. */}
+                                    {typeof client.activity_score === "number" && (
+                                        <span
+                                            title={`Activity score: ${client.activity_score}/10 — based on login recency, saved matches, active pursuits${client.account_type === "consulting" ? ", docs and tasks" : ""}`}
+                                            className={clsx(
+                                                "text-[10px] font-bold px-1.5 py-0.5 rounded border tabular-nums",
+                                                client.activity_score >= 7 ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+                                                client.activity_score >= 4 ? "bg-amber-50 text-amber-700 border-amber-200" :
+                                                "bg-rose-50 text-rose-700 border-rose-200",
+                                            )}
+                                        >
+                                            {client.activity_score}/10
+                                        </span>
+                                    )}
                                     {client.account_type === "consulting" && (
                                         <>
                                             <span className="inline-flex items-center gap-1"><ListTodo className="w-3.5 h-3.5" /> {client.pending_tasks} tasks</span>

@@ -271,41 +271,95 @@ export async function GET(req: NextRequest) {
             if (u.last_sign_in_at) loginMap.set(u.id, u.last_sign_in_at);
         }
 
-        // Only consulting clients use the client_* tables — for other account
-        // types we skip the per-row stat queries entirely so the page stays
-        // fast even with many self-service users.
+        // Activity-score buckets feed the 1-10 score below. All weights are
+        // declarative + sum to 100 so it's easy to tweak.
+        const SCORE = {
+            login_7d: 30, login_30d: 20, login_90d: 10,
+            saved_matches_max: 20,                              // cap at 5 saves
+            pursuit_active: 20, pursuit_any: 10,
+            documents_3plus: 15, documents_some: 7,
+            tasks_engaged: 15,
+        } as const;
+
         const clientsWithStats = await Promise.all(
             (data || []).map(async (client) => {
-                if (client.account_type !== "consulting") {
+                // Per-row counts: consulting clients use the full set; self-service
+                // users get the lightweight set (matches + pursuits + last_login).
+                // Admins get nothing — the score is meaningless for staff.
+                const isConsulting = client.account_type === "consulting";
+                const isStaff = client.account_type === "admin";
+                const lastLogin = loginMap.get(client.auth_user_id) || null;
+
+                if (isStaff) {
                     return {
                         ...client,
-                        total_tasks: 0,
-                        pending_tasks: 0,
-                        document_count: 0,
-                        match_count: 0,
-                        competitor_count: 0,
-                        activity_count: 0,
-                        last_login: loginMap.get(client.auth_user_id) || null,
+                        total_tasks: 0, pending_tasks: 0, document_count: 0,
+                        match_count: 0, saved_match_count: 0, pursuit_count: 0,
+                        active_pursuit_count: 0, competitor_count: 0, activity_count: 0,
+                        last_login: lastLogin, activity_score: null as number | null,
                     };
                 }
-                const [taskRes, pendingRes, docRes, matchRes, compRes, activityRes] = await Promise.all([
-                    admin.from("client_tasks").select("id", { count: "exact", head: true }).eq("user_profile_id", client.id),
-                    admin.from("client_tasks").select("id", { count: "exact", head: true }).eq("user_profile_id", client.id).in("status", ["pending", "in_progress", "waiting_client"]),
-                    admin.from("client_documents").select("id", { count: "exact", head: true }).eq("user_profile_id", client.id),
+
+                const queries = [
                     admin.from("user_matches").select("id", { count: "exact", head: true }).eq("user_profile_id", client.id),
-                    admin.from("client_competitors").select("id", { count: "exact", head: true }).eq("user_profile_id", client.id),
-                    admin.from("client_activity_log").select("id", { count: "exact", head: true }).eq("user_profile_id", client.id),
-                ]);
+                    admin.from("user_matches").select("id", { count: "exact", head: true }).eq("user_profile_id", client.id).eq("is_saved", true),
+                    admin.from("user_pursuits").select("id", { count: "exact", head: true }).eq("user_profile_id", client.id),
+                    admin.from("user_pursuits").select("id", { count: "exact", head: true }).eq("user_profile_id", client.id).in("stage", ["discovered", "researching", "preparing", "submitted"]),
+                ];
+                if (isConsulting) {
+                    queries.push(
+                        admin.from("client_tasks").select("id", { count: "exact", head: true }).eq("user_profile_id", client.id),
+                        admin.from("client_tasks").select("id", { count: "exact", head: true }).eq("user_profile_id", client.id).in("status", ["pending", "in_progress", "waiting_client"]),
+                        admin.from("client_documents").select("id", { count: "exact", head: true }).eq("user_profile_id", client.id),
+                        admin.from("client_competitors").select("id", { count: "exact", head: true }).eq("user_profile_id", client.id),
+                        admin.from("client_activity_log").select("id", { count: "exact", head: true }).eq("user_profile_id", client.id),
+                    );
+                }
+                const results = await Promise.all(queries);
+                const matchCount = results[0].count || 0;
+                const savedMatchCount = results[1].count || 0;
+                const pursuitCount = results[2].count || 0;
+                const activePursuitCount = results[3].count || 0;
+                const totalTasks = isConsulting ? results[4].count || 0 : 0;
+                const pendingTasks = isConsulting ? results[5].count || 0 : 0;
+                const documentCount = isConsulting ? results[6].count || 0 : 0;
+                const competitorCount = isConsulting ? results[7].count || 0 : 0;
+                const activityCount = isConsulting ? results[8].count || 0 : 0;
+
+                // 1-10 score. Each component contributes proportionally; capped at 10.
+                let raw = 0;
+                if (lastLogin) {
+                    const days = (Date.now() - new Date(lastLogin).getTime()) / 86400_000;
+                    if (days <= 7) raw += SCORE.login_7d;
+                    else if (days <= 30) raw += SCORE.login_30d;
+                    else if (days <= 90) raw += SCORE.login_90d;
+                }
+                raw += Math.min(SCORE.saved_matches_max, savedMatchCount * (SCORE.saved_matches_max / 5));
+                if (activePursuitCount > 0) raw += SCORE.pursuit_active;
+                else if (pursuitCount > 0) raw += SCORE.pursuit_any;
+                if (isConsulting) {
+                    if (documentCount >= 3) raw += SCORE.documents_3plus;
+                    else if (documentCount > 0) raw += SCORE.documents_some;
+                    if (totalTasks > 0) raw += SCORE.tasks_engaged;
+                } else {
+                    // Self-service has no docs/tasks — scale the remaining buckets up.
+                    raw = raw * 1.4;
+                }
+                const activityScore = Math.max(1, Math.min(10, Math.round(raw / 10)));
 
                 return {
                     ...client,
-                    total_tasks: taskRes.count || 0,
-                    pending_tasks: pendingRes.count || 0,
-                    document_count: docRes.count || 0,
-                    match_count: matchRes.count || 0,
-                    competitor_count: compRes.count || 0,
-                    activity_count: activityRes.count || 0,
-                    last_login: loginMap.get(client.auth_user_id) || null,
+                    total_tasks: totalTasks,
+                    pending_tasks: pendingTasks,
+                    document_count: documentCount,
+                    match_count: matchCount,
+                    saved_match_count: savedMatchCount,
+                    pursuit_count: pursuitCount,
+                    active_pursuit_count: activePursuitCount,
+                    competitor_count: competitorCount,
+                    activity_count: activityCount,
+                    last_login: lastLogin,
+                    activity_score: activityScore,
                 };
             })
         );

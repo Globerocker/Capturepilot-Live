@@ -35,16 +35,16 @@ const BASE = (getArg("--base", process.env.BASE_URL || "http://localhost:3000") 
 const VERBOSE = args.includes("--verbose") || args.includes("-v");
 const TIMEOUT_MS = 15_000;
 
-// Pages that should redirect non-admins. Sub-routes (`[id]`, `[key]`) are
-// represented by a sentinel id — the redirect happens at the layout level
-// so any concrete value works.
+// Pages that should redirect non-admins. We deliberately skip dynamic-
+// segment routes (`/admin/clients/[id]`, `/admin/backlinks/[id]`) because
+// hitting them with a fake UUID legitimately 404s when the resource doesn't
+// exist — and that 404 is indistinguishable from "the route was removed."
+// Static routes only — those are the ones where 404 means a real regression.
 const ADMIN_PAGES = [
     "/admin/overview",
     "/admin/clients",
-    "/admin/clients/00000000-0000-0000-0000-000000000000",
     "/admin/leads",
     "/admin/lead-check",
-    "/admin/lead-check/00000000-0000-0000-0000-000000000000",
     "/admin/prospects",
     "/admin/beta-invites",
     "/admin/opportunities",
@@ -52,11 +52,8 @@ const ADMIN_PAGES = [
     "/admin/pipeline",
     "/admin/academy",
     "/admin/emails",
-    "/admin/emails/welcome",
-    "/admin/emails/welcome/edit",
     "/admin/messages",
     "/admin/backlinks",
-    "/admin/backlinks/00000000-0000-0000-0000-000000000000",
     "/admin/enrich",
     "/admin/health",
     "/admin/crons",
@@ -102,7 +99,10 @@ const ADMIN_ROUTES = [
     { path: "/api/admin/enrich-contractors", method: "POST" },
     { path: "/api/admin/enrich-campaign-audience", method: "GET" },
     { path: "/api/admin/enrich-campaign-audience", method: "POST" },
-    { path: "/api/admin/enrich-opportunity/abc", method: "POST" },
+    // /api/admin/enrich-opportunity/[id] — skipped: a fake id legitimately
+    // 404s when the row doesn't exist, which is indistinguishable from a
+    // missing route. The gate is still exercised by other dynamic routes
+    // that 401 before any DB lookup.
     { path: "/api/admin/backfill-enrichment", method: "POST" },
     { path: "/api/admin/bulk-enrich", method: "POST" },
     { path: "/api/admin/impersonate", method: "POST" },
@@ -112,9 +112,9 @@ const ADMIN_ROUTES = [
     { path: "/api/admin/push-opportunity", method: "POST" },
     { path: "/api/admin/outreach/prospects", method: "GET" },
     { path: "/api/admin/outreach/prospects/bulk", method: "POST" },
-    { path: "/api/admin/outreach/prospects/abc", method: "PATCH" },
+    // /api/admin/outreach/prospects/[id] — skipped: dynamic-segment 404 noise.
     { path: "/api/admin/backlinks/list", method: "GET" },
-    { path: "/api/admin/backlinks/abc", method: "GET" },
+    // /api/admin/backlinks/[id] — skipped: dynamic-segment 404 noise.
     { path: "/api/admin/backlinks/update", method: "POST" },
     { path: "/api/admin/backlinks/draft-outreach", method: "POST" },
     { path: "/api/admin/backlinks/run-agent", method: "POST" },

@@ -49,12 +49,16 @@ interface ClientData {
     pending_tasks: number;
     total_tasks: number;
     match_count: number;
+    saved_match_count?: number;
+    pursuit_count?: number;
+    active_pursuit_count?: number;
     competitor_count: number;
     document_count: number;
     activity_count: number;
     last_login: string | null;
     created_at: string;
     naics_codes: string[];
+    activity_score?: number | null;
 }
 
 export default function AdminOverview() {
@@ -371,19 +375,17 @@ export default function AdminOverview() {
                                     <th className="text-center px-3 py-2.5">Matches</th>
                                     <th className="text-center px-3 py-2.5">Docs</th>
                                     <th className="text-center px-3 py-2.5">Competitors</th>
-                                    <th className="text-center px-3 py-2.5">Health</th>
+                                    <th className="text-center px-3 py-2.5" title="1-10 activity score: login recency + saved matches + active pursuits + docs + tasks">Activity</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-stone-50">
                                 {clients.map(c => {
-                                    // Health score: 0-100
-                                    let health = 20;
-                                    if (c.last_login && Date.now() - new Date(c.last_login).getTime() < 7 * 86400000) health += 25;
-                                    if (c.match_count > 0) health += 15;
-                                    if (c.document_count > 0) health += 15;
-                                    if (c.competitor_count > 0) health += 10;
-                                    if (c.pending_tasks < 3) health += 15;
-                                    health = Math.min(100, health);
+                                    // Activity score now comes from the API (computed against
+                                    // login recency + saved matches + active pursuits + docs).
+                                    // Fallback to a derived value for the rare row where the
+                                    // API returned null (admin accounts).
+                                    const score = c.activity_score
+                                        ?? (c.last_login && Date.now() - new Date(c.last_login).getTime() < 7 * 86400000 ? 5 : 1);
 
                                     return (
                                         <tr key={c.id} className="hover:bg-stone-50/50">
@@ -426,13 +428,13 @@ export default function AdminOverview() {
                                             <td className="text-center px-3 text-xs text-stone-600">{c.document_count}</td>
                                             <td className="text-center px-3 text-xs text-stone-600">{c.competitor_count}</td>
                                             <td className="text-center px-3">
-                                                <div className="inline-flex items-center gap-1.5">
+                                                <div className="inline-flex items-center gap-1.5" title={`Activity score: ${score}/10`}>
                                                     <div className="w-12 h-1.5 bg-stone-100 rounded-full overflow-hidden">
                                                         <div className={clsx("h-full rounded-full",
-                                                            health >= 70 ? "bg-emerald-500" : health >= 40 ? "bg-amber-500" : "bg-red-500"
-                                                        )} style={{ width: `${health}%` }} />
+                                                            score >= 7 ? "bg-emerald-500" : score >= 4 ? "bg-amber-500" : "bg-red-500"
+                                                        )} style={{ width: `${score * 10}%` }} />
                                                     </div>
-                                                    <span className="text-[10px] font-bold text-stone-500">{health}</span>
+                                                    <span className="text-[10px] font-bold text-stone-500">{score}/10</span>
                                                 </div>
                                             </td>
                                         </tr>
