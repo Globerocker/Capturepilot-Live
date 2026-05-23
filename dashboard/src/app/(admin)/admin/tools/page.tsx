@@ -1,9 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Wrench, Search, RefreshCw, Mail, Loader2, CheckCircle2, Sparkles, Download, ExternalLink } from "lucide-react";
+import { Wrench, Search, RefreshCw, Mail, Loader2, CheckCircle2, AlertCircle, Activity, Sparkles, Download, ExternalLink } from "lucide-react";
 import clsx from "clsx";
+
+interface CronSummary {
+    route: string;
+    runs_7d: number;
+    ok: number;
+    error: number;
+    partial: number;
+    last_run: string | null;
+    last_status: string | null;
+}
 
 export default function AdminTools() {
     const [naicsCodes, setNaicsCodes] = useState("");
@@ -57,6 +67,41 @@ export default function AdminTools() {
     const [campaignPreviewing, setCampaignPreviewing] = useState(false);
     const [campaignResult, setCampaignResult] = useState<string>("");
     const [campaignSample, setCampaignSample] = useState<Array<{ company: string; email?: string; name?: string; title?: string }>>([]);
+
+    // Live cron telemetry — replaces the old hardcoded "9 jobs" list which
+    // had drifted (we run 34 today, not 9). Backed by /api/admin/cron-runs.
+    const [cronSummary, setCronSummary] = useState<CronSummary[] | null>(null);
+    const [cronError, setCronError] = useState<string | null>(null);
+
+    // Controlled inputs for the tool widgets below. Replaces the previous
+    // document.getElementById pattern which fought React on every keystroke.
+    const [aiNoticeId, setAiNoticeId] = useState("");
+    const [propNoticeId, setPropNoticeId] = useState("");
+    const [propProfileId, setPropProfileId] = useState("");
+    const [sbirKeywords, setSbirKeywords] = useState("");
+    const [sbirAgency, setSbirAgency] = useState("");
+    const [fwNotice, setFwNotice] = useState("");
+    const [fwProfile, setFwProfile] = useState("");
+    const [tpNaics, setTpNaics] = useState("");
+    const [tpState, setTpState] = useState("");
+    const [tpCert, setTpCert] = useState("");
+    const [idiqNaics, setIdiqNaics] = useState("");
+    const [idiqKeyword, setIdiqKeyword] = useState("");
+
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            try {
+                const res = await fetch("/api/admin/cron-runs", { cache: "no-store" });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                if (!cancelled) setCronSummary(data.summary || []);
+            } catch (e) {
+                if (!cancelled) setCronError((e as Error).message);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, []);
 
     const handleCrawl = async () => {
         const codes = naicsCodes.split(",").map(s => s.trim()).filter(Boolean);
@@ -405,17 +450,21 @@ export default function AdminTools() {
                 <div className="p-5 space-y-3">
                     <p className="text-xs text-stone-500">Analyze an opportunity using AI — extracts requirements, evaluation criteria, risks, and recommended actions.</p>
                     <div className="flex gap-2">
-                        <input id="ai-notice-id" placeholder="Notice ID (from opportunity)" className="flex-1 border border-stone-300 rounded-lg px-3 py-2 text-sm font-mono" />
+                        <input
+                            value={aiNoticeId}
+                            onChange={e => setAiNoticeId(e.target.value)}
+                            placeholder="Notice ID (from opportunity)"
+                            className="flex-1 border border-stone-300 rounded-lg px-3 py-2 text-sm font-mono"
+                        />
                         <button type="button" onClick={async () => {
-                            const input = document.getElementById("ai-notice-id") as HTMLInputElement;
-                            if (!input?.value) return;
+                            if (!aiNoticeId.trim()) return;
                             setAiAnalyzeResult("");
                             setAiAnalyzing(true);
                             try {
                                 const res = await fetch("/api/ai/summarize-document", {
                                     method: "POST",
                                     headers: { "Content-Type": "application/json" },
-                                    body: JSON.stringify({ notice_id: input.value }),
+                                    body: JSON.stringify({ notice_id: aiNoticeId.trim() }),
                                 });
                                 const data = await res.json();
                                 setAiAnalyzeResult(data.success ? `Analysis complete: ${data.analysis?.executive_summary?.substring(0, 200)}` : `Error: ${data.error}`);
@@ -442,19 +491,27 @@ export default function AdminTools() {
                 <div className="p-5 space-y-3">
                     <p className="text-xs text-stone-500">Generate a tailored proposal outline for a specific opportunity + client profile.</p>
                     <div className="flex gap-2">
-                        <input id="prop-notice-id" placeholder="Notice ID" className="flex-1 border border-stone-300 rounded-lg px-3 py-2 text-sm font-mono" />
-                        <input id="prop-profile-id" placeholder="Client Profile ID (optional)" className="flex-1 border border-stone-300 rounded-lg px-3 py-2 text-sm font-mono" />
+                        <input
+                            value={propNoticeId}
+                            onChange={e => setPropNoticeId(e.target.value)}
+                            placeholder="Notice ID"
+                            className="flex-1 border border-stone-300 rounded-lg px-3 py-2 text-sm font-mono"
+                        />
+                        <input
+                            value={propProfileId}
+                            onChange={e => setPropProfileId(e.target.value)}
+                            placeholder="Client Profile ID (optional)"
+                            className="flex-1 border border-stone-300 rounded-lg px-3 py-2 text-sm font-mono"
+                        />
                         <button type="button" onClick={async () => {
-                            const noticeInput = document.getElementById("prop-notice-id") as HTMLInputElement;
-                            const profileInput = document.getElementById("prop-profile-id") as HTMLInputElement;
-                            if (!noticeInput?.value) return;
+                            if (!propNoticeId.trim()) return;
                             setProposalResult("");
                             setProposalGenerating(true);
                             try {
                                 const res = await fetch("/api/ai/generate-proposal", {
                                     method: "POST",
                                     headers: { "Content-Type": "application/json" },
-                                    body: JSON.stringify({ notice_id: noticeInput.value, user_profile_id: profileInput?.value || undefined }),
+                                    body: JSON.stringify({ notice_id: propNoticeId.trim(), user_profile_id: propProfileId.trim() || undefined }),
                                 });
                                 const data = await res.json();
                                 setProposalResult(data.success ? `Proposal outline generated: ${data.proposal?.proposal_title} (${data.proposal?.sections?.length} sections)` : `Error: ${data.error}`);
@@ -481,8 +538,18 @@ export default function AdminTools() {
                 <div className="p-5 space-y-3">
                     <p className="text-xs text-stone-500">Search SBIR.gov for Small Business Innovation Research and Technology Transfer grants.</p>
                     <div className="flex gap-2">
-                        <input id="sbir-keywords" placeholder="Keywords (e.g. pipeline, cybersecurity)" className="flex-1 border border-stone-300 rounded-lg px-3 py-2 text-sm" />
-                        <select id="sbir-agency" title="Agency" className="border border-stone-300 rounded-lg px-3 py-2 text-sm">
+                        <input
+                            value={sbirKeywords}
+                            onChange={e => setSbirKeywords(e.target.value)}
+                            placeholder="Keywords (e.g. pipeline, cybersecurity)"
+                            className="flex-1 border border-stone-300 rounded-lg px-3 py-2 text-sm"
+                        />
+                        <select
+                            value={sbirAgency}
+                            onChange={e => setSbirAgency(e.target.value)}
+                            title="Agency"
+                            className="border border-stone-300 rounded-lg px-3 py-2 text-sm"
+                        >
                             <option value="">All Agencies</option>
                             <option value="DOD">DOD</option>
                             <option value="DOE">DOE</option>
@@ -494,13 +561,12 @@ export default function AdminTools() {
                             <option value="DOT">DOT</option>
                         </select>
                         <button type="button" onClick={async () => {
-                            const kw = (document.getElementById("sbir-keywords") as HTMLInputElement)?.value;
-                            const ag = (document.getElementById("sbir-agency") as HTMLSelectElement)?.value;
+                            const kw = sbirKeywords.trim();
                             if (!kw) return;
                             setSbirResult("");
                             setSbirSearching(true);
                             try {
-                                const res = await fetch(`/api/grants/sbir?keywords=${encodeURIComponent(kw)}&agency=${ag}&open=true`);
+                                const res = await fetch(`/api/grants/sbir?keywords=${encodeURIComponent(kw)}&agency=${sbirAgency}&open=true`);
                                 const data = await res.json();
                                 setSbirResult(data.total ? `Found ${data.total} SBIR/STTR grants. View: ${data.search_url}` : data.error || "No results found");
                             } catch (err: unknown) {
@@ -526,12 +592,22 @@ export default function AdminTools() {
                 <div className="p-5 space-y-3">
                     <p className="text-xs text-stone-500">Generate a complete multi-section proposal (Cover Letter, Executive Summary, Technical Approach, Past Performance, etc.)</p>
                     <div className="flex gap-2">
-                        <input id="fw-notice" placeholder="Notice ID" className="flex-1 border border-stone-300 rounded-lg px-3 py-2 text-sm font-mono" />
-                        <input id="fw-profile" placeholder="Client Profile ID (optional)" className="flex-1 border border-stone-300 rounded-lg px-3 py-2 text-sm font-mono" />
+                        <input
+                            value={fwNotice}
+                            onChange={e => setFwNotice(e.target.value)}
+                            placeholder="Notice ID"
+                            className="flex-1 border border-stone-300 rounded-lg px-3 py-2 text-sm font-mono"
+                        />
+                        <input
+                            value={fwProfile}
+                            onChange={e => setFwProfile(e.target.value)}
+                            placeholder="Client Profile ID (optional)"
+                            className="flex-1 border border-stone-300 rounded-lg px-3 py-2 text-sm font-mono"
+                        />
                         <button type="button" onClick={async () => {
-                            const nid = (document.getElementById("fw-notice") as HTMLInputElement)?.value;
+                            const nid = fwNotice.trim();
                             if (!nid) return;
-                            const pid = (document.getElementById("fw-profile") as HTMLInputElement)?.value;
+                            const pid = fwProfile.trim();
                             setProposalWriteResult(""); setProposalWriting(true);
                             try {
                                 const res = await fetch("/api/ai/write-proposal", {
@@ -563,9 +639,24 @@ export default function AdminTools() {
                 <div className="p-5 space-y-3">
                     <p className="text-xs text-stone-500">Find SAM-registered companies for teaming partnerships.</p>
                     <div className="flex gap-2">
-                        <input id="tp-naics" placeholder="NAICS code" className="w-28 border border-stone-300 rounded-lg px-3 py-2 text-sm" />
-                        <input id="tp-state" placeholder="State (e.g. TX)" className="w-20 border border-stone-300 rounded-lg px-3 py-2 text-sm" />
-                        <select id="tp-cert" title="Certification" className="border border-stone-300 rounded-lg px-3 py-2 text-sm">
+                        <input
+                            value={tpNaics}
+                            onChange={e => setTpNaics(e.target.value)}
+                            placeholder="NAICS code"
+                            className="w-28 border border-stone-300 rounded-lg px-3 py-2 text-sm"
+                        />
+                        <input
+                            value={tpState}
+                            onChange={e => setTpState(e.target.value)}
+                            placeholder="State (e.g. TX)"
+                            className="w-20 border border-stone-300 rounded-lg px-3 py-2 text-sm"
+                        />
+                        <select
+                            value={tpCert}
+                            onChange={e => setTpCert(e.target.value)}
+                            title="Certification"
+                            className="border border-stone-300 rounded-lg px-3 py-2 text-sm"
+                        >
                             <option value="">Any Cert</option>
                             <option value="8A">8(a)</option>
                             <option value="SDVOSB">SDVOSB</option>
@@ -574,13 +665,11 @@ export default function AdminTools() {
                             <option value="VOSB">VOSB</option>
                         </select>
                         <button type="button" onClick={async () => {
-                            const naics = (document.getElementById("tp-naics") as HTMLInputElement)?.value;
-                            const state = (document.getElementById("tp-state") as HTMLInputElement)?.value;
-                            const cert = (document.getElementById("tp-cert") as HTMLSelectElement)?.value;
+                            const naics = tpNaics.trim();
                             if (!naics) return;
                             setPartnerResult(""); setPartnerSearching(true);
                             try {
-                                const res = await fetch(`/api/partners/search?naics=${naics}&state=${state}&set_aside=${cert}`);
+                                const res = await fetch(`/api/partners/search?naics=${encodeURIComponent(naics)}&state=${encodeURIComponent(tpState)}&set_aside=${encodeURIComponent(tpCert)}`);
                                 const data = await res.json();
                                 setPartnerResult(data.success ? `Found ${data.total} potential partners` : `Error: ${data.error}`);
                             } catch (err: unknown) {
@@ -606,15 +695,25 @@ export default function AdminTools() {
                 <div className="p-5 space-y-3">
                     <p className="text-xs text-stone-500">Find active IDIQ contracts and GWACs in a specific NAICS — getting on one means steady work.</p>
                     <div className="flex gap-2">
-                        <input id="idiq-naics" placeholder="NAICS code" className="w-28 border border-stone-300 rounded-lg px-3 py-2 text-sm" />
-                        <input id="idiq-keyword" placeholder="Keyword (optional)" className="flex-1 border border-stone-300 rounded-lg px-3 py-2 text-sm" />
+                        <input
+                            value={idiqNaics}
+                            onChange={e => setIdiqNaics(e.target.value)}
+                            placeholder="NAICS code"
+                            className="w-28 border border-stone-300 rounded-lg px-3 py-2 text-sm"
+                        />
+                        <input
+                            value={idiqKeyword}
+                            onChange={e => setIdiqKeyword(e.target.value)}
+                            placeholder="Keyword (optional)"
+                            className="flex-1 border border-stone-300 rounded-lg px-3 py-2 text-sm"
+                        />
                         <button type="button" onClick={async () => {
-                            const naics = (document.getElementById("idiq-naics") as HTMLInputElement)?.value;
-                            const kw = (document.getElementById("idiq-keyword") as HTMLInputElement)?.value;
+                            const naics = idiqNaics.trim();
+                            const kw = idiqKeyword.trim();
                             if (!naics && !kw) return;
                             setIdiqResult(""); setIdiqSearching(true);
                             try {
-                                const res = await fetch(`/api/idiq?naics=${naics}&keyword=${encodeURIComponent(kw || "")}`);
+                                const res = await fetch(`/api/idiq?naics=${encodeURIComponent(naics)}&keyword=${encodeURIComponent(kw)}`);
                                 const data = await res.json();
                                 setIdiqResult(data.success ? `Found ${data.total} IDIQ contracts worth ${data.total_value ? "$" + (data.total_value / 1e6).toFixed(0) + "M" : "N/A"}` : `Error: ${data.error}`);
                             } catch (err: unknown) {
@@ -631,33 +730,62 @@ export default function AdminTools() {
                 </div>
             </div>
 
-            {/* Cron Status */}
+            {/* Cron Status — live from /api/admin/cron-runs (last 7d) */}
             <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
-                <div className="bg-stone-50 border-b border-stone-100 px-5 py-3">
-                    <h2 className="font-bold text-sm">Automated Crons (9 jobs)</h2>
+                <div className="bg-stone-50 border-b border-stone-100 px-5 py-3 flex items-center justify-between">
+                    <h2 className="font-bold text-sm flex items-center gap-2">
+                        <Activity className="w-4 h-4 text-stone-400" />
+                        Automated Crons
+                        {cronSummary && (
+                            <span className="text-[10px] font-normal text-stone-400">
+                                ({cronSummary.length} active in last 7d)
+                            </span>
+                        )}
+                    </h2>
+                    <Link
+                        href="/admin/crons"
+                        className="text-xs font-bold text-blue-600 hover:text-blue-800 inline-flex items-center gap-1"
+                    >
+                        Full telemetry <ExternalLink className="w-3 h-3" />
+                    </Link>
                 </div>
                 <div className="p-5">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                        {[
-                            { time: "2:00 AM", name: "ingest_sam", desc: "Fetch new opportunities" },
-                            { time: "3:00 AM", name: "score_matches", desc: "Score all users" },
-                            { time: "4:00 AM Sun", name: "db_cleanup", desc: "Lifecycle management" },
-                            { time: "5:00 AM", name: "enrich", desc: "Contractor enrichment" },
-                            { time: "6:00 AM", name: "backfill_requirements", desc: "Extract from raw_json" },
-                            { time: "7:00 AM Sun", name: "competitor_monitor", desc: "Crawl competitor websites" },
-                            { time: "8:00 AM", name: "deep_enrich", desc: "Descriptions + PDFs + requirements" },
-                            { time: "10:00 AM", name: "notify_matches", desc: "Email opportunity alerts" },
-                            { time: "1st monthly", name: "monthly_awards", desc: "Award + forecast notices" },
-                        ].map(c => (
-                            <div key={c.name} className="flex items-center gap-2 bg-stone-50 rounded-lg px-3 py-2">
-                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
-                                <div>
-                                    <p className="font-medium text-stone-700">{c.name}</p>
-                                    <p className="text-stone-400">{c.time} — {c.desc}</p>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
+                    {cronError && (
+                        <p className="text-xs text-red-600 mb-2">Failed to load cron status: {cronError}</p>
+                    )}
+                    {!cronSummary && !cronError && (
+                        <div className="flex items-center gap-2 text-xs text-stone-500">
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading cron status…
+                        </div>
+                    )}
+                    {cronSummary && cronSummary.length === 0 && (
+                        <p className="text-xs text-stone-500">
+                            No cron runs in the last 7 days. Trigger one from{" "}
+                            <Link href="/admin/crons" className="text-blue-600 hover:underline">/admin/crons</Link>.
+                        </p>
+                    )}
+                    {cronSummary && cronSummary.length > 0 && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                            {cronSummary.map(c => {
+                                const isOk = c.last_status === "ok";
+                                const isErr = c.last_status === "error";
+                                const Icon = isOk ? CheckCircle2 : isErr ? AlertCircle : Activity;
+                                const iconCls = isOk ? "text-emerald-500" : isErr ? "text-rose-500" : "text-stone-400";
+                                const name = c.route.replace("/api/cron/", "");
+                                return (
+                                    <div key={c.route} className="flex items-center gap-2 bg-stone-50 rounded-lg px-3 py-2">
+                                        <Icon className={clsx("w-3.5 h-3.5 flex-shrink-0", iconCls)} />
+                                        <div className="min-w-0 flex-1">
+                                            <p className="font-medium text-stone-700 truncate">{name}</p>
+                                            <p className="text-stone-400 truncate">
+                                                {c.runs_7d} run{c.runs_7d === 1 ? "" : "s"} · {c.ok} ok · {c.error} err
+                                            </p>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

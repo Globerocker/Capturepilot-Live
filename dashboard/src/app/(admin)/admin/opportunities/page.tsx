@@ -3,10 +3,7 @@
 import { fmtCurrency } from "@/lib/display-helpers";
 import { useEffect, useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
-import {
-    Briefcase, Search, Loader2, ExternalLink, Filter, ChevronDown,
-    Shield, Clock, MapPin, DollarSign,
-} from "lucide-react";
+import { Briefcase, Search, Loader2, ExternalLink } from "lucide-react";
 import clsx from "clsx";
 
 const supabase = createBrowserClient(
@@ -69,13 +66,6 @@ export default function AdminOpportunities() {
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();
         loadOpps();
-    };
-
-    const fmtCurrency = (n: number) => {
-        if (!n) return "";
-        if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
-        if (n >= 1_000) return `$${(n / 1_000).toFixed(0)}K`;
-        return `$${n.toLocaleString()}`;
     };
 
     const statusColors: Record<string, string> = {
