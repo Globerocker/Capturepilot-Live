@@ -1103,11 +1103,19 @@ function OnboardPageContent() {
                             </button>
                         </div>
                     ) : (
-                        <button type="button" onClick={handleSave}
-                            disabled={saving || !step3Valid || !step1Valid || !step2Valid}
-                            className="flex items-center px-6 sm:px-8 py-3 rounded-full bg-emerald-600 text-white hover:bg-emerald-700 font-bold text-sm transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">
-                            {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Saving...</> : <><CheckCircle2 className="w-4 h-4 mr-2" /> Complete Setup</>}
-                        </button>
+                        <div className="flex items-center gap-3">
+                            <button type="button" onClick={handleSave}
+                                disabled={saving || !step1Valid || !step2Valid}
+                                className="text-sm text-stone-500 hover:text-stone-700 underline underline-offset-4 disabled:opacity-50"
+                                title="Skip the firmographics — you can fill them in /settings later.">
+                                Skip for now
+                            </button>
+                            <button type="button" onClick={handleSave}
+                                disabled={saving || !step3Valid || !step1Valid || !step2Valid}
+                                className="flex items-center px-6 sm:px-8 py-3 rounded-full bg-emerald-600 text-white hover:bg-emerald-700 font-bold text-sm transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">
+                                {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Saving...</> : <><CheckCircle2 className="w-4 h-4 mr-2" /> Complete Setup</>}
+                            </button>
+                        </div>
                     )}
                 </div>
             </div>

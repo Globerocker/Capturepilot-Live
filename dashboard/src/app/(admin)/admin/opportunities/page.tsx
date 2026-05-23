@@ -16,6 +16,7 @@ const supabase = createBrowserClient(
 
 interface Opp {
     notice_id: string;
+    solicitation_number: string | null;
     title: string;
     agency: string;
     naics_code: string;
@@ -45,7 +46,7 @@ export default function AdminOpportunities() {
     const loadOpps = async () => {
         setLoading(true);
         let query = supabase.from("opportunities")
-            .select("notice_id, title, agency, naics_code, set_aside_code, notice_type, response_deadline, estimated_value, place_of_performance_state, status, veteran_relevance_flag, small_business_relevance_flag, wosb_relevance_flag, sources_sought_flag", { count: "exact" })
+            .select("notice_id, solicitation_number, title, agency, naics_code, set_aside_code, notice_type, response_deadline, estimated_value, place_of_performance_state, status, veteran_relevance_flag, small_business_relevance_flag, wosb_relevance_flag, sources_sought_flag", { count: "exact" })
             .order("posted_date", { ascending: false, nullsFirst: false })
             .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
 
@@ -164,7 +165,10 @@ export default function AdminOpportunities() {
                                     <tr key={o.notice_id} className="hover:bg-stone-50/50">
                                         <td className="px-4 py-2.5 max-w-xs">
                                             <p className="font-medium text-stone-900 truncate">{o.title}</p>
-                                            <p className="text-[10px] text-stone-400 truncate">{o.agency}</p>
+                                            <p className="text-[10px] text-stone-400 truncate">
+                                                {o.agency}
+                                                {o.solicitation_number && <span className="ml-2 font-mono text-stone-500">{o.solicitation_number}</span>}
+                                            </p>
                                         </td>
                                         <td className="text-center px-3">
                                             <span className={clsx("text-[9px] font-bold px-2 py-0.5 rounded uppercase", statusColors[o.status] || "bg-stone-100 text-stone-500")}>

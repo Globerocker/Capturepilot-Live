@@ -4,7 +4,10 @@ import { useEffect, useRef, useState } from "react";
 import { Loader2, Sparkles, Mic, ClipboardCheck, ShieldCheck, FileText, X, CheckCircle2, AlertCircle, Activity } from "lucide-react";
 import clsx from "clsx";
 
-const POLL_MS = 2500;
+// 10s while jobs are running (was 2.5s — too chatty, hammered the API).
+// The component switches to 60s when idle.
+const POLL_MS_ACTIVE = 10_000;
+const POLL_MS_IDLE = 60_000;
 
 interface JobSummary {
     id: string;
@@ -81,7 +84,9 @@ export default function GlobalJobsIndicator() {
             } catch {
                 // swallow — best-effort
             } finally {
-                if (alive) timer = setTimeout(poll, POLL_MS);
+                // Adaptive cadence — fast while a job is running, slow when idle.
+                const haveActive = jobs.some(j => j.status === "running" || j.status === "pending");
+                if (alive) timer = setTimeout(poll, haveActive ? POLL_MS_ACTIVE : POLL_MS_IDLE);
             }
         };
         poll();
