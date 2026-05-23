@@ -373,6 +373,10 @@ async function commitFile(
   }
 }
 
+function sleep(ms: number) {
+  return new Promise<void>(r => setTimeout(r, ms));
+}
+
 export async function GET(req: NextRequest) {
   const denied = guardCron(req);
   if (denied) return denied;
@@ -386,34 +390,75 @@ export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const overrideSlug = url.searchParams.get("slug");
   const dry = url.searchParams.get("dry") === "1";
+  const rewriteMode = url.searchParams.get("rewrite") === "1";
+  const rewriteAll = url.searchParams.get("all") === "1";
+  const limitParam = parseInt(url.searchParams.get("limit") || "0", 10);
 
   try {
     const topics = await fetchBlogTopics(env);
     const published = await listPublishedSlugs(env);
 
+    // Bulk rewrite mode: regenerate every already-published post in HUMAN_VOICE.
+    // Throttled, single endpoint call rewrites the whole site over ~5 min.
+    if (rewriteMode && rewriteAll) {
+      const targets = topics.filter(t => published.has(t.slug));
+      const cap = limitParam > 0 ? Math.min(limitParam, targets.length) : targets.length;
+      const results: Array<{ slug: string; ok: boolean; sections?: number; faq?: number; error?: string }> = [];
+      for (let i = 0; i < cap; i++) {
+        const t = targets[i];
+        try {
+          const post = await generatePost(t, openaiKey);
+          if (!dry) {
+            await commitFile(env, `app/blog/${t.slug}/layout.tsx`, renderLayout(t, post), `blog: rewrite ${t.slug} in human voice`);
+            await commitFile(env, `app/blog/${t.slug}/page.tsx`, renderPage(t, post), `blog: rewrite ${t.slug} in human voice`);
+          }
+          results.push({ slug: t.slug, ok: true, sections: post.sections.length, faq: post.faq.length });
+        } catch (e) {
+          results.push({ slug: t.slug, ok: false, error: (e as Error).message });
+        }
+        // Throttle: GitHub Contents API + OpenAI rate limits
+        if (i < cap - 1) await sleep(2000);
+      }
+      return NextResponse.json({
+        ok: true,
+        mode: dry ? "dry-rewrite-all" : "rewrite-all",
+        processed: results.length,
+        successes: results.filter(r => r.ok).length,
+        failures: results.filter(r => !r.ok).length,
+        results,
+      });
+    }
+
+    // In rewrite mode the candidate must already be published; in normal mode it must NOT be.
     const candidate = overrideSlug
       ? topics.find((t) => t.slug === overrideSlug)
-      : topics.find((t) => !published.has(t.slug));
+      : rewriteMode
+        ? topics.find((t) => published.has(t.slug))
+        : topics.find((t) => !published.has(t.slug));
 
     if (!candidate) {
-      return NextResponse.json({ ok: true, message: "no unpublished topics remain — refill blog-topics.json" });
+      return NextResponse.json({ ok: true, message: rewriteMode
+        ? "no published topics to rewrite — pass ?slug=<slug> or ?all=1"
+        : "no unpublished topics remain — refill blog-topics.json" });
     }
 
     const post = await generatePost(candidate, openaiKey);
 
     if (dry) {
-      return NextResponse.json({ ok: true, dry: true, slug: candidate.slug, sections: post.sections.length, faq: post.faq.length });
+      return NextResponse.json({ ok: true, dry: true, mode: rewriteMode ? "rewrite" : "publish", slug: candidate.slug, sections: post.sections.length, faq: post.faq.length });
     }
 
     const layoutFile = `app/blog/${candidate.slug}/layout.tsx`;
     const pageFile = `app/blog/${candidate.slug}/page.tsx`;
+    const verb = rewriteMode ? "rewrite" : "publish";
 
-    await commitFile(env, layoutFile, renderLayout(candidate, post), `blog: publish ${candidate.slug} (layout)`);
-    await commitFile(env, pageFile, renderPage(candidate, post), `blog: publish ${candidate.slug} (page)`);
+    await commitFile(env, layoutFile, renderLayout(candidate, post), `blog: ${verb} ${candidate.slug} (layout)`);
+    await commitFile(env, pageFile, renderPage(candidate, post), `blog: ${verb} ${candidate.slug} (page)`);
 
     return NextResponse.json({
       ok: true,
-      published: candidate.slug,
+      mode: rewriteMode ? "rewrite" : "publish",
+      slug: candidate.slug,
       url: `https://www.capturepilot.com/blog/${candidate.slug}`,
       sections: post.sections.length,
       faq: post.faq.length,
