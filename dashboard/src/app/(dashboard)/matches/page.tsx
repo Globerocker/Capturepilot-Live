@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createSupabaseClient } from "@/lib/supabase/client";
 import { Loader2, Sparkles, Search, X, ChevronLeft, ChevronRight, Trophy, Shield, Target, ArrowRight, Bookmark, EyeOff, Flame, ChevronUp, ChevronDown, Filter, CheckCircle2, Download, AlertTriangle, List, Table as TableIcon, Columns3, GripVertical } from "lucide-react";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
@@ -49,6 +49,7 @@ interface UserMatch extends MatchRow {
 
 export default function MyMatchesPage() {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const [loading, setLoading] = useState(true);
     const [matches, setMatches] = useState<UserMatch[]>([]);
     const [totalCount, setTotalCount] = useState(0);
@@ -84,6 +85,53 @@ export default function MyMatchesPage() {
     const [aiPrompt, setAiPrompt] = useState<string | null>(null);
 
     const pageSize = 25;
+
+    // ─── URL <-> filter-state sync ──────────────────────────────────────
+    // Read once on mount; subsequent writes go state -> URL via the effect
+    // below. Shareable links FTW.
+    const urlInitialized = useRef(false);
+    useEffect(() => {
+        if (urlInitialized.current) return;
+        urlInitialized.current = true;
+        const q = (k: string) => searchParams.get(k);
+        const f = q("filter");
+        if (f === "HOT" || f === "WARM" || f === "COLD" || f === "SAVED" || f === "ALL") setFilter(f);
+        const sb = q("sort");
+        if (sb === "score" || sb === "deadline" || sb === "agency" || sb === "notice_type") setSortBy(sb);
+        const sd = q("dir");
+        if (sd === "asc" || sd === "desc") setSortDirection(sd);
+        const nt = q("notice_type"); if (nt) setFilterNoticeType(nt);
+        const sa = q("set_aside"); if (sa) setFilterSetAside(sa);
+        const st = q("state"); if (st) setFilterState(st);
+        const naics = q("naics"); if (naics) setFilterNaics(naics);
+        const ms = q("min_score"); if (ms) { const n = parseInt(ms, 10); if (!Number.isNaN(n)) setFilterMinScore(n); }
+        const md = q("max_deadline"); if (md) { const n = parseInt(md, 10); if (!Number.isNaN(n)) setFilterMaxDeadlineDays(n); }
+        const s = q("q"); if (s) { setActiveSearch(s); setSearchInput(s); }
+        const v = q("view");
+        if (v === "card" || v === "list" || v === "table") setViewMode(v);
+        // Reveal the filters drawer if anything non-default is set so users see what's active.
+        if (nt || sa || st || naics || ms || md) setShowFilters(true);
+    }, [searchParams]);
+
+    // Push state -> URL whenever a filter changes. Skip initial render.
+    useEffect(() => {
+        if (!urlInitialized.current) return;
+        const params = new URLSearchParams();
+        if (filter !== "ALL") params.set("filter", filter);
+        if (sortBy !== "score") params.set("sort", sortBy);
+        if (sortDirection !== "desc") params.set("dir", sortDirection);
+        if (filterNoticeType) params.set("notice_type", filterNoticeType);
+        if (filterSetAside) params.set("set_aside", filterSetAside);
+        if (filterState) params.set("state", filterState);
+        if (filterNaics) params.set("naics", filterNaics);
+        if (filterMinScore != null) params.set("min_score", String(filterMinScore));
+        if (filterMaxDeadlineDays != null) params.set("max_deadline", String(filterMaxDeadlineDays));
+        if (activeSearch) params.set("q", activeSearch);
+        if (viewMode !== "card") params.set("view", viewMode);
+        const qs = params.toString();
+        const href = qs ? `?${qs}` : window.location.pathname;
+        router.replace(href, { scroll: false });
+    }, [filter, sortBy, sortDirection, filterNoticeType, filterSetAside, filterState, filterNaics, filterMinScore, filterMaxDeadlineDays, activeSearch, viewMode, router]);
 
     // Load persisted view + columns from localStorage
     useEffect(() => {
@@ -619,55 +667,177 @@ export default function MyMatchesPage() {
                 </div>
             )}
 
-            {/* Empty States */}
-            {matches.length === 0 && !loading && (
-                <div className="bg-stone-50 border border-stone-200 border-dashed rounded-[24px] p-8 sm:p-12 text-center">
-                    {filter === "SAVED" ? (
-                        <>
-                            <Bookmark className="w-10 h-10 text-stone-300 mx-auto mb-3" />
-                            <p className="text-stone-500 mb-2">No saved matches yet.</p>
-                            <p className="text-stone-400 text-sm">Click the bookmark icon on any match to save it for later.</p>
-                        </>
-                    ) : filter === "COLD" ? (
-                        <>
-                            <Shield className="w-10 h-10 text-blue-300 mx-auto mb-3" />
-                            <p className="text-stone-500 mb-2">No COLD matches found.</p>
-                            <p className="text-stone-400 text-sm">COLD matches (30-49% alignment) show opportunities with partial profile fit. Try generating matches to populate this list.</p>
-                        </>
-                    ) : (
-                        <>
-                            <Sparkles className="w-10 h-10 text-stone-300 mx-auto mb-3" />
-                            <p className="text-stone-500 mb-2">No matches found yet</p>
-                            <p className="text-stone-400 text-sm mb-4">
-                                Generate matches based on your profile, or update your profile to improve results.
-                            </p>
-                            <div className="flex items-center justify-center gap-3 flex-wrap">
-                                <button
-                                    type="button"
-                                    onClick={handleGenerateMatches}
-                                    disabled={generatingMatches}
-                                    className="bg-black text-white px-6 py-2.5 rounded-full text-sm font-bold inline-flex items-center disabled:opacity-60"
-                                >
-                                    {generatingMatches ? (
-                                        <>
-                                            <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" />
-                                            Calculating matches...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Sparkles className="w-3.5 h-3.5 mr-2" />
-                                            Generate Matches
-                                        </>
-                                    )}
-                                </button>
-                                <Link href="/settings" className="bg-white text-stone-700 border border-stone-200 px-6 py-2.5 rounded-full text-sm font-bold inline-flex items-center hover:bg-stone-50">
-                                    Update Profile <ArrowRight className="w-3 h-3 ml-2" />
-                                </Link>
-                            </div>
-                        </>
+            {/* Active filter chips — shows what's narrowing the results so users
+                don't get confused when filters in a collapsed drawer hide rows. */}
+            {(filterNoticeType || filterSetAside || filterState || filterNaics || filterMinScore != null || filterMaxDeadlineDays != null || activeSearch) && (
+                <section className="flex flex-wrap items-center gap-1.5 mb-3" aria-label="Active filters">
+                    <span className="text-[10px] text-stone-400 uppercase tracking-widest mr-1">Active filters</span>
+                    {activeSearch && (
+                        <button
+                            type="button"
+                            onClick={() => { setActiveSearch(""); setSearchInput(""); setPage(1); }}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-stone-100 text-stone-700 border border-stone-200 hover:bg-stone-200 transition"
+                        >
+                            search: <span className="font-mono">&quot;{activeSearch}&quot;</span> <X className="w-3 h-3" />
+                        </button>
                     )}
-                </div>
+                    {filterNoticeType && (
+                        <button type="button" onClick={() => { setFilterNoticeType(""); setPage(1); }}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition">
+                            notice: {filterNoticeType} <X className="w-3 h-3" />
+                        </button>
+                    )}
+                    {filterSetAside && (
+                        <button type="button" onClick={() => { setFilterSetAside(""); setPage(1); }}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition">
+                            set-aside: {filterSetAside} <X className="w-3 h-3" />
+                        </button>
+                    )}
+                    {filterState && (
+                        <button type="button" onClick={() => { setFilterState(""); setPage(1); }}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition">
+                            state: {filterState} <X className="w-3 h-3" />
+                        </button>
+                    )}
+                    {filterNaics && (
+                        <button type="button" onClick={() => { setFilterNaics(""); setPage(1); }}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-violet-50 text-violet-700 border border-violet-200 hover:bg-violet-100 transition">
+                            NAICS: {filterNaics} <X className="w-3 h-3" />
+                        </button>
+                    )}
+                    {filterMinScore != null && (
+                        <button type="button" onClick={() => { setFilterMinScore(null); setPage(1); }}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 transition">
+                            min score: {filterMinScore}% <X className="w-3 h-3" />
+                        </button>
+                    )}
+                    {filterMaxDeadlineDays != null && (
+                        <button type="button" onClick={() => { setFilterMaxDeadlineDays(null); setPage(1); }}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-orange-50 text-orange-700 border border-orange-200 hover:bg-orange-100 transition">
+                            ≤ {filterMaxDeadlineDays} days to deadline <X className="w-3 h-3" />
+                        </button>
+                    )}
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setFilterNoticeType("");
+                            setFilterSetAside("");
+                            setFilterState("");
+                            setFilterNaics("");
+                            setFilterMinScore(null);
+                            setFilterMaxDeadlineDays(null);
+                            setActiveSearch("");
+                            setSearchInput("");
+                            setPage(1);
+                        }}
+                        className="text-xs text-stone-500 hover:text-stone-900 underline underline-offset-4 ml-2"
+                    >
+                        Clear all
+                    </button>
+                </section>
             )}
+
+            {/* Empty States */}
+            {matches.length === 0 && !loading && (() => {
+                const anyFilterActive = !!(filterNoticeType || filterSetAside || filterState || filterNaics || filterMinScore != null || filterMaxDeadlineDays != null || activeSearch);
+                const clearAll = () => {
+                    setFilterNoticeType("");
+                    setFilterSetAside("");
+                    setFilterState("");
+                    setFilterNaics("");
+                    setFilterMinScore(null);
+                    setFilterMaxDeadlineDays(null);
+                    setActiveSearch("");
+                    setSearchInput("");
+                    setPage(1);
+                };
+                return (
+                    <div className="bg-stone-50 border border-stone-200 border-dashed rounded-[24px] p-8 sm:p-12 text-center">
+                        {anyFilterActive ? (
+                            <>
+                                <Filter className="w-10 h-10 text-stone-300 mx-auto mb-3" />
+                                <p className="text-stone-500 mb-2 font-medium">No matches with these filters</p>
+                                <p className="text-stone-400 text-sm mb-4">
+                                    Try widening the search — your profile may match opportunities outside the current filter set.
+                                </p>
+                                <div className="flex items-center justify-center gap-2 flex-wrap mb-3">
+                                    {filterMinScore != null && filterMinScore > 50 && (
+                                        <button type="button" onClick={() => setFilterMinScore(50)}
+                                            className="text-xs font-semibold px-3 py-1.5 rounded-full bg-white border border-stone-200 text-stone-700 hover:bg-stone-100">
+                                            Lower min score to 50%
+                                        </button>
+                                    )}
+                                    {filterState && (
+                                        <button type="button" onClick={() => setFilterState("")}
+                                            className="text-xs font-semibold px-3 py-1.5 rounded-full bg-white border border-stone-200 text-stone-700 hover:bg-stone-100">
+                                            Drop the {filterState} state filter
+                                        </button>
+                                    )}
+                                    {filterSetAside && (
+                                        <button type="button" onClick={() => setFilterSetAside("")}
+                                            className="text-xs font-semibold px-3 py-1.5 rounded-full bg-white border border-stone-200 text-stone-700 hover:bg-stone-100">
+                                            Drop the set-aside filter
+                                        </button>
+                                    )}
+                                    {filterNoticeType && (
+                                        <button type="button" onClick={() => setFilterNoticeType("")}
+                                            className="text-xs font-semibold px-3 py-1.5 rounded-full bg-white border border-stone-200 text-stone-700 hover:bg-stone-100">
+                                            Drop the {filterNoticeType} type
+                                        </button>
+                                    )}
+                                </div>
+                                <button type="button" onClick={clearAll}
+                                    className="bg-black text-white px-6 py-2.5 rounded-full text-sm font-bold inline-flex items-center">
+                                    Clear all filters
+                                </button>
+                            </>
+                        ) : filter === "SAVED" ? (
+                            <>
+                                <Bookmark className="w-10 h-10 text-stone-300 mx-auto mb-3" />
+                                <p className="text-stone-500 mb-2">No saved matches yet.</p>
+                                <p className="text-stone-400 text-sm">Click the bookmark icon on any match to save it for later.</p>
+                            </>
+                        ) : filter === "COLD" ? (
+                            <>
+                                <Shield className="w-10 h-10 text-blue-300 mx-auto mb-3" />
+                                <p className="text-stone-500 mb-2">No COLD matches found.</p>
+                                <p className="text-stone-400 text-sm">COLD matches (30-49% alignment) show opportunities with partial profile fit. Try generating matches to populate this list.</p>
+                            </>
+                        ) : (
+                            <>
+                                <Sparkles className="w-10 h-10 text-stone-300 mx-auto mb-3" />
+                                <p className="text-stone-500 mb-2">No matches found yet</p>
+                                <p className="text-stone-400 text-sm mb-4">
+                                    Generate matches based on your profile, or update your profile to improve results.
+                                </p>
+                                <div className="flex items-center justify-center gap-3 flex-wrap">
+                                    <button
+                                        type="button"
+                                        onClick={handleGenerateMatches}
+                                        disabled={generatingMatches}
+                                        className="bg-black text-white px-6 py-2.5 rounded-full text-sm font-bold inline-flex items-center disabled:opacity-60"
+                                    >
+                                        {generatingMatches ? (
+                                            <>
+                                                <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" />
+                                                Calculating matches...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Sparkles className="w-3.5 h-3.5 mr-2" />
+                                                Generate Matches
+                                            </>
+                                        )}
+                                    </button>
+                                    <Link href="/settings" className="bg-white text-stone-700 border border-stone-200 px-6 py-2.5 rounded-full text-sm font-bold inline-flex items-center hover:bg-stone-50">
+                                        Update Profile <ArrowRight className="w-3 h-3 ml-2" />
+                                    </Link>
+                                </div>
+                            </>
+                        )}
+                    </div>
+                );
+            })()}
 
             {/* Results — TABLE VIEW */}
             {matches.length > 0 && viewMode === "table" && (
