@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { assertAdmin } from "@/lib/auth-admin";
 
 /**
  * POST /api/admin/leads/apollo
  * Enriches a lead using Apollo AI 'people/match'.
  */
 export async function POST(req: NextRequest) {
+    const unauth = await assertAdmin();
+    if (unauth) return unauth;
     try {
         const { id } = await req.json();
         if (!id) return NextResponse.json({ error: "Missing ID" }, { status: 400 });

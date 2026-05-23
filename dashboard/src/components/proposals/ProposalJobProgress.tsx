@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Loader2, CheckCircle2, AlertCircle, FileText, Clock, X, ChevronDown, ChevronRight } from "lucide-react";
+import { Loader2, CheckCircle2, AlertCircle, FileText, Clock, X, ChevronDown, ChevronRight, Edit3, Save, Pencil } from "lucide-react";
 import clsx from "clsx";
 
 export interface ProposalJobStatus {
@@ -11,7 +11,8 @@ export interface ProposalJobStatus {
     sections_requested: string[];
     // content is populated server-side as each section finishes so we can
     // render a live preview before the whole proposal completes.
-    sections_completed: Array<{ title: string; content?: string; word_count: number; completed_at: string }>;
+    // edited_at appears after the user edits the section via the inline editor.
+    sections_completed: Array<{ title: string; content?: string; word_count: number; completed_at: string; edited_at?: string }>;
     sections_errored: Array<{ section: string; error: string }>;
     current_section: string | null;
     total_sections: number | null;
@@ -56,6 +57,48 @@ export default function ProposalJobProgress({
     // Tracks which completed sections the user has expanded. Live-preview
     // content is rendered inline when the section row is clicked.
     const [expandedSection, setExpandedSection] = useState<string | null>(null);
+    // Per-section edit state — only set while a section is being edited.
+    // editing maps section title -> the in-progress draft body.
+    const [editing, setEditing] = useState<Record<string, string>>({});
+    const [savingSection, setSavingSection] = useState<string | null>(null);
+    const [editedTitles, setEditedTitles] = useState<Set<string>>(new Set());
+
+    async function saveSection(title: string, content: string) {
+        if (!status) return;
+        setSavingSection(title);
+        try {
+            const res = await fetch(`/api/ai/write-proposal/${status.id}/section`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ section_title: title, content }),
+            });
+            if (!res.ok) {
+                const j = await res.json().catch(() => ({}));
+                setPollError(j.error || `Save failed (HTTP ${res.status})`);
+                return;
+            }
+            // Optimistically update local status so the edited content shows
+            // immediately without waiting for the next poll cycle.
+            setStatus(prev => prev ? ({
+                ...prev,
+                sections_completed: prev.sections_completed.map(s =>
+                    s.title === title
+                        ? { ...s, content, word_count: content.split(/\s+/).filter(Boolean).length, edited_at: new Date().toISOString() }
+                        : s,
+                ),
+            }) : prev);
+            setEditedTitles(prev => new Set(prev).add(title));
+            setEditing(prev => {
+                const next = { ...prev };
+                delete next[title];
+                return next;
+            });
+        } catch (e) {
+            setPollError((e as Error).message);
+        } finally {
+            setSavingSection(null);
+        }
+    }
 
     const poll = useCallback(async () => {
         try {
@@ -267,13 +310,76 @@ export default function ProposalJobProgress({
                                             : <ChevronRight className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
                                     )}
                                 </div>
-                                {hasContent && isExpanded && (
-                                    <div className="border border-t-0 border-emerald-200 bg-white rounded-b-lg px-4 py-3 -mt-px">
-                                        <pre className="whitespace-pre-wrap font-sans text-xs text-stone-700 leading-relaxed max-h-[400px] overflow-y-auto">
-                                            {completed!.content}
-                                        </pre>
-                                    </div>
-                                )}
+                                {hasContent && isExpanded && (() => {
+                                    const inEdit = editing[sectionTitle] !== undefined;
+                                    const isEdited = editedTitles.has(sectionTitle) || !!completed!.edited_at;
+                                    const isSaving = savingSection === sectionTitle;
+                                    const isCompleted = status?.status === "completed";
+                                    return (
+                                        <div className="border border-t-0 border-emerald-200 bg-white rounded-b-lg px-4 py-3 -mt-px">
+                                            <div className="flex items-center justify-between mb-2">
+                                                <div className="flex items-center gap-2">
+                                                    {isEdited && (
+                                                        <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-purple-700 bg-purple-50 border border-purple-200 px-1.5 py-0.5 rounded-full">
+                                                            <Pencil className="w-2.5 h-2.5" /> Edited
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                {/* Only allow editing once the whole job is complete — editing
+                                                     while writing risks the writer overwriting the user's edit on
+                                                     the next section. */}
+                                                {isCompleted && !inEdit && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setEditing(p => ({ ...p, [sectionTitle]: completed!.content || "" }))}
+                                                        className="text-[10px] font-bold text-emerald-700 hover:text-emerald-900 inline-flex items-center gap-1"
+                                                    >
+                                                        <Edit3 className="w-3 h-3" /> Edit
+                                                    </button>
+                                                )}
+                                            </div>
+                                            {inEdit ? (
+                                                <div className="space-y-2">
+                                                    <textarea
+                                                        value={editing[sectionTitle]}
+                                                        onChange={e => setEditing(p => ({ ...p, [sectionTitle]: e.target.value }))}
+                                                        className="w-full font-sans text-xs text-stone-800 leading-relaxed bg-stone-50 border border-stone-200 rounded-md px-3 py-2 outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-200 min-h-[260px] max-h-[500px]"
+                                                        placeholder="Write the section content…"
+                                                    />
+                                                    <div className="flex items-center gap-2">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => saveSection(sectionTitle, editing[sectionTitle] || "")}
+                                                            disabled={isSaving}
+                                                            className="inline-flex items-center gap-1.5 text-xs font-bold bg-emerald-600 text-white px-3 py-1.5 rounded-full hover:bg-emerald-700 disabled:opacity-60"
+                                                        >
+                                                            {isSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                                                            {isSaving ? "Saving…" : "Save section"}
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setEditing(p => {
+                                                                const n = { ...p };
+                                                                delete n[sectionTitle];
+                                                                return n;
+                                                            })}
+                                                            className="text-xs text-stone-500 hover:text-stone-800"
+                                                        >
+                                                            Cancel
+                                                        </button>
+                                                        <span className="text-[10px] text-stone-400 ml-auto">
+                                                            {(editing[sectionTitle] || "").split(/\s+/).filter(Boolean).length.toLocaleString()} words
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <pre className="whitespace-pre-wrap font-sans text-xs text-stone-700 leading-relaxed max-h-[400px] overflow-y-auto">
+                                                    {completed!.content}
+                                                </pre>
+                                            )}
+                                        </div>
+                                    );
+                                })()}
                             </div>
                         );
                     })}

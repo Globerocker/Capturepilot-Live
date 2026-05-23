@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Mail, Loader2, Copy, ExternalLink, Check, Edit3 } from "lucide-react";
+import { Mail, Loader2, Copy, ExternalLink, Check, Edit3, Send, Eye } from "lucide-react";
 import clsx from "clsx";
 import dynamic from "next/dynamic";
 
@@ -20,6 +20,7 @@ const STRATEGY_LABELS: Record<string, string> = {
 };
 
 export default function EmailDraftPanel({ opportunityId, opportunityTitle }: { opportunityId: string; opportunityTitle: string }) {
+    void opportunityTitle;
     const [drafts, setDrafts] = useState<Draft[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
@@ -27,6 +28,12 @@ export default function EmailDraftPanel({ opportunityId, opportunityTitle }: { o
     const [copied, setCopied] = useState(false);
     const [editMode, setEditMode] = useState(false);
     const [editedBody, setEditedBody] = useState("");
+
+    // Gmail-send state
+    const [sendOpen, setSendOpen] = useState(false);
+    const [recipient, setRecipient] = useState("");
+    const [sending, setSending] = useState(false);
+    const [sendResult, setSendResult] = useState<{ ok: boolean; msg: string } | null>(null);
 
     const generate = async () => {
         setLoading(true);
@@ -64,6 +71,46 @@ export default function EmailDraftPanel({ opportunityId, opportunityTitle }: { o
         const d = drafts[activeTab];
         const mailto = `mailto:?subject=${encodeURIComponent(d.subject)}&body=${encodeURIComponent(d.body)}`;
         window.open(mailto);
+    };
+
+    // Strip HTML to plain text for the Gmail send (the body shown in the
+    // editor is HTML when in edit mode; Gmail accepts plain).
+    const htmlToPlain = (html: string): string => {
+        const div = document.createElement("div");
+        div.innerHTML = html;
+        return (div.textContent || div.innerText || "").trim();
+    };
+
+    const sendViaGmail = async () => {
+        if (!drafts[activeTab] || !recipient.trim()) return;
+        const d = drafts[activeTab];
+        const finalBody = editMode ? htmlToPlain(editedBody) : d.body;
+        setSending(true);
+        setSendResult(null);
+        try {
+            const res = await fetch("/api/email/send-gmail", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    to: recipient.trim(),
+                    subject: d.subject,
+                    body: finalBody,
+                    opportunityId,
+                }),
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                setSendResult({ ok: false, msg: data.error || `HTTP ${res.status}` });
+            } else {
+                setSendResult({ ok: true, msg: `Sent — message id ${(data.message_id || "").slice(0, 12)}…` });
+                setSendOpen(false);
+                setRecipient("");
+            }
+        } catch (e) {
+            setSendResult({ ok: false, msg: (e as Error).message });
+        } finally {
+            setSending(false);
+        }
     };
 
     if (drafts.length === 0) {
@@ -171,16 +218,82 @@ export default function EmailDraftPanel({ opportunityId, opportunityTitle }: { o
                 </div>
 
                 {/* Actions */}
-                <div className="flex gap-2 pt-1">
-                    <button type="button" onClick={copyToClipboard} className="flex-1 inline-flex items-center justify-center text-xs font-bold bg-stone-100 border border-stone-200 py-2 rounded-full hover:bg-stone-200 transition-all">
+                <div className="flex gap-2 pt-1 flex-wrap">
+                    <button type="button" onClick={copyToClipboard} className="flex-1 min-w-[100px] inline-flex items-center justify-center text-xs font-bold bg-stone-100 border border-stone-200 py-2 rounded-full hover:bg-stone-200 transition-all">
                         {copied ? <Check className="w-3 h-3 mr-1.5 text-emerald-600" /> : <Copy className="w-3 h-3 mr-1.5" />}
                         {copied ? "Copied!" : "Copy"}
                     </button>
-                    <button type="button" onClick={openInEmail} className="flex-1 inline-flex items-center justify-center text-xs font-bold bg-black text-white py-2 rounded-full hover:bg-stone-800 transition-all">
+                    <button type="button" onClick={openInEmail} className="flex-1 min-w-[100px] inline-flex items-center justify-center text-xs font-bold bg-stone-100 border border-stone-200 py-2 rounded-full hover:bg-stone-200 transition-all">
                         <ExternalLink className="w-3 h-3 mr-1.5" />
-                        Open in Email
+                        Mail App
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setSendOpen(o => !o)}
+                        className="flex-1 min-w-[100px] inline-flex items-center justify-center text-xs font-bold bg-black text-white py-2 rounded-full hover:bg-stone-800 transition-all"
+                    >
+                        <Send className="w-3 h-3 mr-1.5" />
+                        Send via Gmail
                     </button>
                 </div>
+
+                {/* Inline send form — appears when "Send via Gmail" is clicked */}
+                {sendOpen && (
+                    <div className="mt-3 border border-purple-200 rounded-xl p-3 bg-purple-50/40 space-y-2 animate-in slide-in-from-top-1 duration-200">
+                        <p className="text-[10px] uppercase tracking-widest text-purple-700 font-bold flex items-center gap-1.5">
+                            <Send className="w-3 h-3" /> Send from your Gmail
+                        </p>
+                        <input
+                            type="email"
+                            placeholder="recipient@agency.gov"
+                            value={recipient}
+                            onChange={e => setRecipient(e.target.value)}
+                            className="w-full px-3 py-2 rounded-lg border border-stone-200 text-sm focus:ring-2 focus:ring-purple-300 focus:border-purple-400 outline-none"
+                        />
+                        {/* Live preview block — exactly what Gmail will see */}
+                        <details className="group">
+                            <summary className="text-[10px] text-purple-700 font-bold flex items-center gap-1 cursor-pointer hover:text-purple-900">
+                                <Eye className="w-3 h-3" /> Preview message
+                            </summary>
+                            <div className="mt-2 p-3 bg-white rounded-lg border border-stone-100 text-xs">
+                                <p className="text-stone-500 mb-1"><span className="text-stone-400">To:</span> {recipient.trim() || <em className="text-stone-300">recipient@agency.gov</em>}</p>
+                                <p className="text-stone-500 mb-1"><span className="text-stone-400">Subject:</span> {current.subject}</p>
+                                <hr className="my-2 border-stone-100" />
+                                <pre className="whitespace-pre-wrap font-sans text-stone-700 leading-relaxed">{editMode ? htmlToPlain(editedBody) : current.body}</pre>
+                            </div>
+                        </details>
+                        <div className="flex items-center gap-2">
+                            <button
+                                type="button"
+                                onClick={sendViaGmail}
+                                disabled={sending || !recipient.trim()}
+                                className="inline-flex items-center bg-purple-600 text-white text-xs font-bold px-4 py-2 rounded-full hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {sending ? <Loader2 className="w-3 h-3 mr-1.5 animate-spin" /> : <Send className="w-3 h-3 mr-1.5" />}
+                                {sending ? "Sending…" : "Send"}
+                            </button>
+                            <button type="button" onClick={() => { setSendOpen(false); setSendResult(null); }} className="text-xs text-stone-500 hover:text-stone-800 ml-auto">
+                                Cancel
+                            </button>
+                        </div>
+                        {sendResult && (
+                            <p className={clsx(
+                                "text-[11px] font-medium",
+                                sendResult.ok ? "text-emerald-700" : "text-rose-700",
+                            )}>
+                                {sendResult.msg}
+                            </p>
+                        )}
+                    </div>
+                )}
+                {!sendOpen && sendResult && (
+                    <p className={clsx(
+                        "mt-2 text-[11px] font-medium",
+                        sendResult.ok ? "text-emerald-700" : "text-rose-700",
+                    )}>
+                        {sendResult.msg}
+                    </p>
+                )}
             </div>
         </div>
     );

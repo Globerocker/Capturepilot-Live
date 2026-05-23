@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { crawlContractor } from "@/lib/enrichment/contractor-website";
 import { findEmail, splitNameForHunter } from "@/lib/enrichment/hunter";
+import { assertAdmin } from "@/lib/auth-admin";
 
 export const maxDuration = 300;
 
@@ -110,6 +111,8 @@ async function enrichOne(
 }
 
 export async function POST(req: NextRequest) {
+    const unauth = await assertAdmin();
+    if (unauth) return unauth;
     const url = new URL(req.url);
     const limit         = Math.max(1, Math.min(50, parseInt(url.searchParams.get("limit") || "20", 10)));
     const silentMonths  = Math.max(1, Math.min(36, parseInt(url.searchParams.get("silent_months") || "12", 10)));
@@ -218,6 +221,8 @@ export async function POST(req: NextRequest) {
  * filter would touch before kicking off a real run.
  */
 export async function GET(req: NextRequest) {
+    const unauth = await assertAdmin();
+    if (unauth) return unauth;
     const url = new URL(req.url);
     const silentMonths = Math.max(1, Math.min(36, parseInt(url.searchParams.get("silent_months") || "12", 10)));
     const cutoff = new Date(Date.now() - silentMonths * 30 * 86400_000).toISOString();

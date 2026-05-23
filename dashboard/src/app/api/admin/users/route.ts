@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { assertAdmin } from "@/lib/auth-admin";
 
 function getAdmin() {
     return createClient(
@@ -13,6 +14,8 @@ function getAdmin() {
  * GET /api/admin/users — List all auth users with profiles
  */
 export async function GET() {
+    const unauth = await assertAdmin();
+    if (unauth) return unauth;
     try {
         const admin = getAdmin();
         const { data, error } = await admin.auth.admin.listUsers({ page: 1, perPage: 100 });
@@ -47,6 +50,8 @@ export async function GET() {
  * Body: { auth_id, email?, password? }
  */
 export async function PATCH(req: NextRequest) {
+    const unauth = await assertAdmin();
+    if (unauth) return unauth;
     try {
         const { auth_id, email, password } = await req.json();
         if (!auth_id) return NextResponse.json({ error: "auth_id required" }, { status: 400 });
@@ -94,6 +99,8 @@ export async function PATCH(req: NextRequest) {
  * Body: { auth_id }
  */
 export async function DELETE(req: NextRequest) {
+    const unauth = await assertAdmin();
+    if (unauth) return unauth;
     try {
         const { auth_id } = await req.json();
         if (!auth_id) return NextResponse.json({ error: "auth_id required" }, { status: 400 });

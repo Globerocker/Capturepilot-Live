@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { sendTaskNotification } from "@/lib/email";
+import { assertAdmin } from "@/lib/auth-admin";
 
 function getAdmin() {
     return createClient(
@@ -13,6 +14,8 @@ function getAdmin() {
  * POST /api/admin/tasks — Create a task for a client
  */
 export async function POST(req: NextRequest) {
+    const unauth = await assertAdmin();
+    if (unauth) return unauth;
     try {
         const body = await req.json();
         const { user_profile_id, title, description, priority, category, due_date, notify } = body;
@@ -77,6 +80,8 @@ export async function POST(req: NextRequest) {
  * GET /api/admin/tasks?user_profile_id=xxx — List tasks for a client
  */
 export async function GET(req: NextRequest) {
+    const unauth = await assertAdmin();
+    if (unauth) return unauth;
     try {
         const profileId = req.nextUrl.searchParams.get("user_profile_id");
         const admin = getAdmin();

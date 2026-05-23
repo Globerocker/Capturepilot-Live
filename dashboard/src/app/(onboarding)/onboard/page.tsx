@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { createSupabaseClient } from "@/lib/supabase/client";
 import {
     Building, MapPin, Target, ShieldCheck, Briefcase,
@@ -166,6 +166,37 @@ function OnboardPageContent() {
 
     const markSource = (field: string, source: FieldSource) =>
         setFieldSources(prev => ({ ...prev, [field]: source }));
+
+    // ─── Draft autosave to localStorage ─────────────────────────────────────
+    // Onboarding takes 3-5 minutes. A browser refresh used to nuke everything.
+    // Now we persist the form + current step + provenance, and offer to
+    // restore on next visit. Save key is per-browser, not per-user (we can't
+    // tie to user_id reliably before profile creation — but Quick Checker
+    // flow may pass an analysis_id we can use as a hint).
+    const DRAFT_KEY = "onboard:draft:v1";
+    const draftRestored = useRef(false);
+    useEffect(() => {
+        if (draftRestored.current) return;
+        draftRestored.current = true;
+        try {
+            const raw = localStorage.getItem(DRAFT_KEY);
+            if (!raw) return;
+            const parsed = JSON.parse(raw) as { form?: typeof form; step?: number; ts?: number };
+            // Discard drafts older than 7 days
+            if (parsed.ts && Date.now() - parsed.ts > 7 * 86400_000) {
+                localStorage.removeItem(DRAFT_KEY);
+                return;
+            }
+            if (parsed.form) setForm(prev => ({ ...prev, ...parsed.form }));
+            if (parsed.step && [1, 2, 3].includes(parsed.step)) setStep(parsed.step as 1 | 2 | 3);
+        } catch { /* ignore */ }
+    }, []);
+    // Persist on every form change (debounced via React batching)
+    useEffect(() => {
+        try {
+            localStorage.setItem(DRAFT_KEY, JSON.stringify({ form, step, ts: Date.now() }));
+        } catch { /* storage quota; ignore */ }
+    }, [form, step]);
 
     const toggleArray = (key: "naics_codes" | "sba_certifications" | "target_states" | "services" | "differentiators", value: string) => {
         setForm(prev => {
@@ -1096,6 +1127,15 @@ function OnboardPageContent() {
                             {!step2Valid && (
                                 <span className="text-xs text-stone-400 font-medium hidden sm:inline">Pick at least one NAICS + state</span>
                             )}
+                            <button
+                                type="button"
+                                onClick={handleSave}
+                                disabled={saving || !step1Valid || !step2Valid}
+                                className="text-sm text-stone-500 hover:text-stone-700 underline underline-offset-4 disabled:opacity-50"
+                                title="Skip the firmographics — Step 3 is optional, you can fill those in /settings later."
+                            >
+                                Skip Step 3
+                            </button>
                             <button type="button" onClick={() => setStep(3)}
                                 disabled={!step2Valid}
                                 className="flex items-center px-5 sm:px-6 py-3 rounded-full bg-black text-white hover:bg-stone-800 font-bold text-sm transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">

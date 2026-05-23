@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { runQuickCheck } from "@/lib/quick-checker";
+import { assertAdmin } from "@/lib/auth-admin";
 
 export const maxDuration = 120;
 
@@ -106,6 +107,8 @@ async function enrichPersonApollo(firstName: string, lastName: string, domain: s
  * Returns: { success, fields_updated, quick_check, sam, usaspending, apollo }
  */
 export async function POST(req: NextRequest) {
+    const unauth = await assertAdmin();
+    if (unauth) return unauth;
     try {
         const { user_profile_id, force } = await req.json();
         if (!user_profile_id) {

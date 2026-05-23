@@ -123,6 +123,50 @@ export function withCronTelemetry(route: string, handler: CronHandler): CronHand
             } catch { /* swallow */ }
         }
 
+        // Slack alert when this run failed AND the previous run failed.
+        // One isolated 500 is usually a transient upstream blip (SAM throttle,
+        // GovTribe MCP disconnect). Two-in-a-row almost always means we need
+        // human attention. Fire-and-forget so we never block the cron return.
+        if (status === "error" && process.env.SLACK_CRON_ALERT_WEBHOOK) {
+            void alertOnConsecutiveError(db, route, errorMessage, elapsed);
+        }
+
         return response;
     };
+}
+
+async function alertOnConsecutiveError(
+    db: ReturnType<typeof telemetryClient>,
+    route: string,
+    errorMessage: string | null,
+    elapsedMs: number,
+): Promise<void> {
+    try {
+        // Look at the prior run for this route (excluding the one we just wrote
+        // — order by started_at DESC, skip the most recent which is ours).
+        const { data } = await db
+            .from("cron_runs")
+            .select("status, started_at, error_message")
+            .eq("route", route)
+            .order("started_at", { ascending: false })
+            .limit(2);
+        const rows = (data || []) as Array<{ status: string; started_at: string; error_message: string | null }>;
+        // rows[0] is the run we just logged, rows[1] is the previous one.
+        const previous = rows[1];
+        if (!previous || previous.status !== "error") return; // only two-in-a-row triggers
+        const webhook = process.env.SLACK_CRON_ALERT_WEBHOOK!;
+        const text =
+            `:rotating_light: *Cron failing twice in a row* — \`${route}\`\n` +
+            `Last error: ${(errorMessage || "no message").slice(0, 240)}\n` +
+            `Previous error: ${(previous.error_message || "no message").slice(0, 240)}\n` +
+            `Latest run elapsed: ${elapsedMs} ms · previous started ${previous.started_at}`;
+        await fetch(webhook, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text }),
+            signal: AbortSignal.timeout(5000),
+        });
+    } catch {
+        // swallow — alerting must never break the cron
+    }
 }

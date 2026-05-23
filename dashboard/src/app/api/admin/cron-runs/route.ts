@@ -11,8 +11,7 @@
 
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { cookies } from "next/headers";
-import { createServerClient } from "@supabase/ssr";
+import { assertAdmin } from "@/lib/auth-admin";
 
 function getServiceClient() {
     return createClient(
@@ -20,31 +19,6 @@ function getServiceClient() {
         process.env.SUPABASE_SERVICE_KEY!,
         { auth: { persistSession: false } },
     );
-}
-
-async function assertAdmin(): Promise<NextResponse | null> {
-    const cookieStore = await cookies();
-    const supabase = createServerClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        {
-            cookies: {
-                getAll() { return cookieStore.getAll(); },
-                setAll() { /* read-only */ },
-            },
-        },
-    );
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    const { data: profile } = await supabase
-        .from("user_profiles")
-        .select("account_type")
-        .eq("user_id", user.id)
-        .maybeSingle();
-    if (profile?.account_type !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-    return null;
 }
 
 interface CronRunRow {

@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { assertAdmin } from "@/lib/auth-admin";
 
 export async function POST(req: NextRequest) {
+    const unauth = await assertAdmin();
+    if (unauth) return unauth;
     try {
         const body = await req.json();
         const { id, lead_email, company_name, contact_name, phone } = body;

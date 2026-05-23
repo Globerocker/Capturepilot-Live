@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { randomBytes } from "crypto";
 import { sendBetaInviteEmail } from "@/lib/email";
+import { assertAdmin } from "@/lib/auth-admin";
 
 function getAdmin() {
     return createClient(
@@ -20,6 +21,8 @@ function generateToken(): string {
  * Body: { email, recipient_name, company_name, personal_note? }
  */
 export async function POST(req: NextRequest) {
+    const unauth = await assertAdmin();
+    if (unauth) return unauth;
     try {
         const body = await req.json();
         const { email, recipient_name, company_name, personal_note, overrides, resend } = body;
@@ -113,6 +116,8 @@ export async function POST(req: NextRequest) {
  * GET /api/admin/beta-invites — list all invitations, most recent first.
  */
 export async function GET() {
+    const unauth = await assertAdmin();
+    if (unauth) return unauth;
     try {
         const admin = getAdmin();
         const { data, error } = await admin
@@ -134,6 +139,8 @@ export async function GET() {
  * DELETE /api/admin/beta-invites — revoke an invite by id.
  */
 export async function DELETE(req: NextRequest) {
+    const unauth = await assertAdmin();
+    if (unauth) return unauth;
     try {
         const { id } = await req.json();
         if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
