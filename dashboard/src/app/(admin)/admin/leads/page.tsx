@@ -10,6 +10,25 @@ import {
 import Image from "next/image";
 import clsx from "clsx";
 
+// Narrow typing for the JSON `inferred_profile` blob — only the fields the
+// UI actually reads. Extra keys are preserved at runtime, just not typed
+// (rest-spread keeps them when we update).
+interface ContactPerson {
+    name?: string;
+    title?: string;
+    email?: string;
+    phone?: string;
+}
+interface InferredProfile {
+    contact_person?: ContactPerson;
+    pipeline_status?: string;
+    synced_to_hubspot?: boolean;
+    uei?: string;
+    cage_code?: string;
+    state?: string;
+    [k: string]: unknown;
+}
+
 interface Prospect {
     id: string;
     company_name: string;
@@ -20,7 +39,7 @@ interface Prospect {
     sam_data: Record<string, unknown> | null;
     inferred_naics: { code: string; label: string; confidence: number }[];
     preview_matches: { title?: string; agency?: string; score: number; classification: string; award_amount?: number; notice_id?: string }[];
-    inferred_profile: Record<string, unknown>;
+    inferred_profile: InferredProfile;
     crawl_data: Record<string, unknown>;
     is_saved: boolean;
     lead_email: string | null;
@@ -60,12 +79,12 @@ export default function AdminProspectsPage() {
                 const apolloRes = await fetch("/api/admin/leads/apollo", { method: "POST", body: JSON.stringify({ id }) });
                 const apolloData = await apolloRes.json();
                 if (apolloData.success && apolloData.phone) {
-                    setProspects(prev => prev.map(p => p.id === id ? { ...p, inferred_profile: { ...p.inferred_profile, contact_person: { ...(p.inferred_profile as Record<string,unknown>)?.contact_person as Record<string,unknown>, phone: apolloData.phone } } } : p));
+                    setProspects(prev => prev.map(p => p.id === id ? { ...p, inferred_profile: { ...p.inferred_profile, contact_person: { ...p.inferred_profile.contact_person, phone: apolloData.phone } } } : p));
                 }
                 const hsRes = await fetch("/api/admin/leads/hubspot", { method: "POST", body: JSON.stringify({ id }) });
                 const hsData = await hsRes.json();
                 if (hsData.success) {
-                    setProspects(prev => prev.map(p => p.id === id ? { ...p, inferred_profile: { ...(p.inferred_profile as Record<string, unknown>), synced_to_hubspot: true } } : p));
+                    setProspects(prev => prev.map(p => p.id === id ? { ...p, inferred_profile: { ...p.inferred_profile, synced_to_hubspot: true } } : p));
                 }
             } catch (e) {
                 console.error(e);
@@ -277,7 +296,7 @@ export default function AdminProspectsPage() {
                                                 {prospect.is_saved && (
                                                     <span className="text-[9px] font-bold bg-blue-50 text-blue-600 border border-blue-200 px-1.5 py-0.5 rounded">SAVED</span>
                                                 )}
-                                                {(prospect.inferred_profile as any)?.synced_to_hubspot && (
+                                                {prospect.inferred_profile.synced_to_hubspot && (
                                                     <span className="text-[9px] font-bold bg-orange-50 text-orange-600 border border-orange-200 px-1.5 py-0.5 rounded">HUBSPOT</span>
                                                 )}
                                                 {sam && (
@@ -428,7 +447,7 @@ export default function AdminProspectsPage() {
                                                         const data = await res.json();
                                                         setLoadingStatus(prev => ({ ...prev, [prospect.id]: "" }));
                                                         if (data.success && data.phone) {
-                                                            setProspects(prev => prev.map(p => p.id === prospect.id ? { ...p, inferred_profile: { ...p.inferred_profile, contact_person: { ...(p.inferred_profile as Record<string, unknown>)?.contact_person as any, phone: data.phone } } } : p));
+                                                            setProspects(prev => prev.map(p => p.id === prospect.id ? { ...p, inferred_profile: { ...p.inferred_profile, contact_person: { ...p.inferred_profile.contact_person, phone: data.phone } } } : p));
                                                             alert(`Enriched! Found mobile: ${data.phone}`);
                                                         } else {
                                                             alert(data.error || "No phone found");
@@ -440,7 +459,7 @@ export default function AdminProspectsPage() {
                                                 </button>
                                                 <button
                                                     type="button"
-                                                    disabled={loadingStatus[prospect.id] === "hubspot" || !!(prospect.inferred_profile as any)?.synced_to_hubspot}
+                                                    disabled={loadingStatus[prospect.id] === "hubspot" || !!prospect.inferred_profile.synced_to_hubspot}
                                                     onClick={async () => {
                                                         setLoadingStatus(prev => ({ ...prev, [prospect.id]: "hubspot" }));
                                                         const res = await fetch("/api/admin/leads/hubspot", {
@@ -450,14 +469,14 @@ export default function AdminProspectsPage() {
                                                         const data = await res.json();
                                                         setLoadingStatus(prev => ({ ...prev, [prospect.id]: "" }));
                                                         if (data.success) {
-                                                            setProspects(prev => prev.map(p => p.id === prospect.id ? { ...p, inferred_profile: { ...(p.inferred_profile as Record<string, unknown>), synced_to_hubspot: true } } : p));
+                                                            setProspects(prev => prev.map(p => p.id === prospect.id ? { ...p, inferred_profile: { ...p.inferred_profile, synced_to_hubspot: true } } : p));
                                                         } else {
                                                             alert(`Error: ${data.error}`);
                                                         }
                                                     }}
-                                                    className={clsx("text-[10px] font-bold px-3 py-1.5 rounded-lg border inline-flex items-center gap-1 transition-all disabled:opacity-50", (prospect.inferred_profile as any)?.synced_to_hubspot ? "bg-stone-100 text-stone-400 border-stone-200" : "bg-orange-500 text-white border-orange-600 hover:bg-orange-600")}
+                                                    className={clsx("text-[10px] font-bold px-3 py-1.5 rounded-lg border inline-flex items-center gap-1 transition-all disabled:opacity-50", prospect.inferred_profile.synced_to_hubspot ? "bg-stone-100 text-stone-400 border-stone-200" : "bg-orange-500 text-white border-orange-600 hover:bg-orange-600")}
                                                 >
-                                                    {loadingStatus[prospect.id] === "hubspot" ? <Loader2 className="w-3 h-3 animate-spin"/> : <Database className="w-3 h-3" />} {(prospect.inferred_profile as any)?.synced_to_hubspot ? "Synced to HubSpot" : "Send to HubSpot"}
+                                                    {loadingStatus[prospect.id] === "hubspot" ? <Loader2 className="w-3 h-3 animate-spin"/> : <Database className="w-3 h-3" />} {prospect.inferred_profile.synced_to_hubspot ? "Synced to HubSpot" : "Send to HubSpot"}
                                                 </button>
                                             </div>
 
@@ -492,10 +511,10 @@ export default function AdminProspectsPage() {
                                                                 const payload = { id: prospect.id, ...editForm };
                                                                 const res = await fetch("/api/admin/leads/edit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
                                                                 if (res.ok) {
-                                                                    setProspects(prev => prev.map(p => p.id === prospect.id ? { ...p, 
-                                                                        company_name: editForm.company_name, 
-                                                                        lead_email: editForm.lead_email, 
-                                                                        inferred_profile: { ...p.inferred_profile, contact_person: { ...(p.inferred_profile as any).contact_person, name: editForm.contact_name, phone: editForm.phone } } 
+                                                                    setProspects(prev => prev.map(p => p.id === prospect.id ? { ...p,
+                                                                        company_name: editForm.company_name,
+                                                                        lead_email: editForm.lead_email,
+                                                                        inferred_profile: { ...p.inferred_profile, contact_person: { ...p.inferred_profile.contact_person, name: editForm.contact_name, phone: editForm.phone } }
                                                                     } : p));
                                                                     setEditingLead(null);
                                                                 } else {

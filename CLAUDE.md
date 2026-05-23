@@ -30,6 +30,7 @@ git push captiorpilot main && git push live main && git push globerocker main
 - Never commit `.env`, `.env.local`, `.mcp.json`
 - When creating migrations, pick the next free number under `supabase/migrations/` (current latest: **070**)
 - **Cron handlers must use `guardCron(req)` from `@/lib/cron-auth`** — fail-closed in production. See [CRON.md](CRON.md) for the complete cron + agent reference.
+- **Admin handlers must call `assertAdmin()` from `@/lib/auth-admin`** at the top of every exported `GET`/`POST`/`PATCH`/`DELETE`. Returns `NextResponse` on reject; caller does `if (unauth) return unauth`. Re-run `node tools/30_smoke_admin.mjs --base <url>` after touching `/api/admin/**` to verify the gate is still there.
 
 ## Architecture
 - `/dashboard/src/app/(public)/` — Public pages (login, signup, check, admin)
@@ -74,6 +75,38 @@ git push captiorpilot main && git push live main && git push globerocker main
 - `contractors` — 80K SAM.gov registered entities
 - `contacts` — 91K SAM.gov opportunity contacts
 - `naics_codes` / `psc_codes` — validation whitelists for ingestion
+
+## Recent major changes (2026-05-22 — admin-panel hardening + cleanup)
+
+Four-phase rework of `/admin/*` after a security + dead-code audit. Detailed audit lives in commit history; the deliverables:
+
+**Phase 1 — security hotfix** (commit `48b0a7a9`):
+
+- New [`src/lib/auth-admin.ts`](dashboard/src/lib/auth-admin.ts) exposes `assertAdmin()` (returns the 401/403 NextResponse) and `assertAdminWithUser()` (also returns the caller's id/email). Canonical column is `auth_user_id` — every admin route now uses this helper.
+- 30 unprotected admin-API routes gated. Pre-fix, `GET /api/admin/users` was a public dump of every auth user; `PATCH /api/admin/users` was a public password reset. Same category for `/api/admin/{beta-invites, enrich-profile, enrich-opportunity, leads/*, send-update, send-test-email, competitors, documents, academy, email-settings, email-templates, crawl-opportunities, enrich-contractors, enrich-campaign-audience, backfill-enrichment, sam-debug, tasks, clients, backlinks/*}`.
+- Admin shell layout now redirects non-admins to `/dashboard` after `getUser()` (was only checking for any session).
+- Bug-fix nebenbei: `cron-trigger` + `cron-runs` queried `user_profiles.user_id` (column doesn't exist) → "Run now" buttons in `/admin/crons` always 403'd. Both now use the shared helper.
+
+**Phase 2 — code-friedhof aufgeräumt** (commits `b902cc66` + `8397095e`):
+
+- New [`src/lib/cron-auth.ts`](dashboard/src/lib/cron-auth.ts) exposes `guardCron(req)` + `isAuthorizedCron(authHeader)` — fail-closed in production. 31 cron routes migrated off the duplicated inline pattern (`if (process.env.CRON_SECRET) {...}` silently bypassed every cron when the env var was unset).
+- 3 orphaned admin pages stub'd to `redirect()` (analog zur bestehenden `/admin/users` redirect): `/admin/lead-check` → `/admin/leads`, `/admin/lead-check/[analysisId]` → `/check/[analysisId]`, `/admin/prospects` → `/admin/leads`. Net delete ~3,800 lines.
+- `opportunities/page.tsx`: dropped duplicate local `fmtCurrency` that shadowed the shared `@/lib/display-helpers` import (local stopped at millions, broke 1B+ values); removed 6 unused lucide imports.
+- `tools/page.tsx`: hardcoded "9 jobs" cron block replaced with live `/api/admin/cron-runs` pull (actual count: 35 today); 6 `document.getElementById`-pattern inputs/selects converted to controlled `useState`.
+
+**Phase 3 — features** (commit `26dcf19b`):
+
+- Push-Opportunity-to-Client folded into `/admin/opportunities` as a per-row modal: every row has a "Send" button that opens a client-picker + stage + priority + customer-message + next-steps form, pre-filled with the row's notice. Same backing API (`POST /api/admin/push-opportunity`). `/admin/push-opportunity` is now a 9-line redirect-stub.
+- Bulk Email button on `/admin/clients` hardened: previous version did `.catch(() => {})` so all failures were silently swallowed. New version: visible counter "Sending… 12/50", 600 ms throttle (under Resend's 2/sec free-tier ceiling), per-send try/catch, final tally includes failure count + first 3 failing companies + their error messages.
+- `/api/admin/env-health`: added live reachability probes for Resend (GET /domains), Stripe (GET /v1/balance), and Supabase (HEAD count on `opportunities`). New `cron_summary` payload returns last_run / last_status / runs_7d per cron route, stalest first.
+- `/admin/health` page rewritten in the light theme to match the admin chrome; KPI strip (Healthy / Failing / Not configured / Total) + cron-status table feeding off the new `cron_summary`.
+- `/admin/settings` API-Keys section: was hardcoded `"Configured"` per key (lied if a key was unset). Now pulls from `/api/admin/env-health` and shows real per-key state with refresh button + link to `/admin/health` for the full view.
+
+**Phase 4 — verification + housekeeping**:
+
+- New [`tools/30_smoke_admin.mjs`](tools/30_smoke_admin.mjs): Node script (no Playwright dep) that hits every `/admin/*` page + every `/api/admin/*` route unauthenticated and asserts the gate fires. Catches the most common regression class — accidentally removing `assertAdmin()`. Run via `node tools/30_smoke_admin.mjs --base https://captiorpilot-v3.vercel.app`. Exits non-zero if any check fails (CI-friendly).
+- Type-cleanup in `/admin/leads`: dropped 7 `as any` casts on `inferred_profile` by introducing an `InferredProfile` interface that types the JSON blob's known fields (`contact_person`, `synced_to_hubspot`, `pipeline_status`, …) without losing the index signature for unknown keys.
+- Reference docs: [`CRON.md`](CRON.md) catalogs all 35 scheduled tasks (schedule, what they write, how to debug). [`USER_TASKS.md`](USER_TASKS.md) is the active "things only you can do" punch-list (env vars, migrations, ad-platform connections).
 
 ## Recent major changes (2026-04-17 — teaming intelligence)
 
@@ -254,6 +287,13 @@ Node scripts:
   ```
   Requires `NEXT_PUBLIC_SUPABASE_URL` + `SUPABASE_SERVICE_KEY` env vars.
 
+- **`tools/30_smoke_admin.mjs`** — security-regression smoke test for `/admin/*`. Unauthenticated hit on every admin page (expects 302/307/200-with-client-guard) + every admin API route (expects 401/403). Exit non-zero on any failure. Usage:
+
+  ```bash
+  node tools/30_smoke_admin.mjs --base https://captiorpilot-v3.vercel.app
+  node tools/30_smoke_admin.mjs --base http://localhost:3000 --verbose
+  ```
+
 ## Supabase Storage buckets
 - `client-docs` — consulting client document uploads + **capability statement uploads** (`capability-statements/{profile_id}/{timestamp}.ext`)
 - `opportunity-attachments` — cached SAM.gov attachments (populated by deep_enrich cron)
@@ -269,64 +309,47 @@ Node scripts:
 ## Known Issues / Backlog
 
 ### Known bugs (unresolved)
+
 - **PSC/email display bug** (reported 2026-04-14 Americurial test): user saw email address rendered under "Product and Service Code" field during onboarding/settings. Code inspection found no mismapping — all UI bindings to `opp.psc_code` are correct, ingest validates against `psc_codes` whitelist. **Cannot reproduce without screenshot or live repro.**
 - **ESLint v9 migration**: `eslint` expects `eslint.config.js` but repo has legacy `.eslintrc`. `npm run lint` fails — non-blocking for builds.
 
-### Enrichment pipeline gaps (2026-04-14 user report)
-- **Strategic Scoring / Structured Requirements / AI Win Strategy fields empty** on opportunity detail pages for most opps. The `/tools/` Python enrichment scripts (3_generate_email_drafts.py, 5_award_intelligence.py, etc.) appear disconnected from the dashboard — needs audit. Likely causes: cron not running, env missing on Vercel cron, or scripts crashing silently.
-- **Market Intelligence fields empty** for common NAICS (e.g. 541511 spending / avg deal size). Need to audit whether tools/5 actually writes to the expected `market_intelligence` / `naics_stats` table.
-- **Attachment documents not auto-crawled**: Only SAM.gov metadata fetched; no background download, OCR, or requirement extraction. Needs a new cron that fetches PDF/DOCX attachments, stores them in `opportunity-attachments` bucket, and runs OpenAI extraction into `structured_requirements`.
+### Open backlog (deferred across sessions)
 
-### Larger reworks backlog (deferred across sessions)
+Items already shipped — see "Recent major changes" sections (2026-04-16, 2026-04-17, 2026-05-22) — are not repeated here. Anything below is still open.
 
-**Opportunity list & search**
-- Multi-view toggle (card / list / HubSpot-style customizable table with column picker)
-- Bulk Excel export with selection + row cap (max 10–20 per export)
-- AI-assisted natural-language filter: user describes what they want in a sentence, LLM sets NAICS / set-aside / state / keyword filters automatically
-- Full SAM.gov passthrough search when "All Opportunities" — currently capped at our 37K ingested rows
+#### Opportunity list & search
 
-**Opportunity detail**
-- "Analyze all attachments" button — background fetches PDFs, extracts requirements via OpenAI, fills `structured_requirements` + `ai_win_strategy`. Expiration/TTL to avoid DB bloat.
-- Show real attachment filename + size before download instead of just "Download" button (done 2026-04-15 but needs polish)
+- Full SAM.gov passthrough search when "All Opportunities" — currently capped at our 37K ingested rows.
 
-**Pipeline**
-- Split pipeline by notice type (Sources Sought / Pre-Solicitation / Solicitation) as separate boards
-- Custom stage configuration (user-defined stages, rename, reorder)
-- Deal detail page with activity history, notes timeline, contact log — currently cards aren't clickable
-- Responsive full-width layout (done 2026-04-15 via max-w-7xl)
+#### Market intelligence
 
-**Capability Statement**
-- PDF export is a single text blob — needs proper formatting with brand logo, color bands, structured sections, contact block
-- Markdown intermediate: render to MD then to PDF (same pipeline as Google Docs import)
-- Save-to-Google-Drive integration (user already has Google OAuth linked via Supabase)
-- Visual editor with text selection → AI edit (Gemini) for targeted passages
-- Progress bar during drafting; run in background so user can switch to other tools without losing state
-- Prefill from Quick Checker crawler (which works well) instead of bare brand extraction
+- Common NAICS (e.g. 541511) still missing market-intelligence rollups (spend / avg deal size / agency mix). Need to audit whether `naics_stats` is populated end-to-end and surface a fallback when it isn't.
 
-**AI Proposal**
-- Background job so generation persists when user navigates away (currently 5+ min foreground wait)
-- Progress visualization per section (which section is writing now, word count so far)
-- Integrate capability statement content into prompt (currently just uses company_description)
+#### Dashboard
 
-**Settings / Billing**
-- Billing: cancel flow with retention (discount offer, reason survey, confirmation step)
-- Settings: multi-column layout on wide screens instead of single long scroll
-- Settings: Advanced Settings already defaults to expanded (verified 2026-04-15)
+- Sidebar with quick-access fixed tiles (Quick Checker / Drafter / Refresh Matches / Cap Statement).
+- Overall dashboard speed — page loads are sluggish, needs profiling (likely waterfall Supabase queries that should parallelize).
 
-**Dashboard**
-- Sidebar with quick-access Fixed tiles (Quick Checker / Drafter / Refresh Matches / Cap Statement)
-- Overall dashboard speed — page loads are sluggish, needs profiling (likely waterfall Supabase queries that should parallelize)
+#### Partners
 
-**Partners**
-- Bulk-add to pursuit / partner shortlist persistence
-- NAICS dropdown wired to keyword search (done 2026-04-15) — replicate in opportunity filters (done)
+- Bulk-add to pursuit / partner shortlist persistence.
 
-**Competitors**
-- Bulk-add competitors from SAM.gov contractor search
-- Competitor comparison table (side-by-side NAICS overlap, revenue, past clients)
+#### Competitors
 
-**Dembrandt integration**
+- Bulk-add competitors from SAM.gov contractor search.
+- Competitor comparison table (side-by-side NAICS overlap, revenue, past clients).
+
+#### Settings
+
+- Multi-column layout on wide screens instead of single long scroll.
+
+#### Dembrandt integration
+
 - Cannot run in Vercel (Playwright/Chromium too large) — use offline script `tools/21_enrich_brand_tokens.mjs`.
+
+#### Admin smoke tests
+
+- `tools/30_smoke_admin.mjs` currently covers gate-presence only (401 on every admin API unauthenticated). Phase-5 follow-up: optional `--admin-cookie` mode that uses a CI test account to verify the happy-path (200 with expected JSON shape) for each endpoint.
 
 ## Guidelines for Future Work
 - Ship small, ship often. Prefer editing existing files over creating new ones.
