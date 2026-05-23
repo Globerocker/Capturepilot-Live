@@ -84,43 +84,56 @@ export default function ClientDetailPage() {
 
     useEffect(() => {
         if (!clientId) return;
+        // Switched from direct supabase browser-client calls to the new
+        // /api/admin/clients/[id] endpoint. The browser uses the anon key
+        // + RLS, which only exposes a user's OWN row — admins viewing OTHER
+        // clients got "Client not found" because the target row was
+        // invisible to them. The server endpoint runs behind assertAdmin()
+        // with the service key, so it can see everything.
         (async () => {
-            const [profRes, tasksRes, docsRes, matchesRes, pursuitsRes, activityRes, compRes] = await Promise.all([
-                supabase.from("user_profiles").select("*").eq("id", clientId).single(),
-                supabase.from("client_tasks").select("*").eq("user_profile_id", clientId).order("created_at", { ascending: false }),
-                supabase.from("client_documents").select("*").eq("user_profile_id", clientId).order("created_at", { ascending: false }),
-                supabase.from("user_matches").select("score, classification, opportunity:opportunities!inner(title, agency, notice_id, response_deadline, naics_code)").eq("user_profile_id", clientId).order("score", { ascending: false }).limit(20),
-                supabase.from("user_pursuits").select("id, stage, priority, notes, opportunity:opportunities!inner(title, agency, notice_id, response_deadline)").eq("user_profile_id", clientId),
-                supabase.from("client_activity_log").select("*").eq("user_profile_id", clientId).order("created_at", { ascending: false }).limit(30),
-                supabase.from("client_competitors").select("*").eq("user_profile_id", clientId),
-            ]);
-
-            if (profRes.data) {
-                setProfile(profRes.data as unknown as ClientProfile);
-                setForm({
-                    company_name: profRes.data.company_name || "",
-                    contact_name: profRes.data.contact_name || "",
-                    contact_phone: profRes.data.contact_phone || "",
-                    email: profRes.data.email || "",
-                    website: profRes.data.website || "",
-                    uei: profRes.data.uei || "",
-                    cage_code: profRes.data.cage_code || "",
-                    state: profRes.data.state || "",
-                    city: profRes.data.city || "",
-                    address_line_1: profRes.data.address_line_1 || "",
-                    zip_code: profRes.data.zip_code || "",
-                    notes: profRes.data.notes || "",
-                    employee_count: String(profRes.data.employee_count || ""),
-                    revenue: String(profRes.data.revenue || ""),
-                });
+            try {
+                const res = await fetch(`/api/admin/clients/${clientId}`, { cache: "no-store" });
+                if (!res.ok) {
+                    setLoading(false);
+                    return;
+                }
+                const body = await res.json() as {
+                    profile: ClientProfile;
+                    tasks: Array<Record<string, unknown>>;
+                    documents: Array<Record<string, unknown>>;
+                    matches: Array<Record<string, unknown>>;
+                    pursuits: Array<Record<string, unknown>>;
+                    activity: Array<Record<string, unknown>>;
+                    competitors: Array<Record<string, unknown>>;
+                };
+                if (body.profile) {
+                    setProfile(body.profile);
+                    setForm({
+                        company_name: body.profile.company_name || "",
+                        contact_name: body.profile.contact_name || "",
+                        contact_phone: body.profile.contact_phone || "",
+                        email: body.profile.email || "",
+                        website: body.profile.website || "",
+                        uei: body.profile.uei || "",
+                        cage_code: body.profile.cage_code || "",
+                        state: body.profile.state || "",
+                        city: body.profile.city || "",
+                        address_line_1: body.profile.address_line_1 || "",
+                        zip_code: body.profile.zip_code || "",
+                        notes: body.profile.notes || "",
+                        employee_count: String(body.profile.employee_count || ""),
+                        revenue: String(body.profile.revenue || ""),
+                    });
+                }
+                setTasks(body.tasks || []);
+                setDocs(body.documents || []);
+                setMatches(body.matches || []);
+                setPursuits(body.pursuits || []);
+                setActivity(body.activity || []);
+                setCompetitors(body.competitors || []);
+            } finally {
+                setLoading(false);
             }
-            setTasks((tasksRes.data || []) as Array<Record<string, unknown>>);
-            setDocs((docsRes.data || []) as Array<Record<string, unknown>>);
-            setMatches((matchesRes.data || []) as Array<Record<string, unknown>>);
-            setPursuits((pursuitsRes.data || []) as Array<Record<string, unknown>>);
-            setActivity((activityRes.data || []) as Array<Record<string, unknown>>);
-            setCompetitors((compRes.data || []) as Array<Record<string, unknown>>);
-            setLoading(false);
         })();
     }, [clientId]);
 
@@ -145,9 +158,14 @@ export default function ClientDetailPage() {
         });
         setShowTaskForm(false);
         setTaskForm({ title: "", description: "", priority: "medium", category: "general", notify: true });
-        // Reload tasks
-        const { data } = await supabase.from("client_tasks").select("*").eq("user_profile_id", clientId).order("created_at", { ascending: false });
-        setTasks((data || []) as Array<Record<string, unknown>>);
+        // Reload the entire bundle from the admin endpoint (same reason as
+        // the initial fetch — browser client can't see other profiles' tasks
+        // through RLS).
+        const reload = await fetch(`/api/admin/clients/${clientId}`, { cache: "no-store" });
+        if (reload.ok) {
+            const body = await reload.json() as { tasks?: Array<Record<string, unknown>> };
+            setTasks(body.tasks || []);
+        }
     };
 
     // ─── User-account actions ──────────────────────────────────────────────

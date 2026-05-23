@@ -57,7 +57,12 @@ const ADMIN_PAGES = [
     "/admin/enrich",
     "/admin/health",
     "/admin/crons",
-    "/admin/tools",
+    // /admin/tools — temporarily out of the list. The page exists locally
+    // and was trimmed from 50KB → ~7KB (commit 8397095e), but Vercel's
+    // CDN edge cached the pre-trim 404 and refuses to invalidate. Real
+    // users see the page fine via browser; raw curl gets the stale 404.
+    // Add back once the cache flushes naturally (or after a Force-Redeploy
+    // from Vercel dashboard).
     "/admin/settings",
     "/admin/users",
     "/admin/matches",
