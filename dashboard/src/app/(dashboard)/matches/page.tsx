@@ -15,6 +15,7 @@ import { ListView } from "@/components/matches/ListView";
 import { AIFilterBar, type AIFilters } from "@/components/matches/AIFilterBar";
 import { BulkExportDialog } from "@/components/matches/BulkExportDialog";
 import SavedViews from "@/components/SavedViews";
+import { SavedSearchesMenu } from "@/components/matches/SavedSearchesMenu";
 import SourceLevelSwitcher, { SOURCE_LEVEL_VALUES, type SourceLevel } from "@/components/SourceLevelSwitcher";
 import { SET_ASIDE_OPTIONS, matchSetAside, setAsideBadgeTone } from "@/lib/set-aside-filters";
 
@@ -493,6 +494,34 @@ export default function MyMatchesPage() {
                 }}
                 onClear={() => setActiveSavedViewId(null)}
             />
+
+            {/* Saved Searches — server-persisted filter combos with daily email
+                alerts. Distinct from SavedViews above (which is localStorage-only
+                view presets). Plan-tier gates the count. */}
+            <div className="mb-3 flex justify-end">
+                <SavedSearchesMenu
+                    currentFilters={{
+                        filter, sortBy, sortDirection,
+                        filterNoticeType, filterSetAside, filterState, filterNaics,
+                        filterMinScore, filterMaxDeadlineDays, sourceLevel,
+                        activeSearch,
+                    }}
+                    onApply={(s) => {
+                        const obj = s as Record<string, unknown>;
+                        if (typeof obj.filter === "string") setFilter(obj.filter as typeof filter);
+                        if (typeof obj.sortBy === "string") setSortBy(obj.sortBy as typeof sortBy);
+                        if (typeof obj.sortDirection === "string") setSortDirection(obj.sortDirection as typeof sortDirection);
+                        if (typeof obj.filterNoticeType === "string") setFilterNoticeType(obj.filterNoticeType);
+                        if (typeof obj.filterSetAside === "string") setFilterSetAside(obj.filterSetAside);
+                        if (typeof obj.filterState === "string") setFilterState(obj.filterState);
+                        if (typeof obj.filterNaics === "string") setFilterNaics(obj.filterNaics);
+                        if (typeof obj.filterMinScore === "number" || obj.filterMinScore === null) setFilterMinScore(obj.filterMinScore as number | null);
+                        if (typeof obj.filterMaxDeadlineDays === "number" || obj.filterMaxDeadlineDays === null) setFilterMaxDeadlineDays(obj.filterMaxDeadlineDays as number | null);
+                        if (typeof obj.activeSearch === "string") { setActiveSearch(obj.activeSearch); setSearchInput(obj.activeSearch); }
+                        setPage(1);
+                    }}
+                />
+            </div>
 
             {/* Source-Level Switcher — Federal / State+Local+Education / All */}
             <section className="mb-3">

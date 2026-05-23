@@ -627,6 +627,51 @@ export async function sendOpportunityAlert(
     return send("opportunity_alert", to, `${opportunities.length} New Matching Opportunities`, html);
 }
 
+// ─── Saved-Search Daily Digest ─────────────────────────────
+export async function sendSavedSearchDigest(args: {
+    to: string;
+    profileName: string;
+    searches: Array<{
+        id: string;
+        name: string;
+        matches: Array<{ notice_id: string; title: string | null; agency: string | null; response_deadline: string | null }>;
+    }>;
+}) {
+    const totalMatches = args.searches.reduce((s, x) => s + x.matches.length, 0);
+    const sections = args.searches.map(s => `
+        <div style="margin:24px 0;">
+            <p style="font-size:11px;font-weight:700;color:${COLORS.stone500};text-transform:uppercase;letter-spacing:0.1em;margin:0 0 8px;">${s.name} — ${s.matches.length} new</p>
+            <table role="presentation" style="width:100%;border-collapse:collapse;background:${COLORS.white};border:1px solid ${COLORS.stone200};border-radius:12px;overflow:hidden;">
+                <tbody>
+                    ${s.matches.slice(0, 8).map(m => `
+                        <tr>
+                            <td style="padding:12px;border-bottom:1px solid ${COLORS.stone100};">
+                                <p style="font-size:13px;font-weight:700;color:${COLORS.black};margin:0;">
+                                    <a href="${APP_URL}/opportunities/${m.notice_id}" style="color:${COLORS.black};text-decoration:none;">${m.title || "(untitled)"}</a>
+                                </p>
+                                <p style="font-size:11px;color:${COLORS.stone500};margin:3px 0 0;">${m.agency || "—"}${m.response_deadline ? ` · due ${new Date(m.response_deadline).toLocaleDateString()}` : ""}</p>
+                            </td>
+                        </tr>
+                    `).join("")}
+                </tbody>
+            </table>
+        </div>
+    `).join("");
+
+    const html = emailTemplate({
+        category: await getEmailCategory("opportunity_alert"),
+        preheader: `${totalMatches} new opportunities across your saved searches.`,
+        eyebrow: "Saved Searches",
+        heading: `${args.profileName}, ${totalMatches} new opportunities`,
+        body: `
+            ${paragraph(`Your saved searches surfaced ${totalMatches} new opportunit${totalMatches === 1 ? "y" : "ies"} since the last alert.`)}
+            ${sections}
+        `,
+        cta: { label: "Manage saved searches", url: `${APP_URL}/matches` },
+    });
+    return send("opportunity_alert", args.to, `${totalMatches} new matches in your saved searches`, html);
+}
+
 // ─── Quick Checker Results ─────────────────────────────────
 export async function sendQuickCheckerResultsEmail(
     to: string,

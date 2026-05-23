@@ -15,6 +15,7 @@ import Link from "next/link";
 import { NAICS_CODES } from "@/lib/naics-codes";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import AddressAutocomplete from "@/components/AddressAutocomplete";
+import { TeamMembersSection } from "@/components/TeamMembersSection";
 import { PSC_CODES } from "@/lib/psc-codes";
 import { FEDERAL_AGENCIES } from "@/lib/federal-agencies";
 import KeywordPicker from "@/components/KeywordPicker";
@@ -1646,6 +1647,11 @@ export default function SettingsPage() {
             </section>
 
            
+
+                    {/* Team — owner can invite collaborators / viewers (plan-gated).
+                        Foundation lib lives at @/lib/team-accounts; per-row scoping
+                        of writes against the team_members table is enforced API-side. */}
+                    <TeamMembersSection />
 
                     {/* Privacy & Data — GDPR-aligned: export everything, or
                         request deletion with a 7-day grace window. Deletion
