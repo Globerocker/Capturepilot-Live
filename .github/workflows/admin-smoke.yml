@@ -1,0 +1,68 @@
+name: Admin Smoke Test
+
+# Runs tools/30_smoke_admin.mjs against production after every push to main.
+# Verifies that every /admin/* page redirects non-admins away and every
+# /api/admin/* route rejects unauthenticated requests with 401/403.
+#
+# Catches the most common security regression: accidentally removing
+# `assertAdmin()` from a handler.
+#
+# Configuration:
+#   - PROD_URL secret (optional): override the target. Defaults to
+#     https://app.capturepilot.com.
+#   - DEPLOY_WAIT_SECONDS env (optional): how long to wait for Vercel
+#     to finish the deploy before probing. Defaults to 120.
+#
+# Trigger manually: GitHub → Actions → Admin Smoke Test → Run workflow.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "Override the base URL to probe"
+        required: false
+        type: string
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    # Skip on forks — this only makes sense against your own production deploy.
+    if: github.repository_owner == 'Globerocker'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Resolve base URL
+        id: resolve
+        env:
+          INPUT_URL: ${{ inputs.base_url }}
+          SECRET_URL: ${{ secrets.PROD_URL }}
+        run: |
+          if [ -n "$INPUT_URL" ]; then
+            URL="$INPUT_URL"
+          elif [ -n "$SECRET_URL" ]; then
+            URL="$SECRET_URL"
+          else
+            URL="https://app.capturepilot.com"
+          fi
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "Resolved base URL: $URL"
+
+      # Vercel deploys take ~30–90s after a push. On a manual run there's no
+      # deploy in flight, but waiting once is cheap and avoids racing the build.
+      - name: Wait for Vercel deploy to settle
+        run: |
+          WAIT="${DEPLOY_WAIT_SECONDS:-120}"
+          echo "Sleeping ${WAIT}s before probing — gives Vercel time to ship the new build."
+          sleep "$WAIT"
+
+      - name: Run admin smoke test
+        env:
+          BASE_URL: ${{ steps.resolve.outputs.url }}
+        run: node tools/30_smoke_admin.mjs --base "$BASE_URL"

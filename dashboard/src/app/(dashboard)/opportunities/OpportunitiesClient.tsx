@@ -58,6 +58,9 @@ interface Opportunity {
     // Computed
     _matchCount?: number;
     _dataScore?: number;
+    // Set to "sam_live" when the row was merged in from the SAM.gov live
+    // passthrough rather than our local opportunities table.
+    _source?: "sam_live";
 }
 
 interface OpportunitiesClientProps {
@@ -74,6 +77,13 @@ export default function OpportunitiesClient({ initialOpportunities, initialCount
     const [activeSearch, setActiveSearch] = useState("");
     const [viewMode, setViewMode] = useState<"grid" | "list">(typeof window !== "undefined" && window.innerWidth < 768 ? "grid" : "list");
     const [showFilters, setShowFilters] = useState(false);
+
+    // SAM.gov live passthrough — when ON and a keyword search is active, we
+    // also fetch fresh hits from sam.gov and merge them in (deduped by
+    // notice_id). Lets users find opps that haven't been ingested yet.
+    const [samPassthrough, setSamPassthrough] = useState(false);
+    const [samExtraCount, setSamExtraCount] = useState(0);
+    const [samMessage, setSamMessage] = useState<string | null>(null);
 
     // Pagination
     const [page, setPage] = useState(1);
@@ -262,15 +272,45 @@ export default function OpportunitiesClient({ initialOpportunities, initialCount
                     results.sort((a, b) => sortDir === "desc" ? (b._dataScore || 0) - (a._dataScore || 0) : (a._dataScore || 0) - (b._dataScore || 0));
                 }
 
-                setOpportunities(results);
+                // SAM.gov live passthrough — fire only when the toggle is on
+                // and there's an active keyword. We do this after the local
+                // fetch so the page renders fast and the extras stream in.
+                let mergedResults = results;
+                let samMsg: string | null = null;
+                let samExtra = 0;
+                if (samPassthrough && activeSearch.trim().length >= 3 && page === 1) {
+                    try {
+                        const samRes = await fetch(`/api/sam/opportunity-search?keyword=${encodeURIComponent(activeSearch.trim())}&days=180&limit=30`);
+                        const samBody = await samRes.json();
+                        if (samRes.ok && Array.isArray(samBody.results)) {
+                            const existing = new Set(results.map(r => r.notice_id).filter(Boolean));
+                            const fresh = (samBody.results as Opportunity[])
+                                .filter(r => r.notice_id && !existing.has(r.notice_id))
+                                .map(r => ({ ...r, _dataScore: calcDataScore(r) }));
+                            samExtra = fresh.length;
+                            mergedResults = [...results, ...fresh];
+                            samMsg = fresh.length > 0
+                                ? `+${fresh.length} live from SAM.gov (of ${samBody.total_remote ?? "?"} matching).`
+                                : "No additional results on SAM.gov beyond what's already shown.";
+                        } else if (samBody.error) {
+                            samMsg = `SAM live: ${samBody.error}`;
+                        }
+                    } catch (e) {
+                        samMsg = `SAM live: ${(e as Error).message}`;
+                    }
+                }
+
+                setOpportunities(mergedResults);
                 setTotalCount(count || 0);
+                setSamExtraCount(samExtra);
+                setSamMessage(samMsg);
             }
         } catch (err) {
             console.error(err);
         } finally {
             setLoading(false);
         }
-    }, [page, activeSearch, quickFilter, pageSize, filterAgency, filterType, filterNaics, filterState, filterSetAside, sortCol, sortDir]);
+    }, [page, activeSearch, quickFilter, pageSize, filterAgency, filterType, filterNaics, filterState, filterSetAside, sortCol, sortDir, samPassthrough]);
 
     const isInitialMount = useRef(true);
 
@@ -534,7 +574,7 @@ export default function OpportunitiesClient({ initialOpportunities, initialCount
                     )}
 
                     {/* Search Bar */}
-                    <div className="bg-white p-2 rounded-full border border-stone-200 shadow-sm flex items-center mb-6 focus-within:ring-2 focus-within:ring-black focus-within:border-transparent transition-all">
+                    <div className="bg-white p-2 rounded-full border border-stone-200 shadow-sm flex items-center mb-2 focus-within:ring-2 focus-within:ring-black focus-within:border-transparent transition-all">
                         <Search className="w-5 h-5 text-stone-400 ml-4 mr-2" />
                         <input
                             type="text"
@@ -548,6 +588,30 @@ export default function OpportunitiesClient({ initialOpportunities, initialCount
                             <button type="button" title="Clear Search" onClick={() => { setSearchInput(""); setActiveSearch(""); setPage(1); }} className="p-2 text-stone-400 hover:text-black">
                                 <X className="w-4 h-4" />
                             </button>
+                        )}
+                    </div>
+
+                    {/* SAM.gov live passthrough toggle. Off by default — most
+                        searches are fine against our 37k-row corpus. Flip it
+                        on when looking for very fresh or niche notices that
+                        may not have made it through the daily ingest yet. */}
+                    <div className="flex items-center justify-between text-xs text-stone-500 mb-6 px-2">
+                        <label className="inline-flex items-center gap-2 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={samPassthrough}
+                                onChange={(e) => setSamPassthrough(e.target.checked)}
+                                className="rounded border-stone-300"
+                            />
+                            <span>
+                                Also search <strong>SAM.gov live</strong> when a keyword is entered
+                                <span className="text-stone-400"> (slower, requires 3+ chars, top 30 added)</span>
+                            </span>
+                        </label>
+                        {samMessage && (
+                            <span className={samExtraCount > 0 ? "text-emerald-700 font-medium" : "text-stone-500"}>
+                                {samMessage}
+                            </span>
                         )}
                     </div>
 

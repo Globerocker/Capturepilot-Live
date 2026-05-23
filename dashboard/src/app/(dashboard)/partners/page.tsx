@@ -5,7 +5,7 @@ import { useState, useEffect, useMemo, useRef, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { createSupabaseClient } from "@/lib/supabase/client";
-import { Users, Search, Loader2, Shield, Globe, MapPin, X, ChevronDown, Handshake, Plus, CheckCircle2, Award } from "lucide-react";
+import { Users, Search, Loader2, Shield, Globe, MapPin, X, ChevronDown, Handshake, Plus, CheckCircle2, CheckSquare, Square, Award } from "lucide-react";
 import clsx from "clsx";
 import { NAICS_CODES, searchNaics } from "@/lib/naics-codes";
 import { AwardCountBadge } from "@/components/AwardCountBadge";
@@ -77,6 +77,13 @@ function PartnersPageInner() {
     const [savedPartners, setSavedPartners] = useState<SavedPartner[]>([]);
     const [savedUEIs, setSavedUEIs] = useState<Set<string>>(new Set());
     const [savingUEI, setSavingUEI] = useState<string | null>(null);
+    // Bulk-save selection. Keys are UEI when present, else company_name so
+    // tribal/non-SAM-registered partners can still be selected.
+    const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+    const [bulkSaving, setBulkSaving] = useState(false);
+    const [bulkProgress, setBulkProgress] = useState<{ done: number; failed: number; total: number } | null>(null);
+    const partnerKey = (p: Partner) => p.uei || p.company_name;
+    const isPartnerSaved = (p: Partner) => !!(p.uei && savedUEIs.has(p.uei));
 
     const loadSaved = async () => {
         const res = await fetch("/api/partners/save");
@@ -120,6 +127,56 @@ function PartnersPageInner() {
             state: p.state || null,
             certifications: p.certifications || [],
         }, status);
+
+    // Save every selected partner sequentially. Sequential keeps us under any
+    // implicit rate-limit on the upstream Supabase calls and prevents the
+    // savedUEIs Set from racing. Already-saved partners are skipped silently.
+    const handleBulkSave = async (status: "active" | "potential") => {
+        const targets = results.filter(p => selectedKeys.has(partnerKey(p)) && !isPartnerSaved(p));
+        if (targets.length === 0) return;
+        setBulkSaving(true);
+        setBulkProgress({ done: 0, failed: 0, total: targets.length });
+        let failed = 0;
+        for (const p of targets) {
+            try {
+                await savePartnerRaw({
+                    company_name: p.company_name,
+                    website: p.website || null,
+                    uei: p.uei || null,
+                    naics_codes: p.naics_codes || [],
+                    state: p.state || null,
+                    certifications: p.certifications || [],
+                }, status);
+            } catch {
+                failed += 1;
+            }
+            setBulkProgress(prev => prev ? {
+                ...prev,
+                done: prev.done + 1,
+                failed: failed,
+            } : prev);
+        }
+        setBulkSaving(false);
+        // Clear selection after bulk action so the user can verify the saved
+        // pills appeared, then start a fresh selection if they want.
+        setSelectedKeys(new Set());
+        setTimeout(() => setBulkProgress(null), 4000);
+    };
+
+    const toggleSelect = (key: string) =>
+        setSelectedKeys(prev => {
+            const next = new Set(prev);
+            if (next.has(key)) next.delete(key);
+            else next.add(key);
+            return next;
+        });
+
+    // Select-all / clear-all of the currently visible, not-already-saved results.
+    const selectAllVisible = () => {
+        const keys = results.filter(p => !isPartnerSaved(p)).map(partnerKey);
+        setSelectedKeys(new Set(keys));
+    };
+    const clearSelection = () => setSelectedKeys(new Set());
 
     // NAICS picker
     const [naicsQuery, setNaicsQuery] = useState("");
@@ -542,11 +599,96 @@ function PartnersPageInner() {
 
             {results.length > 0 && (
                 <div className="space-y-3">
-                    <p className="text-sm text-stone-500">{results.length} partners found</p>
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                        <p className="text-sm text-stone-500">{results.length} partners found</p>
+                        <div className="flex items-center gap-2 text-xs">
+                            {selectedKeys.size === 0 ? (
+                                <button
+                                    type="button"
+                                    onClick={selectAllVisible}
+                                    disabled={results.every(isPartnerSaved)}
+                                    className="text-stone-600 hover:text-black border border-stone-200 px-2.5 py-1 rounded-lg bg-white disabled:opacity-40"
+                                >
+                                    Select all
+                                </button>
+                            ) : (
+                                <button
+                                    type="button"
+                                    onClick={clearSelection}
+                                    className="text-stone-600 hover:text-black border border-stone-200 px-2.5 py-1 rounded-lg bg-white"
+                                >
+                                    Clear
+                                </button>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Sticky bulk-action bar — only shows when something is selected. */}
+                    {selectedKeys.size > 0 && (
+                        <div className="sticky top-2 z-10 bg-white border border-stone-200 rounded-2xl px-4 py-3 shadow-sm flex flex-wrap items-center justify-between gap-3">
+                            <p className="text-sm font-bold text-stone-700">
+                                {selectedKeys.size} selected
+                                {bulkProgress && bulkSaving && (
+                                    <span className="ml-2 text-xs font-medium text-stone-500">
+                                        — Saving {bulkProgress.done}/{bulkProgress.total}{bulkProgress.failed > 0 ? ` · ${bulkProgress.failed} failed` : ""}
+                                    </span>
+                                )}
+                                {bulkProgress && !bulkSaving && (
+                                    <span className="ml-2 text-xs font-medium text-emerald-700">
+                                        — Saved {bulkProgress.done - bulkProgress.failed}/{bulkProgress.total}{bulkProgress.failed > 0 ? ` · ${bulkProgress.failed} failed` : ""}
+                                    </span>
+                                )}
+                            </p>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    disabled={bulkSaving}
+                                    onClick={() => handleBulkSave("potential")}
+                                    className="inline-flex items-center gap-1.5 bg-white border border-stone-200 hover:border-stone-300 text-stone-700 text-xs font-bold px-3 py-1.5 rounded-lg disabled:opacity-50"
+                                >
+                                    {bulkSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
+                                    Save all as Potential
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={bulkSaving}
+                                    onClick={() => handleBulkSave("active")}
+                                    className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg disabled:opacity-50"
+                                >
+                                    {bulkSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />}
+                                    Save all as Active
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
                     <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-3">
-                    {results.map((p, i) => (
-                        <div key={p.uei || i} className="bg-white border border-stone-200 rounded-2xl p-5 hover:border-stone-300 transition-colors">
+                    {results.map((p, i) => {
+                        const key = partnerKey(p);
+                        const isSelected = selectedKeys.has(key);
+                        const alreadySaved = isPartnerSaved(p);
+                        return (
+                        <div key={p.uei || i} className={clsx(
+                            "bg-white border rounded-2xl p-5 hover:border-stone-300 transition-colors",
+                            isSelected ? "border-emerald-300 ring-1 ring-emerald-200" : "border-stone-200",
+                        )}>
                             <div className="flex items-start justify-between gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => !alreadySaved && toggleSelect(key)}
+                                    disabled={alreadySaved}
+                                    title={alreadySaved ? "Already saved" : isSelected ? "Deselect" : "Select for bulk save"}
+                                    className={clsx(
+                                        "mt-0.5 flex-shrink-0 transition-colors",
+                                        alreadySaved
+                                            ? "text-stone-200 cursor-not-allowed"
+                                            : isSelected
+                                                ? "text-emerald-600 hover:text-emerald-700"
+                                                : "text-stone-300 hover:text-stone-500",
+                                    )}
+                                >
+                                    {isSelected ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
+                                </button>
                                 <div className="flex-1 min-w-0">
                                     <h3 className="font-bold text-sm text-black">{p.company_name}</h3>
                                     {p.dba_name && <p className="text-xs text-stone-400">DBA: {p.dba_name}</p>}
@@ -603,7 +745,8 @@ function PartnersPageInner() {
                                 </div>
                             </div>
                         </div>
-                    ))}
+                        );
+                    })}
                     </div>
                 </div>
             )}

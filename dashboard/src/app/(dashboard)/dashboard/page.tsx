@@ -49,7 +49,10 @@ export default async function DashboardPage() {
     newOpps7dRes,
     newMatches7dRes,
   ] = await Promise.all([
-    supabase.from("opportunities").select("*", { count: "exact", head: true }).eq("is_archived", false),
+    // Total opportunity count — drives the "X opportunities" KPI. Estimated
+    // count avoids the full COUNT(*) scan that exact triggers on the 37k+
+    // row table; the dashboard tile doesn't need single-digit precision.
+    supabase.from("opportunities").select("*", { count: "estimated", head: true }).eq("is_archived", false),
     supabase.from("user_matches")
       .select("id, opportunities!inner(id)", { count: "exact", head: true })
       .eq("user_profile_id", profileId)
@@ -64,7 +67,9 @@ export default async function DashboardPage() {
       .eq("is_dismissed", false)
       .eq("opportunities.is_archived", false)
       .in("opportunities.status", ACTIVE_STATUSES),
-    supabase.from("opportunities").select("*", { count: "exact", head: true })
+    // Urgent (deadline within 7d) — also fine with estimated. The number is
+    // shown as a rough heads-up, not a per-row driver.
+    supabase.from("opportunities").select("*", { count: "estimated", head: true })
       .eq("is_archived", false)
       .lte("response_deadline", new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString())
       .gte("response_deadline", today),
@@ -91,7 +96,8 @@ export default async function DashboardPage() {
       .order("priority", { ascending: false })
       .limit(5),
     // New opportunities in the last 7 days — proves ingestion is alive.
-    supabase.from("opportunities").select("*", { count: "exact", head: true })
+    // Estimated count is plenty for a "fresh today / this week" indicator.
+    supabase.from("opportunities").select("*", { count: "estimated", head: true })
       .eq("is_archived", false)
       .gte("created_at", sevenDaysAgo),
     // New matches scored in the last 7 days for this user.
