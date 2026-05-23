@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { ArrowLeft, Building, Target, ShieldAlert, Award, Sparkles, MapPin, Calendar, CheckSquare, Phone, User, Mail, ExternalLink } from "lucide-react";
+import { ArrowLeft, Building, Target, ShieldAlert, Award, Sparkles, MapPin, Calendar, CheckSquare, Phone, User, Mail, ExternalLink, Clock } from "lucide-react";
 import clsx from "clsx";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -286,13 +286,53 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                 </h1>
             </header>
 
+            {/* Sticky tab nav — anchors to the sections below */}
+            <nav
+                className="sticky top-0 z-30 -mx-1 px-1 py-2 bg-stone-50/95 backdrop-blur border-b border-stone-200 flex gap-1 overflow-x-auto"
+                aria-label="Opportunity sections"
+            >
+                {[
+                    { id: "overview", label: "Overview" },
+                    { id: "contact", label: "Contact" },
+                    { id: "requirements", label: "Requirements" },
+                    { id: "description", label: "Description" },
+                    { id: "incumbent", label: "Incumbent" },
+                    { id: "attachments", label: "Attachments" },
+                    { id: "partners", label: "Partners" },
+                ].map(({ id, label }) => (
+                    <a
+                        key={id}
+                        href={`#${id}`}
+                        className="shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold text-stone-600 hover:bg-stone-100 hover:text-black transition"
+                    >
+                        {label}
+                    </a>
+                ))}
+            </nav>
+
             {/* Quick Summary Bar */}
-            <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-6">
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6">
-                    <div className="text-center">
-                        <p className={clsx("text-3xl font-black", successColor)}>{successLabel}</p>
-                        <p className="text-[10px] text-stone-400 uppercase mt-1">Opportunity Strength</p>
-                        <p className="text-[9px] text-stone-400 mt-0.5">Based on set-aside, incumbent & notice type</p>
+            <div id="overview" className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-6 scroll-mt-20">
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 sm:gap-6 items-center">
+                    {/* Score donut */}
+                    <div className="flex flex-col items-center sm:items-start">
+                        <div className="relative w-20 h-20">
+                            <svg viewBox="0 0 36 36" className="w-20 h-20 -rotate-90">
+                                <circle cx="18" cy="18" r="15.915" fill="none" stroke="#e7e5e4" strokeWidth="3.5" />
+                                <circle
+                                    cx="18" cy="18" r="15.915"
+                                    fill="none"
+                                    stroke={successScore >= 70 ? "#059669" : successScore >= 50 ? "#d97706" : "#dc2626"}
+                                    strokeWidth="3.5"
+                                    strokeDasharray={`${successScore} ${100 - successScore}`}
+                                    strokeLinecap="round"
+                                />
+                            </svg>
+                            <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                <span className={clsx("text-2xl font-black leading-none", successColor)}>{successScore}</span>
+                                <span className="text-[8px] text-stone-400 uppercase tracking-wider">{successLabel}</span>
+                            </div>
+                        </div>
+                        <p className="text-[10px] text-stone-500 uppercase tracking-wider mt-2 text-center sm:text-left">Match score</p>
                     </div>
                     <div className="text-center">
                         <p className="text-3xl font-black text-stone-800">{formattedValue}</p>
@@ -469,7 +509,7 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
 
                     {/* POINT OF CONTACT */}
                     {contacts.length > 0 && (
-                        <div className="bg-white rounded-2xl sm:rounded-3xl border border-stone-200 shadow-sm overflow-hidden">
+                        <div id="contact" className="bg-white rounded-2xl sm:rounded-3xl border border-stone-200 shadow-sm overflow-hidden scroll-mt-20">
                             <div className="bg-stone-50 border-b border-stone-100 px-4 sm:px-8 py-4 sm:py-5">
                                 <h2 className="text-base sm:text-lg font-bold flex items-center text-stone-800">
                                     <User className="w-5 h-5 mr-2 sm:mr-3 text-stone-400" /> Point of Contact
@@ -528,14 +568,18 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                     <VoiceBriefButton noticeId={opp.notice_id} title={opp.title} />
 
                     {/* 2. STRUCTURED REQUIREMENTS - auto-extracted from description */}
-                    <StructuredRequirements dbRequirements={reqs} noticeId={opp.notice_id} />
+                    <div id="requirements" className="scroll-mt-20">
+                        <StructuredRequirements dbRequirements={reqs} noticeId={opp.notice_id} />
+                    </div>
 
                     {/* Description - fetched live from SAM.gov */}
-                    <OpportunityDescription noticeId={opp.notice_id} currentDescription={opp.description} defaultCollapsed={false} />
+                    <div id="description" className="scroll-mt-20">
+                        <OpportunityDescription noticeId={opp.notice_id} currentDescription={opp.description} defaultCollapsed={false} />
+                    </div>
 
                     {/* Incumbent Intelligence */}
                     {(opp.incumbent_contractor_name || opp.award_amount) && (
-                        <div className="bg-amber-50 rounded-2xl sm:rounded-3xl border border-amber-200 shadow-sm overflow-hidden">
+                        <div id="incumbent" className="bg-amber-50 rounded-2xl sm:rounded-3xl border border-amber-200 shadow-sm overflow-hidden scroll-mt-20">
                             <div className="bg-amber-100/50 border-b border-amber-200 px-4 sm:px-8 py-4 sm:py-5">
                                 <h2 className="text-base sm:text-lg font-bold flex items-center text-amber-900">
                                     <ShieldAlert className="w-5 h-5 mr-2 sm:mr-3 text-amber-600" /> Incumbent Intelligence
@@ -621,7 +665,9 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                     )}
 
                     {/* Attachments - fetched live from SAM.gov */}
-                    <OpportunityAttachments noticeId={opp.notice_id} resourceLinks={opp.resource_links} defaultCollapsed={false} />
+                    <div id="attachments" className="scroll-mt-20">
+                        <OpportunityAttachments noticeId={opp.notice_id} resourceLinks={opp.resource_links} defaultCollapsed={false} />
+                    </div>
 
                     {/* Historical winners under the same NAICS — who typically wins these? */}
                     {opp.naics_code && (
@@ -633,11 +679,13 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
 
                     {/* Suggested teaming partners — same NAICS, filterable by set-aside */}
                     {opp.naics_code && (
-                        <SuggestedPartnersPanel
-                            naicsCode={opp.naics_code}
-                            setAsideCode={opp.set_aside_code}
-                            placeOfPerformanceState={opp.place_of_performance_state}
-                        />
+                        <div id="partners" className="scroll-mt-20">
+                            <SuggestedPartnersPanel
+                                naicsCode={opp.naics_code}
+                                setAsideCode={opp.set_aside_code}
+                                placeOfPerformanceState={opp.place_of_performance_state}
+                            />
+                        </div>
                     )}
 
                     {/* Market Intelligence — live aggregates from USASpending.gov keyed on this opp's NAICS */}
@@ -763,9 +811,55 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                 </div>
             </div>
 
-            {/* 5. Pursue This Opportunity - Sticky CTA */}
+            {/* 5. Pursue This Opportunity - Sticky CTA Bar */}
             <div className="sticky bottom-0 z-30 -mx-1 px-1 pt-6 pb-2 bg-gradient-to-t from-stone-50 via-stone-50/95 to-transparent">
-                <PursueButton opportunityId={opp.id} noticeType={opp.notice_type || ""} />
+                <div className="bg-white rounded-2xl border border-stone-200 shadow-lg p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+                    {/* Deadline counter (kept compact for the bar) */}
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-stone-50 border border-stone-200">
+                        <Clock className={clsx("w-4 h-4 shrink-0",
+                            daysToDeadline && daysToDeadline <= 7 ? "text-red-600" :
+                            daysToDeadline && daysToDeadline <= 14 ? "text-amber-600" :
+                            "text-stone-500"
+                        )} />
+                        <div className="leading-tight">
+                            <p className={clsx("text-sm font-bold",
+                                daysToDeadline && daysToDeadline <= 7 ? "text-red-700" :
+                                daysToDeadline && daysToDeadline <= 14 ? "text-amber-700" :
+                                "text-stone-800"
+                            )}>
+                                {daysToDeadline !== null
+                                    ? (daysToDeadline > 0 ? `${daysToDeadline} day${daysToDeadline === 1 ? "" : "s"} left` : "Past deadline")
+                                    : "No deadline"}
+                            </p>
+                            <p className="text-[10px] text-stone-400 uppercase tracking-wider">{successLabel} fit</p>
+                        </div>
+                    </div>
+
+                    {/* Quick links to existing actions on the page */}
+                    {contacts.length > 0 && contacts[0]?.email && (
+                        <a
+                            href={`mailto:${contacts[0].email}`}
+                            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 text-sm font-semibold hover:bg-blue-100 transition"
+                        >
+                            <Mail className="w-4 h-4" /> Email POC
+                        </a>
+                    )}
+                    {opp.notice_id && (
+                        <a
+                            href={`https://sam.gov/opp/${opp.notice_id}/view`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-stone-50 text-stone-700 border border-stone-200 text-sm font-semibold hover:bg-stone-100 transition"
+                        >
+                            <ExternalLink className="w-4 h-4" /> SAM.gov
+                        </a>
+                    )}
+
+                    {/* Primary action — Pursue */}
+                    <div className="flex-1 sm:flex-none sm:ml-auto">
+                        <PursueButton opportunityId={opp.id} noticeType={opp.notice_type || ""} />
+                    </div>
+                </div>
             </div>
         </div>
     );
