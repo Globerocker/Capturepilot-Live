@@ -13,6 +13,7 @@
  */
 
 import OpenAI from "openai";
+import { HUMAN_VOICE_RULES } from "@/lib/llm/humanizer";
 
 const MODEL = "gpt-4o-mini";
 
@@ -77,7 +78,7 @@ export async function generatePitch(input: PitchInput): Promise<PitchOutput> {
     response_format: { type: "json_object" },
     temperature: 0.7,
     messages: [
-      { role: "system", content: SYSTEM_PROMPT + "\n\nReturn JSON: {\"subject\": string, \"body\": string}." },
+      { role: "system", content: `${HUMAN_VOICE_RULES}\n\n${SYSTEM_PROMPT}\n\nReturn JSON: {"subject": string, "body": string}.` },
       { role: "user", content: buildUserPrompt(input) },
     ],
   });

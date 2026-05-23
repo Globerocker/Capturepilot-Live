@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { assertAdmin } from "@/lib/auth-admin";
+import { HUMAN_VOICE_RULES } from "@/lib/llm/humanizer";
 
 export const maxDuration = 60;
 
@@ -76,7 +77,7 @@ Draft the invite email copy now. Return JSON only.`;
                 temperature: 0.6,
                 max_tokens: 500,
                 messages: [
-                    { role: "system", content: systemPrompt },
+                    { role: "system", content: `${HUMAN_VOICE_RULES}\n\n${systemPrompt}` },
                     { role: "user", content: userPrompt },
                 ],
             }),

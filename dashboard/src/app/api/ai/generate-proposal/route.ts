@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { HUMAN_VOICE_RULES } from "@/lib/llm/humanizer";
 
 export const maxDuration = 120;
 
@@ -109,7 +110,10 @@ ${description.substring(0, 5000)}`;
                 messages: [
                     {
                         role: "system",
-                        content: `You are an expert government proposal writer with 20+ years of experience winning federal contracts. Generate a detailed proposal outline for the given opportunity.
+                        content: `${HUMAN_VOICE_RULES}\n\nYou are also generating a federal proposal outline. Write the guidance and win themes in the same plain, specific voice — no marketing fluff. The JSON structure itself stays as specified.
+
+Original outline brief:
+Generate a detailed proposal outline for the given opportunity.
 
 Return a JSON object with this structure:
 {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { HUMAN_VOICE_RULES } from "@/lib/llm/humanizer";
 
 export const maxDuration = 60;
 
@@ -123,7 +124,7 @@ Requirements:
                 temperature: 0.4,
                 response_format: { type: "json_object" },
                 messages: [
-                    { role: "system", content: system },
+                    { role: "system", content: `${HUMAN_VOICE_RULES}\n\n${system}` },
                     { role: "user", content: user },
                 ],
             }),

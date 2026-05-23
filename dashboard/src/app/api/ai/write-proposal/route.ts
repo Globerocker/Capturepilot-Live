@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { HUMAN_VOICE_RULES } from "@/lib/llm/humanizer";
 
 export const maxDuration = 300;
 
@@ -257,7 +258,7 @@ Write ONLY the section content. No headers, no "Section X:" prefix. Just the bod
                 body: JSON.stringify({
                     model: "gpt-4o-mini",
                     messages: [
-                        { role: "system", content: "You are an expert government proposal writer who has won billions of dollars in federal contracts. Write compelling, compliant, and specific proposal content." },
+                        { role: "system", content: `${HUMAN_VOICE_RULES}\n\nYou are also drafting a federal proposal section. Write content that's compliant, specific to the actual solicitation, and credible. No marketing fluff, no overclaiming.` },
                         { role: "user", content: sectionPrompt },
                     ],
                     max_tokens: Math.min(4000, wordsPerSection * 2),

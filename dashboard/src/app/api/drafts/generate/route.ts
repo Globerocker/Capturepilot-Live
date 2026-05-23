@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
+import { HUMAN_VOICE_RULES } from "@/lib/llm/humanizer";
 
 export async function POST(request: Request) {
     const cookieStore = await cookies();
@@ -137,7 +138,7 @@ Rules:
                 body: JSON.stringify({
                     model: "gpt-4o-mini",
                     messages: [
-                        { role: "system", content: "You are a B2G sales email expert. Follow the user's formatting instructions exactly." },
+                        { role: "system", content: `${HUMAN_VOICE_RULES}\n\nYou are also drafting a B2G sales email. Follow the user's formatting instructions exactly.` },
                         { role: "user", content: prompt },
                     ],
                     max_tokens: 2048,

@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { HUMAN_VOICE_RULES } from "@/lib/llm/humanizer";
 
 export const maxDuration = 180;
 export const dynamic = "force-dynamic";
@@ -193,7 +194,8 @@ ${additional_text ? `ADDITIONAL INFO:\n${additional_text}\n` : ""}`.trim();
                                     {
                                         role: "system",
                                         content:
-                                            "You are an expert federal capture/proposal writer. You craft Capability Statement sections that Contracting Officers expect: factual, specific, scannable, no marketing fluff. " +
+                                            `${HUMAN_VOICE_RULES}\n\n` +
+                                            "You are drafting Capability Statement sections that Contracting Officers expect: factual, specific, scannable. " +
                                             "Honor the formatting rules in the user prompt exactly (bullets with '- ', no numbering, etc.).",
                                     },
                                     { role: "user", content: `${section.prompt}\n\n${companyContext}` },

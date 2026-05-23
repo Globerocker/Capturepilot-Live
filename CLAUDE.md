@@ -30,6 +30,7 @@ git push captiorpilot main && git push live main && git push globerocker main
 - Never commit `.env`, `.env.local`, `.mcp.json`
 - When creating migrations, pick the next free number under `supabase/migrations/` (current latest: **070**)
 - **Cron handlers must use `guardCron(req)` from `@/lib/cron-auth`** — fail-closed in production. See [CRON.md](CRON.md) for the complete cron + agent reference.
+- **Any AI-writing prompt for user-facing copy must prepend `HUMAN_VOICE_RULES` from `@/lib/llm/humanizer`** so output matches the CapturePilot voice. Full style guide in [HUMANIZER.md](HUMANIZER.md). Invoke `/humanizer` to review or rewrite copy.
 - **Admin handlers must call `assertAdmin()` from `@/lib/auth-admin`** at the top of every exported `GET`/`POST`/`PATCH`/`DELETE`. Returns `NextResponse` on reject; caller does `if (unauth) return unauth`. Re-run `node tools/30_smoke_admin.mjs --base <url>` after touching `/api/admin/**` to verify the gate is still there.
 
 ## Architecture

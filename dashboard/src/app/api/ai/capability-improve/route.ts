@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { HUMAN_VOICE_RULES } from "@/lib/llm/humanizer";
 
 export const maxDuration = 30;
 
@@ -36,7 +37,8 @@ export async function POST(req: NextRequest) {
                     {
                         role: "system",
                         content:
-                            "You are an expert federal proposal writer. You rewrite passages of a Capability Statement. " +
+                            `${HUMAN_VOICE_RULES}\n\n` +
+                            "You are rewriting passages of a Capability Statement. " +
                             "Return ONLY the rewritten text with no preamble, no quotation marks, no explanation. Preserve line breaks and bullet formatting if present.",
                     },
                     {

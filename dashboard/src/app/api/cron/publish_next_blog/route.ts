@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { guardCron } from "@/lib/cron-auth";
+import { HUMAN_VOICE_RULES } from "@/lib/llm/humanizer";
 
 export const maxDuration = 300;
 
@@ -108,23 +109,22 @@ async function listPublishedSlugs(env: { owner: string; repo: string; token: str
 
 async function generatePost(topic: BlogTopic, openaiKey: string): Promise<GeneratedPost> {
   const openai = new OpenAI({ apiKey: openaiKey });
-  const prompt = `You are a senior federal contracting consultant writing for small business owners.
-Write a detailed, useful blog post for the keyword "${topic.keyword}" with title "${topic.title}".
+  const userPrompt = `Write a blog post for the keyword "${topic.keyword}" with title "${topic.title}".
 
 Audience: small business owners pursuing US federal government contracts (SAM.gov, SBA set-asides).
-Length: 1,200-1,800 words. Concrete, actionable, no fluff. Cite real programs/agency names.
-No fake statistics — only realistic ranges or "many" / "most" if you are not certain of an exact number.
+Length: 1,200-1,800 words. Concrete and useful. Cite real agencies and real programs.
+Never invent statistics — say "usually", "most", "in our experience" instead of fake percentages.
 
 Return ONLY valid JSON in this exact shape (no markdown fences):
 {
-  "intro_paragraph": "<one-paragraph hook that names the keyword and the reader's pain>",
+  "intro_paragraph": "<one-paragraph opener that names the reader's actual problem in plain language>",
   "sections": [
     { "heading": "<H2>", "body_markdown": "<2-4 paragraphs of markdown, use ** for bold, - for lists>" }
   ],
-  "conclusion": "<paragraph that leads into a CTA to try CapturePilot's free Quick Checker at app.capturepilot.com/check>",
-  "meta_description": "<≤160 char SEO description with the target keyword and a CTA verb>",
+  "conclusion": "<paragraph that leads into a soft mention of CapturePilot's free check at app.capturepilot.com/check>",
+  "meta_description": "<≤160 char SEO description with the target keyword, in plain English>",
   "faq": [
-    { "q": "<question>", "a": "<concise 2-3 sentence answer>" }
+    { "q": "<question someone would actually ask>", "a": "<concise 2-3 sentence answer>" }
   ]
 }
 
@@ -139,7 +139,10 @@ Constraints:
     response_format: { type: "json_object" },
     temperature: 0.55,
     max_tokens: 5500,
-    messages: [{ role: "user", content: prompt }],
+    messages: [
+      { role: "system", content: HUMAN_VOICE_RULES },
+      { role: "user", content: userPrompt },
+    ],
   });
 
   const text = chat.choices[0]?.message?.content ?? "{}";

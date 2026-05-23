@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
 import { createJob, runStep, startJob, completeJob, failJob, requireProfileId } from "@/lib/background-jobs";
+import { HUMAN_VOICE_RULES } from "@/lib/llm/humanizer";
 
 export const maxDuration = 180;
 
@@ -222,7 +223,7 @@ export async function POST(req: NextRequest) {
                             messages: [
                                 {
                                     role: "system",
-                                    content: "You are narrating a capture brief to a consultant driving between meetings. Summarize in under 150 words, conversational. Open with PWin + bid/no-bid, then program, incumbent, top risk, top action. No lists — full sentences.",
+                                    content: `${HUMAN_VOICE_RULES}\n\nYou are narrating a capture brief to a consultant driving between meetings. Summarize in under 150 words, conversational. Open with PWin + bid/no-bid, then program, incumbent, top risk, top action. No lists — full sentences.`,
                                 },
                                 { role: "user", content: JSON.stringify(briefData.brief) },
                             ],
