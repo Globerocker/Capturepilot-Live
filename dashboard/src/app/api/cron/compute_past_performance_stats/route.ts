@@ -21,6 +21,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { withCronTelemetry } from "@/lib/cron-telemetry";
+import { toUsaSpendingToptier } from "@/lib/usaspending-agency-map";
 
 export const maxDuration = 300;
 
@@ -151,18 +152,27 @@ async function GET_handler(req: NextRequest): Promise<NextResponse> {
     }
 
     const seen = new Set<string>();
-    const candidates: Array<{ agency: string; naics_prefix: string }> = [];
+    const candidates: Array<{ agency: string; naics_prefix: string; usa_agency: string }> = [];
+    let unmapped = 0;
     for (const o of opps || []) {
         const agency = (o as { agency?: string }).agency?.trim();
         const naics = (o as { naics_code?: string }).naics_code?.toString().trim();
         if (!agency || !naics || naics.length < 4) continue;
+        const usaAgency = toUsaSpendingToptier(agency);
+        if (!usaAgency) {
+            unmapped++;
+            continue;
+        }
         const prefix = naics.slice(0, 4);
-        const key = `${agency}|${prefix}`;
+        const key = `${usaAgency}|${prefix}`;
         if (seen.has(key)) continue;
         seen.add(key);
-        candidates.push({ agency, naics_prefix: prefix });
+        // Store the SAM agency as our canonical key (so users see what they know),
+        // but query USAspending with the mapped toptier name.
+        candidates.push({ agency: usaAgency, naics_prefix: prefix, usa_agency: usaAgency });
     }
     stats.pairs_considered = candidates.length;
+    (stats as Record<string, unknown>).unmapped_agencies = unmapped;
 
     // Skip pairs that have been computed in the last 14 days
     const cutoff = new Date(Date.now() - 14 * 86400_000).toISOString();
@@ -173,9 +183,9 @@ async function GET_handler(req: NextRequest): Promise<NextResponse> {
     const freshSet = new Set<string>((fresh || []).map(r => `${r.agency}|${r.naics_prefix}`));
     const toProcess = candidates.filter(c => !freshSet.has(`${c.agency}|${c.naics_prefix}`)).slice(0, maxPairs);
 
-    for (const { agency, naics_prefix } of toProcess) {
+    for (const { agency, naics_prefix, usa_agency } of toProcess) {
         if (Date.now() - t0 > 270_000) break;
-        const rows = await fetchPair(agency, naics_prefix);
+        const rows = await fetchPair(usa_agency, naics_prefix);
         if (rows.length === 0) {
             // Still write a zero-row marker so we don't poll this pair every run.
             await db.from("past_performance_stats").upsert({
