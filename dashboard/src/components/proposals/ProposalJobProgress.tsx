@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Loader2, CheckCircle2, AlertCircle, FileText, Clock, X } from "lucide-react";
+import { Loader2, CheckCircle2, AlertCircle, FileText, Clock, X, ChevronDown, ChevronRight } from "lucide-react";
 import clsx from "clsx";
 
 export interface ProposalJobStatus {
@@ -9,7 +9,9 @@ export interface ProposalJobStatus {
     notice_id: string;
     status: "pending" | "writing" | "completed" | "failed";
     sections_requested: string[];
-    sections_completed: Array<{ title: string; word_count: number; completed_at: string }>;
+    // content is populated server-side as each section finishes so we can
+    // render a live preview before the whole proposal completes.
+    sections_completed: Array<{ title: string; content?: string; word_count: number; completed_at: string }>;
     sections_errored: Array<{ section: string; error: string }>;
     current_section: string | null;
     total_sections: number | null;
@@ -51,6 +53,9 @@ export default function ProposalJobProgress({
     const [status, setStatus] = useState<ProposalJobStatus | null>(null);
     const [pollError, setPollError] = useState<string | null>(null);
     const notifiedRef = useRef(false);
+    // Tracks which completed sections the user has expanded. Live-preview
+    // content is rendered inline when the section row is clicked.
+    const [expandedSection, setExpandedSection] = useState<string | null>(null);
 
     const poll = useCallback(async () => {
         try {
@@ -208,46 +213,66 @@ export default function ProposalJobProgress({
                         const errored = status.sections_errored.find(e => e.section === sectionTitle);
                         const isCurrent = isActive && status.current_section === sectionTitle;
 
+                        const hasContent = !!completed?.content;
+                        const isExpanded = expandedSection === sectionTitle;
                         return (
-                            <div
-                                key={sectionTitle}
-                                className={clsx(
-                                    "flex items-center gap-2 px-3 py-2 rounded-lg border text-xs",
-                                    completed && "bg-emerald-50/60 border-emerald-200",
-                                    errored && "bg-red-50 border-red-200",
-                                    isCurrent && !completed && !errored && "bg-emerald-50/40 border-emerald-200",
-                                    !completed && !errored && !isCurrent && "bg-stone-50 border-stone-200",
-                                )}
-                            >
-                                {completed ? (
-                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
-                                ) : errored ? (
-                                    <AlertCircle className="w-3.5 h-3.5 text-red-600 flex-shrink-0" />
-                                ) : isCurrent ? (
-                                    <Loader2 className="w-3.5 h-3.5 text-emerald-500 animate-spin flex-shrink-0" />
-                                ) : (
-                                    <Clock className="w-3.5 h-3.5 text-stone-400 flex-shrink-0" />
-                                )}
-                                <span
+                            <div key={sectionTitle}>
+                                <div
+                                    onClick={() => {
+                                        if (hasContent) setExpandedSection(isExpanded ? null : sectionTitle);
+                                    }}
                                     className={clsx(
-                                        "flex-1 font-medium",
-                                        completed && "text-emerald-900",
-                                        errored && "text-red-800",
-                                        !completed && !errored && !isCurrent && "text-stone-500",
-                                        isCurrent && !completed && !errored && "text-emerald-800",
+                                        "flex items-center gap-2 px-3 py-2 rounded-lg border text-xs",
+                                        completed && "bg-emerald-50/60 border-emerald-200",
+                                        errored && "bg-red-50 border-red-200",
+                                        isCurrent && !completed && !errored && "bg-emerald-50/40 border-emerald-200",
+                                        !completed && !errored && !isCurrent && "bg-stone-50 border-stone-200",
+                                        hasContent && "cursor-pointer hover:bg-emerald-100/60",
+                                        isExpanded && "rounded-b-none",
                                     )}
                                 >
-                                    {sectionTitle}
-                                </span>
-                                {completed && (
-                                    <span className="text-[10px] text-emerald-600 font-mono">
-                                        {completed.word_count.toLocaleString()} words
+                                    {completed ? (
+                                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+                                    ) : errored ? (
+                                        <AlertCircle className="w-3.5 h-3.5 text-red-600 flex-shrink-0" />
+                                    ) : isCurrent ? (
+                                        <Loader2 className="w-3.5 h-3.5 text-emerald-500 animate-spin flex-shrink-0" />
+                                    ) : (
+                                        <Clock className="w-3.5 h-3.5 text-stone-400 flex-shrink-0" />
+                                    )}
+                                    <span
+                                        className={clsx(
+                                            "flex-1 font-medium",
+                                            completed && "text-emerald-900",
+                                            errored && "text-red-800",
+                                            !completed && !errored && !isCurrent && "text-stone-500",
+                                            isCurrent && !completed && !errored && "text-emerald-800",
+                                        )}
+                                    >
+                                        {sectionTitle}
                                     </span>
-                                )}
-                                {errored && (
-                                    <span className="text-[10px] text-red-600 font-mono truncate max-w-[160px]">
-                                        {errored.error}
-                                    </span>
+                                    {completed && (
+                                        <span className="text-[10px] text-emerald-600 font-mono">
+                                            {completed.word_count.toLocaleString()} words
+                                        </span>
+                                    )}
+                                    {errored && (
+                                        <span className="text-[10px] text-red-600 font-mono truncate max-w-[160px]">
+                                            {errored.error}
+                                        </span>
+                                    )}
+                                    {hasContent && (
+                                        isExpanded
+                                            ? <ChevronDown className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+                                            : <ChevronRight className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
+                                    )}
+                                </div>
+                                {hasContent && isExpanded && (
+                                    <div className="border border-t-0 border-emerald-200 bg-white rounded-b-lg px-4 py-3 -mt-px">
+                                        <pre className="whitespace-pre-wrap font-sans text-xs text-stone-700 leading-relaxed max-h-[400px] overflow-y-auto">
+                                            {completed!.content}
+                                        </pre>
+                                    </div>
                                 )}
                             </div>
                         );

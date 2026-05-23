@@ -662,3 +662,71 @@ export async function onAmericurialContactForm(params: {
     }
   }
 }
+
+// ─── Backlink contact discovery ──────────────────────────────────────────────
+
+export interface HubspotContactSummary {
+  hubspot_id: string;
+  email: string;
+  full_name: string | null;
+  job_title: string | null;
+  linkedin_url: string | null;
+}
+
+/**
+ * Find existing HubSpot contacts whose email-domain matches the given site.
+ *
+ * Powers the backlink_contact_enrichment cron: if a prospect's domain has
+ * already been touched by sales (e.g. an editor we emailed once via
+ * Americurial), we surface that contact first instead of starting cold.
+ * Falls back gracefully when no token is configured or no contacts match.
+ *
+ * Important: HubSpot's `email` property doesn't support "ends with" — we
+ * use CONTAINS_TOKEN with "@domain.com" which matches the email-domain part.
+ */
+export async function findContactsByDomain(
+  domain: string,
+  limit = 10,
+): Promise<HubspotContactSummary[]> {
+  if (!HUBSPOT_TOKEN) return [];
+  const clean = domain.toLowerCase().replace(/^www\./, "");
+  try {
+    const result = await hsApi("POST", "/crm/v3/objects/contacts/search", {
+      filterGroups: [{
+        filters: [{ propertyName: "email", operator: "CONTAINS_TOKEN", value: `@${clean}` }],
+      }],
+      properties: ["email", "firstname", "lastname", "jobtitle", "linkedinbio", "hs_linkedin_url"],
+      limit,
+    });
+    const rows = (result.results as Array<{ id: string; properties: Record<string, string | null> }>) || [];
+    return rows
+      .filter(r => {
+        const email = r.properties.email?.toLowerCase();
+        return email && email.endsWith(`@${clean}`);
+      })
+      .map(r => {
+        const first = r.properties.firstname || "";
+        const last = r.properties.lastname || "";
+        const full = `${first} ${last}`.trim();
+        return {
+          hubspot_id: r.id,
+          email: (r.properties.email || "").toLowerCase(),
+          full_name: full || null,
+          job_title: r.properties.jobtitle || null,
+          linkedin_url: r.properties.hs_linkedin_url || r.properties.linkedinbio || null,
+        };
+      });
+  } catch (err) {
+    console.warn(`[HubSpot] findContactsByDomain(${clean}) failed:`, (err as Error).message);
+    return [];
+  }
+}
+
+/** Map a HubSpot job-title string onto our backlink_contacts.role enum. */
+export function roleFromJobTitle(title: string | null): "editor" | "pr" | "unknown" {
+  if (!title) return "unknown";
+  const t = title.toLowerCase();
+  if (/editor|editorial|writer|journalist|reporter|contributor/.test(t)) return "editor";
+  if (/press|public relations|\bpr\b|comms?|spokes/.test(t)) return "pr";
+  return "unknown";
+}

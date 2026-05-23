@@ -277,14 +277,17 @@ Write ONLY the section content. No headers, no "Section X:" prefix. Just the bod
                     };
                     writtenSections.push(sec);
                     if (jobId) {
+                        // Persist completed sections WITH content so the status
+                        // endpoint can stream them into the live-preview UI as
+                        // they finish — no need to wait for the whole proposal
+                        // to complete before users see what's been written.
                         await db.from("proposal_jobs").update({
-                            sections_completed: [
-                                ...writtenSections.map(s => ({
-                                    title: s.title,
-                                    word_count: s.word_count,
-                                    completed_at: new Date().toISOString(),
-                                })),
-                            ],
+                            sections_completed: writtenSections.map(s => ({
+                                title: s.title,
+                                content: s.content,
+                                word_count: s.word_count,
+                                completed_at: new Date().toISOString(),
+                            })),
                             completed_sections: writtenSections.length,
                         }).eq("id", jobId);
                     }
