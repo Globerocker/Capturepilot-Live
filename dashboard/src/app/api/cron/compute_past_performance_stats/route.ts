@@ -134,11 +134,15 @@ async function GET_handler(req: NextRequest): Promise<NextResponse> {
     const maxPairs = Math.min(parseInt(req.nextUrl.searchParams.get("limit") || "30", 10), 100);
     const stats = { pairs_considered: 0, pairs_updated: 0, errors: 0 };
 
-    // Discover candidate (agency, naics_prefix_4) pairs from active opportunities
+    // Discover candidate (agency, naics_prefix_4) pairs from FEDERAL opportunities only.
+    // USAspending only contains federal contract data — SLED rows (source='sled')
+    // return zero from USAspending every time and pollute the table with
+    // useless zero-marker rows.
     const { data: opps, error: oppErr } = await db
         .from("opportunities")
-        .select("agency, naics_code")
+        .select("agency, naics_code, source")
         .eq("is_archived", false)
+        .or("source.is.null,source.eq.sam")
         .not("agency", "is", null)
         .not("naics_code", "is", null)
         .limit(5000);

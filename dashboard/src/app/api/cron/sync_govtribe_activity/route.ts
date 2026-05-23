@@ -33,15 +33,18 @@ const APP_BASE = process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL
     ? `https://${process.env.VERCEL_URL}`
     : "https://app.capturepilot.com";
 
-async function prewarm(path: string, params: Record<string, string>, serviceKey: string): Promise<boolean> {
+async function prewarm(path: string, params: Record<string, string>, serviceKey: string): Promise<{ ok: boolean; status: number; body: string }> {
     const q = new URLSearchParams(params).toString();
     try {
         const res = await fetch(`${APP_BASE}${path}?${q}`, {
             headers: { Authorization: `Bearer ${serviceKey}` },
             signal: AbortSignal.timeout(25000),
         });
-        return res.ok;
-    } catch { return false; }
+        const body = await res.text().catch(() => "");
+        return { ok: res.ok, status: res.status, body: body.slice(0, 200) };
+    } catch (e) {
+        return { ok: false, status: 0, body: (e as Error).message.slice(0, 200) };
+    }
 }
 
 async function GET_handler(req: NextRequest): Promise<NextResponse> {
@@ -65,7 +68,7 @@ async function GET_handler(req: NextRequest): Promise<NextResponse> {
     const t0 = Date.now();
     const db = getDb();
     const limit = Math.min(parseInt(req.nextUrl.searchParams.get("limit") || "40", 10), 200);
-    const stats = { opps_considered: 0, prewarmed_activity: 0, prewarmed_awards: 0, errors: 0 };
+    const stats = { opps_considered: 0, prewarmed_activity: 0, prewarmed_awards: 0, errors: 0, error_samples: [] as Array<{ path: string; status: number; body: string }> };
 
     // Target the most actionable opps: active, deadline within 60 days,
     // with a real solicitation_number.
@@ -89,10 +92,16 @@ async function GET_handler(req: NextRequest): Promise<NextResponse> {
         if (Date.now() - t0 > 270_000) break;
         const sol = (opp as { solicitation_number?: string }).solicitation_number;
         if (!sol) continue;
-        const aOk = await prewarm("/api/intelligence/govtribe/activity-summary", { solicitation: sol }, serviceKey);
-        if (aOk) stats.prewarmed_activity++; else stats.errors++;
-        const wOk = await prewarm("/api/intelligence/govtribe/awards-summary", { solicitation: sol }, serviceKey);
-        if (wOk) stats.prewarmed_awards++; else stats.errors++;
+        const a = await prewarm("/api/intelligence/govtribe/activity-summary", { solicitation: sol }, serviceKey);
+        if (a.ok) stats.prewarmed_activity++; else {
+            stats.errors++;
+            if (stats.error_samples.length < 3) stats.error_samples.push({ path: "activity-summary", status: a.status, body: a.body });
+        }
+        const w = await prewarm("/api/intelligence/govtribe/awards-summary", { solicitation: sol }, serviceKey);
+        if (w.ok) stats.prewarmed_awards++; else {
+            stats.errors++;
+            if (stats.error_samples.length < 3) stats.error_samples.push({ path: "awards-summary", status: w.status, body: w.body });
+        }
         // GovTribe MCP gates rate-limits — throttle
         await new Promise(r => setTimeout(r, 600));
     }

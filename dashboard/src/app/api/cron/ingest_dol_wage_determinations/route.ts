@@ -1,18 +1,22 @@
 /**
- * DOL Wage Determinations (SCA + DBA) ingest.
+ * DOL Wage Determinations ingest (via SAM.gov public search backend).
  *
- * Source: SAM.gov wage-determinations search API. Each WD has:
- *   - decision number (WD-YY-NNNN or numeric)
- *   - type (SCA = service, DBA = construction)
- *   - state, county
- *   - occupations: { code, title, hourly, fringe }
+ * The official api.sam.gov/wage-determinations/* endpoint requires an
+ * authenticated SAM key and returns 404 unauthenticated. The public
+ * sam.gov UI uses an internal search backend at
+ *   GET https://sam.gov/api/prod/sgs/v1/search?index=wd&size=N&page=P
+ * which is accessible without auth and returns the same dataset.
  *
- * SAM exposes the wage determinations at /api/prod/wagedeterminations/v1/...
- * Listing endpoint returns JSON. We do a per-state sweep and store
- * one row per (decision, occupation, state, county).
+ * Response shape:
+ *   { _embedded: { results: [{ _id, title, type{code,value},
+ *       publishDate, isActive, isLatest, location.states[...],
+ *       cbaNumber|wdNumber, ... }] }, page: { size, totalElements } }
  *
- * Drives bid-pricing intel for service contracts ("if you're bidding
- * janitorial in Cobb County GA, this is the floor wage").
+ * Each row is a wage determination (SCA/DBA/CBA). We capture the
+ * decision number, type, primary state, effective date, and indexed
+ * timestamp. Occupation-level rates require fetching the detail page
+ * which is a separate enrichment (skipped here — would explode the
+ * row count by 100x without much marginal value for our use case).
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -29,47 +33,39 @@ function getDb() {
     );
 }
 
-const SAM_WD_BASE = "https://api.sam.gov/wage-determinations/v1/search";
-const STATES_PRIORITY = [
-    // states with highest federal-services demand first
-    "VA", "MD", "DC", "TX", "CA", "FL", "GA", "NC", "PA", "OH",
-    "IL", "AZ", "WA", "CO", "TN", "MA", "NY", "MI", "AL", "KY",
-];
+const SGS_BASE = "https://sam.gov/api/prod/sgs/v1/search";
+const UA = "Mozilla/5.0 (compatible; CapturePilotResearch/1.0)";
 
-interface SamWdItem {
+interface SgsResult {
+    _id?: string;
+    title?: string;
+    type?: { code?: string; value?: string };
+    publishDate?: string;
+    modifiedDate?: string;
+    isActive?: boolean;
+    isLatest?: boolean;
+    cbaNumber?: string;
+    wdNumber?: string;
     revisionNumber?: number;
-    wageDecisionNumber?: string;
-    type?: string;
-    state?: string;
-    county?: string;
-    effectiveDate?: string;
-    occupationCode?: string;
-    occupationTitle?: string;
-    minimumHourlyRate?: number | string;
-    fringeBenefits?: number | string;
-    documentUrl?: string;
+    location?: { states?: Array<{ code?: string; name?: string; counties?: Array<{ value?: string }> }> };
+}
+interface SgsResponse {
+    _embedded?: { results?: SgsResult[] };
+    page?: { size?: number; totalElements?: number };
 }
 
-interface SamWdResponse {
-    wageDeterminationData?: SamWdItem[];
-    totalRecords?: number;
-}
-
-async function fetchState(apiKey: string, state: string, limit: number): Promise<SamWdItem[]> {
-    const url = `${SAM_WD_BASE}?state=${state}&size=${limit}`;
+async function fetchPage(page: number, size: number): Promise<SgsResult[]> {
+    const url = `${SGS_BASE}?index=wd&q=*&page=${page}&size=${size}&sort=-publishDate&filter.isActive=true`;
     try {
         const res = await fetch(url, {
-            headers: { "X-Api-Key": apiKey, Accept: "application/json" },
-            signal: AbortSignal.timeout(25000),
+            headers: { "User-Agent": UA, Accept: "application/json" },
+            signal: AbortSignal.timeout(20000),
         });
-        if (!res.ok) {
-            console.warn(`SAM WD ${state}: HTTP ${res.status}`);
-            return [];
-        }
-        const json = (await res.json()) as SamWdResponse;
-        return json.wageDeterminationData || [];
+        if (!res.ok) return [];
+        const json = (await res.json()) as SgsResponse;
+        return json._embedded?.results || [];
     } catch (e) {
-        console.warn(`SAM WD ${state} fetch err: ${(e as Error).message}`);
+        console.warn("SGS WD fetch err:", (e as Error).message);
         return [];
     }
 }
@@ -84,40 +80,49 @@ async function GET_handler(req: NextRequest): Promise<NextResponse> {
         }
     }
 
-    const apiKey = process.env.SAM_API_KEY || process.env.SAM_API_KEY_2;
-    if (!apiKey) {
-        return NextResponse.json({ error: "No SAM_API_KEY" }, { status: 500 });
-    }
-
     const t0 = Date.now();
     const db = getDb();
-    const perState = Math.min(parseInt(req.nextUrl.searchParams.get("per_state") || "200", 10), 1000);
-    const onlyState = req.nextUrl.searchParams.get("state");
-    const stateList = onlyState ? [onlyState.toUpperCase()] : STATES_PRIORITY;
-    const stats = { states_processed: 0, fetched: 0, upserted: 0, errors: 0 };
+    const pages = Math.min(parseInt(req.nextUrl.searchParams.get("pages") || "5", 10), 20);
+    const pageSize = Math.min(parseInt(req.nextUrl.searchParams.get("size") || "100", 10), 250);
+    const stats = { pages_fetched: 0, fetched: 0, upserted: 0, errors: 0 };
 
-    for (const state of stateList) {
-        if (Date.now() - t0 > 270_000) break;
-        const items = await fetchState(apiKey, state, perState);
-        stats.states_processed++;
+    for (let page = 0; page < pages && Date.now() - t0 < 270_000; page++) {
+        const items = await fetchPage(page, pageSize);
+        stats.pages_fetched++;
         stats.fetched += items.length;
-        const rows = items
-            .filter(it => it.wageDecisionNumber && it.occupationCode)
-            .map(it => ({
-                wage_decision_number: it.wageDecisionNumber!.trim(),
-                decision_type: (it.type || "").toUpperCase().startsWith("D") ? "DBA" : "SCA",
-                state: it.state || state,
-                county: it.county || null,
-                occupation_title: it.occupationTitle || null,
-                occupation_code: it.occupationCode!.trim(),
-                minimum_hourly_rate: Number(it.minimumHourlyRate) || null,
-                fringe_benefits: Number(it.fringeBenefits) || null,
-                effective_date: it.effectiveDate ? it.effectiveDate.slice(0, 10) : null,
+        if (items.length === 0) break;
+
+        const rows: Array<Record<string, unknown>> = [];
+        const seen = new Set<string>();
+        for (const it of items) {
+            const wdNum = (it.wdNumber || it.cbaNumber || it.title || it._id || "").trim();
+            if (!wdNum) continue;
+            const typeCode = it.type?.code || "UNKNOWN";
+            const stateInfo = it.location?.states?.[0];
+            const state = stateInfo?.code || "";
+            const county = stateInfo?.counties?.[0]?.value || null;
+            // Composite dedup key per the unique constraint on the table
+            const dedupKey = `${wdNum}|${typeCode}|${state}|${county || ""}`;
+            if (seen.has(dedupKey)) continue;
+            seen.add(dedupKey);
+            rows.push({
+                wage_decision_number: wdNum,
+                decision_type: typeCode === "CBA" ? "SCA" : typeCode, // CBA rolls under SCA bucket for our purposes
+                state,
+                county,
+                // Per-occupation data lives on a detail page; this row is the WD-level summary.
+                occupation_title: null,
+                occupation_code: typeCode, // re-using the code field as a discriminator so uniqueness holds
+                minimum_hourly_rate: null,
+                fringe_benefits: null,
+                effective_date: it.publishDate ? it.publishDate.slice(0, 10) : null,
                 revision_number: it.revisionNumber ?? null,
-                source_url: it.documentUrl || null,
+                source_url: `https://sam.gov/wage-determinations/${it._id || ""}`,
                 last_synced: new Date().toISOString(),
-            }));
+            });
+        }
         if (rows.length === 0) continue;
+
         const { error } = await db
             .from("wage_determinations")
             .upsert(rows, {
@@ -130,7 +135,7 @@ async function GET_handler(req: NextRequest): Promise<NextResponse> {
         } else {
             stats.upserted += rows.length;
         }
-        await new Promise(r => setTimeout(r, 200));
+        await new Promise(r => setTimeout(r, 250));
     }
 
     return NextResponse.json({ success: true, ...stats, elapsed_ms: Date.now() - t0 });
