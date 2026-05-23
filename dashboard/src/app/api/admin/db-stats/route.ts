@@ -153,11 +153,57 @@ export async function GET() {
         }));
 
     // --- Recent change-log entries (best-effort) -------------------------
+    // Pull a generous page so we can join profile company_name in JS without
+    // a second round-trip. Falls back to (none) when the row is orphaned.
     const { data: activity } = await sb
         .from("client_activity_log")
-        .select("id, user_profile_id, action, description, created_at")
+        .select("id, user_profile_id, actor_id, action, description, metadata, created_at")
         .order("created_at", { ascending: false })
-        .limit(15);
+        .limit(20);
+
+    // Build profile-id → company_name map for the activity items we just pulled.
+    const profileIds = Array.from(new Set((activity || []).map(a => a.user_profile_id)));
+    let profileNameMap = new Map<string, { company_name: string | null; account_type: string | null }>();
+    if (profileIds.length) {
+        const { data: profiles } = await sb
+            .from("user_profiles")
+            .select("id, company_name, account_type")
+            .in("id", profileIds);
+        for (const p of (profiles || []) as Array<{ id: string; company_name: string | null; account_type: string | null }>) {
+            profileNameMap.set(p.id, { company_name: p.company_name, account_type: p.account_type });
+        }
+    }
+    const enrichedActivity = (activity || []).map(a => ({
+        ...a,
+        profile: profileNameMap.get(a.user_profile_id) || null,
+    }));
+
+    // --- Last cleanup run from cleanup_log -------------------------------
+    // Aggregate the most-recent batch's rows by `kind` so the admin can see
+    // exactly what got transitioned/archived/deleted on Sunday.
+    const { data: cleanupRows } = await sb
+        .from("cleanup_log")
+        .select("run_at, kind, row_count, notes")
+        .order("run_at", { ascending: false })
+        .limit(60);
+
+    type CleanupRow = { run_at: string; kind: string; row_count: number; notes: Record<string, unknown> | null };
+    const cl = (cleanupRows as CleanupRow[] | null) || [];
+    let lastCleanup: { run_at: string; total_rows: number; by_kind: Array<{ kind: string; row_count: number }> } | null = null;
+    if (cl.length > 0) {
+        // Treat all entries within a 30-min window of the newest as the same run.
+        const newestMs = new Date(cl[0].run_at).getTime();
+        const sameRun = cl.filter(r => newestMs - new Date(r.run_at).getTime() < 30 * 60_000);
+        const byKindMap = new Map<string, number>();
+        for (const r of sameRun) byKindMap.set(r.kind, (byKindMap.get(r.kind) || 0) + r.row_count);
+        lastCleanup = {
+            run_at: cl[0].run_at,
+            total_rows: sameRun.reduce((s, r) => s + r.row_count, 0),
+            by_kind: Array.from(byKindMap.entries())
+                .map(([kind, row_count]) => ({ kind, row_count }))
+                .sort((a, b) => b.row_count - a.row_count),
+        };
+    }
 
     return NextResponse.json({
         generated_at: new Date().toISOString(),
@@ -177,6 +223,7 @@ export async function GET() {
         },
         crons,
         recent_logins: recentLogins,
-        recent_activity: activity || [],
+        recent_activity: enrichedActivity,
+        last_cleanup: lastCleanup,
     });
 }

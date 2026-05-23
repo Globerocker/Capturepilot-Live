@@ -18,6 +18,22 @@ const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
+// Color palette for activity-log entries. Keep in sync with the same map on
+// /admin/overview so chips look identical in both places.
+const ACTION_TONE_DETAIL: Record<string, string> = {
+    client_created: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    client_updated: "bg-blue-50 text-blue-700 border-blue-200",
+    account_type_changed: "bg-violet-50 text-violet-700 border-violet-200",
+    password_reset: "bg-amber-50 text-amber-700 border-amber-200",
+    status_changed: "bg-amber-50 text-amber-700 border-amber-200",
+    impersonation: "bg-rose-50 text-rose-700 border-rose-200",
+    deletion: "bg-rose-50 text-rose-700 border-rose-200",
+    task_created: "bg-blue-50 text-blue-700 border-blue-200",
+    task_completed: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    document_uploaded: "bg-cyan-50 text-cyan-700 border-cyan-200",
+    admin_user_update: "bg-violet-50 text-violet-700 border-violet-200",
+};
+
 interface ClientProfile {
     id: string;
     auth_user_id: string | null;
@@ -599,17 +615,55 @@ export default function ClientDetailPage() {
 
             {activeTab === "activity" && (
                 <div className="bg-white border border-stone-200 rounded-xl p-5">
-                    <h3 className="font-bold text-sm mb-3">Activity Log</h3>
-                    <div className="space-y-2 max-h-96 overflow-y-auto">
-                        {activity.map((a, i) => (
-                            <div key={i} className="flex items-start gap-2 py-2 border-b border-stone-50 last:border-0">
-                                <div className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-1.5 flex-shrink-0" />
-                                <div>
-                                    <p className="text-xs text-stone-700">{String(a.description)}</p>
-                                    <p className="text-[10px] text-stone-400">{new Date(String(a.created_at)).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</p>
+                    <div className="flex items-baseline justify-between mb-3">
+                        <h3 className="font-bold text-sm">Activity Log</h3>
+                        <p className="text-[10px] text-stone-400">{activity.length} entries · most recent first</p>
+                    </div>
+                    {activity.length === 0 && (
+                        <p className="text-xs text-stone-400">No activity logged yet for this profile.</p>
+                    )}
+                    <div className="space-y-2.5 max-h-[600px] overflow-y-auto">
+                        {activity.map((a, i) => {
+                            const action = String(a.action || "unknown");
+                            const description = String(a.description || "");
+                            const meta = (a.metadata as Record<string, unknown> | null) || null;
+                            const fields = meta && Array.isArray(meta.fields) ? (meta.fields as string[]) : null;
+                            const created = String(a.created_at);
+                            const tone = ACTION_TONE_DETAIL[action] || "bg-stone-100 text-stone-600 border-stone-200";
+                            return (
+                                <div key={i} className="flex items-start gap-3 py-2 border-b border-stone-50 last:border-0">
+                                    <span className={clsx(
+                                        "text-[9px] font-bold px-1.5 py-0.5 rounded border whitespace-nowrap mt-0.5",
+                                        tone,
+                                    )}>
+                                        {action.replace(/_/g, " ")}
+                                    </span>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-xs text-stone-700">{description}</p>
+                                        {/* Metadata fields — surfaces *which* columns changed on a client_updated, etc. */}
+                                        {fields && fields.length > 0 && (
+                                            <div className="flex flex-wrap gap-1 mt-1">
+                                                {fields.map((f, idx) => (
+                                                    <span key={idx} className="text-[9px] font-mono text-stone-500 bg-stone-50 border border-stone-200 px-1.5 py-0.5 rounded">
+                                                        {f}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
+                                        <div className="flex items-center gap-2 mt-1">
+                                            <p className="text-[10px] text-stone-400">
+                                                {new Date(created).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                                            </p>
+                                            {a.actor_id ? (
+                                                <p className="text-[10px] text-stone-400">
+                                                    · actor <span className="font-mono">{String(a.actor_id).slice(0, 8)}</span>
+                                                </p>
+                                            ) : null}
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </div>
             )}

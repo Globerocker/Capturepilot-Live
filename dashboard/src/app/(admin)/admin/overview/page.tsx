@@ -37,7 +37,41 @@ interface DbStats {
     };
     crons: CronStat[];
     recent_logins: Array<{ email: string | undefined; last_sign_in_at: string | undefined; created_at: string }>;
-    recent_activity: Array<{ id: string; user_profile_id: string; action: string; description: string; created_at: string }>;
+    recent_activity: Array<{
+        id: string;
+        user_profile_id: string;
+        actor_id: string | null;
+        action: string;
+        description: string;
+        metadata: Record<string, unknown> | null;
+        created_at: string;
+        profile: { company_name: string | null; account_type: string | null } | null;
+    }>;
+    last_cleanup: null | {
+        run_at: string;
+        total_rows: number;
+        by_kind: Array<{ kind: string; row_count: number }>;
+    };
+}
+
+// Lift the action → color/icon mapping to the module scope so the same chip
+// styles are reused on the detail page (DRY-ing in a small way without
+// dragging a shared lib in for one table).
+const ACTION_TONE: Record<string, string> = {
+    client_created: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    client_updated: "bg-blue-50 text-blue-700 border-blue-200",
+    account_type_changed: "bg-violet-50 text-violet-700 border-violet-200",
+    password_reset: "bg-amber-50 text-amber-700 border-amber-200",
+    status_changed: "bg-amber-50 text-amber-700 border-amber-200",
+    impersonation: "bg-rose-50 text-rose-700 border-rose-200",
+    deletion: "bg-rose-50 text-rose-700 border-rose-200",
+    task_created: "bg-blue-50 text-blue-700 border-blue-200",
+    task_completed: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    document_uploaded: "bg-cyan-50 text-cyan-700 border-cyan-200",
+    admin_user_update: "bg-violet-50 text-violet-700 border-violet-200",
+};
+function actionTone(action: string): string {
+    return ACTION_TONE[action] || "bg-stone-100 text-stone-600 border-stone-200";
 }
 
 interface ClientData {
@@ -291,19 +325,61 @@ export default function AdminOverview() {
                             </div>
                             <div className="p-5">
                                 <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400 mb-2">Recent admin activity</p>
-                                <div className="space-y-1 max-h-32 overflow-y-auto">
+                                <div className="space-y-1.5 max-h-40 overflow-y-auto">
                                     {dbStats.recent_activity.length === 0 && (
                                         <p className="text-xs text-stone-400">No activity logged yet.</p>
                                     )}
-                                    {dbStats.recent_activity.slice(0, 8).map(a => (
-                                        <div key={a.id} className="text-xs">
-                                            <p className="text-stone-700 truncate"><span className="text-stone-400 font-mono">{a.action}</span> · {a.description}</p>
-                                            <p className="text-[10px] text-stone-400">{timeAgo(a.created_at)}</p>
+                                    {dbStats.recent_activity.slice(0, 10).map(a => (
+                                        <div key={a.id} className="text-xs flex items-start gap-2">
+                                            <span className={clsx("text-[9px] font-bold px-1.5 py-0.5 rounded border whitespace-nowrap flex-shrink-0", actionTone(a.action))}>
+                                                {a.action.replace(/_/g, " ")}
+                                            </span>
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-stone-700 truncate">
+                                                    {a.profile?.company_name ? (
+                                                        <Link href={`/admin/clients/${a.user_profile_id}`} className="font-bold hover:underline">
+                                                            {a.profile.company_name}
+                                                        </Link>
+                                                    ) : (
+                                                        <span className="text-stone-400">(profile gone)</span>
+                                                    )}
+                                                    {a.description ? <span className="text-stone-500"> — {a.description}</span> : null}
+                                                </p>
+                                                <p className="text-[10px] text-stone-400">{timeAgo(a.created_at)}</p>
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
                             </div>
                         </div>
+
+                        {/* Last lifecycle cleanup — what the Sunday 04:00 UTC db_cleanup
+                            cron actually transitioned / archived / deleted in its most
+                            recent batch. Pulls from cleanup_log (migration 058). */}
+                        {dbStats.last_cleanup && (
+                            <div className="border-t border-stone-100 p-5 bg-stone-50/40">
+                                <div className="flex items-baseline justify-between mb-2 flex-wrap gap-2">
+                                    <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">
+                                        Last cleanup run — {timeAgo(dbStats.last_cleanup.run_at)}
+                                    </p>
+                                    <p className="text-[10px] text-stone-500">
+                                        {dbStats.last_cleanup.total_rows.toLocaleString()} rows touched · runs Sundays 04:00 UTC
+                                    </p>
+                                </div>
+                                {dbStats.last_cleanup.by_kind.length === 0 ? (
+                                    <p className="text-xs text-stone-400">Last run was a no-op — nothing to clean.</p>
+                                ) : (
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-1.5">
+                                        {dbStats.last_cleanup.by_kind.map(k => (
+                                            <div key={k.kind} className="bg-white border border-stone-200 rounded-lg px-2.5 py-1.5">
+                                                <p className="text-[9px] text-stone-400 uppercase tracking-wide truncate" title={k.kind}>{k.kind.replace(/_/g, " ")}</p>
+                                                <p className="text-sm font-bold tabular-nums text-stone-700">{k.row_count.toLocaleString()}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
                 )}
 
