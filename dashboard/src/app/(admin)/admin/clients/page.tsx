@@ -60,6 +60,9 @@ function AdminClientsPageInner() {
     const [createResult, setCreateResult] = useState<string>("");
     const [searchQuery, setSearchQuery] = useState("");
     const [bulkSending, setBulkSending] = useState(false);
+    // Per-batch progress for the "Bulk Email" button so the admin sees what's
+    // happening on a 50-client send instead of staring at a spinner.
+    const [bulkProgress, setBulkProgress] = useState<{ sent: number; failed: number; total: number } | null>(null);
     const [accountTab, setAccountTab] = useState<"all" | AccountType>(
         (searchParams.get("tab") as "all" | AccountType) || "consulting"
     );
@@ -279,21 +282,57 @@ function AdminClientsPageInner() {
                 <div className="flex gap-2 flex-wrap">
                     {accountTab === "consulting" && (
                         <button type="button" onClick={async () => {
-                            if (!confirm(`Send opportunity update email to all ${clients.length} active clients?`)) return;
+                            const targets = clients.filter(cl => cl.client_status === "active");
+                            if (targets.length === 0) {
+                                setCreateResult("No active clients to email.");
+                                return;
+                            }
+                            if (!confirm(`Send opportunity update email to all ${targets.length} active clients?\n\nResend free tier is ~2/sec — this batch will throttle automatically.`)) return;
                             setBulkSending(true);
-                            for (const c of clients.filter(cl => cl.client_status === "active")) {
-                                await fetch("/api/admin/send-update", {
-                                    method: "POST",
-                                    headers: { "Content-Type": "application/json" },
-                                    body: JSON.stringify({ user_profile_id: c.id, type: "opportunities" }),
-                                }).catch(() => {});
+                            setBulkProgress({ sent: 0, failed: 0, total: targets.length });
+                            const failures: { company: string; reason: string }[] = [];
+                            for (let i = 0; i < targets.length; i++) {
+                                const c = targets[i];
+                                try {
+                                    const res = await fetch("/api/admin/send-update", {
+                                        method: "POST",
+                                        headers: { "Content-Type": "application/json" },
+                                        body: JSON.stringify({ user_profile_id: c.id, type: "opportunities" }),
+                                    });
+                                    if (!res.ok) {
+                                        const body = await res.json().catch(() => ({}));
+                                        failures.push({ company: c.company_name, reason: body.error || `HTTP ${res.status}` });
+                                        setBulkProgress(p => p ? { ...p, failed: p.failed + 1 } : p);
+                                    } else {
+                                        setBulkProgress(p => p ? { ...p, sent: p.sent + 1 } : p);
+                                    }
+                                } catch (e) {
+                                    failures.push({ company: c.company_name, reason: (e as Error).message });
+                                    setBulkProgress(p => p ? { ...p, failed: p.failed + 1 } : p);
+                                }
+                                // Throttle to stay well under Resend's 2/sec limit. Last iteration: skip the sleep.
+                                if (i < targets.length - 1) {
+                                    await new Promise(r => setTimeout(r, 600));
+                                }
                             }
                             setBulkSending(false);
-                            setCreateResult(`Sent opportunity updates to ${clients.filter(c => c.client_status === "active").length} clients`);
+                            const sent = targets.length - failures.length;
+                            if (failures.length === 0) {
+                                setCreateResult(`Sent opportunity updates to ${sent} client${sent === 1 ? "" : "s"}.`);
+                            } else {
+                                const sample = failures.slice(0, 3).map(f => `${f.company}: ${f.reason}`).join("; ");
+                                const more = failures.length > 3 ? ` (+${failures.length - 3} more)` : "";
+                                setCreateResult(`Error: Sent ${sent}/${targets.length}. ${failures.length} failure${failures.length === 1 ? "" : "s"} — ${sample}${more}`);
+                            }
+                            // Clear progress bar after a moment so the result message stands alone.
+                            setTimeout(() => setBulkProgress(null), 4000);
                         }}
                         disabled={bulkSending}
                         className="bg-white border border-stone-200 hover:border-stone-300 text-stone-700 px-4 py-2 rounded-xl text-sm font-bold inline-flex items-center gap-1.5 disabled:opacity-50">
-                            <Mail className="w-4 h-4" /> {bulkSending ? "Sending..." : "Bulk Email"}
+                            <Mail className="w-4 h-4" />
+                            {bulkSending && bulkProgress
+                                ? `Sending… ${bulkProgress.sent + bulkProgress.failed}/${bulkProgress.total}`
+                                : bulkSending ? "Sending…" : "Bulk Email"}
                         </button>
                     )}
                     {accountTab === "consulting" && (

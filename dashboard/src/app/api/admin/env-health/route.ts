@@ -130,16 +130,53 @@ export async function GET(_req: NextRequest) {
         checks.push({ key: "Firecrawl", env_var: "FIRECRAWL_API_KEY", configured, reachable, last_check: now });
     }
 
-    // Resend
+    // Resend — list domains is a cheap auth probe
     {
         const configured = !!process.env.RESEND_API_KEY;
-        checks.push({ key: "Resend (email)", env_var: "RESEND_API_KEY", configured, reachable: "unknown", last_check: now });
+        let reachable: ServiceStatus["reachable"] = "unknown";
+        if (configured) {
+            reachable = await probe("https://api.resend.com/domains", {
+                headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}` },
+            });
+        }
+        checks.push({ key: "Resend (email)", env_var: "RESEND_API_KEY", configured, reachable, last_check: now });
     }
 
-    // Stripe
+    // Stripe — /v1/balance is a stable auth probe (only needs the secret key)
     {
         const configured = !!process.env.STRIPE_SECRET_KEY;
-        checks.push({ key: "Stripe", env_var: "STRIPE_SECRET_KEY", configured, reachable: "unknown", last_check: now });
+        let reachable: ServiceStatus["reachable"] = "unknown";
+        if (configured) {
+            reachable = await probe("https://api.stripe.com/v1/balance", {
+                headers: { Authorization: `Bearer ${process.env.STRIPE_SECRET_KEY}` },
+            });
+        }
+        checks.push({ key: "Stripe", env_var: "STRIPE_SECRET_KEY", configured, reachable, last_check: now });
+    }
+
+    // Supabase — we already used the admin client above; do a tiny count query
+    // to verify the service key works against the DB, not just auth.
+    {
+        try {
+            const { error } = await admin.from("opportunities").select("notice_id", { count: "exact", head: true }).limit(1);
+            checks.push({
+                key: "Supabase (DB)",
+                env_var: "SUPABASE_SERVICE_KEY",
+                configured: true,
+                reachable: error ? "error" : "ok",
+                detail: error ? error.message : undefined,
+                last_check: now,
+            });
+        } catch (e) {
+            checks.push({
+                key: "Supabase (DB)",
+                env_var: "SUPABASE_SERVICE_KEY",
+                configured: true,
+                reachable: "error",
+                detail: (e as Error).message,
+                last_check: now,
+            });
+        }
     }
 
     // CRON_SECRET (if set, cron routes require it)
@@ -155,5 +192,39 @@ export async function GET(_req: NextRequest) {
         });
     }
 
-    return NextResponse.json({ checks });
+    // Last-run-per-cron summary so the operator can spot stale routes at a
+    // glance without bouncing over to /admin/crons.
+    type CronStat = { route: string; last_run: string | null; last_status: string | null; runs_7d: number };
+    let cronStats: CronStat[] = [];
+    try {
+        const sevenDaysAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
+        const { data: runs } = await admin
+            .from("cron_runs")
+            .select("route, started_at, status")
+            .gte("started_at", sevenDaysAgo)
+            .order("started_at", { ascending: false })
+            .limit(500);
+        if (Array.isArray(runs)) {
+            const byRoute = new Map<string, CronStat>();
+            for (const r of runs as Array<{ route: string; started_at: string; status: string | null }>) {
+                const existing = byRoute.get(r.route);
+                if (!existing) {
+                    byRoute.set(r.route, { route: r.route, last_run: r.started_at, last_status: r.status, runs_7d: 1 });
+                } else {
+                    existing.runs_7d += 1;
+                    // The first entry per route is the most-recent because we ordered DESC.
+                }
+            }
+            // Sort by stalest last_run first so failing/missing crons surface at the top.
+            cronStats = Array.from(byRoute.values()).sort((a, b) => {
+                if (!a.last_run) return 1;
+                if (!b.last_run) return -1;
+                return a.last_run.localeCompare(b.last_run);
+            });
+        }
+    } catch {
+        // Soft-fail — the env checks above are the primary signal.
+    }
+
+    return NextResponse.json({ checks, cron_summary: cronStats });
 }
