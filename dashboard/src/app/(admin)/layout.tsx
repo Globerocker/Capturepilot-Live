@@ -9,7 +9,7 @@ import {
     LayoutDashboard, Users, Briefcase, Target,
     Wrench, Settings, LogOut, Loader2, Search, ChevronRight,
     Menu, X, MessageSquare, Mail, Gift, Sparkles, Activity,
-    GraduationCap, ExternalLink, ShieldCheck,
+    GraduationCap, ExternalLink, ShieldCheck, Globe,
 } from "lucide-react";
 import clsx from "clsx";
 
@@ -61,6 +61,12 @@ const NAV: NavSection[] = [
             { href: "/admin/academy", icon: GraduationCap, label: "Academy" },
             { href: "/admin/emails", icon: Mail, label: "Emails" },
             { href: "/admin/messages", icon: MessageSquare, label: "Messages", badge: "unreadMessages" },
+        ],
+    },
+    {
+        label: "Growth",
+        items: [
+            { href: "/admin/backlinks", icon: Globe, label: "Backlinks" },
         ],
     },
     {

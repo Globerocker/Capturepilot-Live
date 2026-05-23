@@ -55,6 +55,20 @@ interface MatchData {
     score_breakdown: Record<string, number>;
     matched_keywords?: string[];
     ai_fit_summary?: string;
+    /** 'sam' (federal) / 'sled' / 'grant' — drives source-tier badge. */
+    source?: string | null;
+}
+
+// Source-tier badge config used on every match card. Reads opp.source plus
+// agency-string heuristics so SLED rows still get tagged when source is null.
+function getSourceTier(m: { source?: string | null; agency?: string }): { tier: "federal" | "state_local" | "grant" | "unknown"; label: string; color: string } {
+    const s = (m.source || "").toLowerCase();
+    if (s === "sled") return { tier: "state_local", label: "State / Local", color: "bg-indigo-50 text-indigo-700 border-indigo-200" };
+    if (s === "grant") return { tier: "grant", label: "Grant", color: "bg-violet-50 text-violet-700 border-violet-200" };
+    if (s === "sam" || (s === "" && m.agency && /\b(department|dept|agency|bureau|office|administration|service|command)\b/i.test(m.agency))) {
+        return { tier: "federal", label: "Federal", color: "bg-blue-50 text-blue-700 border-blue-200" };
+    }
+    return { tier: "unknown", label: "Other", color: "bg-stone-50 text-stone-600 border-stone-200" };
 }
 
 interface ReadinessBreakdown {
@@ -547,7 +561,16 @@ function MatchCard({ match, rank, hero, userNaicsLabels }: { match: MatchData; r
 
                     {/* Footer: key facts + actions */}
                     <div className="flex items-center justify-between gap-3 pt-2 border-t border-stone-100">
-                        <div className="flex items-center gap-3 text-[11px] text-stone-500 flex-wrap min-w-0">
+                        <div className="flex items-center gap-2 text-[11px] text-stone-500 flex-wrap min-w-0">
+                            {(() => {
+                                const t = getSourceTier(match);
+                                return (
+                                    <span className={clsx("inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border", t.color)}>
+                                        {t.label}
+                                    </span>
+                                );
+                            })()}
+                            {match.notice_type && <span>·</span>}
                             {match.notice_type && <span>{match.notice_type}</span>}
                             {match.naics_code && <span>·</span>}
                             {match.naics_code && <span className="font-mono">NAICS {match.naics_code}</span>}
@@ -1352,12 +1375,35 @@ export default function CheckResultsPage() {
                         )}
                     </h2>
                     {selectedCodes.length > 0 && (
-                        <p className="text-xs text-stone-500 mb-4 px-1">
+                        <p className="text-xs text-stone-500 mb-2 px-1">
                             Scored against NAICS: {selectedCodes.map((c) => (
                                 <span key={c} className="font-mono font-bold bg-stone-100 px-1.5 py-0.5 rounded border border-stone-200 mx-0.5">{c}</span>
                             ))}
                         </p>
                     )}
+                    {/* Coverage breakdown — surfaces that we now query across federal +
+                        state/local + grant pipelines (post-Tag 6 SLED + RSS rollout). */}
+                    {matches.length > 0 && (() => {
+                        const tally = { federal: 0, state_local: 0, grant: 0, unknown: 0 };
+                        for (const m of matches) tally[getSourceTier(m).tier]++;
+                        const items: Array<{ label: string; n: number; color: string }> = [
+                            { label: "Federal", n: tally.federal, color: "bg-blue-50 text-blue-700 border-blue-200" },
+                            { label: "State / Local", n: tally.state_local, color: "bg-indigo-50 text-indigo-700 border-indigo-200" },
+                            { label: "Grant", n: tally.grant, color: "bg-violet-50 text-violet-700 border-violet-200" },
+                        ].filter(x => x.n > 0);
+                        if (items.length === 0) return null;
+                        return (
+                            <div className="flex items-center gap-2 mb-4 px-1 flex-wrap">
+                                <span className="text-[10px] uppercase tracking-widest text-stone-400 font-bold">Coverage</span>
+                                {items.map((x) => (
+                                    <span key={x.label} className={clsx("inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border", x.color)}>
+                                        <span>{x.label}</span>
+                                        <span className="bg-white/80 rounded-full px-1.5 py-0 text-[10px]">{x.n}</span>
+                                    </span>
+                                ))}
+                            </div>
+                        );
+                    })()}
 
                     {matches.length > 0 ? (
                         <div className="space-y-3 relative">

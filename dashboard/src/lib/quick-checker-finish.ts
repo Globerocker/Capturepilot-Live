@@ -499,7 +499,7 @@ export async function runPostConfirmationPipeline(analysisId: string): Promise<v
             const oppIds = topCandidates.map(m => m.opportunity_id);
             const { data: oppDetails } = await sb
                 .from("opportunities")
-                .select("id, title, agency, naics_code, set_aside_code, response_deadline, notice_type, award_amount, notice_id, place_of_performance_state, description, structured_requirements")
+                .select("id, title, agency, naics_code, set_aside_code, response_deadline, notice_type, award_amount, notice_id, place_of_performance_state, description, structured_requirements, source")
                 .in("id", oppIds);
 
             if (oppDetails) {
@@ -544,9 +544,11 @@ export async function runPostConfirmationPipeline(analysisId: string): Promise<v
                             response_deadline: detail.response_deadline,
                             notice_type: detail.notice_type,
                             award_amount: detail.award_amount,
-                            notice_id: detail.notice_id,
-                            place_of_performance_state: detail.place_of_performance_state,
-                            description_url: detail.description,
+                            notice_id: detail.notice_id ?? undefined,
+                            place_of_performance_state: detail.place_of_performance_state ?? undefined,
+                            description_url: detail.description ?? undefined,
+                            // Carry source through so the UI can badge federal vs sled/grant.
+                            source: (detail as { source?: string }).source ?? undefined,
                         } as ScoredMatch);
                     } else {
                         rescored.push(match);

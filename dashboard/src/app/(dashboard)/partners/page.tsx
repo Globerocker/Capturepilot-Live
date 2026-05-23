@@ -70,6 +70,7 @@ function PartnersPageInner() {
     const [cert, setCert] = useState("");
     const [keyword, setKeyword] = useState("");
     const [searching, setSearching] = useState(false);
+    const [searchProgress, setSearchProgress] = useState<{ done: number; total: number }>({ done: 0, total: 0 });
     const [results, setResults] = useState<Partner[]>([]);
     const [searched, setSearched] = useState(false);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -178,38 +179,96 @@ function PartnersPageInner() {
         setStates(prev => prev.includes(st) ? prev.filter(s => s !== st) : [...prev, st]);
     };
 
+    // Progressive search — fires one request per (NAICS × state) combo and
+    // accumulates results into the table as each upstream call returns. Two
+    // wins: (1) the user sees results 200-500ms after the first call returns
+    // rather than waiting for the slowest SAM call to finish, (2) we can
+    // surface progress ("3 of 8 queries done") so a multi-naics-multi-state
+    // search doesn't feel hung. Keyword-only searches stay as a single call.
     const handleSearch = async () => {
         if (naicsCodes.length === 0 && !keyword.trim()) return;
         setSearching(true);
         setErrorMsg(null);
-        const params = new URLSearchParams();
-        for (const n of naicsCodes) params.append("naics", n);
-        for (const s of states) params.append("state", s);
-        if (cert) params.set("set_aside", cert);
-        if (keyword.trim()) params.set("keyword", keyword.trim());
-        params.set("limit", "50");
-
-        try {
-            const res = await fetch(`/api/partners/search?${params.toString()}`);
-            const data = await res.json();
-            if (!res.ok || data.error) {
-                setErrorMsg(
-                    data.error
-                        ? `${data.error}${data.upstream_errors?.length ? ` — ${data.upstream_errors[0]}` : ""}`
-                        : `Search failed (HTTP ${res.status})`
-                );
-                setResults([]);
-            } else {
-                setResults(data.partners || []);
-                if (data.upstream_errors?.length) {
-                    setErrorMsg(`Partial results: ${data.upstream_errors[0]}`);
-                }
-            }
-        } catch (err) {
-            setErrorMsg(`Network error: ${(err as Error).message}`);
-            setResults([]);
-        }
+        setResults([]);
         setSearched(true);
+
+        // Build the combo list. Empty arrays default to a single anonymous slot.
+        const naicsAxis = naicsCodes.length > 0 ? naicsCodes : [""];
+        const stateAxis = states.length > 0 ? states : [""];
+        const keywordOnly = naicsCodes.length === 0 && keyword.trim().length > 0;
+
+        // Keyword-only path: SAM.gov needs at least one anchor; let the API
+        // handle the keyword filter server-side as today.
+        if (keywordOnly) {
+            const params = new URLSearchParams();
+            if (cert) params.set("set_aside", cert);
+            params.set("keyword", keyword.trim());
+            params.set("limit", "50");
+            try {
+                const res = await fetch(`/api/partners/search?${params.toString()}`);
+                const data = await res.json();
+                if (!res.ok || data.error) {
+                    setErrorMsg(data.error || `Search failed (HTTP ${res.status})`);
+                } else {
+                    setResults(data.partners || []);
+                }
+            } catch (err) {
+                setErrorMsg(`Network error: ${(err as Error).message}`);
+            }
+            setSearching(false);
+            return;
+        }
+
+        // Cap fanout to keep us inside SAM's per-IP rate envelope.
+        const combos = naicsAxis.flatMap(n => stateAxis.map(s => ({ naics: n, state: s }))).slice(0, 12);
+        setSearchProgress({ done: 0, total: combos.length });
+
+        const seenUei = new Set<string>();
+        const upstreamErrors: string[] = [];
+
+        // Concurrency limit so we don't fire 12 calls in one burst.
+        const POOL = 3;
+        let idx = 0;
+        async function worker() {
+            while (idx < combos.length) {
+                const my = idx++;
+                const { naics, state } = combos[my]!;
+                const params = new URLSearchParams();
+                if (naics) params.append("naics", naics);
+                if (state) params.append("state", state);
+                if (cert) params.set("set_aside", cert);
+                if (keyword.trim()) params.set("keyword", keyword.trim());
+                params.set("limit", "50");
+                try {
+                    const res = await fetch(`/api/partners/search?${params.toString()}`);
+                    const data = await res.json();
+                    if (res.ok && data.partners) {
+                        // Merge new partners by UEI to avoid double-render.
+                        const fresh = (data.partners as Partner[]).filter(p => {
+                            const k = p.uei || `${p.legal_business_name}|${p.physical_address_state_or_province_code}`;
+                            if (seenUei.has(k)) return false;
+                            seenUei.add(k);
+                            return true;
+                        });
+                        if (fresh.length > 0) {
+                            setResults(prev => [...prev, ...fresh]);
+                        }
+                    } else if (data.error) {
+                        upstreamErrors.push(`${naics || "any"}/${state || "any"}: ${data.error}`);
+                    }
+                } catch (err) {
+                    upstreamErrors.push(`${naics || "any"}/${state || "any"}: ${(err as Error).message}`);
+                }
+                setSearchProgress(p => ({ done: p.done + 1, total: p.total }));
+            }
+        }
+        await Promise.all(Array.from({ length: Math.min(POOL, combos.length) }, worker));
+
+        if (upstreamErrors.length > 0 && upstreamErrors.length === combos.length) {
+            setErrorMsg(`All queries failed — ${upstreamErrors[0]}`);
+        } else if (upstreamErrors.length > 0) {
+            setErrorMsg(`Partial results: ${upstreamErrors[0]}`);
+        }
         setSearching(false);
     };
 
@@ -458,7 +517,11 @@ function PartnersPageInner() {
                     className="bg-black text-white px-6 py-2.5 rounded-xl text-sm font-bold inline-flex items-center gap-2 disabled:opacity-50 hover:bg-stone-800"
                 >
                     {searching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-                    {searching ? "Searching SAM.gov..." : "Search Partners"}
+                    {searching
+                        ? (searchProgress.total > 0
+                            ? `Searching SAM.gov… ${searchProgress.done}/${searchProgress.total}`
+                            : "Searching SAM.gov…")
+                        : "Search Partners"}
                 </button>
             </div>
 

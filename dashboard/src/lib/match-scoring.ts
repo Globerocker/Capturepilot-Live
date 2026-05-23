@@ -389,6 +389,23 @@ export interface ScoredMatch {
     score_breakdown: Record<string, number>;
     /** Canonical keywords that matched in title/description/requirements. */
     matched_keywords?: string[];
+    /** Snapshot fields the Quick Checker UI renders directly (set when enriched).
+        Kept as plain optional strings (no null) so spreads with `as ScoredMatch`
+        don't fail strict typecheck — null is coerced to undefined at the
+        assignment site via `?? undefined`. */
+    title?: string;
+    agency?: string;
+    naics_code?: string;
+    set_aside_code?: string;
+    response_deadline?: string;
+    notice_type?: string;
+    award_amount?: number;
+    notice_id?: string;
+    place_of_performance_state?: string;
+    description_url?: string;
+    ai_fit_summary?: string;
+    /** 'sam' / 'sled' / 'grant' — drives source-badge rendering. */
+    source?: string;
 }
 
 // Relaxed weights for lead magnet — emphasizes data actually available from a web crawl

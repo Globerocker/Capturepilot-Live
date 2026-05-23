@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import {
     Loader2, RefreshCw, CheckCircle2, AlertTriangle, AlertCircle, Clock,
-    Activity, ChevronDown, ChevronRight,
+    Activity, ChevronDown, ChevronRight, Play,
 } from "lucide-react";
 import clsx from "clsx";
 
@@ -81,6 +81,36 @@ export default function CronsPage() {
     const [err, setErr] = useState<string | null>(null);
     const [expandedRoute, setExpandedRoute] = useState<string | null>(null);
     const [autoRefresh, setAutoRefresh] = useState(false);
+    // Track which routes are mid-trigger so we can disable buttons + show spinner.
+    const [running, setRunning] = useState<Record<string, boolean>>({});
+    const [lastResult, setLastResult] = useState<Record<string, { status: number; ms: number; msg: string }>>({});
+
+    async function triggerRoute(route: string) {
+        setRunning(r => ({ ...r, [route]: true }));
+        try {
+            const res = await fetch("/api/admin/cron-trigger", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ route }),
+            });
+            const body = await res.json();
+            const payload = body.payload;
+            const msg = typeof payload === "object" && payload
+                ? Object.entries(payload).slice(0, 4).map(([k, v]) =>
+                    `${k}=${typeof v === "object" ? JSON.stringify(v).slice(0, 30) : String(v).slice(0, 50)}`).join(" ")
+                : String(payload).slice(0, 120);
+            setLastResult(r => ({
+                ...r,
+                [route]: { status: body.status || res.status, ms: body.elapsed_ms || 0, msg: msg || "" },
+            }));
+        } catch (e) {
+            setLastResult(r => ({ ...r, [route]: { status: 0, ms: 0, msg: (e as Error).message } }));
+        } finally {
+            setRunning(r => ({ ...r, [route]: false }));
+            // refresh the summary so the new cron_runs row shows up
+            void load();
+        }
+    }
 
     async function load() {
         setLoading(true);
@@ -164,11 +194,12 @@ export default function CronsPage() {
                                     <th className="px-3 py-2 text-right font-medium">Avg / p95</th>
                                     <th className="px-3 py-2 text-right font-medium">Rows 7d</th>
                                     <th className="px-3 py-2 text-right font-medium">Last Rows</th>
+                                    <th className="px-3 py-2 text-center font-medium">Run</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {data.summary.length === 0 && (
-                                    <tr><td colSpan={8} className="px-3 py-6 text-center text-slate-500">
+                                    <tr><td colSpan={9} className="px-3 py-6 text-center text-slate-500">
                                         no cron runs yet — wait for the next scheduled cron, or trigger one manually
                                     </td></tr>
                                 )}
@@ -202,11 +233,37 @@ export default function CronsPage() {
                                             </td>
                                             <td className="px-3 py-2 text-right tabular-nums font-medium">{s.total_rows_out_7d.toLocaleString()}</td>
                                             <td className="px-3 py-2 text-right tabular-nums">{s.last_rows_out ?? "—"}</td>
+                                            <td className="px-3 py-2 text-center">
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => { e.stopPropagation(); triggerRoute(s.route); }}
+                                                    disabled={!!running[s.route]}
+                                                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium border border-slate-200 hover:bg-slate-100 disabled:opacity-50"
+                                                    title="Trigger this cron now"
+                                                >
+                                                    {running[s.route] ? <Loader2 className="size-3 animate-spin" /> : <Play className="size-3" />}
+                                                    Run
+                                                </button>
+                                            </td>
                                         </tr>
                                         {expandedRoute === s.route && s.last_error && (
                                             <tr key={s.route + "-err"} className="border-t border-rose-100 bg-rose-50">
-                                                <td colSpan={8} className="px-3 py-2 text-xs text-rose-900 font-mono break-all">
+                                                <td colSpan={9} className="px-3 py-2 text-xs text-rose-900 font-mono break-all">
                                                     <strong>Last error:</strong> {s.last_error}
+                                                </td>
+                                            </tr>
+                                        )}
+                                        {lastResult[s.route] && (
+                                            <tr key={s.route + "-result"} className="border-t border-slate-100 bg-slate-50">
+                                                <td colSpan={9} className="px-3 py-1.5 text-[11px] text-slate-700 font-mono break-all">
+                                                    <span className={clsx(
+                                                        "font-bold",
+                                                        lastResult[s.route]!.status >= 200 && lastResult[s.route]!.status < 300 ? "text-emerald-700"
+                                                            : lastResult[s.route]!.status >= 400 ? "text-rose-700" : "text-amber-700",
+                                                    )}>
+                                                        [{lastResult[s.route]!.status}]
+                                                    </span>{" "}
+                                                    {lastResult[s.route]!.ms}ms — {lastResult[s.route]!.msg}
                                                 </td>
                                             </tr>
                                         )}

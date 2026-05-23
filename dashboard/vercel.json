@@ -16,18 +16,6 @@
             "schedule": "0 4 * * 0"
         },
         {
-            "path": "/api/cron/enrich",
-            "schedule": "0 5 * * *"
-        },
-        {
-            "path": "/api/cron/backfill_requirements",
-            "schedule": "0 6 * * *"
-        },
-        {
-            "path": "/api/cron/deep_enrich",
-            "schedule": "0 */4 * * *"
-        },
-        {
             "path": "/api/cron/notify_matches",
             "schedule": "0 10 * * *"
         },
@@ -48,20 +36,8 @@
             "schedule": "0 13 * * *"
         },
         {
-            "path": "/api/cron/strategic_scoring",
-            "schedule": "0 7 * * *"
-        },
-        {
-            "path": "/api/cron/ai_strategy",
-            "schedule": "15 */4 * * *"
-        },
-        {
             "path": "/api/cron/process_scheduled_emails",
             "schedule": "0 14 * * *"
-        },
-        {
-            "path": "/api/cron/enrich_contractors_usaspending",
-            "schedule": "30 6 * * *"
         },
         {
             "path": "/api/cron/download_attachments",
@@ -106,14 +82,6 @@
         {
             "path": "/api/cron/ingest_gsa_schedule",
             "schedule": "0 5 * * 0"
-        },
-        {
-            "path": "/api/cron/bulk_enrich_descriptions",
-            "schedule": "10,40 1-23 * * *"
-        },
-        {
-            "path": "/api/cron/bulk_enrich_ai",
-            "schedule": "*/30 * * * *"
         },
         {
             "path": "/api/cron/enrich_apollo_contractors",
@@ -162,6 +130,14 @@
         {
             "path": "/api/cron/sync_govtribe_activity",
             "schedule": "0 13 * * *"
+        },
+        {
+            "path": "/api/cron/backlinks_orchestrator",
+            "schedule": "0 6 * * *"
+        },
+        {
+            "path": "/api/cron/enrichment_orchestrator",
+            "schedule": "0,10,15,30,40 * * * *"
         }
     ],
     "functions": {
