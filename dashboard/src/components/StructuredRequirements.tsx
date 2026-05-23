@@ -88,6 +88,48 @@ function normalize(r: RawReqs | null | undefined): Normalized {
 }
 
 // Fallback: client-side regex extraction if the DB row is entirely empty.
+const SECTION_REGEX_CLIENT: Record<"scope_of_work" | "qualifications" | "deliverables", RegExp[]> = {
+    scope_of_work: [
+        /scope\s+of\s+work[:\s.]/i,
+        /statement\s+of\s+work[:\s.]/i,
+        /\bsow\b[:\s.]/i,
+        /performance\s+work\s+statement[:\s.]/i,
+        /\bpws\b[:\s.]/i,
+        /tasks?[:\s.]/i,
+    ],
+    qualifications: [
+        /qualifications?[:\s.]/i,
+        /minimum\s+qualifications?[:\s.]/i,
+        /required\s+qualifications?[:\s.]/i,
+    ],
+    deliverables: [
+        /deliverables?[:\s.]/i,
+        /cdrl[:\s.]/i,
+    ],
+};
+
+function extractListClient(text: string, regexes: RegExp[]): string[] {
+    let earliestIdx = -1;
+    for (const re of regexes) {
+        const m = re.exec(text);
+        if (m && (earliestIdx === -1 || m.index < earliestIdx)) earliestIdx = m.index;
+    }
+    if (earliestIdx < 0) return [];
+    const slice = text.slice(earliestIdx, earliestIdx + 3_000);
+    const stopMatch = slice.slice(20).match(/\n\s*[A-Z][A-Z\s]{5,40}:/);
+    const body = stopMatch ? slice.slice(0, 20 + (stopMatch.index ?? 0)) : slice;
+    const items: string[] = [];
+    const rawItems = body.split(/\n[\s]*(?:\d+\.|•|\*|\-|\(\w\))\s+|;\s*|\n\s*\n/);
+    for (const raw of rawItems) {
+        const t = raw.replace(/\s+/g, " ").trim();
+        if (t.length >= 15 && t.length <= 240 && !/^(scope|requirements?|qualifications?|deliverables?)/i.test(t)) {
+            items.push(t);
+        }
+        if (items.length >= 8) break;
+    }
+    return items;
+}
+
 function extractFromText(html: string): Normalized {
     const text = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
     const lower = text.toLowerCase();
@@ -110,6 +152,17 @@ function extractFromText(html: string): Normalized {
 
     if (/\btop\s+secret\b|\bts[/ ]sci\b/i.test(text)) reqs.clearance_level = "Top Secret";
     else if (/\bsecret\b(?!\s*(?:service|ary|ion))/i.test(text)) reqs.clearance_level = "Secret";
+
+    // Section lists: only attempt on a substantial description; otherwise
+    // we'd produce noise for short stub paragraphs.
+    if (text.length > 300) {
+        const sow = extractListClient(text, SECTION_REGEX_CLIENT.scope_of_work);
+        const quals = extractListClient(text, SECTION_REGEX_CLIENT.qualifications);
+        const delivs = extractListClient(text, SECTION_REGEX_CLIENT.deliverables);
+        if (sow.length > 0) reqs.scope_of_work = sow;
+        if (quals.length > 0) reqs.qualifications = quals;
+        if (delivs.length > 0) reqs.deliverables = delivs;
+    }
 
     return reqs;
 }

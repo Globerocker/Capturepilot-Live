@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { ArrowLeft, Building, Target, ShieldAlert, Award, Sparkles, MapPin, Calendar, CheckSquare, Phone, User, Mail, ExternalLink, Clock } from "lucide-react";
 import clsx from "clsx";
 import Link from "next/link";
@@ -18,6 +19,7 @@ import VoiceBriefButton from "@/components/opportunity/VoiceBriefButton";
 import SuggestedPartnersPanel from "@/components/opportunity/SuggestedPartnersPanel";
 import GenerateWinStrategyButton from "@/components/opportunity/GenerateWinStrategyButton";
 import OpportunityTimeline from "@/components/opportunity/OpportunityTimeline";
+import ReenrichButton from "@/components/opportunity/ReenrichButton";
 import { PastAwardsPanel } from "@/components/PastAwardsPanel";
 import GovTribeAwardsCard from "@/components/opportunity/GovTribeAwardsCard";
 import GovTribeSubAwardsCard from "@/components/opportunity/GovTribeSubAwardsCard";
@@ -36,20 +38,48 @@ interface SamContact {
 }
 
 export default async function OpportunityDetailPage({ params }: { params: Promise<{ id: string }> }) {
-    const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL || "https://ryxgjzehoijjvczqkhwr.supabase.co",
-        process.env.SUPABASE_SERVICE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ5eGdqemVob2lqanZjenFraHdyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIwNDg0NTUsImV4cCI6MjA4NzYyNDQ1NX0.q0HivHixjE-A2MuQZlmlZOO2eLpQEm8c6XhQQQKaJsY"
-    );
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!supabaseUrl || !supabaseKey) {
+        throw new Error("Supabase env vars missing (NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_KEY|NEXT_PUBLIC_SUPABASE_ANON_KEY)");
+    }
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
+    const oppId = (await params).id;
     const { data: opp, error } = await supabase
         .from("opportunities")
         .select("*")
-        .eq("id", (await params).id)
+        .eq("id", oppId)
         .single();
 
     if (error || !opp) {
         notFound();
     }
+
+    // Fetch the user's actual match score for this opportunity (replaces the
+    // header donut's hand-rolled heuristic). Falls back to the heuristic if
+    // the viewer has no match row yet (e.g. score job hasn't run for them).
+    let realMatch: { score: number; classification: string; score_breakdown: Record<string, number> | null } | null = null;
+    try {
+        const ssr = await createSupabaseServerClient();
+        const { data: { user } } = await ssr.auth.getUser();
+        if (user) {
+            const { data: profile } = await ssr
+                .from("user_profiles")
+                .select("id")
+                .eq("auth_user_id", user.id)
+                .single();
+            if (profile?.id) {
+                const { data: match } = await supabase
+                    .from("user_matches")
+                    .select("score, classification, score_breakdown")
+                    .eq("user_profile_id", profile.id)
+                    .eq("opportunity_id", oppId)
+                    .maybeSingle();
+                if (match) realMatch = match;
+            }
+        }
+    } catch { /* fall through to heuristic */ }
 
     // Fetch contacts from the contacts table
     const { data: dbContacts } = await supabase
@@ -179,15 +209,26 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
     const isActive = opp.status === "ACTIVE" || opp.status === "EXPIRING_SOON";
     const daysToDeadline = opp.response_deadline ? Math.ceil((new Date(opp.response_deadline).getTime() - Date.now()) / 86400000) : null;
 
-    let successScore = 30; // base
-    if (hasSetAside) successScore += 20;
-    if (!hasIncumbent) successScore += 15;
-    if (isSourcesSought) successScore += 15;
-    if (daysToDeadline && daysToDeadline > 14) successScore += 10;
-    if (opp.veteran_relevance_flag) successScore += 5;
-    if (opp.small_business_relevance_flag) successScore += 5;
-    successScore = Math.min(95, successScore);
-    const successLabel = successScore >= 70 ? "HIGH" : successScore >= 50 ? "MEDIUM" : "LOW";
+    // Score: prefer the real user-specific match score if available;
+    // otherwise fall back to a quick heuristic so the page still has a number.
+    let successScore: number;
+    let successLabel: string;
+    let scoreIsReal = false;
+    if (realMatch) {
+        successScore = Math.round((realMatch.score || 0) * 100);
+        successLabel = realMatch.classification || (successScore >= 70 ? "HOT" : successScore >= 50 ? "WARM" : "COLD");
+        scoreIsReal = true;
+    } else {
+        let heur = 30;
+        if (hasSetAside) heur += 20;
+        if (!hasIncumbent) heur += 15;
+        if (isSourcesSought) heur += 15;
+        if (daysToDeadline && daysToDeadline > 14) heur += 10;
+        if (opp.veteran_relevance_flag) heur += 5;
+        if (opp.small_business_relevance_flag) heur += 5;
+        successScore = Math.min(95, heur);
+        successLabel = successScore >= 70 ? "HIGH" : successScore >= 50 ? "MEDIUM" : "LOW";
+    }
     const successColor = successScore >= 70 ? "text-emerald-600" : successScore >= 50 ? "text-amber-600" : "text-red-600";
 
     // Generate key points from available data
@@ -267,6 +308,24 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                             SMALL BIZ
                         </span>
                     )}
+                    {/* Source-level badge — surfaces where the opp came from */}
+                    {(() => {
+                        const src = String(opp.source || "sam").toLowerCase();
+                        const map: Record<string, { label: string; tone: string }> = {
+                            sam: { label: "Federal · SAM.gov", tone: "bg-blue-50 text-blue-700 border-blue-200" },
+                            grants_gov: { label: "Federal · Grants.gov", tone: "bg-blue-50 text-blue-700 border-blue-200" },
+                            sbir: { label: "Federal · SBIR", tone: "bg-blue-50 text-blue-700 border-blue-200" },
+                            sled: { label: "State / Local", tone: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+                            state: { label: "State", tone: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+                            local: { label: "Local", tone: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+                        };
+                        const m = map[src] || { label: src.toUpperCase(), tone: "bg-stone-50 text-stone-600 border-stone-200" };
+                        return (
+                            <span className={clsx("font-bold text-[10px] sm:text-xs px-2 sm:px-3 py-1 sm:py-1.5 rounded-md border tracking-wider shadow-sm", m.tone)}>
+                                {m.label}
+                            </span>
+                        );
+                    })()}
                     <span className="bg-stone-100 text-stone-600 font-mono text-[10px] px-2 py-1 rounded-md border border-stone-200">
                         {opp.notice_id?.substring(0, 12)}...
                     </span>
@@ -332,7 +391,9 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                                 <span className="text-[8px] text-stone-400 uppercase tracking-wider">{successLabel}</span>
                             </div>
                         </div>
-                        <p className="text-[10px] text-stone-500 uppercase tracking-wider mt-2 text-center sm:text-left">Match score</p>
+                        <p className="text-[10px] text-stone-500 uppercase tracking-wider mt-2 text-center sm:text-left">
+                            {scoreIsReal ? "Your match score" : "Quick fit (est.)"}
+                        </p>
                     </div>
                     <div className="text-center">
                         <p className="text-3xl font-black text-stone-800">{formattedValue}</p>
@@ -349,6 +410,17 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                         <p className="text-[10px] text-stone-400 uppercase mt-1">Contacts</p>
                     </div>
                 </div>
+            </div>
+
+            {/* Re-enrichment trigger — fresh description + requirements + AI strategy on demand */}
+            <div className="flex items-center justify-between gap-3 -mt-2">
+                <p className="text-xs text-stone-500">
+                    Data feels stale or incomplete? Refresh from source.
+                </p>
+                <ReenrichButton
+                    opportunityId={opp.id}
+                    hasExistingData={!!aiStrat?.summary || (Array.isArray(reqs?.scope_of_work) && (reqs.scope_of_work as unknown[]).length > 0)}
+                />
             </div>
 
             {/* Timeline */}

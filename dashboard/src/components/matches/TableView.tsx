@@ -92,7 +92,9 @@ export const ALL_COLUMNS: ColumnDef[] = [
     },
     {
         key: "place_of_performance_state", label: "State", defaultWidth: 72,
-        render: (m) => <span className="font-mono text-xs text-stone-600">{m.opportunities?.place_of_performance_state || "—"}</span>
+        render: (m) => m.opportunities?.place_of_performance_state
+            ? <span className="inline-flex items-center gap-1 bg-sky-50 text-sky-700 border border-sky-200 px-1.5 py-0.5 rounded text-[11px] font-semibold">{m.opportunities.place_of_performance_state}</span>
+            : <span className="text-stone-300 text-xs">—</span>
     },
     {
         key: "award_amount", label: "Value", defaultWidth: 96,

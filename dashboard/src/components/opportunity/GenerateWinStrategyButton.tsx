@@ -29,7 +29,9 @@ export default function GenerateWinStrategyButton({
         setStarting(true);
         setKickoffErr(null);
         try {
-            const res = await fetch(`/api/admin/enrich-opportunity/${opportunityId}`, { method: "POST" });
+            // Use the user-facing endpoint; the admin variant is gated by assertAdmin
+            // and 401's regular users. Both run the same pipeline.
+            const res = await fetch(`/api/opportunities/${opportunityId}/enrich`, { method: "POST" });
             const data = await res.json();
             if (!res.ok || !data.jobId) {
                 throw new Error(data.error || `HTTP ${res.status}`);

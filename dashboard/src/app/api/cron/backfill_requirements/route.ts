@@ -101,6 +101,56 @@ function extractContacts(raw: Record<string, unknown>, noticeId: string): Contac
     return contacts;
 }
 
+// Regex-extract POCs out of free-text descriptions. Used for RSS / SLED /
+// state-portal opps where raw_json doesn't carry a structured pointOfContact
+// (bonfire feeds put name + email + phone inline in the body).
+//
+// Strategy: pull emails first (highest-precision signal), then look for an
+// adjacent name + phone within 200 chars on either side. Skip noreply / docs
+// addresses. De-dupes by lowercase email.
+const EMAIL_RE = /\b([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})\b/g;
+const PHONE_RE = /(\(?\d{3}\)?[\s.\-]?\d{3}[\s.\-]?\d{4})/;
+// "John Smith" / "John D. Smith" / "John Smith Jr." — 2-3 words, capitalized.
+const NAME_RE = /\b([A-Z][a-z]+(?:\s+[A-Z]\.)?(?:\s+[A-Z][a-z]+){1,2}(?:\s+(?:Jr|Sr|II|III|IV)\.?)?)\b/;
+const NOISE_EMAIL = /noreply|no-reply|donotreply|do-not-reply|webmaster|info@|support@|help@|admin@|@example\./i;
+
+function extractContactsFromDescription(description: string, noticeId: string): Contact[] {
+    if (!description || description.length < 30) return [];
+    const text = String(description);
+    const out: Contact[] = [];
+    const seenEmails = new Set<string>();
+
+    let match: RegExpExecArray | null;
+    EMAIL_RE.lastIndex = 0;
+    while ((match = EMAIL_RE.exec(text)) !== null) {
+        const email = match[1];
+        if (NOISE_EMAIL.test(email)) continue;
+        const lower = email.toLowerCase();
+        if (seenEmails.has(lower)) continue;
+        seenEmails.add(lower);
+
+        // Look 200 chars on either side for an adjacent name / phone
+        const start = Math.max(0, match.index - 200);
+        const end = Math.min(text.length, match.index + email.length + 200);
+        const ctx = text.slice(start, end);
+
+        const phoneMatch = ctx.match(PHONE_RE);
+        const nameMatch = ctx.match(NAME_RE);
+
+        out.push({
+            notice_id: noticeId,
+            fullname: nameMatch ? nameMatch[1].trim() : null,
+            email,
+            phone: phoneMatch ? phoneMatch[1].trim() : null,
+            title: null,
+            fax: null,
+            is_primary: out.length === 0,
+        });
+        if (out.length >= 4) break; // cap per opp
+    }
+    return out;
+}
+
 export async function GET(req: NextRequest) {
     const denied = guardCron(req);
     if (denied) return denied;
@@ -109,13 +159,14 @@ export async function GET(req: NextRequest) {
         const supabase = getSupabase();
         console.log("Starting requirements backfill...");
 
-        // Fetch opportunities with raw_json that need backfill
+        // Fetch opportunities with raw_json that need backfill.
+        // Bumped 100 → 500 — daily cron, ~37k opps total, was 370-day backlog.
         const { data: opps, error: fetchError } = await supabase
             .from("opportunities")
             .select("id, notice_id, award_amount, department, description, raw_json, structured_requirements")
             .not("raw_json", "is", null)
             .or("structured_requirements.is.null,structured_requirements.eq.{}")
-            .limit(100);
+            .limit(500);
 
         if (fetchError) {
             console.error("Fetch error:", fetchError);
@@ -183,9 +234,15 @@ export async function GET(req: NextRequest) {
                 }
             }
 
-            // 4. Extract and upsert contacts
+            // 4. Extract and upsert contacts. Try the structured raw_json path
+            //    first; if it produces nothing (common for RSS / SLED rows
+            //    where pointOfContact is absent), fall back to regex-scanning
+            //    the description text.
             if (opp.notice_id) {
-                const contacts = extractContacts(raw, opp.notice_id);
+                let contacts = extractContacts(raw, opp.notice_id);
+                if (contacts.length === 0) {
+                    contacts = extractContactsFromDescription(desc, opp.notice_id);
+                }
                 for (const contact of contacts) {
                     try {
                         await supabase

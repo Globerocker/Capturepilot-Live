@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createSupabaseClient } from "@/lib/supabase/client";
-import { Loader2, Sparkles, Search, X, ChevronLeft, ChevronRight, Trophy, Shield, Target, ArrowRight, Bookmark, EyeOff, Flame, ChevronUp, ChevronDown, Filter, CheckCircle2, Download, AlertTriangle, List, Table as TableIcon, Columns3, GripVertical } from "lucide-react";
+import { Loader2, Sparkles, Search, X, ChevronLeft, ChevronRight, Trophy, Shield, Target, ArrowRight, Bookmark, EyeOff, Flame, ChevronUp, ChevronDown, Filter, CheckCircle2, Download, AlertTriangle, List, Table as TableIcon, Columns3, GripVertical, MapPin } from "lucide-react";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { createPursuit } from "@/lib/pursue-utils";
 import { Skeleton, SkeletonMatchCard } from "@/components/ui/Skeleton";
@@ -15,6 +15,7 @@ import { ListView } from "@/components/matches/ListView";
 import { AIFilterBar, type AIFilters } from "@/components/matches/AIFilterBar";
 import { BulkExportDialog } from "@/components/matches/BulkExportDialog";
 import SavedViews from "@/components/SavedViews";
+import SourceLevelSwitcher, { SOURCE_LEVEL_VALUES, type SourceLevel } from "@/components/SourceLevelSwitcher";
 import { SET_ASIDE_OPTIONS, matchSetAside, setAsideBadgeTone } from "@/lib/set-aside-filters";
 
 const supabase = createSupabaseClient();
@@ -44,8 +45,10 @@ interface UserMatch extends MatchRow {
         place_of_performance_state: string;
         award_amount: number | null;
         estimated_value: number | null;
+        source: string | null;
     };
 }
+
 
 export default function MyMatchesPage() {
     const router = useRouter();
@@ -67,6 +70,7 @@ export default function MyMatchesPage() {
     const [filterNaics, setFilterNaics] = useState("");
     const [filterMinScore, setFilterMinScore] = useState<number | null>(null);
     const [filterMaxDeadlineDays, setFilterMaxDeadlineDays] = useState<number | null>(null);
+    const [sourceLevel, setSourceLevel] = useState<SourceLevel>("ALL");
     const [pursuingIds, setPursuingIds] = useState<Set<string>>(new Set());
     const [pursuedIds, setPursuedIds] = useState<Set<string>>(new Set());
     const [generatingMatches, setGeneratingMatches] = useState(false);
@@ -106,6 +110,7 @@ export default function MyMatchesPage() {
         const naics = q("naics"); if (naics) setFilterNaics(naics);
         const ms = q("min_score"); if (ms) { const n = parseInt(ms, 10); if (!Number.isNaN(n)) setFilterMinScore(n); }
         const md = q("max_deadline"); if (md) { const n = parseInt(md, 10); if (!Number.isNaN(n)) setFilterMaxDeadlineDays(n); }
+        const lv = q("level"); if (lv === "FEDERAL" || lv === "SLED" || lv === "ALL") setSourceLevel(lv);
         const s = q("q"); if (s) { setActiveSearch(s); setSearchInput(s); }
         const v = q("view");
         if (v === "card" || v === "list" || v === "table") setViewMode(v);
@@ -126,12 +131,13 @@ export default function MyMatchesPage() {
         if (filterNaics) params.set("naics", filterNaics);
         if (filterMinScore != null) params.set("min_score", String(filterMinScore));
         if (filterMaxDeadlineDays != null) params.set("max_deadline", String(filterMaxDeadlineDays));
+        if (sourceLevel !== "ALL") params.set("level", sourceLevel);
         if (activeSearch) params.set("q", activeSearch);
         if (viewMode !== "card") params.set("view", viewMode);
         const qs = params.toString();
         const href = qs ? `?${qs}` : window.location.pathname;
         router.replace(href, { scroll: false });
-    }, [filter, sortBy, sortDirection, filterNoticeType, filterSetAside, filterState, filterNaics, filterMinScore, filterMaxDeadlineDays, activeSearch, viewMode, router]);
+    }, [filter, sortBy, sortDirection, filterNoticeType, filterSetAside, filterState, filterNaics, filterMinScore, filterMaxDeadlineDays, sourceLevel, activeSearch, viewMode, router]);
 
     // Load persisted view + columns from localStorage
     useEffect(() => {
@@ -188,12 +194,18 @@ export default function MyMatchesPage() {
             .from("user_matches")
             .select(
                 "id, score, classification, score_breakdown, is_saved, is_dismissed, " +
-                "opportunities!inner(id, title, agency, naics_code, psc_code, notice_type, response_deadline, posted_date, set_aside_code, place_of_performance_state, award_amount, estimated_value)",
+                "opportunities!inner(id, title, agency, naics_code, psc_code, notice_type, response_deadline, posted_date, set_aside_code, place_of_performance_state, award_amount, estimated_value, source)",
                 { count: "exact" }
             )
             .eq("user_profile_id", profileId)
             .eq("is_dismissed", false)
             .in("opportunities.status", ["ACTIVE", "EXPIRING_SOON", "MARKET_RESEARCH", "DISCOVERED"]);
+
+        // Source-level filter (Federal vs State+Local+Education vs All)
+        const levelSources = SOURCE_LEVEL_VALUES[sourceLevel];
+        if (levelSources) {
+            query = query.in("opportunities.source", levelSources);
+        }
 
         if (filter === "HOT") {
             query = query.eq("classification", "HOT");
@@ -274,7 +286,7 @@ export default function MyMatchesPage() {
         const anyClientFilter = Boolean(activeSearch || filterNoticeType || filterSetAside || filterState || filterNaics || filterMaxDeadlineDays != null);
         setTotalCount(anyClientFilter ? filtered.length : (count || 0));
         setLoading(false);
-    }, [profileId, page, activeSearch, filter, sortBy, sortDirection, filterNoticeType, filterSetAside, filterState, filterNaics, filterMinScore, filterMaxDeadlineDays]);
+    }, [profileId, page, activeSearch, filter, sortBy, sortDirection, filterNoticeType, filterSetAside, filterState, filterNaics, filterMinScore, filterMaxDeadlineDays, sourceLevel]);
 
     useEffect(() => {
         if (profileId) fetchMatches();
@@ -481,6 +493,14 @@ export default function MyMatchesPage() {
                 }}
                 onClear={() => setActiveSavedViewId(null)}
             />
+
+            {/* Source-Level Switcher — Federal / State+Local+Education / All */}
+            <section className="mb-3">
+                <SourceLevelSwitcher
+                    value={sourceLevel}
+                    onChange={(next) => { setSourceLevel(next); setPage(1); }}
+                />
+            </section>
 
             {/* Filter Tabs */}
             <section className="flex flex-wrap gap-2 mb-4 items-center">
@@ -940,7 +960,10 @@ export default function MyMatchesPage() {
                                     <div className="flex items-center gap-2 sm:gap-3 text-xs flex-shrink-0 flex-wrap sm:flex-nowrap">
                                         <span className="font-mono bg-stone-100 px-2 py-0.5 rounded text-stone-600 border border-stone-200">{opp.naics_code}</span>
                                         {opp.place_of_performance_state && (
-                                            <span className="font-mono bg-stone-100 px-2 py-0.5 rounded text-stone-600 border border-stone-200">{opp.place_of_performance_state}</span>
+                                            <span className="inline-flex items-center gap-1 bg-sky-50 text-sky-700 border border-sky-200 px-2 py-0.5 rounded font-semibold">
+                                                <MapPin className="w-3 h-3" />
+                                                {opp.place_of_performance_state}
+                                            </span>
                                         )}
                                         <span className="font-bold text-stone-700 whitespace-nowrap">
                                             {opp.response_deadline ? new Date(opp.response_deadline).toLocaleDateString() : "TBD"}

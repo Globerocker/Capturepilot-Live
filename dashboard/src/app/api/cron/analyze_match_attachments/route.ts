@@ -28,11 +28,13 @@ export const maxDuration = 300;
  * ~100 opps so we cover it in under 3 hours.
  */
 
-// 1 opp × 1 doc per run. Mistral OCR markdown for big federal solicitations
-// can be 5-10 MB by itself, and Vercel's 1024 MB Lambda dies even with 2x2.
-// At 1×1 we run cleanly within 1024 MB. Throughput: 1 doc / 20 min via cron
-// → 72 docs/day. Acceptable while we drain the 4,861-eligible pool.
-const BATCH_SIZE = 1;
+// 2 opps × 1 doc each per run. vercel.json reserves 3008 MB for this route
+// (see `functions` block) — under the older 1024 MB default we OOM'd at 2×2
+// with big federal solicitations (Mistral OCR markdown can be 5-10 MB).
+// With 3008 MB headroom we can safely run 2 opps sequentially at 1 doc each.
+// Throughput: 2 docs / 20 min via cron → 144 docs/day. Halves the drain time
+// on the ~4,861-eligible pool from ~67 to ~34 days.
+const BATCH_SIZE = 2;
 const MAX_DOCS_PER_OPP = 1;
 const MAX_DOC_BYTES = 4 * 1024 * 1024; // skip downloads > 4 MB
 const SAM_API_KEY = process.env.SAM_API_KEY || "";

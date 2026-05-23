@@ -16,8 +16,8 @@ export const maxDuration = 300;
  * Per-run budget: 50 opps. ~5-10s each due to SAM.gov rate limits.
  * 4 runs/hour * 50 = 200/hour => 10,856 backlog cleared in ~55 hours.
  */
-const BATCH_SIZE = 15;
-const REQUEST_GAP_MS = 400;   // ~2.5 req/sec to stay well under SAM's rate limit
+const BATCH_SIZE = 30;
+const REQUEST_GAP_MS = 350;   // ~2.8 req/sec to stay well under SAM's rate limit
 const SAM_API_KEY = process.env.SAM_API_KEY || "";
 
 function sleep(ms: number) {
