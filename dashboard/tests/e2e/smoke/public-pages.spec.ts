@@ -26,8 +26,10 @@ test.describe("public pages @smoke", () => {
 
     test("/check renders the Quick Checker form", async ({ page }) => {
         await page.goto("/check");
-        // The page has a "Run check" or similar CTA + a website input.
-        await expect(page.locator('input[type="url"], input[name="website"], input[placeholder*="website" i]').first()).toBeVisible({ timeout: 10_000 });
+        // The page asks for a website URL in a text input — placeholder is
+        // e.g. "www.acmelogistics.com". Match by the placeholder substring
+        // rather than the input type since the field is `type="text"`.
+        await expect(page.locator('input[placeholder*=".com" i]').first()).toBeVisible({ timeout: 10_000 });
     });
 
     test("/pricing lists at least one paid tier", async ({ page }) => {
