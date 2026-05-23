@@ -532,6 +532,29 @@ export default function SettingsPage() {
                 </button>
             </header>
 
+            {/* ---- Sticky section nav ---- */}
+            <nav
+                className="sticky top-0 z-20 -mx-1 px-1 py-2 bg-stone-50/95 backdrop-blur border-b border-stone-200 flex gap-1 overflow-x-auto"
+                aria-label="Settings sections"
+            >
+                {[
+                    { id: "account", label: "Account" },
+                    { id: "profile", label: "Profile" },
+                    { id: "subscription", label: "Subscription" },
+                    { id: "invoices", label: "Invoices" },
+                    { id: "password", label: "Password" },
+                    { id: "danger-zone", label: "Danger Zone" },
+                ].map(({ id, label }) => (
+                    <a
+                        key={id}
+                        href={`#${id}`}
+                        className="shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold text-stone-600 hover:bg-stone-100 hover:text-black transition"
+                    >
+                        {label}
+                    </a>
+                ))}
+            </nav>
+
             {/* ================================================================ */}
             {/*  Two-column grid on lg+ (single column on smaller screens)       */}
             {/*  Uses grid-auto-flow:dense + col-start utilities per section so  */}

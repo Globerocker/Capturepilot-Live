@@ -67,6 +67,14 @@ export default function CapabilityStatementPage() {
     const [collapseInputs, setCollapseInputs] = useState(false);
     const [savingToDrive, setSavingToDrive] = useState(false);
     const [downloadingPdf, setDownloadingPdf] = useState(false);
+    const [toast, setToast] = useState<{ type: "success" | "error"; msg: string } | null>(null);
+
+    // Auto-dismiss the toast after 4s.
+    useEffect(() => {
+        if (!toast) return;
+        const t = setTimeout(() => setToast(null), 4000);
+        return () => clearTimeout(t);
+    }, [toast]);
 
     // Restore in-flight job from sessionStorage on mount
     useEffect(() => {
@@ -349,9 +357,10 @@ export default function CapabilityStatementPage() {
                 throw new Error(`Drive upload failed: ${res.status} ${err.slice(0, 300)}`);
             }
             const data = await res.json();
-            alert(`Saved to Google Drive. File ID: ${data.id}`);
+            setToast({ type: "success", msg: `Saved to Google Drive (file ${String(data.id).slice(0, 8)}…)` });
+            void data;
         } catch (e) {
-            alert("Google Drive save failed: " + (e as Error).message);
+            setToast({ type: "error", msg: "Google Drive save failed: " + (e as Error).message.slice(0, 120) });
         } finally {
             setSavingToDrive(false);
         }
@@ -369,6 +378,17 @@ export default function CapabilityStatementPage() {
 
     return (
         <div className="max-w-7xl mx-auto space-y-6">
+            {toast && (
+                <div
+                    role="status"
+                    className={clsx(
+                        "fixed top-6 right-6 z-50 px-5 py-3 rounded-xl shadow-lg text-sm font-medium flex items-center gap-2 animate-in slide-in-from-top-2 duration-300",
+                        toast.type === "success" ? "bg-emerald-600 text-white" : "bg-rose-600 text-white",
+                    )}
+                >
+                    {toast.msg}
+                </div>
+            )}
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-2xl font-bold flex items-center gap-2">
