@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { invalidateCustomTemplateCache } from "@/lib/email-custom-template";
 import { DEFAULT_EMAIL_SETTINGS } from "@/lib/email-settings";
+import { assertAdmin } from "@/lib/auth-admin";
 
 function getAdmin() {
     return createClient(
@@ -16,6 +17,8 @@ function getAdmin() {
  * Returns 404 if no custom version exists yet.
  */
 export async function GET(_req: NextRequest, context: { params: Promise<{ key: string }> }) {
+    const unauth = await assertAdmin();
+    if (unauth) return unauth;
     try {
         const { key } = await context.params;
         if (!(key in DEFAULT_EMAIL_SETTINGS)) {
@@ -46,6 +49,8 @@ export async function GET(_req: NextRequest, context: { params: Promise<{ key: s
  * Upserts the row and invalidates the cache.
  */
 export async function PATCH(req: NextRequest, context: { params: Promise<{ key: string }> }) {
+    const unauth = await assertAdmin();
+    if (unauth) return unauth;
     try {
         const { key } = await context.params;
         if (!(key in DEFAULT_EMAIL_SETTINGS)) {
@@ -80,6 +85,8 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ key: 
  * Removes the custom template — send logic falls back to code template.
  */
 export async function DELETE(_req: NextRequest, context: { params: Promise<{ key: string }> }) {
+    const unauth = await assertAdmin();
+    if (unauth) return unauth;
     try {
         const { key } = await context.params;
         const sb = getAdmin();

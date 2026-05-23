@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { assertAdmin } from "@/lib/auth-admin";
 import {
     emailTemplate,
     contentCard,
@@ -22,6 +23,8 @@ import { EMAIL_SETTINGS } from "@/lib/email-settings";
  * Returns rendered HTML for any email template with sample data.
  */
 export async function GET(req: NextRequest) {
+    const unauth = await assertAdmin();
+    if (unauth) return unauth;
     const type = req.nextUrl.searchParams.get("type") || "welcome";
     const html = renderPreview(type);
     if (!html) {

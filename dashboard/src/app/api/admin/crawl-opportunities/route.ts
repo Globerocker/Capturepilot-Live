@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { assertAdmin } from "@/lib/auth-admin";
 
 export const maxDuration = 300;
 
@@ -26,6 +27,8 @@ const WOSB_KEYWORDS = ["wosb", "women-owned", "woman-owned", "edwosb"];
  * }
  */
 export async function POST(req: NextRequest) {
+    const unauth = await assertAdmin();
+    if (unauth) return unauth;
     try {
         const body = await req.json();
         const { naics_codes, days_back = 90, user_profile_id } = body;

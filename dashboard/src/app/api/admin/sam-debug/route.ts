@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { assertAdmin } from "@/lib/auth-admin";
 
 export const maxDuration = 30;
 
@@ -14,10 +15,14 @@ export const maxDuration = 30;
  * Service-key bearer required. Never logs the SAM key.
  */
 export async function GET(req: NextRequest) {
+    // Accept either an admin session cookie OR a server-to-server Bearer call
+    // with SUPABASE_SERVICE_KEY (used by cron-trigger). Reject if neither.
     const auth = req.headers.get("authorization");
     const expected = process.env.SUPABASE_SERVICE_KEY ? `Bearer ${process.env.SUPABASE_SERVICE_KEY}` : null;
-    if (expected && auth !== expected) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const bearerOk = expected != null && auth === expected;
+    if (!bearerOk) {
+        const unauth = await assertAdmin();
+        if (unauth) return unauth;
     }
 
     const key = process.env.SAM_API_KEY;

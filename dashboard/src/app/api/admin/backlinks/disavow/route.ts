@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { adminSupabase } from "@/lib/backlinks/admin-client";
+import { assertAdmin } from "@/lib/auth-admin";
 
 export async function GET() {
+  const unauth = await assertAdmin();
+  if (unauth) return unauth;
   const admin = adminSupabase();
   const { data } = await admin
     .from("backlink_agents")

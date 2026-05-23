@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { assertAdmin } from "@/lib/auth-admin";
 
 export const maxDuration = 60;
 
@@ -13,6 +14,8 @@ export const maxDuration = 60;
  * Returns: { subject, eyebrow, heading, ctaLabel, introLine, personalNote }
  */
 export async function POST(req: NextRequest) {
+    const unauth = await assertAdmin();
+    if (unauth) return unauth;
     const OPENAI_KEY = process.env.OPENAI_API_KEY;
     if (!OPENAI_KEY) {
         return NextResponse.json({ error: "OpenAI not configured" }, { status: 500 });

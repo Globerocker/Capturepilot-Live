@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { renderBetaInviteEmail } from "@/lib/email";
+import { assertAdmin } from "@/lib/auth-admin";
 
 /**
  * POST /api/admin/beta-invites/preview — render a preview of the invite email.
@@ -7,6 +8,8 @@ import { renderBetaInviteEmail } from "@/lib/email";
  * Returns { subject, html } so the admin page can iframe-srcDoc it.
  */
 export async function POST(req: NextRequest) {
+    const unauth = await assertAdmin();
+    if (unauth) return unauth;
     try {
         const body = await req.json();
         const { recipient_name, company_name, personal_note, overrides } = body;

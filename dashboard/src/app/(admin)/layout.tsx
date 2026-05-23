@@ -112,6 +112,21 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         (async () => {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) { window.location.href = "/login"; return; }
+
+            // Gate the entire admin shell on account_type === "admin". The API
+            // routes also enforce this, but checking here avoids rendering the
+            // admin chrome to a non-admin user (which would just 403 every
+            // request anyway).
+            const { data: profile } = await supabase
+                .from("user_profiles")
+                .select("account_type")
+                .eq("auth_user_id", user.id)
+                .maybeSingle();
+            if (profile?.account_type !== "admin") {
+                window.location.href = "/dashboard";
+                return;
+            }
+
             setAdminEmail(user.email || null);
             await fetchUnread();
             setLoading(false);

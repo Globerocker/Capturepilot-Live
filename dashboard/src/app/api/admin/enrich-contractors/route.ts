@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { assertAdmin } from "@/lib/auth-admin";
 
 export const maxDuration = 300;
 
@@ -16,6 +17,8 @@ export const maxDuration = 300;
  * to stay under Vercel's 5-minute function ceiling with margin.
  */
 export async function POST(req: NextRequest) {
+    const unauth = await assertAdmin();
+    if (unauth) return unauth;
     const url = new URL(req.url);
     const passes = Math.max(1, Math.min(6, parseInt(url.searchParams.get("passes") || "1", 10)));
 

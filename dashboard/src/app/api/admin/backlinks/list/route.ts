@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminSupabase } from "@/lib/backlinks/admin-client";
+import { assertAdmin } from "@/lib/auth-admin";
 
 export async function GET(req: NextRequest) {
+  const unauth = await assertAdmin();
+  if (unauth) return unauth;
   const admin = adminSupabase();
   const tier = req.nextUrl.searchParams.get("tier");
   const status = req.nextUrl.searchParams.get("status");

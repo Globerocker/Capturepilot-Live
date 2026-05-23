@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { sendConsultingWelcomeEmail, enqueueDripSequence } from "@/lib/email";
 import { notifyNewClient } from "@/lib/slack";
 import { upsertHubSpotContact, splitContactName } from "@/lib/hubspot";
+import { assertAdmin } from "@/lib/auth-admin";
 
 function getAdmin() {
     return createClient(
@@ -17,6 +18,8 @@ function getAdmin() {
  * Creates auth user + profile + sends welcome email
  */
 export async function POST(req: NextRequest) {
+    const unauth = await assertAdmin();
+    if (unauth) return unauth;
     try {
         const body = await req.json();
         const {
@@ -237,6 +240,8 @@ export async function POST(req: NextRequest) {
  * by the merged People view.
  */
 export async function GET(req: NextRequest) {
+    const unauth = await assertAdmin();
+    if (unauth) return unauth;
     try {
         const admin = getAdmin();
         const { searchParams } = new URL(req.url);
@@ -317,6 +322,8 @@ export async function GET(req: NextRequest) {
  * Body: { user_profile_id, ...fields }
  */
 export async function PATCH(req: NextRequest) {
+    const unauth = await assertAdmin();
+    if (unauth) return unauth;
     try {
         const body = await req.json();
         const { user_profile_id, ...updates } = body;
@@ -360,6 +367,8 @@ export async function PATCH(req: NextRequest) {
  * DELETE /api/admin/clients — Deactivate (not delete) a client
  */
 export async function DELETE(req: NextRequest) {
+    const unauth = await assertAdmin();
+    if (unauth) return unauth;
     try {
         const { user_profile_id } = await req.json();
         if (!user_profile_id) return NextResponse.json({ error: "user_profile_id required" }, { status: 400 });

@@ -6,6 +6,7 @@ import {
     type Audience,
     type EmailCategory,
 } from "@/lib/email-settings";
+import { assertAdmin } from "@/lib/auth-admin";
 
 function getAdmin() {
     return createClient(
@@ -19,6 +20,8 @@ function getAdmin() {
  * Returns merged settings: DB rows override defaults, missing rows use defaults.
  */
 export async function GET() {
+    const unauth = await assertAdmin();
+    if (unauth) return unauth;
     try {
         const sb = getAdmin();
         const { data, error } = await sb
@@ -54,6 +57,8 @@ export async function GET() {
  * Upserts the row, invalidates cache so next send() picks up the change.
  */
 export async function PATCH(req: NextRequest) {
+    const unauth = await assertAdmin();
+    if (unauth) return unauth;
     try {
         const body = await req.json();
         const { key, enabled, audience, category } = body;

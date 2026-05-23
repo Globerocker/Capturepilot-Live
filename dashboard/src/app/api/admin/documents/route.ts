@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { assertAdmin } from "@/lib/auth-admin";
 
 function getAdmin() {
     return createClient(
@@ -12,6 +13,8 @@ function getAdmin() {
  * GET /api/admin/documents?user_profile_id=xxx
  */
 export async function GET(req: NextRequest) {
+    const unauth = await assertAdmin();
+    if (unauth) return unauth;
     const profileId = req.nextUrl.searchParams.get("user_profile_id");
     const admin = getAdmin();
 
@@ -27,6 +30,8 @@ export async function GET(req: NextRequest) {
  * POST /api/admin/documents — Create document record (after upload to storage)
  */
 export async function POST(req: NextRequest) {
+    const unauth = await assertAdmin();
+    if (unauth) return unauth;
     try {
         const body = await req.json();
         const { user_profile_id, filename, file_url, file_size, mime_type, category, description } = body;
@@ -64,6 +69,8 @@ export async function POST(req: NextRequest) {
  * DELETE /api/admin/documents?id=xxx
  */
 export async function DELETE(req: NextRequest) {
+    const unauth = await assertAdmin();
+    if (unauth) return unauth;
     const docId = req.nextUrl.searchParams.get("id");
     if (!docId) return NextResponse.json({ error: "id required" }, { status: 400 });
 

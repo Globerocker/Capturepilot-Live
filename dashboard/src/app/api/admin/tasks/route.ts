@@ -108,6 +108,8 @@ export async function GET(req: NextRequest) {
  * PATCH /api/admin/tasks — Update task status
  */
 export async function PATCH(req: NextRequest) {
+    const unauth = await assertAdmin();
+    if (unauth) return unauth;
     try {
         const body = await req.json();
         const { task_id, status, completed_at } = body;

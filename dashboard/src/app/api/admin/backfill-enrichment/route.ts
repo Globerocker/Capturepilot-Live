@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { computeStrategicScoring } from "@/lib/strategic-scoring";
+import { assertAdmin } from "@/lib/auth-admin";
 import { extractStructuredRequirements } from "@/lib/extract-requirements";
 
 export const maxDuration = 300;
@@ -42,6 +43,8 @@ interface Stats {
  *   { limit?: number = 5000, only?: "strategic" | "requirements" | "both" = "both" }
  */
 export async function POST(req: NextRequest) {
+    const unauth = await assertAdmin();
+    if (unauth) return unauth;
     let body: { limit?: number; only?: string } = {};
     try { body = await req.json(); } catch { /* empty body ok */ }
 

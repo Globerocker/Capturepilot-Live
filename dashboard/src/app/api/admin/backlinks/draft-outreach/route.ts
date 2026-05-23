@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generatePitch, gmailComposeUrl } from "@/lib/backlinks/draft-generator";
 import { adminSupabase } from "@/lib/backlinks/admin-client";
+import { assertAdmin } from "@/lib/auth-admin";
 
 const DEFAULT_TARGET_URL = "https://capturepilot.com/resources/agency-pain-points";
 
 export async function POST(req: NextRequest) {
+  const unauth = await assertAdmin();
+  if (unauth) return unauth;
   const { prospect_id, contact_id, recent_context_snippet } = await req.json();
   if (!prospect_id) return NextResponse.json({ error: "prospect_id required" }, { status: 400 });
 

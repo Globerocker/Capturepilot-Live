@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { assertAdmin } from "@/lib/auth-admin";
 
 const AGENT_TO_CRON: Record<string, string> = {
   prospect_discovery: "backlink_prospect_discovery",
@@ -9,6 +10,8 @@ const AGENT_TO_CRON: Record<string, string> = {
 };
 
 export async function POST(req: NextRequest) {
+  const unauth = await assertAdmin();
+  if (unauth) return unauth;
   const { agent } = await req.json();
   const cron = AGENT_TO_CRON[agent];
   if (!cron) return NextResponse.json({ error: "unknown agent" }, { status: 400 });

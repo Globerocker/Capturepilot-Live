@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { assertAdmin } from "@/lib/auth-admin";
 
 function getAdmin() {
     return createClient(
@@ -12,6 +13,8 @@ function getAdmin() {
  * POST /api/admin/competitors — Add competitor to client profile
  */
 export async function POST(req: NextRequest) {
+    const unauth = await assertAdmin();
+    if (unauth) return unauth;
     try {
         const body = await req.json();
         const {
@@ -58,6 +61,8 @@ export async function POST(req: NextRequest) {
  * GET /api/admin/competitors?user_profile_id=xxx
  */
 export async function GET(req: NextRequest) {
+    const unauth = await assertAdmin();
+    if (unauth) return unauth;
     const profileId = req.nextUrl.searchParams.get("user_profile_id");
     const admin = getAdmin();
 
@@ -73,6 +78,8 @@ export async function GET(req: NextRequest) {
  * DELETE /api/admin/competitors?id=xxx
  */
 export async function DELETE(req: NextRequest) {
+    const unauth = await assertAdmin();
+    if (unauth) return unauth;
     const id = req.nextUrl.searchParams.get("id");
     if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 

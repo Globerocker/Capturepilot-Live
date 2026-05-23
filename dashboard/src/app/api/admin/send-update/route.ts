@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { sendOpportunityAlert } from "@/lib/email";
+import { assertAdmin } from "@/lib/auth-admin";
 
 function getAdmin() {
     return createClient(
@@ -17,6 +18,8 @@ function getAdmin() {
  * For "custom": sends custom subject + body
  */
 export async function POST(req: NextRequest) {
+    const unauth = await assertAdmin();
+    if (unauth) return unauth;
     try {
         const { user_profile_id, type, subject, body } = await req.json();
         if (!user_profile_id) return NextResponse.json({ error: "user_profile_id required" }, { status: 400 });

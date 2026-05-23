@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminSupabase } from "@/lib/backlinks/admin-client";
+import { assertAdmin } from "@/lib/auth-admin";
 
 export async function POST(req: NextRequest) {
+  const unauth = await assertAdmin();
+  if (unauth) return unauth;
   const body = await req.json();
   const admin = adminSupabase();
   if (body.id) {
@@ -17,6 +20,8 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  const unauth = await assertAdmin();
+  if (unauth) return unauth;
   const id = req.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
   const admin = adminSupabase();

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { assertAdmin } from "@/lib/auth-admin";
 
 export const maxDuration = 30;
 
@@ -59,6 +60,8 @@ function detectVideoMeta(url: string | null | undefined): {
  *   (no params)  — list all (published + drafts)
  */
 export async function GET(req: NextRequest) {
+    const unauth = await assertAdmin();
+    if (unauth) return unauth;
     const { searchParams } = new URL(req.url);
     const slug = searchParams.get("slug");
     const admin = getAdmin();
@@ -91,6 +94,8 @@ export async function GET(req: NextRequest) {
 
 /** POST /api/admin/academy — create */
 export async function POST(req: NextRequest) {
+    const unauth = await assertAdmin();
+    if (unauth) return unauth;
     const body = await req.json();
     const {
         slug, title, excerpt, body_md, category, reading_minutes,
@@ -139,6 +144,8 @@ export async function POST(req: NextRequest) {
 
 /** PATCH /api/admin/academy — update by slug (slug stays the same unless `new_slug` given) */
 export async function PATCH(req: NextRequest) {
+    const unauth = await assertAdmin();
+    if (unauth) return unauth;
     const body = await req.json();
     const { slug, new_slug, ...rest } = body as Record<string, unknown>;
     if (!slug || typeof slug !== "string") {
@@ -182,6 +189,8 @@ export async function PATCH(req: NextRequest) {
 
 /** DELETE /api/admin/academy?slug=… */
 export async function DELETE(req: NextRequest) {
+    const unauth = await assertAdmin();
+    if (unauth) return unauth;
     const { searchParams } = new URL(req.url);
     const slug = searchParams.get("slug");
     if (!slug) return NextResponse.json({ error: "slug is required" }, { status: 400 });

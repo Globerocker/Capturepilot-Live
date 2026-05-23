@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { assertAdmin } from "@/lib/auth-admin";
 import {
     sendWelcomeEmail,
     sendConsultingWelcomeEmail,
@@ -21,6 +22,8 @@ import {
  * Bypasses settings.enabled check for previewing.
  */
 export async function POST(req: NextRequest) {
+    const unauth = await assertAdmin();
+    if (unauth) return unauth;
     try {
         const { type, to } = await req.json();
         if (!to || !type) {

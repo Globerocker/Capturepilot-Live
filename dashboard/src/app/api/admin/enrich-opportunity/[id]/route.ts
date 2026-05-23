@@ -6,6 +6,7 @@ import OpenAI from "openai";
 import { computeStrategicScoring } from "@/lib/strategic-scoring";
 import { extractStructuredRequirements } from "@/lib/extract-requirements";
 import { createJob, runStep, startJob, completeJob, failJob, requireProfileId } from "@/lib/background-jobs";
+import { assertAdmin } from "@/lib/auth-admin";
 
 export const maxDuration = 120;
 
@@ -25,6 +26,8 @@ const SAM_API_KEY = process.env.SAM_API_KEY || "";
  * subscribes to /api/jobs/[jobId] to get live step-by-step progress.
  */
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+    const unauth = await assertAdmin();
+    if (unauth) return unauth;
     const { id } = await params;
     if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
