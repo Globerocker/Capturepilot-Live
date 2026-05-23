@@ -1,23 +1,16 @@
 /**
  * Pre-warm the GovTribe MCP cache for opportunities we care about.
  *
- * GovTribe MCP rounds-trip ~1-2s per call. Pre-pulling activity for the
- * top-N opportunities by deadline keeps the per-opportunity detail page
- * fast (cache hit instead of MCP roundtrip). Each tool call is cached
- * in `govtribe_cache` (migration 062) and the existing
- * /api/intelligence/govtribe routes use that cache.
- *
- * We pull two summaries per opp:
- *   1. activity-summary — recent posting / mod / cancel activity
- *   2. awards-summary   — prior awards on related contract numbers
- *
- * Only opportunities with a `solicitation_number` get pre-warmed; the
- * MCP server keys lookups on that.
+ * Calls govtribe lib directly (not via internal API routes — those require
+ * a logged-in Supabase session, not a service key). Each call seeds the
+ * `govtribe_cache` table (migration 062) so the per-opportunity detail
+ * page renders fast from cache.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { withCronTelemetry } from "@/lib/cron-telemetry";
+import { fetchAwardsSummary, fetchSubAwards } from "@/lib/govtribe";
 
 export const maxDuration = 300;
 
@@ -27,24 +20,6 @@ function getDb() {
         process.env.SUPABASE_SERVICE_KEY!,
         { auth: { persistSession: false } },
     );
-}
-
-const APP_BASE = process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : "https://app.capturepilot.com";
-
-async function prewarm(path: string, params: Record<string, string>, serviceKey: string): Promise<{ ok: boolean; status: number; body: string }> {
-    const q = new URLSearchParams(params).toString();
-    try {
-        const res = await fetch(`${APP_BASE}${path}?${q}`, {
-            headers: { Authorization: `Bearer ${serviceKey}` },
-            signal: AbortSignal.timeout(25000),
-        });
-        const body = await res.text().catch(() => "");
-        return { ok: res.ok, status: res.status, body: body.slice(0, 200) };
-    } catch (e) {
-        return { ok: false, status: 0, body: (e as Error).message.slice(0, 200) };
-    }
 }
 
 async function GET_handler(req: NextRequest): Promise<NextResponse> {
@@ -57,56 +32,66 @@ async function GET_handler(req: NextRequest): Promise<NextResponse> {
         }
     }
 
-    const serviceKey = process.env.SUPABASE_SERVICE_KEY;
-    if (!serviceKey || !process.env.GOVTRIBE_API_KEY) {
+    if (!process.env.GOVTRIBE_API_KEY) {
         return NextResponse.json({
             success: false,
-            error: "GOVTRIBE_API_KEY not configured — sync skipped",
+            note: "GOVTRIBE_API_KEY not configured — sync skipped",
         }, { status: 200 });
     }
 
     const t0 = Date.now();
     const db = getDb();
-    const limit = Math.min(parseInt(req.nextUrl.searchParams.get("limit") || "40", 10), 200);
-    const stats = { opps_considered: 0, prewarmed_activity: 0, prewarmed_awards: 0, errors: 0, error_samples: [] as Array<{ path: string; status: number; body: string }> };
+    const limit = Math.min(parseInt(req.nextUrl.searchParams.get("limit") || "20", 10), 100);
+    const stats = {
+        opps_considered: 0,
+        prewarmed_awards: 0,
+        prewarmed_subawards: 0,
+        errors: 0,
+        error_samples: [] as Array<{ kind: string; sol: string; message: string }>,
+    };
 
-    // Target the most actionable opps: active, deadline within 60 days,
-    // with a real solicitation_number.
+    // Target active federal opps with a solicitation_number, deadline soon
     const horizon = new Date(Date.now() + 60 * 86400_000).toISOString();
     const { data: opps, error } = await db
         .from("opportunities")
-        .select("id, notice_id, solicitation_number, response_deadline")
+        .select("solicitation_number, response_deadline")
         .eq("is_archived", false)
-        .eq("status", "ACTIVE")
+        .or("source.is.null,source.eq.sam")
         .not("solicitation_number", "is", null)
         .gt("response_deadline", new Date().toISOString())
         .lt("response_deadline", horizon)
         .order("response_deadline", { ascending: true })
         .limit(limit);
-    if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
-    }
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     stats.opps_considered = (opps || []).length;
 
     for (const opp of opps || []) {
         if (Date.now() - t0 > 270_000) break;
         const sol = (opp as { solicitation_number?: string }).solicitation_number;
         if (!sol) continue;
-        const a = await prewarm("/api/intelligence/govtribe/activity-summary", { solicitation: sol }, serviceKey);
-        if (a.ok) stats.prewarmed_activity++; else {
+        try {
+            await fetchAwardsSummary(sol);
+            stats.prewarmed_awards++;
+        } catch (e) {
             stats.errors++;
-            if (stats.error_samples.length < 3) stats.error_samples.push({ path: "activity-summary", status: a.status, body: a.body });
+            if (stats.error_samples.length < 5) {
+                stats.error_samples.push({ kind: "awards", sol, message: (e as Error).message.slice(0, 200) });
+            }
         }
-        const w = await prewarm("/api/intelligence/govtribe/awards-summary", { solicitation: sol }, serviceKey);
-        if (w.ok) stats.prewarmed_awards++; else {
+        try {
+            await fetchSubAwards(sol);
+            stats.prewarmed_subawards++;
+        } catch (e) {
             stats.errors++;
-            if (stats.error_samples.length < 3) stats.error_samples.push({ path: "awards-summary", status: w.status, body: w.body });
+            if (stats.error_samples.length < 5) {
+                stats.error_samples.push({ kind: "subawards", sol, message: (e as Error).message.slice(0, 200) });
+            }
         }
-        // GovTribe MCP gates rate-limits — throttle
+        // GovTribe MCP rate-limit
         await new Promise(r => setTimeout(r, 600));
     }
 
-    // Clean stale cache rows (> 30d) while we're here
+    // Clean very-old cache rows opportunistically
     await db.from("govtribe_cache").delete().lt("expires_at", new Date(Date.now() - 30 * 86400_000).toISOString());
 
     return NextResponse.json({ success: true, ...stats, elapsed_ms: Date.now() - t0 });
