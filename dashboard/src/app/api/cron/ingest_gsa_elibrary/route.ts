@@ -107,24 +107,28 @@ async function GET_handler(req: NextRequest): Promise<NextResponse> {
         if (found.length === 0) continue;
         stats.contracts_found += found.length;
         const rows = found.map(f => ({
-            contract_number: f.contractNumber,
-            schedule: f.schedule,
-            business_name: name,
+            contract_no: f.contractNumber,
+            company_name: name,
             uei: uei || null,
             duns: null,
-            contractor_address: null,
-            contractor_state: state || null,
+            cage_code: null,
+            schedule: f.schedule,
             sin_codes: f.sinCodes,
-            contract_value: null,
-            period_start: null,
-            period_end: null,
-            socioeconomic_indicators: null,
+            naics_codes: [],
+            small_business: false,
+            certifications: [],
+            phone: null,
+            email: null,
             website: null,
+            address: null,
+            state: state || null,
+            ceiling_value: null,
+            source: "gsa_elibrary",
             last_synced: new Date().toISOString(),
         }));
         const { error: upErr } = await db
             .from("gsa_schedule_holders")
-            .upsert(rows, { onConflict: "contract_number", ignoreDuplicates: false });
+            .upsert(rows, { onConflict: "contract_no,company_name", ignoreDuplicates: false });
         if (upErr) {
             stats.errors++;
             console.warn("GSA upsert err:", upErr.message);

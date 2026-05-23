@@ -144,25 +144,11 @@ create index if not exists idx_pps_naics on public.past_performance_stats(naics_
 
 
 -- --- 5) GSA Schedule holders --------------------------------
-create table if not exists public.gsa_schedule_holders (
-    id uuid primary key default gen_random_uuid(),
-    contract_number text not null unique,    -- e.g. GS-35F-XXXX
-    schedule text,                            -- e.g. 'Multiple Award Schedule', '70 IT Schedule'
-    business_name text not null,
-    uei text,
-    duns text,
-    contractor_address text,
-    contractor_state text,
-    sin_codes text[],                         -- Special Item Numbers covered
-    contract_value numeric(18, 2),
-    period_start date,
-    period_end date,
-    socioeconomic_indicators text[],          -- ['SB','8A','WOSB','VOSB','SDVOSB','HUBZ']
-    website text,
-    last_synced timestamptz default now()
-);
-create index if not exists idx_gsa_uei on public.gsa_schedule_holders(uei) where uei is not null;
-create index if not exists idx_gsa_state on public.gsa_schedule_holders(contractor_state);
+-- Table already exists from migration 055. Indexes are already there.
+-- Just make sure last_synced (added in this migration) exists; the
+-- 055 version used updated_at instead.
+alter table public.gsa_schedule_holders
+    add column if not exists last_synced timestamptz default now();
 
 
 -- --- 6) DOL Wage Determinations -----------------------------
