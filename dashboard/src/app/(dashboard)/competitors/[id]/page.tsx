@@ -7,6 +7,8 @@ import { createSupabaseClient } from "@/lib/supabase/client";
 import {
     ArrowLeft, Loader2, Shield, Globe, ExternalLink, TrendingUp, Users, Briefcase,
     MapPin, ChevronRight, Building, Target, Linkedin,
+    Code, Wrench, Stethoscope, ShieldCheck, Cpu, Truck, Hammer, GraduationCap,
+    Cloud, FileText, Plane, type LucideIcon, Crown,
 } from "lucide-react";
 import clsx from "clsx";
 import { NAICS_CODES } from "@/lib/naics-codes";
@@ -198,6 +200,44 @@ function normalizeLeadership(raw: unknown): LeaderItem[] {
         }
     }
     return out;
+}
+
+// Service category inferred from the service name — drives the per-card
+// icon + accent color. Order matters: first match wins.
+const SERVICE_CATEGORIES: Array<{
+    test: RegExp;
+    icon: LucideIcon;
+    accent: string;
+    iconColor: string;
+    label: string;
+}> = [
+    { test: /software|develop|code|web|app\b|cloud|saas|api\b|devops|data\s*eng/i,
+        icon: Code, accent: "from-indigo-50 to-indigo-100/30 border-indigo-200", iconColor: "text-indigo-600", label: "Software" },
+    { test: /cloud|aws|azure|gcp|kubernet|infra/i,
+        icon: Cloud, accent: "from-sky-50 to-sky-100/30 border-sky-200", iconColor: "text-sky-600", label: "Cloud" },
+    { test: /cyber|security|encrypt|penetrat|soc\b|pii|hipaa|nist/i,
+        icon: ShieldCheck, accent: "from-rose-50 to-rose-100/30 border-rose-200", iconColor: "text-rose-600", label: "Cybersecurity" },
+    { test: /ai\b|machine\s*learn|llm|gpt|neural|nlp|computer\s*vision/i,
+        icon: Cpu, accent: "from-violet-50 to-violet-100/30 border-violet-200", iconColor: "text-violet-600", label: "AI / ML" },
+    { test: /constru|build|hvac|electric|plumb|paint|roof|paving|landscap|grading/i,
+        icon: Hammer, accent: "from-amber-50 to-amber-100/30 border-amber-200", iconColor: "text-amber-600", label: "Construction" },
+    { test: /janitor|clean|facilit|grounds|custod/i,
+        icon: Wrench, accent: "from-emerald-50 to-emerald-100/30 border-emerald-200", iconColor: "text-emerald-600", label: "Facilities" },
+    { test: /medic|health|nurs|clinic|dental|pharm|biolog|laborator/i,
+        icon: Stethoscope, accent: "from-teal-50 to-teal-100/30 border-teal-200", iconColor: "text-teal-600", label: "Healthcare" },
+    { test: /transport|logist|truck|hauling|freight|deliver|courier/i,
+        icon: Truck, accent: "from-orange-50 to-orange-100/30 border-orange-200", iconColor: "text-orange-600", label: "Logistics" },
+    { test: /aviation|aircraft|aero|drone|uav|space/i,
+        icon: Plane, accent: "from-blue-50 to-blue-100/30 border-blue-200", iconColor: "text-blue-600", label: "Aerospace" },
+    { test: /train|educa|school|curricul|instruct|certif|coach/i,
+        icon: GraduationCap, accent: "from-purple-50 to-purple-100/30 border-purple-200", iconColor: "text-purple-600", label: "Training" },
+    { test: /consult|advis|profess|strateg|polic|research|analysis|writing|document/i,
+        icon: FileText, accent: "from-stone-50 to-stone-100/40 border-stone-200", iconColor: "text-stone-600", label: "Consulting" },
+];
+
+function categorizeService(name: string): { icon: LucideIcon; accent: string; iconColor: string; label: string } {
+    for (const cat of SERVICE_CATEGORIES) if (cat.test.test(name)) return cat;
+    return { icon: Briefcase, accent: "from-stone-50 to-stone-100/40 border-stone-200", iconColor: "text-stone-500", label: "Service" };
 }
 
 const presenceColors: Record<string, string> = {
@@ -423,7 +463,7 @@ export default function CompetitorDetailPage({ params }: { params: Promise<{ id:
                 </div>
             )}
 
-            {/* Services — restructured with description field and row layout */}
+            {/* Services — proper category cards with inferred icons */}
             {services.length > 0 && (
                 <div className="bg-white border border-stone-200 rounded-2xl p-6">
                     <div className="flex items-center gap-2 mb-4">
@@ -432,12 +472,40 @@ export default function CompetitorDetailPage({ params }: { params: Promise<{ id:
                         <span className="ml-auto text-xs text-stone-400">{services.length}</span>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {services.map((s, i) => (
-                            <div key={i} className="bg-stone-50 border border-stone-200 rounded-xl p-3">
-                                <p className="font-bold text-sm text-stone-800">{s.name}</p>
-                                {s.description && <p className="text-xs text-stone-500 mt-1 leading-relaxed">{s.description}</p>}
-                            </div>
-                        ))}
+                        {services.map((s, i) => {
+                            const cat = categorizeService(s.name);
+                            const Icon = cat.icon;
+                            return (
+                                <div
+                                    key={i}
+                                    className={clsx(
+                                        "bg-gradient-to-br rounded-xl p-4 border shadow-sm hover:shadow-md transition-shadow",
+                                        cat.accent,
+                                    )}
+                                >
+                                    <div className="flex items-start gap-3">
+                                        <div className={clsx(
+                                            "w-9 h-9 rounded-lg bg-white border border-white flex items-center justify-center flex-shrink-0 shadow-sm",
+                                            cat.iconColor,
+                                        )}>
+                                            <Icon className="w-4 h-4" />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center justify-between gap-2 mb-0.5">
+                                                <p className="font-bold text-sm text-stone-900 leading-tight">{s.name}</p>
+                                                <span className={clsx(
+                                                    "text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-white/60 border border-white",
+                                                    cat.iconColor,
+                                                )}>{cat.label}</span>
+                                            </div>
+                                            {s.description && (
+                                                <p className="text-xs text-stone-600 leading-relaxed mt-1">{s.description}</p>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
             )}
@@ -450,19 +518,39 @@ export default function CompetitorDetailPage({ params }: { params: Promise<{ id:
                         <h2 className="font-bold text-sm uppercase tracking-widest text-stone-700">Leadership</h2>
                         <span className="ml-auto text-xs text-stone-400">{leadership.length}</span>
                     </div>
-                    <div className="space-y-2">
-                        {leadership.map((l, i) => (
-                            <div key={i} className="flex items-start gap-3 py-2 border-b border-stone-100 last:border-0">
-                                <div className="w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center flex-shrink-0 text-xs font-bold text-stone-500">
-                                    {l.name?.split(" ").map(p => p[0]).slice(0, 2).join("") || "?"}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {leadership.map((l, i) => {
+                            const isExecutive = /\b(CEO|CFO|CTO|COO|CIO|CMO|Founder|President|Owner|Principal|Partner)\b/i.test(l.title || "");
+                            const initials = l.name?.split(" ").map(p => p[0]).slice(0, 2).join("") || "?";
+                            return (
+                                <div
+                                    key={i}
+                                    className={clsx(
+                                        "rounded-xl p-4 border shadow-sm flex items-start gap-3",
+                                        isExecutive
+                                            ? "bg-gradient-to-br from-amber-50 to-amber-100/30 border-amber-200"
+                                            : "bg-gradient-to-br from-stone-50 to-stone-100/40 border-stone-200",
+                                    )}
+                                >
+                                    <div className={clsx(
+                                        "w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 font-bold text-sm shadow-sm",
+                                        isExecutive
+                                            ? "bg-gradient-to-br from-amber-500 to-amber-700 text-white"
+                                            : "bg-white border border-stone-200 text-stone-600",
+                                    )}>
+                                        {initials}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-1.5">
+                                            <p className="font-bold text-sm text-stone-900 leading-tight">{l.name}</p>
+                                            {isExecutive && <Crown className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />}
+                                        </div>
+                                        {l.title && <p className="text-xs text-stone-600 mt-0.5">{l.title}</p>}
+                                        {l.bio && <p className="text-xs text-stone-500 mt-1.5 line-clamp-2">{l.bio}</p>}
+                                    </div>
                                 </div>
-                                <div className="flex-1 min-w-0">
-                                    <p className="font-bold text-sm text-black">{l.name}</p>
-                                    <p className="text-xs text-stone-500">{l.title}</p>
-                                    {l.bio && <p className="text-xs text-stone-500 mt-1">{l.bio}</p>}
-                                </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </div>
             )}

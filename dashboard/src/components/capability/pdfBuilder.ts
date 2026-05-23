@@ -176,16 +176,61 @@ export async function buildCapabilityPdf(
     const overviewSection = sections.find(s => /overview/i.test(s.title)) || sections[0];
     const overviewText = overviewSection?.content?.trim() || "";
 
-    // Section heading style
+    // Section heading style — small color "tab" indicator + bold label.
+    // The indicator gives sections a clear visual anchor without overpowering
+    // body text. Two-tone underline (primary + a lighter trail) reads like
+    // a modern report header.
     const drawSectionHeading = (label: string, x: number, yy: number, width: number) => {
+        // Vertical color tab to the left of the heading
+        doc.setFillColor(pr, pg, pb);
+        doc.rect(x - 4, yy - 10, 3, 14, "F");
         doc.setTextColor(pr, pg, pb);
         doc.setFont("helvetica", "bold");
         doc.setFontSize(11);
         doc.text(label.toUpperCase(), x, yy);
+        // Bold lead line in primary color (40% of width)
         doc.setDrawColor(pr, pg, pb);
-        doc.setLineWidth(1);
-        doc.line(x, yy + 3, x + width, yy + 3);
+        doc.setLineWidth(1.2);
+        doc.line(x, yy + 3, x + Math.min(width * 0.4, 80), yy + 3);
+        // Faint continuation in light gray
+        doc.setDrawColor(220, 220, 220);
+        doc.setLineWidth(0.5);
+        doc.line(x + Math.min(width * 0.4, 80), yy + 3, x + width, yy + 3);
         return yy + 14;
+    };
+
+    // Pill renderer — used for NAICS codes + certifications. Pills are
+    // rendered in flow (auto-wrap to next line when width is hit).
+    const renderPillRow = (
+        items: string[],
+        startX: number,
+        startY: number,
+        maxWidth: number,
+        opts?: { fill?: [number, number, number]; text?: [number, number, number]; border?: [number, number, number] },
+    ): number => {
+        const fill = opts?.fill || [248, 246, 240];
+        const text = opts?.text || [40, 40, 40];
+        const border = opts?.border || [220, 215, 200];
+        const padX = 6, padY = 3, gap = 4, lineH = 18;
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9);
+        let cx = startX, cy = startY;
+        for (const raw of items) {
+            const txt = raw.length > 38 ? raw.slice(0, 35) + "…" : raw;
+            const w = doc.getTextWidth(txt) + padX * 2;
+            if (cx + w > startX + maxWidth) {
+                cx = startX;
+                cy += lineH + 4;
+            }
+            doc.setFillColor(fill[0], fill[1], fill[2]);
+            doc.setDrawColor(border[0], border[1], border[2]);
+            doc.setLineWidth(0.4);
+            doc.roundedRect(cx, cy - 10, w, lineH - 4, 6, 6, "FD");
+            doc.setTextColor(text[0], text[1], text[2]);
+            doc.text(txt, cx + padX, cy);
+            cx += w + gap;
+        }
+        return cy + lineH - 8;
     };
 
     // Left column: overview
@@ -316,34 +361,71 @@ export async function buildCapabilityPdf(
         } else if (/differenti/i.test(section.title)) {
             renderBulletSection(section, false);
         } else if (/naics|certificat/i.test(section.title)) {
-            renderBulletSection(section, true);
+            // Render as pills — more visual + denser than bullets.
+            ensurePage(40);
+            y = drawSectionHeading(section.title, margin, y, contentW);
+            const items = splitBullets(section.content);
+            const isCert = /certificat/i.test(section.title);
+            y = renderPillRow(items, margin, y + 4, contentW, {
+                fill: isCert ? [Math.min(255, pr + 230), Math.min(255, pg + 230), Math.min(255, pb + 230)] : [248, 246, 240],
+                text: isCert ? [pr, pg, pb] : [40, 40, 40],
+                border: isCert ? [Math.min(255, pr + 180), Math.min(255, pg + 180), Math.min(255, pb + 180)] : [220, 215, 200],
+            });
+            y += 10;
         } else {
             renderParagraphSection(section);
         }
     }
 
-    // ─── Footer band ─────────────────────────────────────────────────
+    // Extra: render NAICS + cert pills under the contact card if not already
+    // emitted as sections (some users save those in metadata only).
+    if ((metadata.naics_codes?.length || 0) > 0 && !sections.some(s => /naics/i.test(s.title))) {
+        ensurePage(40);
+        y = drawSectionHeading("NAICS Codes", margin, y, contentW);
+        y = renderPillRow(metadata.naics_codes!, margin, y + 4, contentW);
+        y += 10;
+    }
+    if ((metadata.certifications?.length || 0) > 0 && !sections.some(s => /certificat/i.test(s.title))) {
+        ensurePage(40);
+        y = drawSectionHeading("Certifications", margin, y, contentW);
+        y = renderPillRow(metadata.certifications!, margin, y + 4, contentW, {
+            fill: [Math.min(255, pr + 230), Math.min(255, pg + 230), Math.min(255, pb + 230)],
+            text: [pr, pg, pb],
+            border: [Math.min(255, pr + 180), Math.min(255, pg + 180), Math.min(255, pb + 180)],
+        });
+        y += 10;
+    }
+
+    // ─── Footer ──────────────────────────────────────────────────────
+    // Slim 24pt band (was 36pt) + a 2pt accent line above. Less ink,
+    // more whitespace, modern-report look.
     const pages = doc.getNumberOfPages();
     for (let p = 1; p <= pages; p++) {
         doc.setPage(p);
-        const fy = pageH - 36;
+        const footerH = 26;
+        const fy = pageH - footerH;
+        // Thin accent line above the band
         doc.setFillColor(pr, pg, pb);
-        doc.rect(0, fy, pageW, 36, "F");
+        doc.rect(0, fy - 2, pageW, 2, "F");
+        // Slim color band
+        doc.setFillColor(pr, pg, pb);
+        doc.rect(0, fy, pageW, footerH, "F");
         doc.setTextColor(opR, opG, opB);
         doc.setFont("helvetica", "normal");
-        doc.setFontSize(8);
-        const footerLeft = [
-            metadata.uei ? `UEI: ${metadata.uei}` : "",
-            metadata.cage_code ? `CAGE: ${metadata.cage_code}` : "",
-        ].filter(Boolean).join("  •  ");
-        doc.text(footerLeft || "", margin, fy + 14);
-        if (metadata.website) doc.text(metadata.website, margin, fy + 26);
-        const pageLabel = `Page ${p} of ${pages}`;
-        const w = doc.getTextWidth(pageLabel);
-        doc.text(pageLabel, pageW - margin - w, fy + 14);
-        if (metadata.company_name) {
+        doc.setFontSize(7.5);
+        const footerLeftParts = [
+            metadata.uei ? `UEI ${metadata.uei}` : "",
+            metadata.cage_code ? `CAGE ${metadata.cage_code}` : "",
+            metadata.website || "",
+        ].filter(Boolean);
+        doc.text(footerLeftParts.join("   •   "), margin, fy + 16);
+        const pageLabel = `${p} / ${pages}`;
+        const pw = doc.getTextWidth(pageLabel);
+        doc.text(pageLabel, pageW - margin - pw, fy + 16);
+        if (metadata.company_name && pages > 1) {
+            doc.setFontSize(7);
             const nw = doc.getTextWidth(metadata.company_name);
-            doc.text(metadata.company_name, pageW - margin - nw, fy + 26);
+            doc.text(metadata.company_name, (pageW - nw) / 2, fy + 16);
         }
     }
 
