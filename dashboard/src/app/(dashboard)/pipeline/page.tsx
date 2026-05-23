@@ -95,6 +95,7 @@ export default function PipelinePage() {
     const router = useRouter();
     const [loading, setLoading] = useState(true);
     const [pursuits, setPursuits] = useState<Pursuit[]>([]);
+    const [moveError, setMoveError] = useState<string | null>(null);
     const [profileId, setProfileId] = useState<string | null>(null);
     const [profileNotes, setProfileNotes] = useState<string | null>(null);
     const [expandedStages, setExpandedStages] = useState<Record<string, boolean>>({
@@ -146,32 +147,52 @@ export default function PipelinePage() {
         if (profileId) fetchPursuits();
     }, [profileId, fetchPursuits]);
 
+    // Auto-dismiss the optimistic-move error toast after 5s
+    useEffect(() => {
+        if (!moveError) return;
+        const t = setTimeout(() => setMoveError(null), 5000);
+        return () => clearTimeout(t);
+    }, [moveError]);
+
     const updateStage = async (pursuit: Pursuit, newStage: string) => {
+        // Optimistic UI: apply the local move FIRST so the kanban snaps into
+        // place instantly, then persist in the background. On failure, revert
+        // and surface a toast.
         const prev = pursuit.stage;
+        if (prev === newStage) return; // no-op
         const now = new Date().toISOString();
+        setPursuits(prevList => prevList.map(p =>
+            p.id === pursuit.id ? { ...p, stage: newStage, stage_changed_at: now } : p
+        ));
+
         const { error } = await supabase
             .from("user_pursuits")
             .update({ stage: newStage, stage_changed_at: now })
             .eq("id", pursuit.id);
 
-        if (!error) {
+        if (error) {
+            // Revert local state on persist failure
             setPursuits(prevList => prevList.map(p =>
-                p.id === pursuit.id ? { ...p, stage: newStage, stage_changed_at: now } : p
+                p.id === pursuit.id ? { ...p, stage: prev } : p
             ));
-            await logPipelineActivity(supabase, {
-                pursuitId: pursuit.id,
-                userProfileId: pursuit.user_profile_id,
-                activityType: "stage_changed",
-                fromValue: prev,
-                toValue: newStage,
-            });
-            dispatchEvent("pursuit.stage_changed", {
-                pursuit_id: pursuit.id,
-                opportunity_id: pursuit.opportunity_id,
-                from_stage: prev,
-                to_stage: newStage,
-            });
+            setMoveError(`Couldn't move "${pursuit.opportunities?.title || "deal"}" to ${newStage} — ${error.message.slice(0, 80)}`);
+            return;
         }
+
+        // Fire-and-forget — these don't block UI feedback
+        void logPipelineActivity(supabase, {
+            pursuitId: pursuit.id,
+            userProfileId: pursuit.user_profile_id,
+            activityType: "stage_changed",
+            fromValue: prev,
+            toValue: newStage,
+        });
+        dispatchEvent("pursuit.stage_changed", {
+            pursuit_id: pursuit.id,
+            opportunity_id: pursuit.opportunity_id,
+            from_stage: prev,
+            to_stage: newStage,
+        });
     };
 
     const createCustomDeal = async () => {
@@ -193,16 +214,25 @@ export default function PipelinePage() {
             .single();
 
         if (opp) {
-            const { data: newPursuit } = await supabase.from("user_pursuits").insert({
-                user_profile_id: profileId,
-                opportunity_id: opp.id,
-                stage: "discovered",
-                priority: "medium",
-                notes: customDeal.notes.trim() || null,
-            }).select("id").single();
+            const { data: newPursuit } = await supabase
+                .from("user_pursuits")
+                .insert({
+                    user_profile_id: profileId,
+                    opportunity_id: opp.id,
+                    stage: "discovered",
+                    priority: "medium",
+                    notes: customDeal.notes.trim() || null,
+                })
+                // Re-select with the joined opportunity so we can insert into local state
+                // without a follow-up fetchPursuits() round-trip.
+                .select("*, opportunities(id, title, agency, response_deadline, notice_type, set_aside_code, naics_code, award_amount, strategic_scoring)")
+                .single();
 
             if (newPursuit) {
-                await logPipelineActivity(supabase, {
+                // Optimistic insert — render the new card immediately, no full refetch
+                setPursuits(prev => [newPursuit as Pursuit, ...prev]);
+
+                void logPipelineActivity(supabase, {
                     pursuitId: newPursuit.id,
                     userProfileId: profileId,
                     activityType: "created",
@@ -220,7 +250,6 @@ export default function PipelinePage() {
 
             setCustomDeal({ title: "", agency: "", naics_code: "", estimated_value: "", notes: "" });
             setShowCustomDeal(false);
-            await fetchPursuits();
         }
         setSavingDeal(false);
     };
@@ -290,6 +319,17 @@ export default function PipelinePage() {
 
     return (
         <div className="max-w-[1600px] mx-auto pb-12 animate-in fade-in duration-500 px-1">
+            {moveError && (
+                <div
+                    role="alert"
+                    className="fixed top-6 right-6 z-50 max-w-md px-4 py-3 rounded-xl shadow-lg text-sm bg-rose-600 text-white flex items-start gap-2 animate-in slide-in-from-top-2 duration-300"
+                >
+                    <span className="flex-1">{moveError}</span>
+                    <button type="button" onClick={() => setMoveError(null)} className="text-white/80 hover:text-white" aria-label="Dismiss">
+                        ✕
+                    </button>
+                </div>
+            )}
             <header className="mb-6">
                 <div className="flex items-center justify-between">
                     <h2 className="text-2xl sm:text-3xl font-bold tracking-tighter text-black flex items-center">
