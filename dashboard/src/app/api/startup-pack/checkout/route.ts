@@ -14,6 +14,29 @@ function getAdmin() {
     );
 }
 
+// Cold-traffic LP at www.capturepilot.com/startup-pack POSTs here cross-domain.
+const ALLOWED_ORIGINS = new Set([
+    "https://www.capturepilot.com",
+    "https://capturepilot.com",
+    "https://app.capturepilot.com",
+    "http://localhost:3000",
+    "http://localhost:3001",
+]);
+
+function corsHeaders(origin: string | null): Record<string, string> {
+    const allow = origin && ALLOWED_ORIGINS.has(origin) ? origin : "https://www.capturepilot.com";
+    return {
+        "Access-Control-Allow-Origin": allow,
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type",
+        "Vary": "Origin",
+    };
+}
+
+export async function OPTIONS(request: NextRequest) {
+    return new NextResponse(null, { status: 204, headers: corsHeaders(request.headers.get("origin")) });
+}
+
 /**
  * POST /api/startup-pack/checkout
  * Body: { analysis_id?: string, email?: string }
@@ -26,6 +49,7 @@ function getAdmin() {
  * the 7-day window so the UI promise is never broken.
  */
 export async function POST(request: NextRequest) {
+    const cors = corsHeaders(request.headers.get("origin"));
     try {
         const stripe = getStripe();
         const { analysis_id, email: bodyEmail } = await request.json();
@@ -52,7 +76,7 @@ export async function POST(request: NextRequest) {
                     return NextResponse.json({
                         already_unlocked: true,
                         url: `${baseUrl}/startup-pack/success?aid=${analysis_id}`,
-                    });
+                    }, { headers: cors });
                 }
             }
         }
@@ -106,9 +130,9 @@ export async function POST(request: NextRequest) {
             url: session.url,
             session_id: session.id,
             amount_cents: unitAmount,
-        });
+        }, { headers: cors });
     } catch (e) {
         console.error("Startup pack checkout error:", e);
-        return NextResponse.json({ error: (e as Error).message || "Checkout failed" }, { status: 500 });
+        return NextResponse.json({ error: (e as Error).message || "Checkout failed" }, { status: 500, headers: cors });
     }
 }
