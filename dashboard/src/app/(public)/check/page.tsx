@@ -12,6 +12,7 @@ import Image from "next/image";
 import clsx from "clsx";
 import { statusToStep } from "@/components/AnalysisProgressStepper";
 import AnalysisLoadingScreen from "@/components/AnalysisLoadingScreen";
+import { track } from "@/lib/analytics";
 
 // Big-claim numbers reused across the marketing site
 const STATS = [
@@ -211,6 +212,8 @@ function CheckContent() {
         setStep(0);
         setCurrentStatus("crawling");
         setDisplayName(getDomain(url));
+        // Fire Meta Pixel Lead event — someone submitted their website = top-of-funnel lead
+        track("lead", { content_name: "quick_check", website: getDomain(url) });
         fetch("/api/analyze-company", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
