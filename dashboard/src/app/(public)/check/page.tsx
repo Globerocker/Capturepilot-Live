@@ -161,6 +161,19 @@ function CheckContent() {
                     setError(data.error_message || "Analysis failed. Please try again.");
                     return;
                 }
+                // Fire a one-time custom event for each new status the pipeline
+                // emits — Meta sees the actual funnel: crawling → classifying
+                // → awaiting_confirmation → scoring → complete. Drops from
+                // any of these stages are visible as "started this stage,
+                // never reached the next one."
+                if (data.status !== currentStatus) {
+                    const w = window as unknown as { fbq?: (...args: unknown[]) => void };
+                    w.fbq?.("trackCustom", "QuickCheckStage", {
+                        stage: data.status,
+                        step: statusToStep(data.status),
+                        analysis_id: id,
+                    });
+                }
                 setStep(statusToStep(data.status));
                 setCurrentStatus(data.status);
                 // Hand off to the result page as soon as the pipeline has
@@ -195,6 +208,19 @@ function CheckContent() {
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [autoWebsite, autoUei]);
+
+    // Fire QuickCheckStarted once per page-load. Tracks people who land on
+    // /check at all — even if they bail before typing anything, Meta sees
+    // the top-of-funnel interest. Distinct from the Lead event which only
+    // fires on actual submit.
+    useEffect(() => {
+        const w = window as unknown as { fbq?: (...args: unknown[]) => void };
+        w.fbq?.("trackCustom", "QuickCheckStarted", {
+            has_prefill: !!autoWebsite,
+            source: document.referrer || "direct",
+        });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     useEffect(() => () => stopPolling(), [stopPolling]);
 

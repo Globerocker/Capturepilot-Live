@@ -797,6 +797,14 @@ export default function CheckResultsPage() {
     useEffect(() => {
         if (!analysisId) return;
         let cancelled = false;
+        // Track that the user reached the results route. Fires once per
+        // mount — Meta sees "they got far enough to see results" which
+        // is a stronger signal than just "they submitted the form".
+        const w = window as unknown as { fbq?: (...args: unknown[]) => void };
+        w.fbq?.("trackCustom", "QuickCheckResultsViewed", {
+            analysis_id: analysisId,
+            source: document.referrer || "direct",
+        });
 
         const fetchOnce = async () => {
             try {
@@ -808,6 +816,17 @@ export default function CheckResultsPage() {
                 if (cancelled) return;
                 setData(next);
                 setLoading(false);
+
+                // Fire QuickCheckCompleted once when status transitions
+                // to "complete" — strong soft-conversion signal that
+                // separates engaged researchers from drive-by submitters.
+                if (next.status === "complete") {
+                    const w2 = window as unknown as { fbq?: (...args: unknown[]) => void; __cp_qc_complete_fired?: boolean };
+                    if (!w2.__cp_qc_complete_fired) {
+                        w2.__cp_qc_complete_fired = true;
+                        w2.fbq?.("trackCustom", "QuickCheckCompleted", { analysis_id: analysisId });
+                    }
+                }
 
                 // Keep polling while the pipeline is still running
                 if (IN_PROGRESS_STATUSES.has(next.status)) {

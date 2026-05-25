@@ -47,12 +47,20 @@ export default function PixelInstrumentation() {
         });
     }, [pathname, searchParams]);
 
-    // ─── 2. Click delegation, 3. Scroll depth, 4. Time on page ──────────────
+    // ─── 2. Click delegation, 3. Scroll depth, 4. Time on page, 5. Engagement threshold ──
     useEffect(() => {
         if (typeof window === "undefined") return;
         if (getCookieConsent() !== "accepted_all") return;
         const fbq = (window as unknown as { fbq?: (...args: unknown[]) => void }).fbq;
         if (!fbq) return;
+
+        // Engagement threshold: 5+ button-clicks in a single browser session
+        // → emit "EngagedUser" custom event ONCE. Strong soft-conversion
+        // signal — these visitors are far more likely to come back and convert.
+        const SESSION_KEY = "cp_click_count";
+        const ENGAGED_KEY = "cp_engaged_fired";
+        const ENGAGEMENT_THRESHOLD = 5;
+        const getCount = () => parseInt(sessionStorage.getItem(SESSION_KEY) || "0", 10);
 
         // Click delegation — any <button>, <a>, or element with data-cp-track
         // fires a custom "ButtonClick" trackCustom. We capture the visible
@@ -62,8 +70,6 @@ export default function PixelInstrumentation() {
                 "button, a, [data-cp-track]",
             ) as HTMLElement | null;
             if (!target) return;
-            // Skip clicks inside <input>/<select>/<textarea> (those aren't
-            // CTAs and would spam the pixel).
             const tag = target.tagName.toLowerCase();
             const label = (target.getAttribute("data-cp-track")
                 || target.getAttribute("aria-label")
@@ -72,12 +78,33 @@ export default function PixelInstrumentation() {
                 .trim()
                 .slice(0, 80);
             const href = (target as HTMLAnchorElement).href || "";
+
+            // Special-case: any link to /contact or labeled "Contact" →
+            // emit Standard Event "Contact". Helps the ad account
+            // optimize on this specific intent signal.
+            if (/^\/?contact(\/|$)/i.test(href.replace(/^https?:\/\/[^/]+/, ""))
+                || /^contact/i.test(label)) {
+                fbq("track", "Contact", { source: window.location.pathname, content_name: label });
+            }
+
             fbq("trackCustom", "ButtonClick", {
                 content_name: label,
                 element: tag,
                 href,
                 page_path: window.location.pathname,
             });
+
+            // Engagement counter — fires "EngagedUser" once when the
+            // threshold is crossed, never refires within the session.
+            const next = getCount() + 1;
+            sessionStorage.setItem(SESSION_KEY, String(next));
+            if (next === ENGAGEMENT_THRESHOLD && !sessionStorage.getItem(ENGAGED_KEY)) {
+                sessionStorage.setItem(ENGAGED_KEY, "1");
+                fbq("trackCustom", "EngagedUser", {
+                    click_count: next,
+                    page_path: window.location.pathname,
+                });
+            }
         };
 
         // Scroll-depth — emit ViewContent at 25/50/75/100. One fire per
