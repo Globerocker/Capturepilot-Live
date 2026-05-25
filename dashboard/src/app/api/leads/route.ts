@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createHash } from "node:crypto";
 import { getLeadMagnet, sendLeadMagnetEmail } from "@/lib/lead-magnets";
+import { sendCAPIEvent, userDataFromRequest, newEventId } from "@/lib/meta-capi";
 
 export const runtime = "nodejs";
 
@@ -110,10 +111,31 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Fire server-side CAPI Lead event. Hashed email + IP + UA + fbp/fbc
+    // give Meta the best match-quality possible from a server-only fire.
+    // We don't block the response on this — Meta API can be slow + we'd
+    // rather deliver "200 ok" to the marketing-site form than a stall.
+    const capiEventId = String(body.capi_event_id || newEventId());
+    void sendCAPIEvent({
+      eventName: "Lead",
+      eventId: capiEventId,
+      eventSourceUrl: referrer || undefined,
+      userData: userDataFromRequest(req, { email }),
+      customData: {
+        content_name: magnet,
+        content_category: "lead_magnet",
+        source: source || undefined,
+        utm_source: utm_source || undefined,
+        utm_medium: utm_medium || undefined,
+        utm_campaign: utm_campaign || undefined,
+      },
+    }).catch(err => console.warn("[leads] CAPI Lead fire failed (non-fatal):", err));
+
     return NextResponse.json({
       ok: true,
       email_sent: emailSent,
       email_error: emailError,
+      capi_event_id: capiEventId,
     }, { status: 200, headers });
   } catch (err) {
     console.error("[leads] handler error", err);

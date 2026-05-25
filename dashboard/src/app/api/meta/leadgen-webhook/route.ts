@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { getLeadMagnet, sendLeadMagnetEmail } from "@/lib/lead-magnets";
+import { sendCAPIEvent, newEventId } from "@/lib/meta-capi";
 
 export const runtime = "nodejs";
 // Webhook responses must be fast (Meta tolerates ~20s before timeout). All
@@ -206,6 +207,24 @@ async function processLead({ leadgenId, formId, accessToken, db }: ProcessArgs):
             .update({ resend_synced: true })
             .eq("meta_leadgen_id", leadgenId);
     }
+
+    // Server-side CAPI fire. Meta already counts the form submission since
+    // the user did it through their Lead Ad — but firing CAPI with the
+    // hashed email + phone gives us better match-quality and shows up in
+    // the Events Manager alongside the Lead Ads stats. event_id includes
+    // the leadgen_id so this is idempotent across Meta retries.
+    void sendCAPIEvent({
+        eventName: "Lead",
+        eventId: `meta-leadgen-${leadgenId}`,
+        eventSourceUrl: "https://www.facebook.com/leadgen",
+        userData: { email, phone },
+        customData: {
+            content_name: "meta_lead_form",
+            content_category: "lead_magnet",
+            form_id: formId || undefined,
+            magnet_key: MAGNET_KEY_FOR_META,
+        },
+    }).catch(err => console.warn("[leadgen-webhook] CAPI Lead fire failed:", err));
 
     // Log captured fields for analytics — phone/company aren't persisted on the
     // lead row, but they're useful to see in Vercel logs while we tune the form.
