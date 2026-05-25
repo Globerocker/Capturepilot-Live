@@ -52,16 +52,16 @@ export async function GET(req: NextRequest) {
     );
 
     // The contractors table doesn't carry a scalar total-obligated column —
-    // award totals live inside naics_awards JSONB. We over-fetch contractors
-    // that have a non-empty naics_awards array (i.e. been enriched against
-    // USAspending), then compute a lifetime total client-side and sort.
+    // award totals live inside naics_awards JSONB (migration 039). We
+    // over-fetch by USAspending-enriched recency, then sum + sort in JS.
+    // PostgREST's `eq.[]` doesn't reliably match the empty-jsonb-array case,
+    // so we fetch all enriched rows and filter client-side.
     const { data: candidates, error: cErr } = await sb
         .from("contractors")
-        .select("uei, company_name, dba_name, naics_codes, naics_awards, state, city, cage_code, sam_registered, sba_certifications, website")
-        .not("naics_awards", "eq", "[]")
-        .not("naics_awards", "is", null)
+        .select("uei, company_name, dba_name, naics_codes, naics_awards, state, city, cage_code, sam_registered, sba_certifications, website, last_usaspending_refresh")
+        .not("last_usaspending_refresh", "is", null)
         .order("last_usaspending_refresh", { ascending: false, nullsFirst: false })
-        .limit(Math.max(500, limit + publishedUeis.size + 50));
+        .limit(Math.max(1000, limit + publishedUeis.size + 100));
 
     if (cErr) {
         return NextResponse.json({ error: cErr.message }, { status: 500 });
@@ -83,29 +83,54 @@ export async function GET(req: NextRequest) {
 
     type Cand = ContractorRow & { lifetime_total: number };
 
-    const pool: Cand[] = ((candidates || []) as RawCand[])
+    const raw = (candidates || []) as RawCand[];
+    const enriched: Array<RawCand & { lifetime_total: number }> = raw.map((c) => ({
+        ...c,
+        lifetime_total: Array.isArray(c.naics_awards)
+            ? c.naics_awards.reduce((s, n) => s + (Number(n.total) || 0), 0)
+            : 0,
+    }));
+
+    const pool: Cand[] = enriched
         .filter((c) => !publishedUeis.has(c.uei))
-        .map((c) => {
-            const lifetime_total = (c.naics_awards || []).reduce((s, n) => s + (Number(n.total) || 0), 0);
-            return {
-                uei: c.uei,
-                business_name: c.company_name || c.dba_name || "(unnamed contractor)",
-                primary_naics: (c.naics_codes && c.naics_codes[0]) || null,
-                state: c.state,
-                city: c.city,
-                cage_code: c.cage_code,
-                sam_registered: c.sam_registered,
-                sba_certifications: c.sba_certifications,
-                website: c.website,
-                lifetime_total,
-            };
-        })
         .filter((c) => c.lifetime_total > 0)
         .sort((a, b) => b.lifetime_total - a.lifetime_total)
-        .slice(0, limit);
+        .slice(0, limit)
+        .map((c) => ({
+            uei: c.uei,
+            business_name: c.company_name || c.dba_name || "(unnamed contractor)",
+            primary_naics: (c.naics_codes && c.naics_codes[0]) || null,
+            state: c.state,
+            city: c.city,
+            cage_code: c.cage_code,
+            sam_registered: c.sam_registered,
+            sba_certifications: c.sba_certifications,
+            website: c.website,
+            lifetime_total: c.lifetime_total,
+        }));
 
     if (pool.length === 0) {
-        return NextResponse.json({ ok: true, picked: 0, note: "no eligible contractors" });
+        // Diagnostic — return counts at each stage so we can see whether the
+        // contractors table is enriched at all in this environment.
+        return NextResponse.json({
+            ok: true,
+            picked: 0,
+            note: "no eligible contractors",
+            diagnostic: {
+                rows_fetched: raw.length,
+                rows_with_naics_awards_array: raw.filter((c) => Array.isArray(c.naics_awards)).length,
+                rows_with_award_total_gt_0: enriched.filter((c) => c.lifetime_total > 0).length,
+                rows_already_published: raw.filter((c) => publishedUeis.has(c.uei)).length,
+                sample_first_row: raw[0]
+                    ? {
+                          uei: raw[0].uei,
+                          name: raw[0].company_name,
+                          naics_awards_type: typeof raw[0].naics_awards,
+                          naics_awards_len: Array.isArray(raw[0].naics_awards) ? raw[0].naics_awards.length : null,
+                      }
+                    : null,
+            },
+        });
     }
 
     if (dryRun) {
