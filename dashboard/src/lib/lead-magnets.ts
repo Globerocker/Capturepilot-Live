@@ -146,13 +146,13 @@ export async function sendLeadMagnetEmail(args: {
     if (!apiKey) return { sent: false, error: "missing_resend_key" };
 
     const resend = new Resend(apiKey);
-    // From-name is the first thing visible in the inbox row — keep it personal
-    // + give it product context so the recipient instantly recognizes why the
-    // mail is there. "Andre's Field Manual" stands out next to corporate noreplies.
+    // From-name is the first thing visible in the inbox row. "CapturePilot
+    // Downloads" makes the purpose unambiguous (it's the file the user asked
+    // for) and reads cleaner than a personal alias in cold-traffic delivery.
     const from =
         args.fromEmail ||
         process.env.LEAD_MAGNET_FROM_EMAIL ||
-        `Andre's ${args.magnet.productName} <andre@capturepilot.com>`;
+        "CapturePilot Downloads <andre@capturepilot.com>";
 
     const { error } = await resend.emails.send({
         from,
