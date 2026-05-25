@@ -257,17 +257,20 @@ export async function enrichCompanyViaApollo(args: {
 }
 
 // ─── AI summary ──────────────────────────────────────────────────────────────
+//
+// PUBLIC-FACING profile copy — we use the full-quality models (Gemini 1.5 Pro
+// PRIMARY, GPT-4o full as fallback). Mini-tier models are reserved for the
+// internal keyword extraction where volume is 30k calls and quality matters
+// less. Cost: ~$0.001-0.003 per profile, max 500 profiles in the initial
+// pilot → ~$1.50.
 
 const AI_PROMPT = `You write concise, factual 2-paragraph company summaries for a federal-contracting directory. The summary should help a procurement officer or potential teaming partner quickly understand who this company is and what they do. Focus on: what services/goods they provide, what kind of customers they serve, what makes them notable. Do NOT make claims unsupported by the input data. Output plain text, no markdown, ~120-180 words total. No headings.`;
 
-export async function generateAiSummary(args: {
+function buildSummaryUserPrompt(args: {
     contractor: ContractorRow;
     rollup: AwardRollup;
     apollo: ApolloEnrichment | null;
-}): Promise<{ summary: string; model: string } | null> {
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) return null;
-
+}): string {
     const certsStr = (args.contractor.sba_certifications || []).join(", ") || "(none listed)";
     const topAgency = args.rollup.top_agency || "(no public award data)";
     const totalK = args.rollup.total_awarded_amount > 0
@@ -275,7 +278,7 @@ export async function generateAiSummary(args: {
         : "no federal awards in our public-records snapshot";
     const recentYears = args.rollup.awards_by_year.slice(-3).map((y) => y.year).join(", ");
 
-    const userPrompt =
+    return (
         `COMPANY: ${args.contractor.business_name}\n` +
         `LOCATION: ${args.contractor.city || ""}${args.contractor.city && args.contractor.state ? ", " : ""}${args.contractor.state || ""}\n` +
         `PRIMARY NAICS: ${args.contractor.primary_naics || "(unspecified)"}\n` +
@@ -285,29 +288,88 @@ export async function generateAiSummary(args: {
         `SBA CERTIFICATIONS: ${certsStr}\n` +
         `AWARD HISTORY: ${totalK}, top agency ${topAgency}.\n` +
         `RECENT AWARD YEARS: ${recentYears || "(none recent)"}\n` +
-        `Write the 2-paragraph summary now. Plain text, no markdown.`;
+        `Write the 2-paragraph summary now. Plain text, no markdown.`
+    );
+}
 
+async function summaryViaGemini(systemPrompt: string, userPrompt: string): Promise<{ summary: string; model: string } | null> {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) return null;
+    try {
+        const res = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${apiKey}`,
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    systemInstruction: { parts: [{ text: systemPrompt }] },
+                    contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+                    generationConfig: {
+                        temperature: 0.4,
+                        maxOutputTokens: 400,
+                        responseMimeType: "text/plain",
+                    },
+                }),
+                signal: AbortSignal.timeout(20000),
+            },
+        );
+        if (!res.ok) return null;
+        const json = await res.json() as {
+            candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+        };
+        const content = json.candidates?.[0]?.content?.parts?.map((p) => p.text || "").join("").trim();
+        if (!content) return null;
+        return { summary: content, model: "gemini-1.5-pro" };
+    } catch {
+        return null;
+    }
+}
+
+async function summaryViaOpenAI(systemPrompt: string, userPrompt: string): Promise<{ summary: string; model: string } | null> {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) return null;
     try {
         const res = await fetch("https://api.openai.com/v1/chat/completions", {
             method: "POST",
             headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
             body: JSON.stringify({
-                model: "gpt-4o-mini",
+                model: "gpt-4o",
                 messages: [
-                    { role: "system", content: AI_PROMPT },
+                    { role: "system", content: systemPrompt },
                     { role: "user", content: userPrompt },
                 ],
                 temperature: 0.4,
-                max_tokens: 350,
+                max_tokens: 400,
             }),
-            signal: AbortSignal.timeout(15000),
+            signal: AbortSignal.timeout(20000),
         });
         if (!res.ok) return null;
         const json = await res.json() as { choices?: { message?: { content?: string } }[] };
         const content = json.choices?.[0]?.message?.content?.trim();
         if (!content) return null;
-        return { summary: content, model: "gpt-4o-mini" };
+        return { summary: content, model: "gpt-4o" };
     } catch {
         return null;
     }
+}
+
+export async function generateAiSummary(args: {
+    contractor: ContractorRow;
+    rollup: AwardRollup;
+    apollo: ApolloEnrichment | null;
+    /** Override provider order. Default: Gemini 1.5 Pro PRIMARY, GPT-4o fallback. */
+    prefer?: "gemini" | "openai";
+}): Promise<{ summary: string; model: string } | null> {
+    const userPrompt = buildSummaryUserPrompt(args);
+    const order: Array<"gemini" | "openai"> = args.prefer === "openai"
+        ? ["openai", "gemini"]
+        : ["gemini", "openai"];
+
+    for (const provider of order) {
+        const result = provider === "gemini"
+            ? await summaryViaGemini(AI_PROMPT, userPrompt)
+            : await summaryViaOpenAI(AI_PROMPT, userPrompt);
+        if (result) return result;
+    }
+    return null;
 }

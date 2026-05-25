@@ -109,25 +109,42 @@ async function callOpenAI(messages: ChatMessage[], timeoutMs = 15000): Promise<{
     }
 }
 
-async function callDeepSeek(messages: ChatMessage[], timeoutMs = 15000): Promise<{ content: string } | null> {
-    const apiKey = process.env.DEEPSEEK_API_KEY;
+async function callGemini(messages: ChatMessage[], timeoutMs = 15000): Promise<{ content: string } | null> {
+    const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) return null;
     try {
-        const res = await fetch("https://api.deepseek.com/v1/chat/completions", {
-            method: "POST",
-            headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-            body: JSON.stringify({
-                model: "deepseek-chat",
-                messages,
-                response_format: { type: "json_object" },
-                temperature: 0.2,
-                max_tokens: 300,
-            }),
-            signal: AbortSignal.timeout(timeoutMs),
-        });
+        // Convert OpenAI-shaped messages to Gemini's contents-array shape.
+        // System messages go in systemInstruction; user/assistant alternate
+        // in contents[]. Gemini's "model" role is the equivalent of "assistant".
+        const systemParts = messages.filter((m) => m.role === "system").map((m) => ({ text: m.content }));
+        const contents = messages
+            .filter((m) => m.role !== "system")
+            .map((m) => ({
+                role: m.role === "assistant" ? "model" : "user",
+                parts: [{ text: m.content }],
+            }));
+        const res = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    systemInstruction: systemParts.length > 0 ? { parts: systemParts } : undefined,
+                    contents,
+                    generationConfig: {
+                        temperature: 0.2,
+                        maxOutputTokens: 300,
+                        responseMimeType: "application/json",
+                    },
+                }),
+                signal: AbortSignal.timeout(timeoutMs),
+            },
+        );
         if (!res.ok) return null;
-        const json = await res.json() as { choices?: { message?: { content?: string } }[] };
-        const content = json.choices?.[0]?.message?.content;
+        const json = await res.json() as {
+            candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+        };
+        const content = json.candidates?.[0]?.content?.parts?.map((p) => p.text || "").join("");
         if (!content) return null;
         return { content };
     } catch {
@@ -172,8 +189,8 @@ function cleanKeyword(kw: string): string | null {
 export async function extractAiKeywords(args: {
     title: string | null | undefined;
     description: string | null | undefined;
-    /** Optional preferred model: "openai" | "deepseek". Default tries openai first. */
-    prefer?: "openai" | "deepseek";
+    /** Optional preferred provider. Default: Gemini Flash, OpenAI gpt-4o-mini fallback. */
+    prefer?: "gemini" | "openai";
 }): Promise<CompletionResult | null> {
     const title = (args.title || "").trim();
     const desc = stripHtml(args.description || "").slice(0, 4000); // cap input to ~1000 tokens
@@ -189,12 +206,15 @@ export async function extractAiKeywords(args: {
         { role: "user", content: payload },
     ];
 
-    const order: Array<"openai" | "deepseek"> = args.prefer === "deepseek"
-        ? ["deepseek", "openai"]
-        : ["openai", "deepseek"];
+    // Provider order: Gemini Flash (cheapest + per user preference) → OpenAI
+    // gpt-4o-mini (fallback). DeepSeek/Mistral removed since their keys are
+    // empty in this environment.
+    const order: Array<"gemini" | "openai"> = args.prefer === "openai"
+        ? ["openai", "gemini"]
+        : ["gemini", "openai"];
 
     for (const provider of order) {
-        const result = provider === "openai" ? await callOpenAI(messages) : await callDeepSeek(messages);
+        const result = provider === "gemini" ? await callGemini(messages) : await callOpenAI(messages);
         if (!result) continue;
         try {
             const parsed = JSON.parse(result.content) as { keywords?: unknown[] };
