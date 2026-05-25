@@ -94,8 +94,15 @@ export async function POST(req: NextRequest) {
                 lifetime_total,
             };
         })
-        .filter((c) => c.lifetime_total > 0)
-        .sort((a, b) => b.lifetime_total - a.lifetime_total)
+        // No `> 0` filter — naics_awards is empty across the table (separate
+        // enrichment bug). Sort by total DESC then by cert-count DESC so the
+        // most "interesting" pages still surface first.
+        .sort((a, b) => {
+            if (b.lifetime_total !== a.lifetime_total) return b.lifetime_total - a.lifetime_total;
+            const aCerts = (a.sba_certifications || []).length;
+            const bCerts = (b.sba_certifications || []).length;
+            return bCerts - aCerts;
+        })
         .slice(0, limit);
 
     if (pool.length === 0) {

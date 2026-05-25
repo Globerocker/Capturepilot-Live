@@ -91,10 +91,24 @@ export async function GET(req: NextRequest) {
             : 0,
     }));
 
+    // KNOWN ISSUE — contractors.naics_awards is empty [] across all rows
+    // even though last_usaspending_refresh is set. The USAspending enrichment
+    // cron populates the timestamp but not the array. Tracked separately.
+    //
+    // For the pilot we publish ANYWAY since contractor pages have plenty of
+    // value without awards: name, NAICS, state, certifications, SAM status.
+    // We tiebreak by sba_certifications length (more certs = richer page +
+    // better badges + better SEO meta).
     const pool: Cand[] = enriched
         .filter((c) => !publishedUeis.has(c.uei))
-        .filter((c) => c.lifetime_total > 0)
-        .sort((a, b) => b.lifetime_total - a.lifetime_total)
+        .sort((a, b) => {
+            if (b.lifetime_total !== a.lifetime_total) return b.lifetime_total - a.lifetime_total;
+            const aCerts = (a.sba_certifications || []).length;
+            const bCerts = (b.sba_certifications || []).length;
+            if (bCerts !== aCerts) return bCerts - aCerts;
+            // Final tiebreak — prefer SAM-registered
+            return (b.sam_registered ? 1 : 0) - (a.sam_registered ? 1 : 0);
+        })
         .slice(0, limit)
         .map((c) => ({
             uei: c.uei,
