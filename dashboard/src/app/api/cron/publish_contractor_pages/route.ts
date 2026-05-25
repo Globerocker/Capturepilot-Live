@@ -37,12 +37,23 @@ export async function GET(req: NextRequest) {
     const url = new URL(req.url);
     const limit = Math.min(Math.max(Number(url.searchParams.get("limit") || 3), 1), 100);
     const dryRun = url.searchParams.get("dry_run") === "true";
+    // ?reset=true wipes existing profile rows first so we can re-pick the
+    // pilot set from a corrected sort order. Use sparingly.
+    const reset = url.searchParams.get("reset") === "true";
 
     const sb = createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.SUPABASE_SERVICE_KEY!,
         { auth: { persistSession: false } },
     );
+
+    if (reset) {
+        // Soft-reset only the pilot rows (those without claim_email) so we
+        // never blow away a contractor who's claimed their profile.
+        await sb.from("contractor_profile_pages")
+            .delete()
+            .is("claim_email", null);
+    }
 
     const { data: alreadyPublished } = await sb
         .from("contractor_profile_pages")
@@ -51,16 +62,16 @@ export async function GET(req: NextRequest) {
         ((alreadyPublished as Array<{ contractor_uei: string }>) || []).map((r) => r.contractor_uei),
     );
 
-    // The contractors table doesn't carry a scalar total-obligated column —
-    // award totals live inside naics_awards JSONB (migration 039). We
-    // over-fetch by USAspending-enriched recency, then sum + sort in JS.
-    // PostgREST's `eq.[]` doesn't reliably match the empty-jsonb-array case,
-    // so we fetch all enriched rows and filter client-side.
+    // Sort by total_award_volume DESC — this is the scalar populated by the
+    // enrich_contractors_usaspending cron alongside naics_awards. It's the
+    // signal we actually want: real award history. Filtering by > 0 drops
+    // the long tail of zero-award SAM-registered firms (the bulk of the
+    // table, mostly small inactive entities).
     const { data: candidates, error: cErr } = await sb
         .from("contractors")
-        .select("uei, company_name, dba_name, naics_codes, naics_awards, state, city, cage_code, sam_registered, sba_certifications, website, last_usaspending_refresh")
-        .not("last_usaspending_refresh", "is", null)
-        .order("last_usaspending_refresh", { ascending: false, nullsFirst: false })
+        .select("uei, company_name, dba_name, naics_codes, naics_awards, state, city, cage_code, sam_registered, sba_certifications, website, total_award_volume, federal_awards_count")
+        .gt("total_award_volume", 0)
+        .order("total_award_volume", { ascending: false })
         .limit(Math.max(1000, limit + publishedUeis.size + 100));
 
     if (cErr) {
@@ -72,24 +83,32 @@ export async function GET(req: NextRequest) {
         company_name: string | null;
         dba_name: string | null;
         naics_codes: string[] | null;
-        naics_awards: Array<{ naics: string; total: number; count: number }> | null;
+        naics_awards: Array<{ naics: string; amount: number; count: number; description?: string }> | null;
         state: string | null;
         city: string | null;
         cage_code: string | null;
         sam_registered: boolean | null;
         sba_certifications: string[] | null;
         website: string | null;
+        total_award_volume: number | null;
+        federal_awards_count: number | null;
     };
 
     type Cand = ContractorRow & { lifetime_total: number };
 
     const raw = (candidates || []) as RawCand[];
-    const enriched: Array<RawCand & { lifetime_total: number }> = raw.map((c) => ({
-        ...c,
-        lifetime_total: Array.isArray(c.naics_awards)
-            ? c.naics_awards.reduce((s, n) => s + (Number(n.total) || 0), 0)
-            : 0,
-    }));
+    // Prefer the scalar `total_award_volume` populated by enrich_contractors_usaspending.
+    // Naics_awards aggregate may have a different shape ({amount} vs {total}) so we sum
+    // BOTH possible field names as a safety belt.
+    const enriched: Array<RawCand & { lifetime_total: number }> = raw.map((c) => {
+        const fromArray = Array.isArray(c.naics_awards)
+            ? c.naics_awards.reduce((s, n) => s + (Number(n.amount ?? (n as unknown as { total?: number }).total) || 0), 0)
+            : 0;
+        return {
+            ...c,
+            lifetime_total: Number(c.total_award_volume) || fromArray || 0,
+        };
+    });
 
     // KNOWN ISSUE — contractors.naics_awards is empty [] across all rows
     // even though last_usaspending_refresh is set. The USAspending enrichment
