@@ -17,6 +17,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { extractContacts } from "@/lib/extract-contacts";
 
 export const maxDuration = 300;
 
@@ -194,6 +195,10 @@ export async function GET(req: NextRequest) {
                 // Trim noise from Bonfire title pattern "Reference #: X. Name: Y" → keep both
                 const cleanTitle = item.title.replace(/^Reference\s*#\s*:\s*/i, "").slice(0, 500);
                 const cleanDesc = item.description.replace(/Project closes?\s+[^.]+\.?/i, "").trim();
+                // RSS items rarely have structured contact fields — extract
+                // POC email/phone/URL from the description text so the
+                // detail page can render real Contact cards for SLED opps.
+                const extracted = extractContacts(cleanDesc);
                 return {
                     notice_id: `${src.source_prefix}-${shortHash(item.key)}`,
                     title: cleanTitle || null,
@@ -210,14 +215,26 @@ export async function GET(req: NextRequest) {
                     is_archived: false,
                     last_crawled_at: new Date().toISOString(),
                     raw_json: { item, src: { provider: src.provider, source_prefix: src.source_prefix } } as Record<string, unknown>,
+                    extracted_emails: extracted.emails.length ? extracted.emails : null,
+                    extracted_phones: extracted.phones.length ? extracted.phones : null,
+                    extracted_urls: extracted.urls.length ? extracted.urls : null,
+                    extracted_at: new Date().toISOString(),
                 };
             });
 
             let inserted = 0;
             if (rows.length > 0) {
-                // Try with source first, fall back without if migration 064 not applied
+                // Try with source + extracted_* fields first. Fall back
+                // progressively when migrations 064 (source) or 076 (extracted_*)
+                // haven't been applied yet so a half-deployed prod still ingests.
                 const withSource = rows.map(r => ({ ...r, source: src.provider === "bonfire" ? "sled" : "sled" }));
                 let upsertErr = (await supabase.from("opportunities").upsert(withSource, { onConflict: "notice_id" })).error;
+                if (upsertErr && /extracted_/i.test(upsertErr.message)) {
+                    const withoutExtracted = withSource.map(({ extracted_emails, extracted_phones, extracted_urls, extracted_at, ...rest }) =>
+                        // discard the new columns until migration 076 lands
+                        rest);
+                    upsertErr = (await supabase.from("opportunities").upsert(withoutExtracted, { onConflict: "notice_id" })).error;
+                }
                 if (upsertErr && /source/i.test(upsertErr.message)) {
                     upsertErr = (await supabase.from("opportunities").upsert(rows, { onConflict: "notice_id" })).error;
                 }

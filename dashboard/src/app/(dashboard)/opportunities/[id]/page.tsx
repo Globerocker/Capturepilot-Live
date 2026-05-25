@@ -25,6 +25,7 @@ import GovTribeAwardsCard from "@/components/opportunity/GovTribeAwardsCard";
 import GovTribeSubAwardsCard from "@/components/opportunity/GovTribeSubAwardsCard";
 import GovTribeForecastCard from "@/components/opportunity/GovTribeForecastCard";
 import { estimateContractValue } from "@/utils/estimateValue";
+import { originalListing, sourceBadgeLabel } from "@/lib/opportunity-source";
 
 export const dynamic = 'force-dynamic';
 
@@ -156,6 +157,56 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                 email: poc.email || undefined,
                 phone: poc.phone || undefined,
                 source: "sam",
+            });
+        }
+    }
+
+    // SLED opps (state/county/city) rarely have structured POCs — the contact
+    // info sits in the description as free text. Surface the extracted
+    // emails/phones from migration 076 as synthetic Contact cards so the
+    // user has something to click. Each unique email gets one card; loose
+    // phones (without a matching email) get a generic "Procurement contact"
+    // card with the phone(s) attached.
+    type ExtractedRow = { extracted_emails?: string[] | null; extracted_phones?: string[] | null };
+    const ex = opp as ExtractedRow;
+    const extractedEmails = (ex.extracted_emails || []).filter(Boolean);
+    const extractedPhones = (ex.extracted_phones || []).filter(Boolean);
+
+    for (const email of extractedEmails) {
+        const lower = email.toLowerCase();
+        const already = contacts.some((c) => c.email?.toLowerCase() === lower);
+        if (already) continue;
+        // Heuristic name: split local-part on dots/underscores → Title Case.
+        const local = lower.split("@")[0] || "";
+        const guess = local
+            .replace(/[._-]+/g, " ")
+            .split(" ")
+            .filter(Boolean)
+            .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+            .join(" ");
+        contacts.push({
+            name: guess || lower,
+            email,
+            phone: undefined,
+            source: "extracted",
+        });
+    }
+
+    // If there are loose phones not attached to any contact yet, attach them
+    // to existing contacts (in order) OR add a generic procurement entry.
+    if (extractedPhones.length > 0) {
+        const phoneless = contacts.filter((c) => !c.phone);
+        let phoneIdx = 0;
+        for (const c of phoneless) {
+            if (phoneIdx >= extractedPhones.length) break;
+            c.phone = extractedPhones[phoneIdx++];
+        }
+        // Any phones left over → one generic "Procurement contact" card.
+        if (phoneIdx < extractedPhones.length) {
+            contacts.push({
+                name: "Procurement contact",
+                phone: extractedPhones.slice(phoneIdx).join(", "),
+                source: "extracted",
             });
         }
     }
@@ -310,16 +361,7 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                     )}
                     {/* Source-level badge — surfaces where the opp came from */}
                     {(() => {
-                        const src = String(opp.source || "sam").toLowerCase();
-                        const map: Record<string, { label: string; tone: string }> = {
-                            sam: { label: "Federal · SAM.gov", tone: "bg-blue-50 text-blue-700 border-blue-200" },
-                            grants_gov: { label: "Federal · Grants.gov", tone: "bg-blue-50 text-blue-700 border-blue-200" },
-                            sbir: { label: "Federal · SBIR", tone: "bg-blue-50 text-blue-700 border-blue-200" },
-                            sled: { label: "State / Local", tone: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-                            state: { label: "State", tone: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-                            local: { label: "Local", tone: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-                        };
-                        const m = map[src] || { label: src.toUpperCase(), tone: "bg-stone-50 text-stone-600 border-stone-200" };
+                        const m = sourceBadgeLabel(opp);
                         return (
                             <span className={clsx("font-bold text-[10px] sm:text-xs px-2 sm:px-3 py-1 sm:py-1.5 rounded-md border tracking-wider shadow-sm", m.tone)}>
                                 {m.label}
@@ -329,16 +371,26 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                     <span className="bg-stone-100 text-stone-600 font-mono text-[10px] px-2 py-1 rounded-md border border-stone-200">
                         {opp.notice_id?.substring(0, 12)}...
                     </span>
-                    {opp.notice_id && (
-                        <a
-                            href={`https://sam.gov/opp/${opp.notice_id}/view`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 border border-blue-200 font-bold text-[10px] sm:text-xs px-2 sm:px-3 py-1 sm:py-1.5 rounded-md shadow-sm hover:bg-blue-100"
-                        >
-                            <ExternalLink className="w-3 h-3" /> View on SAM.gov
-                        </a>
-                    )}
+                    {(() => {
+                        const orig = originalListing(opp);
+                        if (!orig) return null;
+                        const tone = orig.is_sam
+                            ? "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
+                            : "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100";
+                        return (
+                            <a
+                                href={orig.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className={clsx(
+                                    "inline-flex items-center gap-1 font-bold text-[10px] sm:text-xs px-2 sm:px-3 py-1 sm:py-1.5 rounded-md shadow-sm border transition-colors",
+                                    tone,
+                                )}
+                            >
+                                <ExternalLink className="w-3 h-3" /> {orig.label}
+                            </a>
+                        );
+                    })()}
                 </div>
                 <h1 className="text-2xl sm:text-4xl md:text-5xl font-bold tracking-tight text-stone-900 leading-tight mb-4 sm:mb-6">
                     {opp.title}
@@ -916,16 +968,21 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                             <Mail className="w-4 h-4" /> Email POC
                         </a>
                     )}
-                    {opp.notice_id && (
-                        <a
-                            href={`https://sam.gov/opp/${opp.notice_id}/view`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-stone-50 text-stone-700 border border-stone-200 text-sm font-semibold hover:bg-stone-100 transition"
-                        >
-                            <ExternalLink className="w-4 h-4" /> SAM.gov
-                        </a>
-                    )}
+                    {(() => {
+                        const orig = originalListing(opp);
+                        if (!orig) return null;
+                        return (
+                            <a
+                                href={orig.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                title={orig.full_label}
+                                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-stone-50 text-stone-700 border border-stone-200 text-sm font-semibold hover:bg-stone-100 transition"
+                            >
+                                <ExternalLink className="w-4 h-4" /> {orig.label}
+                            </a>
+                        );
+                    })()}
 
                     {/* Primary action — Pursue */}
                     <div className="flex-1 sm:flex-none sm:ml-auto">
