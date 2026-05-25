@@ -138,9 +138,25 @@ export function renderLeadMagnetEmailHtml(args: {
           )
         : "";
 
+    // Primary CTA rendered inline near the top of the body so it lands above
+    // the fold the second the user opens the email — no scrolling to hunt for
+    // the download. We keep the emailTemplate's trailing CTA slot unused
+    // (cta:undefined) since a single high-contrast button beats two competing
+    // ones for click-through.
+    const inlineCta = `
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:20px 0 8px;">
+            <tr><td style="border-radius:999px;background-color:${COLORS.emerald500};">
+                <a href="${magnet.pdfUrl}" style="display:inline-block;padding:14px 32px;color:${COLORS.white};text-decoration:none;font-weight:700;font-size:15px;border-radius:999px;">
+                    Download the ${escapeHtml(magnet.productName)} (PDF)
+                </a>
+            </td></tr>
+        </table>
+    `;
+
     const body = `
         ${paragraph(greeting)}
         ${paragraph(escapeHtml(magnet.blurb))}
+        ${inlineCta}
         ${featureBox(`
             ${sectionLabel(`What's inside the ${escapeHtml(magnet.productName)}`)}
             <ul style="margin:8px 0 0;padding-left:20px;">${insideList}</ul>
@@ -160,8 +176,9 @@ export function renderLeadMagnetEmailHtml(args: {
         eyebrow: "Your Download Is Ready",
         heading: `Your ${magnet.productName} is ready to download`,
         body,
-        cta: { label: `Download the ${magnet.productName} (PDF)`, url: magnet.pdfUrl },
-        footerNote: "You requested this download from www.capturepilot.com. Reply \"unsubscribe\" any time and I'll take you off the list.",
+        // CTA intentionally omitted here — already rendered inline above the
+        // "What's inside" block so it's visible without scrolling.
+        footerNote: "You requested this download from www.capturepilot.com or www.americurial.com. Reply \"unsubscribe\" any time and I'll take you off the list.",
     });
 }
 
