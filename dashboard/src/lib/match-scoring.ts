@@ -447,20 +447,25 @@ export function scoreOpportunityLeadMagnet(
         return null;
     }
 
-    // HARD GATE #2: NAICS must match at least at 3-digit sub-sector level (0.3+).
-    // 4-digit (0.6) is preferred; 3-digit (0.3) sub-sector matches are allowed
-    // when other signals (keywords, geo, set-aside) carry weight. Anything
-    // below 3-digit (different sub-sector entirely) is rejected — those are
-    // genuinely unrelated industries.
+    // HARD GATE #2: NAICS must match at least at 3-digit sub-sector level (0.3+)
+    // WHEN the opportunity has a NAICS code at all. State/county/city RSS-
+    // ingested opps frequently have no naics_code field (Bonfire / OpenGov /
+    // Socrata feeds don't publish NAICS), so we'd be filtering out 100% of
+    // SLED opportunities if we required it. Two paths:
+    //   • opp HAS naics_code → enforce ≥ 0.3 (3-digit sub-sector or better).
+    //   • opp has NO naics_code → skip this gate, fall through to keyword +
+    //     base scoring. The final 0.30 floor (line 529 below) still drops
+    //     anything that doesn't earn its place via title/description matching.
     //
-    // Empirical reason for the relaxation: niche 6-digit codes like 115116
-    // (Farm Management Services) have almost no exact opportunities in our
-    // DB, but the same 3-digit prefix 115 (Support Activities for Ag & Forestry)
-    // has 40+ active opps that are extremely relevant to a precision-ag firm.
-    // The lower NAICS contribution (0.3 vs 0.6) plus the final 0.30 floor
-    // ensures only matches with real signal elsewhere actually surface.
+    // Empirical reason for the original 0.3 floor: niche 6-digit codes like
+    // 115116 (Farm Management Services) have almost no exact opportunities
+    // in our DB, but the same 3-digit prefix 115 (Support Activities for Ag
+    // & Forestry) has 40+ active opps that are extremely relevant to a
+    // precision-ag firm. The lower NAICS contribution (0.3 vs 0.6) plus the
+    // final 0.30 floor ensures only matches with real signal elsewhere
+    // actually surface.
     const naics = scoreNaics(profile.naics_codes || [], opp.naics_code);
-    if (naics < 0.3) return null;
+    if (opp.naics_code && naics < 0.3) return null;
 
     const nt = scoreNoticeType(opp.notice_type);
     if (nt === null) return null;

@@ -150,6 +150,10 @@
         {
             "path": "/api/cron/health_monitor",
             "schedule": "0 * * * *"
+        },
+        {
+            "path": "/api/cron/ingest_socrata",
+            "schedule": "15 3 * * *"
         }
     ],
     "functions": {
