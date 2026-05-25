@@ -15,6 +15,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { guardCron } from "@/lib/cron-auth";
 import { extractContacts } from "@/lib/extract-contacts";
+import { extractRichFields } from "@/lib/extract-rich-fields";
 import { fetchSocrataRows, readField, type SocrataSource, type FieldMap } from "@/lib/socrata";
 import crypto from "node:crypto";
 
@@ -116,6 +117,7 @@ export async function GET(req: NextRequest) {
             if (!link) link = src.website;
 
             const extracted = extractContacts(desc);
+            const rich = extractRichFields(desc);
 
             // Surface field-mapped contacts (NYC publishes structured POC info)
             // as extracted_* fields too — keeps a single source of truth for
@@ -152,6 +154,12 @@ export async function GET(req: NextRequest) {
                 extracted_phones: extracted.phones.length ? extracted.phones : null,
                 extracted_urls: extracted.urls.length ? extracted.urls : null,
                 extracted_at: new Date().toISOString(),
+                estimated_value_min: rich.estimated_value_min,
+                estimated_value_max: rich.estimated_value_max,
+                estimated_value_text: rich.estimated_value_text,
+                is_subcontract: rich.is_subcontract,
+                opportunity_class: rich.opportunity_class,
+                extracted_offices: rich.government_offices.length ? rich.government_offices : null,
             };
         });
 

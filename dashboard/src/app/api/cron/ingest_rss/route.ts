@@ -18,6 +18,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { extractContacts } from "@/lib/extract-contacts";
+import { extractRichFields } from "@/lib/extract-rich-fields";
 
 export const maxDuration = 300;
 
@@ -199,6 +200,7 @@ export async function GET(req: NextRequest) {
                 // POC email/phone/URL from the description text so the
                 // detail page can render real Contact cards for SLED opps.
                 const extracted = extractContacts(cleanDesc);
+                const rich = extractRichFields(cleanDesc);
                 return {
                     notice_id: `${src.source_prefix}-${shortHash(item.key)}`,
                     title: cleanTitle || null,
@@ -219,6 +221,12 @@ export async function GET(req: NextRequest) {
                     extracted_phones: extracted.phones.length ? extracted.phones : null,
                     extracted_urls: extracted.urls.length ? extracted.urls : null,
                     extracted_at: new Date().toISOString(),
+                    estimated_value_min: rich.estimated_value_min,
+                    estimated_value_max: rich.estimated_value_max,
+                    estimated_value_text: rich.estimated_value_text,
+                    is_subcontract: rich.is_subcontract,
+                    opportunity_class: rich.opportunity_class,
+                    extracted_offices: rich.government_offices.length ? rich.government_offices : null,
                 };
             });
 
@@ -229,11 +237,14 @@ export async function GET(req: NextRequest) {
                 // haven't been applied yet so a half-deployed prod still ingests.
                 const withSource = rows.map(r => ({ ...r, source: src.provider === "bonfire" ? "sled" : "sled" }));
                 let upsertErr = (await supabase.from("opportunities").upsert(withSource, { onConflict: "notice_id" })).error;
-                if (upsertErr && /extracted_/i.test(upsertErr.message)) {
-                    const withoutExtracted = withSource.map(({ extracted_emails, extracted_phones, extracted_urls, extracted_at, ...rest }) =>
-                        // discard the new columns until migration 076 lands
-                        rest);
-                    upsertErr = (await supabase.from("opportunities").upsert(withoutExtracted, { onConflict: "notice_id" })).error;
+                if (upsertErr && /(extracted_|estimated_|opportunity_class|is_subcontract)/i.test(upsertErr.message)) {
+                    const slim = withSource.map(({
+                        extracted_emails, extracted_phones, extracted_urls, extracted_at,
+                        estimated_value_min, estimated_value_max, estimated_value_text,
+                        is_subcontract, opportunity_class, extracted_offices,
+                        ...rest
+                    }) => rest);
+                    upsertErr = (await supabase.from("opportunities").upsert(slim, { onConflict: "notice_id" })).error;
                 }
                 if (upsertErr && /source/i.test(upsertErr.message)) {
                     upsertErr = (await supabase.from("opportunities").upsert(rows, { onConflict: "notice_id" })).error;

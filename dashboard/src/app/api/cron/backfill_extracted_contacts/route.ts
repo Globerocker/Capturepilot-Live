@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { guardCron } from "@/lib/cron-auth";
 import { extractContacts } from "@/lib/extract-contacts";
+import { extractRichFields } from "@/lib/extract-rich-fields";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -59,7 +60,10 @@ export async function GET(req: NextRequest) {
         const slice = targets.slice(i, i + CONCURRENCY);
         await Promise.all(slice.map(async (r) => {
             const ex = extractContacts(r.description || "");
-            const hasAny = ex.emails.length || ex.phones.length || ex.urls.length;
+            const rich = extractRichFields(r.description || "");
+            const hasAny = ex.emails.length || ex.phones.length || ex.urls.length
+                || rich.estimated_value_max !== null || rich.opportunity_class !== null
+                || rich.government_offices.length > 0;
             if (ex.emails.length) withEmail++;
             if (ex.phones.length) withPhone++;
             if (ex.urls.length) withUrl++;
@@ -70,6 +74,12 @@ export async function GET(req: NextRequest) {
                     extracted_phones: ex.phones.length ? ex.phones : null,
                     extracted_urls: ex.urls.length ? ex.urls : null,
                     extracted_at: now,
+                    estimated_value_min: rich.estimated_value_min,
+                    estimated_value_max: rich.estimated_value_max,
+                    estimated_value_text: rich.estimated_value_text,
+                    is_subcontract: rich.is_subcontract,
+                    opportunity_class: rich.opportunity_class,
+                    extracted_offices: rich.government_offices.length ? rich.government_offices : null,
                 })
                 .eq("id", r.id);
             if (upErr) {
