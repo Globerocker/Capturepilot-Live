@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { Inter, Courier_Prime } from "next/font/google";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { Analytics } from "@vercel/analytics/next";
 import { CookieConsent } from "@/components/CookieConsent";
 import MetaPixel from "@/components/MetaPixel";
+import PixelInstrumentation from "@/components/PixelInstrumentation";
 import "./globals.css";
 
 const inter = Inter({
@@ -38,6 +40,12 @@ export default function RootLayout({
         {children}
         <CookieConsent />
         <MetaPixel />
+        {/* Pixel instrumentation: route-change PageView, click delegation,
+            scroll-depth + time-on-page soft conversions. useSearchParams()
+            inside requires Suspense wrapping. */}
+        <Suspense fallback={null}>
+          <PixelInstrumentation />
+        </Suspense>
         <SpeedInsights />
         <Analytics />
         {/* HubSpot Tracking Code — Portal 245197783 */}

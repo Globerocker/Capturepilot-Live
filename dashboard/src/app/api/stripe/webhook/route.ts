@@ -8,6 +8,7 @@ import {
     onSubscriptionCanceled,
     onPaymentFailed,
 } from "@/lib/hubspot";
+import { sendCAPIEvent, newEventId } from "@/lib/meta-capi";
 
 function getStripe() {
     return new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: "2026-02-25.clover" });
@@ -91,6 +92,23 @@ export async function POST(request: Request) {
                         amountPaidCents: amountPaid,
                     }).catch(err => console.error("Startup pack delivery email failed:", err));
                 }
+
+                // Meta CAPI Purchase event — startup pack one-time purchase.
+                // No client-side client to dedup against here (webhook is
+                // server-only). Hashed email goes through, no IP since
+                // Stripe webhook isn't from the buyer's browser.
+                sendCAPIEvent({
+                    eventName: "Purchase",
+                    eventId: newEventId(),
+                    userData: { email },
+                    customData: {
+                        currency: (session.currency || "usd").toUpperCase(),
+                        value: amountPaid / 100,
+                        content_name: "startup_pack",
+                        content_category: "one_time",
+                        content_ids: ["startup_pack"],
+                    },
+                }).catch(err => console.warn("CAPI Purchase fire failed (startup_pack):", err));
                 break;
             }
 
@@ -137,6 +155,27 @@ export async function POST(request: Request) {
                         }
                     }
                 }
+
+                // Meta CAPI — fire StartTrial or Purchase depending on trial state.
+                // Trial start counts as a soft-conversion lead-quality signal;
+                // direct paid (no trial) is the actual Purchase. Stripe webhook
+                // is server-only — no client dedup, but we still want the event.
+                const subPriceCents = session.amount_total ?? 0;
+                const buyerEmail = session.customer_email
+                    || session.customer_details?.email
+                    || null;
+                sendCAPIEvent({
+                    eventName: trialEnd ? "StartTrial" : "Purchase",
+                    eventId: newEventId(),
+                    userData: { email: buyerEmail },
+                    customData: {
+                        currency: (session.currency || "usd").toUpperCase(),
+                        value: subPriceCents / 100,
+                        content_name: trialEnd ? "pro_trial" : "pro_subscription",
+                        content_category: "subscription",
+                        content_ids: ["pro"],
+                    },
+                }).catch(err => console.warn("CAPI subscription event fire failed:", err));
             }
             break;
         }

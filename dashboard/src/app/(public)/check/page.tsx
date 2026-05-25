@@ -212,14 +212,18 @@ function CheckContent() {
         setStep(0);
         setCurrentStatus("crawling");
         setDisplayName(getDomain(url));
-        // Fire Meta Pixel Lead event — someone submitted their website = top-of-funnel lead
-        track("lead", { content_name: "quick_check", website: getDomain(url) });
+        // Fire Meta Pixel Lead event (client) + pass the same event_id to
+        // the server so its CAPI dual-fire dedups against this one. Best
+        // match-rate when both fire — AdBlocker kills ~30% client-side,
+        // server-side guarantees we still see the event.
+        const capiEventId = track("lead", { content_name: "quick_check", website: getDomain(url) });
         fetch("/api/analyze-company", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 website: url,
                 uei: ueiVal || undefined,
+                capi_event_id: capiEventId,
             }),
         })
             .then(async (res) => {

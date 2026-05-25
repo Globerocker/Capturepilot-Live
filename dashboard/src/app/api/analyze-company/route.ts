@@ -6,6 +6,7 @@ import { scoreOpportunityLeadMagnet, type ProfileForScoring, type OpportunityFor
 import { generateCertRecommendations } from "@/lib/cert-recommendations";
 import { analyzeCompany } from "@/lib/crawler";
 import { findCompetitors, computeReadinessScore } from "@/lib/quick-checker-helpers";
+import { sendCAPIEvent, userDataFromRequest, newEventId } from "@/lib/meta-capi";
 
 // Pro plan ceiling. The pipeline runs in after() so it shares this budget.
 // We were getting silent kills at 120s on slow Firecrawl + OpenAI runs that
@@ -998,6 +999,33 @@ export async function POST(request: NextRequest) {
         }
 
         const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+
+        // ── Meta Conversions API — server-side Lead event ─────────────────
+        // Dual-fires with the client-side `track("lead", ...)` from
+        // /check/page.tsx. Same event_id is used both places when the client
+        // passes capi_event_id in the body; otherwise we mint one and the
+        // client won't dedup (still better than firing only client-side,
+        // which AdBlockers kill ~30% of the time).
+        const capiEventId = (body.capi_event_id as string | undefined) || newEventId();
+        after(async () => {
+            try {
+                let domain: string | null = null;
+                try { domain = new URL(website).hostname.replace(/^www\./, ""); } catch {}
+                await sendCAPIEvent({
+                    eventName: "Lead",
+                    eventId: capiEventId,
+                    eventSourceUrl: request.headers.get("referer") || "https://app.capturepilot.com/check",
+                    userData: userDataFromRequest(request),
+                    customData: {
+                        content_name: "quick_check",
+                        content_category: domain || "unknown_domain",
+                        website,
+                    },
+                });
+            } catch (e) {
+                console.warn("CAPI Lead fire failed (non-fatal):", e);
+            }
+        });
 
         // Track whether user explicitly provided a company name
         const userProvidedName = companyName.length > 0;

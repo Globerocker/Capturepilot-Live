@@ -116,7 +116,9 @@ function SignupPageContent() {
       setLoading(false);
     } else {
       if (inviteToken) await claimInvite(data.user?.id);
-      track("signup_completed", { source: inviteToken ? "beta_invite" : "signup" });
+      // Fire Meta Pixel client + capture the event_id to dedup against
+      // the server-side CAPI fire below.
+      const capiEventId = track("signup_completed", { source: inviteToken ? "beta_invite" : "signup" });
       // Fire-and-forget HubSpot sync — do not block redirect
       fetch("/api/hubspot/sync-contact", {
         method: "POST",
@@ -129,6 +131,22 @@ function SignupPageContent() {
           contact_name: invite?.recipient_name,
         }),
       }).catch((err) => console.error("[HubSpot sync failed]", err));
+
+      // CAPI server-side CompleteRegistration — dedups against client
+      // via capi_event_id. Survives AdBlockers, hashes email server-side.
+      fetch("/api/meta/capi-track", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          event: "CompleteRegistration",
+          event_id: capiEventId,
+          email,
+          custom_data: {
+            content_name: inviteToken ? "beta_invite" : "signup",
+            content_category: "account",
+          },
+        }),
+      }).catch((err) => console.error("[CAPI signup fire failed]", err));
 
       const onboardParams = new URLSearchParams();
       if (analysisId) onboardParams.set("analysis_id", analysisId);
