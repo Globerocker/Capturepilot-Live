@@ -19,6 +19,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 export interface ContractorRow {
     uei: string;
+    /** Display name. Source col is `company_name` (or `dba_name` fallback). */
     business_name: string;
     primary_naics: string | null;
     state: string | null;
@@ -97,20 +98,20 @@ export async function buildAwardRollup(sb: SupabaseClient, uei: string): Promise
         awards_by_year: [],
         top_naics_codes: [],
     };
-    // The schema name for the awards table varies across migrations — check
-    // contractor's naics_awards JSONB as a fallback first since 039 stored
-    // pre-aggregated data there.
+    // contractors table doesn't have a scalar total_obligated column — the
+    // award rollup lives entirely in the naics_awards JSONB array (migration
+    // 039). We SUM client-side to derive a lifetime total.
     const { data: contractor } = await sb
         .from("contractors")
-        .select("naics_awards, agency_relationships, total_obligated")
+        .select("naics_awards, agency_relationships")
         .eq("uei", uei)
         .maybeSingle();
     if (!contractor) return empty;
 
     const c = contractor as Record<string, unknown>;
-    const total = Number(c.total_obligated) || 0;
-    const agencyRels = (c.agency_relationships as Array<{ agency: string; obligated: number }> | undefined) || [];
     const naicsAwards = (c.naics_awards as Array<{ naics: string; count: number; total: number }> | undefined) || [];
+    const total = naicsAwards.reduce((sum, n) => sum + (Number(n.total) || 0), 0);
+    const agencyRels = (c.agency_relationships as Array<{ agency: string; obligated: number }> | undefined) || [];
 
     const topAgency = agencyRels.length > 0
         ? agencyRels.slice().sort((a, b) => (b.obligated || 0) - (a.obligated || 0))[0]

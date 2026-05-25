@@ -46,21 +46,57 @@ export async function POST(req: NextRequest) {
         .select("contractor_uei");
     const publishedUeis = new Set(((alreadyPublished as Array<{ contractor_uei: string }>) || []).map((r) => r.contractor_uei));
 
-    // Pull top candidates by total_obligated. We over-fetch so we can skip
-    // any already-published rows without re-querying.
+    // Contractors table has no scalar total-obligated column; we over-fetch
+    // by USAspending-enriched recency, compute lifetime totals from the
+    // naics_awards JSONB array, and sort client-side. See same logic in
+    // /api/cron/publish_contractor_pages.
     const { data: candidates, error: cErr } = await sb
         .from("contractors")
-        .select("uei, business_name, primary_naics, state, city, cage_code, sam_registered, sba_certifications, website, total_obligated")
-        .gt("total_obligated", 0)
-        .order("total_obligated", { ascending: false })
-        .limit(limit + publishedUeis.size + 20);
+        .select("uei, company_name, dba_name, naics_codes, naics_awards, state, city, cage_code, sam_registered, sba_certifications, website")
+        .not("naics_awards", "eq", "[]")
+        .not("naics_awards", "is", null)
+        .order("last_usaspending_refresh", { ascending: false, nullsFirst: false })
+        .limit(Math.max(500, limit + publishedUeis.size + 50));
 
     if (cErr) {
         return NextResponse.json({ error: cErr.message }, { status: 500 });
     }
 
-    type Cand = ContractorRow & { total_obligated: number };
-    const pool = ((candidates || []) as Cand[]).filter((c) => !publishedUeis.has(c.uei)).slice(0, limit);
+    type RawCand = {
+        uei: string;
+        company_name: string | null;
+        dba_name: string | null;
+        naics_codes: string[] | null;
+        naics_awards: Array<{ naics: string; total: number; count: number }> | null;
+        state: string | null;
+        city: string | null;
+        cage_code: string | null;
+        sam_registered: boolean | null;
+        sba_certifications: string[] | null;
+        website: string | null;
+    };
+    type Cand = ContractorRow & { lifetime_total: number };
+
+    const pool: Cand[] = ((candidates || []) as RawCand[])
+        .filter((c) => !publishedUeis.has(c.uei))
+        .map((c) => {
+            const lifetime_total = (c.naics_awards || []).reduce((s, n) => s + (Number(n.total) || 0), 0);
+            return {
+                uei: c.uei,
+                business_name: c.company_name || c.dba_name || "(unnamed contractor)",
+                primary_naics: (c.naics_codes && c.naics_codes[0]) || null,
+                state: c.state,
+                city: c.city,
+                cage_code: c.cage_code,
+                sam_registered: c.sam_registered,
+                sba_certifications: c.sba_certifications,
+                website: c.website,
+                lifetime_total,
+            };
+        })
+        .filter((c) => c.lifetime_total > 0)
+        .sort((a, b) => b.lifetime_total - a.lifetime_total)
+        .slice(0, limit);
 
     if (pool.length === 0) {
         return NextResponse.json({ ok: true, picked: 0, note: "no eligible contractors" });
@@ -73,7 +109,7 @@ export async function POST(req: NextRequest) {
             would_publish: pool.map((c) => ({
                 uei: c.uei,
                 name: c.business_name,
-                total_obligated: c.total_obligated,
+                lifetime_total: c.lifetime_total,
                 proposed_slug: slugify(c.business_name),
             })),
         });
