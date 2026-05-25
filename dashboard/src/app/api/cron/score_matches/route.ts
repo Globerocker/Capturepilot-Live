@@ -100,7 +100,14 @@ export async function GET(req: NextRequest) {
                     "award_amount, response_deadline, " +
                     "title, description, structured_requirements"
                 )
+                // Drop expired + archived opps — they can't be won and pollute
+                // the scoring loop. 23k of the 30k rows in prod are EXPIRED;
+                // scoring those wastes ~80% of the cron budget for zero output.
+                // Notice that we use neq.EXPIRED rather than .in([ACTIVE,...])
+                // so brand-new statuses (e.g. EXPIRING_SOON, AWARDED) are still
+                // considered until we explicitly opt them out.
                 .eq("is_archived", false)
+                .neq("status", "EXPIRED")
                 .order("id", { ascending: true })
                 .range(offset, offset + OPP_BATCH - 1);
             if (oppErr) throw oppErr;
