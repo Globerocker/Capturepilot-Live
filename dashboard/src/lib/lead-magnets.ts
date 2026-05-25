@@ -18,6 +18,29 @@ import {
     COLORS,
 } from "@/lib/email-template";
 
+/**
+ * Form-field contract for a lead magnet. Drives both client-side validation
+ * (LeadMagnetForm.tsx hides/shows + requires the right inputs) and the
+ * server-side payload contract (/api/leads accepts these keys).
+ *
+ * Every new download MUST set this — that's how we document the per-magnet
+ * form requirements in one place instead of scattering them across pages.
+ *
+ * Current default for all download magnets:
+ *   - email (required, work email)
+ *   - first_name (required)
+ *   - last_name (required)
+ *   - company (required) — needed for Apollo + HubSpot enrichment
+ *   - phone (optional) — Apollo backfills when missing
+ */
+export interface LeadMagnetFormSpec {
+    firstName: "required" | "optional" | "off";
+    lastName: "required" | "optional" | "off";
+    email: "required";
+    company: "required" | "optional" | "off";
+    phone: "required" | "optional" | "off";
+}
+
 export interface LeadMagnet {
     /** Stable key — referenced by API callers and stored on marketing_leads rows. */
     key: string;
@@ -35,7 +58,17 @@ export interface LeadMagnet {
     blurb: string;
     /** Bullet list shown in the email body — what's inside the PDF. */
     inside: string[];
+    /** Form requirements — drives UI + API validation. */
+    form: LeadMagnetFormSpec;
 }
+
+const DEFAULT_FORM: LeadMagnetFormSpec = {
+    firstName: "required",
+    lastName: "required",
+    email: "required",
+    company: "required",
+    phone: "optional",
+};
 
 const FIELD_MANUAL_URL =
     process.env.LEAD_MAGNET_PDF_URL ||
@@ -56,6 +89,7 @@ const FIELD_MANUAL_CONFIG = {
         "RFP Response Framework",
         "Pricing-to-Win Worksheet",
     ],
+    form: DEFAULT_FORM,
 };
 
 export const LEAD_MAGNETS: Record<string, LeadMagnet> = {

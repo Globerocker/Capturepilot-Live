@@ -3,12 +3,20 @@ import { createClient } from "@supabase/supabase-js";
 import { createHash } from "node:crypto";
 import { getLeadMagnet, sendLeadMagnetEmail } from "@/lib/lead-magnets";
 import { sendCAPIEvent, userDataFromRequest, newEventId } from "@/lib/meta-capi";
+import { enrichPersonViaApollo, domainFromEmail } from "@/lib/lead-enrichment";
+import { upsertHubSpotContact } from "@/lib/hubspot";
 
 export const runtime = "nodejs";
+// Pipeline (insert → Apollo enrich → HubSpot sync → Resend) typically runs
+// in ~3s. Bumping `maxDuration` so the worst-case Apollo timeout (8s) plus
+// HubSpot (~1s) plus Resend (~1s) all fit before the platform aborts us.
+export const maxDuration = 30;
 
 const ALLOWED_ORIGINS = new Set([
   "https://www.capturepilot.com",
   "https://capturepilot.com",
+  "https://americurial.com",
+  "https://www.americurial.com",
   "http://localhost:3000",
 ]);
 
@@ -43,8 +51,10 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const email = String(body.email ?? "").trim().toLowerCase();
-    const company = body.company ? String(body.company).trim().slice(0, 200) : null;
     const firstName = body.first_name ? String(body.first_name).trim().slice(0, 80) : null;
+    const lastName = body.last_name ? String(body.last_name).trim().slice(0, 80) : null;
+    const company = body.company ? String(body.company).trim().slice(0, 200) : null;
+    const phone = body.phone ? String(body.phone).trim().slice(0, 40) : null;
     const magnet = String(body.magnet ?? body.magnet_key ?? "").trim().slice(0, 80);
     const source = body.source ? String(body.source).slice(0, 200) : null;
 
@@ -67,27 +77,125 @@ export async function POST(req: NextRequest) {
     const user_agent = req.headers.get("user-agent")?.slice(0, 400) ?? null;
     const referrer = req.headers.get("referer")?.slice(0, 400) ?? null;
 
-    const { error } = await db()
+    const sb = db();
+
+    // 1. Insert the lead row. We use plain insert + 23505 (unique_violation)
+    //    handling instead of upsert(..., { onConflict }) because the previous
+    //    upsert path silently failed when the unique constraint was an
+    //    expression index — leaving every retry returning 500 with no clue
+    //    in the response. Plain insert + explicit duplicate handling gives
+    //    us a deterministic path and surfaces real errors to logs.
+    const insertResult = await sb
       .from("marketing_leads")
-      .upsert({
+      .insert({
         email,
+        first_name: firstName,
+        last_name: lastName,
         company,
+        phone,
         magnet_key: magnet,
         source,
         utm_source, utm_medium, utm_campaign, utm_content, utm_term,
         ip_hash, user_agent, referrer,
-      }, { onConflict: "email,magnet_key" });
+      });
 
-    // 409 (already captured) is fine — we still re-send the email below so
-    // the caller can always promise "check your inbox" without lying.
-    if (error && !String(error.message).includes("duplicate")) {
-      console.error("[leads] insert failed", error);
-      return NextResponse.json({ error: "insert failed" }, { status: 500, headers });
+    let isDuplicate = false;
+    if (insertResult.error) {
+      const code = (insertResult.error as { code?: string }).code;
+      const msg = insertResult.error.message || "";
+      if (code === "23505" || msg.includes("duplicate key")) {
+        isDuplicate = true;
+      } else {
+        // Real failure — surface in logs with full context so we can diagnose
+        // the next 500 quickly instead of guessing at error masks again.
+        console.error("[leads] insert failed", {
+          code,
+          message: msg,
+          details: (insertResult.error as { details?: string }).details,
+          hint: (insertResult.error as { hint?: string }).hint,
+          email_domain: email.split("@")[1],
+        });
+        return NextResponse.json({ error: "insert failed", debug: msg }, { status: 500, headers });
+      }
     }
 
-    // Resolve magnet and deliver the PDF. Unknown magnet keys still get the
-    // row written (for legacy forms with their own inline-download UX), they
-    // just don't get an email — caller controls UX from the API response.
+    // If it was a duplicate (same email + magnet already captured), update
+    // the recently-collected firmographics so HubSpot gets the freshest data.
+    if (isDuplicate) {
+      await sb
+        .from("marketing_leads")
+        .update({
+          first_name: firstName,
+          last_name: lastName,
+          company,
+          phone,
+          utm_source, utm_medium, utm_campaign, utm_content, utm_term,
+        })
+        .eq("email", email)
+        .eq("magnet_key", magnet);
+    }
+
+    // 2. Apollo enrichment — pull title/seniority/linkedin/phone/firmographics
+    //    when we can match the contact. Falls back gracefully when the lookup
+    //    misses (free-mail domains, unknown people, missing key).
+    const apolloEnrichment = await enrichPersonViaApollo({
+      firstName,
+      lastName,
+      email,
+      companyName: company,
+    });
+
+    if (apolloEnrichment) {
+      await sb
+        .from("marketing_leads")
+        .update({
+          apollo_enriched_at: new Date().toISOString(),
+          apollo_data: apolloEnrichment as unknown as Record<string, unknown>,
+          // Backfill phone from Apollo only when the user didn't provide one.
+          phone: phone || apolloEnrichment.phone || null,
+        })
+        .eq("email", email)
+        .eq("magnet_key", magnet);
+    }
+
+    // 3. HubSpot CRM sync — runs BEFORE email delivery so a contact exists
+    //    in CRM the instant the user hits inbox. Source tag = "lead_magnet"
+    //    + the magnet key so the marketing team can segment by funnel entry.
+    const domain = domainFromEmail(email);
+    const hubspotId = await upsertHubSpotContact({
+      email,
+      firstname: firstName || apolloEnrichment?.first_name || undefined,
+      lastname: lastName || apolloEnrichment?.last_name || undefined,
+      phone: phone || apolloEnrichment?.phone || undefined,
+      company: company || apolloEnrichment?.organization_name || undefined,
+      jobtitle: apolloEnrichment?.title || undefined,
+      lifecyclestage: "lead",
+      extra: {
+        // `lead_source_cp` is the LeadSource enum; existing string values are
+        // ('quick_checker' | 'signup' | 'contact_form' | ...). We extend with
+        // 'lead_magnet' via cast — the HubSpot property is free-text so any
+        // string works at the API layer, even if the TS type doesn't list it.
+        lead_source_cp: ("lead_magnet" as never),
+      },
+    }).catch((err) => {
+      console.warn("[leads] hubspot sync failed (non-fatal):", (err as Error).message);
+      return null;
+    });
+
+    if (hubspotId) {
+      await sb
+        .from("marketing_leads")
+        .update({
+          hubspot_contact_id: hubspotId,
+          hubspot_synced_at: new Date().toISOString(),
+        })
+        .eq("email", email)
+        .eq("magnet_key", magnet);
+    }
+
+    // 4. Resolve magnet and deliver the PDF (last step — by the time the
+    //    user opens the inbox, the contact exists in HubSpot with full
+    //    Apollo enrichment, so sales can act immediately).
     const leadMagnet = getLeadMagnet(magnet);
     let emailSent = false;
     let emailError: string | undefined;
@@ -95,15 +203,15 @@ export async function POST(req: NextRequest) {
       const result = await sendLeadMagnetEmail({
         magnet: leadMagnet,
         to: email,
-        firstName: firstName || undefined,
-        company: company || undefined,
+        firstName: firstName || apolloEnrichment?.first_name || undefined,
+        company: company || apolloEnrichment?.organization_name || undefined,
       });
       emailSent = result.sent;
       emailError = result.error;
       if (!result.sent) {
         console.error("[leads] resend failed", { magnet, email, error: result.error });
       } else {
-        await db()
+        await sb
           .from("marketing_leads")
           .update({ resend_synced: true })
           .eq("email", email)
@@ -111,16 +219,16 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Fire server-side CAPI Lead event. Hashed email + IP + UA + fbp/fbc
-    // give Meta the best match-quality possible from a server-only fire.
-    // We don't block the response on this — Meta API can be slow + we'd
-    // rather deliver "200 ok" to the marketing-site form than a stall.
+    // 5. Fire server-side CAPI Lead event. Hashed email + IP + UA + fbp/fbc
+    //    give Meta the best match-quality possible from a server-only fire.
+    //    Non-blocking — Meta API can be slow + we'd rather deliver "200 ok"
+    //    to the marketing-site form than stall the user.
     const capiEventId = String(body.capi_event_id || newEventId());
     void sendCAPIEvent({
       eventName: "Lead",
       eventId: capiEventId,
       eventSourceUrl: referrer || undefined,
-      userData: userDataFromRequest(req, { email }),
+      userData: userDataFromRequest(req, { email, phone: phone || apolloEnrichment?.phone || undefined }),
       customData: {
         content_name: magnet,
         content_category: "lead_magnet",
@@ -128,17 +236,50 @@ export async function POST(req: NextRequest) {
         utm_source: utm_source || undefined,
         utm_medium: utm_medium || undefined,
         utm_campaign: utm_campaign || undefined,
+        has_enrichment: Boolean(apolloEnrichment),
+        has_hubspot: Boolean(hubspotId),
       },
     }).catch(err => console.warn("[leads] CAPI Lead fire failed (non-fatal):", err));
 
     return NextResponse.json({
       ok: true,
+      duplicate: isDuplicate,
       email_sent: emailSent,
       email_error: emailError,
+      enriched: Boolean(apolloEnrichment),
+      hubspot_id: hubspotId || null,
       capi_event_id: capiEventId,
     }, { status: 200, headers });
   } catch (err) {
-    console.error("[leads] handler error", err);
-    return NextResponse.json({ error: "internal" }, { status: 500, headers });
+    const msg = (err as Error).message || String(err);
+    console.error("[leads] handler error", { msg, stack: (err as Error).stack });
+    return NextResponse.json({ error: "internal", debug: msg }, { status: 500, headers });
   }
 }
+
+// Documentation for /api/leads contract:
+//
+//   POST /api/leads
+//     {
+//       email: string (required, validated)
+//       first_name?: string
+//       last_name?: string
+//       company?: string
+//       phone?: string
+//       magnet: string (required — must match a key in LEAD_MAGNETS)
+//       source?: string (origin pathname, for analytics)
+//       utm_source?, utm_medium?, utm_campaign?, utm_content?, utm_term?
+//       capi_event_id?: string (client-generated, used for Meta CAPI dedup)
+//     }
+//
+//   Pipeline order (top-to-bottom):
+//     1. Insert into marketing_leads (handles duplicate by re-syncing
+//        firmographics — same email + same magnet = same lead).
+//     2. Apollo enrichment (people/match) when domain or org name is
+//        available. Persists to marketing_leads.apollo_data.
+//     3. HubSpot CRM upsert as a Lead with all available firmographics
+//        AND apollo-enriched fields (title, linkedin, mobile).
+//     4. Resend delivery of the magnet PDF via the branded email template.
+//     5. Meta CAPI Lead event fired (non-blocking).
+//
+//   Form requirements per magnet are defined in `src/lib/lead-magnets.ts`.
