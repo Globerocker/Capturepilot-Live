@@ -20,6 +20,7 @@ export interface RichExtraction {
     is_subcontract: boolean | null;       // true = explicit subcontracting opp, false = explicit prime, null = unknown
     opportunity_class: "prime" | "subcontract" | "teaming" | null;
     government_offices: string[];          // sub-agencies / contracting office names found in text
+    attachment_urls: string[];             // inline PDF/DOC/XLSX links scraped from description HTML
 }
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -162,6 +163,67 @@ const OFFICE_PATTERNS = [
 
 function uniq<T>(arr: T[]): T[] { return Array.from(new Set(arr)); }
 
+// ───────────────────────────────────────────────────────────────────────────
+// Inline attachment URL extraction
+//
+// State / county / city RSS feeds frequently embed links to PDF / DOCX /
+// XLSX attachments directly in the description HTML. Pulling those URLs out
+// up front lets us cache them for the detail page + feed them to the AI
+// requirements extractor without a per-portal page scrape.
+//
+// We accept:
+//   • <a href="…"> tags where the URL ends in a document extension
+//   • bare URLs in plaintext that end in a document extension
+//   • SAM-style /resource/<guid>/download URLs (already handled elsewhere
+//     but we surface them here so the SAM path can read from this column
+//     as a unified source of truth later if we choose)
+// ───────────────────────────────────────────────────────────────────────────
+
+const ATTACHMENT_EXT_RE = /\.(pdf|docx?|xlsx?|pptx?|zip|rtf|csv|txt)(?:[?#].*)?$/i;
+// Inline anchor: <a ... href="URL" ...> capture the URL.
+const HTML_HREF_RE = /<a\b[^>]*\bhref\s*=\s*["']([^"']+)["']/gi;
+
+function isAttachmentUrl(url: string): boolean {
+    try {
+        const u = new URL(url);
+        return ATTACHMENT_EXT_RE.test(u.pathname) || /\/download\b/i.test(u.pathname);
+    } catch {
+        // Bare-string fallback for things that aren't valid URLs (rare).
+        return ATTACHMENT_EXT_RE.test(url);
+    }
+}
+
+function extractAttachmentUrls(rawHtml: string, limit = 20): string[] {
+    if (!rawHtml) return [];
+    const found: string[] = [];
+
+    // 1. HTML href matches
+    for (const m of rawHtml.matchAll(HTML_HREF_RE)) {
+        const href = m[1].trim();
+        if (!href) continue;
+        // Decode HTML entities in href
+        const decoded = href
+            .replace(/&amp;/gi, "&")
+            .replace(/&quot;/gi, '"')
+            .replace(/&#39;/g, "'");
+        if (/^https?:\/\//i.test(decoded) && isAttachmentUrl(decoded)) {
+            found.push(decoded);
+        }
+    }
+
+    // 2. Plain-text URL fallback for non-HTML descriptions. Only adds URLs
+    // not already captured via href.
+    const plainUrlRe = /https?:\/\/[^\s<>"']+/gi;
+    for (const m of rawHtml.matchAll(plainUrlRe)) {
+        const u = m[0].replace(/[.,;:!?)\]]+$/, "");
+        if (isAttachmentUrl(u) && !found.includes(u)) {
+            found.push(u);
+        }
+    }
+
+    return uniq(found).slice(0, limit);
+}
+
 function extractGovernmentOffices(text: string, limit = 5): string[] {
     const found: string[] = [];
     for (const re of OFFICE_PATTERNS) {
@@ -207,13 +269,17 @@ export function extractRichFields(rawText: string | null | undefined): RichExtra
         is_subcontract: null,
         opportunity_class: null,
         government_offices: [],
+        attachment_urls: [],
     };
     if (!rawText) return empty;
-    const text = stripHtml(String(rawText));
+    const raw = String(rawText);
+    const text = stripHtml(raw);
 
     const value = extractValue(text);
     const cls = classifyOpportunity(text);
     const offices = extractGovernmentOffices(text);
+    // Attachments run on the RAW HTML (not stripped) so anchor tags survive.
+    const attachments = extractAttachmentUrls(raw);
 
     return {
         estimated_value_min: value.min,
@@ -222,5 +288,6 @@ export function extractRichFields(rawText: string | null | undefined): RichExtra
         is_subcontract: cls.is_subcontract,
         opportunity_class: cls.opportunity_class,
         government_offices: offices,
+        attachment_urls: attachments,
     };
 }

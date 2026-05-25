@@ -160,26 +160,44 @@ export async function GET(req: NextRequest) {
                 is_subcontract: rich.is_subcontract,
                 opportunity_class: rich.opportunity_class,
                 extracted_offices: rich.government_offices.length ? rich.government_offices : null,
+                extracted_attachment_urls: rich.attachment_urls.length ? rich.attachment_urls : null,
             };
         });
 
+        // Dedupe rows by notice_id BEFORE upserting. Some Socrata datasets
+        // (e.g. Chicago's contracts table) have multiple records per
+        // purchase_order — different line items, revisions, modifications.
+        // Our notice_id derives from that field, so the batch contains
+        // duplicates, and Postgres errors with "ON CONFLICT DO UPDATE
+        // command cannot affect row a second time". Keeping the LATEST
+        // wins (later rows override earlier ones in the dedupe map).
+        const dedup = new Map<string, typeof opps[number]>();
+        for (const o of opps) dedup.set(o.notice_id, o);
+        const uniqueOpps = Array.from(dedup.values());
+
         let inserted = 0;
-        if (opps.length > 0) {
+        if (uniqueOpps.length > 0) {
             // Progressive fallback for the same reasons as ingest_rss.
-            let upsertErr = (await supabase.from("opportunities").upsert(opps, { onConflict: "notice_id" })).error;
-            if (upsertErr && /extracted_|jurisdiction_/i.test(upsertErr.message)) {
-                const slim = opps.map(({ extracted_emails, extracted_phones, extracted_urls, extracted_at, jurisdiction_level, jurisdiction_code, ...rest }) => rest);
+            let upsertErr = (await supabase.from("opportunities").upsert(uniqueOpps, { onConflict: "notice_id" })).error;
+            if (upsertErr && /(extracted_|estimated_|opportunity_class|is_subcontract|jurisdiction_)/i.test(upsertErr.message)) {
+                const slim = uniqueOpps.map(({
+                    extracted_emails, extracted_phones, extracted_urls, extracted_at,
+                    estimated_value_min, estimated_value_max, estimated_value_text,
+                    is_subcontract, opportunity_class, extracted_offices,
+                    jurisdiction_level, jurisdiction_code,
+                    ...rest
+                }) => rest);
                 upsertErr = (await supabase.from("opportunities").upsert(slim, { onConflict: "notice_id" })).error;
             }
             if (upsertErr && /source/i.test(upsertErr.message)) {
-                const slimmer = opps.map(({ source, ...rest }) => rest);
+                const slimmer = uniqueOpps.map(({ source, ...rest }) => rest);
                 upsertErr = (await supabase.from("opportunities").upsert(slimmer, { onConflict: "notice_id" })).error;
             }
             if (upsertErr) {
                 lastStatus = `upsert_error: ${upsertErr.message.slice(0, 80)}`;
                 console.warn(`[socrata] ${src.source_prefix} ${lastStatus}`);
             } else {
-                inserted = opps.length;
+                inserted = uniqueOpps.length;
                 grandInserted += inserted;
             }
         }

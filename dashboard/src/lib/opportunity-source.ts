@@ -46,31 +46,43 @@ function providerLabel(provider: string): string {
     }
 }
 
+// Notice-id prefixes that mean "not SAM" regardless of opp.source. Used as
+// a safety net when opp.source is missing on older rows. Any prefix added
+// here MUST also appear in the source ingestion code (ingest_rss /
+// ingest_socrata generate these with crypto.shortHash suffixes).
+const NON_SAM_PREFIXES = [
+    "socrata-",
+    "bonfire-",
+    "opengov-",
+    "periscope-",
+    "bidnet-",
+    "demandstar-",
+    "agency_direct-",
+    "ckan-",
+    "va-eva-",
+    "ca-eprocure-",
+    "tx-esbd-",
+    "fl-vbs-",
+];
+
+function hasSledPrefix(noticeId: string | null | undefined): boolean {
+    if (!noticeId) return false;
+    const lower = noticeId.toLowerCase();
+    return NON_SAM_PREFIXES.some((p) => lower.startsWith(p));
+}
+
 export function originalListing(opp: OppRow): OriginalListing | null {
-    // 1. Federal SAM.gov — predictable URL pattern, only use it when source
-    //    says SAM (or unset, since SAM was the legacy default).
+    // Decide which "side" we're on. We trust `opp.source` first (set by the
+    // ingest cron), but ALSO check notice_id prefixes because the source
+    // column might be null on older rows that pre-date migration 064. If
+    // either signal says "not SAM", we go to the link path.
     const source = (opp.source || "").toLowerCase();
-    const isSam = !source || source === "sam";
+    const sourceIsSam = !source || source === "sam";
+    const looksSledByPrefix = hasSledPrefix(opp.notice_id);
+    const isSam = sourceIsSam && !looksSledByPrefix;
 
-    // SAM rows store the bare notice_id (no source prefix). State/local rows
-    // are prefixed (e.g. "bonfire-fairfaxcounty-abc123") which would 404 on
-    // sam.gov — so we check shape too.
-    const looksLikeSamId = opp.notice_id && !/^[a-z]+-[a-z0-9_]+-[a-f0-9]+$/i.test(opp.notice_id);
-
-    if (isSam && opp.notice_id && looksLikeSamId) {
-        return {
-            url: `https://sam.gov/opp/${opp.notice_id}/view`,
-            label: "View on SAM.gov",
-            full_label: "View on SAM.gov",
-            host: "sam.gov",
-            is_sam: true,
-        };
-    }
-
-    // 2. Non-SAM — use opp.link when present (RSS ingest stores the original
-    //    item link there). Label is provider-aware so "Open on Bonfire portal"
-    //    reads more useful than "View Original Listing".
-    if (opp.link) {
+    // 1. Non-SAM rows — always prefer opp.link (set by RSS / Socrata ingest).
+    if (!isSam && opp.link) {
         let host: string | undefined;
         try { host = new URL(opp.link).host; } catch { /* keep undefined */ }
         const provider = rawProvider(opp);
@@ -81,16 +93,26 @@ export function originalListing(opp: OppRow): OriginalListing | null {
             ? `Open on ${providerLabel(provider)}`
             : "Open original listing";
         const full_label = `View on ${agencyBit}${stateBit}`;
+        return { url: opp.link, label, full_label, host, is_sam: false };
+    }
+
+    // 2. SLED row but `opp.link` is missing — still don't fall back to SAM
+    //    (that's the bug that surfaced in May 2026 — a Socrata row whose
+    //    link wasn't ingested would render a sam.gov/opp/<socrata-id>/view
+    //    URL that 404'd). Return null so the button hides entirely.
+    if (!isSam) return null;
+
+    // 3. SAM rows — predictable URL pattern.
+    if (opp.notice_id) {
         return {
-            url: opp.link,
-            label,
-            full_label,
-            host,
-            is_sam: false,
+            url: `https://sam.gov/opp/${opp.notice_id}/view`,
+            label: "View on SAM.gov",
+            full_label: "View on SAM.gov",
+            host: "sam.gov",
+            is_sam: true,
         };
     }
 
-    // 3. Nothing usable → caller hides the button.
     return null;
 }
 

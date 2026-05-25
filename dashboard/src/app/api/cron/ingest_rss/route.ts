@@ -227,6 +227,7 @@ export async function GET(req: NextRequest) {
                     is_subcontract: rich.is_subcontract,
                     opportunity_class: rich.opportunity_class,
                     extracted_offices: rich.government_offices.length ? rich.government_offices : null,
+                    extracted_attachment_urls: rich.attachment_urls.length ? rich.attachment_urls : null,
                 };
             });
 
@@ -242,6 +243,7 @@ export async function GET(req: NextRequest) {
                         extracted_emails, extracted_phones, extracted_urls, extracted_at,
                         estimated_value_min, estimated_value_max, estimated_value_text,
                         is_subcontract, opportunity_class, extracted_offices,
+                        extracted_attachment_urls,
                         ...rest
                     }) => rest);
                     upsertErr = (await supabase.from("opportunities").upsert(slim, { onConflict: "notice_id" })).error;

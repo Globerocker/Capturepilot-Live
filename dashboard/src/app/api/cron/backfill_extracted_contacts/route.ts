@@ -80,6 +80,7 @@ export async function GET(req: NextRequest) {
                     is_subcontract: rich.is_subcontract,
                     opportunity_class: rich.opportunity_class,
                     extracted_offices: rich.government_offices.length ? rich.government_offices : null,
+                    extracted_attachment_urls: rich.attachment_urls.length ? rich.attachment_urls : null,
                 })
                 .eq("id", r.id);
             if (upErr) {
