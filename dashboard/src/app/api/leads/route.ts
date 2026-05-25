@@ -79,20 +79,17 @@ export async function POST(req: NextRequest) {
 
     const sb = db();
 
-    // 1. Insert the lead row. We use plain insert + 23505 (unique_violation)
-    //    handling instead of upsert(..., { onConflict }) because the previous
-    //    upsert path silently failed when the unique constraint was an
-    //    expression index — leaving every retry returning 500 with no clue
-    //    in the response. Plain insert + explicit duplicate handling gives
-    //    us a deterministic path and surfaces real errors to logs.
+    // 1. Insert the lead row. Two-phase to survive a stale PostgREST schema
+    //    cache: first inserts the base columns (always present since the
+    //    initial 070 migration), then patches the v2 columns separately and
+    //    swallows any "column not in cache" errors. This way a fresh deploy
+    //    isn't blocked on a Supabase cache reload that can lag minutes
+    //    behind a migration.
     const insertResult = await sb
       .from("marketing_leads")
       .insert({
         email,
-        first_name: firstName,
-        last_name: lastName,
         company,
-        phone,
         magnet_key: magnet,
         source,
         utm_source, utm_medium, utm_campaign, utm_content, utm_term,
@@ -108,7 +105,7 @@ export async function POST(req: NextRequest) {
       } else {
         // Real failure — surface in logs with full context so we can diagnose
         // the next 500 quickly instead of guessing at error masks again.
-        console.error("[leads] insert failed", {
+        console.error("[leads] base insert failed", {
           code,
           message: msg,
           details: (insertResult.error as { details?: string }).details,
@@ -119,16 +116,35 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // If it was a duplicate (same email + magnet already captured), update
-    // the recently-collected firmographics so HubSpot gets the freshest data.
+    // 1b. Patch v2 columns (first_name, last_name, phone) — swallow the
+    //     PGRST204 / "schema cache" error when PostgREST hasn't picked up
+    //     the migration yet. The row is already saved with the base data.
+    if (firstName || lastName || phone) {
+      const v2 = await sb
+        .from("marketing_leads")
+        .update({
+          ...(firstName ? { first_name: firstName } : {}),
+          ...(lastName ? { last_name: lastName } : {}),
+          ...(phone ? { phone } : {}),
+        })
+        .eq("email", email)
+        .eq("magnet_key", magnet);
+      if (v2.error) {
+        const msg = v2.error.message || "";
+        const cacheStale = msg.includes("schema cache") || (v2.error as { code?: string }).code === "PGRST204";
+        if (!cacheStale) {
+          console.warn("[leads] v2 patch non-fatal:", msg);
+        }
+      }
+    }
+
+    // If duplicate, also refresh utm + other firmographics so HubSpot syncs
+    // the latest values (not the initial submit).
     if (isDuplicate) {
       await sb
         .from("marketing_leads")
         .update({
-          first_name: firstName,
-          last_name: lastName,
           company,
-          phone,
           utm_source, utm_medium, utm_campaign, utm_content, utm_term,
         })
         .eq("email", email)
@@ -146,7 +162,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (apolloEnrichment) {
-      await sb
+      const apolloUpdate = await sb
         .from("marketing_leads")
         .update({
           apollo_enriched_at: new Date().toISOString(),
@@ -156,6 +172,16 @@ export async function POST(req: NextRequest) {
         })
         .eq("email", email)
         .eq("magnet_key", magnet);
+      // Same stale-cache survivability as the v2 patch above. Apollo data
+      // is non-critical for delivery; we still keep enrichment in memory
+      // for the HubSpot sync that follows.
+      if (apolloUpdate.error) {
+        const msg = apolloUpdate.error.message || "";
+        const cacheStale = msg.includes("schema cache") || (apolloUpdate.error as { code?: string }).code === "PGRST204";
+        if (!cacheStale) {
+          console.warn("[leads] apollo patch non-fatal:", msg);
+        }
+      }
     }
 
     // 3. HubSpot CRM sync — runs BEFORE email delivery so a contact exists
@@ -183,7 +209,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (hubspotId) {
-      await sb
+      const hsUpdate = await sb
         .from("marketing_leads")
         .update({
           hubspot_contact_id: hubspotId,
@@ -191,6 +217,13 @@ export async function POST(req: NextRequest) {
         })
         .eq("email", email)
         .eq("magnet_key", magnet);
+      if (hsUpdate.error) {
+        const msg = hsUpdate.error.message || "";
+        const cacheStale = msg.includes("schema cache") || (hsUpdate.error as { code?: string }).code === "PGRST204";
+        if (!cacheStale) {
+          console.warn("[leads] hubspot patch non-fatal:", msg);
+        }
+      }
     }
 
     // 4. Resolve magnet and deliver the PDF (last step — by the time the
