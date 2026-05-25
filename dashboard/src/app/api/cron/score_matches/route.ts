@@ -5,7 +5,12 @@ import { scoreOpportunity, type ProfileForScoring, type OpportunityForScoring, t
 export const maxDuration = 300;
 
 const MAX_MATCHES_PER_USER = 500;
-const OPP_BATCH = 1000;
+// Lowered from 1000 — Supabase statement timeout (~30s) was hitting on the
+// first page when the table grew past ~25k rows because each opp row carries
+// a multi-KB `description` and JSONB `structured_requirements` column. At
+// batch=200 each round-trip is small enough to clear comfortably; total
+// wall-time across pages is still well inside the cron's 250s budget.
+const OPP_BATCH = 200;
 
 function getDb() {
     return createClient(
