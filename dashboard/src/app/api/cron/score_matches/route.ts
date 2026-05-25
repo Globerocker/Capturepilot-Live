@@ -176,8 +176,23 @@ export async function GET(req: NextRequest) {
 
         return NextResponse.json({ success: true, ...stats, elapsed_ms: Date.now() - startTime });
     } catch (e) {
-        const msg = e instanceof Error ? e.message : "Unknown error";
-        console.error("score_matches error:", msg);
-        return NextResponse.json({ error: msg, ...stats }, { status: 500 });
+        // Supabase errors come through as plain objects with .message / .code /
+        // .details / .hint — not Error instances. Without explicit handling
+        // the catch reads "Unknown error" and hides the real cause.
+        let msg = "Unknown error";
+        let code: string | undefined;
+        let details: string | undefined;
+        let hint: string | undefined;
+        if (e instanceof Error) {
+            msg = e.message;
+        } else if (e && typeof e === "object") {
+            const obj = e as { message?: string; code?: string; details?: string; hint?: string };
+            msg = obj.message || JSON.stringify(e).slice(0, 200);
+            code = obj.code;
+            details = obj.details;
+            hint = obj.hint;
+        }
+        console.error("score_matches error:", { msg, code, details, hint, stats });
+        return NextResponse.json({ error: msg, code, details, hint, ...stats }, { status: 500 });
     }
 }
