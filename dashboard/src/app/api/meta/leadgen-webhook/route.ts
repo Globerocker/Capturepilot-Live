@@ -1,14 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { Resend } from "resend";
+import { getLeadMagnet, sendLeadMagnetEmail } from "@/lib/lead-magnets";
 
 export const runtime = "nodejs";
 // Webhook responses must be fast (Meta tolerates ~20s before timeout). All
 // work runs inline since both Graph API and Resend are typically <1s combined.
 export const maxDuration = 30;
-
-const MAGNET_KEY = "meta-lead-field-manual";
 
 function env(name: string): string | null {
     const v = process.env[name];
@@ -75,12 +73,11 @@ export async function POST(req: NextRequest) {
 
     const accessToken = env("META_SYSTEM_TOKEN");
     const resendKey = env("RESEND_API_KEY");
-    const pdfUrl = env("LEAD_MAGNET_PDF_URL");
     const allowedFormId = env("META_LEAD_FORM_ID"); // optional — when set, ignore events from other forms
 
-    if (!accessToken || !resendKey || !pdfUrl) {
+    if (!accessToken || !resendKey) {
         console.error("[leadgen-webhook] missing required env vars", {
-            accessToken: !!accessToken, resendKey: !!resendKey, pdfUrl: !!pdfUrl,
+            accessToken: !!accessToken, resendKey: !!resendKey,
         });
         // Still 200 so Meta doesn't hammer us with retries while we fix config.
         return NextResponse.json({ ok: true, skipped: "missing_config" });
@@ -94,8 +91,6 @@ export async function POST(req: NextRequest) {
     }
 
     const db = getDb();
-    const resend = new Resend(resendKey);
-    const fromEmail = env("LEAD_MAGNET_FROM_EMAIL") || "Andre @ CapturePilot <andre@capturepilot.com>";
 
     const entries = (payload as { entry?: unknown[] }).entry ?? [];
     const results: Array<{ leadgen_id: string; status: string; error?: string }> = [];
@@ -114,7 +109,7 @@ export async function POST(req: NextRequest) {
             }
 
             try {
-                const result = await processLead({ leadgenId, formId, accessToken, db, resend, fromEmail, pdfUrl });
+                const result = await processLead({ leadgenId, formId, accessToken, db });
                 results.push({ leadgen_id: leadgenId, status: result });
             } catch (err) {
                 console.error("[leadgen-webhook] lead processing failed", leadgenId, err);
@@ -129,17 +124,16 @@ export async function POST(req: NextRequest) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+const MAGNET_KEY_FOR_META = "meta-lead-field-manual";
+
 type ProcessArgs = {
     leadgenId: string;
     formId: string | undefined;
     accessToken: string;
     db: DB | null;
-    resend: Resend;
-    fromEmail: string;
-    pdfUrl: string;
 };
 
-async function processLead({ leadgenId, formId, accessToken, db, resend, fromEmail, pdfUrl }: ProcessArgs): Promise<string> {
+async function processLead({ leadgenId, formId, accessToken, db }: ProcessArgs): Promise<string> {
     // 1. Fetch the lead from Graph API. Bearer header avoids leaking the token
     //    into Vercel access logs (URL query strings get logged by default).
     const graphRes = await fetch(
@@ -171,7 +165,7 @@ async function processLead({ leadgenId, formId, accessToken, db, resend, fromEma
         const { error } = await db.from("marketing_leads").insert({
             email,
             company: company || null,
-            magnet_key: MAGNET_KEY,
+            magnet_key: MAGNET_KEY_FOR_META,
             source: "meta-lead-ad",
             utm_source: "meta",
             utm_medium: "lead-ad",
@@ -192,18 +186,19 @@ async function processLead({ leadgenId, formId, accessToken, db, resend, fromEma
 
     if (!isNew) return "duplicate";
 
-    // 3. Send the lead magnet.
-    const greeting = fullName ? `Hi ${fullName.split(" ")[0]},` : "Hi,";
-    const html = renderLeadMagnetEmail({ greeting, pdfUrl, company });
+    // 3. Deliver via the shared lead-magnet pipeline so we don't drift from
+    //    /api/leads (the website form path).
+    const magnet = getLeadMagnet(MAGNET_KEY_FOR_META);
+    if (!magnet) throw new Error(`magnet_not_configured: ${MAGNET_KEY_FOR_META}`);
 
-    const { error: sendErr } = await resend.emails.send({
-        from: fromEmail,
+    const firstName = fullName ? fullName.split(" ")[0] : undefined;
+    const result = await sendLeadMagnetEmail({
+        magnet,
         to: email,
-        replyTo: "andre@capturepilot.com",
-        subject: "Your Field Manual: Win Your First Government Contract",
-        html,
+        firstName,
+        company: company || undefined,
     });
-    if (sendErr) throw new Error(`resend: ${sendErr.message || String(sendErr)}`);
+    if (!result.sent) throw new Error(`resend: ${result.error || "unknown"}`);
 
     if (db) {
         await db
@@ -217,48 +212,4 @@ async function processLead({ leadgenId, formId, accessToken, db, resend, fromEma
     console.log("[leadgen-webhook] sent", { leadgenId, email, company, phone: phone ? "[set]" : "[empty]" });
 
     return "sent";
-}
-
-function renderLeadMagnetEmail({ greeting, pdfUrl, company }: { greeting: string; pdfUrl: string; company: string }) {
-    const intro = company
-        ? `Thanks for grabbing the field manual — I pulled it together so folks at companies like ${escapeHtml(company)} can skip the year of trial-and-error most first-time bidders go through.`
-        : `Thanks for grabbing the field manual — I pulled it together so first-time bidders can skip the year of trial-and-error most folks go through.`;
-
-    return `<!doctype html>
-<html><body style="margin:0;padding:0;background:#f5f5f4;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#1c1917;line-height:1.55;">
-<div style="max-width:560px;margin:24px auto;background:#fff;border-radius:16px;padding:32px;">
-  <p style="margin:0 0 16px;font-size:16px;">${greeting}</p>
-  <p style="margin:0 0 16px;font-size:15px;color:#44403c;">${intro}</p>
-  <p style="margin:0 0 24px;font-size:15px;color:#44403c;">Here&rsquo;s the PDF — 24 pages, no fluff:</p>
-  <p style="margin:0 0 24px;">
-    <a href="${pdfUrl}" style="display:inline-block;background:#059669;color:#fff;text-decoration:none;font-weight:700;padding:14px 22px;border-radius:10px;font-size:15px;">
-      Download the Field Manual
-    </a>
-  </p>
-  <p style="margin:0 0 8px;font-size:14px;font-weight:600;color:#1c1917;">What&rsquo;s inside:</p>
-  <ul style="margin:0 0 24px;padding-left:20px;font-size:14px;color:#44403c;">
-    <li style="margin:0 0 4px;">Bid / No-Bid Decision Matrix</li>
-    <li style="margin:0 0 4px;">PWin (Probability of Win) Calculator</li>
-    <li style="margin:0 0 4px;">RFP Response Framework</li>
-    <li style="margin:0;">Pricing-to-Win Worksheet</li>
-  </ul>
-  <p style="margin:0 0 8px;font-size:14px;color:#44403c;">
-    If you want me to walk through one of your live opportunities, hit reply &mdash; happy to take a look.
-  </p>
-  <p style="margin:24px 0 0;font-size:14px;color:#1c1917;">&mdash; Andre, CapturePilot</p>
-  <p style="margin:32px 0 0;padding-top:16px;border-top:1px solid #e7e5e4;font-size:11px;color:#a8a29e;">
-    You&rsquo;re getting this because you requested the field manual through our Facebook / Instagram ad.
-    Reply &ldquo;unsubscribe&rdquo; and I&rsquo;ll take you off the list.
-  </p>
-</div>
-</body></html>`;
-}
-
-function escapeHtml(s: string): string {
-    return s
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#39;");
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createHash } from "node:crypto";
+import { getLeadMagnet, sendLeadMagnetEmail } from "@/lib/lead-magnets";
 
 export const runtime = "nodejs";
 
@@ -42,6 +43,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const email = String(body.email ?? "").trim().toLowerCase();
     const company = body.company ? String(body.company).trim().slice(0, 200) : null;
+    const firstName = body.first_name ? String(body.first_name).trim().slice(0, 80) : null;
     const magnet = String(body.magnet ?? body.magnet_key ?? "").trim().slice(0, 80);
     const source = body.source ? String(body.source).slice(0, 200) : null;
 
@@ -75,13 +77,44 @@ export async function POST(req: NextRequest) {
         ip_hash, user_agent, referrer,
       }, { onConflict: "email,magnet_key" });
 
-    // 409 (already captured) is fine — caller still gets the download URL.
+    // 409 (already captured) is fine — we still re-send the email below so
+    // the caller can always promise "check your inbox" without lying.
     if (error && !String(error.message).includes("duplicate")) {
       console.error("[leads] insert failed", error);
       return NextResponse.json({ error: "insert failed" }, { status: 500, headers });
     }
 
-    return NextResponse.json({ ok: true }, { status: 200, headers });
+    // Resolve magnet and deliver the PDF. Unknown magnet keys still get the
+    // row written (for legacy forms with their own inline-download UX), they
+    // just don't get an email — caller controls UX from the API response.
+    const leadMagnet = getLeadMagnet(magnet);
+    let emailSent = false;
+    let emailError: string | undefined;
+    if (leadMagnet) {
+      const result = await sendLeadMagnetEmail({
+        magnet: leadMagnet,
+        to: email,
+        firstName: firstName || undefined,
+        company: company || undefined,
+      });
+      emailSent = result.sent;
+      emailError = result.error;
+      if (!result.sent) {
+        console.error("[leads] resend failed", { magnet, email, error: result.error });
+      } else {
+        await db()
+          .from("marketing_leads")
+          .update({ resend_synced: true })
+          .eq("email", email)
+          .eq("magnet_key", magnet);
+      }
+    }
+
+    return NextResponse.json({
+      ok: true,
+      email_sent: emailSent,
+      email_error: emailError,
+    }, { status: 200, headers });
   } catch (err) {
     console.error("[leads] handler error", err);
     return NextResponse.json({ error: "internal" }, { status: 500, headers });
