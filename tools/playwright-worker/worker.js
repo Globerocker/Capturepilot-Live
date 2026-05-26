@@ -76,34 +76,26 @@ const HANDLERS = [
             await page.goto(link, { waitUntil: "networkidle", timeout: 45_000 });
             // Give the SPA mount a moment after CF clears.
             await page.waitForTimeout(2500);
-            // Log what we ACTUALLY got so we can iterate selectors.
+            // Cloudflare-challenge detection — covers all observed variants:
+            //   - title="Just a moment..."
+            //   - title="Attention Required! | Cloudflare"
+            //   - tiny body (< 500 chars) with the hostname as h1 (CF's
+            //     no-script fallback page)
             const diag = await page.evaluate(() => ({
                 title: document.title || "",
                 bodyLen: (document.body?.innerText || "").length,
                 h1: document.querySelector("h1")?.innerText || "",
-                // Probe a wide net of candidate selectors so we can see
-                // which one Bonfire's actual template uses.
-                candidates: {
-                    "main": (document.querySelector("main")?.innerText || "").length,
-                    ".project-summary": (document.querySelector(".project-summary")?.innerText || "").length,
-                    "[role=main]": (document.querySelector("[role=main]")?.innerText || "").length,
-                    "article": (document.querySelector("article")?.innerText || "").length,
-                    "#root": (document.querySelector("#root")?.innerText || "").length,
-                    "#app": (document.querySelector("#app")?.innerText || "").length,
-                    ".content": (document.querySelector(".content")?.innerText || "").length,
-                },
+                hasCfHeader: !!document.querySelector("#cf-wrapper, .cf-error-code, [data-translate]"),
             }));
-            console.log(`    [diag] title="${diag.title}" body=${diag.bodyLen} h1="${diag.h1}" candidates=${JSON.stringify(diag.candidates)}`);
-            // Look for CF challenge marker — if present, scraping failed.
-            const cfBlocked = await page.evaluate(() =>
-                /just a moment|enable javascript and cookies/i.test(document.body?.innerText || "")
-            );
+            const titleCfMatch = /just a moment|attention required|cloudflare/i.test(diag.title);
+            const bodyTooSmall = diag.bodyLen < 600;
+            const cfBlocked = titleCfMatch || diag.hasCfHeader || bodyTooSmall;
+            console.log(`    [diag] title="${diag.title}" body=${diag.bodyLen} h1="${diag.h1}" cfBlocked=${cfBlocked}`);
             if (cfBlocked) {
-                console.log("    [diag] Cloudflare challenge page detected — scrape unavailable");
+                console.log("    [diag] Cloudflare challenge — scrape unavailable");
                 return null;
             }
-            // Grab whichever candidate has the most content (likely the
-            // bid body container).
+            // Grab whichever candidate has the most content.
             const text = await page.evaluate(() => {
                 const sels = ["main", ".project-summary", "[role=main]", "article", "#root", "#app", ".content", "body"];
                 let best = "";
@@ -115,7 +107,7 @@ const HANDLERS = [
                 }
                 return best.replace(/\s+/g, " ").trim();
             });
-            return text && text.length >= 200 ? text.slice(0, 6000) : null;
+            return text && text.length >= 400 ? text.slice(0, 6000) : null;
         },
     },
     {
