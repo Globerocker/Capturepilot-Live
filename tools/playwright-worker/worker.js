@@ -170,47 +170,39 @@ function pickHandler(link) {
     return HANDLERS.find((h) => h.match(host));
 }
 
-// Server-side filter for SPA host patterns. PostgREST `or` with multiple
-// link.ilike clauses cuts ~50x the rows we'd otherwise pull-and-discard.
-// Patterns mirror SPA_HOST_PATTERNS above; we use ilike with % wildcards
-// because PostgREST regex requires a server-side function we don't have.
-const LINK_ILIKE_OR = [
-    "link.ilike.%.bonfirehub.com/%",
-    "link.ilike.%procurement.opengov.com/%",
-    "link.ilike.%.opengov.com/%",
-    "link.ilike.%txsmartbuy.gov/%",
-    "link.ilike.%evp.nc.gov/%",
-    "link.ilike.%emma.maryland.gov/%",
-    "link.ilike.%.cleveland.gov/%",
-    "link.ilike.%.clevelandohio.gov/%",
-    "link.ilike.%sigma.michigan.gov/%",
-    "link.ilike.%caleprocure.ca.gov/%",
-].join(",");
+// Host patterns the worker is willing to scrape, used by both the SQL
+// function for filtering and pickHandler() for routing. ilike-friendly
+// (PostgREST ANY/UNNEST on text[]). Bonfire detail is CF-walled but
+// queued anyway — Chromium handles the challenge inline.
+const SPA_LINK_ILIKE_PATTERNS = [
+    "%.bonfirehub.com/%",
+    "%procurement.opengov.com/%",
+    "%.opengov.com/%",
+    "%txsmartbuy.gov/%",
+    "%evp.nc.gov/%",
+    "%emma.maryland.gov/%",
+    "%.cleveland.gov/%",
+    "%.clevelandohio.gov/%",
+    "%sigma.michigan.gov/%",
+    "%caleprocure.ca.gov/%",
+];
 
 async function fetchBatch() {
-    // Pull candidate rows — SLED, link on a known-SPA host, description short,
-    // ordered by last_crawled_at ASC so we cycle fairly. Two `or` filters
-    // (PostgREST AND-combines successive or() calls).
-    const { data, error } = await sb
-        .from("opportunities")
-        .select("id, title, link, description")
-        .eq("source", "sled")
-        .eq("is_archived", false)
-        .not("link", "is", null)
-        .neq("link", "")
-        .or("description.is.null,description.eq.")
-        .or(LINK_ILIKE_OR)
-        .order("last_crawled_at", { ascending: true, nullsFirst: true })
-        .limit(BATCH_SIZE);
+    // Calls a Postgres function (migration 085) that filters by char_length
+    // on the description column — something PostgREST can't express
+    // directly. Previously we filtered "description is null or empty" which
+    // missed the 800+ Bonfire rows with stub descriptions like
+    // "Department: Procurement" (technically non-empty, useless content).
+    const { data, error } = await sb.rpc("get_sled_rows_needing_enrichment", {
+        host_patterns: SPA_LINK_ILIKE_PATTERNS,
+        max_desc_len: 500,
+        batch_size: BATCH_SIZE,
+    });
     if (error) {
         console.error("[worker] fetch err:", error.message);
         return [];
     }
-    // Belt-and-suspenders — JS-side host check too, since the ilike
-    // patterns can match substrings inside query params in pathological
-    // cases.
-    const rows = (data || []).filter((r) => pickHandler(r.link));
-    return rows.slice(0, BATCH_SIZE);
+    return (data || []).filter((r) => pickHandler(r.link));
 }
 
 // Single-tick worker: launch a fresh Chromium per batch, do the work, kill
