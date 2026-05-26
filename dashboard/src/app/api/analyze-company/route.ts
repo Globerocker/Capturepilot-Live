@@ -265,12 +265,27 @@ YOUR TASK:
 3. Optionally add 1-2 secondary codes ONLY if the company clearly operates multiple distinct lines of business.
 4. For each code, assign a confidence between 0.0 and 1.0 based on how directly the website evidence supports it, and write a one-sentence reason citing specific text from the page.
 
+THE #1 MISTAKE TO AVOID — "WHAT YOU DO" vs "WHO YOU SERVE":
+Classify the company's OWN service, not the industry of its customers. A recruiting firm
+that places talent at logistics companies is in EXECUTIVE SEARCH (561312), NOT freight
+transportation. A law firm representing hospitals is in LEGAL SERVICES (541110), NOT
+healthcare. An IT consultant serving banks is in IT CONSULTING (541512), NOT finance.
+
+When the page says "We help [industry X] companies do [verb Y]", the company sells [Y],
+not [X]. Phrasing patterns that signal this:
+  - "We help / We serve / We work with [industry]" → company is in the SERVICE, not the industry
+  - "Trusted by [industry] leaders" → company is in the SERVICE, not the industry
+  - "Specializing in [industry] [recruiting / consulting / law / marketing / SaaS]" →
+    code the noun (recruiting/consulting/etc), not the adjective.
+
 CRITICAL ANTI-HALLUCINATION RULES:
 - Be CONSERVATIVE. Returning 1 highly accurate code is better than returning 3 mediocre ones.
 - Do NOT pick adjacent or tangential codes. Examples of mistakes to avoid:
   * "Janitorial Services" company → DO NOT also return "Carpet & Upholstery Cleaning" (561740) or "Drycleaning" (812320). Carpets are part of janitorial work.
   * "Cleaning warehouses" mentioned → does NOT mean the company is in "Warehousing & Storage" (493110). It means they CLEAN warehouses (still janitorial 561720).
   * "Construction company" → DO NOT return "Engineering Services" or "Management Consulting" unless they explicitly do those.
+  * "Executive search firm specializing in supply chain and logistics" → 561312 Executive Search, NOT 488510 Freight Transportation Arrangement.
+  * "Boutique HR consultancy serving healthcare clients" → 541612 HR Consulting, NOT 621111 Offices of Physicians.
 - A confidence of 0.95 means: "the website explicitly says this is what they do, multiple times".
 - A confidence of 0.70 means: "this is implied but not explicit".
 - If you only have one strong signal, return ONE code. Don't pad the list.

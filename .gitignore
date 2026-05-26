@@ -17,3 +17,4 @@ __pycache__/
 *.pyc
 *.tsbuildinfo
 .tsc-precommit.tsbuildinfo
+.claude/scheduled_tasks.lock
