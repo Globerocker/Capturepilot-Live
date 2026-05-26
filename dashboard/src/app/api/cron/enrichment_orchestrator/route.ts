@@ -64,11 +64,13 @@ function tasksDueAt(d: Date): TaskName[] {
   if (m === 0 && h % 4 === 0) due.push("deep_enrich");
   // 30 6 * * *
   if (h === 6 && m === 30) due.push("enrich_contractors_usaspending");
-  // 5,25,45 * * * *  → every 20 min between the heavier tasks. 60-row batches,
-  // 35-45s each. Quick enough to fit the orchestrator window; over a 24h cycle
-  // it scans ~4,300 rows / day, more than enough to keep up with new SLED
-  // ingest + cycle back through the 1,300 rows that have <200-char descriptions.
-  if (m === 5 || m === 25 || m === 45) due.push("enrich_sled_descriptions");
+  // Run at minutes 10 and 40 — these align with the orchestrator's own
+  // vercel.json schedule (0,10,15,30,40). Picking the slots already used by
+  // bulk_enrich_descriptions (10,40) but for SLED — they're independent
+  // pipelines hitting different rows. ~3000 rows scanned/day at 60-row
+  // batches, enough to chew through the 1,100-row gap in ~3 days then
+  // settle into maintenance keeping up with new ingest.
+  if (m === 10 || m === 40) due.push("enrich_sled_descriptions");
 
   return due;
 }
