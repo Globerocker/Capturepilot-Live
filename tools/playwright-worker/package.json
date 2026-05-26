@@ -1,0 +1,18 @@
+{
+  "name": "capturepilot-playwright-worker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Headless-Chromium worker for SLED opportunity descriptions on SPA portals (Bonfire, OpenGov, TX SmartBuy, Cleveland, etc) that Vercel serverless can't crawl.",
+  "type": "module",
+  "scripts": {
+    "start": "node --enable-source-maps worker.js",
+    "dev": "node --enable-source-maps --watch worker.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "playwright": "^1.48.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

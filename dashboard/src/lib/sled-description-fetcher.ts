@@ -327,6 +327,21 @@ export async function fetchSledDescription(args: {
     // per-bid page sits behind a vendor login.
     if (urlIsObviousListingPage(link)) return null;
 
+    // Oregon BIDS / Illinois BidBuy / similar BSO portals serve real detail
+    // pages at /bso/external/bidDetail.sdo?docId=… — we get the full Header
+    // Information block (Bid Number, Description, Bid Opening Date, Purchaser,
+    // etc) on a single anonymous GET. Probed 2026-05-26.
+    if (/bidDetail\.sdo\?docId=/i.test(link)) {
+        const text = await fetchHtmlDescription(link);
+        // BSO chrome opens with "You already have an unfinished Quote..."
+        // when logged out — that's a curated header, NOT a login wall, so
+        // it passes the existing filters and the title-match check finds
+        // the description string. Skip the title-guard explicitly since
+        // BSO formats titles ("Bid No. NNN — title") that don't always
+        // share anchors with the row.title we hold.
+        if (text) return { description: text, source: "html-generic" };
+    }
+
     // Default: server-rendered HTML strip.
     const text = await fetchHtmlDescription(link);
     if (!text) return null;
