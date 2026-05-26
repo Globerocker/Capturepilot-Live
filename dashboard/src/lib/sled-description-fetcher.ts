@@ -165,35 +165,66 @@ async function fetchBonfireDescription(
     }
 }
 
-// Pick "significant words" from a title — anything 5+ chars, excluding
-// stopwords. Used to verify the scrape we just got actually belongs to
-// this opportunity (not the portal's index page rendered for every URL).
+// Pick "significant words" from a title — 6+ chars, excluding procurement
+// stopwords. Used to verify the scrape actually belongs to THIS opportunity
+// (not the portal's listing-index page rendered identically for every URL).
 function titleAnchors(title: string): string[] {
+    // Expanded stopwords — anything that recurs across nearly every portal
+    // landing page would otherwise let an index-shell pass the guard.
     const stop = new Set([
         "the", "and", "for", "with", "from", "this", "that", "these", "those",
         "rfp", "rfq", "ifb", "rfi", "bid", "bids", "contract", "services",
-        "service", "project", "request", "proposal", "proposals", "invitation",
-        "invitations", "purchase", "purchasing", "department",
+        "service", "project", "projects", "request", "proposal", "proposals",
+        "invitation", "invitations", "purchase", "purchasing", "purchases",
+        "department", "departments", "opportunity", "opportunities",
+        "current", "open", "active", "public", "vendor", "vendors", "supplier",
+        "suppliers", "solicitation", "solicitations", "procurement", "details",
+        "view", "list", "listing", "page", "online", "company", "corporation",
     ]);
     return title
         .toLowerCase()
         .replace(/[^a-z0-9\s-]/g, " ")
         .split(/\s+/)
-        .filter(w => w.length >= 5 && !stop.has(w))
-        .slice(0, 6);
+        .filter(w => w.length >= 6 && !stop.has(w))
+        .slice(0, 8);
 }
 
-function scrapeMentionsTitle(text: string, title: string): boolean {
+// URL-shape check: detail pages usually carry an ID in the path or query
+// (numeric, UUID, hex-32, slug w/ digits). Pure index URLs have none.
+function urlLooksLikeDetail(url: string): boolean {
+    try {
+        const u = new URL(url);
+        const path = u.pathname + u.search;
+        // ID-looking patterns: a docId / project_id / bid_id query param,
+        // OR a path segment that's mostly digits / a UUID / a hex blob.
+        return (
+            /[?&](docid|projectid|project_id|bidid|bid_id|opportunityid|id|noticeid|notice_id)=/i.test(path) ||
+            /\/[0-9]{4,}(?:[/?-]|$)/.test(path) ||
+            /\/[0-9a-f]{8,}-[0-9a-f]/i.test(path) ||
+            /\/[0-9a-f]{16,}/i.test(path)
+        );
+    } catch {
+        return false;
+    }
+}
+
+function scrapeMentionsTitle(text: string, title: string, url: string): boolean {
     const anchors = titleAnchors(title);
     if (anchors.length === 0) return true; // can't verify → don't reject
     const lc = text.toLowerCase();
     let hits = 0;
     for (const a of anchors) {
         if (lc.includes(a)) hits++;
-        if (hits >= 2) return true;
     }
-    // For very short anchor lists, 1 hit is enough.
-    return anchors.length <= 2 && hits >= 1;
+    // Require 50%+ of distinctive anchors when URL looks like an index
+    // (no ID), 30%+ when URL looks like a real detail page. Floor at 2
+    // hits for non-trivial titles.
+    const isDetailUrl = urlLooksLikeDetail(url);
+    const ratio = hits / anchors.length;
+    if (isDetailUrl) {
+        return hits >= 1 && ratio >= 0.3;
+    }
+    return hits >= 2 && ratio >= 0.5;
 }
 
 /**
@@ -251,6 +282,6 @@ export async function fetchSledDescription(args: {
     // Title-mention sanity check: if the scrape doesn't mention any
     // significant title word, we probably hit a portal index/listing page
     // (SPA serving the same shell for every URL — Cleveland, etc).
-    if (title && !scrapeMentionsTitle(text, title)) return null;
+    if (title && !scrapeMentionsTitle(text, title, link)) return null;
     return { description: text, source: "html-generic" };
 }
