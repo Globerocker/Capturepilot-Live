@@ -170,10 +170,27 @@ function pickHandler(link) {
     return HANDLERS.find((h) => h.match(host));
 }
 
+// Server-side filter for SPA host patterns. PostgREST `or` with multiple
+// link.ilike clauses cuts ~50x the rows we'd otherwise pull-and-discard.
+// Patterns mirror SPA_HOST_PATTERNS above; we use ilike with % wildcards
+// because PostgREST regex requires a server-side function we don't have.
+const LINK_ILIKE_OR = [
+    "link.ilike.%.bonfirehub.com/%",
+    "link.ilike.%procurement.opengov.com/%",
+    "link.ilike.%.opengov.com/%",
+    "link.ilike.%txsmartbuy.gov/%",
+    "link.ilike.%evp.nc.gov/%",
+    "link.ilike.%emma.maryland.gov/%",
+    "link.ilike.%.cleveland.gov/%",
+    "link.ilike.%.clevelandohio.gov/%",
+    "link.ilike.%sigma.michigan.gov/%",
+    "link.ilike.%caleprocure.ca.gov/%",
+].join(",");
+
 async function fetchBatch() {
-    // Pull candidate rows — SLED, link present, description short, ordered by
-    // last_crawled_at ASC so we cycle fairly. Pull more than BATCH_SIZE since
-    // many will be filtered out by SPA_HOST_PATTERNS.
+    // Pull candidate rows — SLED, link on a known-SPA host, description short,
+    // ordered by last_crawled_at ASC so we cycle fairly. Two `or` filters
+    // (PostgREST AND-combines successive or() calls).
     const { data, error } = await sb
         .from("opportunities")
         .select("id, title, link, description")
@@ -182,12 +199,16 @@ async function fetchBatch() {
         .not("link", "is", null)
         .neq("link", "")
         .or("description.is.null,description.eq.")
+        .or(LINK_ILIKE_OR)
         .order("last_crawled_at", { ascending: true, nullsFirst: true })
-        .limit(BATCH_SIZE * 4);
+        .limit(BATCH_SIZE);
     if (error) {
         console.error("[worker] fetch err:", error.message);
         return [];
     }
+    // Belt-and-suspenders — JS-side host check too, since the ilike
+    // patterns can match substrings inside query params in pathological
+    // cases.
     const rows = (data || []).filter((r) => pickHandler(r.link));
     return rows.slice(0, BATCH_SIZE);
 }
