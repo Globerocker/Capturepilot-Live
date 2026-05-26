@@ -1,7 +1,7 @@
 # Playwright ships its own runtime image with Chromium + all required
 # system libs preinstalled. Pinned to the same Playwright version as
 # package.json so the binary matches the API.
-FROM mcr.microsoft.com/playwright:v1.48.0-jammy
+FROM mcr.microsoft.com/playwright:v1.60.0-jammy
 
 WORKDIR /app
 
