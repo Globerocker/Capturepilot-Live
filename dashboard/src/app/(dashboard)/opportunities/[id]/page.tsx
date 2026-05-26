@@ -13,6 +13,7 @@ import OpportunityAttachments from "@/components/OpportunityAttachments";
 import StructuredRequirements from "@/components/StructuredRequirements";
 import { MarketIntelligence } from "@/components/MarketIntelligence";
 import { HistoricalWinners } from "@/components/HistoricalWinners";
+import { RelatedContractorsPanel } from "@/components/RelatedContractorsPanel";
 import ComplianceMatrixPanel from "@/components/opportunity/ComplianceMatrixPanel";
 import CapabilityMatrixPanel from "@/components/opportunity/CapabilityMatrixPanel";
 import VoiceBriefButton from "@/components/opportunity/VoiceBriefButton";
@@ -816,6 +817,15 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                     {opp.naics_code && (
                         <MarketIntelligence naicsCodes={[opp.naics_code]} companyName={opp.incumbent_contractor_name || undefined} />
                     )}
+
+                    {/* Related Contractors — works for every opp regardless of NAICS.
+                        For federal opps it complements MarketIntelligence; for SLED
+                        opps without NAICS it's the only market-intel signal. */}
+                    <RelatedContractorsPanel
+                        naics={opp.naics_code}
+                        state={opp.place_of_performance_state}
+                        keywords={Array.isArray(opp.extracted_keywords) ? opp.extracted_keywords : null}
+                    />
 
                 </div>
 
