@@ -30,7 +30,11 @@ export const runtime = "nodejs";
 // every downloaded PDF send recipients into an internal preview deployment.
 const LAUNCH_KIT_URL = "https://app.capturepilot.com/startup-pack";
 const STRATEGY_CALL_URL = "https://calendly.com/capturepilot/strategy-call";
-const LOGO_URL = "https://app.capturepilot.com/logo.png";
+// LOGO_URL was https://app.capturepilot.com/logo.png — fetching it back to the
+// same lambda's own deployment hostname intermittently returns "fetch failed"
+// in production (self-fetch quirk inside Vercel's runtime). Set to empty so
+// react-pdf falls through to the text-only header fallback at PageHeader().
+const LOGO_URL = "";
 
 async function isAdminSession(): Promise<boolean> {
     try {
