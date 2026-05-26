@@ -44,7 +44,10 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
     process.exit(1);
 }
 
-const BATCH_SIZE = Number(process.env.WORKER_BATCH_SIZE || 8);
+// Smaller default batch because Chromium memory accumulates fast on Railway's
+// 1 GB / Fly's 512 MB trial tiers. Bump WORKER_BATCH_SIZE in env once we know
+// the plan can take it.
+const BATCH_SIZE = Number(process.env.WORKER_BATCH_SIZE || 3);
 const POLL_MS = Number(process.env.WORKER_POLL_INTERVAL_MS || 60_000);
 const UA = process.env.WORKER_USER_AGENT
     || "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
@@ -180,88 +183,133 @@ async function fetchBatch() {
     return rows.slice(0, BATCH_SIZE);
 }
 
-async function tick(browser) {
+// Single-tick worker: launch a fresh Chromium per batch, do the work, kill
+// it. Burns ~2s extra per batch on cold-start but avoids the slow memory
+// leak that comes from keeping a single browser running for hours of
+// navigations. On Railway's 1 GB tier this is the difference between
+// "stays up indefinitely" and "OOM-crashes every ~5 min".
+async function tick() {
     const rows = await fetchBatch();
     if (rows.length === 0) {
         console.log("[worker] nothing to do");
         return;
     }
-    console.log(`[worker] batch of ${rows.length} rows`);
+    console.log(`[worker] batch of ${rows.length} rows — launching Chromium`);
 
-    const context = await browser.newContext({
-        userAgent: UA,
-        viewport: { width: 1280, height: 800 },
-        // Persist cookies in-memory so CF challenges resolve once per batch.
-    });
-
+    let browser;
     let enriched = 0;
     let failed = 0;
-    for (const row of rows) {
-        const handler = pickHandler(row.link);
-        const page = await context.newPage();
-        try {
-            const text = await handler.fetch(page, row.link);
-            if (text && text.length >= 200) {
-                const { error: upErr } = await sb
-                    .from("opportunities")
-                    .update({ description: text, last_crawled_at: new Date().toISOString() })
-                    .eq("id", row.id);
-                if (upErr) {
-                    console.warn(`[worker] update fail ${row.id}: ${upErr.message}`);
-                    failed++;
-                } else {
-                    enriched++;
-                    console.log(`  ✓ ${handler.name}: ${(row.title || "").slice(0, 60)} (+${text.length} chars)`);
-                }
-            } else {
+    try {
+        browser = await chromium.launch({
+            headless: true,
+            args: [
+                "--no-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-gpu",
+                "--disable-extensions",
+                "--disable-default-apps",
+                "--disable-sync",
+                "--no-first-run",
+                "--no-zygote",
+                "--single-process",   // Railway's containers don't like multi-process Chromium
+                "--disable-background-networking",
+            ],
+        });
+        const context = await browser.newContext({
+            userAgent: UA,
+            viewport: { width: 1280, height: 800 },
+            // Block heavy resources — we only need DOM text, not pixels.
+            // Saves ~70% of bandwidth + memory per page load.
+            javaScriptEnabled: true,
+        });
+        // Route-level filter — skip images, fonts, media, stylesheets. The
+        // bid text we want is in the DOM regardless.
+        await context.route("**/*", (route) => {
+            const t = route.request().resourceType();
+            if (t === "image" || t === "font" || t === "media" || t === "stylesheet") {
+                return route.abort();
+            }
+            return route.continue();
+        });
+
+        for (const row of rows) {
+            const handler = pickHandler(row.link);
+            if (!handler) {
                 failed++;
+                continue;
+            }
+            const page = await context.newPage();
+            try {
+                console.log(`  → ${handler.name}: ${(row.title || "").slice(0, 50)} (${row.link.slice(0, 60)})`);
+                const text = await handler.fetch(page, row.link);
+                if (text && text.length >= 200) {
+                    const { error: upErr } = await sb
+                        .from("opportunities")
+                        .update({ description: text, last_crawled_at: new Date().toISOString() })
+                        .eq("id", row.id);
+                    if (upErr) {
+                        console.warn(`    ✗ update err: ${upErr.message}`);
+                        failed++;
+                    } else {
+                        enriched++;
+                        console.log(`    ✓ +${text.length} chars`);
+                    }
+                } else {
+                    failed++;
+                    console.log(`    ✗ no body (got ${text ? text.length : 0} chars)`);
+                    await sb
+                        .from("opportunities")
+                        .update({ last_crawled_at: new Date().toISOString() })
+                        .eq("id", row.id);
+                }
+            } catch (e) {
+                failed++;
+                console.warn(`    ✗ ${(e && e.message) || e}`);
                 await sb
                     .from("opportunities")
                     .update({ last_crawled_at: new Date().toISOString() })
                     .eq("id", row.id);
+            } finally {
+                await page.close().catch(() => undefined);
             }
-        } catch (e) {
-            failed++;
-            console.warn(`  ✗ ${handler.name}: ${(row.title || "").slice(0, 40)} → ${e.message || e}`);
-            await sb
-                .from("opportunities")
-                .update({ last_crawled_at: new Date().toISOString() })
-                .eq("id", row.id);
-        } finally {
-            await page.close().catch(() => undefined);
+            await new Promise((r) => setTimeout(r, 1500));
         }
-        // Be polite — 1-2s between hits to the same portal (each new page
-        // launches inside the same context).
-        await new Promise((r) => setTimeout(r, 1500));
+        await context.close().catch(() => undefined);
+    } catch (e) {
+        console.error(`[worker] batch error: ${(e && e.message) || e}`);
+    } finally {
+        if (browser) await browser.close().catch(() => undefined);
     }
-    await context.close();
     console.log(`[worker] batch done: ${enriched} enriched, ${failed} failed`);
 }
 
 async function main() {
-    console.log("[worker] starting Playwright worker");
-    const browser = await chromium.launch({
-        headless: true,
-        args: ["--no-sandbox", "--disable-dev-shm-usage"],
+    console.log(`[worker] starting Playwright worker (batch_size=${BATCH_SIZE}, poll=${POLL_MS}ms)`);
+    let stopping = false;
+    process.on("SIGTERM", () => {
+        console.log("[worker] SIGTERM received — finishing current batch then exiting");
+        stopping = true;
     });
-    process.on("SIGTERM", async () => {
-        console.log("[worker] SIGTERM — shutting down");
-        await browser.close().catch(() => undefined);
-        process.exit(0);
+    process.on("uncaughtException", (e) => {
+        console.error(`[worker] uncaughtException: ${e?.message || e}`);
+    });
+    process.on("unhandledRejection", (reason) => {
+        console.error(`[worker] unhandledRejection: ${reason?.message || reason}`);
     });
 
-    // Eternal loop — Railway / Fly will restart on crash.
-    while (true) {
+    while (!stopping) {
         const started = Date.now();
         try {
-            await tick(browser);
+            await tick();
         } catch (e) {
-            console.error("[worker] tick error:", e?.message || e);
+            console.error(`[worker] tick error: ${(e && e.message) || e}`);
         }
+        if (stopping) break;
         const elapsed = Date.now() - started;
         const sleep = Math.max(0, POLL_MS - elapsed);
         if (sleep > 0) await new Promise((r) => setTimeout(r, sleep));
     }
+    console.log("[worker] exiting cleanly");
 }
 
 main().catch((e) => {
