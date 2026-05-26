@@ -44,20 +44,63 @@ function htmlToText(html: string): string {
 // Sniff for the obvious "this is a login wall / robot challenge" pages so we
 // don't save a 5KB blob of "Enable JavaScript and cookies to continue".
 function looksLikeBlocked(text: string): boolean {
-    const head = text.slice(0, 500).toLowerCase();
+    const head = text.slice(0, 800).toLowerCase();
     return (
         head.includes("enable javascript and cookies") ||
         head.includes("checking your browser") ||
         head.includes("cf-error") ||
         head.includes("please sign in") ||
+        head.includes("please log in") ||
         head.includes("login is required") ||
-        head.includes("access denied")
+        head.includes("access denied") ||
+        head.includes("session has expired") ||
+        // Detect login-wall chrome where the page renders a header + login
+        // form but no real body. Multiple of these signals together = chrome.
+        ((head.match(/log\s*in/g) || []).length >= 2 && head.includes("register")) ||
+        // Bidexpress / ProcureWare / DemandStar — common nav-only renders
+        // where the first 500 chars are timezone selectors or month-pickers.
+        head.includes("international date line west") ||
+        head.includes("coordinated universal time") ||
+        head.includes("aleutian islands")
     );
+}
+
+// Score how "boilerplate" the captured text looks — anything > 0.4 is mostly
+// navigation chrome, not real bid scope. Cheap heuristic: ratio of "stop-word
+// nav phrases" to total length.
+function chromeScore(text: string): number {
+    const sample = text.slice(0, 2000).toLowerCase();
+    const navPhrases = [
+        "log in", "sign in", "register", "home", "about", "contact",
+        "skip to", "main content", "menu", "search", "language",
+        "vendor portal", "supplier portal", "bid portal",
+        "privacy policy", "terms of service", "cookies",
+    ];
+    let hits = 0;
+    for (const p of navPhrases) {
+        const matches = sample.match(new RegExp(p, "g"));
+        if (matches) hits += matches.length;
+    }
+    return hits / Math.max(sample.length / 100, 1);
+}
+
+// Pull <meta name="description"> / <meta property="og:description"> — these
+// are portal-curated summaries and usually beat a body-strip for quality.
+function extractMetaDescription(html: string): string | null {
+    for (const re of [
+        /<meta\s+name=["']description["']\s+content=["']([^"']+)/i,
+        /<meta\s+property=["']og:description["']\s+content=["']([^"']+)/i,
+        /<meta\s+name=["']twitter:description["']\s+content=["']([^"']+)/i,
+    ]) {
+        const m = re.exec(html);
+        if (m && m[1] && m[1].length >= 80) return m[1].trim();
+    }
+    return null;
 }
 
 // Generic HTML fetcher — server-rendered portals that ship the bid body
 // in the initial HTML. Returns null for SPAs (tiny <body> + JS bundles)
-// and bot-blocked responses.
+// and bot-blocked responses. Prefers <meta description> when curated.
 async function fetchHtmlDescription(url: string): Promise<string | null> {
     try {
         const res = await fetch(url, {
@@ -67,10 +110,21 @@ async function fetchHtmlDescription(url: string): Promise<string | null> {
         });
         if (!res.ok) return null;
         const html = await res.text();
-        if (html.length < 1500) return null; // SPA shells are usually < 2KB
+        if (html.length < 1500) return null;
+
+        // First try the curated <meta> description — beats body-strip for
+        // portals that emit a real summary in head (most state government
+        // CMSs do this).
+        const meta = extractMetaDescription(html);
+        if (meta) return meta.slice(0, 4000);
+
         const text = htmlToText(html);
         if (text.length < 200) return null;
         if (looksLikeBlocked(text)) return null;
+        // Reject heavy navigation/chrome — without this filter the crawler
+        // saves "Login Register Skip to main content..." for every login-
+        // walled portal (ProcureWare, BidExpress, DemandStar, etc).
+        if (chromeScore(text) > 0.35) return null;
         return text.slice(0, 4000);
     } catch {
         return null;
