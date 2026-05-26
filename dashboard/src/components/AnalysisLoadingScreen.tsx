@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import clsx from "clsx";
+import { PublicStat } from "@/components/LiveCounter";
 import {
     Globe, Database, Target, Search, Users, Sparkles, CheckCircle2, Loader2,
     Clock,
@@ -232,6 +233,40 @@ export default function AnalysisLoadingScreen({ companyName, status }: Props) {
                             );
                         })}
                     </ol>
+                </div>
+
+                {/* Live data ticker — shows the scale of the engine running behind
+                    this analysis. Updates in real time from /api/public/stats. */}
+                <div className="bg-gradient-to-r from-emerald-50 via-white to-blue-50 border border-emerald-100 rounded-2xl px-5 py-4 mb-5">
+                    <div className="flex items-center justify-between gap-3 mb-2">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-700">
+                            Scoring against
+                        </p>
+                        <span className="inline-flex items-center gap-1 text-[10px] text-stone-500">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            Live
+                        </span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-3 text-center">
+                        <div>
+                            <p className="text-xl sm:text-2xl font-black text-stone-900">
+                                <PublicStat statKey="federal_opps" />
+                            </p>
+                            <p className="text-[10px] text-stone-500 uppercase tracking-widest mt-0.5">Federal opps</p>
+                        </div>
+                        <div>
+                            <p className="text-xl sm:text-2xl font-black text-stone-900">
+                                <PublicStat statKey="sled_opps" />
+                            </p>
+                            <p className="text-[10px] text-stone-500 uppercase tracking-widest mt-0.5">State / Local</p>
+                        </div>
+                        <div>
+                            <p className="text-xl sm:text-2xl font-black text-stone-900">
+                                <PublicStat statKey="contractors_tracked" />
+                            </p>
+                            <p className="text-[10px] text-stone-500 uppercase tracking-widest mt-0.5">Contractors</p>
+                        </div>
+                    </div>
                 </div>
 
                 {/* Reassurance microcopy */}
