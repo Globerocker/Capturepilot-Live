@@ -23,9 +23,24 @@ interface Props {
     initialPrimaryKeywords: string[];
     initialNaicsCodes: NaicsItem[];
     initialTargetStates: string[];
+    initialSamRegistered: boolean;
+    initialYearFounded: number | null;
+    initialSbaCertifications: string[];
+    initialPastAwardsCount: number;
     onClose: () => void;
     onSaved: () => void;
 }
+
+const CERT_OPTIONS = [
+    "8(a)",
+    "HUBZone",
+    "WOSB",
+    "EDWOSB",
+    "VOSB",
+    "SDVOSB",
+    "SDB",
+    "MBE",
+];
 
 // Full-profile editor invoked from the "Edit Info & Re-Match" button at the top
 // of the result page. Lets the operator correct name + state + keywords + NAICS
@@ -38,6 +53,10 @@ export default function ProfileEditModal({
     initialPrimaryKeywords,
     initialNaicsCodes,
     initialTargetStates,
+    initialSamRegistered,
+    initialYearFounded,
+    initialSbaCertifications,
+    initialPastAwardsCount,
     onClose,
     onSaved,
 }: Props) {
@@ -45,10 +64,23 @@ export default function ProfileEditModal({
     const [state, setState] = useState(initialState || "");
     const [keywordsText, setKeywordsText] = useState(initialPrimaryKeywords.join(", "));
     const [selectedNaics, setSelectedNaics] = useState<NaicsItem[]>(initialNaicsCodes);
-    const [targetStates, setTargetStates] = useState<string[]>(initialTargetStates);
+    const [targetStates, setTargetStates] = useState<string[]>(
+        // Auto-broaden when the row has no target states yet, so a save with
+        // unmodified geo doesn't accidentally drop every match via scoreGeo's
+        // "no overlap" branch.
+        initialTargetStates.length > 0 ? initialTargetStates : US_STATES.slice(0, 50),
+    );
+    const [samRegistered, setSamRegistered] = useState(initialSamRegistered);
+    const [yearFounded, setYearFounded] = useState<string>(initialYearFounded ? String(initialYearFounded) : "");
+    const [sbaCerts, setSbaCerts] = useState<string[]>(initialSbaCertifications);
+    const [pastAwardsCount, setPastAwardsCount] = useState<string>(String(initialPastAwardsCount || 0));
     const [naicsQuery, setNaicsQuery] = useState("");
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState("");
+
+    const toggleCert = (cert: string) => {
+        setSbaCerts(prev => prev.includes(cert) ? prev.filter(c => c !== cert) : [...prev, cert]);
+    };
 
     useEffect(() => {
         const onKey = (e: KeyboardEvent) => {
@@ -110,6 +142,8 @@ export default function ProfileEditModal({
                 .split(/[,;\n]/)
                 .map(k => k.trim())
                 .filter(k => k.length >= 2);
+            const yearFoundedNum = yearFounded.trim() ? parseInt(yearFounded.trim(), 10) : null;
+            const pastAwardsNum = pastAwardsCount.trim() ? Math.max(0, parseInt(pastAwardsCount.trim(), 10) || 0) : 0;
             const res = await fetch("/api/analyze-company/rescore", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -121,6 +155,10 @@ export default function ProfileEditModal({
                         state: state || null,
                         primary_keywords: keywords,
                         target_states: targetStates,
+                        sam_registered: samRegistered,
+                        year_founded: yearFoundedNum && yearFoundedNum > 1800 ? yearFoundedNum : null,
+                        sba_certifications: sbaCerts,
+                        past_awards_count: pastAwardsNum,
                     },
                 }),
             });
@@ -163,6 +201,7 @@ export default function ProfileEditModal({
                         type="button"
                         onClick={() => !submitting && onClose()}
                         disabled={submitting}
+                        aria-label="Close edit dialog"
                         className="text-stone-400 hover:text-stone-700 transition disabled:opacity-30"
                     >
                         <X className="w-5 h-5" />
@@ -190,6 +229,7 @@ export default function ProfileEditModal({
                             Home state
                         </label>
                         <select
+                            aria-label="Home state"
                             value={state}
                             onChange={(e) => setState(e.target.value)}
                             className="w-full px-3 py-2 text-sm border border-stone-200 rounded-xl bg-white focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
@@ -216,6 +256,111 @@ export default function ProfileEditModal({
                         </p>
                     </div>
 
+                    {/* Readiness-score fields — these feed computeReadinessScore so the
+                        readiness rating on the page reflects what the operator confirms. */}
+                    <div className="bg-emerald-50/50 border border-emerald-100 rounded-2xl p-4 space-y-4">
+                        <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-md bg-emerald-100 border border-emerald-200 flex items-center justify-center">
+                                <Target className="w-3.5 h-3.5 text-emerald-700" />
+                            </div>
+                            <h3 className="font-bold text-sm text-emerald-900">Readiness factors</h3>
+                            <span className="text-[10px] text-emerald-700/70">drive the readiness score on the page</span>
+                        </div>
+
+                        {/* SAM registered + year founded + past awards in one row */}
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div>
+                                <label className="text-[10px] uppercase tracking-widest font-bold text-stone-500 mb-1.5 block">
+                                    SAM.gov registered
+                                </label>
+                                <div className="flex gap-1.5">
+                                    <button
+                                        type="button"
+                                        onClick={() => setSamRegistered(true)}
+                                        className={clsx(
+                                            "flex-1 text-xs font-bold px-3 py-1.5 rounded-lg border transition",
+                                            samRegistered
+                                                ? "bg-emerald-600 text-white border-emerald-600"
+                                                : "bg-white text-stone-500 border-stone-200 hover:border-emerald-300",
+                                        )}
+                                    >
+                                        Yes
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setSamRegistered(false)}
+                                        className={clsx(
+                                            "flex-1 text-xs font-bold px-3 py-1.5 rounded-lg border transition",
+                                            !samRegistered
+                                                ? "bg-stone-900 text-white border-stone-900"
+                                                : "bg-white text-stone-500 border-stone-200 hover:border-stone-400",
+                                        )}
+                                    >
+                                        No
+                                    </button>
+                                </div>
+                            </div>
+                            <div>
+                                <label className="text-[10px] uppercase tracking-widest font-bold text-stone-500 mb-1.5 block" htmlFor="year-founded-input">
+                                    Year founded
+                                </label>
+                                <input
+                                    id="year-founded-input"
+                                    type="number"
+                                    inputMode="numeric"
+                                    min="1800"
+                                    max={new Date().getFullYear()}
+                                    value={yearFounded}
+                                    onChange={(e) => setYearFounded(e.target.value)}
+                                    placeholder="e.g. 2018"
+                                    className="w-full px-3 py-1.5 text-sm border border-stone-200 rounded-lg focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-[10px] uppercase tracking-widest font-bold text-stone-500 mb-1.5 block" htmlFor="past-awards-input">
+                                    Past federal awards
+                                </label>
+                                <input
+                                    id="past-awards-input"
+                                    type="number"
+                                    inputMode="numeric"
+                                    min="0"
+                                    value={pastAwardsCount}
+                                    onChange={(e) => setPastAwardsCount(e.target.value)}
+                                    placeholder="0"
+                                    className="w-full px-3 py-1.5 text-sm border border-stone-200 rounded-lg focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
+                                />
+                            </div>
+                        </div>
+
+                        {/* SBA certifications — multi-select chips */}
+                        <div>
+                            <label className="text-[10px] uppercase tracking-widest font-bold text-stone-500 mb-1.5 block">
+                                SBA certifications ({sbaCerts.length} selected)
+                            </label>
+                            <div className="flex flex-wrap gap-1.5">
+                                {CERT_OPTIONS.map(c => (
+                                    <button
+                                        key={c}
+                                        type="button"
+                                        onClick={() => toggleCert(c)}
+                                        className={clsx(
+                                            "text-[11px] font-bold px-2.5 py-1 rounded-md border transition",
+                                            sbaCerts.includes(c)
+                                                ? "bg-emerald-600 text-white border-emerald-600"
+                                                : "bg-white text-stone-500 border-stone-200 hover:border-emerald-300",
+                                        )}
+                                    >
+                                        {c}
+                                    </button>
+                                ))}
+                            </div>
+                            <p className="text-[10px] text-stone-400 mt-1.5">
+                                VOSB/SDVOSB also unlock veteran set-asides. 8(a) / HUBZone / WOSB drive small-business set-aside matching.
+                            </p>
+                        </div>
+                    </div>
+
                     {/* NAICS picker (reuses NaicsEditModal logic inline) */}
                     <div>
                         <p className="text-[10px] uppercase tracking-widest font-bold text-stone-400 mb-2">
@@ -239,6 +384,7 @@ export default function ProfileEditModal({
                                         <button
                                             type="button"
                                             onClick={() => removeNaics(s.code)}
+                                            aria-label={`Remove NAICS ${s.code}`}
                                             className="text-stone-400 hover:text-red-600 transition flex-shrink-0"
                                         >
                                             <Trash2 className="w-4 h-4" />

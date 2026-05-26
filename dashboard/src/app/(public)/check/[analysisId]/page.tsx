@@ -60,6 +60,34 @@ interface MatchData {
     source?: string | null;
     /** 'state' / 'county' / 'city' — refines the SLED badge label. */
     jurisdiction_level?: string | null;
+    /** Portal URL for the opp (Bonfire / Socrata / NY State Contract Reporter
+        / vendor site). For SLED rows we MUST link here — the notice_id is an
+        internal hg-sled-* hash and a sam.gov URL would 404. */
+    link?: string | null;
+}
+
+// Pick the right "view this opportunity" URL for a match. Federal rows use
+// sam.gov; SLED / grant rows go straight to whatever portal originally listed
+// them (Bonfire, Socrata, BidExpress, NY-SCR, etc). Returns null when there's
+// no usable link so the card just renders the inline detail without a button.
+function pickMatchUrl(m: MatchData): { url: string; label: string } | null {
+    const src = (m.source || "").toLowerCase();
+    const isFederalNoticeId = typeof m.notice_id === "string" && /^[0-9a-f]{32}$/i.test(m.notice_id);
+    // SAM federal: use sam.gov only when the notice_id looks like a real SAM
+    // UUID (32 hex chars). Reject our internal hg-sled-* hashes.
+    if ((src === "sam" || (!src && isFederalNoticeId)) && m.notice_id && isFederalNoticeId) {
+        return { url: `https://sam.gov/opp/${m.notice_id}/view`, label: "View on SAM.gov" };
+    }
+    // SLED / grants / anything else — use the opp's persisted link.
+    if (m.link) {
+        try {
+            const host = new URL(m.link).hostname.replace(/^www\./, "");
+            return { url: m.link, label: `View on ${host}` };
+        } catch {
+            return { url: m.link, label: "View Opportunity" };
+        }
+    }
+    return null;
 }
 
 // Source-tier badge config used on every match card. Reads opp.source +
@@ -476,9 +504,12 @@ function WhyMatchPanel({ match, userNaicsLabels }: { match: MatchData; userNaics
 function MatchCard({ match, rank, hero, userNaicsLabels }: { match: MatchData; rank: number; hero?: boolean; userNaicsLabels?: Record<string, string> }) {
     const [expanded, setExpanded] = useState(false);
 
-    const samUrl = match.notice_id
-        ? `https://sam.gov/opp/${match.notice_id}/view`
-        : null;
+    // Source-aware "view opp" link. For SLED rows the notice_id is an internal
+    // hash, so the old `https://sam.gov/opp/${notice_id}/view` construction
+    // produced 404 URLs — now resolved via pickMatchUrl().
+    const viewLink = pickMatchUrl(match);
+    const samUrl = viewLink?.url || null;
+    const samLabel = viewLink?.label || "View Opportunity";
 
     const formatCurrency = (amount: number) => {
         if (amount >= 1_000_000) return `$${(amount / 1_000_000).toFixed(1)}M`;
@@ -612,7 +643,7 @@ function MatchCard({ match, rank, hero, userNaicsLabels }: { match: MatchData; r
                                 rel="noopener noreferrer"
                                 className="inline-flex items-center gap-1.5 text-xs font-bold text-white bg-stone-900 hover:bg-stone-700 px-3 py-1.5 rounded-lg transition-colors flex-shrink-0"
                             >
-                                View on SAM.gov <ExternalLink className="w-3 h-3" />
+                                {samLabel} <ExternalLink className="w-3 h-3" />
                             </a>
                         )}
                     </div>
@@ -790,7 +821,7 @@ function MatchCard({ match, rank, hero, userNaicsLabels }: { match: MatchData; r
                             rel="noopener noreferrer"
                             className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:text-blue-800 bg-blue-50 border border-blue-200 px-3 py-2 rounded-xl transition-colors"
                         >
-                            <ExternalLink className="w-3.5 h-3.5" /> View on SAM.gov
+                            <ExternalLink className="w-3.5 h-3.5" /> {samLabel}
                         </a>
                     )}
 
@@ -1782,6 +1813,27 @@ export default function CheckResultsPage() {
                         .filter(k => k.length >= 2)}
                     initialNaicsCodes={naics.map(n => ({ code: n.code, label: n.label }))}
                     initialTargetStates={(profile.target_states as string[] | undefined) || []}
+                    initialSamRegistered={hasSam}
+                    initialYearFounded={(() => {
+                        const c = (crawl || {}) as Record<string, unknown>;
+                        const fy = (c.founded_year as number | undefined) || (c.founding_year as number | undefined);
+                        if (fy && fy > 1800) return fy;
+                        const yib = profile.years_in_business as number | undefined;
+                        if (yib && yib > 0) return new Date().getFullYear() - yib;
+                        return null;
+                    })()}
+                    initialSbaCertifications={(() => {
+                        const fromProfile = (profile.sba_certifications as string[] | undefined) || [];
+                        if (fromProfile.length > 0) return fromProfile;
+                        const fromSam = ((data.sam_data as { sba_certifications?: string[] } | null)?.sba_certifications) || [];
+                        const c = (crawl || {}) as Record<string, unknown>;
+                        const fromCrawl = ((c.certifications as Array<{ type: string }> | undefined) || []).map(c => c.type);
+                        return [...fromSam, ...fromCrawl].filter((v, i, a) => a.indexOf(v) === i);
+                    })()}
+                    initialPastAwardsCount={(() => {
+                        const gs = profile.gov_spending as { award_count?: number } | undefined;
+                        return gs?.award_count || 0;
+                    })()}
                     onClose={() => setProfileEditOpen(false)}
                     onSaved={async () => {
                         setProfileEditOpen(false);

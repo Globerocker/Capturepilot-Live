@@ -24,6 +24,10 @@ type ScoredMatch = {
     matched_keywords?: string[];
     source?: string | null;
     jurisdiction_level?: string | null;
+    /** Portal URL where the opp was originally listed (Bonfire / Socrata /
+        NY State Contract Reporter / etc). Required for SLED rows where the
+        notice_id is our internal hg-sled-* hash and a SAM.gov URL would 404. */
+    link?: string | null;
 };
 
 /**
@@ -45,6 +49,14 @@ export async function POST(request: NextRequest) {
             state?: string | null;
             primary_keywords?: string[];
             target_states?: string[];
+            // Readiness-relevant fields. Setting any of these patches sam_data
+            // / crawl_data accordingly so computeReadinessScore picks them up
+            // on the rebuild below, AND persists them so the page reflects
+            // the operator's manual override on refresh.
+            sam_registered?: boolean;
+            year_founded?: number | null;
+            sba_certifications?: string[];
+            past_awards_count?: number;
         };
 
         if (!analysisId) {
@@ -108,6 +120,57 @@ export async function POST(request: NextRequest) {
         // and the next rescore see the same canonical source.
         newProfileFields.naics_codes = cleanCodes;
         profilePatch.inferred_profile = newProfileFields;
+
+        // Apply readiness-relevant overrides into sam_data + crawl_data so
+        // computeReadinessScore (which still reads from those legacy fields)
+        // picks them up below AND on subsequent loads.
+        const newSamData = (analysis.sam_data || {}) as Record<string, unknown>;
+        const newCrawlData = (analysis.crawl_data || {}) as Record<string, unknown>;
+        let samDataChanged = false;
+        let crawlDataChanged = false;
+        if (overrides.sam_registered !== undefined) {
+            if (overrides.sam_registered && !newSamData.uei) {
+                newSamData.uei = "USER_PROVIDED";  // truthy sentinel; readiness only checks presence
+                samDataChanged = true;
+            } else if (overrides.sam_registered === false) {
+                delete newSamData.uei;
+                samDataChanged = true;
+            }
+        }
+        if (overrides.year_founded !== undefined) {
+            if (overrides.year_founded && overrides.year_founded > 1800) {
+                newCrawlData.founded_year = overrides.year_founded;
+                newCrawlData.founding_year = overrides.year_founded;
+                newProfileFields.years_in_business = new Date().getFullYear() - overrides.year_founded;
+                crawlDataChanged = true;
+            } else if (overrides.year_founded === null) {
+                delete newCrawlData.founded_year;
+                delete newCrawlData.founding_year;
+                delete newProfileFields.years_in_business;
+                crawlDataChanged = true;
+            }
+        }
+        if (Array.isArray(overrides.sba_certifications)) {
+            const cleanCerts = overrides.sba_certifications
+                .map(c => String(c || "").trim())
+                .filter(c => c.length >= 2)
+                .filter((v, i, a) => a.indexOf(v) === i);
+            newSamData.sba_certifications = cleanCerts;
+            // Also mirror into crawl_data.certifications so the readiness fn
+            // (which inspects both fields) doesn't double-count anything.
+            newCrawlData.certifications = cleanCerts.map(type => ({ type, confidence: 1.0 }));
+            newProfileFields.sba_certifications = cleanCerts;
+            samDataChanged = true;
+            crawlDataChanged = true;
+        }
+        if (overrides.past_awards_count !== undefined && overrides.past_awards_count >= 0) {
+            const gov = (newProfileFields.gov_spending as Record<string, unknown> | null) || {};
+            gov.award_count = overrides.past_awards_count;
+            newProfileFields.gov_spending = gov;
+        }
+        if (samDataChanged) profilePatch.sam_data = newSamData;
+        if (crawlDataChanged) profilePatch.crawl_data = newCrawlData;
+
         if (Object.keys(profilePatch).length > 0) {
             const { error: patchErr } = await sb
                 .from("company_analyses")
@@ -119,8 +182,9 @@ export async function POST(request: NextRequest) {
         }
 
         const companyName = (overrides.company_name?.trim()) || (analysis.company_name as string);
-        const crawlData = (analysis.crawl_data || {}) as Record<string, unknown>;
-        const samData = (analysis.sam_data || null) as Record<string, unknown> | null;
+        // Use the patched versions so readiness + scoring see the overrides.
+        const crawlData = newCrawlData;
+        const samData = (newSamData && Object.keys(newSamData).length > 0) ? newSamData : null;
         const certifications = (crawlData.certifications as { type: string; confidence: number }[]) || [];
         const detectedStates = (crawlData.detected_states as string[]) || [];
         const inferredProfile = newProfileFields;
@@ -211,7 +275,7 @@ export async function POST(request: NextRequest) {
             const oppIds = topCandidates.map(m => m.opportunity_id);
             const { data: oppDetails } = await sb
                 .from("opportunities")
-                .select("id, title, agency, naics_code, set_aside_code, response_deadline, notice_type, award_amount, notice_id, place_of_performance_state, description")
+                .select("id, title, agency, naics_code, set_aside_code, response_deadline, notice_type, award_amount, notice_id, place_of_performance_state, description, link")
                 .in("id", oppIds);
             if (oppDetails) {
                 const detailMap = new Map(oppDetails.map(o => [o.id, o]));
@@ -228,6 +292,7 @@ export async function POST(request: NextRequest) {
                         match.notice_id = detail.notice_id;
                         match.place_of_performance_state = detail.place_of_performance_state;
                         match.description_url = detail.description;
+                        match.link = (detail as { link?: string | null }).link ?? null;
                     }
                     // Carry tier-classification fields from the scoring opp.
                     const scoringOpp = oppById.get(match.opportunity_id);
@@ -255,12 +320,17 @@ export async function POST(request: NextRequest) {
             (samData?.state as string) || detectedStates[0] || null,
         );
 
-        // Recompute readiness (uses new cert data but rest stays same)
+        // Recompute readiness — feed the override past-awards count when
+        // supplied, otherwise pull from the existing gov_spending blob.
+        const govSpending = (newProfileFields.gov_spending as { award_count?: number } | null) || null;
+        const usaspendingAwardCount = typeof overrides.past_awards_count === "number"
+            ? overrides.past_awards_count
+            : (govSpending?.award_count || 0);
         const { score: readinessScore, breakdown: readinessBreakdown } = computeReadinessScore({
             samData,
             crawlData,
             certifications,
-            usaspendingAwardCount: 0,
+            usaspendingAwardCount,
         });
 
         // Persist
