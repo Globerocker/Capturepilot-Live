@@ -208,6 +208,29 @@ function urlLooksLikeDetail(url: string): boolean {
     }
 }
 
+// Hard-reject: URLs that obviously point at a LISTING page rather than a
+// detail page. Common giveaways: plurals, "current_bids", "opportunities",
+// "view-jobs-list", etc. These were sneaking past the title-match guard
+// because their LIST contains the target bid title verbatim, so the check
+// found anchors and passed.
+function urlIsObviousListingPage(url: string): boolean {
+    try {
+        const lc = (new URL(url)).pathname.toLowerCase();
+        return (
+            /bidopportunities\.(php|aspx|html?)?$/.test(lc) ||
+            /current[-_]bids?\.(php|aspx|html?)?$/.test(lc) ||
+            /\/(bid|proposal|solicitation|tender|rfp)s($|\/|\.|-)/.test(lc) && !/\/(bid|proposal)s?\/[0-9a-z]{6,}/.test(lc) ||
+            /\/bid[-_]and[-_]proposal[-_]opportunities/.test(lc) ||
+            /\/viewjoblist/.test(lc) ||
+            /\/jobs[-_]for[-_]bid/.test(lc) ||
+            /\/(all|active|open|current)[-_]?(bids?|opportunities|solicitations)/.test(lc) ||
+            (/\/opportunities$/.test(lc) || /\/opportunities\/?(?:\?|$)/.test(lc))
+        );
+    } catch {
+        return false;
+    }
+}
+
 function scrapeMentionsTitle(text: string, title: string, url: string): boolean {
     const anchors = titleAnchors(title);
     if (anchors.length === 0) return true; // can't verify → don't reject
@@ -275,6 +298,14 @@ export async function fetchSledDescription(args: {
     if (host === "www.rampla.org" || host === "rampla.org") {
         return null;
     }
+
+    // Hard URL filter: when the link is clearly a listing-page (TNTech's
+    // /purchasing/bidopportunities.php, Ingham's /current_bids.php, UK's
+    // /bid-and-proposal-opportunities, IU's /viewjoblist…), no scrape we
+    // can do here will give us the per-bid scope — refuse up front. These
+    // URLs are usually the link the upstream RSS feed publishes when the
+    // per-bid page sits behind a vendor login.
+    if (urlIsObviousListingPage(link)) return null;
 
     // Default: server-rendered HTML strip.
     const text = await fetchHtmlDescription(link);
