@@ -101,25 +101,41 @@ export async function GET(req: NextRequest) {
     // and military commands as "entities" that receive funds. They don't
     // belong in a US-contractor-focused SEO directory.
     const NON_CONTRACTOR_PATTERNS = [
-        // Foreign governments
         /^MINISTRY OF /i,
         /^GOVERNMENT OF /i,
         /^REPUBLIC OF /i,
         /^EMBASSY OF /i,
         /\bFOREIGN MILITARY SALES?\b/i,
-        // US federal agencies (variants like "AIR FORCE, UNITED STATES
-        // DEPARTMENT OF THE" or "ARMY, DEPARTMENT OF THE")
         /^(AIR FORCE|ARMY|NAVY|MARINE CORPS|MARINES|COAST GUARD|SPACE FORCE)\b.*\bDEPARTMENT\b/i,
-        /^DEPARTMENT OF (?!.*\bDEFENSE INC|.*LLC|.*CORP)/i,  // catch "DEPARTMENT OF X" agencies, allow corps that happen to use the word
+        /^DEPARTMENT OF (?!.*\bDEFENSE INC|.*LLC|.*CORP)/i,
         /\bUNITED STATES DEPARTMENT\b/i,
         /\bDEFENSE LOGISTICS AGENCY\b/i,
         /\bUS ARMY CORPS OF ENGINEERS\b/i,
         /\bNATIONAL (GUARD|RECONNAISSANCE|SECURITY) /i,
-        // Sketchy state-of patterns (allow US-state names embedded later)
+        /,\s*(?:[A-Z'\s-]+\s+)?(?:STATE\s+)?DEPARTMENT\s+OF/i,
+        /\bAIR FORCE BASE\b/i,
+        /\bARMY (BASE|GARRISON|DEPOT|RESERVE)\b/i,
+        /\bNAVAL (BASE|STATION|AIR STATION|SUPPORT ACTIVITY)\b/i,
+        /\bMARINE CORPS BASE\b/i,
+        /\bAFB\s+LODGING\b/i,
         /^STATE OF (?!.*USA|.*\b(AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY)\b)/i,
     ];
+    // US state names that prefix state-agency entries.
+    const US_STATES = new Set([
+        "ALABAMA","ALASKA","ARIZONA","ARKANSAS","CALIFORNIA","COLORADO","CONNECTICUT",
+        "DELAWARE","FLORIDA","GEORGIA","HAWAII","IDAHO","ILLINOIS","INDIANA","IOWA",
+        "KANSAS","KENTUCKY","LOUISIANA","MAINE","MARYLAND","MASSACHUSETTS","MICHIGAN",
+        "MINNESOTA","MISSISSIPPI","MISSOURI","MONTANA","NEBRASKA","NEVADA","NEW",
+        "NORTH","OHIO","OKLAHOMA","OREGON","PENNSYLVANIA","RHODE","SOUTH","TENNESSEE",
+        "TEXAS","UTAH","VERMONT","VIRGINIA","WASHINGTON","WEST","WISCONSIN","WYOMING",
+        "DISTRICT","PUERTO","COMMONWEALTH",
+    ]);
     function isNonContractor(name: string): boolean {
-        return NON_CONTRACTOR_PATTERNS.some((re) => re.test(name));
+        if (!name) return false;
+        if (NON_CONTRACTOR_PATTERNS.some((re) => re.test(name))) return true;
+        const first = (name.trim().split(/\s+/)[0] || "").toUpperCase().replace(/[.,]/g, "");
+        if (US_STATES.has(first) && /\bDEPARTMENT\b/i.test(name)) return true;
+        return false;
     }
 
     const raw = ((candidates || []) as RawCand[])

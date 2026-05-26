@@ -30,10 +30,42 @@ const PATTERNS: RegExp[] = [
     /\bDEFENSE LOGISTICS AGENCY\b/i,
     /\bUS ARMY CORPS OF ENGINEERS\b/i,
     /\bNATIONAL (GUARD|RECONNAISSANCE|SECURITY) /i,
+    // Comma-prefix state agency shape: "HEALTH, WASHINGTON STATE DEPARTMENT OF"
+    /,\s*(?:[A-Z'\s-]+\s+)?(?:STATE\s+)?DEPARTMENT\s+OF/i,
+    // Military bases — they receive facility-service contracts but aren't
+    // contractors themselves.
+    /\bAIR FORCE BASE\b/i,
+    /\bARMY (BASE|GARRISON|DEPOT|RESERVE)\b/i,
+    /\bNAVAL (BASE|STATION|AIR STATION|SUPPORT ACTIVITY)\b/i,
+    /\bMARINE CORPS BASE\b/i,
+    /\bAFB\s+LODGING\b/i,
 ];
 
+// US state names that prefix state-agency entries like
+// "UTAH DEPARTMENT OF HEALTH AND HUMAN SERVICES".
+const US_STATES = new Set([
+    "ALABAMA","ALASKA","ARIZONA","ARKANSAS","CALIFORNIA","COLORADO","CONNECTICUT",
+    "DELAWARE","FLORIDA","GEORGIA","HAWAII","IDAHO","ILLINOIS","INDIANA","IOWA",
+    "KANSAS","KENTUCKY","LOUISIANA","MAINE","MARYLAND","MASSACHUSETTS","MICHIGAN",
+    "MINNESOTA","MISSISSIPPI","MISSOURI","MONTANA","NEBRASKA","NEVADA","NEW",
+    "NORTH","OHIO","OKLAHOMA","OREGON","PENNSYLVANIA","RHODE","SOUTH","TENNESSEE",
+    "TEXAS","UTAH","VERMONT","VIRGINIA","WASHINGTON","WEST","WISCONSIN","WYOMING",
+    "DISTRICT","PUERTO","COMMONWEALTH",
+]);
+
+function isStateAgency(name: string): boolean {
+    // Catches "UTAH DEPARTMENT OF X", "NEW MEXICO DEPARTMENT OF X", etc.
+    const tokens = name.trim().split(/\s+/);
+    const first = (tokens[0] || "").toUpperCase().replace(/[.,]/g, "");
+    if (US_STATES.has(first) && /\bDEPARTMENT\b/i.test(name)) return true;
+    return false;
+}
+
 function isNonContractor(name: string): boolean {
-    return PATTERNS.some((re) => re.test(name));
+    if (!name) return false;
+    if (PATTERNS.some((re) => re.test(name))) return true;
+    if (isStateAgency(name)) return true;
+    return false;
 }
 
 export async function GET(req: NextRequest) {
