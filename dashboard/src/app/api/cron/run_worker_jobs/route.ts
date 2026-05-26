@@ -24,6 +24,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { guardCron } from "@/lib/cron-auth";
 import { classifyNaics } from "@/lib/classify-naics";
 import { extractStructuredRequirements } from "@/lib/extract-structured-requirements";
+import { extractAiKeywords } from "@/lib/extract-ai-keywords";
 
 // Loose SupabaseClient typing — the handlers below intentionally use the
 // generic any-shape client to avoid PostgrestQueryBuilder generic
@@ -39,6 +40,7 @@ export const maxDuration = 60;
 const HTTP_TASK_TYPES = [
     "classify_naics",
     "extract_structured_reqs",
+    "extract_keywords",
 ];
 
 type Job = {
@@ -92,9 +94,32 @@ async function handleExtractStructuredReqs(sb: SbAny, job: Job) {
     return { result: { extracted: true } };
 }
 
+async function handleExtractKeywords(sb: SbAny, job: Job) {
+    const oppId = job.payload.opp_id as string;
+    if (!oppId) return { error: "missing opp_id" };
+    const { data: opp } = await sb.from("opportunities")
+        .select("title, description, ai_keywords")
+        .eq("id", oppId)
+        .maybeSingle();
+    if (!opp) return { error: "opp not found" };
+    if (opp.ai_keywords && Array.isArray(opp.ai_keywords) && opp.ai_keywords.length > 0) {
+        return { result: { skipped: "already_extracted" } };
+    }
+    const result = await extractAiKeywords({ title: opp.title, description: opp.description });
+    if (!result || !result.keywords || result.keywords.length === 0) {
+        return { result: { no_keywords: true } };
+    }
+    const { error: upErr } = await sb.from("opportunities")
+        .update({ ai_keywords: result.keywords })
+        .eq("id", oppId);
+    if (upErr) return { error: upErr.message };
+    return { result: { keyword_count: result.keywords.length } };
+}
+
 const HANDLERS: Record<string, (sb: SbAny, job: Job) => Promise<{ result?: unknown; error?: string }>> = {
     classify_naics: handleClassifyNaics,
     extract_structured_reqs: handleExtractStructuredReqs,
+    extract_keywords: handleExtractKeywords,
 };
 
 export async function GET(req: NextRequest) {
