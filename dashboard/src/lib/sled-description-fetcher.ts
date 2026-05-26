@@ -165,6 +165,37 @@ async function fetchBonfireDescription(
     }
 }
 
+// Pick "significant words" from a title — anything 5+ chars, excluding
+// stopwords. Used to verify the scrape we just got actually belongs to
+// this opportunity (not the portal's index page rendered for every URL).
+function titleAnchors(title: string): string[] {
+    const stop = new Set([
+        "the", "and", "for", "with", "from", "this", "that", "these", "those",
+        "rfp", "rfq", "ifb", "rfi", "bid", "bids", "contract", "services",
+        "service", "project", "request", "proposal", "proposals", "invitation",
+        "invitations", "purchase", "purchasing", "department",
+    ]);
+    return title
+        .toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, " ")
+        .split(/\s+/)
+        .filter(w => w.length >= 5 && !stop.has(w))
+        .slice(0, 6);
+}
+
+function scrapeMentionsTitle(text: string, title: string): boolean {
+    const anchors = titleAnchors(title);
+    if (anchors.length === 0) return true; // can't verify → don't reject
+    const lc = text.toLowerCase();
+    let hits = 0;
+    for (const a of anchors) {
+        if (lc.includes(a)) hits++;
+        if (hits >= 2) return true;
+    }
+    // For very short anchor lists, 1 hit is enough.
+    return anchors.length <= 2 && hits >= 1;
+}
+
 /**
  * Top-level dispatcher. Routes to the right scraper based on URL host and
  * any hints in raw_json. Returns null on any failure — caller leaves the
@@ -172,10 +203,11 @@ async function fetchBonfireDescription(
  */
 export async function fetchSledDescription(args: {
     link: string;
+    title?: string;
     rawJson?: Record<string, unknown> | null;
     sourcePrefix?: string;
 }): Promise<DescriptionResult | null> {
-    const { link, rawJson, sourcePrefix } = args;
+    const { link, title, rawJson, sourcePrefix } = args;
     let host: string;
     try {
         host = new URL(link).hostname.toLowerCase();
@@ -215,6 +247,10 @@ export async function fetchSledDescription(args: {
 
     // Default: server-rendered HTML strip.
     const text = await fetchHtmlDescription(link);
-    if (text) return { description: text, source: "html-generic" };
-    return null;
+    if (!text) return null;
+    // Title-mention sanity check: if the scrape doesn't mention any
+    // significant title word, we probably hit a portal index/listing page
+    // (SPA serving the same shell for every URL — Cleveland, etc).
+    if (title && !scrapeMentionsTitle(text, title)) return null;
+    return { description: text, source: "html-generic" };
 }

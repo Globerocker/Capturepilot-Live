@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
     // not archived. Ordered by last_crawled_at ASC so we cycle through fairly.
     let query = sb
         .from("opportunities")
-        .select("id, notice_id, link, description, raw_json")
+        .select("id, notice_id, title, link, description, raw_json")
         .eq("source", "sled")
         .eq("is_archived", false)
         .not("link", "is", null)
@@ -64,6 +64,7 @@ export async function GET(req: NextRequest) {
     type Row = {
         id: string;
         notice_id: string | null;
+        title: string | null;
         link: string | null;
         description: string | null;
         raw_json: Record<string, unknown> | null;
@@ -99,6 +100,7 @@ export async function GET(req: NextRequest) {
             const sourcePrefix = (r.notice_id || "").split("-").slice(0, 3).join("-");
             const result = await fetchSledDescription({
                 link: r.link,
+                title: r.title || undefined,
                 rawJson: r.raw_json || undefined,
                 sourcePrefix,
             }).catch(() => null);
