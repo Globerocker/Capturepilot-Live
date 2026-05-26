@@ -36,6 +36,15 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { chromium } from "playwright";
+import WebSocketImpl from "ws";
+
+// Node 20 (which the Playwright base image ships) doesn't have a native
+// global WebSocket. Supabase's realtime-js eagerly initializes a WS client
+// when createClient() runs — without this polyfill the worker crashes on
+// boot with "Node.js 20 detected without native WebSocket support".
+if (typeof globalThis.WebSocket === "undefined") {
+    globalThis.WebSocket = WebSocketImpl;
+}
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
