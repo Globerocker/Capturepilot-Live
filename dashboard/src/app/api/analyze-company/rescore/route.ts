@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { scoreOpportunityLeadMagnet, type ProfileForScoring, type OpportunityForScoring } from "@/lib/match-scoring";
 import { findCompetitors, computeReadinessScore } from "@/lib/quick-checker-helpers";
 import { NAICS_CODES } from "@/lib/naics-codes";
+import { generateMatchSummary, type CompanyContextForAi, type MatchForAi } from "@/lib/match-summary";
 
 export const maxDuration = 60;
 
@@ -333,6 +334,48 @@ export async function POST(request: NextRequest) {
             usaspendingAwardCount,
         });
 
+        // Regenerate per-match AI summaries against the corrected profile.
+        // The initial Quick Checker pipeline populates ai_match_summaries
+        // once at sign-up; if we don't refresh on rescore, new matches (most
+        // visibly SLED rows after a NAICS expansion) arrive without a blurb
+        // and the card collapses to bare title+agency. ~$0.0005/match × 10
+        // matches ≈ half a cent per rescore — well worth it.
+        const companyContext: CompanyContextForAi = {
+            companyName,
+            description: (crawlData.description as string) || (analysis.company_summary as string) || "",
+            services: (crawlData.services as string[]) || [],
+            naicsCodes: cleanCodes,
+            certifications: ((newSamData.sba_certifications as string[]) || []).concat(
+                certifications.map(c => c.type),
+            ).filter((v, i, a) => a.indexOf(v) === i),
+            state: tempProfile.state,
+            employeeCount: (newProfileFields.employee_count as number) || null,
+            yearsInBusiness: (newProfileFields.years_in_business as number) || null,
+            capStatementText: (analysis.capability_statement as string) || (analysis.capability_statement_text as string) || "",
+        };
+        const summaryEntries = await Promise.all(
+            topMatches.map(async (m) => {
+                const summaryMatch: MatchForAi = {
+                    opportunity_id: m.opportunity_id,
+                    title: m.title,
+                    agency: m.agency,
+                    naics_code: m.naics_code,
+                    set_aside_code: m.set_aside_code,
+                    notice_type: m.notice_type,
+                    award_amount: m.award_amount,
+                    description_url: m.description_url,
+                    response_deadline: m.response_deadline,
+                    matched_keywords: m.matched_keywords,
+                    score_breakdown: m.score_breakdown,
+                };
+                const summary = await generateMatchSummary(companyContext, summaryMatch).catch(() => "");
+                return [m.opportunity_id, summary] as const;
+            }),
+        );
+        const aiMatchSummaries: Record<string, string> = Object.fromEntries(
+            summaryEntries.filter(([, s]) => s && s.length > 0),
+        );
+
         // Persist
         await sb
             .from("company_analyses")
@@ -342,6 +385,7 @@ export async function POST(request: NextRequest) {
                 competitors,
                 readiness_score: readinessScore,
                 readiness_breakdown: readinessBreakdown,
+                ai_match_summaries: aiMatchSummaries,
             })
             .eq("id", analysisId);
 

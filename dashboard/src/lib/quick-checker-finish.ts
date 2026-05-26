@@ -55,134 +55,19 @@ interface ScoredMatch {
     matched_keywords?: string[];
 }
 
-interface MatchForAi {
-    opportunity_id: string;
-    title?: string;
-    agency?: string;
-    naics_code?: string;
-    set_aside_code?: string;
-    notice_type?: string;
-    award_amount?: number;
-    description_url?: string;
-    response_deadline?: string;
-    matched_keywords?: string[];
-    score_breakdown?: Record<string, number>;
-}
+// MatchForAi + CompanyContextForAi + generateMatchSummary now live in
+// lib/match-summary.ts so the rescore endpoint can reuse them — see the
+// comment at the top of that file. Local imports kept identical so the
+// initial pipeline below doesn't change semantics.
+import { generateMatchSummary as sharedGenerateMatchSummary, type CompanyContextForAi, type MatchForAi } from "./match-summary";
 
-interface CompanyContextForAi {
-    companyName: string;
-    description: string;
-    services: string[];
-    naicsCodes: string[];
-    certifications: string[];
-    state: string;
-    employeeCount: number | null;
-    yearsInBusiness: number | null;
-    capStatementText: string;
-}
-
-/**
- * Generate a 2-3 sentence "why this opportunity fits YOUR company specifically"
- * blurb for a single match. Falls back to a deterministic 1-liner if OpenAI
- * is not configured or the call errors out.
- */
 async function generateMatchSummary(
     company: CompanyContextForAi,
     match: MatchForAi,
 ): Promise<string> {
-    const openaiKey = process.env.OPENAI_API_KEY;
-
-    // Deterministic fallback — no OpenAI required
-    const fallback = (() => {
-        const sa = match.set_aside_code ? ` (set-aside: ${match.set_aside_code})` : "";
-        const naicsMatch = match.naics_code && company.naicsCodes.includes(match.naics_code)
-            ? ` Direct NAICS match (${match.naics_code}).`
-            : "";
-        return `Match for ${company.companyName} at ${match.agency || "this agency"}${sa}.${naicsMatch}`;
-    })();
-
-    if (!openaiKey) return fallback;
-
-    const capStatementHint = company.capStatementText
-        ? `\nCAPABILITY STATEMENT EXCERPT (verbatim from user-uploaded doc, first 1500 chars):\n${company.capStatementText.slice(0, 1500)}`
-        : "";
-
-    // Deadline countdown — added when within 30 days so the model can lead
-    // with urgency ("closes in 9 days") on time-sensitive opportunities.
-    const deadlineHint = (() => {
-        if (!match.response_deadline) return "";
-        const dt = new Date(match.response_deadline).getTime();
-        if (Number.isNaN(dt)) return "";
-        const days = Math.round((dt - Date.now()) / (1000 * 60 * 60 * 24));
-        if (days < 0 || days > 30) return "";
-        return `  Closes in: ${days} day${days === 1 ? "" : "s"}`;
-    })();
-
-    const matchedKwHint = (match.matched_keywords && match.matched_keywords.length > 0)
-        ? `  MATCHED YOUR KEYWORDS: ${match.matched_keywords.join(", ")}`
-        : "";
-
-    const scoreHint = (match.score_breakdown && Object.keys(match.score_breakdown).length > 0)
-        ? `  SCORE SIGNALS: NAICS=${Math.round((match.score_breakdown.naics || 0) * 100)}% · keywords=${Math.round((match.score_breakdown.keywords || 0) * 100)}% · geo=${Math.round((match.score_breakdown.geo || 0) * 100)}% · set-aside=${Math.round((match.score_breakdown.set_aside || 0) * 100)}%`
-        : "";
-
-    const userMsg = [
-        `COMPANY: ${company.companyName}`,
-        `DESCRIPTION: ${company.description || "(no website description)"}`,
-        `SERVICES: ${company.services.slice(0, 8).join(", ") || "(none extracted)"}`,
-        `NAICS: ${company.naicsCodes.join(", ") || "(none)"}`,
-        `CERTIFICATIONS: ${company.certifications.join(", ") || "(none)"}`,
-        `STATE: ${company.state || "(unknown)"}`,
-        `SIZE: ${company.employeeCount ? `${company.employeeCount} employees` : "(unknown)"}${company.yearsInBusiness ? ` · ${company.yearsInBusiness} yrs in business` : ""}`,
-        capStatementHint,
-        ``,
-        `OPPORTUNITY:`,
-        `  Title: ${match.title || "(no title)"}`,
-        `  Agency: ${match.agency || "(unknown)"}`,
-        `  Notice type: ${match.notice_type || "(unknown)"}`,
-        `  NAICS: ${match.naics_code || "(none)"}`,
-        `  Set-aside: ${match.set_aside_code || "(open)"}`,
-        match.award_amount ? `  Estimated value: $${match.award_amount.toLocaleString()}` : "",
-        deadlineHint,
-        matchedKwHint,
-        scoreHint,
-        match.description_url ? `  Description snippet: ${String(match.description_url).slice(0, 600)}` : "",
-    ].filter(Boolean).join("\n");
-
-    try {
-        const res = await fetch("https://api.openai.com/v1/chat/completions", {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${openaiKey}` },
-            body: JSON.stringify({
-                model: "gpt-4o-mini",
-                messages: [
-                    {
-                        role: "system",
-                        content: [
-                            "You write personalized 2-sentence federal-contracting fit summaries for a small-business lead-magnet. Write IN SECOND PERSON (you / your company).",
-                            "Be TRUTHFUL about why the opportunity matched. ONLY cite a matched keyword in quotes if it appears in MATCHED YOUR KEYWORDS — do NOT invent keyword hits.",
-                            "When MATCHED YOUR KEYWORDS is provided: OPEN by quoting 1–2 of them and connect to a specific company strength.",
-                            "When MATCHED YOUR KEYWORDS is empty/absent: explain the match honestly — lead with the strongest signal in SCORE SIGNALS (NAICS / set-aside / geo). Example: 'Strong NAICS match (541511) and your California base lines up with this VA contract.'",
-                            "If 'Closes in' is provided AND ≤ 14 days, lead with urgency (e.g. 'Closes in N days — this one is yours to grab.').",
-                            "Avoid filler. NEVER invent company facts that aren't in the input. NEVER pretend keywords matched when they didn't. Cap output at 320 characters.",
-                            "Format: two tight sentences, no bullet points, no headings.",
-                        ].join(" "),
-                    },
-                    { role: "user", content: userMsg },
-                ],
-                max_tokens: 160,
-                temperature: 0.35,
-            }),
-            signal: AbortSignal.timeout(15000),
-        });
-        if (!res.ok) return fallback;
-        const data = await res.json();
-        const text = (data.choices?.[0]?.message?.content || "").trim();
-        return text || fallback;
-    } catch {
-        return fallback;
-    }
+    return sharedGenerateMatchSummary(company, match);
 }
+
 
 async function generateSummary(
     companyName: string,
