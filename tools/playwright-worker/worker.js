@@ -251,32 +251,43 @@ async function claimAndRun(browser) {
     return jobs.length;
 }
 
+// Per-batch browser lifecycle. --single-process used to be in here but
+// caused "context closed" cascades after the first job — single-process
+// Chromium dies when stealth-patched context.close() runs. Multi-process
+// is heavier (~150MB more RAM) but stable across many batches.
+const CHROMIUM_ARGS = [
+    "--no-sandbox",
+    "--disable-dev-shm-usage",
+    "--disable-gpu",
+    "--disable-extensions",
+    "--disable-default-apps",
+    "--disable-sync",
+    "--no-first-run",
+    "--disable-background-networking",
+];
+
 async function tick() {
-    let browser;
-    try {
-        browser = await chromium.launch({
-            headless: true,
-            args: [
-                "--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu",
-                "--disable-extensions", "--disable-default-apps", "--disable-sync",
-                "--no-first-run", "--no-zygote", "--single-process",
-                "--disable-background-networking",
-            ],
-        });
-        let total = 0;
-        // Drain the queue in this tick — up to 5 batches per Chromium launch
-        // so the Chromium cold-start cost amortizes.
-        for (let i = 0; i < 5; i++) {
+    // Launch a FRESH browser per claim batch (not per tick). The previous
+    // pattern reused one browser across 5 claim cycles; even with
+    // multi-process, accumulated state caused intermittent crashes. A new
+    // browser per batch costs ~600ms of cold start but the work itself is
+    // 4-30s per job so the overhead is negligible.
+    let total = 0;
+    for (let i = 0; i < 5; i++) {
+        let browser;
+        try {
+            browser = await chromium.launch({ headless: true, args: CHROMIUM_ARGS });
             const n = await claimAndRun(browser);
             total += n;
             if (n === 0) break;
+        } catch (e) {
+            console.error(`[worker] batch ${i} error: ${(e && e.message) || e}`);
+            break;
+        } finally {
+            if (browser) await browser.close().catch(() => {});
         }
-        console.log(`[worker] tick done: ${total} jobs processed`);
-    } catch (e) {
-        console.error(`[worker] tick error: ${(e && e.message) || e}`);
-    } finally {
-        if (browser) await browser.close().catch(() => {});
     }
+    console.log(`[worker] tick done: ${total} jobs processed`);
 }
 
 async function main() {
