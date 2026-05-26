@@ -16,6 +16,12 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+    findRecipientHashByUei,
+    getRecipientLifetime,
+    getSpendingOverTime,
+    getSpendingByAgency,
+} from "@/lib/usaspending";
 
 export interface ContractorRow {
     uei: string;
@@ -89,7 +95,11 @@ interface AwardRow {
     naics_code: string | null;
 }
 
-export async function buildAwardRollup(sb: SupabaseClient, uei: string): Promise<AwardRollup> {
+export async function buildAwardRollup(
+    sb: SupabaseClient,
+    uei: string,
+    companyName?: string,
+): Promise<AwardRollup> {
     const empty: AwardRollup = {
         total_awarded_amount: 0,
         total_awards_count: 0,
@@ -98,58 +108,61 @@ export async function buildAwardRollup(sb: SupabaseClient, uei: string): Promise
         awards_by_year: [],
         top_naics_codes: [],
     };
-    // contractors table doesn't have a scalar total_obligated column — the
-    // award rollup lives entirely in the naics_awards JSONB array (migration
-    // 039). We SUM client-side to derive a lifetime total.
-    const { data: contractor } = await sb
-        .from("contractors")
-        .select("naics_awards, agency_relationships")
-        .eq("uei", uei)
-        .maybeSingle();
-    if (!contractor) return empty;
 
-    const c = contractor as Record<string, unknown>;
-    const naicsAwards = (c.naics_awards as Array<{ naics: string; count: number; total: number }> | undefined) || [];
-    const total = naicsAwards.reduce((sum, n) => sum + (Number(n.total) || 0), 0);
-    const agencyRels = (c.agency_relationships as Array<{ agency: string; obligated: number }> | undefined) || [];
+    // Step 1 — find the USAspending recipient hash for this UEI by name
+    //   search. USAspending has no direct UEI lookup so we search by name +
+    //   filter for the exact UEI match (or fall back to first hit).
+    let nameToSearch = companyName;
+    if (!nameToSearch) {
+        const { data } = await sb
+            .from("contractors")
+            .select("company_name, dba_name")
+            .eq("uei", uei)
+            .maybeSingle();
+        const row = data as { company_name?: string; dba_name?: string } | null;
+        nameToSearch = row?.company_name || row?.dba_name || undefined;
+    }
+    if (!nameToSearch) return empty;
 
-    const topAgency = agencyRels.length > 0
-        ? agencyRels.slice().sort((a, b) => (b.obligated || 0) - (a.obligated || 0))[0]
-        : null;
+    const recipient = await findRecipientHashByUei({ uei, companyName: nameToSearch });
+    if (!recipient) return empty;
 
-    // by-year rollup from raw awards (best effort — try fpds_awards then bail)
-    let awardsByYear: AwardRollup["awards_by_year"] = [];
+    // Step 2 — three parallel calls: lifetime profile, by-year aggregate,
+    //   by-agency breakdown. All hit unauthenticated USAspending endpoints
+    //   so this is a single ~1-2s burst regardless of award volume.
+    const [lifetime, byYear, byAgency] = await Promise.all([
+        getRecipientLifetime(recipient.hash),
+        getSpendingOverTime({ recipient_id: recipient.hash }),
+        getSpendingByAgency({ recipient_id: recipient.hash }),
+    ]);
+
+    const total = lifetime?.total_transaction_amount || 0;
+    const count = lifetime?.total_transactions || 0;
+    const topAgency = byAgency[0];
+
+    // Also dual-write the rollup back into the contractors row so the older
+    // enrichment endpoints + scoring still see fresh data without re-calling
+    // USAspending themselves. Soft-fail if the row doesn't exist yet.
     try {
-        const { data: rawAwards } = await sb
-            .from("fpds_awards")
-            .select("awarded_amount, award_date")
-            .eq("recipient_uei", uei)
-            .limit(500);
-        if (Array.isArray(rawAwards)) {
-            const byYear = new Map<number, { value: number; count: number }>();
-            for (const a of rawAwards as AwardRow[]) {
-                if (!a.award_date) continue;
-                const y = new Date(a.award_date).getFullYear();
-                if (!byYear.has(y)) byYear.set(y, { value: 0, count: 0 });
-                const slot = byYear.get(y)!;
-                slot.value += Number(a.awarded_amount || 0);
-                slot.count += 1;
-            }
-            awardsByYear = Array.from(byYear.entries())
-                .map(([year, v]) => ({ year, value: v.value, count: v.count }))
-                .sort((a, b) => a.year - b.year);
-        }
+        await sb.from("contractors").update({
+            federal_awards_count: count,
+            total_award_volume: total,
+            agency_relationships: byAgency.map((a) => ({ agency: a.agency_name, obligated: a.amount, count: a.count })),
+            naics_awards: [], // separate fetch — kept empty here, see below
+            last_usaspending_refresh: new Date().toISOString(),
+        }).eq("uei", uei);
     } catch {
-        // fpds_awards may not exist on every deployment. Soft-fail.
+        // Don't fail the build — the rollup we return downstream is what
+        // gets persisted to contractor_profile_pages.
     }
 
     return {
         total_awarded_amount: total,
-        total_awards_count: naicsAwards.reduce((sum, n) => sum + (n.count || 0), 0),
-        top_agency: topAgency?.agency || null,
-        top_agency_amount: topAgency?.obligated || 0,
-        awards_by_year: awardsByYear,
-        top_naics_codes: naicsAwards.slice(0, 5).map((n) => n.naics),
+        total_awards_count: count,
+        top_agency: topAgency?.agency_name || null,
+        top_agency_amount: topAgency?.amount || 0,
+        awards_by_year: byYear.map((y) => ({ year: y.fiscal_year, value: y.aggregated_amount, count: y.transaction_count || 0 })),
+        top_naics_codes: [], // would need separate spending_by_category/naics/ call; out of scope for the rollup
     };
 }
 
