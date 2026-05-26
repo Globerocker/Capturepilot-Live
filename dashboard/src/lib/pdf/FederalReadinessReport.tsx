@@ -787,19 +787,13 @@ export function FederalReadinessReport(props: ReportInput) {
     const matchesCompact = qualifiedMatches.slice(3);
 
     // Clearbit Logo API — free, no-auth, returns a square PNG of any domain's
-    // brand logo (when known). When the analyzed company has a website, we
-    // hotlink to /logo/{domain}, letting the customer's own brand mark appear
-    // on the cover so this PDF feels owned by THEM, not by us. Falls through
-    // to no-logo when Clearbit doesn't have the domain.
-    const companyLogoUrl = (() => {
-        try {
-            const host = new URL(website.startsWith("http") ? website : `https://${website}`).hostname.replace(/^www\./, "");
-            if (!host) return null;
-            return `https://logo.clearbit.com/${host}`;
-        } catch {
-            return null;
-        }
-    })();
+    // Brand-logo block — was hot-linking https://logo.clearbit.com/{host} so
+    // each PDF cover wore the customer's mark. The Clearbit logo CDN was
+    // discontinued in 2025 (post-HubSpot acquisition) and now fails to
+    // respond, crashing the entire react-pdf render with "fetch failed"
+    // inside the lambda. Disabled until we wire a working alternative
+    // (favicon.im, google s2 favicons, or a self-hosted resolver).
+    const companyLogoUrl = null as string | null;
 
     return (
         <Document
