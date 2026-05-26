@@ -76,8 +76,16 @@ export async function fetchSocrataRows(
         || ":updated_at";
     url.searchParams.set("$order", `${postedField} DESC`);
 
-    if (options?.since) {
-        url.searchParams.set("$where", `:updated_at > '${options.since}'`);
+    // Build a single $where clause combining the static filter (configured per
+    // source for datasets that mix procurement + non-procurement records, e.g.
+    // NYC dg92-zbpx where section_name='Procurement' isolates the right rows)
+    // and the incremental since-marker.
+    const clauses: string[] = [];
+    const extraWhere = src.field_map.extra_where as string | undefined;
+    if (extraWhere && typeof extraWhere === "string") clauses.push(extraWhere);
+    if (options?.since) clauses.push(`:updated_at > '${options.since}'`);
+    if (clauses.length > 0) {
+        url.searchParams.set("$where", clauses.join(" AND "));
     }
 
     const headers: Record<string, string> = {
