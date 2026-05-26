@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+rrow me so
 import * as dotenv from 'dotenv';
 import path from 'path';
 
@@ -94,7 +95,7 @@ async function createOrUpdateCompany(companyName: string, domain: string) {
     try {
         const properties: any = { name: companyName };
         if (domain) properties.domain = domain;
-        
+
         const res = await hsApi('POST', '/crm/v3/objects/companies', { properties });
         return res.id;
     } catch (err: any) {
@@ -171,7 +172,7 @@ async function enrichPhoneFromApollo(domain: string, firstName: string, lastName
 // --- Main execution ---
 async function main() {
     console.log(`🚀 Starting Bulk Quick Checker Sync to HubSpot (Dry Run: ${isDryRun})`);
-    
+
     // Fetch all user profiles that have emails
     const { data: profiles, error } = await supabase
         .from('user_profiles')
@@ -191,7 +192,7 @@ async function main() {
 
     for (const profile of profiles) {
         console.log(`\nProcessing: ${profile.email} (${profile.company_name || 'No Company'})`);
-        
+
         let phone = profile.contact_phone || profile.phone;
 
         // Try Apollo Enrichment 
@@ -200,7 +201,7 @@ async function main() {
             const first = nameParts[0];
             const last = nameParts.slice(1).join(" ");
             const domain = profile.website.replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0];
-            
+
             console.log(`   🔍 Enriching missing phone from Apollo for ${profile.contact_name}...`);
             if (!isDryRun) {
                 phone = await enrichPhoneFromApollo(domain, first, last, profile.company_name);
@@ -239,7 +240,7 @@ async function main() {
         if (contactId) {
             console.log(`     ✅ Synced Contact -> ID: ${contactId}`);
             syncCount++;
-            
+
             if (profile.company_name) {
                 const domain = profile.website ? profile.website.replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0] : "";
                 const companyId = await createOrUpdateCompany(profile.company_name, domain);
