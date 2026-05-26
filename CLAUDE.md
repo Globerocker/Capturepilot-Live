@@ -76,6 +76,55 @@ git push captiorpilot main && git push live main && git push globerocker main
 - `contractors` — 80K SAM.gov registered entities
 - `contacts` — 91K SAM.gov opportunity contacts
 - `naics_codes` / `psc_codes` — validation whitelists for ingestion
+- `worker_jobs` — job queue (migration 086); fan-out trigger on opportunities insert
+- `portal_cookies` — CF clearance / session cookies per portal host, used by Playwright worker
+
+## Recent major changes (2026-05-26 — worker_jobs queue platform)
+
+Turned the codebase into a job-queue system. Before this, enrichment work was a sprawl of 40 Vercel crons each doing batch passes. Now there's one table — `worker_jobs` — that any worker (Vercel or Railway) can claim from. Bottleneck removed.
+
+**Migration 086** (`dashboard/supabase/migrations/086_worker_jobs_platform.sql`):
+- `worker_jobs` table with `task_type`, `payload jsonb`, `priority`, `status`, `attempts`, generated `dedup_key` column.
+- Partial unique index on `dedup_key WHERE status IN ('pending','running')` — prevents duplicate work in flight, allows re-queueing once done.
+- `claim_jobs(task_types[], batch_size)` RPC — atomic claim via `FOR UPDATE SKIP LOCKED`.
+- `finish_job(id, status, result, error)` RPC.
+- Fan-out trigger `on_new_opportunity_enrich`: every opp INSERT fans out 3-5 enrichment jobs (`classify_naics`, `extract_structured_reqs`, `extract_keywords`, conditionally `scrape_portal_detail` for SLED + `analyze_attachments` for SAM).
+- `portal_cookies` table caches CF clearance per host.
+
+**Two consumers:**
+- `/api/cron/run_worker_jobs` (Vercel) — handles HTTP-only task types: `classify_naics`, `extract_structured_reqs`, `extract_keywords`. Tops up `warm_cf_cookie` jobs at the start of each run if cookies are expiring within 6 min.
+- `tools/playwright-worker/worker.js` (Railway, $5/mo Hobby plan) — handles browser task types: `scrape_portal_detail`, `warm_cf_cookie`. Uses `playwright-extra` + stealth plugin to defeat headless detection. Loads cookies from `portal_cookies` before navigating CF-protected portals (Bonfire, etc).
+
+**Bulk backfill** (`/api/cron/enqueue_backfill`) re-enqueues every under-enriched opp + warms cookies for every known Bonfire host. Idempotent via `dedup_key`. Wired into orchestrator at `:30` hourly.
+
+**Admin dashboard** at `/admin/queue` auto-refreshes every 10s, shows per-task-type counts (pending/running/done/failed), 5/30/60-min throughput, and the `portal_cookies` table with per-host expiry.
+
+**Live counters**:
+- `/api/public/stats` — anonymous, 5-min cached aggregate counts (federal_opps, sled_opps, contractors_tracked, etc).
+- `components/LiveCounter.tsx` — reusable count-up component + `PublicStat` helper that fetches `/api/public/stats` and animates the target value into place. Used on the Quick Checker `AnalysisLoadingScreen`.
+
+**Playwright worker quirks** (in `tools/playwright-worker/worker.js`):
+- **No `--single-process`** flag — Chromium SIGSEGVs after first `context.close()` with stealth patches loaded. Multi-process (+150MB RAM) is stable.
+- **Fresh browser per batch** — was per-tick, accumulated state crashed after ~5 batches.
+- **2s sleep between batch browser launches** — back-to-back Chromium init occasionally SIGSEGV on Railway's container.
+- **Stealth plugin loaded conditionally** — worker still boots if `playwright-extra` or `puppeteer-extra-plugin-stealth` aren't installed.
+- **ws polyfill** — Playwright base image ships Node 20 which lacks native WebSocket; supabase-js realtime needs one or `createClient` throws.
+
+**Cron orchestrator schedule additions**:
+- `run_worker_jobs` — every orchestrator tick (also tops up cookie warmers).
+- `enqueue_backfill` — :30 hourly.
+- `discover_bonfire_tenants` — 04:00 UTC daily (probes 220+ slug seed list).
+- `enrich_sled_descriptions` — :10 and :40 hourly.
+- `analyze_match_attachments` — :15 hourly (downloads PDFs/DOCX → OCR → structured_requirements).
+
+**Bonfire CF defeat path** (commit `754d7a7f` + `3e9de51b`):
+1. `warm_cf_cookie` task opens portal homepage in stealth Chromium, sits through JS challenge, harvests `cf_clearance` + `__cf_bm` cookies.
+2. `portal_cookies` table stores them keyed by host with `expires_at`.
+3. `scrape_portal_detail` loads cookies into the context BEFORE navigating → Bonfire serves the real SPA instead of the challenge.
+4. `run_worker_jobs` auto-refreshes cookies expiring within 6 min.
+
+**SEO/LLM** (commit `dd2a030` on website):
+- `website/app/robots.ts` explicitly allows GPTBot, ClaudeBot, PerplexityBot, Google-Extended, Bytespider, Amazonbot, Applebot-Extended, Meta-ExternalAgent, CCBot, etc. We want to be cited in AI answers.
 
 ## Recent major changes (2026-05-22 — admin-panel hardening + cleanup)
 
