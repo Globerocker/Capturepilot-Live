@@ -96,24 +96,34 @@ export async function GET(req: NextRequest) {
 
     type Cand = ContractorRow & { lifetime_total: number };
 
-    // Foreign-government / non-US-corporate entity blocklist. These show up
-    // in the contractors table because SAM registers them when they receive
-    // FMS pass-through or US-funded foreign aid contracts, but they don't
+    // Non-contractor entity blocklist. These show up in the contractors
+    // table because SAM registers federal agencies, foreign governments,
+    // and military commands as "entities" that receive funds. They don't
     // belong in a US-contractor-focused SEO directory.
-    const FOREIGN_ENTITY_PATTERNS = [
+    const NON_CONTRACTOR_PATTERNS = [
+        // Foreign governments
         /^MINISTRY OF /i,
         /^GOVERNMENT OF /i,
         /^REPUBLIC OF /i,
         /^EMBASSY OF /i,
         /\bFOREIGN MILITARY SALES?\b/i,
+        // US federal agencies (variants like "AIR FORCE, UNITED STATES
+        // DEPARTMENT OF THE" or "ARMY, DEPARTMENT OF THE")
+        /^(AIR FORCE|ARMY|NAVY|MARINE CORPS|MARINES|COAST GUARD|SPACE FORCE)\b.*\bDEPARTMENT\b/i,
+        /^DEPARTMENT OF (?!.*\bDEFENSE INC|.*LLC|.*CORP)/i,  // catch "DEPARTMENT OF X" agencies, allow corps that happen to use the word
+        /\bUNITED STATES DEPARTMENT\b/i,
+        /\bDEFENSE LOGISTICS AGENCY\b/i,
+        /\bUS ARMY CORPS OF ENGINEERS\b/i,
+        /\bNATIONAL (GUARD|RECONNAISSANCE|SECURITY) /i,
+        // Sketchy state-of patterns (allow US-state names embedded later)
         /^STATE OF (?!.*USA|.*\b(AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY)\b)/i,
     ];
-    function isForeignEntity(name: string): boolean {
-        return FOREIGN_ENTITY_PATTERNS.some((re) => re.test(name));
+    function isNonContractor(name: string): boolean {
+        return NON_CONTRACTOR_PATTERNS.some((re) => re.test(name));
     }
 
     const raw = ((candidates || []) as RawCand[])
-        .filter((c) => !isForeignEntity(c.company_name || c.dba_name || ""));
+        .filter((c) => !isNonContractor(c.company_name || c.dba_name || ""));
     // Prefer the scalar `total_award_volume` populated by enrich_contractors_usaspending.
     // Naics_awards aggregate may have a different shape ({amount} vs {total}) so we sum
     // BOTH possible field names as a safety belt.

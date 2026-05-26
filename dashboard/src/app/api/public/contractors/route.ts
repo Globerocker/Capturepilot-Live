@@ -63,15 +63,32 @@ export async function GET(req: NextRequest) {
     const { data, error } = await q;
     if (error) return NextResponse.json({ error: error.message }, { status: 500, headers });
 
-    // Compute aggregate stats for the overview page header
-    const total = (data || []).length;
-    const avgScore = total > 0
-        ? Math.round((data || []).reduce((s, r) => s + (r.federal_score || 0), 0) / total)
+    // Separate query for the table-wide aggregate stats — the meta.total
+    // is the FULL published count regardless of the `limit` param, so the
+    // overview page header shows the directory's true size.
+    let totalQuery = sb
+        .from("contractor_profile_pages")
+        .select("federal_score, total_awarded_amount", { count: "exact" })
+        .eq("is_published", true);
+    if (naics) totalQuery = totalQuery.eq("primary_naics", naics);
+    if (state) totalQuery = totalQuery.eq("state", state);
+    const { count: tableCount, data: allRows } = await totalQuery;
+
+    const fullData = (allRows || []) as Array<{ federal_score: number | null; total_awarded_amount: number | null }>;
+    const avgScore = fullData.length > 0
+        ? Math.round(fullData.reduce((s, r) => s + (r.federal_score || 0), 0) / fullData.length)
         : 0;
-    const totalAwarded = (data || []).reduce((s, r) => s + Number(r.total_awarded_amount || 0), 0);
+    const totalAwarded = fullData.reduce((s, r) => s + Number(r.total_awarded_amount || 0), 0);
 
     return NextResponse.json({
         contractors: data || [],
-        meta: { total, avg_score: avgScore, total_awarded: totalAwarded, filters: { naics, state }, sort },
+        meta: {
+            total: tableCount ?? fullData.length,
+            returned: (data || []).length,
+            avg_score: avgScore,
+            total_awarded: totalAwarded,
+            filters: { naics, state },
+            sort,
+        },
     }, { status: 200, headers });
 }
