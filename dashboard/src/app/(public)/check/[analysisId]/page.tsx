@@ -16,6 +16,7 @@ import { LeadMagnetForm } from "@/components/LeadMagnetForm";
 import { OpportunityLandscape, ConversionBottomSection, type OpportunityStats } from "@/components/OpportunityLandscape";
 import ReadinessScoreCard from "@/components/ReadinessScoreCard";
 import NaicsEditModal from "@/components/NaicsEditModal";
+import ProfileEditModal from "@/components/ProfileEditModal";
 import StartupPackOfferCard from "@/components/StartupPackOfferCard";
 import ConfirmFoundDataStep from "@/components/ConfirmFoundDataStep";
 import AnalysisLoadingScreen from "@/components/AnalysisLoadingScreen";
@@ -823,6 +824,7 @@ export default function CheckResultsPage() {
     const [saved, setSaved] = useState(false);
     const [saving, setSaving] = useState(false);
     const [naicsEditOpen, setNaicsEditOpen] = useState(false);
+    const [profileEditOpen, setProfileEditOpen] = useState(false);
     // "Save as Competitor" state — must sit with the other useStates above the
     // early-return guards, otherwise the hook count differs between the loading
     // render (12 hooks) and the loaded render (14), which throws
@@ -1181,12 +1183,19 @@ export default function CheckResultsPage() {
                                     )}
                                 </div>
                             </div>
-                            <div className="flex items-center gap-2 flex-shrink-0">
+                            <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
                                 {hasSam && (
                                     <span className="bg-emerald-50 text-emerald-700 text-[10px] font-bold px-3 py-1.5 rounded-lg border border-emerald-200">
                                         SAM.gov Verified
                                     </span>
                                 )}
+                                <button
+                                    type="button"
+                                    onClick={() => setProfileEditOpen(true)}
+                                    className="text-[11px] font-bold px-3 py-1.5 rounded-lg border bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700 inline-flex items-center gap-1.5 transition-all print:hidden"
+                                >
+                                    <Target className="w-3 h-3" /> Edit Info & Re-Match
+                                </button>
                                 <button
                                     type="button"
                                     onClick={handleSave}
@@ -1749,13 +1758,35 @@ export default function CheckResultsPage() {
                 </div>
             </main>
 
-            {/* NAICS edit modal */}
+            {/* NAICS edit modal — kept around for the inline "Edit codes" CTA
+                next to the NAICS list. */}
             {naicsEditOpen && (
                 <NaicsEditModal
                     analysisId={analysisId}
                     initialCodes={naics.map(n => ({ code: n.code, label: n.label }))}
                     onClose={() => setNaicsEditOpen(false)}
                     onSaved={handleNaicsEditSaved}
+                />
+            )}
+
+            {/* Full profile editor — top-of-page CTA. Edits company name, state,
+                primary keywords, NAICS codes, target states in one pass, then
+                rescores against the new profile. */}
+            {profileEditOpen && (
+                <ProfileEditModal
+                    analysisId={analysisId}
+                    initialCompanyName={data.company_name || ""}
+                    initialState={(profile.state as string | null) || ""}
+                    initialPrimaryKeywords={((profile.primary_keywords as Array<{ keyword?: string }> | undefined) || [])
+                        .map(k => String(k?.keyword || "").trim())
+                        .filter(k => k.length >= 2)}
+                    initialNaicsCodes={naics.map(n => ({ code: n.code, label: n.label }))}
+                    initialTargetStates={(profile.target_states as string[] | undefined) || []}
+                    onClose={() => setProfileEditOpen(false)}
+                    onSaved={async () => {
+                        setProfileEditOpen(false);
+                        await handleNaicsEditSaved();
+                    }}
                 />
             )}
 

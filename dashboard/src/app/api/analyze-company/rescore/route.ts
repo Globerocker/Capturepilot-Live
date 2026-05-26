@@ -29,13 +29,23 @@ type ScoredMatch = {
 /**
  * Re-run scoring + competitors + readiness against a new set of NAICS codes.
  * Reuses crawl_data, sam_data, and usaspending data from the original analysis.
- * Used by the "Edit NAICS codes" button on the Quick Checker results page.
+ * Used by the "Edit & Re-Match" button on the Quick Checker results page.
+ *
+ * Optional `profile_overrides` lets the caller patch the inferred_profile
+ * before scoring runs — company_name, state, primary_keywords, target_states.
+ * Any field not supplied is left as-is.
  */
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
         const analysisId = body.analysis_id as string;
         const naicsCodes = (body.naics_codes as string[]) || [];
+        const overrides = (body.profile_overrides || {}) as {
+            company_name?: string;
+            state?: string | null;
+            primary_keywords?: string[];
+            target_states?: string[];
+        };
 
         if (!analysisId) {
             return NextResponse.json({ error: "analysis_id is required" }, { status: 400 });
@@ -67,12 +77,53 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: "Analysis not found" }, { status: 404 });
         }
 
-        const companyName = analysis.company_name as string;
+        // Apply optional profile overrides supplied by the Edit & Re-Match form.
+        // We patch the row in DB BEFORE scoring so the persisted profile reflects
+        // what the user typed in, AND so the scoring profile below picks up the
+        // new values from the same source of truth.
+        const profilePatch: Record<string, unknown> = {};
+        if (overrides.company_name && overrides.company_name.trim()) {
+            profilePatch.company_name = overrides.company_name.trim();
+        }
+        const inferredProfileBase = (analysis.inferred_profile || {}) as Record<string, unknown>;
+        const newProfileFields: Record<string, unknown> = { ...inferredProfileBase };
+        if (overrides.state !== undefined) {
+            newProfileFields.state = overrides.state === "" ? null : overrides.state;
+        }
+        if (Array.isArray(overrides.primary_keywords)) {
+            newProfileFields.primary_keywords = overrides.primary_keywords
+                .map(k => String(k || "").trim().toLowerCase())
+                .filter(k => k.length >= 2)
+                .filter((v, i, a) => a.indexOf(v) === i)
+                .slice(0, 8)
+                .map(k => ({ keyword: k }));
+        }
+        if (Array.isArray(overrides.target_states)) {
+            newProfileFields.target_states = overrides.target_states
+                .map(s => String(s || "").trim().toUpperCase())
+                .filter(s => /^[A-Z]{2}$/.test(s))
+                .filter((v, i, a) => a.indexOf(v) === i);
+        }
+        // Always persist naics_codes alongside the inferred_naics array so the UI
+        // and the next rescore see the same canonical source.
+        newProfileFields.naics_codes = cleanCodes;
+        profilePatch.inferred_profile = newProfileFields;
+        if (Object.keys(profilePatch).length > 0) {
+            const { error: patchErr } = await sb
+                .from("company_analyses")
+                .update(profilePatch)
+                .eq("id", analysisId);
+            if (patchErr) {
+                console.warn("[rescore] profile patch failed:", patchErr.message);
+            }
+        }
+
+        const companyName = (overrides.company_name?.trim()) || (analysis.company_name as string);
         const crawlData = (analysis.crawl_data || {}) as Record<string, unknown>;
         const samData = (analysis.sam_data || null) as Record<string, unknown> | null;
         const certifications = (crawlData.certifications as { type: string; confidence: number }[]) || [];
         const detectedStates = (crawlData.detected_states as string[]) || [];
-        const inferredProfile = (analysis.inferred_profile || {}) as Record<string, unknown>;
+        const inferredProfile = newProfileFields;
         const primaryKeywords = (inferredProfile.primary_keywords as Array<{ keyword: string; aliases?: string[] }> | undefined) || [];
         const secondaryKeywords = (inferredProfile.secondary_keywords as Array<{ keyword: string; aliases?: string[] }> | undefined) || [];
 
@@ -93,17 +144,24 @@ export async function POST(request: NextRequest) {
         // them every preview match would come back with matched_keywords=undefined
         // and the result page can't explain why anything scored.
         const samCerts = (samData?.sba_certifications as string[]) || [];
+        // State / target_states honor user overrides first, then SAM, then crawl.
+        const overrideState = overrides.state === "" ? "" : (overrides.state || "");
+        const overrideTargetStates = Array.isArray(overrides.target_states)
+            ? overrides.target_states.map(s => String(s || "").trim().toUpperCase()).filter(s => /^[A-Z]{2}$/.test(s))
+            : null;
         const tempProfile: ProfileForScoring = {
             naics_codes: cleanCodes,
             sba_certifications: [
                 ...samCerts,
                 ...certifications.filter(c => c.confidence > 0.7).map(c => c.type),
             ].filter((v, i, a) => a.indexOf(v) === i),
-            state: (samData?.state as string) || detectedStates[0] || "",
-            target_states: [
-                ...(samData?.state ? [samData.state as string] : []),
-                ...detectedStates,
-            ].filter((v, i, a) => a.indexOf(v) === i),
+            state: overrideState || (samData?.state as string) || detectedStates[0] || "",
+            target_states: overrideTargetStates && overrideTargetStates.length > 0
+                ? overrideTargetStates
+                : [
+                    ...(samData?.state ? [samData.state as string] : []),
+                    ...detectedStates,
+                ].filter((v, i, a) => a.indexOf(v) === i),
             revenue: null,
             federal_awards_count: 0,
             target_psc_codes: [],

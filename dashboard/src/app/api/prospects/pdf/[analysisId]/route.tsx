@@ -245,7 +245,16 @@ export async function GET(
             },
         });
     } catch (e) {
-        console.error("PDF render error:", e);
-        return NextResponse.json({ error: "PDF render failed" }, { status: 500 });
+        // Surface the full message + stack into a single line so Vercel's log
+        // viewer (which truncates multi-arg console.error after ~80 chars)
+        // captures something we can actually debug.
+        const err = e as Error;
+        const message = err?.message || String(e);
+        const stack = err?.stack ? `\nSTACK ${err.stack.split("\n").slice(0, 5).join(" | ")}` : "";
+        console.error(`[pdf-render-fail] ${message}${stack}`);
+        return NextResponse.json({
+            error: "PDF render failed",
+            detail: process.env.NODE_ENV === "production" ? undefined : message,
+        }, { status: 500 });
     }
 }
