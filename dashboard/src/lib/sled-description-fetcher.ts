@@ -47,6 +47,7 @@ function looksLikeBlocked(text: string): boolean {
     const head = text.slice(0, 800).toLowerCase();
     return (
         head.includes("enable javascript and cookies") ||
+        head.includes("javascript is disabled on your browser") ||
         head.includes("checking your browser") ||
         head.includes("cf-error") ||
         head.includes("please sign in") ||
@@ -61,8 +62,27 @@ function looksLikeBlocked(text: string): boolean {
         // where the first 500 chars are timezone selectors or month-pickers.
         head.includes("international date line west") ||
         head.includes("coordinated universal time") ||
-        head.includes("aleutian islands")
+        head.includes("aleutian islands") ||
+        // SEPTA serves the same boilerplate template on every bid URL — the
+        // actual scope is in the PDF attachment behind their eProcurement
+        // login. The template has no bid-specific content.
+        head.includes("septa will accept bids with the eprocurement system only for the bid indicated") ||
+        // PublicPurchase.com Wyoming and others sprinkle random hex/alpha
+        // tokens around the content (CSRF/anti-scrape tokens) — when the
+        // first 200 chars are mostly token-shaped strings, it's noise.
+        looksLikeTokenSoup(head.slice(0, 200))
     );
+}
+
+// "Token soup" = strings dominated by short non-word fragments and capital
+// letters mixed with numbers — typical of CSRF / anti-scrape token blobs.
+// If >40% of the chars are in non-letter token-ish runs, reject.
+function looksLikeTokenSoup(text: string): boolean {
+    if (text.length < 50) return false;
+    // Count word-like runs (≥4 lowercase letters) vs everything else.
+    const wordChars = (text.match(/[a-z]{4,}/g) || []).join("").length;
+    const ratio = wordChars / text.length;
+    return ratio < 0.25;
 }
 
 // Score how "boilerplate" the captured text looks — anything > 0.4 is mostly
