@@ -66,6 +66,29 @@ interface MatchData {
     link?: string | null;
 }
 
+// Some SLED ingest paths store notice_type as a JSON-encoded blob like
+// `{"description":"Solicitation"}` rather than a plain string. The scoring
+// path tolerates it via .includes() but the UI shouldn't expose the curly
+// braces. Always render through this helper.
+function displayNoticeType(raw: string | null | undefined): string | null {
+    if (!raw) return null;
+    const s = String(raw).trim();
+    if (!s) return null;
+    if (s.startsWith("{")) {
+        try {
+            const parsed = JSON.parse(s) as { description?: unknown };
+            if (parsed && typeof parsed.description === "string" && parsed.description.trim()) {
+                return parsed.description.trim();
+            }
+        } catch {
+            const m = s.match(/"description"\s*:\s*"([^"]+)"/);
+            if (m && m[1]) return m[1].trim();
+        }
+        return null; // unparseable JSON → hide rather than show braces
+    }
+    return s;
+}
+
 // Pick the right "view this opportunity" URL for a match. Federal rows use
 // sam.gov; SLED / grant rows go straight to whatever portal originally listed
 // them (Bonfire, Socrata, BidExpress, NY-SCR, etc). Returns null when there's
@@ -629,8 +652,8 @@ function MatchCard({ match, rank, hero, userNaicsLabels }: { match: MatchData; r
                                     </span>
                                 );
                             })()}
-                            {match.notice_type && <span>·</span>}
-                            {match.notice_type && <span>{match.notice_type}</span>}
+                            {displayNoticeType(match.notice_type) && <span>·</span>}
+                            {displayNoticeType(match.notice_type) && <span>{displayNoticeType(match.notice_type)}</span>}
                             {match.naics_code && <span>·</span>}
                             {match.naics_code && <span className="font-mono">NAICS {match.naics_code}</span>}
                             {match.place_of_performance_state && <span>·</span>}
@@ -727,10 +750,10 @@ function MatchCard({ match, rank, hero, userNaicsLabels }: { match: MatchData; r
                 <div className="border-t border-stone-100 bg-stone-50/50 px-4 sm:px-5 py-4 space-y-3">
                     {/* Key details grid */}
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                        {match.notice_type && (
+                        {displayNoticeType(match.notice_type) && (
                             <div className="text-xs">
                                 <p className="text-[10px] text-stone-400 uppercase">Type</p>
-                                <p className="font-medium text-stone-700">{match.notice_type}</p>
+                                <p className="font-medium text-stone-700">{displayNoticeType(match.notice_type)}</p>
                             </div>
                         )}
                         {match.naics_code && (
