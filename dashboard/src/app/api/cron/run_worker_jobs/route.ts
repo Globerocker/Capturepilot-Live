@@ -110,6 +110,28 @@ export async function GET(req: NextRequest) {
         { auth: { persistSession: false } },
     );
 
+    // Cookie refresh: top up warm_cf_cookie jobs for any portal whose
+    // cached cookie expires within 6 minutes. CF clearance cookies live
+    // ~30 min; we keep a 6-min safety window so scrape_portal_detail
+    // never hits an expired cookie. The dedup index prevents duplicate
+    // pending jobs for the same host.
+    {
+        const expirySoon = new Date(Date.now() + 6 * 60 * 1000).toISOString();
+        const { data: expiring } = await sb.from("portal_cookies")
+            .select("host, expires_at")
+            .or(`expires_at.is.null,expires_at.lt.${expirySoon}`)
+            .limit(50);
+        const expiringHosts = (expiring || []) as { host: string; expires_at: string | null }[];
+        if (expiringHosts.length > 0) {
+            const rows = expiringHosts.map(r => ({
+                task_type: "warm_cf_cookie",
+                payload: { host: r.host },
+                priority: 9,
+            }));
+            await sb.from("worker_jobs").insert(rows);
+        }
+    }
+
     const startedAt = Date.now();
     let processed = 0;
     let done = 0;

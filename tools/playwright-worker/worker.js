@@ -274,6 +274,10 @@ async function tick() {
     // 4-30s per job so the overhead is negligible.
     let total = 0;
     for (let i = 0; i < 5; i++) {
+        // Pause between browser launches — back-to-back chromium spawns
+        // on Railway's container occasionally SIGSEGV during init. 2s
+        // settle window between close() and next launch() makes it stable.
+        if (i > 0) await new Promise(r => setTimeout(r, 2000));
         let browser;
         try {
             browser = await chromium.launch({ headless: true, args: CHROMIUM_ARGS });
@@ -282,7 +286,9 @@ async function tick() {
             if (n === 0) break;
         } catch (e) {
             console.error(`[worker] batch ${i} error: ${(e && e.message) || e}`);
-            break;
+            // Continue to next batch — transient launch failures shouldn't
+            // kill the whole tick.
+            continue;
         } finally {
             if (browser) await browser.close().catch(() => {});
         }
