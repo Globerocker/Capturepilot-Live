@@ -38,6 +38,7 @@ const TASKS = {
   bulk_enrich_ai:                  "bulk_enrich_ai",
   deep_enrich:                     "deep_enrich",
   enrich_contractors_usaspending:  "enrich_contractors_usaspending",
+  enrich_sled_descriptions:        "enrich_sled_descriptions",
 } as const;
 
 type TaskName = keyof typeof TASKS;
@@ -63,6 +64,11 @@ function tasksDueAt(d: Date): TaskName[] {
   if (m === 0 && h % 4 === 0) due.push("deep_enrich");
   // 30 6 * * *
   if (h === 6 && m === 30) due.push("enrich_contractors_usaspending");
+  // 5,25,45 * * * *  → every 20 min between the heavier tasks. 60-row batches,
+  // 35-45s each. Quick enough to fit the orchestrator window; over a 24h cycle
+  // it scans ~4,300 rows / day, more than enough to keep up with new SLED
+  // ingest + cycle back through the 1,300 rows that have <200-char descriptions.
+  if (m === 5 || m === 25 || m === 45) due.push("enrich_sled_descriptions");
 
   return due;
 }
