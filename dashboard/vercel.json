@@ -158,6 +158,10 @@
         {
             "path": "/api/cron/extract_keywords_batch",
             "schedule": "30 * * * *"
+        },
+        {
+            "path": "/api/cron/recalc_contractor_rankings",
+            "schedule": "30 4 * * *"
         }
     ],
     "functions": {
