@@ -21,6 +21,9 @@ type ScoredMatch = {
     score: number;
     classification: string;
     score_breakdown: Record<string, number>;
+    matched_keywords?: string[];
+    source?: string | null;
+    jurisdiction_level?: string | null;
 };
 
 /**
@@ -69,6 +72,9 @@ export async function POST(request: NextRequest) {
         const samData = (analysis.sam_data || null) as Record<string, unknown> | null;
         const certifications = (crawlData.certifications as { type: string; confidence: number }[]) || [];
         const detectedStates = (crawlData.detected_states as string[]) || [];
+        const inferredProfile = (analysis.inferred_profile || {}) as Record<string, unknown>;
+        const primaryKeywords = (inferredProfile.primary_keywords as Array<{ keyword: string; aliases?: string[] }> | undefined) || [];
+        const secondaryKeywords = (inferredProfile.secondary_keywords as Array<{ keyword: string; aliases?: string[] }> | undefined) || [];
 
         // Build new inferredNaics array with the user's selection.
         // Keep label/keywords from the static catalog, mark confidence high (user picked them).
@@ -82,7 +88,10 @@ export async function POST(request: NextRequest) {
             };
         });
 
-        // Build profile for scoring
+        // Build profile for scoring — keywords carry from inferred_profile so the
+        // text-similarity branch of scoreOpportunityLeadMagnet kicks in. Without
+        // them every preview match would come back with matched_keywords=undefined
+        // and the result page can't explain why anything scored.
         const samCerts = (samData?.sba_certifications as string[]) || [];
         const tempProfile: ProfileForScoring = {
             naics_codes: cleanCodes,
@@ -99,16 +108,21 @@ export async function POST(request: NextRequest) {
             federal_awards_count: 0,
             target_psc_codes: [],
             preferred_agencies: [],
+            primary_keywords: primaryKeywords,
+            secondary_keywords: secondaryKeywords,
         };
 
-        // Fetch opportunities matching the new NAICS codes
+        // Fetch opportunities matching the new NAICS codes — include title +
+        // description so keyword scoring has text to work with, and source +
+        // jurisdiction_level so the UI tier badge can say "State"/"County"/"City"
+        // instead of "Other".
         const allOpps: OpportunityForScoring[] = [];
         let offset = 0;
         const batchSize = 1000;
         while (true) {
             const { data: batch } = await sb
                 .from("opportunities")
-                .select("id, naics_code, psc_code, notice_type, agency, set_aside_code, place_of_performance_state, award_amount, response_deadline")
+                .select("id, naics_code, psc_code, notice_type, agency, set_aside_code, place_of_performance_state, award_amount, response_deadline, title, description, source, jurisdiction_level")
                 .eq("is_archived", false)
                 .in("naics_code", cleanCodes)
                 .range(offset, offset + batchSize - 1);
@@ -118,7 +132,13 @@ export async function POST(request: NextRequest) {
             offset += batchSize;
         }
 
-        // Score
+        // Score — keep an opp-by-id map so we can carry source/jurisdiction
+        // through to the persisted preview without a second roundtrip. Cast to
+        // the broader runtime shape since we widened the select above but
+        // OpportunityForScoring's type doesn't yet declare source/jurisdiction.
+        const oppById = new Map<string, Record<string, unknown>>(
+            allOpps.map(o => [o.id, o as unknown as Record<string, unknown>]),
+        );
         const scoredMatches: ScoredMatch[] = [];
         for (const opp of allOpps) {
             const result = scoreOpportunityLeadMagnet(tempProfile, opp);
@@ -127,7 +147,8 @@ export async function POST(request: NextRequest) {
         scoredMatches.sort((a, b) => b.score - a.score);
         const topCandidates = scoredMatches.slice(0, 40);
 
-        // Enrich candidates with full opportunity details
+        // Enrich candidates with full opportunity details + carry source/jurisdiction
+        // from the score-time opp map (already loaded — no second query needed).
         if (topCandidates.length > 0) {
             const oppIds = topCandidates.map(m => m.opportunity_id);
             const { data: oppDetails } = await sb
@@ -149,6 +170,12 @@ export async function POST(request: NextRequest) {
                         match.notice_id = detail.notice_id;
                         match.place_of_performance_state = detail.place_of_performance_state;
                         match.description_url = detail.description;
+                    }
+                    // Carry tier-classification fields from the scoring opp.
+                    const scoringOpp = oppById.get(match.opportunity_id);
+                    if (scoringOpp) {
+                        match.source = (scoringOpp.source as string | null) ?? null;
+                        match.jurisdiction_level = (scoringOpp.jurisdiction_level as string | null) ?? null;
                     }
                 }
             }

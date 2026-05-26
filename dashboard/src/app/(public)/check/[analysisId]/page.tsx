@@ -57,15 +57,42 @@ interface MatchData {
     ai_fit_summary?: string;
     /** 'sam' (federal) / 'sled' / 'grant' — drives source-tier badge. */
     source?: string | null;
+    /** 'state' / 'county' / 'city' — refines the SLED badge label. */
+    jurisdiction_level?: string | null;
 }
 
-// Source-tier badge config used on every match card. Reads opp.source plus
-// agency-string heuristics so SLED rows still get tagged when source is null.
-function getSourceTier(m: { source?: string | null; agency?: string }): { tier: "federal" | "state_local" | "grant" | "unknown"; label: string; color: string } {
+// Source-tier badge config used on every match card. Reads opp.source +
+// jurisdiction_level + agency heuristics so each row gets the most specific
+// label possible. Tiers, in order of specificity:
+//   Federal · State · County · City · Subcontracting · Grant · Other
+function getSourceTier(m: { source?: string | null; agency?: string; jurisdiction_level?: string | null; notice_type?: string | null }): { tier: "federal" | "state" | "county" | "city" | "subcontract" | "grant" | "unknown"; label: string; color: string } {
     const s = (m.source || "").toLowerCase();
-    if (s === "sled") return { tier: "state_local", label: "State / Local", color: "bg-indigo-50 text-indigo-700 border-indigo-200" };
+    const jl = (m.jurisdiction_level || "").toLowerCase();
+    const agency = (m.agency || "").toLowerCase();
+
+    // Subcontracting prime/SBA-network signals — visible cue that this is not
+    // a direct-bid federal opp but a teaming / subcontracting lead.
+    if (
+        /\bsubcontract|subnet|dynamic small business|sba\s+subcontract|small business administration\s+sub/i.test(m.agency || "") ||
+        /\bsubcontract/i.test(m.notice_type || "")
+    ) {
+        return { tier: "subcontract", label: "Subcontracting", color: "bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200" };
+    }
+
     if (s === "grant") return { tier: "grant", label: "Grant", color: "bg-violet-50 text-violet-700 border-violet-200" };
-    if (s === "sam" || (s === "" && m.agency && /\b(department|dept|agency|bureau|office|administration|service|command)\b/i.test(m.agency))) {
+
+    if (s === "sled") {
+        if (jl === "state") return { tier: "state", label: "State", color: "bg-indigo-50 text-indigo-700 border-indigo-200" };
+        if (jl === "county") return { tier: "county", label: "County", color: "bg-teal-50 text-teal-700 border-teal-200" };
+        if (jl === "city") return { tier: "city", label: "City", color: "bg-cyan-50 text-cyan-700 border-cyan-200" };
+        // Fall back to inferring from agency string when DB didn't populate level
+        if (/\bcounty\b/.test(agency)) return { tier: "county", label: "County", color: "bg-teal-50 text-teal-700 border-teal-200" };
+        if (/\bcity of\b|\btown of\b|\bvillage of\b|\bcity\s+services\b/.test(agency)) return { tier: "city", label: "City", color: "bg-cyan-50 text-cyan-700 border-cyan-200" };
+        if (/\bstate of\b|department of (transportation|education|health|labor|administration)/.test(agency)) return { tier: "state", label: "State", color: "bg-indigo-50 text-indigo-700 border-indigo-200" };
+        return { tier: "state", label: "State / Local", color: "bg-indigo-50 text-indigo-700 border-indigo-200" };
+    }
+
+    if (s === "sam" || (s === "" && m.agency && /\b(department of (defense|veterans|homeland|state|the (army|navy|air force|interior|treasury|justice|energy)|labor|education|commerce|transportation|agriculture|housing|health|the\s+interior))|\b(dept|federal|gsa|noaa|nasa|usda|usaf)\b/i.test(m.agency))) {
         return { tier: "federal", label: "Federal", color: "bg-blue-50 text-blue-700 border-blue-200" };
     }
     return { tier: "unknown", label: "Other", color: "bg-stone-50 text-stone-600 border-stone-200" };
@@ -635,6 +662,11 @@ function MatchCard({ match, rank, hero, userNaicsLabels }: { match: MatchData; r
                     </div>
                     <p className="font-bold text-sm text-black line-clamp-2">{match.title || "Untitled Opportunity"}</p>
                     <p className="text-xs text-stone-500 mt-0.5">{match.agency || "Federal Agency"}</p>
+                    {match.matched_keywords && match.matched_keywords.length > 0 && (
+                        <p className="text-[10px] text-emerald-700 mt-1 truncate">
+                            <span className="font-bold uppercase tracking-wider text-emerald-600">Matched:</span> {match.matched_keywords.slice(0, 4).join(" · ")}
+                        </p>
+                    )}
                 </div>
 
                 <ChevronDown className={clsx(
@@ -700,6 +732,22 @@ function MatchCard({ match, rank, hero, userNaicsLabels }: { match: MatchData; r
                             </div>
                         )}
                     </div>
+
+                    {/* Matched keywords — shows the user the actual phrases that lit
+                        up the keyword scorer, so they can judge whether the match is
+                        real or coincidental at a glance. */}
+                    {match.matched_keywords && match.matched_keywords.length > 0 && (
+                        <div>
+                            <p className="text-[10px] text-stone-400 uppercase mb-1.5">Why it matched — keywords found in this opportunity</p>
+                            <div className="flex gap-1.5 flex-wrap">
+                                {match.matched_keywords.slice(0, 8).map((kw) => (
+                                    <span key={kw} className="text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full">
+                                        {kw}
+                                    </span>
+                                ))}
+                            </div>
+                        </div>
+                    )}
 
                     {/* Score breakdown */}
                     {match.score_breakdown && Object.keys(match.score_breakdown).length > 0 && (
@@ -1403,11 +1451,14 @@ export default function CheckResultsPage() {
                     {/* Coverage breakdown — surfaces that we now query across federal +
                         state/local + grant pipelines (post-Tag 6 SLED + RSS rollout). */}
                     {matches.length > 0 && (() => {
-                        const tally = { federal: 0, state_local: 0, grant: 0, unknown: 0 };
-                        for (const m of matches) tally[getSourceTier(m).tier]++;
+                        const tally: Record<string, number> = { federal: 0, state: 0, county: 0, city: 0, subcontract: 0, grant: 0, unknown: 0 };
+                        for (const m of matches) tally[getSourceTier(m).tier] = (tally[getSourceTier(m).tier] || 0) + 1;
                         const items: Array<{ label: string; n: number; color: string }> = [
                             { label: "Federal", n: tally.federal, color: "bg-blue-50 text-blue-700 border-blue-200" },
-                            { label: "State / Local", n: tally.state_local, color: "bg-indigo-50 text-indigo-700 border-indigo-200" },
+                            { label: "State", n: tally.state, color: "bg-indigo-50 text-indigo-700 border-indigo-200" },
+                            { label: "County", n: tally.county, color: "bg-teal-50 text-teal-700 border-teal-200" },
+                            { label: "City", n: tally.city, color: "bg-cyan-50 text-cyan-700 border-cyan-200" },
+                            { label: "Subcontracting", n: tally.subcontract, color: "bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200" },
                             { label: "Grant", n: tally.grant, color: "bg-violet-50 text-violet-700 border-violet-200" },
                         ].filter(x => x.n > 0);
                         if (items.length === 0) return null;
@@ -1614,9 +1665,9 @@ export default function CheckResultsPage() {
                             <button
                                 type="button"
                                 onClick={() => setNaicsEditOpen(true)}
-                                className="text-xs font-bold bg-white border border-stone-200 hover:border-emerald-400 hover:text-emerald-700 text-stone-700 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5"
+                                className="text-xs font-bold bg-emerald-50 border border-emerald-300 hover:bg-emerald-100 hover:border-emerald-500 text-emerald-700 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5"
                             >
-                                <Target className="w-3 h-3" /> Edit codes
+                                <Target className="w-3 h-3" /> Edit & Re-Match
                             </button>
                         </div>
                         <div className="p-5 sm:p-8 space-y-3">
