@@ -217,7 +217,9 @@ export async function getTopRecipientsByNaics(args: {
                         end_date: new Date().toISOString().slice(0, 10),
                     }],
                     award_type_codes: ["A", "B", "C", "D"],
-                    naics_codes: { require: [[args.naics]] },
+                    // Flat array form — USAspending v2 expects ["541330"] not
+                    // {require: [["541330"]]} for this endpoint.
+                    naics_codes: [args.naics],
                 },
                 category: "recipient",
                 limit: Math.min(args.limit ?? 50, 100),
@@ -226,12 +228,23 @@ export async function getTopRecipientsByNaics(args: {
             signal: AbortSignal.timeout(args.timeoutMs ?? 25000),
         });
         if (!res.ok) return [];
-        const json = await res.json() as { results?: Array<{ name?: string; recipient_id?: string; code?: string; amount?: number; count?: number }> };
+        const json = await res.json() as {
+            results?: Array<{
+                name?: string;
+                recipient_id?: string;
+                code?: string;   // DUNS (legacy)
+                uei?: string;    // 12-char UEI (current)
+                amount?: number;
+                count?: number;
+            }>;
+        };
         return (json.results || [])
             .map((r) => ({
                 name: r.name || "Unknown",
                 recipient_id: r.recipient_id || null,
-                uei: r.code || null, // USAspending puts UEI in `code` for recipient category
+                // Prefer the real UEI field; fall back to `code` only when it
+                // looks UEI-shaped (12 alphanumeric chars, not 9-digit DUNS).
+                uei: r.uei || (r.code && /^[A-Z0-9]{12}$/i.test(r.code) ? r.code : null),
                 amount: Number(r.amount) || 0,
                 count: Number(r.count) || 0,
             }))
