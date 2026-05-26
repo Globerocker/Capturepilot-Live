@@ -28,7 +28,9 @@ interface DbStats {
         expiring_in_7d_exact: number;
         expired_estimated: number;
         latest_added: { posted_date: string | null; created_at: string | null; title: string | null; agency: string | null; notice_id: string | null } | null;
+        status_distribution?: Array<{ status: string; count: number }>;
     };
+    field_fill_rates?: Array<{ field: string; populated: number; pct: number }>;
     enrichment: {
         denominator: number;
         strategic_scoring: { populated: number; pct: number };
@@ -283,6 +285,45 @@ export default function AdminOverview() {
                                     </div>
                                 ))}
                             </div>
+
+                            {/* Per-field fill rates — surfaces the empty-field problem on opp detail pages */}
+                            {dbStats.field_fill_rates && (
+                                <div className="p-5">
+                                    <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400 mb-2 flex items-center gap-1">
+                                        <Sparkles className="w-3 h-3" /> Field fill rates (% of active rows)
+                                    </p>
+                                    <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+                                        {dbStats.field_fill_rates.map((f) => (
+                                            <div key={f.field} className="flex items-center gap-2 text-[11px]">
+                                                <span className="flex-1 truncate font-mono text-stone-600">{f.field}</span>
+                                                <span className={clsx("font-bold tabular-nums w-10 text-right",
+                                                    f.pct >= 80 ? "text-emerald-600" : f.pct >= 40 ? "text-amber-600" : "text-rose-600")}>
+                                                    {f.pct}%
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Status distribution — explains the "0 active" mystery */}
+                            {dbStats.opportunities.status_distribution && (
+                                <div className="p-5">
+                                    <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400 mb-2 flex items-center gap-1">
+                                        <Database className="w-3 h-3" /> Status distribution
+                                    </p>
+                                    <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
+                                        {dbStats.opportunities.status_distribution
+                                            .filter((s) => s.count > 0)
+                                            .map((s) => (
+                                                <div key={s.status} className="flex items-center gap-2">
+                                                    <span className="flex-1 truncate font-mono text-stone-600">{s.status}</span>
+                                                    <span className="font-bold tabular-nums text-stone-700">{s.count.toLocaleString()}</span>
+                                                </div>
+                                            ))}
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Critical crons — stalest first */}
                             <div className="p-5">

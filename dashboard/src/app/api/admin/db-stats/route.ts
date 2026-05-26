@@ -205,6 +205,48 @@ export async function GET() {
         };
     }
 
+    // --- Per-field fill-rate diagnostic ---------------------------------
+    // For each KEY field we care about, count rows where it's populated.
+    // Drives the "DB Health by Field" panel + the gap-filler agent triggers.
+    const FIELD_CHECKS: Array<{ key: string; column: string; type: "not_null" | "array_non_empty" | "text_non_empty" }> = [
+        { key: "description", column: "description", type: "text_non_empty" },
+        { key: "agency", column: "agency", type: "text_non_empty" },
+        { key: "place_of_performance_state", column: "place_of_performance_state", type: "text_non_empty" },
+        { key: "naics_code", column: "naics_code", type: "text_non_empty" },
+        { key: "psc_code", column: "psc_code", type: "text_non_empty" },
+        { key: "set_aside_code", column: "set_aside_code", type: "text_non_empty" },
+        { key: "response_deadline", column: "response_deadline", type: "not_null" },
+        { key: "award_amount", column: "award_amount", type: "not_null" },
+        { key: "structured_requirements", column: "structured_requirements", type: "not_null" },
+        { key: "ai_win_strategy", column: "ai_win_strategy", type: "not_null" },
+        { key: "strategic_scoring", column: "strategic_scoring", type: "not_null" },
+        { key: "extracted_emails", column: "extracted_emails", type: "array_non_empty" },
+        { key: "extracted_phones", column: "extracted_phones", type: "array_non_empty" },
+        { key: "extracted_attachment_urls", column: "extracted_attachment_urls", type: "array_non_empty" },
+        { key: "extracted_keywords", column: "extracted_keywords", type: "array_non_empty" },
+        { key: "estimated_value_max", column: "estimated_value_max", type: "not_null" },
+        { key: "opportunity_class", column: "opportunity_class", type: "text_non_empty" },
+        { key: "extracted_offices", column: "extracted_offices", type: "array_non_empty" },
+    ];
+
+    const fieldChecks = await Promise.all(FIELD_CHECKS.map(async (f) => {
+        let q = sb.from("opportunities").select("*", { count: "estimated", head: true }).eq("is_archived", false);
+        if (f.type === "not_null") q = q.not(f.column, "is", null);
+        else if (f.type === "text_non_empty") q = q.not(f.column, "is", null).neq(f.column, "");
+        else if (f.type === "array_non_empty") q = q.not(f.column, "is", null);
+        const { count } = await q;
+        return { field: f.key, populated: count ?? 0, pct: pct(count) };
+    }));
+
+    // Status distribution — answer the user's "why is active showing 0?" question.
+    const STATUSES = ["ACTIVE", "EXPIRING_SOON", "DISCOVERED", "EXPIRED", "AWARDED", "CANCELLED", "MARKET_RESEARCH"];
+    const statusCounts = await Promise.all(STATUSES.map(async (s) => {
+        const { count } = await sb.from("opportunities").select("*", { count: "estimated", head: true }).eq("status", s);
+        return { status: s, count: count ?? 0 };
+    }));
+    const nullStatusRes = await sb.from("opportunities").select("*", { count: "estimated", head: true }).is("status", null);
+    statusCounts.push({ status: "NULL", count: nullStatusRes.count ?? 0 });
+
     return NextResponse.json({
         generated_at: new Date().toISOString(),
         opportunities: {
@@ -214,6 +256,7 @@ export async function GET() {
             expiring_in_30d_estimated: null,
             expired_estimated: expiredRes.count ?? 0,
             latest_added: latest,
+            status_distribution: statusCounts,
         },
         enrichment: {
             denominator: denom,
@@ -221,6 +264,7 @@ export async function GET() {
             ai_win_strategy: { populated: winStrategyFilledRes.count ?? 0, pct: pct(winStrategyFilledRes.count) },
             structured_requirements: { populated: requirementsFilledRes.count ?? 0, pct: pct(requirementsFilledRes.count) },
         },
+        field_fill_rates: fieldChecks,
         crons,
         recent_logins: recentLogins,
         recent_activity: enrichedActivity,
