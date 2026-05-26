@@ -39,6 +39,8 @@ const TASKS = {
   deep_enrich:                     "deep_enrich",
   enrich_contractors_usaspending:  "enrich_contractors_usaspending",
   enrich_sled_descriptions:        "enrich_sled_descriptions",
+  discover_bonfire_tenants:        "discover_bonfire_tenants",
+  analyze_match_attachments:       "analyze_match_attachments",
 } as const;
 
 type TaskName = keyof typeof TASKS;
@@ -71,6 +73,18 @@ function tasksDueAt(d: Date): TaskName[] {
   // batches, enough to chew through the 1,100-row gap in ~3 days then
   // settle into maintenance keeping up with new ingest.
   if (m === 10 || m === 40) due.push("enrich_sled_descriptions");
+
+  // Bonfire tenant discovery — daily at 04:00 UTC. Cheap (~25s for 200
+  // seed probes) and idempotent; new tenants land in rss_sources, the
+  // ingest_bonfire_json cron picks them up automatically. No need for
+  // higher frequency — seed list grows slowly.
+  if (h === 4 && m === 0) due.push("discover_bonfire_tenants");
+
+  // SAM attachment text → structured_requirements. Runs at :15 every
+  // hour. analyze_match_attachments downloads PDFs/DOCX from saved opps,
+  // extracts text, and re-runs the LLM to fill bonding/insurance/clearance/
+  // performance-period fields that were null from description-only extraction.
+  if (m === 15) due.push("analyze_match_attachments");
 
   return due;
 }

@@ -70,21 +70,52 @@ const HANDLERS = [
         name: "bonfire-detail",
         match: (host) => host.endsWith(".bonfirehub.com"),
         async fetch(page, link) {
-            // Bonfire SPAs render the bid body into .project-summary on this
-            // route. Waiting for the selector handles both clean loads and
-            // CF challenges (CF resolves within 5s, then the SPA mounts).
-            await page.goto(link, { waitUntil: "domcontentloaded", timeout: 30_000 });
-            const sel = await page.waitForSelector(
-                ".project-summary, .public-project-summary, [class*='ProjectSummary'], main",
-                { timeout: 15_000 },
-            ).catch(() => null);
-            if (!sel) return null;
+            // Bonfire = Cloudflare-protected SPA. The CF challenge resolves
+            // via JS within 5-10s; we navigate with networkidle so the wait
+            // happens transparently, then check what we actually loaded.
+            await page.goto(link, { waitUntil: "networkidle", timeout: 45_000 });
+            // Give the SPA mount a moment after CF clears.
+            await page.waitForTimeout(2500);
+            // Log what we ACTUALLY got so we can iterate selectors.
+            const diag = await page.evaluate(() => ({
+                title: document.title || "",
+                bodyLen: (document.body?.innerText || "").length,
+                h1: document.querySelector("h1")?.innerText || "",
+                // Probe a wide net of candidate selectors so we can see
+                // which one Bonfire's actual template uses.
+                candidates: {
+                    "main": (document.querySelector("main")?.innerText || "").length,
+                    ".project-summary": (document.querySelector(".project-summary")?.innerText || "").length,
+                    "[role=main]": (document.querySelector("[role=main]")?.innerText || "").length,
+                    "article": (document.querySelector("article")?.innerText || "").length,
+                    "#root": (document.querySelector("#root")?.innerText || "").length,
+                    "#app": (document.querySelector("#app")?.innerText || "").length,
+                    ".content": (document.querySelector(".content")?.innerText || "").length,
+                },
+            }));
+            console.log(`    [diag] title="${diag.title}" body=${diag.bodyLen} h1="${diag.h1}" candidates=${JSON.stringify(diag.candidates)}`);
+            // Look for CF challenge marker — if present, scraping failed.
+            const cfBlocked = await page.evaluate(() =>
+                /just a moment|enable javascript and cookies/i.test(document.body?.innerText || "")
+            );
+            if (cfBlocked) {
+                console.log("    [diag] Cloudflare challenge page detected — scrape unavailable");
+                return null;
+            }
+            // Grab whichever candidate has the most content (likely the
+            // bid body container).
             const text = await page.evaluate(() => {
-                const main = document.querySelector(".project-summary, .public-project-summary, [class*='ProjectSummary'], main");
-                if (!main) return "";
-                return (main.innerText || "").replace(/\s+/g, " ").trim();
+                const sels = ["main", ".project-summary", "[role=main]", "article", "#root", "#app", ".content", "body"];
+                let best = "";
+                for (const s of sels) {
+                    const el = document.querySelector(s);
+                    if (!el) continue;
+                    const t = (el.innerText || "").trim();
+                    if (t.length > best.length) best = t;
+                }
+                return best.replace(/\s+/g, " ").trim();
             });
-            return text && text.length >= 80 ? text.slice(0, 6000) : null;
+            return text && text.length >= 200 ? text.slice(0, 6000) : null;
         },
     },
     {
