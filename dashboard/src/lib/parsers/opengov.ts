@@ -1,22 +1,26 @@
 /**
  * OpenGov Procurement JSON-API client.
  *
- * Per docs/source-analysis/OPENGOV.md: OpenGov Procurement is a webpack
- * SPA whose HTML at procurement.opengov.com is Cloudflare-protected,
- * BUT the underlying REST API at api.procurement.opengov.com/api/v1
- * is reachable anonymously with the right UA + Origin headers.
+ * STATUS 2026-05-26: PARTIALLY BLOCKED.
+ *   - GET /government (tenants directory) works → 545 tenants confirmed
+ *   - The project-listing endpoints documented in the research file
+ *     (e.g. /government/{slug}/project/public) all return 404 in prod.
+ *   - Direct portal HTML (procurement.opengov.com/portal/<code>) returns
+ *     403 Cloudflare-challenge to non-browser clients.
+ *   - Decompiling the SPA bundle shows the public site loads projects
+ *     via GraphQL at /api/v1/po/graphql — the documented REST surface
+ *     is private/internal.
+ *   The cron writes ok_empty harmlessly until we either reverse-engineer
+ *   the GraphQL query or wire a headless-browser path.
  *
- * Three endpoints:
- *   GET  /government                       → 545+ tenants index
- *   POST /government/{slug}/project/public → paginated open listings
- *   GET  /project/{id}                     → ~200-field detail
- *
- * Cloudflare gotcha: a curl/Python default UA gets 403'd. A realistic
- * Chrome UA + Origin: procurement.opengov.com header gives clean 200s.
+ * Three documented endpoints (only the first verifiably works):
+ *   GET  /government                       → 545+ tenants index ✓
+ *   POST /government/{slug}/project/public → 404 in prod ✗
+ *   GET  /project/{id}                     → 404 in prod ✗
  *
  * Category systems: hardcoded — NIGP:100, NAICS:200, UNSPSC:300. ~75%
  * of tenants use NIGP; the caller can read `categorySetId` and apply
- * a NIGP→NAICS crosswalk if needed.
+ * a NIGP→NAICS crosswalk if needed (once project listings are reachable).
  */
 
 const API_BASE = "https://api.procurement.opengov.com/api/v1";
