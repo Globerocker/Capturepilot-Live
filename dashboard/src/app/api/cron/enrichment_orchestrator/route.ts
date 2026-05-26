@@ -41,6 +41,8 @@ const TASKS = {
   enrich_sled_descriptions:        "enrich_sled_descriptions",
   discover_bonfire_tenants:        "discover_bonfire_tenants",
   analyze_match_attachments:       "analyze_match_attachments",
+  run_worker_jobs:                 "run_worker_jobs",
+  enqueue_backfill:                "enqueue_backfill",
 } as const;
 
 type TaskName = keyof typeof TASKS;
@@ -85,6 +87,16 @@ function tasksDueAt(d: Date): TaskName[] {
   // extracts text, and re-runs the LLM to fill bonding/insurance/clearance/
   // performance-period fields that were null from description-only extraction.
   if (m === 15) due.push("analyze_match_attachments");
+
+  // worker_jobs queue consumer (Vercel side — HTTP-only task types).
+  // Runs every orchestrator tick — picks up jobs enqueued by the
+  // opportunities trigger and the bulk-backfill cron. Browser tasks stay
+  // claimed by the Railway worker.
+  due.push("run_worker_jobs");
+
+  // Bulk backfill — re-enqueues any stale opps + tops up the cookie-warmer
+  // queue. Runs hourly at :30. Idempotent via worker_jobs.dedup_key.
+  if (m === 30) due.push("enqueue_backfill");
 
   return due;
 }

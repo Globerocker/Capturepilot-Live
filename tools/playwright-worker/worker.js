@@ -1,49 +1,45 @@
 /**
- * CapturePilot Playwright worker — fills SLED opportunity descriptions from
- * SPA portals that Vercel's serverless can't crawl.
+ * CapturePilot worker — generic job-queue consumer with Playwright handlers.
  *
- * What this exists for:
- *   - Bonfire detail pages (~228 rows in our DB) are Cloudflare-protected SPAs.
- *     Anonymous curl gets a 403; a real Chromium with a CF cookie jar gets the
- *     bid body.
- *   - OpenGov procurement portals load via GraphQL with auth tokens we can't
- *     mint from our backend. A logged-out browser session does the dance for us.
- *   - TX SmartBuy / Cleveland / Maryland eMMA show "Javascript is disabled"
- *     in the no-script HTML. The actual content lands after JS executes.
- *   - NY-SCR detail pages require an account login (we skip those — only
- *     valuable if you've registered an NYS vendor account; not the worker's job).
+ * Reads worker_jobs (migration 086), atomically claims pending rows whose
+ * task_type matches our HANDLERS map, runs the handler, writes the result
+ * back via finish_job.
  *
- * Loop:
- *   1. Poll Supabase every WORKER_POLL_INTERVAL_MS for SLED rows where
- *      description IS NULL or length < 200, AND the link matches one of the
- *      SPA portal patterns below.
- *   2. For each batch, spin up a single Chromium context (cookie reuse cuts
- *      Cloudflare friction by ~3x). One worker = one batch in flight; we set
- *      concurrency low because Bonfire detects parallel hits and starts
- *      throwing CF challenges.
- *   3. Per row: navigate, wait for content selector, extract description text.
- *   4. Write back via service-role Supabase client.
- *   5. Bump last_crawled_at on every row (even on miss) so we don't burn
- *      Chromium time on the same dead-ends each tick.
+ * Currently registered task types:
+ *   - scrape_portal_detail   : Bonfire / OpenGov / TX SmartBuy / generic SPA
+ *                              detail-page scraping. Uses portal_cookies
+ *                              when available (defeats Cloudflare).
+ *   - warm_cf_cookie         : Open a portal homepage, wait for CF, harvest
+ *                              cookies, store in portal_cookies for reuse.
+ *   - extract_brand_tokens   : (future) competitor brand extraction
  *
- * Env vars required:
- *   NEXT_PUBLIC_SUPABASE_URL    Supabase project URL
- *   SUPABASE_SERVICE_KEY        Service-role JWT (write access)
- *   WORKER_BATCH_SIZE           Default 8 rows/tick (low for CF politeness)
- *   WORKER_POLL_INTERVAL_MS     Default 60000 (1 min)
- *   WORKER_USER_AGENT           Override the default UA string
+ * Vercel cron handlers consume the HTTP-only task types out of the same
+ * queue (classify_naics, extract_structured_reqs, analyze_attachments, etc).
  */
 
 import { createClient } from "@supabase/supabase-js";
-import { chromium } from "playwright";
+import { chromium as rawChromium } from "playwright";
 import WebSocketImpl from "ws";
 
-// Node 20 (which the Playwright base image ships) doesn't have a native
-// global WebSocket. Supabase's realtime-js eagerly initializes a WS client
-// when createClient() runs — without this polyfill the worker crashes on
-// boot with "Node.js 20 detected without native WebSocket support".
+// Node 20 in the Playwright base image doesn't ship a native WebSocket;
+// Supabase realtime-js needs one or createClient throws on boot.
 if (typeof globalThis.WebSocket === "undefined") {
     globalThis.WebSocket = WebSocketImpl;
+}
+
+// Stealth plugin — hides headless-Chrome fingerprints (navigator.webdriver,
+// plugin count, canvas hash, etc). Loaded conditionally so the worker still
+// boots if the dep isn't installed.
+let chromium = rawChromium;
+try {
+    const { addExtra } = await import("playwright-extra");
+    const stealth = (await import("puppeteer-extra-plugin-stealth")).default;
+    const extra = addExtra(rawChromium);
+    extra.use(stealth());
+    chromium = extra;
+    console.log("[worker] stealth plugin loaded");
+} catch (e) {
+    console.log("[worker] stealth plugin unavailable, using raw chromium:", e?.message || e);
 }
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -53,305 +49,248 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
     process.exit(1);
 }
 
-// Smaller default batch because Chromium memory accumulates fast on Railway's
-// 1 GB / Fly's 512 MB trial tiers. Bump WORKER_BATCH_SIZE in env once we know
-// the plan can take it.
 const BATCH_SIZE = Number(process.env.WORKER_BATCH_SIZE || 3);
-const POLL_MS = Number(process.env.WORKER_POLL_INTERVAL_MS || 60_000);
+const POLL_MS = Number(process.env.WORKER_POLL_INTERVAL_MS || 30_000);
 const UA = process.env.WORKER_USER_AGENT
     || "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false } });
 
-// Per-portal handler — each returns a description string or null. Each runs
-// inside the same browser context so CF cookies persist across hits.
-const HANDLERS = [
-    {
-        name: "bonfire-detail",
-        match: (host) => host.endsWith(".bonfirehub.com"),
-        async fetch(page, link) {
-            // Bonfire = Cloudflare-protected SPA. The CF challenge resolves
-            // via JS within 5-10s; we navigate with networkidle so the wait
-            // happens transparently, then check what we actually loaded.
-            await page.goto(link, { waitUntil: "networkidle", timeout: 45_000 });
-            // Give the SPA mount a moment after CF clears.
-            await page.waitForTimeout(2500);
-            // Cloudflare-challenge detection — covers all observed variants:
-            //   - title="Just a moment..."
-            //   - title="Attention Required! | Cloudflare"
-            //   - tiny body (< 500 chars) with the hostname as h1 (CF's
-            //     no-script fallback page)
-            const diag = await page.evaluate(() => ({
-                title: document.title || "",
-                bodyLen: (document.body?.innerText || "").length,
-                h1: document.querySelector("h1")?.innerText || "",
-                hasCfHeader: !!document.querySelector("#cf-wrapper, .cf-error-code, [data-translate]"),
-            }));
-            const titleCfMatch = /just a moment|attention required|cloudflare/i.test(diag.title);
-            const bodyTooSmall = diag.bodyLen < 600;
-            const cfBlocked = titleCfMatch || diag.hasCfHeader || bodyTooSmall;
-            console.log(`    [diag] title="${diag.title}" body=${diag.bodyLen} h1="${diag.h1}" cfBlocked=${cfBlocked}`);
-            if (cfBlocked) {
-                console.log("    [diag] Cloudflare challenge — scrape unavailable");
-                return null;
-            }
-            // Grab whichever candidate has the most content.
-            const text = await page.evaluate(() => {
-                const sels = ["main", ".project-summary", "[role=main]", "article", "#root", "#app", ".content", "body"];
-                let best = "";
-                for (const s of sels) {
-                    const el = document.querySelector(s);
-                    if (!el) continue;
-                    const t = (el.innerText || "").trim();
-                    if (t.length > best.length) best = t;
-                }
-                return best.replace(/\s+/g, " ").trim();
-            });
-            return text && text.length >= 400 ? text.slice(0, 6000) : null;
-        },
-    },
-    {
-        name: "opengov-procurement",
-        match: (host) => host.endsWith(".opengov.com") || host === "procurement.opengov.com",
-        async fetch(page, link) {
-            await page.goto(link, { waitUntil: "networkidle", timeout: 30_000 });
-            // OpenGov mounts the bid body into [data-testid="project-detail-..."]
-            // OR an article tag after GraphQL resolves.
-            const text = await page.evaluate(() => {
-                const candidates = document.querySelectorAll(
-                    "[data-testid*='detail'], article, main, .project-details, .bid-body",
-                );
-                for (const el of candidates) {
-                    const t = (el.innerText || "").trim();
-                    if (t.length >= 200) return t.replace(/\s+/g, " ");
-                }
-                return "";
-            });
-            return text && text.length >= 80 ? text.slice(0, 6000) : null;
-        },
-    },
-    {
-        name: "tx-smartbuy",
-        match: (host) => host === "www.txsmartbuy.gov" || host === "txsmartbuy.gov",
-        async fetch(page, link) {
-            await page.goto(link, { waitUntil: "networkidle", timeout: 30_000 });
-            // TX SmartBuy ESBD detail panel
-            const text = await page.evaluate(() => {
-                const panel = document.querySelector(".esbd-detail, .opportunity-detail, main, #content");
-                if (!panel) return "";
-                return (panel.innerText || "").replace(/\s+/g, " ").trim();
-            });
-            return text && text.length >= 80 ? text.slice(0, 6000) : null;
-        },
-    },
-    {
-        name: "generic-spa",
-        // Fallback for everything else — Cleveland, eMaryland, NC eVP, etc.
-        // Waits for networkidle then grabs main / body innerText. Caller
-        // decides whether the row was worth a Chromium launch by URL host
-        // pattern in pickHandler() below.
-        match: () => true,
-        async fetch(page, link) {
-            await page.goto(link, { waitUntil: "networkidle", timeout: 30_000 });
-            const text = await page.evaluate(() => {
-                const main = document.querySelector(
-                    "main, article, [role='main'], .content, #content, .detail, .bid-detail",
-                );
-                if (!main) return (document.body.innerText || "").replace(/\s+/g, " ").trim();
-                return (main.innerText || "").replace(/\s+/g, " ").trim();
-            });
-            return text && text.length >= 200 ? text.slice(0, 6000) : null;
-        },
-    },
-];
+// ---------------------------------------------------------------------------
+// HANDLERS — one per task_type. Each returns { result, error? }.
+// ---------------------------------------------------------------------------
+const HANDLERS = {
+    scrape_portal_detail: scrapePortalDetail,
+    warm_cf_cookie: warmCfCookie,
+};
+const MY_TASKS = Object.keys(HANDLERS);
 
-// Only queue rows whose link host matches a portal we know is SPA-rendered
-// (and therefore worth burning a Chromium launch on). Server-rendered .gov
-// portals are handled by the Vercel fetcher — running them here is wasteful.
-const SPA_HOST_PATTERNS = [
-    /\.bonfirehub\.com$/i,
-    /\.opengov\.com$/i,
-    /^procurement\.opengov\.com$/i,
-    /^www\.txsmartbuy\.gov$/i,
-    /^txsmartbuy\.gov$/i,
-    /^evp\.nc\.gov$/i,
-    /^emma\.maryland\.gov$/i,
-    /\.cleveland\.gov$/i,
-    /\.clevelandohio\.gov$/i,
-    /^sigma\.michigan\.gov$/i,
-    /^caleprocure\.ca\.gov$/i,
-];
-
-function pickHandler(link) {
-    let host;
-    try {
-        host = new URL(link).hostname.toLowerCase();
-    } catch {
-        return null;
-    }
-    if (!SPA_HOST_PATTERNS.some((re) => re.test(host))) return null;
-    return HANDLERS.find((h) => h.match(host));
+// ---------------------------------------------------------------------------
+// Portal-cookies helpers
+// ---------------------------------------------------------------------------
+async function loadPortalCookies(host) {
+    const { data } = await sb.from("portal_cookies").select("*").eq("host", host).maybeSingle();
+    if (!data) return null;
+    // Bump use_count + last_used_at fire-and-forget
+    sb.from("portal_cookies")
+        .update({ use_count: (data.use_count || 0) + 1, last_used_at: new Date().toISOString() })
+        .eq("host", host)
+        .then(() => {});
+    return data;
 }
 
-// Host patterns the worker is willing to scrape, used by both the SQL
-// function for filtering and pickHandler() for routing. ilike-friendly
-// (PostgREST ANY/UNNEST on text[]). Bonfire detail is CF-walled but
-// queued anyway — Chromium handles the challenge inline.
-const SPA_LINK_ILIKE_PATTERNS = [
-    "%.bonfirehub.com/%",
-    "%procurement.opengov.com/%",
-    "%.opengov.com/%",
-    "%txsmartbuy.gov/%",
-    "%evp.nc.gov/%",
-    "%emma.maryland.gov/%",
-    "%.cleveland.gov/%",
-    "%.clevelandohio.gov/%",
-    "%sigma.michigan.gov/%",
-    "%caleprocure.ca.gov/%",
-];
+async function savePortalCookies(host, cookies, userAgent) {
+    const earliestExpiry = cookies
+        .map(c => c.expires)
+        .filter(e => typeof e === "number" && e > 0)
+        .sort((a, b) => a - b)[0];
+    await sb.from("portal_cookies").upsert({
+        host,
+        cookies,
+        user_agent: userAgent,
+        fetched_at: new Date().toISOString(),
+        expires_at: earliestExpiry ? new Date(earliestExpiry * 1000).toISOString() : null,
+    }, { onConflict: "host" });
+}
 
-async function fetchBatch() {
-    // Calls a Postgres function (migration 085) that filters by char_length
-    // on the description column — something PostgREST can't express
-    // directly. Previously we filtered "description is null or empty" which
-    // missed the 800+ Bonfire rows with stub descriptions like
-    // "Department: Procurement" (technically non-empty, useless content).
-    const { data, error } = await sb.rpc("get_sled_rows_needing_enrichment", {
-        host_patterns: SPA_LINK_ILIKE_PATTERNS,
-        max_desc_len: 500,
-        batch_size: BATCH_SIZE,
+// ---------------------------------------------------------------------------
+// HANDLER: scrape_portal_detail
+// ---------------------------------------------------------------------------
+async function scrapePortalDetail(job, browser) {
+    const oppId = job.payload?.opp_id;
+    const url = job.payload?.url;
+    if (!oppId || !url) return { error: "missing opp_id or url" };
+
+    let host;
+    try { host = new URL(url).hostname.toLowerCase(); } catch { return { error: "bad url" }; }
+
+    const cookieRow = await loadPortalCookies(host);
+    const context = await browser.newContext({
+        userAgent: cookieRow?.user_agent || UA,
+        viewport: { width: 1280, height: 800 },
+    });
+    if (cookieRow?.cookies) {
+        await context.addCookies(cookieRow.cookies).catch(() => {});
+    }
+    // Block heavy assets — save ~70% of memory and bandwidth.
+    await context.route("**/*", (route) => {
+        const t = route.request().resourceType();
+        if (t === "image" || t === "font" || t === "media" || t === "stylesheet") return route.abort();
+        return route.continue();
+    });
+
+    const page = await context.newPage();
+    try {
+        await page.goto(url, { waitUntil: "networkidle", timeout: 45_000 });
+        await page.waitForTimeout(2500);
+
+        // CF challenge guard
+        const diag = await page.evaluate(() => ({
+            title: document.title || "",
+            bodyLen: (document.body?.innerText || "").length,
+            hasCf: !!document.querySelector("#cf-wrapper, .cf-error-code, [data-translate]"),
+        }));
+        const cfBlocked = /just a moment|attention required|cloudflare/i.test(diag.title)
+            || diag.hasCf
+            || diag.bodyLen < 600;
+        if (cfBlocked) {
+            console.log(`    [cf-blocked] ${host} (title="${diag.title}" body=${diag.bodyLen})`);
+            return { result: { skipped: "cf_blocked", host }, error: null, write: { last_crawled_at: new Date().toISOString() } };
+        }
+
+        const text = await page.evaluate(() => {
+            const sels = ["main", ".project-summary", "[role=main]", "article", "#root", "#app", ".content", "body"];
+            let best = "";
+            for (const s of sels) {
+                const el = document.querySelector(s);
+                if (!el) continue;
+                const t = (el.innerText || "").trim();
+                if (t.length > best.length) best = t;
+            }
+            return best.replace(/\s+/g, " ").trim();
+        });
+        if (!text || text.length < 400) {
+            return { result: { skipped: "thin_content", chars: text?.length || 0 }, write: { last_crawled_at: new Date().toISOString() } };
+        }
+
+        // Write the description back to the opp
+        const { error: upErr } = await sb
+            .from("opportunities")
+            .update({ description: text.slice(0, 6000), last_crawled_at: new Date().toISOString() })
+            .eq("id", oppId);
+        if (upErr) return { error: `db update failed: ${upErr.message}` };
+        return { result: { chars: text.length, host } };
+    } finally {
+        await page.close().catch(() => {});
+        await context.close().catch(() => {});
+    }
+}
+
+// ---------------------------------------------------------------------------
+// HANDLER: warm_cf_cookie
+// Open a portal homepage, sit through the CF challenge, harvest cookies.
+// ---------------------------------------------------------------------------
+async function warmCfCookie(job, browser) {
+    const host = job.payload?.host;
+    if (!host) return { error: "missing host" };
+    const context = await browser.newContext({
+        userAgent: UA,
+        viewport: { width: 1280, height: 800 },
+    });
+    const page = await context.newPage();
+    try {
+        const target = `https://${host}/portal/`;
+        await page.goto(target, { waitUntil: "networkidle", timeout: 60_000 });
+        // Sit through the CF JS challenge — up to 15s
+        for (let i = 0; i < 30; i++) {
+            const title = await page.title().catch(() => "");
+            if (!/just a moment|attention required|cloudflare/i.test(title)) break;
+            await page.waitForTimeout(500);
+        }
+        const cookies = await context.cookies();
+        const cfCookies = cookies.filter(c => /^cf_|^__cf|^cf-/i.test(c.name) || c.name === "cf_clearance");
+        if (cfCookies.length === 0) return { error: "no CF cookies issued" };
+        await savePortalCookies(host, cookies, UA);
+        return { result: { saved_cookies: cookies.length, cf_cookies: cfCookies.length } };
+    } finally {
+        await page.close().catch(() => {});
+        await context.close().catch(() => {});
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Queue consumer loop
+// ---------------------------------------------------------------------------
+async function claimAndRun(browser) {
+    const { data: jobs, error } = await sb.rpc("claim_jobs", {
+        p_task_types: MY_TASKS,
+        p_batch_size: BATCH_SIZE,
     });
     if (error) {
-        console.error("[worker] fetch err:", error.message);
-        return [];
+        console.error("[worker] claim err:", error.message);
+        return 0;
     }
-    return (data || []).filter((r) => pickHandler(r.link));
+    if (!jobs || jobs.length === 0) {
+        console.log("[worker] queue empty");
+        return 0;
+    }
+    console.log(`[worker] claimed ${jobs.length} jobs`);
+    for (const job of jobs) {
+        const handler = HANDLERS[job.task_type];
+        if (!handler) {
+            await sb.rpc("finish_job", { p_job_id: job.id, p_status: "skipped", p_result: null, p_error: "no handler" });
+            continue;
+        }
+        const t0 = Date.now();
+        try {
+            const res = await handler(job, browser);
+            if (res?.error) {
+                await sb.rpc("finish_job", {
+                    p_job_id: job.id,
+                    p_status: job.attempts >= job.max_attempts ? "failed" : "pending",
+                    p_result: null,
+                    p_error: res.error,
+                });
+                console.log(`  ✗ ${job.task_type} (${Date.now() - t0}ms): ${res.error}`);
+            } else {
+                await sb.rpc("finish_job", { p_job_id: job.id, p_status: "done", p_result: res?.result || {}, p_error: null });
+                console.log(`  ✓ ${job.task_type} (${Date.now() - t0}ms): ${JSON.stringify(res?.result || {}).slice(0, 100)}`);
+            }
+        } catch (e) {
+            const msg = (e && e.message) || String(e);
+            await sb.rpc("finish_job", {
+                p_job_id: job.id,
+                p_status: job.attempts >= job.max_attempts ? "failed" : "pending",
+                p_result: null,
+                p_error: msg,
+            });
+            console.warn(`  ✗ ${job.task_type} (${Date.now() - t0}ms): ${msg}`);
+        }
+        await new Promise((r) => setTimeout(r, 1500));
+    }
+    return jobs.length;
 }
 
-// Single-tick worker: launch a fresh Chromium per batch, do the work, kill
-// it. Burns ~2s extra per batch on cold-start but avoids the slow memory
-// leak that comes from keeping a single browser running for hours of
-// navigations. On Railway's 1 GB tier this is the difference between
-// "stays up indefinitely" and "OOM-crashes every ~5 min".
 async function tick() {
-    const rows = await fetchBatch();
-    if (rows.length === 0) {
-        console.log("[worker] nothing to do");
-        return;
-    }
-    console.log(`[worker] batch of ${rows.length} rows — launching Chromium`);
-
     let browser;
-    let enriched = 0;
-    let failed = 0;
     try {
         browser = await chromium.launch({
             headless: true,
             args: [
-                "--no-sandbox",
-                "--disable-dev-shm-usage",
-                "--disable-gpu",
-                "--disable-extensions",
-                "--disable-default-apps",
-                "--disable-sync",
-                "--no-first-run",
-                "--no-zygote",
-                "--single-process",   // Railway's containers don't like multi-process Chromium
+                "--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu",
+                "--disable-extensions", "--disable-default-apps", "--disable-sync",
+                "--no-first-run", "--no-zygote", "--single-process",
                 "--disable-background-networking",
             ],
         });
-        const context = await browser.newContext({
-            userAgent: UA,
-            viewport: { width: 1280, height: 800 },
-            // Block heavy resources — we only need DOM text, not pixels.
-            // Saves ~70% of bandwidth + memory per page load.
-            javaScriptEnabled: true,
-        });
-        // Route-level filter — skip images, fonts, media, stylesheets. The
-        // bid text we want is in the DOM regardless.
-        await context.route("**/*", (route) => {
-            const t = route.request().resourceType();
-            if (t === "image" || t === "font" || t === "media" || t === "stylesheet") {
-                return route.abort();
-            }
-            return route.continue();
-        });
-
-        for (const row of rows) {
-            const handler = pickHandler(row.link);
-            if (!handler) {
-                failed++;
-                continue;
-            }
-            const page = await context.newPage();
-            try {
-                console.log(`  → ${handler.name}: ${(row.title || "").slice(0, 50)} (${row.link.slice(0, 60)})`);
-                const text = await handler.fetch(page, row.link);
-                if (text && text.length >= 200) {
-                    const { error: upErr } = await sb
-                        .from("opportunities")
-                        .update({ description: text, last_crawled_at: new Date().toISOString() })
-                        .eq("id", row.id);
-                    if (upErr) {
-                        console.warn(`    ✗ update err: ${upErr.message}`);
-                        failed++;
-                    } else {
-                        enriched++;
-                        console.log(`    ✓ +${text.length} chars`);
-                    }
-                } else {
-                    failed++;
-                    console.log(`    ✗ no body (got ${text ? text.length : 0} chars)`);
-                    await sb
-                        .from("opportunities")
-                        .update({ last_crawled_at: new Date().toISOString() })
-                        .eq("id", row.id);
-                }
-            } catch (e) {
-                failed++;
-                console.warn(`    ✗ ${(e && e.message) || e}`);
-                await sb
-                    .from("opportunities")
-                    .update({ last_crawled_at: new Date().toISOString() })
-                    .eq("id", row.id);
-            } finally {
-                await page.close().catch(() => undefined);
-            }
-            await new Promise((r) => setTimeout(r, 1500));
+        let total = 0;
+        // Drain the queue in this tick — up to 5 batches per Chromium launch
+        // so the Chromium cold-start cost amortizes.
+        for (let i = 0; i < 5; i++) {
+            const n = await claimAndRun(browser);
+            total += n;
+            if (n === 0) break;
         }
-        await context.close().catch(() => undefined);
+        console.log(`[worker] tick done: ${total} jobs processed`);
     } catch (e) {
-        console.error(`[worker] batch error: ${(e && e.message) || e}`);
+        console.error(`[worker] tick error: ${(e && e.message) || e}`);
     } finally {
-        if (browser) await browser.close().catch(() => undefined);
+        if (browser) await browser.close().catch(() => {});
     }
-    console.log(`[worker] batch done: ${enriched} enriched, ${failed} failed`);
 }
 
 async function main() {
-    console.log(`[worker] starting Playwright worker (batch_size=${BATCH_SIZE}, poll=${POLL_MS}ms)`);
+    console.log(`[worker] starting (handlers=${MY_TASKS.join(",")}, batch=${BATCH_SIZE}, poll=${POLL_MS}ms)`);
     let stopping = false;
-    process.on("SIGTERM", () => {
-        console.log("[worker] SIGTERM received — finishing current batch then exiting");
-        stopping = true;
-    });
-    process.on("uncaughtException", (e) => {
-        console.error(`[worker] uncaughtException: ${e?.message || e}`);
-    });
-    process.on("unhandledRejection", (reason) => {
-        console.error(`[worker] unhandledRejection: ${reason?.message || reason}`);
-    });
+    process.on("SIGTERM", () => { console.log("[worker] SIGTERM"); stopping = true; });
+    process.on("uncaughtException", (e) => console.error(`[worker] uncaughtException: ${e?.message || e}`));
+    process.on("unhandledRejection", (r) => console.error(`[worker] unhandledRejection: ${r?.message || r}`));
 
     while (!stopping) {
-        const started = Date.now();
-        try {
-            await tick();
-        } catch (e) {
-            console.error(`[worker] tick error: ${(e && e.message) || e}`);
-        }
+        const t0 = Date.now();
+        try { await tick(); } catch (e) { console.error(`[worker] tick fatal: ${(e && e.message) || e}`); }
         if (stopping) break;
-        const elapsed = Date.now() - started;
-        const sleep = Math.max(0, POLL_MS - elapsed);
+        const sleep = Math.max(0, POLL_MS - (Date.now() - t0));
         if (sleep > 0) await new Promise((r) => setTimeout(r, sleep));
     }
     console.log("[worker] exiting cleanly");
