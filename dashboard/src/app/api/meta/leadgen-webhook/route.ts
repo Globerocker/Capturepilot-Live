@@ -3,6 +3,9 @@ import crypto from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { getLeadMagnet, sendLeadMagnetEmail } from "@/lib/lead-magnets";
 import { sendCAPIEvent, newEventId } from "@/lib/meta-capi";
+import { enrichPersonViaApollo } from "@/lib/lead-enrichment";
+import { upsertHubSpotContact } from "@/lib/hubspot";
+import { enqueueLeadBrief } from "@/lib/lead-brief";
 
 export const runtime = "nodejs";
 // Webhook responses must be fast (Meta tolerates ~20s before timeout). All
@@ -187,25 +190,105 @@ async function processLead({ leadgenId, formId, accessToken, db }: ProcessArgs):
 
     if (!isNew) return "duplicate";
 
-    // 3. Deliver via the shared lead-magnet pipeline so we don't drift from
+    const firstName = fullName ? fullName.split(" ")[0] : undefined;
+    const lastName = fullName && fullName.split(" ").length > 1
+        ? fullName.split(" ").slice(1).join(" ")
+        : undefined;
+
+    // 3a. Apollo enrichment — mirror /api/leads so the brief that emails
+    //     americurial@gmail.com has the same enriched payload regardless of
+    //     entry path. Non-fatal: null result means the brief LLM works off
+    //     the bare-form data instead.
+    const apolloEnrichment = await enrichPersonViaApollo({
+        firstName,
+        lastName,
+        email,
+        companyName: company || null,
+    });
+
+    if (apolloEnrichment && db) {
+        await db
+            .from("marketing_leads")
+            .update({
+                apollo_enriched_at: new Date().toISOString(),
+                apollo_data: apolloEnrichment as unknown as Record<string, unknown>,
+                phone: phone || apolloEnrichment.phone || null,
+            })
+            .eq("meta_leadgen_id", leadgenId)
+            .then(({ error }) => {
+                if (error && !error.message?.includes("schema cache")) {
+                    console.warn("[leadgen-webhook] apollo patch non-fatal:", error.message);
+                }
+            });
+    }
+
+    // 3b. HubSpot CRM sync — partner workflow runs through HubSpot manually,
+    //     so we want the contact in CRM the instant the lead converts.
+    const hubspotId = await upsertHubSpotContact({
+        email,
+        firstname: firstName || apolloEnrichment?.first_name || undefined,
+        lastname: lastName || apolloEnrichment?.last_name || undefined,
+        phone: phone || apolloEnrichment?.phone || undefined,
+        company: company || apolloEnrichment?.organization_name || undefined,
+        jobtitle: apolloEnrichment?.title || undefined,
+        lifecyclestage: "lead",
+        extra: {
+            lead_source_cp: ("meta_lead_ad" as never),
+        },
+    }).catch((err) => {
+        console.warn("[leadgen-webhook] hubspot sync failed (non-fatal):", (err as Error).message);
+        return null;
+    });
+
+    if (hubspotId && db) {
+        await db
+            .from("marketing_leads")
+            .update({
+                hubspot_contact_id: hubspotId,
+                hubspot_synced_at: new Date().toISOString(),
+            })
+            .eq("meta_leadgen_id", leadgenId);
+    }
+
+    // 4. Deliver via the shared lead-magnet pipeline so we don't drift from
     //    /api/leads (the website form path).
     const magnet = getLeadMagnet(MAGNET_KEY_FOR_META);
     if (!magnet) throw new Error(`magnet_not_configured: ${MAGNET_KEY_FOR_META}`);
 
-    const firstName = fullName ? fullName.split(" ")[0] : undefined;
     const result = await sendLeadMagnetEmail({
         magnet,
         to: email,
-        firstName,
-        company: company || undefined,
+        firstName: firstName || apolloEnrichment?.first_name || undefined,
+        company: company || apolloEnrichment?.organization_name || undefined,
     });
     if (!result.sent) throw new Error(`resend: ${result.error || "unknown"}`);
 
     if (db) {
         await db
             .from("marketing_leads")
-            .update({ resend_synced: true })
+            .update({
+                resend_synced: true,
+                ...(result.resendId ? { magnet_resend_id: result.resendId } : {}),
+            })
             .eq("meta_leadgen_id", leadgenId);
+    }
+
+    // 5. Enqueue the AI lead brief so americurial@gmail.com gets the call
+    //    script + fit score + top opportunity matches. Worker picks it up
+    //    within ~30s; brief lands in the partner's inbox a minute or two later.
+    if (db) {
+        try {
+            const { data: leadRow } = await db
+                .from("marketing_leads")
+                .select("id")
+                .eq("meta_leadgen_id", leadgenId)
+                .maybeSingle();
+            if (leadRow?.id) {
+                await enqueueLeadBrief(db, leadRow.id);
+            }
+        } catch (e) {
+            console.warn("[leadgen-webhook] enqueueLeadBrief failed (non-fatal):", (e as Error).message);
+        }
     }
 
     // Server-side CAPI fire. Meta already counts the form submission since

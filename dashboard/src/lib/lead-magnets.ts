@@ -183,8 +183,12 @@ export function renderLeadMagnetEmailHtml(args: {
 }
 
 /**
- * Deliver a magnet. Returns `{ sent: true }` on success, `{ sent: false }` if
+ * Deliver a magnet. Returns `{ sent: true, resendId }` on success, `{ sent: false }` if
  * Resend isn't configured (env unset). Caller decides whether that's fatal.
+ *
+ * The resendId is the Resend message id (re_...). Persist it on the lead row
+ * so the /api/webhooks/resend handler can join delivered/opened/clicked events
+ * back to the lead they came from.
  */
 export async function sendLeadMagnetEmail(args: {
     magnet: LeadMagnet;
@@ -192,20 +196,17 @@ export async function sendLeadMagnetEmail(args: {
     firstName?: string;
     company?: string;
     fromEmail?: string;
-}): Promise<{ sent: boolean; error?: string }> {
+}): Promise<{ sent: boolean; error?: string; resendId?: string }> {
     const apiKey = process.env.RESEND_API_KEY;
     if (!apiKey) return { sent: false, error: "missing_resend_key" };
 
     const resend = new Resend(apiKey);
-    // From-name is the first thing visible in the inbox row. "CapturePilot
-    // Downloads" makes the purpose unambiguous (it's the file the user asked
-    // for) and reads cleaner than a personal alias in cold-traffic delivery.
     const from =
         args.fromEmail ||
         process.env.LEAD_MAGNET_FROM_EMAIL ||
         "CapturePilot Downloads <andre@capturepilot.com>";
 
-    const { error } = await resend.emails.send({
+    const { data, error } = await resend.emails.send({
         from,
         to: args.to,
         replyTo: "andre@capturepilot.com",
@@ -218,5 +219,5 @@ export async function sendLeadMagnetEmail(args: {
     });
 
     if (error) return { sent: false, error: error.message || String(error) };
-    return { sent: true };
+    return { sent: true, resendId: data?.id };
 }

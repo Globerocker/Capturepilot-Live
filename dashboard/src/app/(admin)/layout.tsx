@@ -60,6 +60,7 @@ const NAV: NavSection[] = [
         items: [
             { href: "/admin/academy", icon: GraduationCap, label: "Academy" },
             { href: "/admin/emails", icon: Mail, label: "Emails" },
+            { href: "/admin/email-tracking", icon: Eye, label: "Email Tracking" },
             { href: "/admin/messages", icon: MessageSquare, label: "Messages", badge: "unreadMessages" },
         ],
     },

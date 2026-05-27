@@ -245,7 +245,10 @@ Return up to 3 most-likely 6-digit NAICS codes for this company's federal-contra
     if (emailRes.sent) {
         await sb
             .from("marketing_leads")
-            .update({ lead_brief_sent_at: new Date().toISOString() })
+            .update({
+                lead_brief_sent_at: new Date().toISOString(),
+                ...(emailRes.resendId ? { brief_resend_id: emailRes.resendId } : {}),
+            })
             .eq("id", lead.id);
     } else if (emailRes.error) {
         console.warn(`[lead-brief] email to ${BRIEF_RECIPIENT} failed:`, emailRes.error);
@@ -325,7 +328,7 @@ The call script is the most important thing — Andre will literally read parts 
     ], { temperature: 0.3, max_tokens: 1200 });
 }
 
-async function sendBriefEmail(brief: LeadBrief): Promise<{ sent: boolean; error?: string }> {
+async function sendBriefEmail(brief: LeadBrief): Promise<{ sent: boolean; error?: string; resendId?: string }> {
     const apiKey = process.env.RESEND_API_KEY;
     if (!apiKey) return { sent: false, error: "RESEND_API_KEY not set" };
     const resend = new Resend(apiKey);
@@ -344,7 +347,7 @@ async function sendBriefEmail(brief: LeadBrief): Promise<{ sent: boolean; error?
             text,
         });
         if (res.error) return { sent: false, error: res.error.message };
-        return { sent: true };
+        return { sent: true, resendId: res.data?.id };
     } catch (e) {
         return { sent: false, error: (e as Error).message };
     }

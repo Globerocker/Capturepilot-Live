@@ -247,7 +247,10 @@ export async function POST(req: NextRequest) {
       } else {
         await sb
           .from("marketing_leads")
-          .update({ resend_synced: true })
+          .update({
+            resend_synced: true,
+            ...(result.resendId ? { magnet_resend_id: result.resendId } : {}),
+          })
           .eq("email", email)
           .eq("magnet_key", magnet);
       }

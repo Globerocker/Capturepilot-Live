@@ -1,5 +1,5 @@
 {
-  "name": "CapturePilot — HubSpot pipeline sync (user_pursuits → deal stage)",
+  "name": "CapturePilot — HubSpot pipeline sync (every 15 min)",
   "nodes": [
     {
       "parameters": {
@@ -17,16 +17,19 @@
     },
     {
       "parameters": {
-        "url": "=https://ryxgjzehoijjvczqkhwr.supabase.co/rest/v1/user_pursuits?select=id,user_profile_id,opportunity_id,stage,hubspot_deal_id,updated_at&updated_at=gte.{{ $now.minus({minutes: 20}).toISO() }}&hubspot_deal_id=not.is.null&order=updated_at.desc&limit=50",
-        "options": {
-          "headers": {
-            "Authorization": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}",
-            "apikey": "={{ $env.SUPABASE_SERVICE_KEY }}"
-          }
-        }
+        "method": "GET",
+        "url": "=https://ryxgjzehoijjvczqkhwr.supabase.co/rest/v1/user_pursuits?select=id,stage,priority,hubspot_deal_id,updated_at&hubspot_deal_id=not.is.null&updated_at=gte.{{ $now.minus({minutes: 20}).toISO() }}&limit=100",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" }
+          ]
+        },
+        "options": {}
       },
-      "id": "fetch-pursuits",
-      "name": "Fetch recently-changed pursuits",
+      "id": "fetch-recent-pursuits",
+      "name": "Fetch pursuits updated in last 20 min",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [460, 400]
@@ -44,87 +47,54 @@
     },
     {
       "parameters": {
-        "assignments": {
-          "assignments": [
-            {
-              "id": "stage-map",
-              "name": "hubspotStageId",
-              "value": "={{ ({ \"discovered\": $env.HUBSPOT_SAAS_STAGE_SIGNED_UP, \"researching\": $env.HUBSPOT_SAAS_STAGE_QUICK_CHECK, \"preparing\": $env.HUBSPOT_SAAS_STAGE_TRIAL, \"submitted\": $env.HUBSPOT_SAAS_STAGE_SUBSCRIBED, \"awarded\": $env.HUBSPOT_SAAS_STAGE_ENGAGED, \"lost\": $env.HUBSPOT_SAAS_STAGE_CHURNED, \"no_bid\": $env.HUBSPOT_SAAS_STAGE_CHURNED })[$json.stage] }}",
-              "type": "string"
-            }
-          ]
-        },
-        "options": {}
+        "jsCode": "// Map internal pipeline stage → HubSpot stage ID env var\nconst stageMap = {\n  discovered:   $env.HUBSPOT_STAGE_DISCOVERED,\n  researching:  $env.HUBSPOT_STAGE_RESEARCHING,\n  preparing:    $env.HUBSPOT_STAGE_PREPARING,\n  submitted:    $env.HUBSPOT_STAGE_SUBMITTED,\n  awarded:      $env.HUBSPOT_STAGE_AWARDED,\n  lost:         $env.HUBSPOT_STAGE_LOST,\n  no_bid:       $env.HUBSPOT_STAGE_NO_BID,\n};\nconst item = $input.item.json;\nconst hubspotStage = stageMap[item.stage] || stageMap.discovered;\nreturn { json: { ...item, hubspot_stage_id: hubspotStage } };"
       },
       "id": "map-stage",
-      "name": "Map stage → HubSpot ID",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
+      "name": "Map stage → HubSpot stage ID",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [900, 400]
     },
     {
       "parameters": {
-        "conditions": {
-          "options": { "version": 2 },
-          "conditions": [
-            {
-              "leftValue": "={{ $json.hubspotStageId }}",
-              "rightValue": "",
-              "operator": { "type": "string", "operation": "notEmpty" }
-            }
+        "method": "PATCH",
+        "url": "=https://api.hubapi.com/crm/v3/objects/deals/{{ $json.hubspot_deal_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.HUBSPOT_ACCESS_TOKEN }}" },
+            { "name": "Content-Type", "value": "application/json" }
           ]
         },
-        "options": {}
-      },
-      "id": "if-mapped",
-      "name": "If stage mapped",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [1120, 400]
-    },
-    {
-      "parameters": {
-        "method": "PATCH",
-        "url": "=https://api.hubapi.com/crm/v3/objects/deals/{{ $('Per-pursuit loop').item.json.hubspot_deal_id }}",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={ \"properties\": { \"dealstage\": \"{{ $json.hubspotStageId }}\" } }",
-        "options": {
-          "headers": {
-            "Authorization": "=Bearer {{ $env.HUBSPOT_ACCESS_TOKEN }}"
-          }
-        }
+        "jsonBody": "={ \"properties\": { \"dealstage\": \"{{ $json.hubspot_stage_id }}\" } }",
+        "options": {}
       },
-      "id": "hubspot-update",
-      "name": "PATCH HubSpot deal stage",
+      "id": "patch-hubspot",
+      "name": "PATCH HubSpot deal",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1340, 320]
+      "position": [1120, 400]
     }
   ],
   "connections": {
     "Every 15 min": {
-      "main": [[{ "node": "Fetch recently-changed pursuits", "type": "main", "index": 0 }]]
+      "main": [[{ "node": "Fetch pursuits updated in last 20 min", "type": "main", "index": 0 }]]
     },
-    "Fetch recently-changed pursuits": {
+    "Fetch pursuits updated in last 20 min": {
       "main": [[{ "node": "Per-pursuit loop", "type": "main", "index": 0 }]]
     },
     "Per-pursuit loop": {
       "main": [
-        [{ "node": "Map stage → HubSpot ID", "type": "main", "index": 0 }],
-        []
+        [],
+        [{ "node": "Map stage → HubSpot stage ID", "type": "main", "index": 0 }]
       ]
     },
-    "Map stage → HubSpot ID": {
-      "main": [[{ "node": "If stage mapped", "type": "main", "index": 0 }]]
+    "Map stage → HubSpot stage ID": {
+      "main": [[{ "node": "PATCH HubSpot deal", "type": "main", "index": 0 }]]
     },
-    "If stage mapped": {
-      "main": [
-        [{ "node": "PATCH HubSpot deal stage", "type": "main", "index": 0 }],
-        [{ "node": "Per-pursuit loop", "type": "main", "index": 0 }]
-      ]
-    },
-    "PATCH HubSpot deal stage": {
+    "PATCH HubSpot deal": {
       "main": [[{ "node": "Per-pursuit loop", "type": "main", "index": 0 }]]
     }
   },
