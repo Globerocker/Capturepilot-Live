@@ -94,10 +94,17 @@ async function countQuery(
     sb: SbAny,
     table: string,
     filters: Record<string, string>,
+    countMode: "exact" | "estimated" = "estimated",
 ): Promise<number> {
     try {
+        // Default to `estimated` for marketing counters — `exact` runs a full
+        // SELECT COUNT(*) which silently times out on large tables (opportunities
+        // is 60k+ rows). The planner's row estimate is good enough for
+        // big-number widgets and was the reason the dashboard page also uses
+        // `estimated` on this table. We saw `federal_opps: 0` in production
+        // for hours because the exact-count query was failing silently.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        let q: any = sb.from(table).select("id", { count: "exact", head: true });
+        let q: any = sb.from(table).select("id", { count: countMode, head: true });
         for (const [k, v] of Object.entries(filters)) {
             // Use indexOf instead of split — values like "gte.2026-05-27T13:00:00Z"
             // contain dots in the timestamp and split would truncate the date.
