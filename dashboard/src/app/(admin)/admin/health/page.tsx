@@ -172,6 +172,42 @@ export default function EnvHealthPage() {
                             Full telemetry <ExternalLink className="w-3 h-3" />
                         </Link>
                     </div>
+
+                    {/* At-a-glance status grid — each square = one cron, color by
+                        ok/error/stale. Lets you spot trouble across all 35-40 crons
+                        in a single eye sweep, before drilling into the table below. */}
+                    <div className="bg-white border border-stone-200 rounded-xl p-3 mb-3">
+                        <div className="flex items-center justify-between mb-2">
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
+                                Status grid · {cronSummary.length} crons
+                            </p>
+                            <div className="flex items-center gap-3 text-[10px] text-stone-500">
+                                <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded bg-emerald-500" /> ok</span>
+                                <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded bg-amber-500" /> error</span>
+                                <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded bg-rose-500" /> stale</span>
+                                <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded bg-stone-300" /> unknown</span>
+                            </div>
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                            {cronSummary.map(c => {
+                                const isErr = c.last_status === "error";
+                                const stale = c.last_run && (Date.now() - new Date(c.last_run).getTime() > 86_400_000 * 2);
+                                const ok = c.last_status === "ok" && !stale;
+                                const cls = ok ? "bg-emerald-500 hover:bg-emerald-600"
+                                    : stale ? "bg-rose-500 hover:bg-rose-600"
+                                    : isErr ? "bg-amber-500 hover:bg-amber-600"
+                                    : "bg-stone-300 hover:bg-stone-400";
+                                return (
+                                    <span
+                                        key={c.route}
+                                        title={`${c.route.replace("/api/cron/", "")} — ${c.last_status || "?"} (${fmtRelative(c.last_run)})`}
+                                        className={clsx("inline-block w-3 h-3 rounded transition-colors cursor-help", cls)}
+                                    />
+                                );
+                            })}
+                        </div>
+                    </div>
+
                     <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
                         <table className="w-full text-sm">
                             <thead className="bg-stone-50 text-[10px] text-stone-400 uppercase">

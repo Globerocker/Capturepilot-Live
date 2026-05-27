@@ -14,8 +14,62 @@
 
 import mammoth from "mammoth";
 import JSZip from "jszip";
+import { createHash } from "node:crypto";
+import { createClient } from "@supabase/supabase-js";
 import { extractFromUrl as mistralExtractFromUrl, isMistralConfigured } from "@/lib/llm/mistral-ocr";
 import { tikaExtract, isTikaConfigured } from "@/lib/llm/tika";
+
+// ---------------------------------------------------------------------------
+// Hash-based extraction cache (migration 094)
+//
+// Many SAM opportunities reference the same boilerplate attachments (FAR
+// rider PDFs, agency cover sheets). De-duping by content hash saves Tika
+// cycles + Mistral API spend when we re-process. Cache is best-effort:
+// any Supabase error falls through to live extraction.
+// ---------------------------------------------------------------------------
+function hashBytes(b: Uint8Array): string {
+    return createHash("sha256").update(b).digest("hex");
+}
+
+function cacheClient() {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const key = process.env.SUPABASE_SERVICE_KEY;
+    if (!url || !key) return null;
+    return createClient(url, key, { auth: { persistSession: false } });
+}
+
+async function cacheLookup(hash: string): Promise<{ text: string; source: "tika" | "mistral" | "regex" } | null> {
+    const sb = cacheClient();
+    if (!sb) return null;
+    try {
+        const { data } = await sb.from("pdf_extract_cache")
+            .select("extracted_text, source")
+            .eq("content_hash", hash)
+            .maybeSingle();
+        if (!data) return null;
+        // Fire-and-forget access counter — useful for cache eviction later.
+        sb.from("pdf_extract_cache")
+            .update({ accessed_count: 1, last_accessed: new Date().toISOString() })
+            .eq("content_hash", hash)
+            .then(() => {});
+        return { text: (data as { extracted_text: string }).extracted_text, source: (data as { source: "tika" | "mistral" | "regex" }).source };
+    } catch { return null; }
+}
+
+async function cacheStore(hash: string, text: string, bytes: number, source: "tika" | "mistral" | "regex"): Promise<void> {
+    if (!text || text.length < 50) return; // don't pollute cache with empties
+    const sb = cacheClient();
+    if (!sb) return;
+    try {
+        await sb.from("pdf_extract_cache").upsert({
+            content_hash: hash,
+            extracted_text: text.slice(0, 80_000),
+            bytes_size: bytes,
+            source,
+            last_accessed: new Date().toISOString(),
+        }, { onConflict: "content_hash" });
+    } catch { /* swallow — cache is best-effort */ }
+}
 
 export interface ExtractResult {
     text: string;
@@ -63,6 +117,14 @@ function pdfRegexExtract(bytes: Uint8Array): string {
 const MISTRAL_PDF_BYTES_CAP = 4 * 1024 * 1024;
 
 async function extractPdf(bytes: Uint8Array, url: string): Promise<{ text: string; ocr: boolean }> {
+    // 0. Cache lookup — same PDF bytes likely processed before (many SAM
+    //    opps share boilerplate PDFs). Saves Tika + Mistral cycles.
+    const hash = hashBytes(bytes);
+    const cached = await cacheLookup(hash);
+    if (cached) {
+        return { text: cached.text.slice(0, 40_000), ocr: cached.source === "mistral" };
+    }
+
     // 1. Tika first — handles digital PDFs (the majority of SAM attachments).
     //    No per-call cost, ~200ms for typical 5-page PDFs. Returns short/empty
     //    text on scanned PDFs (no embedded text layer) — that's the signal to
@@ -71,6 +133,7 @@ async function extractPdf(bytes: Uint8Array, url: string): Promise<{ text: strin
         try {
             const text = await tikaExtract(bytes, "application/pdf");
             if (text.length > 200) {
+                void cacheStore(hash, text, bytes.byteLength, "tika");
                 return { text: text.slice(0, 40_000), ocr: false };
             }
         } catch {
@@ -83,6 +146,7 @@ async function extractPdf(bytes: Uint8Array, url: string): Promise<{ text: strin
         try {
             const ocr = await mistralExtractFromUrl(url);
             if (ocr.full_markdown && ocr.full_markdown.length > 200) {
+                void cacheStore(hash, ocr.full_markdown, bytes.byteLength, "mistral");
                 return { text: ocr.full_markdown.slice(0, 40_000), ocr: true };
             }
         } catch {
@@ -90,7 +154,9 @@ async function extractPdf(bytes: Uint8Array, url: string): Promise<{ text: strin
         }
     }
     // 3. Regex — last resort, acknowledged ~30% recovery on text PDFs.
-    return { text: pdfRegexExtract(bytes).slice(0, 40_000), ocr: false };
+    const regexText = pdfRegexExtract(bytes).slice(0, 40_000);
+    if (regexText.length > 200) void cacheStore(hash, regexText, bytes.byteLength, "regex");
+    return { text: regexText, ocr: false };
 }
 
 async function extractDocx(bytes: Uint8Array): Promise<string> {

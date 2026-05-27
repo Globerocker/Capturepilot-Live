@@ -226,6 +226,52 @@ export async function GET(req: NextRequest) {
         console.warn("[health_monitor] cron staleness check failed:", (e as Error).message);
     }
 
+    // ─── Worker_jobs failure-rate spike ──────────────────────────────────────
+    // If the failure rate over the last hour crosses 20% (and there's at
+    // least 10 jobs to avoid false positives on small samples), fire a
+    // `worker_spike` alert. Catches silent regressions like a scraper
+    // breaking on every page or an enrichment endpoint going 500.
+    try {
+        const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+        const { data: recent } = await sb
+            .from("worker_jobs")
+            .select("status")
+            .gte("finished_at", oneHourAgo);
+        const rows = (recent || []) as Array<{ status: string }>;
+        if (rows.length >= 10) {
+            const failed = rows.filter(r => r.status === "failed").length;
+            const failureRate = failed / rows.length;
+            if (failureRate >= 0.20) {
+                // Skip if we already fired this alert in the last 6h.
+                const { count: existing } = await sb
+                    .from("health_alerts")
+                    .select("id", { count: "exact", head: true })
+                    .eq("alert_type", "worker_spike")
+                    .gte("fired_at", new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString());
+                if (!existing) {
+                    const pct = Math.round(failureRate * 100);
+                    const sev = failureRate >= 0.5 ? "critical" : "warning";
+                    newAlerts.push({
+                        slug: "worker_jobs",
+                        severity: sev,
+                        title: `Worker queue failure rate spike: ${pct}%`,
+                        detail: `${failed} of ${rows.length} jobs failed in the last hour.`,
+                    });
+                    await sb.from("health_alerts").insert({
+                        connector_slug: "worker_jobs",
+                        alert_type: "worker_spike",
+                        severity: sev,
+                        title: `Worker failure rate ${pct}%`,
+                        detail: `${failed}/${rows.length} jobs failed in the last hour`,
+                        payload: { failed, total: rows.length, rate: failureRate },
+                    });
+                }
+            }
+        }
+    } catch (e) {
+        console.warn("[health_monitor] worker-spike check failed:", (e as Error).message);
+    }
+
     // ─── Email digest ────────────────────────────────────────────────────────
     if (newAlerts.length > 0) {
         try {

@@ -105,5 +105,48 @@ export async function sendHealthDigest(args: { to: string; alerts: Alert[] }): P
     });
 
     if (error) return { sent: false, error: error.message || String(error) };
+
+    // Slack fallback channel — fires in parallel with the email so a Slack
+    // outage doesn't block the email delivery and vice versa. Optional:
+    // only fires if SLACK_WEBHOOK_URL is set. Format = simple markdown
+    // (Slack mrkdwn) so we don't need to depend on Slack Blocks.
+    void sendSlackDigest(sorted).catch(() => {});
+
     return { sent: true };
+}
+
+/**
+ * Best-effort Slack incoming-webhook delivery of the same alert digest.
+ * Fire-and-forget — caller doesn't await; failures are swallowed since the
+ * email path is the primary channel. Set SLACK_WEBHOOK_URL to enable.
+ */
+async function sendSlackDigest(alerts: Alert[]): Promise<void> {
+    const url = process.env.SLACK_WEBHOOK_URL;
+    if (!url || alerts.length === 0) return;
+
+    const criticalCount = alerts.filter(a => a.severity === "critical").length;
+    const warningCount = alerts.filter(a => a.severity === "warning").length;
+    const header = criticalCount > 0
+        ? `:rotating_light: *${criticalCount} critical* CapturePilot alert${criticalCount === 1 ? "" : "s"}`
+        : warningCount > 0
+            ? `:warning: *${warningCount} warning* CapturePilot alert${warningCount === 1 ? "" : "s"}`
+            : `:information_source: ${alerts.length} CapturePilot health update${alerts.length === 1 ? "" : "s"}`;
+
+    const lines = alerts.map(a => {
+        const emoji = a.severity === "critical" ? ":red_circle:"
+            : a.severity === "warning" ? ":large_yellow_circle:"
+            : ":large_blue_circle:";
+        return `${emoji} *${a.slug}* — ${a.title}${a.detail ? `\n   _${a.detail}_` : ""}`;
+    }).join("\n");
+
+    const text = `${header}\n${lines}\n<${APP_URL}/admin/health|Open /admin/health>`;
+
+    try {
+        await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text }),
+            signal: AbortSignal.timeout(5_000),
+        });
+    } catch { /* slack outage — email already sent above, no-op */ }
 }

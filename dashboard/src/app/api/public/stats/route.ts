@@ -44,6 +44,37 @@ export async function GET() {
         { auth: { persistSession: false } },
     );
 
+    // Fast path: read the pre-computed snapshot (refreshed every 10 min by
+    // /api/cron/compute_public_stats). Skip the live aggregates entirely if
+    // we have a fresh-enough snapshot — the marketing page only needs ~10 min
+    // freshness, and this drops 12 queries to 1.
+    try {
+        const { data: snap } = await sb
+            .from("public_stats_snapshot")
+            .select("payload, computed_at")
+            .eq("id", 1)
+            .maybeSingle();
+        if (snap?.payload) {
+            const computed = snap.computed_at ? new Date(snap.computed_at as string).getTime() : 0;
+            const ageMin = (Date.now() - computed) / 60_000;
+            // Accept snapshots up to 30 min old. Older than that falls through
+            // to the live query so the user always gets fresh-ish data even
+            // if the snapshot cron is dead.
+            if (ageMin < 30) {
+                return NextResponse.json(snap.payload, {
+                    headers: {
+                        "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600",
+                        "Access-Control-Allow-Origin": "*",
+                        "Access-Control-Allow-Methods": "GET, OPTIONS",
+                        "X-Stats-Source": "snapshot",
+                    },
+                });
+            }
+        }
+    } catch {
+        /* fall through to live query */
+    }
+
     const today = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
     // Run aggregates in parallel. SLED rows are subdivided by jurisdiction_level

@@ -142,6 +142,14 @@
         {
             "path": "/api/cron/discover_top_by_naics",
             "schedule": "0 6 * * 0"
+        },
+        {
+            "path": "/api/cron/compute_public_stats",
+            "schedule": "*/10 * * * *"
+        },
+        {
+            "path": "/api/cron/send_daily_digest",
+            "schedule": "0 8 * * *"
         }
     ],
     "functions": {
