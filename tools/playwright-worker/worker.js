@@ -79,6 +79,10 @@ async function loadPortalCookies(host) {
     return data;
 }
 
+function hasClearance(cookies) {
+    return Array.isArray(cookies) && cookies.some(c => c.name === "cf_clearance");
+}
+
 async function savePortalCookies(host, cookies, userAgent) {
     const earliestExpiry = cookies
         .map(c => c.expires)
@@ -90,7 +94,27 @@ async function savePortalCookies(host, cookies, userAgent) {
         user_agent: userAgent,
         fetched_at: new Date().toISOString(),
         expires_at: earliestExpiry ? new Date(earliestExpiry * 1000).toISOString() : null,
+        last_blocked_at: null,
     }, { onConflict: "host" });
+}
+
+// Mark a host as currently blocked — backfill cron uses this to skip the host
+// for ~6h instead of re-enqueuing warm/scrape jobs that will fail the same way.
+async function markHostBlocked(host) {
+    await sb.from("portal_cookies").upsert({
+        host,
+        last_blocked_at: new Date().toISOString(),
+    }, { onConflict: "host" }).then(() => {});
+}
+
+// Enqueue a fresh warm_cf_cookie job for a host. Idempotent: the partial unique
+// index on dedup_key prevents duplicate pending/running rows.
+async function enqueueWarm(host) {
+    await sb.from("worker_jobs").insert({
+        task_type: "warm_cf_cookie",
+        payload: { host },
+        priority: 9,
+    }).then(() => {});
 }
 
 // ---------------------------------------------------------------------------
@@ -105,6 +129,17 @@ async function scrapePortalDetail(job, browser) {
     try { host = new URL(url).hostname.toLowerCase(); } catch { return { error: "bad url" }; }
 
     const cookieRow = await loadPortalCookies(host);
+
+    // Bonfire detail pages require cf_clearance to load. If we don't have one,
+    // spawning a context and navigating is guaranteed to return the CF
+    // challenge HTML — wastes 4s of browser time per row. Skip and enqueue a
+    // fresh warm job so the next backfill tick has a chance.
+    const needsClearance = host.endsWith(".bonfirehub.com");
+    if (needsClearance && !hasClearance(cookieRow?.cookies)) {
+        await enqueueWarm(host);
+        return { result: { skipped: "no_clearance_cookie", host } };
+    }
+
     const context = await browser.newContext({
         userAgent: cookieRow?.user_agent || UA,
         viewport: { width: 1280, height: 800 },
@@ -135,6 +170,8 @@ async function scrapePortalDetail(job, browser) {
             || diag.bodyLen < 600;
         if (cfBlocked) {
             console.log(`    [cf-blocked] ${host} (title="${diag.title}" body=${diag.bodyLen})`);
+            await markHostBlocked(host);
+            await enqueueWarm(host);
             return { result: { skipped: "cf_blocked", host }, error: null, write: { last_crawled_at: new Date().toISOString() } };
         }
 
@@ -168,30 +205,66 @@ async function scrapePortalDetail(job, browser) {
 
 // ---------------------------------------------------------------------------
 // HANDLER: warm_cf_cookie
-// Open a portal homepage, sit through the CF challenge, harvest cookies.
+// Open a portal page that is actually CF-challenged, sit through the JS
+// challenge, harvest cf_clearance + companion cookies.
+//
+// Why not just hit `/portal/`? On most Bonfire tenants the homepage isn't CF
+// protected — it sets __cf_bm (passive bot mgmt) and that's it. cf_clearance
+// is only issued AFTER the interactive JS challenge runs, which only fires on
+// the gated paths (Opportunities list, detail URLs, login). We try a small
+// list of likely-protected paths and the first one that issues cf_clearance
+// wins. Saving without cf_clearance is treated as a failure (the cookie that
+// actually proves you passed the challenge isn't there).
 // ---------------------------------------------------------------------------
+const CF_WARM_PATHS = [
+    "/portal/Opportunities",
+    "/portal/portallogin",
+    "/portal/",
+];
+
 async function warmCfCookie(job, browser) {
     const host = job.payload?.host;
     if (!host) return { error: "missing host" };
     const context = await browser.newContext({
         userAgent: UA,
         viewport: { width: 1280, height: 800 },
+        locale: "en-US",
     });
     const page = await context.newPage();
     try {
-        const target = `https://${host}/portal/`;
-        await page.goto(target, { waitUntil: "networkidle", timeout: 60_000 });
-        // Sit through the CF JS challenge — up to 15s
-        for (let i = 0; i < 30; i++) {
-            const title = await page.title().catch(() => "");
-            if (!/just a moment|attention required|cloudflare/i.test(title)) break;
-            await page.waitForTimeout(500);
+        for (const path of CF_WARM_PATHS) {
+            const target = `https://${host}${path}`;
+            try {
+                await page.goto(target, { waitUntil: "networkidle", timeout: 60_000 });
+            } catch {
+                continue;
+            }
+            // Sit through the CF JS challenge — up to 30s. The challenge can
+            // require multiple round-trips; networkidle returns before it's
+            // fully resolved.
+            for (let i = 0; i < 60; i++) {
+                const title = await page.title().catch(() => "");
+                const challenged = /just a moment|attention required|cloudflare/i.test(title);
+                const cookies = await context.cookies().catch(() => []);
+                if (!challenged && hasClearance(cookies)) break;
+                await page.waitForTimeout(500);
+            }
+            const cookies = await context.cookies();
+            if (hasClearance(cookies)) {
+                await savePortalCookies(host, cookies, UA);
+                return {
+                    result: {
+                        saved_cookies: cookies.length,
+                        cf_clearance: true,
+                        path,
+                    },
+                };
+            }
         }
-        const cookies = await context.cookies();
-        const cfCookies = cookies.filter(c => /^cf_|^__cf|^cf-/i.test(c.name) || c.name === "cf_clearance");
-        if (cfCookies.length === 0) return { error: "no CF cookies issued" };
-        await savePortalCookies(host, cookies, UA);
-        return { result: { saved_cookies: cookies.length, cf_cookies: cfCookies.length } };
+        // None of the paths produced cf_clearance — mark blocked so backfill
+        // stops re-enqueueing this host for a while.
+        await markHostBlocked(host);
+        return { error: "no cf_clearance issued (strict tenant or stealth defeated)" };
     } finally {
         await page.close().catch(() => {});
         await context.close().catch(() => {});

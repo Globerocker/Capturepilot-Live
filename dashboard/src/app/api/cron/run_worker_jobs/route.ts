@@ -139,14 +139,20 @@ export async function GET(req: NextRequest) {
     // cached cookie expires within 6 minutes. CF clearance cookies live
     // ~30 min; we keep a 6-min safety window so scrape_portal_detail
     // never hits an expired cookie. The dedup index prevents duplicate
-    // pending jobs for the same host.
+    // pending jobs for the same host. Hosts marked blocked in the last
+    // 6h (migration 087) are skipped — see worker.js markHostBlocked.
     {
         const expirySoon = new Date(Date.now() + 6 * 60 * 1000).toISOString();
+        const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
         const { data: expiring } = await sb.from("portal_cookies")
-            .select("host, expires_at")
+            .select("host, expires_at, last_blocked_at")
             .or(`expires_at.is.null,expires_at.lt.${expirySoon}`)
             .limit(50);
-        const expiringHosts = (expiring || []) as { host: string; expires_at: string | null }[];
+        const expiringHosts = ((expiring || []) as {
+            host: string;
+            expires_at: string | null;
+            last_blocked_at: string | null;
+        }[]).filter(r => !r.last_blocked_at || r.last_blocked_at < sixHoursAgo);
         if (expiringHosts.length > 0) {
             const rows = expiringHosts.map(r => ({
                 task_type: "warm_cf_cookie",

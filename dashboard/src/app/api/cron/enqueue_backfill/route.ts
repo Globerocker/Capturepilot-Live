@@ -116,6 +116,9 @@ export async function GET(req: NextRequest) {
     }
 
     // ---- 4. warm_cf_cookie — every Bonfire host we know about ----
+    // Skip hosts the worker marked blocked in the last 6h (migration 087).
+    // Strict-Turnstile tenants will reject every warm attempt; without the
+    // cooldown the queue burns Railway compute hammering them every tick.
     {
         const { data, error } = await sb.from("rss_sources")
             .select("feed_url")
@@ -129,7 +132,14 @@ export async function GET(req: NextRequest) {
                 if (h.endsWith(".bonfirehub.com")) hosts.add(h);
             } catch { /* skip */ }
         }
-        const rows = Array.from(hosts).map(host => ({
+        const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
+        const { data: blockedRows } = await sb.from("portal_cookies")
+            .select("host")
+            .gte("last_blocked_at", sixHoursAgo);
+        const blocked = new Set<string>(((blockedRows || []) as { host: string }[]).map(r => r.host));
+        const eligible = Array.from(hosts).filter(h => !blocked.has(h));
+        counts.warm_cf_cookie_blocked = blocked.size;
+        const rows = eligible.map(host => ({
             task_type: "warm_cf_cookie",
             payload: { host },
             priority: 8,  // High — these unblock downstream scrape jobs
