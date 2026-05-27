@@ -96,6 +96,68 @@ export const probes: Record<string, () => Promise<ProbeResult>> = {
             : { status: "disabled", detail: "META_APP_SECRET unset" };
     },
     "vercel": async () => probeBearer("https://api.vercel.com/v9/user", process.env.VERCEL_TOKEN),
+
+    // PDL — added 2026-05-27 as Apollo people/match fallback.
+    "pdl": async () => {
+        const k = process.env.PDL_API_KEY;
+        if (!k) return { status: "disabled", detail: "PDL_API_KEY unset" };
+        // /v5/company/enrich is the cheapest 2xx probe (1 credit but only on
+        // success; 404 doesn't charge). Use a known company.
+        return probeApiKeyHeader("https://api.peopledatalabs.com/v5/company/enrich?website=apple.com", "X-Api-Key", k);
+    },
+
+    // SAM.gov KEY 2 (contractor scope) — added 2026-05-27 with the key split.
+    // Probes the entity-information endpoint that this key actually serves.
+    "sam-gov-contractors": async () => {
+        const k = process.env.SAM_API_KEY_2;
+        if (!k) return { status: "disabled", detail: "SAM_API_KEY_2 unset" };
+        return probeApiKeyHeader("https://api.sam.gov/entity-information/v3/entities?registrationStatus=A&size=1", "X-Api-Key", k);
+    },
+
+    // Hostinger-VPS hosted services. Each is reached through Traefik with a
+    // bearer token; the URL constants and tokens live in *_URL / *_AUTH_TOKEN
+    // env vars. If the URL is unset the connector reports disabled (which is
+    // fine — these services are optional integrations).
+    "flaresolverr": async () => {
+        const url = process.env.FLARESOLVERR_URL;
+        const tok = process.env.FLARESOLVERR_AUTH_TOKEN;
+        if (!url) return { status: "disabled", detail: "FLARESOLVERR_URL unset" };
+        const res = await safeFetch(`${url}/`, { headers: tok ? { Authorization: `Bearer ${tok}` } : {} });
+        if (!res) return { status: "error", detail: "network/timeout" };
+        return { status: res.ok ? "ok" : "error", detail: res.ok ? undefined : `HTTP ${res.status}` };
+    },
+    "tika": async () => {
+        const url = process.env.TIKA_URL;
+        const tok = process.env.TIKA_AUTH_TOKEN;
+        if (!url) return { status: "disabled", detail: "TIKA_URL unset" };
+        const res = await safeFetch(`${url}/version`, { headers: tok ? { Authorization: `Bearer ${tok}` } : {} });
+        if (!res) return { status: "error", detail: "network/timeout" };
+        return { status: res.ok ? "ok" : "error", detail: res.ok ? undefined : `HTTP ${res.status}` };
+    },
+    "ollama": async () => {
+        const url = process.env.OLLAMA_URL;
+        const tok = process.env.OLLAMA_AUTH_TOKEN;
+        if (!url) return { status: "disabled", detail: "OLLAMA_URL unset" };
+        const res = await safeFetch(`${url}/api/version`, { headers: tok ? { Authorization: `Bearer ${tok}` } : {} });
+        if (!res) return { status: "error", detail: "network/timeout" };
+        return { status: res.ok ? "ok" : "error", detail: res.ok ? undefined : `HTTP ${res.status}` };
+    },
+    "searxng": async () => {
+        const url = process.env.SEARXNG_URL;
+        const tok = process.env.SEARXNG_AUTH_TOKEN;
+        if (!url) return { status: "disabled", detail: "SEARXNG_URL unset" };
+        const res = await safeFetch(`${url}/`, { headers: tok ? { Authorization: `Bearer ${tok}` } : {} });
+        if (!res) return { status: "error", detail: "network/timeout" };
+        return { status: res.ok ? "ok" : "error", detail: res.ok ? undefined : `HTTP ${res.status}` };
+    },
+    "crawl4ai": async () => {
+        const url = process.env.CRAWL4AI_URL;
+        const tok = process.env.CRAWL4AI_AUTH_TOKEN;
+        if (!url) return { status: "disabled", detail: "CRAWL4AI_URL unset" };
+        const res = await safeFetch(`${url}/health`, { headers: tok ? { Authorization: `Bearer ${tok}` } : {} });
+        if (!res) return { status: "error", detail: "network/timeout" };
+        return { status: res.ok ? "ok" : "error", detail: res.ok ? undefined : `HTTP ${res.status}` };
+    },
 };
 
 /** Days until expiry (negative = already expired, null = no expiry tracked). */
