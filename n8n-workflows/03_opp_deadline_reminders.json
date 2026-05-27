@@ -1,0 +1,111 @@
+{
+  "name": "CapturePilot — Opportunity deadline reminders (24h before close)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            { "field": "cronExpression", "expression": "0 7 * * *" }
+          ]
+        }
+      },
+      "id": "trigger-daily-7utc",
+      "name": "Daily 07:00 UTC",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 400]
+    },
+    {
+      "parameters": {
+        "url": "=https://ryxgjzehoijjvczqkhwr.supabase.co/rest/v1/user_pursuits?select=id,user_profile_id,opportunity_id,opportunities!inner(title,response_deadline,link),user_profiles!inner(email,company_name)&stage=in.(researching,preparing)&opportunities.response_deadline=gte.{{ $now.plus({hours: 23}).toISO() }}&opportunities.response_deadline=lt.{{ $now.plus({hours: 26}).toISO() }}&deadline_reminder_sent_at=is.null&limit=100",
+        "options": {
+          "headers": {
+            "Authorization": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}",
+            "apikey": "={{ $env.SUPABASE_SERVICE_KEY }}"
+          }
+        }
+      },
+      "id": "fetch-due-tomorrow",
+      "name": "Fetch opps due in 23-26h, not yet reminded",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 400]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "split-batches",
+      "name": "Per-pursuit loop",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [680, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.resend.com/emails",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"from\": \"CapturePilot <alerts@capturepilot.com>\",\n  \"to\": \"{{ $json.user_profiles.email }}\",\n  \"subject\": \"⏰ Closes tomorrow: {{ $json.opportunities.title }}\",\n  \"html\": \"<p>Hi,</p><p>Heads up — <strong>{{ $json.opportunities.title }}</strong> closes in about 24 hours ({{ $json.opportunities.response_deadline }}).</p><p>Final-day actions:</p><ul><li><a href='{{ $json.opportunities.link }}'>Open the opportunity</a></li><li><a href='https://app.capturepilot.com/pipeline/{{ $json.id }}'>Open your pipeline card</a> — check action items + final draft</li></ul><p>— CapturePilot</p>\"\n}",
+        "options": {
+          "headers": {
+            "Authorization": "=Bearer {{ $env.RESEND_API_KEY }}"
+          }
+        }
+      },
+      "id": "resend-reminder",
+      "name": "Send reminder via Resend",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 400]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://ryxgjzehoijjvczqkhwr.supabase.co/rest/v1/user_pursuits?id=eq.{{ $('Per-pursuit loop').item.json.id }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"deadline_reminder_sent_at\": \"{{ $now.toISO() }}\" }",
+        "options": {
+          "headers": {
+            "Authorization": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}",
+            "apikey": "={{ $env.SUPABASE_SERVICE_KEY }}",
+            "Prefer": "return=minimal"
+          }
+        }
+      },
+      "id": "tag-sent",
+      "name": "Mark deadline_reminder_sent_at",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1120, 400]
+    }
+  ],
+  "connections": {
+    "Daily 07:00 UTC": {
+      "main": [[{ "node": "Fetch opps due in 23-26h, not yet reminded", "type": "main", "index": 0 }]]
+    },
+    "Fetch opps due in 23-26h, not yet reminded": {
+      "main": [[{ "node": "Per-pursuit loop", "type": "main", "index": 0 }]]
+    },
+    "Per-pursuit loop": {
+      "main": [
+        [{ "node": "Send reminder via Resend", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Send reminder via Resend": {
+      "main": [[{ "node": "Mark deadline_reminder_sent_at", "type": "main", "index": 0 }]]
+    },
+    "Mark deadline_reminder_sent_at": {
+      "main": [[{ "node": "Per-pursuit loop", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false,
+  "pinData": {}
+}
