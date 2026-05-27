@@ -2,10 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { runQuickCheck } from "@/lib/quick-checker";
 import { assertAdmin } from "@/lib/auth-admin";
+import { SAM_CONTRACTOR_KEY } from "@/lib/sam-keys";
 
 export const maxDuration = 120;
 
-const SAM_API_KEY = process.env.SAM_API_KEY || "";
+// Entity lookups go through the dedicated SAM_API_KEY_2 (contractor scope).
+const SAM_API_KEY = SAM_CONTRACTOR_KEY;
 const APOLLO_API_KEY = process.env.APOLLO_API_KEY || "";
 
 function getAdmin() {

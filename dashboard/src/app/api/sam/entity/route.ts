@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { SAM_CONTRACTOR_KEY } from "@/lib/sam-keys";
 
-const SAM_API_KEY = process.env.SAM_API_KEY || "";
+// Entity Management API uses the dedicated SAM_API_KEY_2 (contractor scope)
+// so heavy Quick Checker bursts don't eat the Opportunities API's quota.
+const SAM_API_KEY = SAM_CONTRACTOR_KEY;
 const SAM_ENTITY_URL = "https://api.sam.gov/entity-information/v3/entities";
 
 interface SamEntity {
