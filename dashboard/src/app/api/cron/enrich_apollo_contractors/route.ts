@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { isPdlConfigured, pdlPersonByCompany } from "@/lib/enrichment/pdl";
 
 export const maxDuration = 300;
 
@@ -163,11 +164,14 @@ export async function GET(req: NextRequest) {
     const stats = {
         company_matched: 0,
         person_matched: 0,
+        pdl_matched: 0,
         not_found: 0,
         failed: 0,
         person_endpoint_blocked: false,
+        pdl_endpoint_blocked: false,
     };
     let personEndpointBlocked = false;
+    let pdlEndpointBlocked = false;
 
     // Priority 1: incumbents on active opportunities (we want their email yesterday).
     const { data: incumbentRows } = await db
@@ -266,6 +270,39 @@ export async function GET(req: NextRequest) {
                             stats.person_matched++;
                         }
                     }
+                }
+
+                // FALLBACK: PDL person enrichment when Apollo people/match is
+                // blocked (the audit on 2026-05-27 confirmed Apollo returns
+                // "insufficient credits" on our current plan even with paid
+                // window). PDL has a 1000/mo free tier and same shape.
+                if (
+                    !update.primary_poc_email
+                    && !pdlEndpointBlocked
+                    && isPdlConfigured()
+                ) {
+                    try {
+                        const { person: pdlP, blocked: pdlBlocked } = await pdlPersonByCompany({
+                            companyName: company.name || name,
+                            companyDomain: finalDomain || null,
+                            firstName: split?.first || null,
+                            lastName: split?.last || null,
+                        });
+                        if (pdlBlocked) {
+                            pdlEndpointBlocked = true;
+                            stats.pdl_endpoint_blocked = true;
+                        } else if (pdlP) {
+                            const pdlEmail = pdlP.work_email || pdlP.personal_emails[0] || null;
+                            if (pdlEmail && !update.primary_poc_email) update.primary_poc_email = pdlEmail;
+                            if (pdlP.job_title && !update.primary_poc_title) update.primary_poc_title = pdlP.job_title;
+                            if (pdlP.linkedin_url && !update.owner_linkedin) update.owner_linkedin = pdlP.linkedin_url;
+                            if (pdlP.mobile_phone && !update.direct_phone) update.direct_phone = pdlP.mobile_phone;
+                            if (pdlEmail || pdlP.job_title || pdlP.linkedin_url) {
+                                update.enrichment_source = "pdl";
+                                stats.pdl_matched++;
+                            }
+                        }
+                    } catch { /* swallow — leave row at apollo-only enrichment */ }
                 }
             }
 
