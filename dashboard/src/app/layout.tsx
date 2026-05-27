@@ -5,6 +5,7 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 import { Analytics } from "@vercel/analytics/next";
 import { CookieConsent } from "@/components/CookieConsent";
 import MetaPixel from "@/components/MetaPixel";
+import FbclidCapture from "@/components/FbclidCapture";
 import PixelInstrumentation from "@/components/PixelInstrumentation";
 import "./globals.css";
 
@@ -39,6 +40,7 @@ export default function RootLayout({
       >
         {children}
         <CookieConsent />
+        <FbclidCapture />
         <MetaPixel />
         {/* Pixel instrumentation: route-change PageView, click delegation,
             scroll-depth + time-on-page soft conversions. useSearchParams()

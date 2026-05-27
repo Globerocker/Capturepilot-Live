@@ -7,7 +7,7 @@ import Image from "next/image";
 import { ArrowRight, CheckCircle2, Loader2, Gift } from "lucide-react";
 import clsx from "clsx";
 import { createSupabaseClient } from "@/lib/supabase/client";
-import { track } from "@/lib/analytics";
+import { trackWithCapi } from "@/lib/analytics";
 
 interface InviteDetails {
   email: string;
@@ -116,9 +116,12 @@ function SignupPageContent() {
       setLoading(false);
     } else {
       if (inviteToken) await claimInvite(data.user?.id);
-      // Fire Meta Pixel client + capture the event_id to dedup against
-      // the server-side CAPI fire below.
-      const capiEventId = track("signup_completed", { source: inviteToken ? "beta_invite" : "signup" });
+      // Pixel + CAPI dual-fire. Passing email + Supabase user_id improves
+      // Meta's Event Match Quality dramatically (4.3 → ~8 range).
+      trackWithCapi("signup_completed", {
+        user: { email, externalId: data.user?.id || null },
+        customData: { source: inviteToken ? "beta_invite" : "signup" },
+      });
       // Fire-and-forget HubSpot sync — do not block redirect
       fetch("/api/hubspot/sync-contact", {
         method: "POST",
@@ -134,20 +137,6 @@ function SignupPageContent() {
 
       // CAPI server-side CompleteRegistration — dedups against client
       // via capi_event_id. Survives AdBlockers, hashes email server-side.
-      fetch("/api/meta/capi-track", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          event: "CompleteRegistration",
-          event_id: capiEventId,
-          email,
-          custom_data: {
-            content_name: inviteToken ? "beta_invite" : "signup",
-            content_category: "account",
-          },
-        }),
-      }).catch((err) => console.error("[CAPI signup fire failed]", err));
-
       const onboardParams = new URLSearchParams();
       if (analysisId) onboardParams.set("analysis_id", analysisId);
       if (invite?.company_name) onboardParams.set("company", invite.company_name);

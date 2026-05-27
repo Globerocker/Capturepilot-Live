@@ -16,6 +16,7 @@ import { LeadMagnetForm } from "@/components/LeadMagnetForm";
 import { OpportunityLandscape, ConversionBottomSection, type OpportunityStats } from "@/components/OpportunityLandscape";
 import ReadinessScoreCard from "@/components/ReadinessScoreCard";
 import NaicsEditModal from "@/components/NaicsEditModal";
+import { trackWithCapi } from "@/lib/analytics";
 import ProfileEditModal from "@/components/ProfileEditModal";
 import StartupPackOfferCard from "@/components/StartupPackOfferCard";
 import ConfirmFoundDataStep from "@/components/ConfirmFoundDataStep";
@@ -932,10 +933,17 @@ export default function CheckResultsPage() {
                     if (!w2.__cp_qc_complete_fired) {
                         w2.__cp_qc_complete_fired = true;
                         w2.fbq?.("trackCustom", "QuickCheckCompleted", { analysis_id: analysisId });
-                        w2.fbq?.("track", "Lead", {
-                            content_name: "quick_check_completed",
-                            content_category: "tool",
-                            analysis_id: analysisId,
+                        // Pixel + CAPI dual-fire. lead_email is the address the
+                        // user gave when starting the check (if any) — Meta uses
+                        // it to match to a Facebook user. Without it the event
+                        // matches only on IP/UA/fbp, which is low-signal.
+                        trackWithCapi("lead", {
+                            user: { email: next.lead_email || null },
+                            customData: {
+                                content_name: "quick_check_completed",
+                                content_category: "tool",
+                                analysis_id: analysisId,
+                            },
                         });
                     }
                 }
