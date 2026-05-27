@@ -20,6 +20,14 @@ export const revalidate = 300; // 5 min
 interface PublicStats {
     federal_opps: number;
     sled_opps: number;
+    state_opps: number;
+    county_opps: number;
+    city_opps: number;
+    district_opps: number;
+    /** SLED rows not yet tagged with jurisdiction_level. Equals
+     *  sled_opps - (state + county + city + district). ~76% currently
+     *  per the 2026-05-27 audit; gets backfilled by Sprint C. */
+    sled_uncategorized: number;
     active_total: number;
     contractors_tracked: number;
     portals_tracked: number;
@@ -38,10 +46,18 @@ export async function GET() {
 
     const today = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
-    // Run aggregates in parallel
-    const [federal, sled, total, contractors, portals, newToday, matches24h, enrich24h] = await Promise.all([
+    // Run aggregates in parallel. SLED rows are subdivided by jurisdiction_level
+    // so the marketing site can show separate State / County / City counters.
+    const [
+        federal, sled, state, county, city, district,
+        total, contractors, portals, newToday, matches24h, enrich24h,
+    ] = await Promise.all([
         countQuery(sb, "opportunities", { source: "eq.sam", is_archived: "eq.false" }),
         countQuery(sb, "opportunities", { source: "eq.sled", is_archived: "eq.false" }),
+        countQuery(sb, "opportunities", { source: "eq.sled", jurisdiction_level: "eq.state", is_archived: "eq.false" }),
+        countQuery(sb, "opportunities", { source: "eq.sled", jurisdiction_level: "eq.county", is_archived: "eq.false" }),
+        countQuery(sb, "opportunities", { source: "eq.sled", jurisdiction_level: "eq.city", is_archived: "eq.false" }),
+        countQuery(sb, "opportunities", { source: "eq.sled", jurisdiction_level: "eq.district", is_archived: "eq.false" }),
         countQuery(sb, "opportunities", { is_archived: "eq.false" }),
         countQuery(sb, "contractors", {}),
         countQuery(sb, "rss_sources", { enabled: "eq.true" }),
@@ -53,6 +69,11 @@ export async function GET() {
     const stats: PublicStats = {
         federal_opps: federal,
         sled_opps: sled,
+        state_opps: state,
+        county_opps: county,
+        city_opps: city,
+        district_opps: district,
+        sled_uncategorized: Math.max(0, sled - state - county - city - district),
         active_total: total,
         contractors_tracked: contractors,
         portals_tracked: portals,
@@ -78,14 +99,24 @@ async function countQuery(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let q: any = sb.from(table).select("id", { count: "exact", head: true });
         for (const [k, v] of Object.entries(filters)) {
-            const [op, val] = v.split(".", 2);
+            // Use indexOf instead of split — values like "gte.2026-05-27T13:00:00Z"
+            // contain dots in the timestamp and split would truncate the date.
+            const dotIdx = v.indexOf(".");
+            const op = dotIdx === -1 ? v : v.slice(0, dotIdx);
+            const val = dotIdx === -1 ? "" : v.slice(dotIdx + 1);
             if (op === "eq") q = q.eq(k, val);
             else if (op === "gte") q = q.gte(k, val);
             else if (op === "lt") q = q.lt(k, val);
         }
-        const { count } = await q;
+        const { count, error } = await q;
+        if (error) {
+            // Log but don't throw — counter widgets shouldn't crash the page.
+            console.warn(`[public/stats] countQuery ${table} ${JSON.stringify(filters)} → ${error.message}`);
+            return 0;
+        }
         return count || 0;
-    } catch {
+    } catch (e) {
+        console.warn(`[public/stats] countQuery threw on ${table} ${JSON.stringify(filters)}:`, e);
         return 0;
     }
 }

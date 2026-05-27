@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import clsx from "clsx";
-import { PublicStat } from "@/components/LiveCounter";
+import { PublicStatsBar } from "@/components/LiveCounter";
 import {
     Globe, Database, Target, Search, Users, Sparkles, CheckCircle2, Loader2,
     Clock,
@@ -247,26 +247,7 @@ export default function AnalysisLoadingScreen({ companyName, status }: Props) {
                             Live
                         </span>
                     </div>
-                    <div className="grid grid-cols-3 gap-3 text-center">
-                        <div>
-                            <p className="text-xl sm:text-2xl font-black text-stone-900">
-                                <PublicStat statKey="federal_opps" />
-                            </p>
-                            <p className="text-[10px] text-stone-500 uppercase tracking-widest mt-0.5">Federal opps</p>
-                        </div>
-                        <div>
-                            <p className="text-xl sm:text-2xl font-black text-stone-900">
-                                <PublicStat statKey="sled_opps" />
-                            </p>
-                            <p className="text-[10px] text-stone-500 uppercase tracking-widest mt-0.5">State / Local</p>
-                        </div>
-                        <div>
-                            <p className="text-xl sm:text-2xl font-black text-stone-900">
-                                <PublicStat statKey="contractors_tracked" />
-                            </p>
-                            <p className="text-[10px] text-stone-500 uppercase tracking-widest mt-0.5">Contractors</p>
-                        </div>
-                    </div>
+                    <PublicStatsBar variant="compact" />
                 </div>
 
                 {/* Reassurance microcopy */}

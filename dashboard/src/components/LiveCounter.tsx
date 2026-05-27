@@ -53,10 +53,27 @@ export function LiveCounter({ value, durationMs = 1200, format, prefix = "", suf
     return <span className={clsx("tabular-nums", className)}>{prefix}{fmt(displayed)}{suffix}</span>;
 }
 
+// Keys that /api/public/stats returns. Keep in sync with PublicStats interface
+// in src/app/api/public/stats/route.ts.
+export type PublicStatKey =
+    | "federal_opps"
+    | "sled_opps"
+    | "state_opps"
+    | "county_opps"
+    | "city_opps"
+    | "district_opps"
+    | "sled_uncategorized"
+    | "active_total"
+    | "contractors_tracked"
+    | "portals_tracked"
+    | "new_today"
+    | "matches_scored_24h"
+    | "enrichments_completed_24h";
+
 /**
- * StatsBadge — pull from /api/public/stats once, optionally re-poll. Used
- * on the marketing landing page, the Quick Checker loading screen, etc.
- * Renders a count-up animation on first mount + every refresh.
+ * Single-stat live counter — pulls from /api/public/stats once, optionally
+ * re-polls. Used on the marketing landing page, the Quick Checker loading
+ * screen, etc. Renders a count-up animation on first mount + every refresh.
  */
 export function PublicStat({
     statKey,
@@ -67,7 +84,7 @@ export function PublicStat({
     className,
     pollMs,
 }: {
-    statKey: "federal_opps" | "sled_opps" | "active_total" | "contractors_tracked" | "portals_tracked" | "new_today" | "matches_scored_24h" | "enrichments_completed_24h";
+    statKey: PublicStatKey;
     label?: string;
     fallback?: number;
     prefix?: string;
@@ -100,5 +117,53 @@ export function PublicStat({
             <LiveCounter value={value} prefix={prefix} suffix={suffix} />
             {label && <span className="ml-1 text-stone-500">{label}</span>}
         </span>
+    );
+}
+
+/**
+ * Reusable jurisdictional counter bar — Federal / State / County / City + Contractors.
+ * Drop into any page (Quick Checker loading, marketing hero, dashboard top, email
+ * preview, etc) and it will fetch + animate. Renders a 5-column grid that
+ * collapses to 2 columns on mobile.
+ *
+ * Use `variant="compact"` for embedded contexts (smaller text, no surrounding card).
+ */
+export function PublicStatsBar({
+    variant = "card",
+    showContractors = true,
+    className,
+}: {
+    variant?: "card" | "compact";
+    showContractors?: boolean;
+    className?: string;
+}) {
+    const compact = variant === "compact";
+    const items: Array<{ key: PublicStatKey; label: string }> = [
+        { key: "federal_opps", label: "Federal" },
+        { key: "state_opps", label: "State" },
+        { key: "county_opps", label: "County" },
+        { key: "city_opps", label: "City" },
+    ];
+    if (showContractors) items.push({ key: "contractors_tracked", label: "Contractors" });
+
+    const wrapClass = compact
+        ? clsx("grid grid-cols-2 sm:grid-cols-5 gap-3", className)
+        : clsx(
+            "bg-gradient-to-r from-emerald-50 via-white to-blue-50 border border-emerald-100 rounded-2xl px-5 py-4",
+            "grid grid-cols-2 sm:grid-cols-5 gap-3",
+            className,
+        );
+
+    return (
+        <div className={wrapClass}>
+            {items.map(({ key, label }) => (
+                <div key={key} className="text-center">
+                    <p className={clsx("font-black text-stone-900", compact ? "text-base sm:text-lg" : "text-xl sm:text-2xl")}>
+                        <PublicStat statKey={key} />
+                    </p>
+                    <p className="text-[10px] text-stone-500 uppercase tracking-widest mt-0.5">{label}</p>
+                </div>
+            ))}
+        </div>
     );
 }
