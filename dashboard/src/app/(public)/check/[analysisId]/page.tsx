@@ -921,14 +921,22 @@ export default function CheckResultsPage() {
                 setData(next);
                 setLoading(false);
 
-                // Fire QuickCheckCompleted once when status transitions
-                // to "complete" — strong soft-conversion signal that
-                // separates engaged researchers from drive-by submitters.
+                // Fire QuickCheckCompleted + standard Lead once when status
+                // transitions to "complete" — strong soft-conversion signal
+                // that separates engaged researchers from drive-by submitters.
+                // Lead at completion is what Meta optimizes ad delivery for;
+                // the custom event stays so we can build a separate audience
+                // off "actually saw their report" vs "just started a check".
                 if (next.status === "complete") {
                     const w2 = window as unknown as { fbq?: (...args: unknown[]) => void; __cp_qc_complete_fired?: boolean };
                     if (!w2.__cp_qc_complete_fired) {
                         w2.__cp_qc_complete_fired = true;
                         w2.fbq?.("trackCustom", "QuickCheckCompleted", { analysis_id: analysisId });
+                        w2.fbq?.("track", "Lead", {
+                            content_name: "quick_check_completed",
+                            content_category: "tool",
+                            analysis_id: analysisId,
+                        });
                     }
                 }
 

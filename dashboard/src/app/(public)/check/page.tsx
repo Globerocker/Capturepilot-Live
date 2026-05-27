@@ -212,12 +212,18 @@ function CheckContent() {
     // Fire QuickCheckStarted once per page-load. Tracks people who land on
     // /check at all — even if they bail before typing anything, Meta sees
     // the top-of-funnel interest. Distinct from the Lead event which only
-    // fires on actual submit.
+    // fires on actual submit. Also fires standard "ViewContent" so Meta
+    // recognizes /check as a high-intent content page.
     useEffect(() => {
         const w = window as unknown as { fbq?: (...args: unknown[]) => void };
         w.fbq?.("trackCustom", "QuickCheckStarted", {
             has_prefill: !!autoWebsite,
             source: document.referrer || "direct",
+        });
+        w.fbq?.("track", "ViewContent", {
+            content_name: "Quick Federal Readiness Check",
+            content_category: "tool",
+            content_ids: ["quick_check"],
         });
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
