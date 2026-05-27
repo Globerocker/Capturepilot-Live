@@ -118,6 +118,57 @@ async function enqueueWarm(host) {
 }
 
 // ---------------------------------------------------------------------------
+// FlareSolverr — Cloudflare-bypass proxy. Runs on a separate host (Hostinger
+// VPS), exposes a single POST /v1 endpoint. When configured, Bonfire URLs go
+// through it instead of Playwright because puppeteer-stealth from Railway IPs
+// can't pass Bonfire's Turnstile challenge. FlareSolverr's selenium +
+// undetected-chromedriver passes it cleanly. See tools/playwright-worker/
+// README.md "FlareSolverr setup" for the install instructions.
+// ---------------------------------------------------------------------------
+const FLARESOLVERR_URL = process.env.FLARESOLVERR_URL || null;
+const FLARESOLVERR_TIMEOUT_MS = 60_000;
+
+async function fetchViaFlaresolverr(url) {
+    if (!FLARESOLVERR_URL) throw new Error("FLARESOLVERR_URL not configured");
+    const res = await fetch(`${FLARESOLVERR_URL}/v1`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            cmd: "request.get",
+            url,
+            maxTimeout: FLARESOLVERR_TIMEOUT_MS,
+        }),
+        signal: AbortSignal.timeout(FLARESOLVERR_TIMEOUT_MS + 15_000),
+    });
+    if (!res.ok) throw new Error(`flaresolverr http ${res.status}`);
+    const data = await res.json();
+    if (data.status !== "ok") {
+        throw new Error(`flaresolverr: ${data.message || data.status}`);
+    }
+    return data.solution?.response || "";
+}
+
+// Extract visible bid text from a FlareSolverr HTML payload. The Playwright
+// path uses Page.innerText() to walk the DOM; we don't have that here, so
+// we strip scripts/styles and unwrap remaining tags. Good enough for Bonfire,
+// which renders the bid body as plain text in the SPA.
+function extractBidText(html) {
+    if (!html) return "";
+    let cleaned = html
+        .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ")
+        .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ")
+        .replace(/<noscript\b[^>]*>[\s\S]*?<\/noscript>/gi, " ")
+        .replace(/<[^>]+>/g, " ")
+        .replace(/&nbsp;/g, " ")
+        .replace(/&amp;/g, "&")
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'");
+    return cleaned.replace(/\s+/g, " ").trim();
+}
+
+// ---------------------------------------------------------------------------
 // HANDLER: scrape_portal_detail
 // ---------------------------------------------------------------------------
 async function scrapePortalDetail(job, browser) {
@@ -128,14 +179,41 @@ async function scrapePortalDetail(job, browser) {
     let host;
     try { host = new URL(url).hostname.toLowerCase(); } catch { return { error: "bad url" }; }
 
+    // Bonfire → FlareSolverr path. We tested puppeteer-stealth from Railway
+    // datacenter IPs and it can't pass Bonfire's CF Turnstile; FlareSolverr
+    // (selenium + undetected-chromedriver) on a separate VPS does. When
+    // FLARESOLVERR_URL is set and the host is Bonfire, skip Playwright
+    // entirely — no browser context, no cookie pool needed (FlareSolverr
+    // re-solves on every request).
+    const isBonfire = host.endsWith(".bonfirehub.com");
+    if (isBonfire && FLARESOLVERR_URL) {
+        try {
+            const html = await fetchViaFlaresolverr(url);
+            const text = extractBidText(html);
+            if (!text || text.length < 400) {
+                return {
+                    result: { skipped: "thin_content", chars: text.length, via: "flaresolverr", host },
+                    write: { last_crawled_at: new Date().toISOString() },
+                };
+            }
+            const { error: upErr } = await sb
+                .from("opportunities")
+                .update({ description: text.slice(0, 6000), last_crawled_at: new Date().toISOString() })
+                .eq("id", oppId);
+            if (upErr) return { error: `db update failed: ${upErr.message}` };
+            return { result: { chars: text.length, host, via: "flaresolverr" } };
+        } catch (e) {
+            return { error: `flaresolverr: ${(e && e.message) || e}` };
+        }
+    }
+
     const cookieRow = await loadPortalCookies(host);
 
-    // Bonfire detail pages require cf_clearance to load. If we don't have one,
-    // spawning a context and navigating is guaranteed to return the CF
-    // challenge HTML — wastes 4s of browser time per row. Skip and enqueue a
-    // fresh warm job so the next backfill tick has a chance.
-    const needsClearance = host.endsWith(".bonfirehub.com");
-    if (needsClearance && !hasClearance(cookieRow?.cookies)) {
+    // Bonfire without FlareSolverr falls back to the Playwright + cookie path,
+    // which currently can't pass Bonfire's Turnstile. Skip early when there's
+    // no cf_clearance instead of burning a browser context on a guaranteed
+    // block.
+    if (isBonfire && !hasClearance(cookieRow?.cookies)) {
         await enqueueWarm(host);
         return { result: { skipped: "no_clearance_cookie", host } };
     }
@@ -228,6 +306,15 @@ const CF_WARM_PATHS = [
 async function warmCfCookie(job, browser) {
     const host = job.payload?.host;
     if (!host) return { error: "missing host" };
+
+    // When FlareSolverr handles Bonfire (see scrapePortalDetail), there's no
+    // cookie pool to warm. Mark the job done immediately so the queue clears
+    // and enqueue_backfill doesn't keep re-enqueueing it. Other portals fall
+    // through to the Playwright warming path unchanged.
+    if (FLARESOLVERR_URL && host.endsWith(".bonfirehub.com")) {
+        return { result: { skipped: "flaresolverr_handles_cf", host } };
+    }
+
     const context = await browser.newContext({
         userAgent: UA,
         viewport: { width: 1280, height: 800 },
