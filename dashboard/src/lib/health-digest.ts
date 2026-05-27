@@ -47,10 +47,17 @@ function escape(s: string): string {
         .replace(/"/g, "&quot;");
 }
 
-export async function sendHealthDigest(args: { to: string; alerts: Alert[] }): Promise<{ sent: boolean; error?: string }> {
+export async function sendHealthDigest(args: { to: string | string[]; alerts: Alert[] }): Promise<{ sent: boolean; error?: string }> {
     const apiKey = process.env.RESEND_API_KEY;
     if (!apiKey) return { sent: false, error: "missing_resend_key" };
     if (args.alerts.length === 0) return { sent: false, error: "no_alerts" };
+
+    // Accept either a single address, a string[], or a comma-separated string.
+    // The comma path is the common case — HEALTH_ALERT_EMAIL=foo@x.com,bar@y.com
+    // lets you add recipients via Vercel env without touching code.
+    const toList = Array.isArray(args.to)
+        ? args.to
+        : args.to.split(",").map(s => s.trim()).filter(Boolean);
 
     const sorted = [...args.alerts].sort(severitySort);
     const criticalCount = sorted.filter(a => a.severity === "critical").length;
@@ -98,7 +105,7 @@ export async function sendHealthDigest(args: { to: string; alerts: Alert[] }): P
     const from = process.env.HEALTH_ALERT_FROM || "CapturePilot Health Monitor <alerts@capturepilot.com>";
     const { error } = await resend.emails.send({
         from,
-        to: args.to,
+        to: toList,
         subject,
         html,
         replyTo: "andre@capturepilot.com",

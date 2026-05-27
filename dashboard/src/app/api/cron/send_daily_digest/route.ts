@@ -144,7 +144,10 @@ export async function GET(req: NextRequest) {
 
     const apiKey = process.env.RESEND_API_KEY;
     if (!apiKey) return NextResponse.json({ ok: false, error: "RESEND_API_KEY missing" }, { status: 500 });
-    const to = process.env.HEALTH_ALERT_EMAIL || "info@fillcart.de";
+    // HEALTH_ALERT_EMAIL supports comma-separated list (set via Vercel env)
+    // so additional recipients land without code changes.
+    const recipientsRaw = process.env.HEALTH_ALERT_EMAIL || "info@fillcart.de,info@americurial.com";
+    const to = recipientsRaw.split(",").map(s => s.trim()).filter(Boolean);
     const from = process.env.HEALTH_ALERT_FROM || "CapturePilot Ops <alerts@capturepilot.com>";
 
     const resend = new Resend(apiKey);
