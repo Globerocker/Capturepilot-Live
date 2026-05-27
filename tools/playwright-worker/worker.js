@@ -184,14 +184,21 @@ async function scrapePortalDetail(job, browser) {
     let host;
     try { host = new URL(url).hostname.toLowerCase(); } catch { return { error: "bad url" }; }
 
-    // Bonfire → FlareSolverr path. We tested puppeteer-stealth from Railway
-    // datacenter IPs and it can't pass Bonfire's CF Turnstile; FlareSolverr
-    // (selenium + undetected-chromedriver) on a separate VPS does. When
-    // FLARESOLVERR_URL is set and the host is Bonfire, skip Playwright
-    // entirely — no browser context, no cookie pool needed (FlareSolverr
-    // re-solves on every request).
+    // Hosts that puppeteer-stealth from a Railway/datacenter IP can't crack
+    // — Cloudflare Turnstile or Salesforce Community Cloud SPAs that
+    // never reach networkidle. Routed through FlareSolverr (selenium +
+    // undetected-chromedriver) on the Hostinger VPS, which solves both
+    // cleanly. New hosts get added here as we discover them in the
+    // worker logs (cf_blocked / no_clearance_cookie / persistent timeouts).
+    const isFlaresolverrHost = (
+        host.endsWith(".bonfirehub.com")          // Bonfire (CF Turnstile)
+        || host === "www.rampla.org"              // LA-area rampla Salesforce SPA
+        || host === "rampla.org"
+        || /\.force\.com$/.test(host)             // Generic Salesforce Community Cloud
+        || /\.lightning\.force\.com$/.test(host)
+    );
     const isBonfire = host.endsWith(".bonfirehub.com");
-    if (isBonfire && FLARESOLVERR_URL) {
+    if (isFlaresolverrHost && FLARESOLVERR_URL) {
         try {
             const html = await fetchViaFlaresolverr(url);
             const text = extractBidText(html);

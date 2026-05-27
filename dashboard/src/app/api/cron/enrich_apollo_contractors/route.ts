@@ -18,10 +18,19 @@ export const maxDuration = 300;
  * spending an Apollo credit on, and our re-engagement campaigns don't use
  * non-awardees anyway.
  *
- * Schedule: every 2h via vercel.json. 50 contractors/run = ~600/day.
+ * Schedule: every 2h via vercel.json. With BATCH_SIZE=200 + manual top-ups
+ * during the paid-tier window we can clear the 2,262 award-having audience
+ * in ~2 days; default schedule covers ~150/day at this batch.
  * Priority order: incumbents on active opps, then biggest award counts.
+ *
+ * 2026-05-27: bumped from 50 → 200 to maximize the paid Apollo window
+ * (people/match endpoint accessible until 2026-06-02). The per-row work
+ * is ~1.5s, so 200 fits the 300s maxDuration with headroom.
+ *
+ * Accepts ?batch=N override (capped at 400) for manual burst runs.
  */
-const BATCH_SIZE = 50;
+const DEFAULT_BATCH_SIZE = 200;
+const MAX_BATCH_SIZE = 400;
 
 function admin() {
     return createClient(
@@ -140,6 +149,14 @@ export async function GET(req: NextRequest) {
     if (!process.env.APOLLO_API_KEY) {
         return NextResponse.json({ error: "APOLLO_API_KEY not configured — skipping" }, { status: 501 });
     }
+
+    // Allow per-call batch override for manual burst runs.
+    // ?batch=400 = max; defaults to DEFAULT_BATCH_SIZE if absent or invalid.
+    const url = new URL(req.url);
+    const batchParam = Number(url.searchParams.get("batch") || "");
+    const BATCH_SIZE = Number.isFinite(batchParam) && batchParam > 0
+        ? Math.min(MAX_BATCH_SIZE, Math.floor(batchParam))
+        : DEFAULT_BATCH_SIZE;
 
     const db = admin();
     const startTime = Date.now();
