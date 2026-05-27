@@ -76,20 +76,33 @@ export async function GET(_req: NextRequest) {
         checks.push({ key: "DeepSeek", env_var: "DEEPSEEK_API_KEY", configured, reachable, last_check: now });
     }
 
-    // SAM.gov — no free "ping" endpoint, just check key is present
+    // SAM.gov — probe BOTH keys independently. The split (lib/sam-keys.ts)
+    // means opportunities and contractor calls have separate quotas; if KEY 1
+    // is 429-ing we still want to know KEY 2 is healthy.
+    //
+    // Each probe uses the endpoint matching its own scope so it draws against
+    // the right quota (1 req against KEY 1, 1 req against KEY 2 — both small).
     {
-        const configured = !!process.env.SAM_API_KEY;
-        let reachable: ServiceStatus["reachable"] = "unknown";
-        if (configured) {
-            const today = new Date();
-            const toStr = `${String(today.getMonth() + 1).padStart(2, "0")}/${String(today.getDate()).padStart(2, "0")}/${today.getFullYear()}`;
-            const fromStr = toStr;
-            reachable = await probe(
-                `https://api.sam.gov/opportunities/v2/search?postedFrom=${fromStr}&postedTo=${toStr}&limit=1`,
-                { headers: { "X-Api-Key": process.env.SAM_API_KEY! } },
-            );
-        }
-        checks.push({ key: "SAM.gov", env_var: "SAM_API_KEY", configured, reachable, last_check: now });
+        const today = new Date();
+        const dateStr = `${String(today.getMonth() + 1).padStart(2, "0")}/${String(today.getDate()).padStart(2, "0")}/${today.getFullYear()}`;
+
+        const k1 = process.env.SAM_API_KEY;
+        const k1Reachable: ServiceStatus["reachable"] = k1
+            ? await probe(
+                `https://api.sam.gov/opportunities/v2/search?postedFrom=${dateStr}&postedTo=${dateStr}&limit=1`,
+                { headers: { "X-Api-Key": k1 } },
+            )
+            : "unknown";
+        checks.push({ key: "SAM.gov (opportunities)", env_var: "SAM_API_KEY", configured: !!k1, reachable: k1Reachable, last_check: now });
+
+        const k2 = process.env.SAM_API_KEY_2;
+        const k2Reachable: ServiceStatus["reachable"] = k2
+            ? await probe(
+                "https://api.sam.gov/entity-information/v3/entities?registrationStatus=A&size=1",
+                { headers: { "X-Api-Key": k2 } },
+            )
+            : "unknown";
+        checks.push({ key: "SAM.gov (contractors)", env_var: "SAM_API_KEY_2", configured: !!k2, reachable: k2Reachable, last_check: now });
     }
 
     // Apollo

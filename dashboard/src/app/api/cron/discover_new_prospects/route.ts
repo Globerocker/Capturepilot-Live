@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { guardCron } from "@/lib/cron-auth";
+import { SAM_CONTRACTOR_KEY } from "@/lib/sam-keys";
 
 export const maxDuration = 300;
 
@@ -29,8 +30,12 @@ export async function GET(req: NextRequest) {
     const denied = guardCron(req);
     if (denied) return denied;
 
-    const samKey = process.env.SAM_API_KEY;
-    if (!samKey) return NextResponse.json({ error: "SAM_API_KEY missing" }, { status: 500 });
+    // Entity-information endpoint = contractor scope → use SAM_API_KEY_2.
+    // This route paginates by date and can fire 100-entity requests heavily;
+    // keeping it on SAM_API_KEY would burn the opportunities-API quota (the
+    // 429 alert on 2026-05-27 was traced to exactly this).
+    const samKey = SAM_CONTRACTOR_KEY;
+    if (!samKey) return NextResponse.json({ error: "SAM_API_KEY/SAM_API_KEY_2 missing" }, { status: 500 });
 
     const admin = createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
