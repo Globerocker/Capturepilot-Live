@@ -86,6 +86,24 @@ export async function GET() {
     return NextResponse.json(stats, {
         headers: {
             "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600",
+            // CORS: marketing site (capturepilot.com), embedded widgets, and
+            // any presentation deck need to fetch this anonymously. The
+            // payload has no PII — only big-number aggregates — so wildcard
+            // origin is safe.
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, OPTIONS",
+        },
+    });
+}
+
+// Preflight handler — browsers send OPTIONS before cross-origin fetches.
+export function OPTIONS() {
+    return new Response(null, {
+        headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type",
+            "Access-Control-Max-Age": "86400",
         },
     });
 }
