@@ -126,13 +126,18 @@ async function enqueueWarm(host) {
 // README.md "FlareSolverr setup" for the install instructions.
 // ---------------------------------------------------------------------------
 const FLARESOLVERR_URL = process.env.FLARESOLVERR_URL || null;
+const FLARESOLVERR_AUTH_TOKEN = process.env.FLARESOLVERR_AUTH_TOKEN || null;
 const FLARESOLVERR_TIMEOUT_MS = 60_000;
 
 async function fetchViaFlaresolverr(url) {
     if (!FLARESOLVERR_URL) throw new Error("FLARESOLVERR_URL not configured");
+    const headers = { "Content-Type": "application/json" };
+    if (FLARESOLVERR_AUTH_TOKEN) {
+        headers["Authorization"] = `Bearer ${FLARESOLVERR_AUTH_TOKEN}`;
+    }
     const res = await fetch(`${FLARESOLVERR_URL}/v1`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({
             cmd: "request.get",
             url,
