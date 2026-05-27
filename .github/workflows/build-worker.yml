@@ -42,7 +42,12 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          # Using a user-scoped PAT (`GHCR_TOKEN` repo secret) instead of
+          # GITHUB_TOKEN — the latter requires the repo's "Workflow
+          # permissions" to be set to "Read and write permissions", which
+          # we couldn't get to stick. Classic PAT with `write:packages`
+          # bypasses that gate cleanly.
+          password: ${{ secrets.GHCR_TOKEN }}
 
       - name: Resolve image tags
         id: tags
