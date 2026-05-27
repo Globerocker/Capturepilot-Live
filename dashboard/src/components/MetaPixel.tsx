@@ -1,12 +1,12 @@
 "use client";
 
 import Script from "next/script";
-import { useEffect, useState } from "react";
-import { getCookieConsent } from "./CookieConsent";
 
 /**
- * Meta tracking loader. Respects the cookie consent banner — only fires
- * when the user has chosen "accepted_all".
+ * Meta tracking loader. Fires unconditionally — matches the marketing site's
+ * behavior and lets Meta's Event Setup Tool detect the Pixel. If a stricter
+ * consent posture is required later, re-add the cookie-consent gate that
+ * lived here previously (commit history).
  *
  * Loads (independently, based on which env var is set):
  *   - Meta Pixel (NEXT_PUBLIC_META_PIXEL_ID) — ads / conversion tracking
@@ -17,20 +17,7 @@ import { getCookieConsent } from "./CookieConsent";
 export default function MetaPixel() {
   const pixelId = process.env.NEXT_PUBLIC_META_PIXEL_ID;
   const fbAppId = process.env.NEXT_PUBLIC_FB_APP_ID;
-  const [consented, setConsented] = useState(false);
 
-  useEffect(() => {
-    const refresh = () => setConsented(getCookieConsent() === "accepted_all");
-    refresh();
-    window.addEventListener("storage", refresh);
-    window.addEventListener("cp:consent-changed", refresh);
-    return () => {
-      window.removeEventListener("storage", refresh);
-      window.removeEventListener("cp:consent-changed", refresh);
-    };
-  }, []);
-
-  if (!consented) return null;
   if (!pixelId && !fbAppId) return null;
 
   return (
