@@ -705,6 +705,20 @@ function MatchCard({ match, rank, hero, userNaicsLabels }: { match: MatchData; r
                         )}>
                             {match.classification}
                         </span>
+                        {/* Source-tier badge — Federal / State / County / City / etc.
+                            Always visible so users immediately know whether they're
+                            looking at a federal vs state-vs-local opportunity. */}
+                        {(() => {
+                            const tier = getSourceTier(match);
+                            return (
+                                <span className={clsx(
+                                    "text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-widest border",
+                                    tier.color,
+                                )}>
+                                    {tier.label}
+                                </span>
+                            );
+                        })()}
                         {match.set_aside_code && (
                             <span className="text-[9px] font-bold bg-blue-100 text-blue-600 border border-blue-200 px-2 py-0.5 rounded uppercase">
                                 {match.set_aside_code}
@@ -749,6 +763,24 @@ function MatchCard({ match, rank, hero, userNaicsLabels }: { match: MatchData; r
             {/* Expandable detail panel */}
             {expanded && (
                 <div className="border-t border-stone-100 bg-stone-50/50 px-4 sm:px-5 py-4 space-y-3">
+                    {/* Description snippet — highlighted on the user's matched
+                        keywords so they instantly see WHY it's relevant. Pulled
+                        from description_url (which is the opportunity description
+                        text on most ingest paths; helper tolerates the JSON-blob
+                        shape used by some SLED sources). */}
+                    {match.description_url && (
+                        <div>
+                            <p className="text-[10px] text-stone-400 uppercase mb-1.5">Description</p>
+                            <div className="text-xs text-stone-700 leading-relaxed">
+                                <HighlightedSnippet
+                                    text={String(match.description_url)}
+                                    terms={match.matched_keywords || []}
+                                    maxLen={400}
+                                />
+                            </div>
+                        </div>
+                    )}
+
                     {/* Key details grid */}
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                         {displayNoticeType(match.notice_type) && (
