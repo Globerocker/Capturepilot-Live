@@ -25,6 +25,7 @@ import { guardCron } from "@/lib/cron-auth";
 import { classifyNaics } from "@/lib/classify-naics";
 import { extractStructuredRequirements } from "@/lib/extract-structured-requirements";
 import { extractAiKeywords } from "@/lib/extract-ai-keywords";
+import { generateLeadBrief } from "@/lib/lead-brief";
 
 // Loose SupabaseClient typing — the handlers below intentionally use the
 // generic any-shape client to avoid PostgrestQueryBuilder generic
@@ -41,6 +42,7 @@ const HTTP_TASK_TYPES = [
     "classify_naics",
     "extract_structured_reqs",
     "extract_keywords",
+    "enrich_lead_brief",
 ];
 
 type Job = {
@@ -116,10 +118,26 @@ async function handleExtractKeywords(sb: SbAny, job: Job) {
     return { result: { keyword_count: result.keywords.length } };
 }
 
+async function handleEnrichLeadBrief(sb: SbAny, job: Job) {
+    const leadId = job.payload.lead_id as string;
+    if (!leadId) return { error: "missing lead_id" };
+    try {
+        const brief = await generateLeadBrief(sb, leadId);
+        return { result: { fit_score: brief.ai.fit_score, recipient_email: brief.lead.email } };
+    } catch (e) {
+        // Mark the lead so a human can see it failed without joining worker_jobs.
+        await sb.from("marketing_leads")
+            .update({ lead_brief_status: "failed" })
+            .eq("id", leadId);
+        return { error: (e as Error).message };
+    }
+}
+
 const HANDLERS: Record<string, (sb: SbAny, job: Job) => Promise<{ result?: unknown; error?: string }>> = {
     classify_naics: handleClassifyNaics,
     extract_structured_reqs: handleExtractStructuredReqs,
     extract_keywords: handleExtractKeywords,
+    enrich_lead_brief: handleEnrichLeadBrief,
 };
 
 export async function GET(req: NextRequest) {

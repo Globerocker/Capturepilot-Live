@@ -5,6 +5,7 @@ import { getLeadMagnet, sendLeadMagnetEmail } from "@/lib/lead-magnets";
 import { sendCAPIEvent, userDataFromRequest, newEventId } from "@/lib/meta-capi";
 import { enrichPersonViaApollo, domainFromEmail } from "@/lib/lead-enrichment";
 import { upsertHubSpotContact } from "@/lib/hubspot";
+import { enqueueLeadBrief } from "@/lib/lead-brief";
 
 export const runtime = "nodejs";
 // Pipeline (insert → Apollo enrich → HubSpot sync → Resend) typically runs
@@ -273,6 +274,25 @@ export async function POST(req: NextRequest) {
         has_hubspot: Boolean(hubspotId),
       },
     }).catch(err => console.warn("[leads] CAPI Lead fire failed (non-fatal):", err));
+
+    // 6. Enqueue an AI Lead Brief for Andre's follow-up call. Runs async via
+    //    the worker queue — the user already has their 200, this just lands
+    //    in americurial@gmail.com a minute or two later with a SAM-resolved
+    //    + opportunity-matched + LLM-scored briefing and a phone-call script.
+    try {
+      const { data: leadRow } = await sb
+        .from("marketing_leads")
+        .select("id")
+        .eq("email", email)
+        .eq("magnet_key", magnet)
+        .maybeSingle();
+      if (leadRow?.id) {
+        await enqueueLeadBrief(sb, leadRow.id);
+      }
+    } catch (e) {
+      // Non-fatal — the lead was already saved + the user already got the PDF.
+      console.warn("[leads] failed to enqueue lead-brief job (non-fatal):", (e as Error).message);
+    }
 
     return NextResponse.json({
       ok: true,
