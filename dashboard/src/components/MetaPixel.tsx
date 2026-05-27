@@ -16,8 +16,11 @@
  * Conversion events are dispatched via `track()` in `@/lib/analytics`.
  */
 export default function MetaPixel() {
-  const pixelId = process.env.NEXT_PUBLIC_META_PIXEL_ID;
-  const fbAppId = process.env.NEXT_PUBLIC_FB_APP_ID;
+  // .trim() guards against `echo "..." | vercel env add` leaving a trailing
+  // newline in the value, which would land inside fbq('init', '...') and
+  // silently break the Pixel.
+  const pixelId = process.env.NEXT_PUBLIC_META_PIXEL_ID?.trim();
+  const fbAppId = process.env.NEXT_PUBLIC_FB_APP_ID?.trim();
 
   if (!pixelId && !fbAppId) return null;
 
