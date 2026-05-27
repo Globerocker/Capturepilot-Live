@@ -1,16 +1,22 @@
 /**
- * DeepSeek V3.2/V4 wrapper for cheap LLM calls.
+ * DeepSeek V3.2/V4 wrapper for cheap LLM calls. Also dispatches to Ollama
+ * (self-hosted) or OpenAI depending on the `provider` option + env vars.
  *
- * DeepSeek's REST API is OpenAI-Chat-Completions-compatible, so we use the
- * same shape and only flip the base URL + model when DEEPSEEK_API_KEY is set.
+ * All three providers use the OpenAI Chat Completions wire format, so we only
+ * flip the base URL, auth header, and default model.
  *
  * Cost reference (2026-04):
  *   OpenAI gpt-4o-mini  — $0.15/M input  · $0.60/M output
  *   DeepSeek V3.2       — $0.14/M input  · $0.28/M output  (cached: $0.03/M)
+ *   Ollama qwen2.5:7b   — $0.00 (self-hosted on Hostinger VPS)
  *
  * Use `callLLM` for non-critical generation (summaries, classification,
  * long-context passes over RFPs). Use OpenAI directly for the high-quality
  * final pass on customer-facing proposal text.
+ *
+ * Set LLM_PROVIDER=ollama in a dev .env.local to route every callLLM through
+ * the self-hosted model — useful for iterating on prompts without burning
+ * paid API budget. Production should leave it unset.
  */
 
 export type LLMMessage = {
@@ -18,27 +24,66 @@ export type LLMMessage = {
     content: string;
 };
 
+export type LLMProvider = "openai" | "deepseek" | "ollama";
+
 export interface LLMOptions {
     model?: string;
     temperature?: number;
     max_tokens?: number;
     response_format?: { type: "json_object" | "text" };
-    /** Force provider. Default = auto (DeepSeek if key available, else OpenAI) */
-    provider?: "openai" | "deepseek" | "auto";
+    /** Force provider. Default = auto (LLM_PROVIDER env, then DeepSeek if key, else OpenAI) */
+    provider?: LLMProvider | "auto";
 }
 
 export interface LLMResponse {
     content: string;
-    provider: "openai" | "deepseek";
+    provider: LLMProvider;
     model: string;
     prompt_tokens?: number;
     completion_tokens?: number;
 }
 
-function pickProvider(opts: LLMOptions): "openai" | "deepseek" {
-    if (opts.provider === "openai") return "openai";
-    if (opts.provider === "deepseek") return "deepseek";
+function pickProvider(opts: LLMOptions): LLMProvider {
+    if (opts.provider && opts.provider !== "auto") return opts.provider;
+    const envOverride = (process.env.LLM_PROVIDER || "").toLowerCase();
+    if (envOverride === "ollama" || envOverride === "deepseek" || envOverride === "openai") {
+        return envOverride as LLMProvider;
+    }
     return process.env.DEEPSEEK_API_KEY ? "deepseek" : "openai";
+}
+
+interface ProviderConfig {
+    baseUrl: string;
+    authHeader: string | null;
+    defaultModel: string;
+}
+
+function providerConfig(provider: LLMProvider): ProviderConfig {
+    switch (provider) {
+        case "openai":
+            return {
+                baseUrl: "https://api.openai.com/v1/chat/completions",
+                authHeader: process.env.OPENAI_API_KEY ? `Bearer ${process.env.OPENAI_API_KEY}` : null,
+                defaultModel: "gpt-4o-mini",
+            };
+        case "deepseek":
+            return {
+                baseUrl: "https://api.deepseek.com/v1/chat/completions",
+                authHeader: process.env.DEEPSEEK_API_KEY ? `Bearer ${process.env.DEEPSEEK_API_KEY}` : null,
+                defaultModel: "deepseek-chat",
+            };
+        case "ollama": {
+            const base = process.env.OLLAMA_URL;
+            if (!base) {
+                throw new Error("OLLAMA_URL not configured");
+            }
+            return {
+                baseUrl: `${base.replace(/\/$/, "")}/v1/chat/completions`,
+                authHeader: process.env.OLLAMA_AUTH_TOKEN ? `Bearer ${process.env.OLLAMA_AUTH_TOKEN}` : null,
+                defaultModel: process.env.OLLAMA_DEFAULT_MODEL || "qwen2.5:7b-instruct",
+            };
+        }
+    }
 }
 
 export async function callLLM(
@@ -46,24 +91,18 @@ export async function callLLM(
     opts: LLMOptions = {}
 ): Promise<LLMResponse> {
     const provider = pickProvider(opts);
+    const config = providerConfig(provider);
 
-    const baseUrl =
-        provider === "deepseek"
-            ? "https://api.deepseek.com/v1/chat/completions"
-            : "https://api.openai.com/v1/chat/completions";
-
-    const apiKey =
-        provider === "deepseek"
-            ? process.env.DEEPSEEK_API_KEY
-            : process.env.OPENAI_API_KEY;
-
-    if (!apiKey) {
+    // OpenAI + DeepSeek require an API key; Ollama is open within its network
+    // but Traefik enforces a bearer token via OLLAMA_AUTH_TOKEN. If we resolved
+    // to a paid provider with no key, fail loudly so we don't silently fall
+    // back to a free tier that doesn't exist.
+    if (provider !== "ollama" && !config.authHeader) {
         throw new Error(`${provider.toUpperCase()}_API_KEY not configured`);
     }
 
-    const model =
-        opts.model ||
-        (provider === "deepseek" ? "deepseek-chat" : "gpt-4o-mini");
+    const baseUrl = config.baseUrl;
+    const model = opts.model || config.defaultModel;
 
     const payload: Record<string, unknown> = {
         model,
@@ -75,12 +114,12 @@ export async function callLLM(
         payload.response_format = opts.response_format;
     }
 
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (config.authHeader) headers["Authorization"] = config.authHeader;
+
     const res = await fetch(baseUrl, {
         method: "POST",
-        headers: {
-            Authorization: `Bearer ${apiKey}`,
-            "Content-Type": "application/json",
-        },
+        headers,
         body: JSON.stringify(payload),
     });
 
