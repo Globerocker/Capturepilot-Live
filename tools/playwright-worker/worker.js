@@ -216,10 +216,13 @@ async function scrapePortalDetail(job, browser) {
 // wins. Saving without cf_clearance is treated as a failure (the cookie that
 // actually proves you passed the challenge isn't there).
 // ---------------------------------------------------------------------------
+// Two paths, picked because they trigger the full CF challenge on Bonfire
+// tenants that have it enabled. /portal/Opportunities is the list view (always
+// CF-gated on protected tenants); /portal/portallogin is the auth wall. We
+// stop at two so a strict tenant takes ~30s to fail honestly, not 90s.
 const CF_WARM_PATHS = [
     "/portal/Opportunities",
     "/portal/portallogin",
-    "/portal/",
 ];
 
 async function warmCfCookie(job, browser) {
@@ -239,10 +242,12 @@ async function warmCfCookie(job, browser) {
             } catch {
                 continue;
             }
-            // Sit through the CF JS challenge — up to 30s. The challenge can
-            // require multiple round-trips; networkidle returns before it's
-            // fully resolved.
-            for (let i = 0; i < 60; i++) {
+            // Sit through the CF JS challenge — up to 15s per path. The
+            // challenge can require multiple round-trips; networkidle returns
+            // before it's fully resolved. Bail early as soon as cf_clearance
+            // shows up. 15s is enough for non-strict tenants; strict tenants
+            // never issue cf_clearance no matter how long we wait.
+            for (let i = 0; i < 30; i++) {
                 const title = await page.title().catch(() => "");
                 const challenged = /just a moment|attention required|cloudflare/i.test(title);
                 const cookies = await context.cookies().catch(() => []);
@@ -339,7 +344,28 @@ const CHROMIUM_ARGS = [
     "--disable-background-networking",
 ];
 
+// Peek the queue without claiming — cheap probe so we can skip the Chromium
+// launch entirely when there's nothing for us to do. Chromium init on
+// Railway's container occasionally SIGSEGVs (known multi-process behavior),
+// and every empty tick was paying that cost for no work. With 30s poll
+// interval and a usually-empty queue, this cuts ~95% of Chromium spawns.
+async function hasPendingWork() {
+    const { count, error } = await sb.from("worker_jobs")
+        .select("id", { count: "exact", head: true })
+        .in("task_type", MY_TASKS)
+        .eq("status", "pending");
+    if (error) {
+        console.warn("[worker] queue probe failed:", error.message);
+        return true;  // assume work exists so we still try
+    }
+    return (count || 0) > 0;
+}
+
 async function tick() {
+    if (!(await hasPendingWork())) {
+        console.log("[worker] queue empty (no Chromium launched)");
+        return;
+    }
     // Launch a FRESH browser per claim batch (not per tick). The previous
     // pattern reused one browser across 5 claim cycles; even with
     // multi-process, accumulated state caused intermittent crashes. A new
