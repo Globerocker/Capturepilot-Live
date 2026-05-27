@@ -239,7 +239,14 @@ async function scrapePortalDetail(job, browser) {
 
     const page = await context.newPage();
     try {
-        await page.goto(url, { waitUntil: "networkidle", timeout: 45_000 });
+        // SPA-friendly wait strategy: jump to next step as soon as the initial
+        // DOM is parsed (fast), then OPPORTUNISTICALLY wait for networkidle
+        // with a short cap. Salesforce Community Cloud (rampla.org and
+        // friends) constantly poll APIs and never reach networkidle — old
+        // pattern of waitUntil:"networkidle"+45s timeout always blew the
+        // budget and returned an empty result.
+        await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30_000 });
+        await page.waitForLoadState("networkidle", { timeout: 10_000 }).catch(() => {});
         await page.waitForTimeout(2500);
 
         // CF challenge guard

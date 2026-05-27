@@ -2,9 +2,10 @@
  * Unified document text extractor for SAM.gov opportunity attachments.
  * Handles PDF, DOCX, XLSX, ZIP, plain text. Returns { text, pages?, sheets? }.
  *
- * PDF path:
- *   - If MISTRAL_API_KEY is set, use Mistral OCR (clean markdown, layout-aware)
- *   - Otherwise regex extraction from raw PDF bytes (~30% recovery on text PDFs)
+ * PDF path (try in order, first to return >200 chars wins):
+ *   1. Apache Tika (Hostinger VPS) — fast, reliable for digital PDFs
+ *   2. Mistral OCR — handles scanned PDFs but costs $$, capped at 4 MB
+ *   3. Regex extraction — last-resort fallback (~30% recovery on text PDFs)
  *
  * DOCX path: mammoth → plain text
  * XLSX path: exceljs → CSV-like per sheet
@@ -14,6 +15,7 @@
 import mammoth from "mammoth";
 import JSZip from "jszip";
 import { extractFromUrl as mistralExtractFromUrl, isMistralConfigured } from "@/lib/llm/mistral-ocr";
+import { tikaExtract, isTikaConfigured } from "@/lib/llm/tika";
 
 export interface ExtractResult {
     text: string;
@@ -61,6 +63,22 @@ function pdfRegexExtract(bytes: Uint8Array): string {
 const MISTRAL_PDF_BYTES_CAP = 4 * 1024 * 1024;
 
 async function extractPdf(bytes: Uint8Array, url: string): Promise<{ text: string; ocr: boolean }> {
+    // 1. Tika first — handles digital PDFs (the majority of SAM attachments).
+    //    No per-call cost, ~200ms for typical 5-page PDFs. Returns short/empty
+    //    text on scanned PDFs (no embedded text layer) — that's the signal to
+    //    fall through to Mistral OCR.
+    if (isTikaConfigured()) {
+        try {
+            const text = await tikaExtract(bytes, "application/pdf");
+            if (text.length > 200) {
+                return { text: text.slice(0, 40_000), ocr: false };
+            }
+        } catch {
+            // Tika down / network issue — fall through to Mistral
+        }
+    }
+    // 2. Mistral OCR — paid, handles scanned PDFs cleanly. Capped at 4 MB to
+    //    avoid Lambda heap blowup on long documents.
     if (isMistralConfigured() && bytes.byteLength <= MISTRAL_PDF_BYTES_CAP && url) {
         try {
             const ocr = await mistralExtractFromUrl(url);
@@ -71,6 +89,7 @@ async function extractPdf(bytes: Uint8Array, url: string): Promise<{ text: strin
             // fall through
         }
     }
+    // 3. Regex — last resort, acknowledged ~30% recovery on text PDFs.
     return { text: pdfRegexExtract(bytes).slice(0, 40_000), ocr: false };
 }
 
@@ -189,21 +208,38 @@ export async function fetchAndExtract(
         const resolvedName = nameFromHeader || guessedName;
         const kind = kindOf(resolvedName, contentType);
         const buf = new Uint8Array(await res.arrayBuffer());
-        // For PDFs we want the URL so Mistral OCR can fetch it directly.
-        // Skip Mistral on big PDFs to avoid OOM — fall back to regex extract.
-        if (kind === "pdf" && isMistralConfigured() && buf.byteLength <= MISTRAL_PDF_BYTES_CAP) {
-            try {
-                const ocr = await mistralExtractFromUrl(url);
-                if (ocr.full_markdown && ocr.full_markdown.length > 200) {
-                    return {
-                        text: ocr.full_markdown.slice(0, 40_000),
-                        kind: "pdf",
-                        filename: resolvedName,
-                        bytes: buf.byteLength,
-                        ocr_used: true,
-                    };
-                }
-            } catch { /* fall back to regex */ }
+        // PDF fast path: Tika first (free, fast for digital PDFs), then Mistral
+        // OCR (paid, for scanned PDFs only). Falls through to extractOne's
+        // regex last-resort when both fail.
+        if (kind === "pdf") {
+            if (isTikaConfigured()) {
+                try {
+                    const text = await tikaExtract(buf, "application/pdf");
+                    if (text.length > 200) {
+                        return {
+                            text: text.slice(0, 40_000),
+                            kind: "pdf",
+                            filename: resolvedName,
+                            bytes: buf.byteLength,
+                            ocr_used: false,
+                        };
+                    }
+                } catch { /* fall through */ }
+            }
+            if (isMistralConfigured() && buf.byteLength <= MISTRAL_PDF_BYTES_CAP) {
+                try {
+                    const ocr = await mistralExtractFromUrl(url);
+                    if (ocr.full_markdown && ocr.full_markdown.length > 200) {
+                        return {
+                            text: ocr.full_markdown.slice(0, 40_000),
+                            kind: "pdf",
+                            filename: resolvedName,
+                            bytes: buf.byteLength,
+                            ocr_used: true,
+                        };
+                    }
+                } catch { /* fall back to regex */ }
+            }
         }
         return await extractOne(buf, resolvedName, kind);
     } catch {
