@@ -11,6 +11,7 @@
  */
 
 import { EMAIL_RE, JUNK_EMAIL_DOMAINS } from "@/lib/crawler/config";
+import { isCrawl4aiConfigured, crawlUrl } from "@/lib/crawler/crawl4ai";
 
 const PATHS_TO_TRY = ["", "/contact", "/contact-us", "/about", "/about-us", "/team", "/staff", "/editorial-team", "/contributors"];
 const HTTP_TIMEOUT_MS = 8000;
@@ -37,6 +38,20 @@ interface PageFetch {
 }
 
 async function fetchPage(url: string): Promise<PageFetch | null> {
+  // Prefer Crawl4AI when configured — it runs the JS, returns the post-render
+  // HTML, and bypasses simple bot blocks (the homemade fetch below regularly
+  // gets 403'd by Cloudflare-fronted prospect sites).
+  if (isCrawl4aiConfigured()) {
+    try {
+      const result = await crawlUrl(url);
+      if (result.html && result.html.length > 500) {
+        return { url, html: result.html.slice(0, 250_000) };
+      }
+    } catch {
+      // Fall back to raw fetch
+    }
+  }
+
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), HTTP_TIMEOUT_MS);
   try {
