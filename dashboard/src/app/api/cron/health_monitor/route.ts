@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { guardCron } from "@/lib/cron-auth";
 import { probes, daysUntilExpiry, EXPIRY_WARN_DAYS, type ProbeResult } from "@/lib/connectors";
 import { sendHealthDigest } from "@/lib/health-digest";
+import { shouldSuppressImmediateEmail, type HealthAlertRow } from "@/lib/health-autoheal";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -273,16 +274,40 @@ export async function GET(req: NextRequest) {
     }
 
     // ─── Email digest ────────────────────────────────────────────────────────
-    if (newAlerts.length > 0) {
+    // Filter out alerts that have a recipe in lib/health-autoheal — those
+    // get handled by /api/cron/self_heal within 30min and rolled into the
+    // morning digest. Email only the urgent + unrecognized ones now.
+    //
+    // (Critical alerts where supabase/vercel/dns goes down still email
+    // immediately; see shouldSuppressImmediateEmail.)
+    const emailWorthy = newAlerts.filter(a => {
+        const asRow: HealthAlertRow = {
+            id: "", // synthetic — recipe matchers don't read id
+            connector_slug: a.slug,
+            alert_type: "status_change",
+            severity: a.severity,
+            title: a.title,
+            detail: a.detail || null,
+            payload: null,
+            fired_at: new Date().toISOString(),
+        };
+        return !shouldSuppressImmediateEmail(asRow);
+    });
+
+    if (emailWorthy.length > 0) {
         try {
-            await sendHealthDigest({ to: ALERT_EMAIL_TO, alerts: newAlerts });
-            // Mark them emailed so we don't re-send next run.
-            await sb.from("health_alerts")
-                .update({ emailed: true })
-                .gte("fired_at", startedAt.toISOString());
+            await sendHealthDigest({ to: ALERT_EMAIL_TO, alerts: emailWorthy });
         } catch (e) {
             console.error("[health_monitor] email digest failed:", (e as Error).message);
         }
+    }
+    if (newAlerts.length > 0) {
+        // Always mark emailed=true so health_monitor doesn't churn the same
+        // alert next hour; suppressed alerts will get a single mention in
+        // the morning digest via alert_autofixes.
+        await sb.from("health_alerts")
+            .update({ emailed: true })
+            .gte("fired_at", startedAt.toISOString());
     }
 
     return NextResponse.json({

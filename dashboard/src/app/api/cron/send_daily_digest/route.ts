@@ -44,6 +44,15 @@ async function n(sb: SbAny, table: string, filt: Record<string, string> = {}): P
     } catch { return 0; }
 }
 
+function escapeHtml(s: string): string {
+    return s
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+
 function row(label: string, value: string | number, tone: "ok" | "info" | "warn" = "info"): string {
     const valueColor = tone === "warn" ? "#dc2626" : tone === "ok" ? "#15803d" : COLORS.black;
     return `
@@ -97,7 +106,49 @@ export async function GET(req: NextRequest) {
         return Date.now() - dt.getTime() > 26 * 60 * 60 * 1000;
     }).length;
 
-    const subject = `CapturePilot daily digest — +${oppsToday} opps, +${contractorsToday} contractors`;
+    // ─── Auto-healer activity (last 24h) ────────────────────────────────────
+    // Pulled from alert_autofixes (migration 098). Two buckets:
+    //   - "fixed"     → silently resolved, mention as count + 1-line summary
+    //   - "escalated" → recipe couldn't fix → list each one as a TODO for the operator
+    const { data: autofixesRaw } = await sb
+        .from("alert_autofixes")
+        .select("status, recipe_slug, action_taken, connector_slug")
+        .gte("created_at", yesterday)
+        .order("created_at", { ascending: false })
+        .limit(100);
+    type AutofixRow = { status: string; recipe_slug: string; action_taken: string; connector_slug: string | null };
+    const autofixes = (autofixesRaw || []) as AutofixRow[];
+    const autoFixed = autofixes.filter(a => a.status === "fixed");
+    const escalated = autofixes.filter(a => a.status === "escalated" || a.status === "no_recipe" || a.status === "error");
+
+    // De-dupe escalations by recipe_slug+connector so we don't repeat the same
+    // "Apollo expired" 12 times if it tripped every hour.
+    const seen = new Set<string>();
+    const uniqueEscalations = escalated.filter(a => {
+        const k = `${a.recipe_slug}:${a.connector_slug || ""}`;
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+    });
+
+    // ─── Smart skip ────────────────────────────────────────────────────────
+    // Quiet day: no new opps, no contractors, no enrichment, no escalations.
+    // Skip the email entirely to save Resend budget (1k/mo cap).
+    const isQuietDay =
+        oppsToday === 0 && contractorsToday === 0 && pagesToday === 0 &&
+        wjDone === 0 && wjFailed === 0 &&
+        uniqueEscalations.length === 0 && staleCount === 0;
+    if (isQuietDay) {
+        return NextResponse.json({
+            ok: true,
+            skipped: "quiet_day",
+            snapshot: { oppsToday, contractorsToday, pagesToday, wjDone, wjFailed, autoFixed: autoFixed.length, escalations: uniqueEscalations.length },
+        });
+    }
+
+    const subject = uniqueEscalations.length > 0
+        ? `[Action needed] CapturePilot digest — ${uniqueEscalations.length} item${uniqueEscalations.length === 1 ? "" : "s"} for you · +${oppsToday} opps`
+        : `CapturePilot daily digest — +${oppsToday} opps, +${contractorsToday} contractors`;
 
     const body = `
         ${paragraph(`Last 24h on the platform. Open <a href="${APP_URL}/admin/db-health" style="color:${COLORS.emerald600};">/admin/db-health</a> for the full live view.`)}
@@ -127,9 +178,28 @@ export async function GET(req: NextRequest) {
             <table role="presentation" style="width:100%;border-collapse:collapse;margin-top:6px;">
                 <tbody>
                     ${row("Alerts fired", alertsToday, alertsToday > 0 ? "warn" : "ok")}
+                    ${row("Auto-healed", autoFixed.length, autoFixed.length > 0 ? "ok" : "info")}
                     ${row("Stale crons", staleCount, staleCount > 0 ? "warn" : "ok")}
                 </tbody>
             </table>
+        `)}
+        ${uniqueEscalations.length === 0 ? "" : contentCard(`
+            ${sectionLabel(`Needs your attention (${uniqueEscalations.length})`)}
+            <div style="margin-top:8px;">
+                ${uniqueEscalations.map(a => `
+                    <div style="padding:10px 12px;margin-bottom:6px;background:#fef3c7;border-left:3px solid #d97706;border-radius:4px;">
+                        <div style="font-size:13px;font-weight:600;color:#78350f;">${escapeHtml(a.connector_slug || a.recipe_slug)}</div>
+                        <div style="font-size:12px;color:#78350f;margin-top:3px;line-height:1.5;">${escapeHtml(a.action_taken)}</div>
+                    </div>
+                `).join("")}
+            </div>
+        `)}
+        ${autoFixed.length === 0 ? "" : contentCard(`
+            ${sectionLabel(`Auto-healed (${autoFixed.length}) — no action needed`)}
+            <div style="margin-top:8px;font-size:12px;color:${COLORS.stone600};line-height:1.6;">
+                ${autoFixed.slice(0, 5).map(a => `· <strong>${escapeHtml(a.connector_slug || a.recipe_slug)}:</strong> ${escapeHtml(a.action_taken.slice(0, 140))}`).join("<br>")}
+                ${autoFixed.length > 5 ? `<br><em>… and ${autoFixed.length - 5} more</em>` : ""}
+            </div>
         `)}
     `;
 

@@ -140,6 +140,10 @@
             "schedule": "0 */2 * * *"
         },
         {
+            "path": "/api/cron/self_heal",
+            "schedule": "30 * * * *"
+        },
+        {
             "path": "/api/cron/discover_top_by_naics",
             "schedule": "0 6 * * 0"
         },
