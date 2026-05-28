@@ -43,6 +43,14 @@ const TASKS = {
   analyze_match_attachments:       "analyze_match_attachments",
   run_worker_jobs:                 "run_worker_jobs",
   enqueue_backfill:                "enqueue_backfill",
+  // SLED ingestion paths that existed in code but were never wired to a
+  // schedule — discovered 2026-05-28 when SLED counts stayed flat. The
+  // Bonfire JSON path replaces the RSS path for tenants where
+  // use_json_api=true (set by discover_bonfire_tenants). OpenGov +
+  // tx_esbd are direct ingestion paths for those portal families.
+  ingest_bonfire_json:             "ingest_bonfire_json",
+  ingest_opengov:                  "ingest_opengov",
+  ingest_tx_esbd:                  "ingest_tx_esbd",
 } as const;
 
 type TaskName = keyof typeof TASKS;
@@ -77,10 +85,23 @@ function tasksDueAt(d: Date): TaskName[] {
   if (m === 10 || m === 40) due.push("enrich_sled_descriptions");
 
   // Bonfire tenant discovery — daily at 04:00 UTC. Cheap (~25s for 200
-  // seed probes) and idempotent; new tenants land in rss_sources, the
-  // ingest_bonfire_json cron picks them up automatically. No need for
-  // higher frequency — seed list grows slowly.
+  // seed probes) and idempotent; new tenants land in rss_sources, then
+  // ingest_bonfire_json (below) pulls their open projects on the next tick.
   if (h === 4 && m === 0) due.push("discover_bonfire_tenants");
+
+  // Bonfire JSON ingest — every 2h at :05 (avoids clashing with
+  // bulk_enrich_descriptions at :10/:40). Each tenant returns ALL open
+  // opps in one call, so per-run cost is bounded by tenant count, not
+  // opp count. ~120 tenants × 1s ≈ 2min/run, well inside maxDuration.
+  if (m === 5 && h % 2 === 0) due.push("ingest_bonfire_json");
+
+  // OpenGov ingest — twice daily (06:05 + 18:05 UTC). Lower frequency
+  // because OpenGov refreshes are slower and the list+detail combo per
+  // project burns more time than Bonfire's single-call JSON.
+  if (m === 5 && (h === 6 || h === 18)) due.push("ingest_opengov");
+
+  // Texas SmartBuy / ESBD — daily at 05:05 UTC. State-only, single feed.
+  if (h === 5 && m === 5) due.push("ingest_tx_esbd");
 
   // SAM attachment text → structured_requirements. Runs at :15 every
   // hour. analyze_match_attachments downloads PDFs/DOCX from saved opps,

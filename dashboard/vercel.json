@@ -109,7 +109,7 @@
         },
         {
             "path": "/api/cron/enrichment_orchestrator",
-            "schedule": "0,10,15,30,40 * * * *"
+            "schedule": "0,5,10,15,30,40 * * * *"
         },
         {
             "path": "/api/cron/publish_next_blog",
