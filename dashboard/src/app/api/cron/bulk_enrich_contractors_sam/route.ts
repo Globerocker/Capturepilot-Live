@@ -33,8 +33,12 @@ import { SAM_CONTRACTOR_KEY } from "@/lib/sam-keys";
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
-const DEFAULT_BATCH = 50;
-const MAX_BATCH = 100;
+// SAM federal-roles quota is ~1000 entity calls/day. With this cron on
+// "0 */2 * * *" (12 runs/day) and batch=30, ceiling is 360/day — leaves
+// plenty of headroom for discover_new_prospects and ad-hoc admin enrichments
+// that share SAM_API_KEY_2. Hitting 429 here triggers the hourly health alert.
+const DEFAULT_BATCH = 30;
+const MAX_BATCH = 60;
 const SAM_ENTITY_URL = "https://api.sam.gov/entity-information/v3/entities";
 
 interface SamEntity {

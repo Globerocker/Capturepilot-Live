@@ -137,7 +137,7 @@
         },
         {
             "path": "/api/cron/bulk_enrich_contractors_sam",
-            "schedule": "*/5 * * * *"
+            "schedule": "0 */2 * * *"
         },
         {
             "path": "/api/cron/discover_top_by_naics",

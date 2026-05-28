@@ -64,11 +64,14 @@ export const probes: Record<string, () => Promise<ProbeResult>> = {
     "firecrawl": async () => {
         const k = process.env.FIRECRAWL_API_KEY;
         if (!k) return { status: "disabled", detail: "FIRECRAWL_API_KEY unset" };
+        // /v1/scrape can legitimately take 5-30s on cache miss; the default
+        // 6s safeFetch timeout caused hourly false-positive "network/timeout"
+        // alerts. Bump to 30s — matches Firecrawl's documented p95.
         const res = await safeFetch("https://api.firecrawl.dev/v1/scrape", {
             method: "POST",
             headers: { Authorization: `Bearer ${k}`, "Content-Type": "application/json" },
             body: JSON.stringify({ url: "https://example.com", formats: ["markdown"] }),
-        });
+        }, 30_000);
         if (!res) return { status: "error", detail: "network/timeout" };
         return { status: res.ok ? "ok" : "error", detail: res.ok ? undefined : `HTTP ${res.status}` };
     },
