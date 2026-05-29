@@ -20,6 +20,7 @@ import { PSC_CODES } from "@/lib/psc-codes";
 import { FEDERAL_AGENCIES } from "@/lib/federal-agencies";
 import KeywordPicker from "@/components/KeywordPicker";
 import TeamManagement from "@/components/TeamManagement";
+import { CollapsibleSection } from "@/components/ui/CollapsibleSection";
 
 const supabase = createSupabaseClient();
 
@@ -810,11 +811,7 @@ export default function SettingsPage() {
             
                     {showAdvanced && (<>
                         {/* Capacity & Experience */}
-                        <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7 scroll-mt-20">
-
-                <h3 className="font-bold text-base sm:text-lg flex items-center mb-4">
-                    <Briefcase className="w-5 h-5 mr-2 text-stone-400" /> Capacity & Experience
-                </h3>
+                        <CollapsibleSection title="Capacity & Experience" icon={Briefcase} storageKey="capacity" defaultOpen>
                 <div className="space-y-4">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
@@ -898,15 +895,11 @@ export default function SettingsPage() {
                         </div>
                     </div>
                 </div>
-            </section>
+            </CollapsibleSection>
 
-           
+
                         {/* Industry */}
-                        <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7 scroll-mt-20">
-
-                <h3 className="font-bold text-base sm:text-lg flex items-center mb-4">
-                    <Shield className="w-5 h-5 mr-2 text-stone-400" /> Industry & Certifications
-                </h3>
+                        <CollapsibleSection title="Industry & Certifications" icon={Shield} storageKey="industry" defaultOpen>
                 <div className="space-y-4">
                     <div>
                         <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">NAICS Codes <InfoTooltip text="North American Industry Classification System -- codes that describe your industry. The government uses these to categorize opportunities by service/product type." /></label>
@@ -981,15 +974,11 @@ export default function SettingsPage() {
                         />
                     </div>
                 </div>
-            </section>
+            </CollapsibleSection>
 
 
                         {/* PSC Codes & Clearances */}
-                        <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7 scroll-mt-20">
-
-                <h3 className="font-bold text-base sm:text-lg flex items-center mb-4">
-                    <Shield className="w-5 h-5 mr-2 text-stone-400" /> Service Codes & Clearances
-                </h3>
+                        <CollapsibleSection title="Service Codes & Clearances" icon={Shield} storageKey="psc-clearances">
                 <div className="space-y-4">
                     <div>
                         <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">Product/Service Codes (PSC) <InfoTooltip text="PSC codes describe the specific products or services you provide to the government. These help match you to opportunities beyond NAICS." /></label>
@@ -1048,15 +1037,11 @@ export default function SettingsPage() {
                         </div>
                     </div>
                 </div>
-            </section>
+            </CollapsibleSection>
 
-            
+
                         {/* Preferred Agencies & Contract Preferences */}
-                        <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7 scroll-mt-20">
-
-                <h3 className="font-bold text-base sm:text-lg flex items-center mb-4">
-                    <Building className="w-5 h-5 mr-2 text-stone-400" /> Targeting Preferences
-                </h3>
+                        <CollapsibleSection title="Targeting Preferences" icon={Building} storageKey="targeting">
                 <div className="space-y-4">
                     <div>
                         <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">Preferred Agencies</label>
@@ -1123,16 +1108,12 @@ export default function SettingsPage() {
                         </div>
                     </div>
                 </div>
-            </section>
-            
+            </CollapsibleSection>
+
                     </>)}
 
                     {/* Target States */}
-                    <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7 scroll-mt-20">
-
-                <h3 className="font-bold text-base sm:text-lg flex items-center mb-4">
-                    <MapPin className="w-5 h-5 mr-2 text-stone-400" /> Target States
-                </h3>
+                    <CollapsibleSection title="Target States" icon={MapPin} storageKey="target-states" defaultOpen>
                 <button type="button" onClick={() => {
                     if ((profile.target_states || []).includes("NATIONWIDE")) {
                         setProfile({ ...profile, target_states: [] });
@@ -1167,7 +1148,7 @@ export default function SettingsPage() {
                 {(profile.target_states || []).length > 0 && !(profile.target_states || []).includes("NATIONWIDE") && (
                     <p className="text-xs text-emerald-600 font-bold mt-2">{profile.target_states.length} states selected</p>
                 )}
-            </section>
+            </CollapsibleSection>
 
             
                 </div>
@@ -1521,11 +1502,7 @@ export default function SettingsPage() {
             
 
                     {/* Notifications */}
-                    <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7 scroll-mt-20">
-
-                <h3 className="font-bold text-base sm:text-lg flex items-center mb-4">
-                    <Bell className="w-5 h-5 mr-2 text-stone-400" /> Notifications
-                </h3>
+                    <CollapsibleSection title="Notifications" icon={Bell} storageKey="notifications">
                 <div className="space-y-4">
                     <div className="flex items-center justify-between py-3 border-b border-stone-100">
                         <div>
@@ -1560,9 +1537,9 @@ export default function SettingsPage() {
                         </select>
                     </div>
                 </div>
-            </section>
+            </CollapsibleSection>
 
-            
+
 
                     {/* Password */}
                     <section id="password" className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7 scroll-mt-20">
@@ -1627,12 +1604,7 @@ export default function SettingsPage() {
            
 
                     {/* Google Login */}
-                    <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7 scroll-mt-20">
-
-                <h3 className="font-bold text-base sm:text-lg flex items-center mb-2">
-                    Quick Login
-                </h3>
-                <p className="text-xs text-stone-500 mb-4">Link your Google account for one-click login next time.</p>
+                    <CollapsibleSection title="Quick Login" storageKey="quick-login" description="Link your Google account for one-click login next time.">
                 <button
                     type="button"
                     onClick={async () => {
@@ -1644,9 +1616,9 @@ export default function SettingsPage() {
                     <svg className="w-5 h-5" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
                     Connect Google Account
                 </button>
-            </section>
+            </CollapsibleSection>
 
-           
+
 
                     {/* Team — owner can invite collaborators / viewers (plan-gated).
                         Foundation lib lives at @/lib/team-accounts; per-row scoping
