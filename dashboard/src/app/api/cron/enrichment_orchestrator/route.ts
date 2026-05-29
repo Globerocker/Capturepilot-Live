@@ -59,6 +59,12 @@ const TASKS = {
   // never publish new pages from the 80k contractor pool.
   publish_contractor_pages:        "publish_contractor_pages",
   refresh_contractor_pages:        "refresh_contractor_pages",
+  // Contractor profile pages double as backlink prospects — we wrote
+  // about them on the public directory, the trade is they link back.
+  // This cron walks new profile_pages and seeds backlink_prospects with
+  // pitch_angle='contractor_profile' so the existing draft-generator +
+  // outreach pipeline picks them up alongside competitor-refdomain leads.
+  discover_contractor_backlink_prospects: "discover_contractor_backlink_prospects",
 } as const;
 
 type TaskName = keyof typeof TASKS;
@@ -127,6 +133,12 @@ function tasksDueAt(d: Date): TaskName[] {
   //   numbers on www.capturepilot.com/contractors/<slug> stay current.
   if (h === 4 && m === 30) due.push("publish_contractor_pages");
   if (h === 5 && m === 30) due.push("refresh_contractor_pages");
+
+  // Backlink prospect discovery from new contractor profile pages.
+  // 06:40 UTC daily — runs AFTER publish_contractor_pages (04:30) +
+  // refresh_contractor_pages (05:30) so any newly-published profile
+  // is eligible the same day.
+  if (h === 6 && m === 40) due.push("discover_contractor_backlink_prospects");
 
   // SAM attachment text → structured_requirements. Runs at :15 every
   // hour. analyze_match_attachments downloads PDFs/DOCX from saved opps,

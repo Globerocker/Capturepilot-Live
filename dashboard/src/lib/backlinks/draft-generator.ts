@@ -47,7 +47,20 @@ Rules:
 - Always end with one sentence that gives them an easy "no" path. E.g. "Totally fine if it's not a fit."
 - Sign off "— André".
 - No subject longer than 55 characters.
-- No emojis, no exclamation marks.`;
+- No emojis, no exclamation marks.
+
+SPECIAL CASE — pitch_angle = "contractor_profile":
+The recipient is a federal contractor we've already FEATURED on a
+public profile page at link_we_want_them_to_link_to. The 'ask' is not
+a generic backlink — it's:
+  1. Confirm the page's info (rank, awards, certifications) is accurate
+     OR tell us what to update.
+  2. Link to the profile page from their own website (capability page,
+     awards page, or press section).
+Open with the SPECIFIC stat from the page (e.g. "Saw you ranked #3 in
+NAICS 541512 with $X in lifetime federal awards"). Don't make it sound
+like a cold pitch — it's a courtesy heads-up + soft link request.
+Subject example: "Featured you on our directory — quick favor".`;
 
 function buildUserPrompt(input: PitchInput): string {
   return JSON.stringify(
