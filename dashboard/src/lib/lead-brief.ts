@@ -69,10 +69,13 @@ interface OpportunityMatch {
 interface LLMBriefOutput {
     fit_score: number;            // 1-10
     fit_rationale: string;        // 1-2 sentences
-    biggest_strength: string;     // 1 sentence
-    biggest_risk: string;         // 1 sentence
-    suggested_strategy: string;   // 2-3 sentences — what consulting angle to pitch
     call_script: string;          // multi-line, includes opener + 2-3 talk tracks + close
+    // Legacy fields — older briefs persisted these. Kept optional so JSON
+    // parsing of stored briefs doesn't break, but the new template doesn't
+    // render them and the LLM no longer fills them in.
+    biggest_strength?: string;
+    biggest_risk?: string;
+    suggested_strategy?: string;
 }
 
 interface LeadBrief {
@@ -620,7 +623,7 @@ export async function previewLeadBrief(sb: SbAny, leadId: string): Promise<{
         ai: briefAi,
     };
 
-    const subject = `[Lead] ${brief.ai.fit_score}/10 — ${brief.enrichment.apollo_company || brief.lead.company || brief.lead.email} (${brief.lead.magnet_key})`;
+    const subject = `New Facebook lead · ${brief.ai.fit_score}/10 · ${brief.enrichment.apollo_company || brief.lead.company || brief.lead.email}`;
     return {
         brief,
         subject,
@@ -685,16 +688,13 @@ Gov-contracting signals: ${websiteSummary.gov_signals}
 
     const systemPrompt = `${HUMAN_VOICE_RULES}
 
-ROLE: You are briefing Andre — the founder of Americurial — for a phone follow-up call to a new lead who just downloaded one of our federal-contracting whitepapers. He'll be on the call in the next hour. Give him exactly what he needs.
+ROLE: You are briefing SERGIO — partner at Americurial — for a follow-up phone call to a new lead who just submitted a Facebook lead form to download one of our federal-contracting whitepapers. Sergio will be on the call within the hour. Give him exactly what he needs.
 
 Output strict JSON, no prose outside the JSON. Schema:
 {
   "fit_score": <integer 1-10, how good a consulting prospect this is>,
   "fit_rationale": "<one or two sentences justifying the score>",
-  "biggest_strength": "<one sentence — the asset this lead already has>",
-  "biggest_risk": "<one sentence — the thing that could kill the conversion>",
-  "suggested_strategy": "<two or three sentences — what consulting angle to pitch>",
-  "call_script": "<multi-line script. Open with confirming receipt of the whitepaper. Then a personalized observation from the enrichment. Then 2-3 talk-track options based on whether they have SAM.gov, the NAICS we found, and the top match. Close with a soft ask for a 20-min strategy call. Sign with — Andre at the end. Use \\n for line breaks.>"
+  "call_script": "<multi-line script Sergio will speak from. Use \\n for paragraph breaks.>"
 }
 
 CRITICAL RULES for fit_score:
@@ -703,7 +703,39 @@ CRITICAL RULES for fit_score:
 - 4-6 = enrichment landed but missing one of (SAM, NAICS match, contact title)
 - 1-3 = free-mail lead OR no company info OR no NAICS overlap
 
-The call script is the most important thing — Andre will literally read parts of it on the call. Lead with the personalization (use the specific match + specific NAICS), not boilerplate.`;
+CRITICAL RULES for call_script — read these carefully, the prior templates were too salesy:
+
+- Caller is SERGIO, not Andre. End with "— Sergio".
+- DO NOT open as a sales pitch. The legitimate reason for the call is to
+  confirm the PDF was actually delivered to their inbox. The campaign was
+  set up recently and we want to make sure the email automation works.
+- Opening line MUST be a delivery-confirmation question. Template:
+  "Hey [first_name], this is Sergio from Americurial. Quick one — did the
+  PDF actually land in your inbox? We set up the email automation pretty
+  recently and I'm calling new signups to make sure it's getting through."
+- They will respond one of three ways. Write a SHORT (1-2 line) reply for each:
+    a) "Yeah I got it" → "Perfect, thanks for confirming."
+    b) "Haven't checked" → "No worries — would you mind taking a quick peek
+       while we're on? It's from briefs@capturepilot.com. I want to make
+       sure it didn't go to spam."
+    c) "No I didn't get it" → "Got it, I'll resend right now while we're on
+       — what's the best email?"
+- AFTER the delivery check, pivot OPEN-ENDED — not a pitch. Template:
+  "And while I have you — what got you interested in federal contracting?
+  Have you bid on any government contracts before?"
+- Then leave room for them to talk. The script should explicitly say
+  "[listen]" or "[let them answer]" so Sergio doesn't barrel over them.
+- IF top_matches contains good fits, suggest ONE — by name + agency, NOT
+  by NAICS code. Frame it casually: "Funny enough, I saw something pop up
+  the other day — [agency] is putting out a [opp title], looks like the
+  kind of thing your shop could chase." Skip this if no matches or matches
+  are clearly irrelevant.
+- Close SOFT: "If you want, I can send over a one-pager of opps that match
+  what you do — no commitment, just reply with a 'sure' or 'pass'."
+- Use natural spoken English. Contractions, partial sentences, "and",
+  "so", "well", "I mean" are all fine. Avoid corporate-speak ("synergies",
+  "vertical", "go-to-market").
+- Total script under 200 words.`;
 
     return await callLLMJson<LLMBriefOutput>([
         { role: "system", content: systemPrompt },
@@ -716,7 +748,7 @@ async function sendBriefEmail(brief: LeadBrief): Promise<{ sent: boolean; error?
     if (!apiKey) return { sent: false, error: "RESEND_API_KEY not set" };
     const resend = new Resend(apiKey);
 
-    const subject = `[Lead] ${brief.ai.fit_score}/10 — ${brief.enrichment.apollo_company || brief.lead.company || brief.lead.email} (${brief.lead.magnet_key})`;
+    const subject = `New Facebook lead · ${brief.ai.fit_score}/10 · ${brief.enrichment.apollo_company || brief.lead.company || brief.lead.email}`;
 
     const html = renderBriefHtml(brief);
     const text = renderBriefText(brief);
@@ -820,6 +852,7 @@ function renderBriefHtml(b: LeadBrief): string {
     <div style="padding:20px 24px;border-bottom:1px solid #e5e7eb;">
       <div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px;">Snapshot</div>
       <table cellpadding="0" cellspacing="0" style="font-size:13px;line-height:1.7;">
+        <tr><td style="color:#6b7280;padding-right:16px;">Name</td><td><strong>${escapeHtml([b.lead.first_name, b.lead.last_name].filter(Boolean).join(" ") || "—")}</strong></td></tr>
         <tr><td style="color:#6b7280;padding-right:16px;">Phone</td><td>${b.lead.phone ? `<a href="tel:${escapeAttr(b.lead.phone.replace(/[^0-9+]/g, ""))}" style="color:#059669;font-weight:600;">${escapeHtml(b.lead.phone)}</a>` : "—"}</td></tr>
         <tr><td style="color:#6b7280;padding-right:16px;">Email</td><td><a href="mailto:${escapeAttr(b.lead.email)}">${escapeHtml(b.lead.email)}</a></td></tr>
         <tr><td style="color:#6b7280;padding-right:16px;">Website</td><td>${b.enrichment.apollo_website ? `<a href="${escapeAttr(/^https?:\/\//.test(b.enrichment.apollo_website) ? b.enrichment.apollo_website : `https://${b.enrichment.apollo_website}`)}" target="_blank" rel="noopener">${escapeHtml(b.enrichment.apollo_website)}</a>` : "—"}</td></tr>
@@ -837,13 +870,6 @@ function renderBriefHtml(b: LeadBrief): string {
       ${matchesHtml}
     </div>
 
-    <div style="padding:20px 24px;border-bottom:1px solid #e5e7eb;">
-      <div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px;">Strategy</div>
-      <p style="margin:0 0 10px;font-size:14px;line-height:1.5;"><strong>Strength:</strong> ${escapeHtml(b.ai.biggest_strength)}</p>
-      <p style="margin:0 0 10px;font-size:14px;line-height:1.5;"><strong>Risk:</strong> ${escapeHtml(b.ai.biggest_risk)}</p>
-      <p style="margin:0;font-size:14px;line-height:1.5;">${escapeHtml(b.ai.suggested_strategy)}</p>
-    </div>
-
     <div style="padding:20px 24px;background:#fef3c7;">
       <div style="font-size:11px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px;">Call Script</div>
       <pre style="white-space:pre-wrap;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:14px;line-height:1.6;margin:0;color:#451a03;">${escapeHtml(b.ai.call_script)}</pre>
@@ -857,12 +883,12 @@ function renderBriefHtml(b: LeadBrief): string {
 }
 
 function renderBriefText(b: LeadBrief): string {
+    const fullName = [b.lead.first_name, b.lead.last_name].filter(Boolean).join(" ") || "(no name)";
     return [
-        `NEW LEAD — ${b.ai.fit_score}/10 fit`,
+        `NEW FACEBOOK LEAD · ${b.ai.fit_score}/10`,
         `${b.enrichment.apollo_company || b.lead.company || b.lead.email}`,
-        `${[b.lead.first_name, b.lead.last_name].filter(Boolean).join(" ") || "(no name)"} · ${b.lead.email}`,
+        `${fullName} · ${b.lead.email}`,
         b.lead.phone ? `📞 ${b.lead.phone}  (tap to call on mobile)` : `📞 (no phone captured)`,
-        `Downloaded: ${b.lead.magnet_key}`,
         ``,
         `WHY ${b.ai.fit_score}/10: ${b.ai.fit_rationale}`,
         ``,
@@ -873,6 +899,9 @@ function renderBriefText(b: LeadBrief): string {
 ` : `WEBSITE SUMMARY: (could not pull)`,
         ``,
         `SNAPSHOT`,
+        `- Name: ${fullName}`,
+        `- Phone: ${b.lead.phone || "—"}`,
+        `- Email: ${b.lead.email}`,
         `- Website: ${b.enrichment.apollo_website || "—"}`,
         `- Industry: ${b.enrichment.apollo_industry || "—"}`,
         `- Employees: ${b.enrichment.apollo_employees ?? "—"}`,
@@ -884,11 +913,6 @@ function renderBriefText(b: LeadBrief): string {
         b.top_matches.length === 0 ? "(no active matches in inferred NAICS)" : b.top_matches.map((m, i) =>
             `${i + 1}. ${m.title} — ${m.agency || "?"} · NAICS ${m.naics_code} · due ${fmtDate(m.response_deadline)} · ${fmtMoney(m.estimated_value)}`,
         ).join("\n"),
-        ``,
-        `STRATEGY`,
-        `Strength: ${b.ai.biggest_strength}`,
-        `Risk: ${b.ai.biggest_risk}`,
-        `Pitch: ${b.ai.suggested_strategy}`,
         ``,
         `CALL SCRIPT`,
         b.ai.call_script,
