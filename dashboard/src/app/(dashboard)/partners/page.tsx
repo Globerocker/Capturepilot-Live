@@ -5,7 +5,7 @@ import { useState, useEffect, useMemo, useRef, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { createSupabaseClient } from "@/lib/supabase/client";
-import { Users, Search, Loader2, Shield, Globe, MapPin, X, ChevronDown, Handshake, Plus, CheckCircle2, CheckSquare, Square, Award } from "lucide-react";
+import { Users, Search, Loader2, Shield, Globe, MapPin, X, ChevronDown, Handshake, Plus, CheckCircle2, CheckSquare, Square, Award, Mail, Phone, User, Sparkles } from "lucide-react";
 import clsx from "clsx";
 import { NAICS_CODES, searchNaics } from "@/lib/naics-codes";
 import { AwardCountBadge } from "@/components/AwardCountBadge";
@@ -25,6 +25,14 @@ interface Partner {
     certifications: string[];
     website: string;
     sam_url: string;
+    // Added 2026-05-29 — were always present in SAM but the API mapper dropped them.
+    poc_name?: string | null;
+    poc_title?: string | null;
+    poc_email?: string | null;
+    poc_phone?: string | null;
+    enriched_from_db?: boolean;
+    past_award_count?: number | null;
+    capability_summary?: string | null;
 }
 
 const STATE_OPTIONS = [
@@ -717,8 +725,41 @@ function PartnersPageInner() {
                                             {p.naics_codes.length > 5 && <span className="text-[9px] text-stone-400">+{p.naics_codes.length - 5}</span>}
                                         </div>
                                     )}
-                                    <div className="mt-1.5">
+                                    {(p.poc_email || p.poc_phone || p.poc_name) && (
+                                        <div className="mt-2 text-[11px] text-stone-600 flex items-center gap-3 flex-wrap">
+                                            {p.poc_name && (
+                                                <span className="inline-flex items-center gap-1">
+                                                    <User className="w-3 h-3 text-stone-400" />
+                                                    {p.poc_name}{p.poc_title ? <span className="text-stone-400">, {p.poc_title}</span> : null}
+                                                </span>
+                                            )}
+                                            {p.poc_email && (
+                                                <a href={`mailto:${p.poc_email}`} className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800">
+                                                    <Mail className="w-3 h-3" /> {p.poc_email}
+                                                </a>
+                                            )}
+                                            {p.poc_phone && (
+                                                <a href={`tel:${p.poc_phone}`} className="inline-flex items-center gap-1 text-stone-600 hover:text-stone-800">
+                                                    <Phone className="w-3 h-3" /> {p.poc_phone}
+                                                </a>
+                                            )}
+                                        </div>
+                                    )}
+                                    {p.capability_summary && (
+                                        <p className="mt-1.5 text-[11px] text-stone-600 line-clamp-2 leading-relaxed">{p.capability_summary}</p>
+                                    )}
+                                    <div className="mt-1.5 flex items-center gap-2">
                                         <AwardCountBadge name={p.company_name} uei={p.uei} />
+                                        {p.enriched_from_db && (
+                                            <span className="text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded inline-flex items-center gap-1">
+                                                <Sparkles className="w-2.5 h-2.5" /> Enriched
+                                            </span>
+                                        )}
+                                        {typeof p.past_award_count === "number" && p.past_award_count > 0 && (
+                                            <span className="text-[10px] font-medium text-amber-700">
+                                                {p.past_award_count} past award{p.past_award_count === 1 ? "" : "s"}
+                                            </span>
+                                        )}
                                     </div>
                                 </div>
                                 <div className="flex flex-col gap-1.5 flex-shrink-0">

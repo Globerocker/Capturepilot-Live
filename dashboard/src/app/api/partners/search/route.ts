@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 
 export const maxDuration = 60;
 
@@ -22,6 +23,51 @@ interface PartnerResult {
     expiration_date: string;
     entity_type: string;
     sam_url: string;
+    // POC fields — extracted from SAM's pointsOfContact block. The
+    // `bulk_enrich_contractors_sam` cron uses the same logic to populate
+    // our contractors table; we mirror it here so partners search isn't
+    // missing what's already in the underlying SAM response.
+    poc_name: string | null;
+    poc_title: string | null;
+    poc_email: string | null;
+    poc_phone: string | null;
+    // Cross-reference from our enriched contractors table (when the UEI
+    // matches a row we've already deep-enriched). Surfaces past-award
+    // count + business summary the partner card can show inline.
+    enriched_from_db: boolean;
+    past_award_count: number | null;
+    capability_summary: string | null;
+}
+
+// pointsOfContact shape from SAM v3. Same priority as bulk_enrich cron:
+// electronicBusinessPOC first (usually a real human bizdev contact),
+// then governmentBusinessPOC (registrar of record), then pastPerformancePOC.
+type SamPoc = {
+    firstName?: string;
+    lastName?: string;
+    title?: string;
+    email?: string;
+    usPhoneNumber?: string;
+};
+type SamPocBlock = {
+    electronicBusinessPOC?: SamPoc;
+    governmentBusinessPOC?: SamPoc;
+    pastPerformancePOC?: SamPoc;
+};
+
+function bestPoc(block: SamPocBlock | undefined): { name: string | null; title: string | null; email: string | null; phone: string | null } {
+    const candidates = [
+        block?.electronicBusinessPOC,
+        block?.governmentBusinessPOC,
+        block?.pastPerformancePOC,
+    ].filter(Boolean) as SamPoc[];
+    for (const p of candidates) {
+        const email = (p.email || "").trim();
+        if (!email) continue;
+        const name = [p.firstName, p.lastName].filter(Boolean).join(" ").trim();
+        return { name: name || null, title: p.title || null, email, phone: p.usPhoneNumber || null };
+    }
+    return { name: null, title: null, email: null, phone: null };
 }
 
 /**
@@ -92,7 +138,9 @@ export async function GET(req: NextRequest) {
                 const params = new URLSearchParams({
                     registrationStatus: "A",
                     purposeOfRegistrationCode: "Z2",
-                    includeSections: "entityRegistration,coreData,assertions",
+                    // pointsOfContact added so we get emails/phones — previously
+                    // dropped from the response, leaving SAM-live cards blank.
+                    includeSections: "entityRegistration,coreData,assertions,pointsOfContact",
                     samRegistered: "Yes",
                 });
                 if (naics) params.set("naicsCode", naics);
@@ -143,6 +191,8 @@ export async function GET(req: NextRequest) {
                 const uei = String(reg.ueiSAM || "");
                 if (!uei || byUei.has(uei)) continue;
 
+                const poc = bestPoc(entity.pointsOfContact as SamPocBlock | undefined);
+
                 byUei.set(uei, {
                     uei,
                     cage_code: String(reg.cageCode || ""),
@@ -158,6 +208,13 @@ export async function GET(req: NextRequest) {
                     expiration_date: String(reg.registrationExpirationDate || ""),
                     entity_type: String(reg.entityType || ""),
                     sam_url: `https://sam.gov/entity/${uei}/coreData`,
+                    poc_name: poc.name,
+                    poc_title: poc.title,
+                    poc_email: poc.email,
+                    poc_phone: poc.phone,
+                    enriched_from_db: false,
+                    past_award_count: null,
+                    capability_summary: null,
                 });
 
                 if (byUei.size >= limit) break;
@@ -166,6 +223,48 @@ export async function GET(req: NextRequest) {
         }
 
         const partners = Array.from(byUei.values()).slice(0, limit);
+
+        // Cross-reference: when a SAM-live UEI matches a row in our
+        // contractors table that's been deep-enriched, merge those richer
+        // fields in. This is how the same row goes from a barebones SAM
+        // record to "we already know this contractor has won 12 contracts
+        // and here's their capability summary".
+        if (partners.length > 0) {
+            try {
+                const supaUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+                const supaKey = process.env.SUPABASE_SERVICE_KEY;
+                if (supaUrl && supaKey) {
+                    const sb = createClient(supaUrl, supaKey, { auth: { persistSession: false } });
+                    const ueis = partners.map(p => p.uei);
+                    // Only columns we know exist on `contractors` (set by
+                    // bulk_enrich_contractors_sam): email, direct_phone,
+                    // primary_poc_name, primary_poc_title, business_url.
+                    // past_award_count + capability_summary need a separate
+                    // join (TODO — usaspending data lives elsewhere).
+                    const { data: enrichedRows } = await sb
+                        .from("contractors")
+                        .select("uei, email, direct_phone, primary_poc_name, primary_poc_title, business_url")
+                        .in("uei", ueis);
+                    const byUeiEnriched = new Map<string, Record<string, unknown>>(
+                        (enrichedRows || []).map((r: Record<string, unknown>) => [String(r.uei), r]),
+                    );
+                    for (const p of partners) {
+                        const e = byUeiEnriched.get(p.uei);
+                        if (!e) continue;
+                        p.enriched_from_db = true;
+                        if (!p.poc_email && e.email) p.poc_email = String(e.email);
+                        if (!p.poc_phone && e.direct_phone) p.poc_phone = String(e.direct_phone);
+                        if (!p.poc_name && e.primary_poc_name) p.poc_name = String(e.primary_poc_name);
+                        if (!p.poc_title && e.primary_poc_title) p.poc_title = String(e.primary_poc_title);
+                        if (!p.website && e.business_url) p.website = String(e.business_url);
+                    }
+                }
+            } catch (e) {
+                // Non-fatal — SAM-live data still flows through; we just lose
+                // the cross-ref this round. Logged for diagnosis.
+                console.warn("[partners/search] DB cross-ref failed:", (e as Error).message);
+            }
+        }
 
         // If we got zero rows AND every upstream call failed, surface the first error.
         if (partners.length === 0 && upstreamErrors.length === combos.length && upstreamErrors.length > 0) {
