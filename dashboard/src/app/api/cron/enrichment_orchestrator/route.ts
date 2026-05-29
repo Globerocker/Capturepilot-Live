@@ -53,6 +53,12 @@ const TASKS = {
   ingest_tx_esbd:                  "ingest_tx_esbd",
   ingest_fpds_awards:              "ingest_fpds_awards",
   ingest_gsa_schedule:             "ingest_gsa_schedule",
+  // Contractor profile-page lifecycle. publish picks 10 new candidates/day;
+  // refresh updates existing pages from latest USAspending. Without these
+  // running, www.capturepilot.com/contractors/<slug> goes stale and we
+  // never publish new pages from the 80k contractor pool.
+  publish_contractor_pages:        "publish_contractor_pages",
+  refresh_contractor_pages:        "refresh_contractor_pages",
 } as const;
 
 type TaskName = keyof typeof TASKS;
@@ -113,6 +119,14 @@ function tasksDueAt(d: Date): TaskName[] {
   // are an explicit "ready-to-team" signal; lower frequency since list
   // changes slowly.
   if (h === 6 && m === 5 && d.getUTCDay() === 0) due.push("ingest_gsa_schedule");
+
+  // Contractor profile page lifecycle:
+  //   publish — picks 10 new candidates/day from contractors pool,
+  //   computes rollups, generates AI summary, marks is_published.
+  //   refresh — re-pulls USAspending data for existing pages so the
+  //   numbers on www.capturepilot.com/contractors/<slug> stay current.
+  if (h === 4 && m === 30) due.push("publish_contractor_pages");
+  if (h === 5 && m === 30) due.push("refresh_contractor_pages");
 
   // SAM attachment text → structured_requirements. Runs at :15 every
   // hour. analyze_match_attachments downloads PDFs/DOCX from saved opps,
