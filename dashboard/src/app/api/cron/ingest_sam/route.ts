@@ -206,7 +206,9 @@ export async function GET(req: NextRequest) {
                             estimated_value: o.estimatedTotalValue ? Number(o.estimatedTotalValue) : (award?.amount ? Number(award.amount) : null),
                             link: o.uiLink || (o.noticeId ? `https://sam.gov/opp/${o.noticeId}/view` : null),
                             resource_links: resourceLinks,
-                            priority_flag: false,
+                            // priority_flag was dropped from the schema but the
+                            // cron kept writing it — blocked every SAM ingest
+                            // upsert for weeks with "Could not find column".
                             is_archived: ["EXPIRED", "ARCHIVED", "DELETED"].includes(status),
                             raw_json: o,
                             // Strategic fields
@@ -230,7 +232,7 @@ export async function GET(req: NextRequest) {
                     console.error(`DB Error for ${ptype}: ${dbError.message}`);
                     dbErrors.push(`primary[${ptype}]: ${dbError.message.slice(0, 200)}`);
                     // Try without new columns as fallback (pre-migration compat)
-                    const NEW_COLS = ["sub_agency", "office", "estimated_value", "status", "veteran_relevance_flag", "small_business_relevance_flag", "wosb_relevance_flag", "sources_sought_flag", "last_crawled_at", "retention_protected", "retention_reason", "incumbent_contractor_name", "resource_links", "organization_code"];
+                    const NEW_COLS = ["sub_agency", "office", "estimated_value", "status", "veteran_relevance_flag", "small_business_relevance_flag", "wosb_relevance_flag", "sources_sought_flag", "last_crawled_at", "retention_protected", "retention_reason", "incumbent_contractor_name", "resource_links", "organization_code", "priority_flag"];
                     const fallback = payload.map(row => {
                         const clean: Record<string, unknown> = {};
                         for (const [k, v] of Object.entries(row)) {
