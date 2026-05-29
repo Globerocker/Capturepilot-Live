@@ -15,6 +15,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Resend } from "resend";
 import { generatePitch } from "@/lib/backlinks/draft-generator";
 import { assertAdmin } from "@/lib/auth-admin";
+import { isAuthorizedCron } from "@/lib/cron-auth";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -68,8 +69,13 @@ const PRESETS: Record<string, MockProspect> = {
 };
 
 export async function POST(req: NextRequest) {
-    const unauth = await assertAdmin();
-    if (unauth) return unauth;
+    // Dual auth — admin session OR CRON_SECRET bearer (so this endpoint
+    // can be triggered from a CLI for testing without a Supabase cookie).
+    const isCron = isAuthorizedCron(req.headers.get("authorization"));
+    if (!isCron) {
+        const unauth = await assertAdmin();
+        if (unauth) return unauth;
+    }
 
     const body = await req.json().catch(() => ({}));
     const to = String(body.to || "").trim();
