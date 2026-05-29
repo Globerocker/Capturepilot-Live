@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Target, Sparkles, ArrowRight, Loader2, Search, Shield, BarChart3, Layers, CheckSquare, UserCheck, FileText, Mic, Mail, Pencil } from "lucide-react";
 import ServiceCTA from "@/components/ui/ServiceCTA";
@@ -41,25 +41,35 @@ interface TopOpp {
   set_aside_code: string;
 }
 
+interface DashboardStats {
+  opsCount: number;
+  hotMatchCount: number;
+  warmMatchCount: number;
+  totalMatchCount: number;
+  urgentCount: number;
+  topOpps: TopOpp[];
+  pipelineCount: number;
+  pipelineStages: Record<string, number>;
+  actionsPending: number;
+  actionsUrgent: number;
+  competitorCount: number;
+  recentPipeline: Array<{ id: string; stage: string; title: string; opportunity_id: string }>;
+  pendingActions: Array<{ id: string; title: string; priority: string; opportunity_id: string }>;
+  newOpps7d: number;
+  newMatches7d: number;
+}
+
+const EMPTY_STATS: DashboardStats = {
+  opsCount: 0, hotMatchCount: 0, warmMatchCount: 0, totalMatchCount: 0,
+  urgentCount: 0, topOpps: [], pipelineCount: 0, pipelineStages: {},
+  actionsPending: 0, actionsUrgent: 0, competitorCount: 0,
+  recentPipeline: [], pendingActions: [], newOpps7d: 0, newMatches7d: 0,
+};
+
 interface DashboardClientProps {
   profile: UserProfile;
-  stats: {
-    opsCount: number;
-    hotMatchCount: number;
-    warmMatchCount: number;
-    totalMatchCount: number;
-    urgentCount: number;
-    topOpps: TopOpp[];
-    pipelineCount: number;
-    pipelineStages: Record<string, number>;
-    actionsPending: number;
-    actionsUrgent: number;
-    competitorCount: number;
-    recentPipeline: Array<{ id: string; stage: string; title: string; opportunity_id: string }>;
-    pendingActions: Array<{ id: string; title: string; priority: string; opportunity_id: string }>;
-    newOpps7d: number;
-    newMatches7d: number;
-  };
+  /** Optional pre-fetched stats for backward compat; if omitted, client fetches via /api/dashboard/kpis. */
+  stats?: DashboardStats;
   initialLayout?: DashboardLayout;
 }
 
@@ -83,11 +93,31 @@ function calculateProfileCompleteness(profile: UserProfile): { score: number; mi
   return { score: Math.round((completed / checks.length) * 100), missing };
 }
 
-export default function DashboardClient({ profile, stats, initialLayout }: DashboardClientProps) {
+export default function DashboardClient({ profile, stats: initialStats, initialLayout }: DashboardClientProps) {
   const router = useRouter();
   const [generatingMatches, setGeneratingMatches] = useState(false);
   const [layout, setLayout] = useState<DashboardLayout>(initialLayout || {});
   const show = (id: Parameters<typeof isHidden>[1]) => !isHidden(layout, id);
+
+  // KPIs now fetched client-side from /api/dashboard/kpis instead of blocking
+  // the server render. Falls back to initialStats if a caller still passes
+  // them (backward compat). statsLoading drives skeleton rendering.
+  const [stats, setStats] = useState<DashboardStats>(initialStats || EMPTY_STATS);
+  const [statsLoading, setStatsLoading] = useState(!initialStats);
+  useEffect(() => {
+    if (initialStats) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/dashboard/kpis", { cache: "no-store" });
+        if (!res.ok) return;
+        const json = await res.json();
+        if (!cancelled) setStats(json as DashboardStats);
+      } catch {/* silent — stays in EMPTY_STATS */}
+      finally { if (!cancelled) setStatsLoading(false); }
+    })();
+    return () => { cancelled = true; };
+  }, [initialStats]);
 
   const {
     opsCount,

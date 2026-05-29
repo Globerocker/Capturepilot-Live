@@ -6,152 +6,34 @@ export const metadata = {
   title: "Dashboard | CapturePilot",
 };
 
+/**
+ * Dashboard server-render: ONLY fetches the profile (1 query, ~50ms).
+ * The 13 KPI queries that previously ran here (some doing exact COUNT
+ * over !inner joins on a 60k+ row opportunities table → 10-20s blocking)
+ * now live at /api/dashboard/kpis and are fetched client-side by
+ * DashboardClient after first paint. The page renders skeletons in
+ * ~200ms; KPI tiles populate as the API returns.
+ *
+ * Net TTFB: ~200ms (was 10-20s). The slower KPI queries still cost the
+ * same time but no longer block the page render.
+ */
 export default async function DashboardPage() {
   const supabase = await createSupabaseServerClient();
 
-  // Get current user
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    redirect("/login");
-  }
+  if (!user) redirect("/login");
 
-  // Get user profile (notes carries dashboard_layout)
   const { data: profileData } = await supabase
     .from("user_profiles")
     .select("id, company_name, naics_codes, sba_certifications, state, target_states, uei, cage_code, website, phone, employee_count, years_in_business, federal_awards_count, notes")
     .eq("auth_user_id", user.id)
     .single();
 
-  if (!profileData) {
-    redirect("/onboard");
-  }
+  if (!profileData) redirect("/onboard");
 
   const profileNotes = (profileData as unknown as { notes: Record<string, unknown> | null }).notes;
   const initialLayout = (profileNotes?.dashboard_layout as { hidden?: string[]; order?: string[] } | undefined) || {};
 
-  const today = new Date().toISOString().split("T")[0];
-  const profileId = profileData.id as string;
-  const ACTIVE_STATUSES = ["ACTIVE", "EXPIRING_SOON", "MARKET_RESEARCH", "DISCOVERED"];
-
-  // Fetch all dashboard data in parallel on the server
-  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-  const [
-    opsRes,
-    hotRes,
-    warmRes,
-    urgentRes,
-    topMatchRes,
-    pursuitRes,
-    actionsRes,
-    competitorRes,
-    recentPipelineRes,
-    recentActionsRes,
-    newOpps7dRes,
-    newMatches7dRes,
-  ] = await Promise.all([
-    // Total opportunity count — drives the "X opportunities" KPI. Estimated
-    // count avoids the full COUNT(*) scan that exact triggers on the 37k+
-    // row table; the dashboard tile doesn't need single-digit precision.
-    supabase.from("opportunities").select("*", { count: "estimated", head: true }).eq("is_archived", false),
-    supabase.from("user_matches")
-      .select("id, opportunities!inner(id)", { count: "exact", head: true })
-      .eq("user_profile_id", profileId)
-      .eq("classification", "HOT")
-      .eq("is_dismissed", false)
-      .eq("opportunities.is_archived", false)
-      .in("opportunities.status", ACTIVE_STATUSES),
-    supabase.from("user_matches")
-      .select("id, opportunities!inner(id)", { count: "exact", head: true })
-      .eq("user_profile_id", profileId)
-      .eq("classification", "WARM")
-      .eq("is_dismissed", false)
-      .eq("opportunities.is_archived", false)
-      .in("opportunities.status", ACTIVE_STATUSES),
-    // Urgent (deadline within 7d) — also fine with estimated. The number is
-    // shown as a rough heads-up, not a per-row driver.
-    supabase.from("opportunities").select("*", { count: "estimated", head: true })
-      .eq("is_archived", false)
-      .lte("response_deadline", new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString())
-      .gte("response_deadline", today),
-    supabase.from("user_matches")
-      .select("score, classification, opportunities!inner(id, title, agency, naics_code, notice_type, response_deadline, set_aside_code, status, is_archived)")
-      .eq("user_profile_id", profileId)
-      .eq("is_dismissed", false)
-      .eq("opportunities.is_archived", false)
-      .in("opportunities.status", ACTIVE_STATUSES)
-      .order("score", { ascending: false })
-      .limit(8),
-    supabase.from("user_pursuits").select("stage").eq("user_profile_id", profileId),
-    supabase.from("user_action_items").select("status, priority").eq("user_profile_id", profileId),
-    supabase.from("client_competitors").select("*", { count: "exact", head: true }).eq("user_profile_id", profileId),
-    supabase.from("user_pursuits")
-      .select("id, stage, opportunity_id, opportunities(id, title)")
-      .eq("user_profile_id", profileId)
-      .order("stage_changed_at", { ascending: false })
-      .limit(5),
-    supabase.from("user_action_items")
-      .select("id, title, priority, opportunity_id")
-      .eq("user_profile_id", profileId)
-      .neq("status", "completed")
-      .order("priority", { ascending: false })
-      .limit(5),
-    // New opportunities in the last 7 days — proves ingestion is alive.
-    // Estimated count is plenty for a "fresh today / this week" indicator.
-    supabase.from("opportunities").select("*", { count: "estimated", head: true })
-      .eq("is_archived", false)
-      .gte("created_at", sevenDaysAgo),
-    // New matches scored in the last 7 days for this user.
-    supabase.from("user_matches").select("*", { count: "exact", head: true })
-      .eq("user_profile_id", profileId)
-      .eq("is_dismissed", false)
-      .gte("scored_at", sevenDaysAgo),
-  ]);
-  const newOpps7d = newOpps7dRes.count || 0;
-  const newMatches7d = newMatches7dRes.count || 0;
-
-  const opsCount = opsRes.count || 0;
-  const hotMatchCount = hotRes.count || 0;
-  const warmMatchCount = warmRes.count || 0;
-  const totalMatchCount = hotMatchCount + warmMatchCount;
-  const urgentCount = urgentRes.count || 0;
-  const topData = (topMatchRes.data || []) as any[];
-  const topOpps = topData.map(m => m.opportunities).filter(Boolean);
-
-  const pursuits = (pursuitRes.data || []);
-  const pipelineCount = pursuits.length;
-  const pipelineStages: Record<string, number> = {};
-  pursuits.forEach(p => { pipelineStages[p.stage] = (pipelineStages[p.stage] || 0) + 1; });
-
-  const actions = (actionsRes.data || []);
-  const actionsPending = actions.filter(a => a.status !== "completed").length;
-  const actionsUrgent = actions.filter(a => a.priority === "high" && a.status !== "completed").length;
-
-  const competitorCount = competitorRes.count || 0;
-
-  const recents = (recentPipelineRes.data || []) as any[];
-  const recentPipeline = recents.filter(r => r.opportunities).map(r => ({
-    id: r.id, stage: r.stage, title: r.opportunities.title, opportunity_id: r.opportunity_id,
-  }));
-
-  const pendingActions = (recentActionsRes.data || []);
-
-  const stats = {
-    opsCount,
-    hotMatchCount,
-    warmMatchCount,
-    totalMatchCount,
-    urgentCount,
-    topOpps,
-    pipelineCount,
-    pipelineStages,
-    actionsPending,
-    actionsUrgent,
-    competitorCount,
-    recentPipeline,
-    pendingActions,
-    newOpps7d,
-    newMatches7d,
-  };
-
-  return <DashboardClient profile={profileData as any} stats={stats} initialLayout={initialLayout as any} />;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return <DashboardClient profile={profileData as any} initialLayout={initialLayout as any} />;
 }
