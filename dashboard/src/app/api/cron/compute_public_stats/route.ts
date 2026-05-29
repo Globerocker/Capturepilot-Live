@@ -21,10 +21,17 @@ export const maxDuration = 60;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SbAny = SupabaseClient<any, any, any>;
 
+/**
+ * Count helper. Now uses count="exact" because estimated counts come from
+ * pg_class.reltuples which lags autovacuum — after a big insert burst
+ * (e.g. SAM backfill of 4k rows), reltuples can return 0 or stale numbers
+ * for 15+ minutes. Exact is slower but accurate; migration 099 added the
+ * matching created_at index that keeps it fast enough.
+ */
 async function n(sb: SbAny, table: string, filt: Record<string, string> = {}): Promise<number> {
     try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        let q: any = sb.from(table).select("id", { count: "estimated", head: true });
+        let q: any = sb.from(table).select("id", { count: "exact", head: true });
         for (const [k, v] of Object.entries(filt)) {
             const dot = v.indexOf(".");
             const op = dot === -1 ? v : v.slice(0, dot);
@@ -32,9 +39,16 @@ async function n(sb: SbAny, table: string, filt: Record<string, string> = {}): P
             if (op === "eq") q = q.eq(k, val);
             else if (op === "gte") q = q.gte(k, val);
         }
-        const { count } = await q;
+        const { count, error } = await q;
+        if (error) {
+            console.error(`[compute_stats] count failed for ${table}`, { filt, error: error.message });
+            return 0;
+        }
         return count || 0;
-    } catch { return 0; }
+    } catch (e) {
+        console.error(`[compute_stats] count threw for ${table}`, { filt, error: (e as Error).message });
+        return 0;
+    }
 }
 
 export async function GET(req: NextRequest) {
