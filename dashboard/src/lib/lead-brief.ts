@@ -23,6 +23,7 @@ import { Resend } from "resend";
 import { callLLMJson } from "@/lib/llm/deepseek";
 import { HUMAN_VOICE_RULES } from "@/lib/llm/humanizer";
 import { searchSamByName, lookupSamEntity } from "@/lib/quick-checker-helpers";
+import { sendWhatsAppPartnerAlert, formatPartnerAlertFromBrief } from "@/lib/whatsapp";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SbAny = SupabaseClient<any, any, any>;
@@ -511,6 +512,26 @@ Return up to 3 most-likely 6-digit NAICS codes for this company's federal-contra
             .eq("id", lead.id);
     } else if (emailRes.error) {
         console.warn(`[lead-brief] email to ${BRIEF_RECIPIENT} failed:`, emailRes.error);
+    }
+
+    // WhatsApp partner alert — fires after the email so a Resend failure
+    // doesn't block the WA send (and vice versa). Non-fatal: if the WA
+    // env isn't configured, we silently skip; if the 24-hr window has
+    // expired (code 131047) we log loud so Sergio knows to send any
+    // message back to the WA business number to reopen it.
+    const waText = formatPartnerAlertFromBrief({
+        firstName: brief.lead.first_name,
+        lastName: brief.lead.last_name,
+        company: brief.enrichment.apollo_company || brief.lead.company,
+        phone: brief.lead.phone,
+        email: brief.lead.email,
+        fitScore: brief.ai.fit_score,
+        fitRationale: brief.ai.fit_rationale,
+        websiteSummary: brief.website_summary?.what_they_do || null,
+    });
+    const waRes = await sendWhatsAppPartnerAlert(waText);
+    if (!waRes.sent) {
+        console.warn(`[lead-brief] WA alert failed: ${waRes.error}${waRes.needsReengagement ? " — partner must send any message to WA business number to reopen 24-hr window" : ""}`);
     }
 
     return brief;
