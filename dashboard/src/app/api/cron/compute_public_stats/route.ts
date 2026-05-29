@@ -22,16 +22,15 @@ export const maxDuration = 60;
 type SbAny = SupabaseClient<any, any, any>;
 
 /**
- * Count helper. Now uses count="exact" because estimated counts come from
- * pg_class.reltuples which lags autovacuum — after a big insert burst
- * (e.g. SAM backfill of 4k rows), reltuples can return 0 or stale numbers
- * for 15+ minutes. Exact is slower but accurate; migration 099 added the
- * matching created_at index that keeps it fast enough.
+ * Count helper. Tries count="exact" first; on statement-timeout or any
+ * error, falls back to count="estimated" (from pg_class.reltuples) so we
+ * NEVER return 0 when there are actually rows. Better stale than zero.
+ * Migration 102 added the partial indexes that make exact counts fast.
  */
-async function n(sb: SbAny, table: string, filt: Record<string, string> = {}): Promise<number> {
+async function countOnce(sb: SbAny, table: string, filt: Record<string, string>, mode: "exact" | "estimated"): Promise<{ count: number | null; error: string | null }> {
     try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        let q: any = sb.from(table).select("id", { count: "exact", head: true });
+        let q: any = sb.from(table).select("id", { count: mode, head: true });
         for (const [k, v] of Object.entries(filt)) {
             const dot = v.indexOf(".");
             const op = dot === -1 ? v : v.slice(0, dot);
@@ -40,15 +39,28 @@ async function n(sb: SbAny, table: string, filt: Record<string, string> = {}): P
             else if (op === "gte") q = q.gte(k, val);
         }
         const { count, error } = await q;
-        if (error) {
-            console.error(`[compute_stats] count failed for ${table}`, { filt, error: error.message });
-            return 0;
-        }
-        return count || 0;
+        if (error) return { count: null, error: error.message };
+        return { count: count ?? 0, error: null };
     } catch (e) {
-        console.error(`[compute_stats] count threw for ${table}`, { filt, error: (e as Error).message });
-        return 0;
+        return { count: null, error: (e as Error).message };
     }
+}
+
+async function n(sb: SbAny, table: string, filt: Record<string, string> = {}): Promise<number> {
+    const exact = await countOnce(sb, table, filt, "exact");
+    if (exact.count !== null && exact.count > 0) return exact.count;
+    // Fallback to estimated on error OR genuine-zero (could still be the
+    // statement timeout returning 0). Tiny risk of double-counting work
+    // here but the alternative is "federal_opps: 0" on the homepage.
+    const est = await countOnce(sb, table, filt, "estimated");
+    if (est.count !== null && est.count > 0) {
+        console.warn(`[compute_stats] exact count failed for ${table}, used estimated`, { filt, exact_err: exact.error });
+        return est.count;
+    }
+    if (exact.error || est.error) {
+        console.error(`[compute_stats] both exact AND estimated failed for ${table}`, { filt, exact: exact.error, estimated: est.error });
+    }
+    return 0;
 }
 
 export async function GET(req: NextRequest) {
