@@ -214,13 +214,20 @@ export async function GET(req: NextRequest) {
 
         // Upsert awards. Schema permitting — if the table doesn't exist or
         // the conflict target differs, we surface the error but keep going.
+        // Dedupe by piid within this batch — USAspending sometimes returns
+        // the same award twice across paginated pages (when a result lands
+        // on a page boundary at fetch time). Otherwise the upsert errors
+        // with "ON CONFLICT DO UPDATE command cannot affect row a second time".
+        const deduped = Array.from(
+            new Map(naicsAwards.map(a => [a.piid, a])).values()
+        );
         // onConflict='piid' uses the migration-101 unique constraint.
         // The old uq_fpds_natural expression index can't be referenced
         // via the Supabase JS client (it only takes column names, not
         // coalesce() expressions).
         const { error: upsertErr } = await db
             .from("fpds_awards")
-            .upsert(naicsAwards, { onConflict: "piid", ignoreDuplicates: false });
+            .upsert(deduped, { onConflict: "piid", ignoreDuplicates: false });
         if (upsertErr) {
             stats.errors.push(`fpds_awards upsert naics=${naics}: ${upsertErr.message}`);
         } else {
