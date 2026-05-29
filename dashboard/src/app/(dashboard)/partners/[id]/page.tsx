@@ -8,6 +8,7 @@ import clsx from "clsx";
 import { NAICS_CODES } from "@/lib/naics-codes";
 import { PastAwardsPanel } from "@/components/PastAwardsPanel";
 import { SubawardsPanel } from "@/components/SubawardsPanel";
+import { ContractorDetailView } from "@/components/ContractorDetailView";
 
 interface Partner {
     id: string;
@@ -213,8 +214,18 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
                 )}
             </div>
 
+            {/* Unified rich detail view — strengths/weaknesses (Ollama),
+                POC enrichment, agency/NAICS breakdowns, active opps where
+                this partner is the incumbent. Only renders when we have
+                a UEI (the basis for cross-referencing the contractors table). */}
+            {partner.uei && (
+                <ContractorDetailView uei={partner.uei} fallbackName={partner.company_name} />
+            )}
+
             {/* Federal award history — live from USASpending.gov */}
-            <PastAwardsPanel name={partner.company_name} uei={partner.uei} />
+            {!partner.uei && (
+                <PastAwardsPanel name={partner.company_name} uei={partner.uei} />
+            )}
 
             {/* Teaming graph — primes they sub for, subs they hire. Great for partner fit. */}
             <SubawardsPanel name={partner.company_name} uei={partner.uei} />

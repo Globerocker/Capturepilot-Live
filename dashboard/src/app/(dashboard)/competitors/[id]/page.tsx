@@ -14,6 +14,7 @@ import clsx from "clsx";
 import { NAICS_CODES } from "@/lib/naics-codes";
 import { PastAwardsPanel } from "@/components/PastAwardsPanel";
 import { SubawardsPanel } from "@/components/SubawardsPanel";
+import { ContractorDetailView } from "@/components/ContractorDetailView";
 
 const supabase = createSupabaseClient();
 
@@ -422,8 +423,18 @@ export default function CompetitorDetailPage({ params }: { params: Promise<{ id:
                 </div>
             </div>
 
-            {/* Federal award history — live from USASpending.gov (keyed on UEI when available) */}
-            <PastAwardsPanel name={competitor.competitor_name} uei={competitor.uei} />
+            {/* Unified rich detail (Ollama strengths/weaknesses, POC,
+                agency/NAICS breakdowns, active opps where they're the
+                incumbent). Renders when we have a UEI. */}
+            {competitor.uei && (
+                <ContractorDetailView uei={competitor.uei} fallbackName={competitor.competitor_name} />
+            )}
+
+            {/* Federal award history — only when we don't have a UEI; the
+                detail view above embeds PastAwardsPanel itself when UEI exists. */}
+            {!competitor.uei && (
+                <PastAwardsPanel name={competitor.competitor_name} uei={competitor.uei} />
+            )}
 
             {/* Subaward / teaming relationships — who they sub for, who they hire. */}
             <SubawardsPanel name={competitor.competitor_name} uei={competitor.uei} />

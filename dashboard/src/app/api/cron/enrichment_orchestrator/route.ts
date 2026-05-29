@@ -51,6 +51,8 @@ const TASKS = {
   ingest_bonfire_json:             "ingest_bonfire_json",
   ingest_opengov:                  "ingest_opengov",
   ingest_tx_esbd:                  "ingest_tx_esbd",
+  ingest_fpds_awards:              "ingest_fpds_awards",
+  ingest_gsa_schedule:             "ingest_gsa_schedule",
 } as const;
 
 type TaskName = keyof typeof TASKS;
@@ -102,6 +104,15 @@ function tasksDueAt(d: Date): TaskName[] {
 
   // Texas SmartBuy / ESBD — daily at 05:05 UTC. State-only, single feed.
   if (h === 5 && m === 5) due.push("ingest_tx_esbd");
+
+  // FPDS awards ingest — daily at 02:05 UTC. Backfills the past-performance
+  // signal that feeds capability_summary_ai + Contract Winners ranking.
+  if (h === 2 && m === 5) due.push("ingest_fpds_awards");
+
+  // GSA Schedule (MAS) holders — weekly Sunday 06:05 UTC. Schedule holders
+  // are an explicit "ready-to-team" signal; lower frequency since list
+  // changes slowly.
+  if (h === 6 && m === 5 && d.getUTCDay() === 0) due.push("ingest_gsa_schedule");
 
   // SAM attachment text → structured_requirements. Runs at :15 every
   // hour. analyze_match_attachments downloads PDFs/DOCX from saved opps,

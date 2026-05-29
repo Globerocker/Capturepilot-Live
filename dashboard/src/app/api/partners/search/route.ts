@@ -37,6 +37,9 @@ interface PartnerResult {
     enriched_from_db: boolean;
     past_award_count: number | null;
     capability_summary: string | null;
+    // Cached USASpending aggregates (when present in contractors row).
+    total_award_volume: number | null;
+    last_award_date: string | null;
 }
 
 // pointsOfContact shape from SAM v3. Same priority as bulk_enrich cron:
@@ -215,6 +218,8 @@ export async function GET(req: NextRequest) {
                     enriched_from_db: false,
                     past_award_count: null,
                     capability_summary: null,
+                    total_award_volume: null,
+                    last_award_date: null,
                 });
 
                 if (byUei.size >= limit) break;
@@ -236,14 +241,13 @@ export async function GET(req: NextRequest) {
                 if (supaUrl && supaKey) {
                     const sb = createClient(supaUrl, supaKey, { auth: { persistSession: false } });
                     const ueis = partners.map(p => p.uei);
-                    // Only columns we know exist on `contractors` (set by
-                    // bulk_enrich_contractors_sam): email, direct_phone,
-                    // primary_poc_name, primary_poc_title, business_url.
-                    // past_award_count + capability_summary need a separate
-                    // join (TODO — usaspending data lives elsewhere).
+                    // Pull cached USASpending fields too — populated by
+                    // /api/intelligence/recipient-awards on first view of a
+                    // contractor. Lets the partner card show "12 past awards"
+                    // without a second roundtrip.
                     const { data: enrichedRows } = await sb
                         .from("contractors")
-                        .select("uei, email, direct_phone, primary_poc_name, primary_poc_title, business_url")
+                        .select("uei, email, direct_phone, primary_poc_name, primary_poc_title, business_url, federal_awards_count, total_award_volume, last_award_date")
                         .in("uei", ueis);
                     const byUeiEnriched = new Map<string, Record<string, unknown>>(
                         (enrichedRows || []).map((r: Record<string, unknown>) => [String(r.uei), r]),
@@ -257,6 +261,9 @@ export async function GET(req: NextRequest) {
                         if (!p.poc_name && e.primary_poc_name) p.poc_name = String(e.primary_poc_name);
                         if (!p.poc_title && e.primary_poc_title) p.poc_title = String(e.primary_poc_title);
                         if (!p.website && e.business_url) p.website = String(e.business_url);
+                        if (typeof e.federal_awards_count === "number") p.past_award_count = e.federal_awards_count;
+                        if (typeof e.total_award_volume === "number") p.total_award_volume = e.total_award_volume;
+                        if (e.last_award_date) p.last_award_date = String(e.last_award_date);
                     }
                 }
             } catch (e) {

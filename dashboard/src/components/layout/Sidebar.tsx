@@ -8,6 +8,7 @@ import {
     LayoutDashboard, Target, Layers, FileText, BarChart3, Mic, Users, Shield,
     CreditCard, Settings, LogOut, Menu, X, FolderOpen, Mail, Search, Pencil,
     Handshake, Clock, ChevronRight, Radar, Telescope, GraduationCap, Sparkles,
+    Award,
 } from "lucide-react";
 import clsx from "clsx";
 import { createSupabaseClient } from "@/lib/supabase/client";
@@ -57,6 +58,7 @@ export default function Sidebar() {
                 { name: "Suggested", href: "/partners?status=suggested", icon: Sparkles },
             ],
         },
+        { name: "Contract Winners", href: "/contract-winners", icon: Award },
         { name: "Competitors", href: "/competitors", icon: Shield },
         { name: "Recompetes", href: "/recompetes", icon: Radar },
         { name: "Forecasts", href: "/forecasts", icon: Telescope },
