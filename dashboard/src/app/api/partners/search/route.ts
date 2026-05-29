@@ -86,13 +86,20 @@ function bestPoc(block: SamPocBlock | undefined): { name: string | null; title: 
  * ?api_key= URL param is deprecated and rejected).
  */
 export async function GET(req: NextRequest) {
-    const SAM_API_KEY = process.env.SAM_API_KEY;
-    if (!SAM_API_KEY) {
+    // Try both SAM keys. Key 1 is shared with ingest_sam (1000/day quota);
+    // when it hits the daily ceiling the partner search would 502 with
+    // "Message throttled out" — exactly what users saw at 2026-05-29.
+    // Key 2 is the contractor-scope key with its own quota — falls back
+    // for partner search until midnight UTC reset.
+    const SAM_KEYS = [process.env.SAM_API_KEY, process.env.SAM_API_KEY_2]
+        .filter((k): k is string => !!k && k.length > 10);
+    if (SAM_KEYS.length === 0) {
         return NextResponse.json(
             { error: "SAM API key not configured", partners: [], total: 0 },
             { status: 500 }
         );
     }
+    let activeKeyIdx = 0;
 
     try {
         const { searchParams } = req.nextUrl;
@@ -152,22 +159,41 @@ export async function GET(req: NextRequest) {
                 if (setAsideCode) params.set("sbaBusinessTypeCode", setAsideCode);
 
                 const url = `${SAM_ENTITY_ENDPOINT}?${params.toString()}`;
-                try {
-                    const res = await fetch(url, {
-                        headers: { "X-Api-Key": SAM_API_KEY },
-                        signal: AbortSignal.timeout(25000),
-                    });
-                    if (!res.ok) {
+                // Try each key in turn on 401/403/429 (quota or auth fail).
+                // activeKeyIdx is read at request-time so once one parallel
+                // call rotates, subsequent calls start from the working key.
+                let lastErr = "";
+                let lastStatus = 0;
+                let startIdx = activeKeyIdx;
+                for (let attempt = 0; attempt < SAM_KEYS.length; attempt++) {
+                    const keyIdx = (startIdx + attempt) % SAM_KEYS.length;
+                    try {
+                        const res = await fetch(url, {
+                            headers: { "X-Api-Key": SAM_KEYS[keyIdx] },
+                            signal: AbortSignal.timeout(25000),
+                        });
+                        if (res.ok) {
+                            // Promote this key to the new default so the rest
+                            // of the fanout doesn't keep eating quota errors.
+                            if (keyIdx !== activeKeyIdx) activeKeyIdx = keyIdx;
+                            const data = await res.json();
+                            return (data.entityData || []) as SamEntity[];
+                        }
                         const body = await res.text().catch(() => "");
-                        upstreamErrors.push(`SAM ${res.status} (naics=${naics || "-"} state=${state || "-"}): ${body.slice(0, 200)}`);
-                        return [] as SamEntity[];
+                        lastErr = body.slice(0, 200);
+                        lastStatus = res.status;
+                        // Rotate on quota/auth — anything else (400/500) is
+                        // unlikely to be fixed by another key, so bail out.
+                        if (res.status !== 401 && res.status !== 403 && res.status !== 429) {
+                            break;
+                        }
+                    } catch (err) {
+                        lastErr = (err as Error).message;
+                        lastStatus = 0;
                     }
-                    const data = await res.json();
-                    return (data.entityData || []) as SamEntity[];
-                } catch (err) {
-                    upstreamErrors.push(`SAM request failed (naics=${naics || "-"} state=${state || "-"}): ${(err as Error).message}`);
-                    return [] as SamEntity[];
                 }
+                upstreamErrors.push(`SAM ${lastStatus || "ERR"} (naics=${naics || "-"} state=${state || "-"}): ${lastErr}`);
+                return [] as SamEntity[];
             })
         );
 

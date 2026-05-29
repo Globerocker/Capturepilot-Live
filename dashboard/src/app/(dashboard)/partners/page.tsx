@@ -763,6 +763,12 @@ function PartnersPageInner() {
                                     </div>
                                 </div>
                                 <div className="flex flex-col gap-1.5 flex-shrink-0">
+                                    {p.uei && (
+                                        <Link href={`/contract-winners/${p.uei}`}
+                                            className="text-xs font-bold text-black hover:text-stone-700 inline-flex items-center gap-1">
+                                            <User className="w-3 h-3" /> View profile
+                                        </Link>
+                                    )}
                                     <a href={p.sam_url} target="_blank" rel="noopener noreferrer"
                                         className="text-xs font-bold text-blue-600 hover:text-blue-800 inline-flex items-center gap-1">
                                         <Shield className="w-3 h-3" /> SAM.gov
