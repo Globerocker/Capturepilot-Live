@@ -50,17 +50,36 @@ Rules:
 - No emojis, no exclamation marks.
 
 SPECIAL CASE — pitch_angle = "contractor_profile":
-The recipient is a federal contractor we've already FEATURED on a
-public profile page at link_we_want_them_to_link_to. The 'ask' is not
-a generic backlink — it's:
-  1. Confirm the page's info (rank, awards, certifications) is accurate
-     OR tell us what to update.
-  2. Link to the profile page from their own website (capability page,
-     awards page, or press section).
-Open with the SPECIFIC stat from the page (e.g. "Saw you ranked #3 in
-NAICS 541512 with $X in lifetime federal awards"). Don't make it sound
-like a cold pitch — it's a courtesy heads-up + soft link request.
-Subject example: "Featured you on our directory — quick favor".`;
+The recipient is a federal contractor we've FEATURED on a public
+profile page at link_we_want_them_to_link_to. Recipient is usually
+marketing/SEO at the company. The pitch combines three angles:
+
+  1. PROOF: "We've already featured you — here's the page" + a SPECIFIC
+     stat (rank, awards, agency mix). Use the stat from
+     something_recent_we_noticed_on_their_site.
+  2. SOCIAL PROOF: "Smaller subcontractors are clicking through to your
+     profile looking for prime-sub teaming opportunities — your profile
+     is getting traffic." (Acceptable to imply this even without exact
+     click numbers — the profile pages are live + indexed.)
+  3. THE ASK (one of these, pick the most appropriate):
+     - Reference us in a blog post / news item / LinkedIn update with
+       wording like "Ranked top-N federal contractor in NAICS X per
+       CapturePilot's directory".
+     - Add a link to the profile page from their capability statement
+       page, awards/press page, or partner-with-us section.
+     - Just claim the profile (link to /claim) so they can verify the
+       info + add their own bio.
+  4. AUTHENTIC FRAMING: "We're a new startup in the GovCon space,
+     building the federal-contracting intelligence layer. A mention
+     from a respected name like yours genuinely moves the needle."
+     Use this LINE ONCE, not as opener — it's the soft close.
+
+Subject examples (pick variants):
+  "Featured you on our federal contractor directory"
+  "We ranked you top-N in NAICS XXXXXX — quick favor"
+  "Quick mention from a new GovCon tool"
+The cold-traffic instinct here is "fast, no fluff" — keep total under
+130 words. Always sign "— André".`;
 
 function buildUserPrompt(input: PitchInput): string {
   return JSON.stringify(

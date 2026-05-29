@@ -32,15 +32,25 @@ export async function GET(req: NextRequest) {
   for (const p of prospects || []) {
     summary.attempted++;
     try {
-      // Pick the best contact: editor > pr > unknown > general_inbox
+      // Pick the best contact. Order changes by pitch_angle:
+      //   contractor_profile → marketing > seo > editor > pr > unknown > general_inbox
+      //   editorial / press / default → editor > pr > marketing > unknown > general_inbox
+      // Rationale: marketing/SEO own the website's backlink real estate
+      // for company sites; editors own publishing decisions on press sites.
       const { data: contacts } = await admin
         .from("backlink_contacts")
         .select("id, email, full_name, role, email_confidence")
         .eq("prospect_id", p.id)
         .order("created_at", { ascending: true });
 
-      const order = ["editor", "pr", "unknown", "general_inbox"];
-      const sorted = (contacts || []).sort((a, b) => order.indexOf(a.role || "") - order.indexOf(b.role || ""));
+      const order = p.pitch_angle === "contractor_profile"
+        ? ["marketing", "seo", "editor", "pr", "unknown", "general_inbox"]
+        : ["editor", "pr", "marketing", "seo", "unknown", "general_inbox"];
+      const sorted = (contacts || []).sort((a, b) => {
+        const ai = order.indexOf(a.role || "unknown");
+        const bi = order.indexOf(b.role || "unknown");
+        return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi);
+      });
       const best = sorted[0];
       if (!best?.email) { summary.no_contact_skipped++; continue; }
 

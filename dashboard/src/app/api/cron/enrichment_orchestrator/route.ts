@@ -65,6 +65,9 @@ const TASKS = {
   // pitch_angle='contractor_profile' so the existing draft-generator +
   // outreach pipeline picks them up alongside competitor-refdomain leads.
   discover_contractor_backlink_prospects: "discover_contractor_backlink_prospects",
+  // Auto-sender for the backlink outreach pipeline — 100/day cap
+  // enforced in the route. Fires every 2h, ~9 per tick.
+  send_backlink_outreach:          "send_backlink_outreach",
 } as const;
 
 type TaskName = keyof typeof TASKS;
@@ -139,6 +142,12 @@ function tasksDueAt(d: Date): TaskName[] {
   // refresh_contractor_pages (05:30) so any newly-published profile
   // is eligible the same day.
   if (h === 6 && m === 40) due.push("discover_contractor_backlink_prospects");
+
+  // Backlink autosend — every 2h, all day, ~9 sends per tick = ~100/day.
+  // Skip the very early UTC hours (US business-hours window only) so
+  // emails land while marketing people are awake.
+  // 13:00 UTC = 9 AM ET / 6 AM PT, 23:00 UTC = 7 PM ET / 4 PM PT.
+  if (m === 10 && h >= 13 && h <= 23 && h % 2 === 1) due.push("send_backlink_outreach");
 
   // SAM attachment text → structured_requirements. Runs at :15 every
   // hour. analyze_match_attachments downloads PDFs/DOCX from saved opps,

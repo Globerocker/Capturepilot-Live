@@ -165,5 +165,31 @@ export async function POST(req: NextRequest) {
         return new NextResponse("Insert failed", { status: 500 });
     }
 
+    // ---- Mirror to backlink_outreach when the message_id matches an
+    //      outreach we sent. Updates the per-row counters so the morning
+    //      digest can render "sent 100, opened 32, clicked 8" without
+    //      joining email_events at query time. ----
+    const now = evt.created_at ? new Date(evt.created_at).toISOString() : new Date().toISOString();
+    try {
+        if (eventType === "opened") {
+            await sb.from("backlink_outreach")
+                .update({ opened_at: now, open_count: 1 })
+                .eq("resend_message_id", resendEmailId)
+                .is("opened_at", null);
+        } else if (eventType === "clicked") {
+            await sb.from("backlink_outreach")
+                .update({ clicked_at: now, click_count: 1 })
+                .eq("resend_message_id", resendEmailId)
+                .is("clicked_at", null);
+        } else if (eventType === "bounced" || eventType === "complained") {
+            await sb.from("backlink_outreach")
+                .update({ bounced_at: now, status: "bounced" })
+                .eq("resend_message_id", resendEmailId);
+        }
+    } catch {
+        // Non-fatal — the email_events insert above succeeded so we
+        // still have the raw event. Backlink mirror is a convenience.
+    }
+
     return NextResponse.json({ ok: true, type: eventType });
 }

@@ -98,6 +98,7 @@ export async function GET(req: NextRequest) {
         oppsToday, oppsFederal, oppsSled, oppsGrant,
         contractorsToday, pagesToday, attachmentsToday,
         wjDone, wjFailed, alertsToday,
+        blSent, blOpened, blClicked, blBounced, blReplied,
     ] = await Promise.all([
         n(sb, "opportunities", { created_at: `gte.${yesterday}` }),
         n(sb, "opportunities", { source: "eq.sam", created_at: `gte.${yesterday}` }),
@@ -109,6 +110,11 @@ export async function GET(req: NextRequest) {
         n(sb, "worker_jobs", { status: "eq.done", finished_at: `gte.${yesterday}` }),
         n(sb, "worker_jobs", { status: "eq.failed", finished_at: `gte.${yesterday}` }),
         n(sb, "health_alerts", { created_at: `gte.${yesterday}` }),
+        n(sb, "backlink_outreach", { sent_at: `gte.${yesterday}` }),
+        n(sb, "backlink_outreach", { opened_at: `gte.${yesterday}` }),
+        n(sb, "backlink_outreach", { clicked_at: `gte.${yesterday}` }),
+        n(sb, "backlink_outreach", { bounced_at: `gte.${yesterday}` }),
+        n(sb, "backlink_outreach", { replied_at: `gte.${yesterday}` }),
     ]);
     const wjTotal = wjDone + wjFailed;
     const failurePct = wjTotal > 0 ? Math.round((wjFailed / wjTotal) * 1000) / 10 : 0;
@@ -158,7 +164,8 @@ export async function GET(req: NextRequest) {
     const isQuietDay =
         oppsToday === 0 && contractorsToday === 0 && pagesToday === 0 &&
         wjDone === 0 && wjFailed === 0 &&
-        uniqueEscalations.length === 0 && staleCount === 0;
+        uniqueEscalations.length === 0 && staleCount === 0 &&
+        blSent === 0;
     if (isQuietDay) {
         return NextResponse.json({
             ok: true,
@@ -204,6 +211,18 @@ export async function GET(req: NextRequest) {
                     ${row("Alerts fired", alertsToday, alertsToday > 0 ? "warn" : "ok")}
                     ${row("Auto-healed", autoFixed.length, autoFixed.length > 0 ? "ok" : "info")}
                     ${row("Stale crons", staleCount, staleCount > 0 ? "warn" : "ok")}
+                </tbody>
+            </table>
+        `)}
+        ${blSent === 0 ? "" : contentCard(`
+            ${sectionLabel("Backlink outreach (24h)")}
+            <table role="presentation" style="width:100%;border-collapse:collapse;margin-top:6px;">
+                <tbody>
+                    ${row("Sent", blSent, "ok")}
+                    ${row("Opened", `${blOpened} (${blSent > 0 ? Math.round(blOpened / blSent * 100) : 0}%)`, blOpened > 0 ? "ok" : "info")}
+                    ${row("Clicked", `${blClicked} (${blSent > 0 ? Math.round(blClicked / blSent * 100) : 0}%)`, blClicked > 0 ? "ok" : "info")}
+                    ${row("Replied", blReplied, blReplied > 0 ? "ok" : "info")}
+                    ${row("Bounced", blBounced, blBounced > 0 ? "warn" : "info")}
                 </tbody>
             </table>
         `)}

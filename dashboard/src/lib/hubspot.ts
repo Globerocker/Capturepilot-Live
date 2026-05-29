@@ -722,11 +722,27 @@ export async function findContactsByDomain(
   }
 }
 
-/** Map a HubSpot job-title string onto our backlink_contacts.role enum. */
-export function roleFromJobTitle(title: string | null): "editor" | "pr" | "unknown" {
+export type BacklinkContactRole = "marketing" | "seo" | "editor" | "pr" | "unknown";
+
+/** Map a HubSpot job-title string onto our backlink_contacts.role enum.
+ *
+ * For contractor_profile outreach we want marketing / SEO leads (they
+ * own the website + brand mentions). For editorial / press sites we
+ * still want editor + pr. The drafter's contact-priority list changes
+ * based on pitch_angle.
+ */
+export function roleFromJobTitle(title: string | null): BacklinkContactRole {
   if (!title) return "unknown";
   const t = title.toLowerCase();
+  // SEO check first — many SEOs have "marketing" in the title too
+  // (e.g. "Marketing Manager - SEO") and the SEO label is more specific.
+  if (/\bseo\b|search engine|link build|organic growth|growth marketing/.test(t)) return "seo";
+  // Marketing — VP/Director/Head/Manager of Marketing, Brand, Demand Gen,
+  // Content. Most likely owners of "where backlinks live on our site".
+  if (/marketing|brand|demand gen|\bcmo\b|growth\b|content/.test(t)) return "marketing";
   if (/editor|editorial|writer|journalist|reporter|contributor/.test(t)) return "editor";
-  if (/press|public relations|\bpr\b|comms?|spokes/.test(t)) return "pr";
+  if (/press|public relations|\bpr\b|spokes/.test(t)) return "pr";
+  // "Communications" usually = corporate comms which is closer to PR.
+  if (/communications?\b|comms\b/.test(t)) return "pr";
   return "unknown";
 }
