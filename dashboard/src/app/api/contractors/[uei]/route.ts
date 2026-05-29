@@ -1,12 +1,7 @@
 /**
- * Single-contractor detail endpoint. Returns everything we know about a
- * UEI: SAM-derived fields (POC, certs, NAICS, address), past-awards
- * aggregates (federal_awards_count, total_award_volume, top agencies/NAICS),
- * AI capability summary (Ollama-generated; see /api/intelligence/contractor-analysis),
- * and optionally a list of recent recompetes/opportunities they're tied to.
- *
- * Used by /contract-winners/[uei] + the new ContractorDetailView component
- * that's embedded on partner/competitor detail pages too.
+ * Single-contractor detail. Source of truth: contractor_profile_pages
+ * (the curated published row); joined with contractors table for POC
+ * fields by UEI. The frontend ContractorDetailView consumes this.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -29,27 +24,80 @@ export async function GET(_req: NextRequest, ctx: RouteContext) {
         { auth: { persistSession: false } },
     );
 
-    const { data: contractor, error } = await sb
-        .from("contractors")
+    // Try profile_pages first (richer, has past-perf rollups + AI summary).
+    // Fall back to raw contractors row for UEIs not yet promoted to profile.
+    const { data: profile, error: profileErr } = await sb
+        .from("contractor_profile_pages")
         .select(
-            `uei, cage_code, company_name, dba_name, state, city, address_line_1,
-             naics_codes, primary_naics_code,
-             email, direct_phone, primary_poc_name, primary_poc_title, business_url,
-             certifications, expiration_date, registration_status,
-             entity_structure, business_types,
-             federal_awards_count, total_award_volume, last_award_date,
-             agency_relationships, naics_awards, last_usaspending_refresh,
-             capability_summary_ai, capability_summary_refreshed_at, capability_summary_source,
-             created_at, updated_at`
+            `contractor_uei, slug, business_name, primary_naics, state, city, cage_code,
+             sba_certifications, total_awarded_amount, total_awards_count, top_agency,
+             top_agency_amount, awards_by_year, top_naics_codes, ai_summary,
+             company_website, company_linkedin, federal_score, naics_rank, naics_total,
+             state_rank, state_total, badges, is_published, published_at`
         )
+        .eq("contractor_uei", uei)
+        .maybeSingle();
+    if (profileErr) return NextResponse.json({ error: profileErr.message }, { status: 500 });
+
+    // POC fields from contractors table.
+    const { data: poc } = await sb
+        .from("contractors")
+        .select("uei, email, direct_phone, primary_poc_name, primary_poc_title, business_url, capability_summary_ai, capability_summary_refreshed_at")
         .eq("uei", uei)
         .maybeSingle();
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    if (!contractor) return NextResponse.json({ error: "not found" }, { status: 404 });
+    if (!profile && !poc) return NextResponse.json({ error: "not found" }, { status: 404 });
 
-    // Subawards as prime — opps where this UEI is the listed incumbent.
-    // Useful for "what is this contractor currently working on" surface.
+    // Build the unified contractor record the frontend expects.
+    const p = profile as Record<string, unknown> | null;
+    const c = poc as Record<string, unknown> | null;
+    const contractor = {
+        uei,
+        slug: p?.slug ?? null,
+        cage_code: p?.cage_code ?? null,
+        company_name: (p?.business_name as string) ?? "Unknown",
+        dba_name: null,
+        state: p?.state ?? null,
+        city: p?.city ?? null,
+        address_line_1: null,
+        naics_codes: (p?.top_naics_codes as string[] | null) ?? [],
+        primary_naics_code: p?.primary_naics ?? null,
+        email: c?.email ?? null,
+        direct_phone: c?.direct_phone ?? null,
+        primary_poc_name: c?.primary_poc_name ?? null,
+        primary_poc_title: c?.primary_poc_title ?? null,
+        business_url: (c?.business_url as string | null) ?? (p?.company_website as string | null) ?? null,
+        certifications: (p?.sba_certifications as string[] | null) ?? [],
+        expiration_date: null,
+        registration_status: null,
+        entity_structure: null,
+        business_types: null,
+        federal_awards_count: p?.total_awards_count ?? null,
+        total_award_volume: p?.total_awarded_amount ?? null,
+        last_award_date: null,
+        agency_relationships: p?.top_agency
+            ? [{ name: p.top_agency, amount: Number(p.top_agency_amount) || 0, count: 0 }]
+            : null,
+        naics_awards: null,
+        awards_by_year: p?.awards_by_year ?? null,
+        last_usaspending_refresh: null,
+        // AI summary preference: prefer the structured contractor-analysis JSON
+        // (strengths/weaknesses), fall back to the prose ai_summary from profile_pages.
+        capability_summary_ai: c?.capability_summary_ai ?? null,
+        capability_summary_refreshed_at: c?.capability_summary_refreshed_at ?? null,
+        capability_summary_source: null,
+        ai_summary_prose: p?.ai_summary ?? null,
+        federal_score: p?.federal_score ?? null,
+        naics_rank: p?.naics_rank ?? null,
+        naics_total: p?.naics_total ?? null,
+        state_rank: p?.state_rank ?? null,
+        state_total: p?.state_total ?? null,
+        badges: p?.badges ?? [],
+        created_at: null,
+        updated_at: null,
+    };
+
+    // Active opps this UEI is the incumbent on.
     const { data: incumbentOpps } = await sb
         .from("opportunities")
         .select("id, title, agency, response_deadline, link, source, estimated_value")

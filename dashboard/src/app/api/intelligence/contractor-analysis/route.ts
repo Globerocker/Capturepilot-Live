@@ -45,20 +45,54 @@ export async function POST(req: NextRequest) {
         { auth: { persistSession: false } },
     );
 
-    const { data: contractor, error } = await sb
-        .from("contractors")
-        .select(
-            `uei, company_name, dba_name, state, city, naics_codes, primary_naics_code,
-             certifications, primary_poc_title, business_url, entity_structure,
-             federal_awards_count, total_award_volume, last_award_date,
-             agency_relationships, naics_awards,
-             capability_summary_ai, capability_summary_refreshed_at`
-        )
-        .eq("uei", uei)
-        .maybeSingle();
-
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    if (!contractor) return NextResponse.json({ error: "not found" }, { status: 404 });
+    // Join contractor_profile_pages (past-performance source) with
+    // contractors (POC + AI cache). Either may be missing; merged in code.
+    const [profileRes, pocRes] = await Promise.all([
+        sb.from("contractor_profile_pages")
+            .select(`contractor_uei, business_name, primary_naics, state, city,
+                     sba_certifications, total_awarded_amount, total_awards_count,
+                     top_agency, top_agency_amount, top_naics_codes, awards_by_year,
+                     ai_summary, company_website, federal_score`)
+            .eq("contractor_uei", uei)
+            .maybeSingle(),
+        sb.from("contractors")
+            .select(`uei, primary_poc_title, business_url,
+                     capability_summary_ai, capability_summary_refreshed_at`)
+            .eq("uei", uei)
+            .maybeSingle(),
+    ]);
+    if (profileRes.error && pocRes.error) {
+        return NextResponse.json({ error: profileRes.error.message }, { status: 500 });
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const pp: any = profileRes.data || {};
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const cc: any = pocRes.data || {};
+    if (!pp.contractor_uei && !cc.uei) {
+        return NextResponse.json({ error: "not found" }, { status: 404 });
+    }
+    const contractor = {
+        uei,
+        company_name: pp.business_name || "(unknown)",
+        dba_name: null,
+        state: pp.state ?? null,
+        city: pp.city ?? null,
+        naics_codes: pp.top_naics_codes ?? [],
+        primary_naics_code: pp.primary_naics ?? null,
+        certifications: pp.sba_certifications ?? [],
+        primary_poc_title: cc.primary_poc_title ?? null,
+        business_url: cc.business_url ?? pp.company_website ?? null,
+        entity_structure: null,
+        federal_awards_count: pp.total_awards_count ?? 0,
+        total_award_volume: pp.total_awarded_amount ?? 0,
+        last_award_date: null,
+        agency_relationships: pp.top_agency
+            ? [{ name: pp.top_agency, amount: Number(pp.top_agency_amount) || 0, count: 0 }]
+            : null,
+        naics_awards: null,
+        capability_summary_ai: cc.capability_summary_ai ?? null,
+        capability_summary_refreshed_at: cc.capability_summary_refreshed_at ?? null,
+    };
 
     // Cache check — return existing if fresh enough.
     const cachedAt = contractor.capability_summary_refreshed_at as string | null;
