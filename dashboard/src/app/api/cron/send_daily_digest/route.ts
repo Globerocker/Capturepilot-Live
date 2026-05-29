@@ -28,10 +28,20 @@ export const maxDuration = 60;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SbAny = SupabaseClient<any, any, any>;
 
+/**
+ * Count helper. Uses `count: "exact"` (was "estimated") because Postgres'
+ * autovacuum stats can lag and `reltuples` returned 0 for the digest's
+ * `created_at >= yesterday` filter — that's why the morning email said
+ * "0 new opportunities" for 3 days straight. Exact counts are slow on
+ * unindexed columns, so migration 099 adds the matching indexes.
+ *
+ * Errors now log to console.error instead of silently returning 0 — any
+ * future "0 everything" digest is now a visible Vercel log line we can debug.
+ */
 async function n(sb: SbAny, table: string, filt: Record<string, string> = {}): Promise<number> {
     try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        let q: any = sb.from(table).select("id", { count: "estimated", head: true });
+        let q: any = sb.from(table).select("id", { count: "exact", head: true });
         for (const [k, v] of Object.entries(filt)) {
             const dot = v.indexOf(".");
             const op = dot === -1 ? v : v.slice(0, dot);
@@ -39,9 +49,16 @@ async function n(sb: SbAny, table: string, filt: Record<string, string> = {}): P
             if (op === "eq") q = q.eq(k, val);
             else if (op === "gte") q = q.gte(k, val);
         }
-        const { count } = await q;
+        const { count, error } = await q;
+        if (error) {
+            console.error(`[digest] count failed for ${table}`, { filt, error: error.message });
+            return 0;
+        }
         return count || 0;
-    } catch { return 0; }
+    } catch (e) {
+        console.error(`[digest] count threw for ${table}`, { filt, error: (e as Error).message });
+        return 0;
+    }
 }
 
 function escapeHtml(s: string): string {
@@ -78,10 +95,14 @@ export async function GET(req: NextRequest) {
     const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
     const [
-        oppsToday, contractorsToday, pagesToday, attachmentsToday,
+        oppsToday, oppsFederal, oppsSled, oppsGrant,
+        contractorsToday, pagesToday, attachmentsToday,
         wjDone, wjFailed, alertsToday,
     ] = await Promise.all([
         n(sb, "opportunities", { created_at: `gte.${yesterday}` }),
+        n(sb, "opportunities", { source: "eq.sam", created_at: `gte.${yesterday}` }),
+        n(sb, "opportunities", { source: "eq.sled", created_at: `gte.${yesterday}` }),
+        n(sb, "opportunities", { source: "eq.grants", created_at: `gte.${yesterday}` }),
         n(sb, "contractors", { created_at: `gte.${yesterday}` }),
         n(sb, "contractor_profile_pages", { published_at: `gte.${yesterday}` }),
         n(sb, "opportunity_attachments", { downloaded_at: `gte.${yesterday}` }),
@@ -153,10 +174,13 @@ export async function GET(req: NextRequest) {
     const body = `
         ${paragraph(`Last 24h on the platform. Open <a href="${APP_URL}/admin/db-health" style="color:${COLORS.emerald600};">/admin/db-health</a> for the full live view.`)}
         ${contentCard(`
-            ${sectionLabel("Ingestion")}
+            ${sectionLabel("Ingestion (last 24h)")}
             <table role="presentation" style="width:100%;border-collapse:collapse;margin-top:6px;">
                 <tbody>
-                    ${row("New opportunities", oppsToday)}
+                    ${row("New opportunities", oppsToday, oppsToday > 0 ? "ok" : "warn")}
+                    ${row("&nbsp;&nbsp;— Federal (SAM)", oppsFederal)}
+                    ${row("&nbsp;&nbsp;— State/Local (SLED)", oppsSled, oppsSled > 0 ? "ok" : "info")}
+                    ${row("&nbsp;&nbsp;— Grants", oppsGrant)}
                     ${row("New contractors", contractorsToday)}
                     ${row("New contractor pages", pagesToday)}
                     ${row("Attachments processed", attachmentsToday)}

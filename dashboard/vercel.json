@@ -144,6 +144,10 @@
             "schedule": "30 * * * *"
         },
         {
+            "path": "/api/cron/validate_sled_links",
+            "schedule": "0 3 * * *"
+        },
+        {
             "path": "/api/cron/discover_top_by_naics",
             "schedule": "0 6 * * 0"
         },

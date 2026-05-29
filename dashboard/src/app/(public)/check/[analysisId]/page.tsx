@@ -65,6 +65,9 @@ interface MatchData {
         / vendor site). For SLED rows we MUST link here — the notice_id is an
         internal hg-sled-* hash and a sam.gov URL would 404. */
     link?: string | null;
+    /** Set by /api/cron/validate_sled_links — true when HEAD returned 404/410.
+        UI hides the dead button and falls back to a Google search. */
+    link_broken?: boolean | null;
 }
 
 // Some SLED ingest paths store notice_type as a JSON-encoded blob like
@@ -92,24 +95,30 @@ function displayNoticeType(raw: string | null | undefined): string | null {
 
 // Pick the right "view this opportunity" URL for a match. Federal rows use
 // sam.gov; SLED / grant rows go straight to whatever portal originally listed
-// them (Bonfire, Socrata, BidExpress, NY-SCR, etc). Returns null when there's
-// no usable link so the card just renders the inline detail without a button.
+// them. Falls back to a Google search when we have no link (or the link was
+// flagged broken by validate_sled_links) — better than no button at all.
 function pickMatchUrl(m: MatchData): { url: string; label: string } | null {
     const src = (m.source || "").toLowerCase();
     const isFederalNoticeId = typeof m.notice_id === "string" && /^[0-9a-f]{32}$/i.test(m.notice_id);
-    // SAM federal: use sam.gov only when the notice_id looks like a real SAM
-    // UUID (32 hex chars). Reject our internal hg-sled-* hashes.
     if ((src === "sam" || (!src && isFederalNoticeId)) && m.notice_id && isFederalNoticeId) {
         return { url: `https://sam.gov/opp/${m.notice_id}/view`, label: "View on SAM.gov" };
     }
-    // SLED / grants / anything else — use the opp's persisted link.
-    if (m.link) {
+    // SLED / grants / anything else — use the opp's persisted link unless
+    // it's been flagged broken by the link-validator cron.
+    if (m.link && !m.link_broken) {
         try {
             const host = new URL(m.link).hostname.replace(/^www\./, "");
             return { url: m.link, label: `View on ${host}` };
         } catch {
             return { url: m.link, label: "View Opportunity" };
         }
+    }
+    // Fallback: Google search for "<title> <agency>" — always gives the user
+    // a way to click through. Better than a missing button on a card where
+    // the title alone tells them what to search for.
+    if (m.title) {
+        const q = encodeURIComponent(`${m.title} ${m.agency || ""}`.trim());
+        return { url: `https://www.google.com/search?q=${q}`, label: "Find on Google" };
     }
     return null;
 }
