@@ -828,8 +828,22 @@ function renderBriefHtml(b: LeadBrief): string {
   <div style="max-width:640px;margin:0 auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;">
     <div style="padding:20px 24px;border-bottom:1px solid #e5e7eb;background:#fafafa;">
       <div style="font-size:11px;font-weight:700;letter-spacing:0.1em;color:#6b7280;text-transform:uppercase;">New Lead Brief</div>
-      <div style="font-size:20px;font-weight:700;margin-top:4px;">${escapeHtml(b.enrichment.apollo_company || b.lead.company || b.lead.email)}</div>
-      <div style="color:#6b7280;font-size:13px;margin-top:4px;">${escapeHtml([b.lead.first_name, b.lead.last_name].filter(Boolean).join(" ") || "(no name)")} · ${escapeHtml(b.lead.email)} · downloaded <code style="background:#e5e7eb;padding:1px 6px;border-radius:4px;font-size:12px;">${escapeHtml(b.lead.magnet_key)}</code></div>
+      <div style="font-size:14px;font-weight:600;margin-top:4px;color:#6b7280;">${escapeHtml(b.enrichment.apollo_company || b.lead.company || b.lead.email)}</div>
+    </div>
+
+    <!-- Idiot-proof hero: BIG name, then BIG phone right under it. The single
+         most important thing the partner needs to see at a glance is "who am
+         I calling and what's the number". Everything else can wait. -->
+    <div style="padding:32px 24px;text-align:center;background:#fff;border-bottom:1px solid #e5e7eb;">
+      <div style="font-size:36px;font-weight:800;color:#111827;line-height:1.1;letter-spacing:-0.02em;">
+        ${escapeHtml([b.lead.first_name, b.lead.last_name].filter(Boolean).join(" ") || "(name unknown)")}
+      </div>
+      ${b.lead.phone ? `<div style="margin-top:14px;">
+        <a href="tel:${escapeAttr(b.lead.phone.replace(/[^0-9+]/g, ""))}" style="font-size:30px;font-weight:800;color:#059669;text-decoration:none;letter-spacing:-0.01em;">
+          📞 ${escapeHtml(b.lead.phone)}
+        </a>
+        <div style="font-size:11px;color:#6b7280;margin-top:6px;text-transform:uppercase;letter-spacing:0.1em;">Tap on mobile to call</div>
+      </div>` : `<div style="margin-top:14px;font-size:18px;color:#dc2626;font-weight:700;">No phone captured</div>`}
     </div>
 
     <div style="padding:20px 24px;display:flex;gap:16px;align-items:center;border-bottom:1px solid #e5e7eb;">
@@ -887,8 +901,11 @@ function renderBriefText(b: LeadBrief): string {
     return [
         `NEW FACEBOOK LEAD · ${b.ai.fit_score}/10`,
         `${b.enrichment.apollo_company || b.lead.company || b.lead.email}`,
-        `${fullName} · ${b.lead.email}`,
-        b.lead.phone ? `📞 ${b.lead.phone}  (tap to call on mobile)` : `📞 (no phone captured)`,
+        ``,
+        `>>>  ${fullName.toUpperCase()}  <<<`,
+        b.lead.phone ? `>>>  📞 ${b.lead.phone}  <<<` : `>>>  📞 NO PHONE CAPTURED  <<<`,
+        ``,
+        `Email: ${b.lead.email}`,
         ``,
         `WHY ${b.ai.fit_score}/10: ${b.ai.fit_rationale}`,
         ``,
