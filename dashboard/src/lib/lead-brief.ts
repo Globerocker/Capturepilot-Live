@@ -84,6 +84,7 @@ interface LeadBrief {
         last_name: string | null;
         magnet_key: string;
         utm_source: string | null;
+        phone: string | null;
     };
     enrichment: {
         apollo_company: string | null;
@@ -96,6 +97,7 @@ interface LeadBrief {
     sam: SamSnapshot | null;
     likely_naics: string[];
     top_matches: OpportunityMatch[];
+    website_summary: QuickSiteSummary | null;
     ai: LLMBriefOutput;
 }
 
@@ -110,6 +112,104 @@ interface LeadRow {
     utm_source: string | null;
     utm_campaign: string | null;
     apollo_data: ApolloOrg | null;
+    meta_leadgen_id?: string | null;
+}
+
+/**
+ * Re-fetch a Facebook lead from Graph API to recover the phone number when
+ * marketing_leads.phone is null. The webhook tries to capture phone_number
+ * but some forms use custom field names — this re-reads the raw field_data
+ * and looks across the standard variants. Returns null on any failure (logged,
+ * never throws — phone is a nice-to-have, not a blocker).
+ */
+async function refetchMetaLeadPhone(leadgenId: string): Promise<string | null> {
+    const token = process.env.META_SYSTEM_TOKEN;
+    if (!token) return null;
+    try {
+        const res = await fetch(
+            `https://graph.facebook.com/v21.0/${encodeURIComponent(leadgenId)}?fields=field_data`,
+            { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(5000) },
+        );
+        if (!res.ok) return null;
+        const data = await res.json() as { field_data?: Array<{ name: string; values: string[] }> };
+        const fields: Record<string, string> = {};
+        for (const f of data.field_data || []) {
+            fields[f.name.toLowerCase()] = f.values?.[0] || "";
+        }
+        // Try every reasonable variant — FB form builders use whichever name.
+        return (
+            fields.phone_number ||
+            fields.phone ||
+            fields.mobile_phone ||
+            fields.mobile ||
+            fields.cell_phone ||
+            fields.work_phone ||
+            null
+        ) || null;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Quick website summary via OpenAI when Apollo is unavailable. Fetches the
+ * homepage, strips it to plain text, asks gpt-4o-mini for a 3-line summary:
+ * what they do, who they serve, federal-contracting signals. Caps at 6s end-to-end
+ * so it can't blow the per-lead time budget. Returns null on any failure —
+ * the brief just runs without the summary.
+ */
+interface QuickSiteSummary { what_they_do: string; who_they_serve: string; gov_signals: string }
+
+async function quickWebsiteSummary(websiteOrEmail: string): Promise<QuickSiteSummary | null> {
+    const openaiKey = process.env.OPENAI_API_KEY;
+    if (!openaiKey) return null;
+    let url = websiteOrEmail;
+    if (url.includes("@")) {
+        const domain = url.split("@")[1];
+        if (!domain || /^(gmail|yahoo|outlook|hotmail|aol|icloud|protonmail)\./i.test(domain)) return null;
+        url = `https://${domain}`;
+    }
+    if (!/^https?:\/\//.test(url)) url = `https://${url}`;
+    let html = "";
+    try {
+        const res = await fetch(url, { signal: AbortSignal.timeout(4000), headers: { "user-agent": "Mozilla/5.0 (capturepilot-lead-brief)" } });
+        if (!res.ok) return null;
+        html = await res.text();
+    } catch {
+        return null;
+    }
+    // Crude text extraction — keep first 8k chars to leave headroom for the LLM call.
+    const text = html
+        .replace(/<script[\s\S]*?<\/script>/gi, " ")
+        .replace(/<style[\s\S]*?<\/style>/gi, " ")
+        .replace(/<[^>]+>/g, " ")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 8000);
+    if (text.length < 50) return null;
+
+    try {
+        const client = new (await import("openai")).default({ apiKey: openaiKey });
+        const completion = await client.chat.completions.create({
+            model: "gpt-4o-mini",
+            response_format: { type: "json_object" },
+            temperature: 0,
+            max_tokens: 250,
+            messages: [
+                {
+                    role: "system",
+                    content: `You read a company homepage and return strict JSON describing the business for a federal-contracting BD call. Schema: {"what_they_do":"<one sentence>","who_they_serve":"<one sentence>","gov_signals":"<one sentence — mentions of SAM, NAICS, set-asides, federal/state/local clients, certifications; or 'none visible' if absent>"}.`,
+                },
+                { role: "user", content: text },
+            ],
+        });
+        const raw = completion.choices[0]?.message?.content || "{}";
+        const parsed = JSON.parse(raw);
+        if (!parsed.what_they_do) return null;
+        return parsed as QuickSiteSummary;
+    } catch {
+        return null;
+    }
 }
 
 /**
@@ -120,7 +220,7 @@ export async function generateLeadBrief(sb: SbAny, leadId: string): Promise<Lead
     // 1. Pull the lead row + the Apollo enrichment that /api/leads already wrote.
     const { data: lead, error: leadErr } = await sb
         .from("marketing_leads")
-        .select("id, email, company, first_name, last_name, phone, magnet_key, utm_source, utm_campaign, apollo_data")
+        .select("id, email, company, first_name, last_name, phone, magnet_key, utm_source, utm_campaign, apollo_data, meta_leadgen_id")
         .eq("id", leadId)
         .maybeSingle() as { data: LeadRow | null; error: { message: string } | null };
     if (leadErr) throw new Error(`lead lookup: ${leadErr.message}`);
@@ -128,6 +228,21 @@ export async function generateLeadBrief(sb: SbAny, leadId: string): Promise<Lead
 
     const apollo: ApolloOrg = lead.apollo_data || {};
     const companyName = apollo.organization_name || lead.company || null;
+
+    // 1b. Phone recovery — Apollo's monthly cap is hit, so we lean on the
+    //     raw FB Lead Ad payload. If we already have a phone on the lead
+    //     row we trust it; otherwise re-fetch from Graph API which still
+    //     has the original field_data for ~90 days.
+    let phone = (lead.phone || apollo.phone || "").trim() || null;
+    if (!phone && lead.meta_leadgen_id) {
+        phone = await refetchMetaLeadPhone(lead.meta_leadgen_id);
+        if (phone) {
+            await sb.from("marketing_leads")
+                .update({ phone })
+                .eq("id", lead.id)
+                .then(({ error }) => { if (error) console.warn("[lead-brief] phone backfill non-fatal:", error.message); });
+        }
+    }
 
     // 2. SAM.gov — name → UEI → full entity. Both calls return null on miss
     //    (free-mail leads, unregistered companies); we just carry that null
@@ -195,6 +310,14 @@ Return up to 3 most-likely 6-digit NAICS codes for this company's federal-contra
         topMatches = opps || [];
     }
 
+    // 4b. Website summary — when Apollo blanks (quota cap, free-mail lead),
+    //     we still want a "what is this company" line for the partner. The
+    //     OpenAI call is timeboxed to ~6s + caps tokens so it can't blow the
+    //     per-lead time budget. Source priority: apollo website → SAM website
+    //     → company domain from email.
+    const websiteCandidate = apollo.organization_website || sam?.website || lead.email;
+    const websiteSummary = websiteCandidate ? await quickWebsiteSummary(websiteCandidate) : null;
+
     // 5. The actual brief — LLM picks a fit score, writes the strategy, and
     //    drafts a call script Andre can read off the screen.
     const briefAi = await draftBriefAI({
@@ -203,6 +326,8 @@ Return up to 3 most-likely 6-digit NAICS codes for this company's federal-contra
         sam,
         likelyNaics,
         topMatches,
+        websiteSummary,
+        phone,
     });
 
     const brief: LeadBrief = {
@@ -214,10 +339,11 @@ Return up to 3 most-likely 6-digit NAICS codes for this company's federal-contra
             last_name: lead.last_name,
             magnet_key: lead.magnet_key,
             utm_source: lead.utm_source,
+            phone,
         },
         enrichment: {
             apollo_company: apollo.organization_name || null,
-            apollo_website: apollo.organization_website || null,
+            apollo_website: apollo.organization_website || sam?.website || null,
             apollo_industry: apollo.organization_industry || null,
             apollo_employees: apollo.employees ?? null,
             apollo_title: apollo.title || null,
@@ -226,6 +352,7 @@ Return up to 3 most-likely 6-digit NAICS codes for this company's federal-contra
         sam,
         likely_naics: likelyNaics,
         top_matches: topMatches,
+        website_summary: websiteSummary,
         ai: briefAi,
     };
 
@@ -263,14 +390,17 @@ async function draftBriefAI(args: {
     sam: SamSnapshot | null;
     likelyNaics: string[];
     topMatches: OpportunityMatch[];
+    websiteSummary: QuickSiteSummary | null;
+    phone: string | null;
 }): Promise<LLMBriefOutput> {
-    const { lead, apollo, sam, likelyNaics, topMatches } = args;
+    const { lead, apollo, sam, likelyNaics, topMatches, websiteSummary, phone } = args;
     const companyName = apollo.organization_name || lead.company || lead.email.split("@")[1];
     const personName = [lead.first_name || apollo.first_name, lead.last_name || apollo.last_name].filter(Boolean).join(" ");
 
     const dossier = [
         `LEAD INTAKE`,
         `Email: ${lead.email}`,
+        `Phone: ${phone || "(none captured)"}`,
         `Name: ${personName || "(unknown)"}`,
         `Company: ${companyName}`,
         `Title at company: ${apollo.title || "(unknown)"}`,
@@ -278,11 +408,19 @@ async function draftBriefAI(args: {
         `Magnet downloaded: ${lead.magnet_key}`,
         `UTM source: ${lead.utm_source || "(direct)"}`,
         ``,
-        `COMPANY ENRICHMENT (Apollo)`,
-        `Website: ${apollo.organization_website || "(unknown)"}`,
+        `COMPANY ENRICHMENT`,
+        `Website: ${apollo.organization_website || sam?.website || "(unknown)"}`,
         `Industry: ${apollo.organization_industry || "(unknown)"}`,
         `Size: ${apollo.organization_size || "(unknown)"}`,
         `Employee count: ${apollo.employees ?? "(unknown)"}`,
+        ``,
+        websiteSummary
+            ? `WEBSITE SUMMARY (live crawl)
+What they do: ${websiteSummary.what_they_do}
+Who they serve: ${websiteSummary.who_they_serve}
+Gov-contracting signals: ${websiteSummary.gov_signals}
+`
+            : `WEBSITE SUMMARY: (could not pull homepage — likely free-mail lead or site blocked the crawler)`,
         ``,
         `SAM.GOV REGISTRATION`,
         sam
@@ -383,6 +521,31 @@ function renderBriefHtml(b: LeadBrief): string {
             `).join("")}
           </table>`;
 
+    // Quick-action row — the thing the partner came here for. Click-to-call
+    // is the headline button when we have a phone (works on iOS Mail, Gmail
+    // mobile, GSuite desktop with click-to-call extensions); the other buttons
+    // open the company website / their LinkedIn / their SAM record in new tabs.
+    const websiteHref = (() => {
+        const w = b.enrichment.apollo_website;
+        if (!w) return null;
+        return /^https?:\/\//.test(w) ? w : `https://${w}`;
+    })();
+    const linkedinSearch = b.lead.first_name && b.lead.last_name && b.enrichment.apollo_company
+        ? `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(`${b.lead.first_name} ${b.lead.last_name} ${b.enrichment.apollo_company}`)}`
+        : b.enrichment.apollo_linkedin || null;
+    const samHref = b.sam?.uei ? `https://sam.gov/entity/${b.sam.uei}/coreData` : null;
+    const ctaBtn = (href: string, label: string, primary = false) =>
+        `<a href="${escapeAttr(href)}" style="display:inline-block;padding:10px 16px;margin:0 6px 6px 0;font-size:13px;font-weight:700;text-decoration:none;border-radius:8px;${primary ? "background:#059669;color:#fff;" : "background:#fff;color:#111827;border:1px solid #d1d5db;"}">${escapeHtml(label)}</a>`;
+    const ctaRowHtml = `<div style="padding:18px 24px;background:#ecfdf5;border-bottom:1px solid #e5e7eb;">
+      <div style="font-size:11px;font-weight:700;color:#065f46;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px;">Quick actions</div>
+      ${b.lead.phone ? ctaBtn(`tel:${b.lead.phone.replace(/[^0-9+]/g, "")}`, `📞 Call ${b.lead.phone}`, true) : ""}
+      ${ctaBtn(`mailto:${b.lead.email}?subject=${encodeURIComponent("Re: your federal-contracting question")}`, `✉️ Reply`)}
+      ${websiteHref ? ctaBtn(websiteHref, "🌐 Open website") : ""}
+      ${linkedinSearch ? ctaBtn(linkedinSearch, "🔍 Find on LinkedIn") : ""}
+      ${samHref ? ctaBtn(samHref, "🏛 SAM.gov record") : ""}
+      ${!b.lead.phone ? `<div style="margin-top:8px;font-size:11px;color:#92400e;">No phone captured from the Lead Ad — reply via email above.</div>` : ""}
+    </div>`;
+
     return `<!doctype html>
 <html><body style="margin:0;padding:24px;background:#f9fafb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#111827;">
   <div style="max-width:640px;margin:0 auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;">
@@ -400,10 +563,21 @@ function renderBriefHtml(b: LeadBrief): string {
       <div style="flex:1;font-size:14px;">${escapeHtml(b.ai.fit_rationale)}</div>
     </div>
 
+    ${ctaRowHtml}
+
+    ${b.website_summary ? `<div style="padding:20px 24px;border-bottom:1px solid #e5e7eb;background:#f9fafb;">
+      <div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px;">What they do (from website)</div>
+      <p style="margin:0 0 6px;font-size:13px;line-height:1.5;"><strong>Business:</strong> ${escapeHtml(b.website_summary.what_they_do)}</p>
+      <p style="margin:0 0 6px;font-size:13px;line-height:1.5;"><strong>Customers:</strong> ${escapeHtml(b.website_summary.who_they_serve)}</p>
+      <p style="margin:0;font-size:13px;line-height:1.5;"><strong>GovCon signals:</strong> ${escapeHtml(b.website_summary.gov_signals)}</p>
+    </div>` : ""}
+
     <div style="padding:20px 24px;border-bottom:1px solid #e5e7eb;">
       <div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px;">Snapshot</div>
       <table cellpadding="0" cellspacing="0" style="font-size:13px;line-height:1.7;">
-        <tr><td style="color:#6b7280;padding-right:16px;">Website</td><td>${escapeHtml(b.enrichment.apollo_website || "—")}</td></tr>
+        <tr><td style="color:#6b7280;padding-right:16px;">Phone</td><td>${b.lead.phone ? `<a href="tel:${escapeAttr(b.lead.phone.replace(/[^0-9+]/g, ""))}" style="color:#059669;font-weight:600;">${escapeHtml(b.lead.phone)}</a>` : "—"}</td></tr>
+        <tr><td style="color:#6b7280;padding-right:16px;">Email</td><td><a href="mailto:${escapeAttr(b.lead.email)}">${escapeHtml(b.lead.email)}</a></td></tr>
+        <tr><td style="color:#6b7280;padding-right:16px;">Website</td><td>${b.enrichment.apollo_website ? `<a href="${escapeAttr(/^https?:\/\//.test(b.enrichment.apollo_website) ? b.enrichment.apollo_website : `https://${b.enrichment.apollo_website}`)}" target="_blank" rel="noopener">${escapeHtml(b.enrichment.apollo_website)}</a>` : "—"}</td></tr>
         <tr><td style="color:#6b7280;padding-right:16px;">Industry</td><td>${escapeHtml(b.enrichment.apollo_industry || "—")}</td></tr>
         <tr><td style="color:#6b7280;padding-right:16px;">Employees</td><td>${b.enrichment.apollo_employees ?? "—"}</td></tr>
         <tr><td style="color:#6b7280;padding-right:16px;">Title</td><td>${escapeHtml(b.enrichment.apollo_title || "—")}</td></tr>
@@ -442,9 +616,16 @@ function renderBriefText(b: LeadBrief): string {
         `NEW LEAD — ${b.ai.fit_score}/10 fit`,
         `${b.enrichment.apollo_company || b.lead.company || b.lead.email}`,
         `${[b.lead.first_name, b.lead.last_name].filter(Boolean).join(" ") || "(no name)"} · ${b.lead.email}`,
+        b.lead.phone ? `📞 ${b.lead.phone}  (tap to call on mobile)` : `📞 (no phone captured)`,
         `Downloaded: ${b.lead.magnet_key}`,
         ``,
         `WHY ${b.ai.fit_score}/10: ${b.ai.fit_rationale}`,
+        ``,
+        b.website_summary ? `WEBSITE SUMMARY
+- ${b.website_summary.what_they_do}
+- Serves: ${b.website_summary.who_they_serve}
+- GovCon signals: ${b.website_summary.gov_signals}
+` : `WEBSITE SUMMARY: (could not pull)`,
         ``,
         `SNAPSHOT`,
         `- Website: ${b.enrichment.apollo_website || "—"}`,
