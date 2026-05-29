@@ -105,6 +105,25 @@ export const LEAD_MAGNETS: Record<string, LeadMagnet> = {
         label: "Win Your First Government Contract — Field Manual (Meta Lead Ad)",
         ...FIELD_MANUAL_CONFIG,
     },
+    // Submitted via /claim on the marketing site. No PDF — confirmation
+    // email + the existing Apollo→HubSpot→lead-brief pipeline fires so
+    // the partner gets a call script before reaching out to verify.
+    "claim_profile": {
+        key: "claim_profile",
+        label: "Contractor Profile Claim",
+        productName: "Profile Claim Confirmation",
+        pdfUrl: "https://www.capturepilot.com/contractors",
+        subject: "We received your CapturePilot profile claim — verification within 24h",
+        preheader: "Thanks for your submission. We'll verify against SAM.gov and reach out.",
+        blurb: "Thanks for claiming your profile. Our team will verify your role at the company against SAM.gov registration data and reach out within 24 hours with portal access.",
+        inside: [
+            "Verification of your role at the company",
+            "Free portal access for verified contractors",
+            "Add your team + capability statement",
+            "See active solicitations matching your NAICS",
+        ],
+        form: { ...DEFAULT_FORM },
+    },
 };
 
 export function getLeadMagnet(key: string | null | undefined): LeadMagnet | null {
