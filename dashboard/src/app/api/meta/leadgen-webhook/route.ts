@@ -155,20 +155,34 @@ async function processLead({ leadgenId, formId, accessToken, db }: ProcessArgs):
         fields[f.name] = f.values?.[0] || "";
     }
     const email = (fields.work_email || fields.email || "").trim().toLowerCase();
-    const fullName = (fields.full_name || `${fields.first_name || ""} ${fields.last_name || ""}`).trim();
-    const company = (fields.company_name || "").trim();
-    const phone = (fields.phone_number || "").trim();
+    // FB forms vary on field naming — accept the obvious variants for every
+    // captured field. Lowercased lookup so a field called "First Name" still
+    // resolves (FB serializes that as first_name but custom-builders sometimes
+    // ship odd casing).
+    const lc: Record<string, string> = {};
+    for (const k of Object.keys(fields)) lc[k.toLowerCase()] = fields[k] || "";
+    const fullName = (lc.full_name || `${lc.first_name || ""} ${lc.last_name || ""}`).trim();
+    const firstNameRaw = (lc.first_name || (fullName ? fullName.split(" ")[0] : "")).trim();
+    const lastNameRaw = (lc.last_name || (fullName.split(" ").length > 1 ? fullName.split(" ").slice(1).join(" ") : "")).trim();
+    const company = (lc.company_name || lc.company || "").trim();
+    const phone = (lc.phone_number || lc.phone || lc.mobile_phone || lc.mobile || lc.cell_phone || lc.work_phone || "").trim();
 
     if (!email) return "skipped_no_email";
 
     // 2. Insert into marketing_leads. Unique constraint on meta_leadgen_id
     //    short-circuits Meta retries; the inserted row count tells us whether
-    //    this was a fresh lead (→ send email) or a duplicate (→ noop).
+    //    this was a fresh lead (→ send email) or a duplicate (→ noop). All
+    //    form fields land on the initial INSERT — earlier versions of this
+    //    handler relied on a follow-up Apollo update to write name + phone,
+    //    which left every row blank once Apollo's monthly quota was hit.
     let isNew = true;
     if (db) {
         const { error } = await db.from("marketing_leads").insert({
             email,
             company: company || null,
+            first_name: firstNameRaw || null,
+            last_name: lastNameRaw || null,
+            phone: phone || null,
             magnet_key: MAGNET_KEY_FOR_META,
             source: "meta-lead-ad",
             utm_source: "meta",
@@ -190,10 +204,8 @@ async function processLead({ leadgenId, formId, accessToken, db }: ProcessArgs):
 
     if (!isNew) return "duplicate";
 
-    const firstName = fullName ? fullName.split(" ")[0] : undefined;
-    const lastName = fullName && fullName.split(" ").length > 1
-        ? fullName.split(" ").slice(1).join(" ")
-        : undefined;
+    const firstName = firstNameRaw || undefined;
+    const lastName = lastNameRaw || undefined;
 
     // 3a. Apollo enrichment — mirror /api/leads so the brief that emails
     //     americurial@gmail.com has the same enriched payload regardless of
@@ -206,13 +218,15 @@ async function processLead({ leadgenId, formId, accessToken, db }: ProcessArgs):
         companyName: company || null,
     });
 
-    if (apolloEnrichment && db) {
+    if (db && apolloEnrichment) {
         await db
             .from("marketing_leads")
             .update({
                 apollo_enriched_at: new Date().toISOString(),
                 apollo_data: apolloEnrichment as unknown as Record<string, unknown>,
-                phone: phone || apolloEnrichment.phone || null,
+                // Apollo phone is a fallback ONLY if the form didn't carry one
+                // — the INSERT above already wrote whatever the form had.
+                ...(phone ? {} : (apolloEnrichment.phone ? { phone: apolloEnrichment.phone } : {})),
             })
             .eq("meta_leadgen_id", leadgenId)
             .then(({ error }) => {

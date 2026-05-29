@@ -152,6 +152,131 @@ async function refetchMetaLeadPhone(leadgenId: string): Promise<string | null> {
 }
 
 /**
+ * Free-mail domain check. We do NOT treat these as the company website
+ * because the address belongs to the personal mailbox provider, not the lead's
+ * employer.
+ */
+const FREEMAIL_DOMAINS = new Set([
+    "gmail.com", "googlemail.com", "yahoo.com", "yahoo.co.uk", "ymail.com",
+    "outlook.com", "hotmail.com", "live.com", "msn.com",
+    "aol.com", "icloud.com", "me.com", "mac.com",
+    "protonmail.com", "proton.me", "pm.me",
+    "gmx.com", "gmx.de", "gmx.net", "web.de", "t-online.de",
+    "mail.com", "zoho.com", "yandex.com", "fastmail.com", "tutanota.com",
+    "duck.com", "qq.com", "163.com", "126.com",
+]);
+
+function isFreeMailDomain(domain: string): boolean {
+    return FREEMAIL_DOMAINS.has(domain.toLowerCase());
+}
+
+/**
+ * Pull a company website from an email address when the domain is a real
+ * company domain (not free mail). For "jane@acme.com" this returns
+ * "https://acme.com". For "jane@gmail.com" this returns null.
+ */
+function websiteFromEmail(email: string): string | null {
+    const parts = email.toLowerCase().split("@");
+    if (parts.length !== 2) return null;
+    const domain = parts[1].trim();
+    if (!domain || isFreeMailDomain(domain)) return null;
+    return `https://${domain}`;
+}
+
+/**
+ * For free-mail leads we ask gpt-4o-mini to guess the most likely company
+ * website domain given the company name (e.g. "Solid Ground Property Solutions"
+ * → "solidgroundpropertysolutions.com"). Then we HEAD-check the URL and only
+ * trust it if it returns 200/30x. Cheap fallback: better than nothing, but
+ * never accepted without the live probe so we don't email the partner a
+ * hallucinated URL.
+ */
+async function guessCompanyWebsite(companyName: string): Promise<string | null> {
+    if (!companyName || companyName.length < 3) return null;
+    const openaiKey = process.env.OPENAI_API_KEY;
+    if (!openaiKey) return null;
+
+    let guessUrl: string | null = null;
+    try {
+        const client = new (await import("openai")).default({ apiKey: openaiKey });
+        const completion = await client.chat.completions.create({
+            model: "gpt-4o-mini",
+            response_format: { type: "json_object" },
+            temperature: 0,
+            max_tokens: 80,
+            messages: [
+                {
+                    role: "system",
+                    content: `Given a US small-business name, return the single most likely website URL. Reply with strict JSON: {"url":"https://example.com"} or {"url":null} if uncertain. Prefer .com over other TLDs, avoid social-media URLs, no http://www. prefixes — just the bare domain. If the name is a sole proprietor or generic ("Test Co", "N/A"), return null.`,
+                },
+                { role: "user", content: companyName },
+            ],
+        });
+        const raw = completion.choices[0]?.message?.content || "{}";
+        const parsed = JSON.parse(raw) as { url?: string | null };
+        if (parsed.url && typeof parsed.url === "string" && parsed.url.startsWith("http")) {
+            guessUrl = parsed.url;
+        }
+    } catch {
+        return null;
+    }
+    if (!guessUrl) return null;
+
+    // HEAD probe so we don't trust an LLM hallucination. 200/30x = real site.
+    try {
+        const res = await fetch(guessUrl, {
+            method: "HEAD",
+            redirect: "follow",
+            signal: AbortSignal.timeout(4000),
+            headers: { "user-agent": "Mozilla/5.0 (capturepilot-lead-brief)" },
+        });
+        if (res.ok || (res.status >= 300 && res.status < 400)) return guessUrl;
+        return null;
+    } catch {
+        // Some sites refuse HEAD. Try a GET with cheap timeout as a fallback —
+        // if it loads at all, we'll trust the URL.
+        try {
+            const res2 = await fetch(guessUrl, { signal: AbortSignal.timeout(4000), headers: { "user-agent": "Mozilla/5.0 (capturepilot-lead-brief)" } });
+            return res2.ok ? guessUrl : null;
+        } catch {
+            return null;
+        }
+    }
+}
+
+/**
+ * Resolve a company website using everything we know, in priority order:
+ *   1. Apollo's organization_website (when present)
+ *   2. SAM.gov's registered URL (when present)
+ *   3. The email domain — IFF it's not a free-mail provider
+ *   4. An LLM-guessed domain from the company name, validated with a HEAD probe
+ *
+ * Returns null only when ALL four fail. The brief renders "(no website)" only
+ * for truly orphaned free-mail leads with no company name.
+ */
+async function resolveCompanyWebsite(args: {
+    apolloWebsite: string | null | undefined;
+    samWebsite: string | null | undefined;
+    email: string;
+    companyName: string | null;
+}): Promise<string | null> {
+    const { apolloWebsite, samWebsite, email, companyName } = args;
+    if (apolloWebsite && apolloWebsite.length > 3) return normalizeUrl(apolloWebsite);
+    if (samWebsite && samWebsite.length > 3) return normalizeUrl(samWebsite);
+    const fromEmail = websiteFromEmail(email);
+    if (fromEmail) return fromEmail;
+    if (companyName) {
+        const guess = await guessCompanyWebsite(companyName);
+        if (guess) return guess;
+    }
+    return null;
+}
+
+function normalizeUrl(u: string): string {
+    return /^https?:\/\//.test(u) ? u : `https://${u}`;
+}
+
+/**
  * Quick website summary via OpenAI when Apollo is unavailable. Fetches the
  * homepage, strips it to plain text, asks gpt-4o-mini for a 3-line summary:
  * what they do, who they serve, federal-contracting signals. Caps at 6s end-to-end
@@ -310,13 +435,17 @@ Return up to 3 most-likely 6-digit NAICS codes for this company's federal-contra
         topMatches = opps || [];
     }
 
-    // 4b. Website summary — when Apollo blanks (quota cap, free-mail lead),
-    //     we still want a "what is this company" line for the partner. The
-    //     OpenAI call is timeboxed to ~6s + caps tokens so it can't blow the
-    //     per-lead time budget. Source priority: apollo website → SAM website
-    //     → company domain from email.
-    const websiteCandidate = apollo.organization_website || sam?.website || lead.email;
-    const websiteSummary = websiteCandidate ? await quickWebsiteSummary(websiteCandidate) : null;
+    // 4b. Website resolution — walks the priority chain (Apollo → SAM →
+    //     email domain → LLM-guess validated by HEAD probe) and returns the
+    //     best URL we can establish. Then the LLM crawls + summarizes that
+    //     URL. Timeboxed end-to-end so it can't blow the per-lead budget.
+    const resolvedWebsite = await resolveCompanyWebsite({
+        apolloWebsite: apollo.organization_website,
+        samWebsite: sam?.website,
+        email: lead.email,
+        companyName,
+    });
+    const websiteSummary = resolvedWebsite ? await quickWebsiteSummary(resolvedWebsite) : null;
 
     // 5. The actual brief — LLM picks a fit score, writes the strategy, and
     //    drafts a call script Andre can read off the screen.
@@ -343,7 +472,7 @@ Return up to 3 most-likely 6-digit NAICS codes for this company's federal-contra
         },
         enrichment: {
             apollo_company: apollo.organization_name || null,
-            apollo_website: apollo.organization_website || sam?.website || null,
+            apollo_website: resolvedWebsite || apollo.organization_website || sam?.website || null,
             apollo_industry: apollo.organization_industry || null,
             apollo_employees: apollo.employees ?? null,
             apollo_title: apollo.title || null,
