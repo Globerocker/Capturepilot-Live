@@ -81,7 +81,10 @@ export async function POST(req: NextRequest) {
     const mock = { ...preset, ...(body.mock as Partial<MockProspect> || {}) };
 
     // Generate the actual pitch via the same path the autosender uses.
-    const pitch = await generatePitch(mock);
+    const pitch = await generatePitch({
+        ...mock,
+        recent_context_snippet: mock.recent_context_snippet ?? undefined,
+    });
 
     const resendKey = process.env.RESEND_API_KEY;
     if (!resendKey) return NextResponse.json({ error: "RESEND_API_KEY missing" }, { status: 500 });
