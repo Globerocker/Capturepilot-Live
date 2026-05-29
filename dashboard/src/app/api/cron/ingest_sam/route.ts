@@ -224,9 +224,20 @@ export async function GET(req: NextRequest) {
                         };
                     });
 
-                const { error: dbError } = await supabase
-                    .from("opportunities")
-                    .upsert(payload, { onConflict: "notice_id", ignoreDuplicates: false });
+                // Chunk the upsert into 250-row sub-batches. The full
+                // 1000-row upsert was hitting Supabase statement timeout
+                // (~30s default per query) on the larger ptypes like
+                // "o" (Solicitation) and "k" (Combined Synopsis) when
+                // the 7-day window had thousands of rows queued behind it.
+                const CHUNK = 250;
+                let dbError: { message: string } | null = null;
+                for (let i = 0; i < payload.length; i += CHUNK) {
+                    const slice = payload.slice(i, i + CHUNK);
+                    const { error: chunkErr } = await supabase
+                        .from("opportunities")
+                        .upsert(slice, { onConflict: "notice_id", ignoreDuplicates: false });
+                    if (chunkErr) { dbError = chunkErr; break; }
+                }
 
                 if (dbError) {
                     console.error(`DB Error for ${ptype}: ${dbError.message}`);

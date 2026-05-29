@@ -97,30 +97,50 @@ export async function fetchOpenGovProjects(args: {
     timeoutMs?: number;
 }): Promise<OpenGovListing[]> {
     try {
+        // OpenGov renamed fields in their 2025 procurement API rewrite:
+        //   status filter:   "Published" → "open"  (lowercase)
+        //   sort field:      publishedAt → releaseProjectDate
+        //   field title:     title (unchanged)
+        //   field ref num:   projectNumber → financialId
+        //   field posted:    publishedAt → releaseProjectDate
+        //   field deadline:  closeAt → proposalDeadline
+        //   field dept:      departmentName → department.name (object)
+        // Dropping the explicit status filter entirely — `open` is the
+        // default for the public endpoint and including the filter as
+        // "Published" returned 500 silently for every tenant.
+        // Origin must match a real tenant URL or the API returns 500.
         const body = {
             paging: { page: args.page ?? 0, pageSize: args.pageSize ?? 50 },
-            sort: { field: "publishedAt", direction: "desc" },
-            filters: { status: ["Published"] },
         };
         const res = await fetch(`${API_BASE}/government/${encodeURIComponent(args.tenantSlug)}/project/public`, {
             method: "POST",
-            headers: { ...commonHeaders(), "Content-Type": "application/json" },
+            headers: {
+                ...commonHeaders(),
+                "Content-Type": "application/json",
+                Referer: `${PORTAL_ORIGIN}/portal/${encodeURIComponent(args.tenantSlug)}`,
+            },
             body: JSON.stringify(body),
             signal: AbortSignal.timeout(args.timeoutMs ?? 20000),
         });
         if (!res.ok) return [];
-        const j = await res.json() as { data?: Array<Record<string, unknown>>; results?: Array<Record<string, unknown>> };
-        const rows = j.data || j.results || [];
+        // 2025 response shape: { count, rows: [...] }. Older shape used data/results.
+        const j = await res.json() as {
+            count?: number;
+            rows?: Array<Record<string, unknown>>;
+            data?: Array<Record<string, unknown>>;
+            results?: Array<Record<string, unknown>>;
+        };
+        const rows = j.rows || j.data || j.results || [];
         return rows.map((r) => {
             const dept = (r.department as Record<string, unknown> | undefined) || {};
             return {
                 project_id: typeof r.id === "number" ? r.id : Number(r.id) || 0,
                 title: (r.title as string) || (r.name as string) || "",
-                project_number: (r.projectNumber as string) || (r.referenceNumber as string) || null,
+                project_number: (r.financialId as string) || (r.projectNumber as string) || (r.referenceNumber as string) || null,
                 department: (dept.name as string) || (r.departmentName as string) || null,
                 status: (r.status as string) || null,
-                posted_at: (r.publishedAt as string) || (r.postedAt as string) || null,
-                close_at: (r.closeAt as string) || (r.closesAt as string) || (r.responseDueAt as string) || null,
+                posted_at: (r.releaseProjectDate as string) || (r.publishedAt as string) || (r.postedAt as string) || (r.created_at as string) || null,
+                close_at: (r.proposalDeadline as string) || (r.closeAt as string) || (r.closesAt as string) || (r.responseDueAt as string) || null,
                 category_id: (r.categoryId as string) || null,
                 category_set_id: typeof r.categorySetId === "number" ? r.categorySetId : null,
                 raw: r,

@@ -41,10 +41,17 @@ const PRIORITY_NAICS = [
     "238210", // Electrical Contractors
 ];
 
-const FPDS_BASE = "https://www.fpds.gov/ezsearch/fpdsportal";
-const PAGE_SIZE = 10; // FPDS hard-cap
-const PAGES_PER_NAICS = 5; // 50 awards per NAICS, 500 total per run
-const FETCH_GAP_MS = 250;
+// FPDS-NG (fpds.gov/ezsearch) was retired in 2024 — redirects to sam.gov.
+// We migrated to USAspending.gov which mirrors FPDS award data 1:1
+// (same upstream source, better API, no Atom XML parsing). Free, no key.
+const USASPENDING_BASE = "https://api.usaspending.gov/api/v2/search/spending_by_award/";
+const PAGE_SIZE = 100; // USAspending hard-cap 100
+const PAGES_PER_NAICS = 3; // 300 awards per NAICS, 3000 total per run
+const FETCH_GAP_MS = 200;
+// Look back 1 year for most recent awards — enough to discover active
+// contractors. The contractors table is the long-lived sink; we don't
+// need every historical award here, just enough to flag who's active.
+const LOOKBACK_DAYS = 365;
 
 interface ParsedAward {
     piid: string;
@@ -76,56 +83,79 @@ function dateOrNull(x: string | null): string | null {
     return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null;
 }
 
-function parseAtom(xml: string): ParsedAward[] {
-    const out: ParsedAward[] = [];
-    const entries = xml.match(/<entry[\s>][\s\S]*?<\/entry>/g) || [];
-    for (const entry of entries) {
-        const pick = (tag: string): string | null => {
-            const re = new RegExp(`<[^:<]*:?${tag}[^>]*>([\\s\\S]*?)<\\/[^:<]*:?${tag}>`, "i");
-            const m = entry.match(re);
-            return m ? m[1].replace(/<[^>]+>/g, "").trim() : null;
-        };
-        const piid = pick("PIID") || pick("contractID");
-        if (!piid) continue;
-        const uei = pick("ueiSAM") || pick("UEI");
-        out.push({
-            piid,
-            referenced_idv: pick("referencedIDVID") || pick("referencedIDVAgencyID") || null,
-            modification_number: pick("modNumber") || null,
-            contractor_uei: uei ? uei.toUpperCase() : null,
-            contractor_name: pick("vendorName") || pick("legalBusinessName") || null,
-            awarding_agency: pick("contractingOfficeAgencyID") || pick("agencyID") || pick("departmentFullName") || null,
-            naics_code: pick("principalNAICSCode") || null,
-            psc_code: pick("productOrServiceCode") || null,
-            set_aside: pick("typeOfSetAside") || pick("typeOfSetAsideDescription") || null,
-            obligation_amount: numOrNull(pick("obligatedAmount") || pick("dollarsObligated")),
-            base_and_all_options: numOrNull(pick("baseAndAllOptionsValue")),
-            signed_date: dateOrNull(pick("signedDate")),
-            effective_date: dateOrNull(pick("effectiveDate")),
-            ultimate_end_date: dateOrNull(pick("ultimateCompletionDate")),
-        });
-    }
-    return out;
-}
-
-async function fetchFpdsPage(query: string, start: number): Promise<string> {
-    const params = new URLSearchParams({
-        s: "FPDS",
-        templateName: "1.5.3",
-        indexName: "awardfull",
-        q: query,
-        rss: "1",
-        start: String(start),
-    });
-    const res = await fetch(`${FPDS_BASE}?${params}`, {
-        headers: {
-            "User-Agent": "CapturePilot-FPDS-Ingest/1.0",
-            Accept: "application/atom+xml",
+async function fetchUsaspendingAwards(naics: string, page: number): Promise<ParsedAward[]> {
+    const endDate = new Date().toISOString().slice(0, 10);
+    const startDate = new Date(Date.now() - LOOKBACK_DAYS * 86_400_000).toISOString().slice(0, 10);
+    const body = {
+        filters: {
+            time_period: [{ start_date: startDate, end_date: endDate }],
+            naics_codes: [naics],
+            award_type_codes: ["A", "B", "C", "D"], // contracts only
         },
-        signal: AbortSignal.timeout(20_000),
+        fields: [
+            "Award ID",
+            "generated_internal_id",
+            "Recipient Name",
+            "recipient_id",
+            "Award Amount",
+            "Awarding Agency",
+            "Awarding Sub Agency",
+            "NAICS",
+            "PSC",
+            "Last Modified Date",
+            "Start Date",
+            "End Date",
+            "Type of Contract Pricing",
+        ],
+        page,
+        limit: PAGE_SIZE,
+        sort: "Last Modified Date",
+        order: "desc",
+    };
+    const res = await fetch(USASPENDING_BASE, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "User-Agent": "CapturePilot-Awards-Ingest/1.0",
+            Accept: "application/json",
+        },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(30_000),
     });
-    if (!res.ok) throw new Error(`FPDS ${res.status}`);
-    return await res.text();
+    if (!res.ok) throw new Error(`USAspending ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    const j = await res.json() as {
+        results?: Array<Record<string, unknown>>;
+        page_metadata?: { hasNext: boolean };
+    };
+    const rows = j.results || [];
+    return rows.map((r) => {
+        const naicsObj = (r.NAICS as { code?: string } | string | null);
+        const pscObj = (r.PSC as { code?: string } | string | null);
+        const naicsCode = typeof naicsObj === "string" ? naicsObj : (naicsObj?.code || null);
+        const pscCode = typeof pscObj === "string" ? pscObj : (pscObj?.code || null);
+        const awardId = String(r["Award ID"] || r.generated_internal_id || "");
+        // USAspending doesn't expose UEI in the search response — only
+        // recipient_id (their internal hash) + Recipient Name. We use the
+        // recipient_id as a stand-in for upsert dedup. Real UEI gets backfilled
+        // by enrich_contractors_usaspending via /recipient/<id> endpoint.
+        const recipientId = String(r.recipient_id || "");
+        return {
+            piid: awardId,
+            referenced_idv: null,
+            modification_number: null,
+            contractor_uei: recipientId ? recipientId.toUpperCase() : null,
+            contractor_name: (r["Recipient Name"] as string) || null,
+            awarding_agency: (r["Awarding Agency"] as string) || (r["Awarding Sub Agency"] as string) || null,
+            naics_code: naicsCode || naics,
+            psc_code: pscCode || null,
+            set_aside: null, // not surfaced in this endpoint
+            obligation_amount: numOrNull(String(r["Award Amount"] || "")),
+            base_and_all_options: numOrNull(String(r["Award Amount"] || "")),
+            signed_date: dateOrNull((r["Start Date"] as string) || null),
+            effective_date: dateOrNull((r["Start Date"] as string) || null),
+            ultimate_end_date: dateOrNull((r["End Date"] as string) || null),
+        };
+    }).filter(a => a.piid);
 }
 
 export async function GET(req: NextRequest) {
@@ -162,15 +192,13 @@ export async function GET(req: NextRequest) {
 
     for (const naics of PRIORITY_NAICS) {
         if (Date.now() - startTime > 270_000) break;
-        const query = `PRINCIPAL_NAICS_CODE:"${naics}"`;
         const naicsAwards: ParsedAward[] = [];
 
-        for (let page = 0; page < PAGES_PER_NAICS; page++) {
-            const start = page * PAGE_SIZE;
+        // USAspending paginates from page=1, not page=0
+        for (let page = 1; page <= PAGES_PER_NAICS; page++) {
             try {
                 await sleep(FETCH_GAP_MS);
-                const xml = await fetchFpdsPage(query, start);
-                const rows = parseAtom(xml);
+                const rows = await fetchUsaspendingAwards(naics, page);
                 if (rows.length === 0) break;
                 naicsAwards.push(...rows);
                 if (rows.length < PAGE_SIZE) break;
