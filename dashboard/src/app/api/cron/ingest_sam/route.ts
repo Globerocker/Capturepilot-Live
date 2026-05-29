@@ -111,6 +111,7 @@ export async function GET(req: NextRequest) {
         const limit = 1000;
         let totalProcessed = 0;
         let totalInserted = 0;
+        const dbErrors: string[] = [];
         // r=Sources Sought/RFI, p=Presolicitation, o=Solicitation,
         // k=Combined Synopsis, u=Justification, i=Intent to Bundle,
         // g=Sale of Surplus, s=Special Notice. Broad coverage = more leads.
@@ -227,8 +228,9 @@ export async function GET(req: NextRequest) {
 
                 if (dbError) {
                     console.error(`DB Error for ${ptype}: ${dbError.message}`);
+                    dbErrors.push(`primary[${ptype}]: ${dbError.message.slice(0, 200)}`);
                     // Try without new columns as fallback (pre-migration compat)
-                    const NEW_COLS = ["sub_agency", "office", "estimated_value", "status", "veteran_relevance_flag", "small_business_relevance_flag", "wosb_relevance_flag", "sources_sought_flag", "last_crawled_at", "retention_protected", "retention_reason", "incumbent_contractor_name"];
+                    const NEW_COLS = ["sub_agency", "office", "estimated_value", "status", "veteran_relevance_flag", "small_business_relevance_flag", "wosb_relevance_flag", "sources_sought_flag", "last_crawled_at", "retention_protected", "retention_reason", "incumbent_contractor_name", "resource_links", "organization_code"];
                     const fallback = payload.map(row => {
                         const clean: Record<string, unknown> = {};
                         for (const [k, v] of Object.entries(row)) {
@@ -239,6 +241,7 @@ export async function GET(req: NextRequest) {
                     const { error: fallbackErr } = await supabase.from("opportunities").upsert(fallback, { onConflict: "notice_id", ignoreDuplicates: true });
                     if (fallbackErr) {
                         console.error(`Fallback also failed: ${fallbackErr.message}`);
+                        dbErrors.push(`fallback[${ptype}]: ${fallbackErr.message.slice(0, 200)}`);
                         break;
                     }
                 }
@@ -252,7 +255,13 @@ export async function GET(req: NextRequest) {
         }
 
         console.log(`Ingestion Complete. Window=${windowDays}d Processed=${totalProcessed} Upserted=${totalInserted}`);
-        return NextResponse.json({ success: true, window_days: windowDays, processed: totalProcessed, inserted: totalInserted });
+        return NextResponse.json({
+            success: true,
+            window_days: windowDays,
+            processed: totalProcessed,
+            inserted: totalInserted,
+            db_errors: dbErrors.length > 0 ? dbErrors : undefined,
+        });
 
     } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : "Fatal Error";
