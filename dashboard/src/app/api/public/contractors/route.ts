@@ -58,7 +58,7 @@ export async function GET(req: NextRequest) {
     // intentionally omitted — only fetched on the per-contractor detail page.
     let q = sb
         .from("contractor_profile_pages")
-        .select("slug, business_name, primary_naics, state, city, federal_score, total_awarded_amount, top_agency, badges, industry, published_at, company_website, company_linkedin, naics_rank, naics_total, state_rank, state_total, total_awards_count, ai_summary, sba_certifications")
+        .select("slug, business_name, primary_naics, state, city, federal_score, total_awarded_amount, top_agency, badges, industry, published_at, company_website, company_linkedin, naics_rank, naics_total, state_rank, state_total, total_awards_count, ai_summary, sba_certifications, awards_by_year")
         .eq("is_published", true)
         .order(sort, { ascending: false })
         .limit(limit);
