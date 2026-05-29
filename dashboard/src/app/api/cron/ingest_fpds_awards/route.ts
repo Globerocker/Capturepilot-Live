@@ -214,9 +214,13 @@ export async function GET(req: NextRequest) {
 
         // Upsert awards. Schema permitting — if the table doesn't exist or
         // the conflict target differs, we surface the error but keep going.
+        // onConflict='piid' uses the migration-101 unique constraint.
+        // The old uq_fpds_natural expression index can't be referenced
+        // via the Supabase JS client (it only takes column names, not
+        // coalesce() expressions).
         const { error: upsertErr } = await db
             .from("fpds_awards")
-            .upsert(naicsAwards, { onConflict: "piid,referenced_idv,modification_number", ignoreDuplicates: false });
+            .upsert(naicsAwards, { onConflict: "piid", ignoreDuplicates: false });
         if (upsertErr) {
             stats.errors.push(`fpds_awards upsert naics=${naics}: ${upsertErr.message}`);
         } else {
