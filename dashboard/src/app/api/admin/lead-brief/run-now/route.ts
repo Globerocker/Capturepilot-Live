@@ -17,12 +17,17 @@
  *   limit       — number of leads to process this call (default 10, max 40)
  *   status      — filter target: pending (default) | failed | all
  *   include_done — "1" to re-run leads that already have a brief (testing only)
+ *   dry_run     — "1" to generate the brief but skip emailing AND skip the
+ *                 lead_brief DB write. Useful for previewing the new template
+ *                 before re-sending to the partner.
+ *   lead_id     — when set, restricts to a single lead row (works with dry_run
+ *                 for preview).
  */
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { assertAdmin } from "@/lib/auth-admin";
 import { isAuthorizedCron } from "@/lib/cron-auth";
-import { generateLeadBrief } from "@/lib/lead-brief";
+import { generateLeadBrief, previewLeadBrief } from "@/lib/lead-brief";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -50,6 +55,8 @@ export async function POST(req: NextRequest) {
     const limit = Math.min(Math.max(Number(url.searchParams.get("limit") || 10), 1), 40);
     const statusFilter = (url.searchParams.get("status") || "pending").toLowerCase();
     const includeDone = url.searchParams.get("include_done") === "1";
+    const dryRun = url.searchParams.get("dry_run") === "1";
+    const singleLeadId = url.searchParams.get("lead_id");
 
     const sb = createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -65,7 +72,9 @@ export async function POST(req: NextRequest) {
         .select("id, email, company, created_at, lead_brief_status, lead_brief_sent_at")
         .order("created_at", { ascending: true })
         .limit(limit);
-    if (!includeDone) {
+    if (singleLeadId) {
+        query = query.eq("id", singleLeadId);
+    } else if (!includeDone) {
         if (statusFilter === "failed") {
             query = query.eq("lead_brief_status", "failed");
         } else if (statusFilter === "all") {
@@ -83,6 +92,41 @@ export async function POST(req: NextRequest) {
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     if (!leads || leads.length === 0) {
         return NextResponse.json({ processed: 0, results: [], note: "no eligible leads" });
+    }
+
+    // Dry-run mode: build the brief in memory, never write to DB, never
+    // send email, return the rendered html+text so the partner can review
+    // the template before we re-fire the batch.
+    if (dryRun) {
+        const previews: Array<{ lead_id: string; email: string; subject: string; text: string; html: string; fit_score: number }> = [];
+        for (const lead of leads) {
+            try {
+                const { brief, subject, text, html } = await Promise.race([
+                    previewLeadBrief(sb, lead.id),
+                    new Promise((_, reject) =>
+                        setTimeout(() => reject(new Error(`lead ${lead.id} exceeded ${PER_LEAD_TIMEOUT_MS}ms`)), PER_LEAD_TIMEOUT_MS),
+                    ),
+                ]) as Awaited<ReturnType<typeof previewLeadBrief>>;
+                previews.push({
+                    lead_id: lead.id,
+                    email: lead.email,
+                    subject,
+                    text,
+                    html,
+                    fit_score: brief.ai.fit_score,
+                });
+            } catch (e) {
+                previews.push({
+                    lead_id: lead.id,
+                    email: lead.email,
+                    subject: "(error)",
+                    text: `ERROR: ${(e as Error).message.slice(0, 240)}`,
+                    html: "",
+                    fit_score: 0,
+                });
+            }
+        }
+        return NextResponse.json({ dry_run: true, count: previews.length, previews });
     }
 
     const results: RunResult[] = [];

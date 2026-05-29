@@ -513,6 +513,122 @@ Return up to 3 most-likely 6-digit NAICS codes for this company's federal-contra
     return brief;
 }
 
+/**
+ * Build the brief end-to-end and render its email forms WITHOUT persisting
+ * or sending. Lets the admin preview the exact rendered output before we
+ * fire a batch — useful when iterating on the template.
+ */
+export async function previewLeadBrief(sb: SbAny, leadId: string): Promise<{
+    brief: LeadBrief;
+    subject: string;
+    text: string;
+    html: string;
+}> {
+    // Wrap generateLeadBrief by temporarily routing the DB calls + email
+    // calls through stubs. Simpler than maintaining two near-identical
+    // pipelines side-by-side; the cost is one no-op insert path.
+    //
+    // We achieve this by reading the lead row + running the full pipeline
+    // inline. This duplicates the structure of generateLeadBrief but skips
+    // the persist + send steps. Worth the small duplication — keeps each
+    // function readable and the test surface explicit.
+    const { data: lead, error: leadErr } = await sb
+        .from("marketing_leads")
+        .select("id, email, company, first_name, last_name, phone, magnet_key, utm_source, utm_campaign, apollo_data, meta_leadgen_id")
+        .eq("id", leadId)
+        .maybeSingle() as { data: LeadRow | null; error: { message: string } | null };
+    if (leadErr) throw new Error(`lead lookup: ${leadErr.message}`);
+    if (!lead) throw new Error(`lead ${leadId} not found`);
+
+    const apollo: ApolloOrg = lead.apollo_data || {};
+    const companyName = apollo.organization_name || lead.company || null;
+
+    let phone = (lead.phone || apollo.phone || "").trim() || null;
+    if (!phone && lead.meta_leadgen_id) {
+        phone = await refetchMetaLeadPhone(lead.meta_leadgen_id);
+    }
+
+    let sam: SamSnapshot | null = null;
+    if (companyName) {
+        const uei = await searchSamByName(companyName);
+        if (uei) {
+            const entity = await lookupSamEntity(uei);
+            if (entity) {
+                sam = {
+                    uei: entity.uei,
+                    cage_code: entity.cage_code,
+                    state: entity.state,
+                    website: entity.website,
+                    sba_certifications: entity.sba_certifications,
+                };
+            }
+        }
+    }
+
+    let likelyNaics: string[] = (apollo.organization_naics || [])
+        .map(n => String(n).trim())
+        .filter(n => /^[0-9]{4,6}$/.test(n))
+        .slice(0, 3);
+
+    if (likelyNaics.length === 0 && (companyName || apollo.organization_website || apollo.organization_industry)) {
+        try {
+            const naicsResp = await callLLMJson<{ naics: string[] }>([
+                { role: "system", content: "You map US companies to their 1-3 most likely primary 6-digit NAICS codes. Reply with strict JSON only: {\"naics\":[\"541330\",\"541618\"]}. No prose." },
+                { role: "user", content: `Company: ${companyName || "(unknown)"}\nWebsite: ${apollo.organization_website || "(none)"}\nIndustry: ${apollo.organization_industry || "(none)"}\nReturn up to 3 most-likely 6-digit NAICS codes for this company's federal-contracting work.` },
+            ], { temperature: 0, max_tokens: 200 });
+            likelyNaics = (naicsResp.naics || []).map(n => String(n).trim()).filter(n => /^[0-9]{6}$/.test(n)).slice(0, 3);
+        } catch { /* preview can tolerate empty NAICS */ }
+    }
+
+    let topMatches: OpportunityMatch[] = [];
+    if (likelyNaics.length > 0) {
+        const { data: opps } = await sb
+            .from("opportunities")
+            .select("id, title, agency, naics_code, response_deadline, estimated_value, notice_type, place_of_performance_state")
+            .in("naics_code", likelyNaics)
+            .in("status", ["ACTIVE", "EXPIRING_SOON"])
+            .order("response_deadline", { ascending: true, nullsFirst: false })
+            .limit(5) as { data: OpportunityMatch[] | null };
+        topMatches = opps || [];
+    }
+
+    const resolvedWebsite = await resolveCompanyWebsite({
+        apolloWebsite: apollo.organization_website,
+        samWebsite: sam?.website,
+        email: lead.email,
+        companyName,
+    });
+    const websiteSummary = resolvedWebsite ? await quickWebsiteSummary(resolvedWebsite) : null;
+
+    const briefAi = await draftBriefAI({ lead, apollo, sam, likelyNaics, topMatches, websiteSummary, phone });
+
+    const brief: LeadBrief = {
+        generated_at: new Date().toISOString(),
+        lead: { email: lead.email, company: lead.company, first_name: lead.first_name, last_name: lead.last_name, magnet_key: lead.magnet_key, utm_source: lead.utm_source, phone },
+        enrichment: {
+            apollo_company: apollo.organization_name || null,
+            apollo_website: resolvedWebsite || apollo.organization_website || sam?.website || null,
+            apollo_industry: apollo.organization_industry || null,
+            apollo_employees: apollo.employees ?? null,
+            apollo_title: apollo.title || null,
+            apollo_linkedin: apollo.linkedin_url || null,
+        },
+        sam,
+        likely_naics: likelyNaics,
+        top_matches: topMatches,
+        website_summary: websiteSummary,
+        ai: briefAi,
+    };
+
+    const subject = `[Lead] ${brief.ai.fit_score}/10 — ${brief.enrichment.apollo_company || brief.lead.company || brief.lead.email} (${brief.lead.magnet_key})`;
+    return {
+        brief,
+        subject,
+        text: renderBriefText(brief),
+        html: renderBriefHtml(brief),
+    };
+}
+
 async function draftBriefAI(args: {
     lead: LeadRow;
     apollo: ApolloOrg;
