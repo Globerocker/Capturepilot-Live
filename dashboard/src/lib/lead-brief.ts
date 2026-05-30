@@ -24,6 +24,7 @@ import { callLLMJson } from "@/lib/llm/deepseek";
 import { HUMAN_VOICE_RULES } from "@/lib/llm/humanizer";
 import { searchSamByName, lookupSamEntity } from "@/lib/quick-checker-helpers";
 import { sendWhatsAppPartnerAlert, formatPartnerAlertFromBrief } from "@/lib/whatsapp";
+import { sendSmsPartnerAlert, formatPartnerAlertSmsFromBrief } from "@/lib/sms";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SbAny = SupabaseClient<any, any, any>;
@@ -532,6 +533,23 @@ Return up to 3 most-likely 6-digit NAICS codes for this company's federal-contra
     const waRes = await sendWhatsAppPartnerAlert(waText);
     if (!waRes.sent) {
         console.warn(`[lead-brief] WA alert failed: ${waRes.error}${waRes.needsReengagement ? " — partner must send any message to WA business number to reopen 24-hr window" : ""}`);
+    }
+
+    // SMS partner alert — runs in parallel with WhatsApp because the two
+    // channels fail in different ways (WA hits the 24-hr window rule; SMS
+    // hits trial-account verification + A2P 10DLC throttling). Belt-and-
+    // suspenders: at least one almost always lands.
+    const smsText = formatPartnerAlertSmsFromBrief({
+        firstName: brief.lead.first_name,
+        lastName: brief.lead.last_name,
+        company: brief.enrichment.apollo_company || brief.lead.company,
+        phone: brief.lead.phone,
+        email: brief.lead.email,
+        fitScore: brief.ai.fit_score,
+    });
+    const smsRes = await sendSmsPartnerAlert(smsText);
+    if (!smsRes.sent) {
+        console.warn(`[lead-brief] SMS alert failed: ${smsRes.error}${smsRes.needsVerification ? " — Twilio trial account, verify the recipient phone in Twilio console" : ""}`);
     }
 
     return brief;
