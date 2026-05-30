@@ -554,7 +554,13 @@ Return up to 3 most-likely 6-digit NAICS codes for this company's federal-contra
     });
     const smsRes = await sendSmsPartnerAlert(smsText);
     if (!smsRes.sent) {
-        console.warn(`[lead-brief] SMS alert failed: ${smsRes.error}${smsRes.needsVerification ? " — Twilio trial account, verify the recipient phone in Twilio console" : ""}`);
+        const needsVerify = smsRes.perRecipient.some(r => r.needsVerification);
+        console.warn(`[lead-brief] SMS alert failed: ${smsRes.error || "all recipients failed"}${needsVerify ? " — Twilio trial account, verify recipient phones in Twilio console" : ""}`);
+    } else {
+        const failed = smsRes.perRecipient.filter(r => !r.sent);
+        if (failed.length > 0) {
+            console.warn(`[lead-brief] SMS partial: ${failed.length} of ${smsRes.perRecipient.length} failed (${failed.map(f => f.to).join(", ")})`);
+        }
     }
 
     return brief;

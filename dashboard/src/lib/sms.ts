@@ -45,74 +45,99 @@ interface SmsResult {
     needsVerification?: boolean;
 }
 
-export async function sendSmsPartnerAlert(text: string): Promise<SmsResult> {
-    const accountSid = process.env.TWILIO_ACCOUNT_SID;
-    const apiKeySid = process.env.TWILIO_API_KEY_SID;
-    const apiKeySecret = process.env.TWILIO_API_KEY_SECRET;
-    const authToken = process.env.TWILIO_AUTH_TOKEN;
-    const from = process.env.TWILIO_PHONE_NUMBER;
-    // Reuse the WhatsApp partner-phone env var so we don't keep two copies
-    // of Sergio's number in sync. SMS_PARTNER_PHONE wins if explicitly set.
-    const to = process.env.SMS_PARTNER_PHONE || process.env.WHATSAPP_PARTNER_PHONE;
+interface MultiSmsResult {
+    sent: boolean;       // true if AT LEAST ONE recipient delivery succeeded
+    perRecipient: Array<{ to: string; sent: boolean; sid?: string; error?: string; code?: number; needsVerification?: boolean }>;
+    error?: string;      // top-level error (env missing, no recipients, etc.)
+}
 
-    // Pick auth mode. API Key (SK*/secret) is preferred — scoped + revokable
-    // without touching the master Auth Token. Fall back to the master Auth
-    // Token only when the API key pair isn't configured.
-    const useApiKey = !!(apiKeySid && apiKeySecret);
-    const authUser = useApiKey ? apiKeySid : accountSid;
-    const authPass = useApiKey ? apiKeySecret : authToken;
-
-    if (!accountSid || !authUser || !authPass || !from || !to) {
-        return {
-            sent: false,
-            error: `Missing env: ${[
-                !accountSid && "TWILIO_ACCOUNT_SID",
-                !authUser && (useApiKey ? "TWILIO_API_KEY_SID" : "TWILIO_API_KEY_SID or TWILIO_AUTH_TOKEN"),
-                !authPass && (useApiKey ? "TWILIO_API_KEY_SECRET" : "TWILIO_API_KEY_SECRET or TWILIO_AUTH_TOKEN"),
-                !from && "TWILIO_PHONE_NUMBER",
-                !to && "WHATSAPP_PARTNER_PHONE (or SMS_PARTNER_PHONE)",
-            ].filter(Boolean).join(", ")}`,
-        };
-    }
-
+/**
+ * Send to ONE specific recipient. Internal — callers should use
+ * sendSmsPartnerAlert() so multi-recipient routing stays centralized.
+ */
+async function sendSmsToOne(args: { accountSid: string; authUser: string; authPass: string; from: string; to: string; text: string }): Promise<SmsResult> {
+    const { accountSid, authUser, authPass, from, to, text } = args;
     const auth = Buffer.from(`${authUser}:${authPass}`).toString("base64");
     const body = new URLSearchParams({ From: from, To: to, Body: text.slice(0, 1600) });
-
     try {
         const res = await fetch(
             `https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(accountSid)}/Messages.json`,
             {
                 method: "POST",
-                headers: {
-                    Authorization: `Basic ${auth}`,
-                    "content-type": "application/x-www-form-urlencoded",
-                },
+                headers: { Authorization: `Basic ${auth}`, "content-type": "application/x-www-form-urlencoded" },
                 body: body.toString(),
                 signal: AbortSignal.timeout(10000),
             },
         );
-
         const raw = await res.text();
-        let parsed: { sid?: string; status?: string; code?: number; message?: string };
+        let parsed: { sid?: string; code?: number; message?: string };
         try { parsed = JSON.parse(raw); } catch { parsed = {}; }
-
         if (!res.ok) {
-            // Twilio error code 21608 = "to phone unverified on trial account"
-            // 21211 = "invalid To phone"
-            // 21610 = "recipient opted out / blocklist"
             const code = parsed.code || 0;
-            const needsVerification = code === 21608;
             return {
                 sent: false,
                 error: parsed.message || `twilio ${res.status}: ${raw.slice(0, 200)}`,
                 code,
-                needsVerification,
+                needsVerification: code === 21608,
             };
         }
         return { sent: true, sid: parsed.sid };
     } catch (e) {
         return { sent: false, error: (e as Error).message };
     }
+}
+
+/**
+ * Send the same SMS to every configured partner recipient. The env
+ * SMS_PARTNER_PHONES takes a comma-separated E.164 list (e.g.
+ * "+14427322693,+18503769785") and wins over the legacy single-recipient
+ * SMS_PARTNER_PHONE / WHATSAPP_PARTNER_PHONE vars.
+ *
+ * Returns success if AT LEAST ONE recipient delivery succeeded — partial
+ * failure is logged per-recipient in perRecipient[]. This shape lets the
+ * brief pipeline keep moving when Twilio bounces one number but the other
+ * lands.
+ */
+export async function sendSmsPartnerAlert(text: string): Promise<MultiSmsResult> {
+    const accountSid = process.env.TWILIO_ACCOUNT_SID;
+    const apiKeySid = process.env.TWILIO_API_KEY_SID;
+    const apiKeySecret = process.env.TWILIO_API_KEY_SECRET;
+    const authToken = process.env.TWILIO_AUTH_TOKEN;
+    const from = process.env.TWILIO_PHONE_NUMBER;
+
+    // Multi-recipient: comma-separated list wins. Fall back to legacy single
+    // vars for backward compat (still useful when only Sergio's number is set).
+    const recipientsRaw = process.env.SMS_PARTNER_PHONES
+        || process.env.SMS_PARTNER_PHONE
+        || process.env.WHATSAPP_PARTNER_PHONE
+        || "";
+    const recipients = recipientsRaw.split(",").map(s => s.trim()).filter(Boolean);
+
+    const useApiKey = !!(apiKeySid && apiKeySecret);
+    const authUser = useApiKey ? apiKeySid : accountSid;
+    const authPass = useApiKey ? apiKeySecret : authToken;
+
+    if (!accountSid || !authUser || !authPass || !from || recipients.length === 0) {
+        return {
+            sent: false,
+            perRecipient: [],
+            error: `Missing env: ${[
+                !accountSid && "TWILIO_ACCOUNT_SID",
+                !authUser && "TWILIO_API_KEY_SID or TWILIO_AUTH_TOKEN",
+                !authPass && "TWILIO_API_KEY_SECRET or TWILIO_AUTH_TOKEN",
+                !from && "TWILIO_PHONE_NUMBER",
+                recipients.length === 0 && "SMS_PARTNER_PHONES (or SMS_PARTNER_PHONE / WHATSAPP_PARTNER_PHONE)",
+            ].filter(Boolean).join(", ")}`,
+        };
+    }
+
+    const perRecipient: MultiSmsResult["perRecipient"] = [];
+    for (const to of recipients) {
+        const r = await sendSmsToOne({ accountSid, authUser: authUser as string, authPass: authPass as string, from, to, text });
+        perRecipient.push({ to, ...r });
+    }
+    const sent = perRecipient.some(r => r.sent);
+    return { sent, perRecipient };
 }
 
 /**

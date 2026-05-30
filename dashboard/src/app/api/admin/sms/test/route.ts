@@ -44,20 +44,24 @@ export async function POST(req: NextRequest) {
         else process.env.SMS_PARTNER_PHONE = savedEnv;
     }
 
+    const first = result.perRecipient[0] || { to: "(none)", sent: false, error: result.error };
     if (result.sent) {
         return NextResponse.json({
             ok: true,
-            sid: result.sid,
-            sent_to: overridePhone || process.env.SMS_PARTNER_PHONE || process.env.WHATSAPP_PARTNER_PHONE,
+            sent_count: result.perRecipient.filter(r => r.sent).length,
+            total_recipients: result.perRecipient.length,
+            results: result.perRecipient,
         });
     }
+    const anyVerify = result.perRecipient.some(r => r.needsVerification);
     return NextResponse.json({
         ok: false,
-        error: result.error,
-        code: result.code,
-        needs_verification: !!result.needsVerification,
-        hint: result.needsVerification
-            ? "Twilio trial accounts can only send to verified numbers. Verify the recipient at https://console.twilio.com/us1/develop/phone-numbers/manage/verified or upgrade your account."
-            : "Check TWILIO_ACCOUNT_SID, TWILIO_API_KEY_SID, TWILIO_API_KEY_SECRET, TWILIO_PHONE_NUMBER are all set.",
+        error: result.error || first.error,
+        code: first.code,
+        needs_verification: anyVerify,
+        results: result.perRecipient,
+        hint: anyVerify
+            ? "Twilio trial accounts can only send to verified numbers. Verify the failing recipient(s) at https://console.twilio.com/us1/develop/phone-numbers/manage/verified or upgrade your account."
+            : "Check TWILIO_ACCOUNT_SID, TWILIO_API_KEY_SID, TWILIO_API_KEY_SECRET, TWILIO_PHONE_NUMBER, SMS_PARTNER_PHONES.",
     }, { status: 502 });
 }

@@ -111,12 +111,13 @@ export async function POST(req: NextRequest) {
             websiteSummaryShort: brief?.website_summary?.what_they_do || null,
         });
         const res = await sendSmsPartnerAlert(text);
+        const first = res.perRecipient[0];
         results.push({
             lead_id: lead.id,
             email: lead.email,
             status: res.sent ? "sent" : "failed",
-            sid: res.sid,
-            error: res.error,
+            sid: first?.sid,
+            error: res.error || first?.error,
         });
         // Twilio toll-free trial throughput is ~10 msgs/min until TFN Verified
         // Sender registration completes. 5s spacing keeps us safely under that.
