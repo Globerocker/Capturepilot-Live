@@ -545,7 +545,12 @@ Return up to 3 most-likely 6-digit NAICS codes for this company's federal-contra
         company: brief.enrichment.apollo_company || brief.lead.company,
         phone: brief.lead.phone,
         email: brief.lead.email,
+        website: brief.enrichment.apollo_website,
+        samRegistered: !!brief.sam,
         fitScore: brief.ai.fit_score,
+        magnetKey: brief.lead.magnet_key,
+        fitRationale: brief.ai.fit_rationale,
+        websiteSummaryShort: brief.website_summary?.what_they_do || null,
     });
     const smsRes = await sendSmsPartnerAlert(smsText);
     if (!smsRes.sent) {

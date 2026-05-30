@@ -116,9 +116,29 @@ export async function sendSmsPartnerAlert(text: string): Promise<SmsResult> {
 }
 
 /**
- * SMS-friendly version of the brief alert — strips emojis/markdown, keeps it
- * inside 160 chars when possible (1 SMS segment) and 320 chars worst case
- * (2 segments). Phone is included so Sergio can tap it on iOS/Android to dial.
+ * Maps the marketing_leads.magnet_key to a human-readable whitepaper name.
+ * Keep this in sync with lib/lead-magnets.ts as new magnets are added.
+ */
+const MAGNET_DISPLAY_NAMES: Record<string, string> = {
+    "meta-lead-field-manual": "Field Manual",
+    "field-manual": "Field Manual",
+    "claim_profile": "Profile Claim",
+};
+
+function magnetDisplayName(key: string | null | undefined): string {
+    if (!key) return "Whitepaper";
+    return MAGNET_DISPLAY_NAMES[key] || key.replace(/[-_]/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+}
+
+/**
+ * Sergio's SMS alert — designed to look like a quick triage card on his lock
+ * screen. Order matches the agreed structure: header → magnet → name → company
+ * → phone → site → SAM → score → findings → CTA. Plain text, no emojis (US
+ * carriers can split mid-emoji and corrupt segments). Phone + URL auto-link
+ * on iOS/Android.
+ *
+ * Length budget: ~420 chars (3 SMS segments) when all fields are present.
+ * ~280 chars (2 segments) when website/findings are sparse.
  */
 export function formatPartnerAlertSmsFromBrief(args: {
     firstName: string | null;
@@ -126,15 +146,42 @@ export function formatPartnerAlertSmsFromBrief(args: {
     company: string | null;
     phone: string | null;
     email: string;
+    website: string | null;
+    samRegistered: boolean;
     fitScore: number;
+    magnetKey: string | null;
+    fitRationale: string | null;
+    websiteSummaryShort: string | null;
 }): string {
-    const { firstName, lastName, company, phone, fitScore, email } = args;
+    const { firstName, lastName, company, phone, email, website, samRegistered, fitScore, magnetKey, fitRationale, websiteSummaryShort } = args;
     const fullName = [firstName, lastName].filter(Boolean).join(" ") || "(name unknown)";
+
     const lines = [
-        `New lead ${fitScore}/10: ${fullName}${company ? ` @ ${company}` : ""}`,
+        `New Facebook lead`,
+        `Downloaded: ${magnetDisplayName(magnetKey)}`,
+        ``,
+        fullName,
+        company ? `${company}...` : `(company unknown)`,
+        ``,
     ];
+
     if (phone) lines.push(`Call: ${phone}`);
-    else lines.push(`Email: ${email}`);
-    lines.push(`Within 30min if possible.`);
+    else lines.push(`Phone: (not provided) — Email: ${email}`);
+
+    if (website) lines.push(`Site: ${website}`);
+    else lines.push(`Site: (not found)`);
+
+    lines.push(`SAM registered: ${samRegistered ? "Yes" : "No"}`);
+    lines.push(`Gov-readiness score: ${fitScore}/10`);
+    lines.push(``);
+
+    // Findings: prefer the LLM's website summary (concrete: what the company
+    // actually does) over the AI's fit rationale (often abstract). Fall back
+    // to whichever exists. Cap to a sentence to keep segment count down.
+    const findings = websiteSummaryShort || fitRationale || "No enrichment data available.";
+    lines.push(`Findings: ${findings}`);
+    lines.push(``);
+    lines.push(`Call within the next 30 minutes please.`);
+
     return lines.join("\n");
 }
