@@ -349,11 +349,13 @@ export default function AdminEmails() {
                                     {sending ? "Sending..." : "Send Test"}
                                 </button>
                                 <Link
-                                    href={`/admin/emails/${selected.id}/edit`}
+                                    href={selected.group === "nurture"
+                                        ? `/admin/emails/${selected.id}/preview`
+                                        : `/admin/emails/${selected.id}/edit`}
                                     className="bg-stone-900 text-white px-4 py-2 rounded-lg text-sm font-bold inline-flex items-center gap-1.5 hover:bg-stone-800 transition-colors"
                                 >
                                     <Edit3 className="w-4 h-4" />
-                                    Edit Design
+                                    {selected.group === "nurture" ? "Preview & Edit HTML" : "Edit Design"}
                                 </Link>
                             </div>
                             {sendResult && (
