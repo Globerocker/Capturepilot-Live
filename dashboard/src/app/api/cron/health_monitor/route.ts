@@ -294,7 +294,12 @@ export async function GET(req: NextRequest) {
         return !shouldSuppressImmediateEmail(asRow);
     });
 
-    if (emailWorthy.length > 0) {
+    // Per-event email firing is OFF by default — the morning daily digest
+    // (cron send_daily_digest) already reports the 24-hour alert roll-up,
+    // and per-event emails were spamming the inbox + burning Resend budget.
+    // Set HEALTH_MONITOR_IMMEDIATE_EMAIL=1 to re-enable for critical-only
+    // notifications during an incident window.
+    if (emailWorthy.length > 0 && process.env.HEALTH_MONITOR_IMMEDIATE_EMAIL === "1") {
         try {
             await sendHealthDigest({ to: ALERT_EMAIL_TO, alerts: emailWorthy });
         } catch (e) {
