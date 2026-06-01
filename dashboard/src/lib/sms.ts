@@ -186,7 +186,7 @@ export function formatPartnerAlertSmsFromBrief(args: {
         `Downloaded: ${magnetDisplayName(magnetKey)}`,
         ``,
         fullName,
-        company ? `${company}...` : `(company unknown)`,
+        company || `(company unknown)`,
         ``,
     ];
 
