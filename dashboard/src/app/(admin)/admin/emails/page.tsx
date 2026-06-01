@@ -18,7 +18,7 @@ interface EmailTemplate {
     name: string;
     subject: string;
     trigger: string;
-    group: "onboarding" | "transactional" | "lifecycle" | "marketing" | "educational";
+    group: "onboarding" | "transactional" | "lifecycle" | "marketing" | "educational" | "nurture";
     category: Category;
     audience: Audience[];
     enabled: boolean;
@@ -51,6 +51,20 @@ const TEMPLATES: EmailTemplate[] = [
     { id: "edu_naics_codes", name: "NAICS Codes Explained", subject: "NAICS codes, decoded", trigger: "Manual / drip (planned)", group: "educational", category: "marketing", audience: ["self_service"], enabled: true, icon: BookOpen, description: "How to pick the right NAICS codes." },
     { id: "edu_set_asides", name: "Set-Aside Programs", subject: "Set-asides: the small business advantage", trigger: "Manual / drip (planned)", group: "educational", category: "marketing", audience: ["all_users"], enabled: true, icon: BookOpen, description: "Deep dive into 8(a), SDVOSB, WOSB, HUBZone." },
     { id: "edu_capability_statement", name: "Capability Statement Guide", subject: "Your capability statement, upgraded", trigger: "Manual / drip (planned)", group: "educational", category: "marketing", audience: ["consulting"], enabled: true, icon: BookOpen, description: "6 essential sections of a winning capability statement." },
+
+    // ─────────── 90-day Facebook-lead nurture sequence ───────────
+    { id: "nurture_01_welcome",             name: "Nurture 01 · Welcome",                    subject: "Your Federal Field Manual + a question",                trigger: "Day 0 — FB lead form submission",  group: "nurture", category: "marketing", audience: ["lead"], enabled: true, icon: Mail, description: "Confirms PDF delivery, asks for the one biggest confusion to shape future emails." },
+    { id: "nurture_02_opp_anatomy",         name: "Nurture 02 · Opp anatomy",                subject: "How to read a SAM opportunity in 90 seconds",            trigger: "Day 3 after signup",               group: "nurture", category: "marketing", audience: ["lead"], enabled: true, icon: BookOpen, description: "Teaches the 5 fields that matter on a SAM.gov opp." },
+    { id: "nurture_03_naics_misses",        name: "Nurture 03 · NAICS misses",               subject: "5 NAICS codes most contractors miss",                    trigger: "Day 8 after signup",               group: "nurture", category: "marketing", audience: ["lead"], enabled: true, icon: BookOpen, description: "5 high-spend NAICS most small biz skip + reply hook." },
+    { id: "nurture_04_past_perf_bootstrap", name: "Nurture 04 · Past-perf bootstrap",        subject: "How to look good before you've won anything",            trigger: "Day 15 after signup",              group: "nurture", category: "marketing", audience: ["lead"], enabled: true, icon: BookOpen, description: "How to build past performance from $0 in federal awards." },
+    { id: "nurture_05_audit_call",          name: "Nurture 05 · Audit call CTA",             subject: "30 min on the calendar → 3 live opportunities tomorrow", trigger: "Day 22 after signup",              group: "nurture", category: "marketing", audience: ["lead"], enabled: true, icon: Zap, description: "Free B2G Audit. First conversion push." },
+    { id: "nurture_06_sources_sought",      name: "Nurture 06 · Sources Sought",             subject: "The procurement step 80% of contractors skip",            trigger: "Day 30 after signup",              group: "nurture", category: "marketing", audience: ["lead"], enabled: true, icon: BookOpen, description: "Sources Sought = 6-18 months early. Most skip them." },
+    { id: "nurture_07_cap_statement",       name: "Nurture 07 · Cap statement teardown",     subject: "Capability statement teardown (and an offer)",            trigger: "Day 38 after signup",              group: "nurture", category: "marketing", audience: ["lead"], enabled: true, icon: BookOpen, description: "Hybrid: value content + offer to roast their cap statement." },
+    { id: "nurture_08_kit",                 name: "Nurture 08 · $70 Kit",                    subject: "The $70 Capture Kit (no upsell, just deliverables)",     trigger: "Day 45 after signup",              group: "nurture", category: "marketing", audience: ["lead"], enabled: true, icon: Gift, description: "Second conversion push at lower price point." },
+    { id: "nurture_09_fiscal_cliff",        name: "Nurture 09 · Year-end fiscal cliff",      subject: "What to chase in Aug-Sep (year-end fiscal cliff)",       trigger: "Day 55 after signup",              group: "nurture", category: "marketing", audience: ["lead"], enabled: true, icon: BookOpen, description: "30% of federal spend hits in Aug-Sep. Prep guide." },
+    { id: "nurture_10_why_bids_lose",       name: "Nurture 10 · Why bids lose",              subject: "Why your last bid lost (without seeing it)",             trigger: "Day 65 after signup",              group: "nurture", category: "marketing", audience: ["lead"], enabled: true, icon: BookOpen, description: "5 reasons account for 90% of small-biz losses." },
+    { id: "nurture_11_pilot",               name: "Nurture 11 · Pilot Program",              subject: "Pilot Program — 3 spots open this quarter",              trigger: "Day 75 after signup",              group: "nurture", category: "marketing", audience: ["lead"], enabled: true, icon: Zap, description: "Third + highest conversion push. Done-for-you 90-day program." },
+    { id: "nurture_12_goodbye",             name: "Nurture 12 · Three doors",                subject: "Three doors — or none",                                  trigger: "Day 90 after signup",              group: "nurture", category: "marketing", audience: ["lead"], enabled: true, icon: Mail, description: "Final sunset: book, buy, apply, or graceful unsubscribe." },
 ];
 
 const GROUPS = [
@@ -60,6 +74,7 @@ const GROUPS = [
     { key: "lifecycle", label: "Lifecycle" },
     { key: "marketing", label: "Marketing" },
     { key: "educational", label: "Learning Series" },
+    { key: "nurture", label: "Lead Nurture (90-day)" },
 ];
 
 const AUDIENCE_LABELS: Record<Audience, { label: string; color: string; icon: typeof Users }> = {

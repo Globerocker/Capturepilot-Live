@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { invalidateCustomTemplateCache } from "@/lib/email-custom-template";
 import { DEFAULT_EMAIL_SETTINGS } from "@/lib/email-settings";
+import { NURTURE_TEMPLATES } from "@/lib/email-nurture-templates";
 import { assertAdmin } from "@/lib/auth-admin";
 
 function getAdmin() {
@@ -34,6 +35,22 @@ export async function GET(_req: NextRequest, context: { params: Promise<{ key: s
 
         if (error) throw error;
         if (!data) {
+            // Nurture-sequence templates ship with built-in HTML + subject —
+            // serve those as defaults so the editor loads ready-made content
+            // on first open. The user can then edit + save, which creates the
+            // DB row and supersedes this fallback.
+            const fallback = NURTURE_TEMPLATES[key];
+            if (fallback) {
+                return NextResponse.json({
+                    exists: false,
+                    key,
+                    html: fallback.html,
+                    subject: fallback.subject,
+                    design_json: null,
+                    published: false,
+                    is_default: true,
+                });
+            }
             return NextResponse.json({ exists: false, key });
         }
         return NextResponse.json({ exists: true, key, ...data });

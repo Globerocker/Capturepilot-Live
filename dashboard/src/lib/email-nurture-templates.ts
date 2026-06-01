@@ -1,0 +1,650 @@
+/**
+ * 90-day Facebook-lead nurture sequence — 12 emails.
+ *
+ * Cadence: 70% value, 30% conversion. Sends on day 0, 3, 8, 15, 22, 30, 38,
+ * 45, 55, 65, 75, 90 from the lead's marketing_leads.created_at. The cron
+ * scheduler picks the right template based on day offset (wire-up is in
+ * /api/cron/nurture_sequence — separate from this file).
+ *
+ * Each template here returns { subject, html } and serves as the DB fallback
+ * when /api/admin/email-templates/:key is opened with no saved row yet. Once
+ * the admin edits + saves, the DB row wins and these defaults stay frozen.
+ *
+ * Design: inline-CSS, 600px max, table-based (Outlook-safe). Hero SVGs are
+ * inline so Gmail/Apple Mail/iOS render them; Outlook desktop strips SVG but
+ * the rest of the email still works.
+ *
+ * Brand palette:
+ *   ink    #0c0a09  (near-black, headlines + CP monogram)
+ *   stone  #44403c  (body copy)
+ *   muted  #78716c  (captions, footer)
+ *   bg     #fafaf9  (page background)
+ *   card   #ffffff  (content card)
+ *   accent #059669  (emerald — primary CTA + positive)
+ *   warn   #d97706  (amber — soft alert)
+ */
+
+const COLORS = {
+    ink: "#0c0a09",
+    stone: "#44403c",
+    muted: "#78716c",
+    bg: "#fafaf9",
+    card: "#ffffff",
+    accent: "#059669",
+    accentDark: "#047857",
+    warn: "#d97706",
+    border: "#e7e5e4",
+};
+
+const FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+
+/**
+ * The single base wrapper every nurture email uses. Provides the CapturePilot
+ * monogram header, the optional hero SVG, the body content, the CTA button,
+ * and the footer with CAN-SPAM unsubscribe link. Email clients drop most
+ * stylesheet rules so everything is inline.
+ */
+function wrap(args: {
+    preheader: string;          // grey snippet shown in inbox preview
+    heroSvg?: string;            // optional inline SVG hero
+    body: string;                // main HTML body (use <p>, <h2>, etc.)
+    ctaText?: string;            // primary button label
+    ctaUrl?: string;             // primary button URL
+    ctaSecondary?: string;       // optional small link below button
+    ctaSecondaryUrl?: string;
+    isMarketing: boolean;        // controls footer: marketing must have unsubscribe
+}): string {
+    const { preheader, heroSvg, body, ctaText, ctaUrl, ctaSecondary, ctaSecondaryUrl, isMarketing } = args;
+    const cta = ctaText && ctaUrl ? `
+        <tr><td align="center" style="padding:24px 0 8px;">
+          <a href="${ctaUrl}" style="display:inline-block;background:${COLORS.accent};color:#fff;text-decoration:none;padding:14px 28px;border-radius:8px;font-weight:700;font-size:15px;letter-spacing:0.01em;">${ctaText}</a>
+        </td></tr>
+        ${ctaSecondary && ctaSecondaryUrl ? `<tr><td align="center" style="padding:0 0 16px;font-size:13px;"><a href="${ctaSecondaryUrl}" style="color:${COLORS.muted};text-decoration:underline;">${ctaSecondary}</a></td></tr>` : ""}
+    ` : "";
+
+    const footerUnsub = isMarketing
+        ? `<a href="{{unsubscribe_url}}" style="color:${COLORS.muted};text-decoration:underline;">Unsubscribe</a> · `
+        : "";
+
+    return `<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CapturePilot</title>
+</head><body style="margin:0;padding:0;background:${COLORS.bg};font-family:${FONT};color:${COLORS.stone};">
+<!-- preheader hidden text -->
+<div style="display:none;max-height:0;overflow:hidden;font-size:1px;line-height:1px;color:${COLORS.bg};">${preheader}</div>
+
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:${COLORS.bg};padding:24px 12px;">
+  <tr><td align="center">
+    <table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" style="max-width:600px;background:${COLORS.card};border-radius:12px;overflow:hidden;border:1px solid ${COLORS.border};">
+
+      <!-- header: CP monogram + wordmark -->
+      <tr><td style="padding:20px 28px;border-bottom:1px solid ${COLORS.border};">
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr>
+          <td style="vertical-align:middle;padding-right:10px;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+              <rect width="32" height="32" rx="6" fill="${COLORS.ink}"/>
+              <text x="16" y="22" text-anchor="middle" font-family="${FONT}" font-size="14" font-weight="800" fill="#fff" letter-spacing="-0.04em">CP</text>
+            </svg>
+          </td>
+          <td style="vertical-align:middle;font-size:14px;font-weight:700;color:${COLORS.ink};letter-spacing:-0.01em;">CapturePilot</td>
+        </tr></table>
+      </td></tr>
+
+      ${heroSvg ? `<tr><td style="padding:0;background:#f5f5f4;text-align:center;">${heroSvg}</td></tr>` : ""}
+
+      <!-- body -->
+      <tr><td style="padding:28px;font-size:15px;line-height:1.6;color:${COLORS.stone};">
+        ${body}
+      </td></tr>
+
+      <!-- CTA -->
+      ${cta}
+
+      <!-- footer -->
+      <tr><td style="padding:20px 28px;background:#fafaf9;border-top:1px solid ${COLORS.border};font-size:12px;color:${COLORS.muted};text-align:center;line-height:1.6;">
+        André Schüler · Founder, CapturePilot<br>
+        Federal-contracting intelligence for small businesses<br>
+        <a href="https://www.capturepilot.com" style="color:${COLORS.muted};">capturepilot.com</a><br><br>
+        ${footerUnsub}<a href="mailto:hello@capturepilot.com" style="color:${COLORS.muted};">Reply with feedback</a>
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+</body></html>`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Hero SVGs — one per email, reused across the file.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const HERO_WELCOME = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 180" width="100%" style="display:block;max-width:600px;">
+  <defs><linearGradient id="g1" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#0c0a09"/><stop offset="1" stop-color="#44403c"/></linearGradient></defs>
+  <rect width="600" height="180" fill="url(#g1)"/>
+  <g fill="#059669" opacity="0.15"><circle cx="80" cy="40" r="60"/><circle cx="520" cy="140" r="80"/></g>
+  <text x="300" y="80" text-anchor="middle" fill="#fff" font-family="-apple-system,sans-serif" font-size="32" font-weight="800" letter-spacing="-0.02em">Welcome aboard.</text>
+  <text x="300" y="110" text-anchor="middle" fill="#a8a29e" font-family="-apple-system,sans-serif" font-size="14" font-weight="500">Federal contracting · without the maze</text>
+  <g stroke="#059669" stroke-width="2" fill="none"><path d="M270 140 L290 155 L330 125"/></g>
+</svg>`;
+
+const HERO_OPP_ANATOMY = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 180" width="100%" style="display:block;max-width:600px;background:#f5f5f4;">
+  <rect x="40" y="20" width="520" height="140" fill="#fff" stroke="#e7e5e4" rx="6"/>
+  <text x="60" y="48" fill="#0c0a09" font-family="-apple-system,sans-serif" font-size="13" font-weight="700">Janitorial Services — Andrews AFB</text>
+  <rect x="60" y="58" width="80" height="16" fill="#059669"/><text x="100" y="70" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">NAICS 561720</text>
+  <rect x="148" y="58" width="60" height="16" fill="#d97706"/><text x="178" y="70" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">SDVOSB</text>
+  <text x="60" y="100" fill="#44403c" font-size="11">Sources Sought · Due Oct 15 · $1.4M est.</text>
+  <line x1="280" y1="92" x2="510" y2="92" stroke="#dc2626" stroke-width="2"/>
+  <circle cx="510" cy="92" r="3" fill="#dc2626"/>
+  <text x="395" y="86" text-anchor="middle" fill="#dc2626" font-size="10" font-weight="700">DEADLINE</text>
+  <g><circle cx="70" cy="130" r="6" fill="#059669"/><text x="84" y="134" fill="#44403c" font-size="11">Set-aside flag</text></g>
+  <g><circle cx="220" cy="130" r="6" fill="#059669"/><text x="234" y="134" fill="#44403c" font-size="11">Notice type</text></g>
+  <g><circle cx="360" cy="130" r="6" fill="#059669"/><text x="374" y="134" fill="#44403c" font-size="11">Dollar range</text></g>
+</svg>`;
+
+const HERO_NAICS = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 180" width="100%" style="display:block;max-width:600px;background:#f5f5f4;">
+  <g font-family="-apple-system,sans-serif">
+    ${[
+      { x: 100, y: 50, code: "561720", label: "Janitorial", hot: true },
+      { x: 250, y: 50, code: "541330", label: "Engineering", hot: false },
+      { x: 400, y: 50, code: "237310", label: "Highway Constr.", hot: true },
+      { x: 100, y: 110, code: "562910", label: "Remediation", hot: true },
+      { x: 250, y: 110, code: "541611", label: "Mgmt Consult.", hot: false },
+      { x: 400, y: 110, code: "236220", label: "Commercial Bldg", hot: false },
+    ].map(c => `
+      <g>
+        <rect x="${c.x-50}" y="${c.y-22}" width="120" height="44" rx="6" fill="${c.hot ? "#059669" : "#fff"}" stroke="#e7e5e4"/>
+        <text x="${c.x+10}" y="${c.y-4}" text-anchor="middle" font-size="13" font-weight="800" fill="${c.hot ? "#fff" : "#0c0a09"}">${c.code}</text>
+        <text x="${c.x+10}" y="${c.y+12}" text-anchor="middle" font-size="10" fill="${c.hot ? "#d1fae5" : "#78716c"}">${c.label}</text>
+      </g>
+    `).join("")}
+  </g>
+  <text x="300" y="170" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="10" fill="#78716c">Green = high small-business spend</text>
+</svg>`;
+
+const HERO_PAST_PERF = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 180" width="100%" style="display:block;max-width:600px;background:#f5f5f4;">
+  <g font-family="-apple-system,sans-serif">
+    <text x="30" y="40" font-size="13" font-weight="700" fill="#0c0a09">Year 1 — bootstrap</text>
+    ${[20, 25, 30, 35, 40, 35, 45].map((h, i) => `<rect x="${30 + i*18}" y="${100-h}" width="12" height="${h}" fill="#a8a29e"/>`).join("")}
+    <text x="170" y="40" font-size="13" font-weight="700" fill="#0c0a09">Year 2 — sub-contracts</text>
+    ${[35, 50, 55, 60, 70, 75, 80].map((h, i) => `<rect x="${170 + i*18}" y="${100-h}" width="12" height="${h}" fill="#44403c"/>`).join("")}
+    <text x="310" y="40" font-size="13" font-weight="700" fill="#0c0a09">Year 3 — prime</text>
+    ${[80, 90, 105, 115, 110, 130, 140].map((h, i) => `<rect x="${310 + i*18}" y="${145-h}" width="12" height="${h}" fill="#059669"/>`).join("")}
+    <line x1="20" y1="148" x2="580" y2="148" stroke="#78716c" stroke-width="1"/>
+    <text x="300" y="165" text-anchor="middle" font-size="11" fill="#78716c">Performance compounds — start small, win bigger</text>
+  </g>
+</svg>`;
+
+const HERO_AUDIT_CALL = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 180" width="100%" style="display:block;max-width:600px;background:#0c0a09;">
+  <g font-family="-apple-system,sans-serif">
+    <circle cx="120" cy="90" r="56" fill="none" stroke="#059669" stroke-width="2"/>
+    <text x="120" y="86" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">FREE</text>
+    <text x="120" y="105" text-anchor="middle" fill="#059669" font-size="20" font-weight="800">30 min</text>
+    <g stroke="#059669" stroke-width="2" fill="none"><circle cx="120" cy="50" r="3"/><circle cx="120" cy="130" r="3"/><circle cx="60" cy="90" r="3"/><circle cx="180" cy="90" r="3"/></g>
+    <text x="320" y="60" fill="#fff" font-size="20" font-weight="800" letter-spacing="-0.02em">B2G Audit Call</text>
+    <text x="320" y="86" fill="#a8a29e" font-size="13">We review your NAICS, certs, and SAM</text>
+    <text x="320" y="104" fill="#a8a29e" font-size="13">status. You leave with 3 live opps in</text>
+    <text x="320" y="122" fill="#a8a29e" font-size="13">your inbox within 24 hours.</text>
+  </g>
+</svg>`;
+
+const HERO_SOURCES_SOUGHT = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 180" width="100%" style="display:block;max-width:600px;background:#f5f5f4;">
+  <g font-family="-apple-system,sans-serif">
+    <line x1="60" y1="100" x2="540" y2="100" stroke="#78716c" stroke-width="2"/>
+    <g><circle cx="100" cy="100" r="14" fill="#059669"/><text x="100" y="78" text-anchor="middle" font-size="11" font-weight="700" fill="#059669">Sources Sought</text><text x="100" y="130" text-anchor="middle" font-size="10" fill="#78716c">Month -12</text></g>
+    <g><circle cx="240" cy="100" r="10" fill="#a8a29e"/><text x="240" y="78" text-anchor="middle" font-size="11" font-weight="700" fill="#44403c">Pre-Solicit</text><text x="240" y="130" text-anchor="middle" font-size="10" fill="#78716c">Month -6</text></g>
+    <g><circle cx="380" cy="100" r="10" fill="#a8a29e"/><text x="380" y="78" text-anchor="middle" font-size="11" font-weight="700" fill="#44403c">RFP/RFQ</text><text x="380" y="130" text-anchor="middle" font-size="10" fill="#78716c">Month -2</text></g>
+    <g><circle cx="520" cy="100" r="10" fill="#a8a29e"/><text x="520" y="78" text-anchor="middle" font-size="11" font-weight="700" fill="#44403c">Award</text><text x="520" y="130" text-anchor="middle" font-size="10" fill="#78716c">Month 0</text></g>
+    <text x="300" y="160" text-anchor="middle" font-size="11" fill="#059669" font-weight="700">Most contractors enter here ↑ — 6 to 12 months too late</text>
+  </g>
+</svg>`;
+
+const HERO_CAP_STATEMENT = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 200" width="100%" style="display:block;max-width:600px;background:#f5f5f4;">
+  <g font-family="-apple-system,sans-serif">
+    <rect x="180" y="20" width="240" height="170" fill="#fff" stroke="#e7e5e4"/>
+    <rect x="180" y="20" width="240" height="40" fill="#0c0a09"/>
+    <text x="300" y="46" text-anchor="middle" fill="#fff" font-size="14" font-weight="800">CAPABILITY STATEMENT</text>
+    <text x="195" y="78" fill="#0c0a09" font-size="11" font-weight="700">COMPANY OVERVIEW</text>
+    <line x1="195" y1="84" x2="405" y2="84" stroke="#e7e5e4"/>
+    <text x="195" y="100" fill="#78716c" font-size="9">────────────────────────────────────</text>
+    <text x="195" y="112" fill="#78716c" font-size="9">────────────────────────────────────</text>
+    <text x="195" y="130" fill="#0c0a09" font-size="11" font-weight="700">CORE COMPETENCIES</text>
+    <line x1="195" y1="136" x2="405" y2="136" stroke="#e7e5e4"/>
+    <g fill="#059669">
+      <rect x="195" y="146" width="50" height="14" rx="3"/><text x="220" y="156" text-anchor="middle" fill="#fff" font-size="9" font-weight="700">561720</text>
+      <rect x="252" y="146" width="50" height="14" rx="3"/><text x="277" y="156" text-anchor="middle" fill="#fff" font-size="9" font-weight="700">562910</text>
+      <rect x="309" y="146" width="50" height="14" rx="3"/><text x="334" y="156" text-anchor="middle" fill="#fff" font-size="9" font-weight="700">541330</text>
+    </g>
+    <text x="195" y="180" fill="#78716c" font-size="9">UEI: ABC123 · CAGE: 1A2B3 · SAM ✓</text>
+  </g>
+</svg>`;
+
+const HERO_KIT = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 180" width="100%" style="display:block;max-width:600px;background:#fff7ed;">
+  <g font-family="-apple-system,sans-serif">
+    <rect x="60" y="40" width="180" height="120" fill="#d97706" rx="8"/>
+    <text x="150" y="80" text-anchor="middle" fill="#fff" font-size="36" font-weight="800">$70</text>
+    <text x="150" y="105" text-anchor="middle" fill="#fef3c7" font-size="11" font-weight="700">CAPTURE KIT</text>
+    <text x="150" y="125" text-anchor="middle" fill="#fef3c7" font-size="10">One-time</text>
+    <g><text x="280" y="60" fill="#0c0a09" font-size="14" font-weight="800">What's inside</text></g>
+    <g fill="#44403c" font-size="12">
+      <text x="280" y="84">✓ NAICS-targeted opp list (90 days)</text>
+      <text x="280" y="104">✓ Capability statement template</text>
+      <text x="280" y="124">✓ Past-performance bootstrap guide</text>
+      <text x="280" y="144">✓ SAM.gov registration walkthrough</text>
+    </g>
+  </g>
+</svg>`;
+
+const HERO_FY_CLIFF = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 180" width="100%" style="display:block;max-width:600px;background:#f5f5f4;">
+  <g font-family="-apple-system,sans-serif">
+    <path d="M 40 140 L 240 140 L 280 60 L 540 60" stroke="#059669" stroke-width="3" fill="none"/>
+    <path d="M 40 140 L 240 140 L 280 60 L 540 60 L 540 160 L 40 160 Z" fill="#059669" opacity="0.1"/>
+    ${["Oct","Nov","Dec","Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep"].map((m,i) => `<text x="${50 + i*40}" y="172" text-anchor="middle" font-size="10" fill="#78716c">${m}</text>`).join("")}
+    <text x="290" y="50" text-anchor="middle" font-size="11" font-weight="700" fill="#059669">Aug 1 — Sept 30</text>
+    <text x="290" y="40" text-anchor="middle" font-size="9" font-weight="700" fill="#059669">~30% of fed spend</text>
+    <line x1="280" y1="60" x2="280" y2="140" stroke="#dc2626" stroke-width="1" stroke-dasharray="3,3"/>
+  </g>
+</svg>`;
+
+const HERO_BID_LOSS = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 180" width="100%" style="display:block;max-width:600px;background:#f5f5f4;">
+  <g font-family="-apple-system,sans-serif">
+    <text x="300" y="35" text-anchor="middle" font-size="14" font-weight="800" fill="#0c0a09">Why bids lose (federal small-biz)</text>
+    ${[
+      { label: "Price not justified", pct: 32 },
+      { label: "Missing past performance", pct: 26 },
+      { label: "Set-aside mismatch", pct: 18 },
+      { label: "Incomplete compliance", pct: 14 },
+      { label: "Other", pct: 10 },
+    ].map((row, i) => `
+      <text x="40" y="${75 + i*20}" font-size="11" fill="#44403c">${row.label}</text>
+      <rect x="220" y="${66 + i*20}" width="${row.pct*7}" height="12" fill="#dc2626"/>
+      <text x="${230 + row.pct*7}" y="${76 + i*20}" font-size="10" fill="#44403c" font-weight="700">${row.pct}%</text>
+    `).join("")}
+  </g>
+</svg>`;
+
+const HERO_PILOT = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 180" width="100%" style="display:block;max-width:600px;background:#0c0a09;">
+  <g font-family="-apple-system,sans-serif">
+    <text x="300" y="50" text-anchor="middle" fill="#fff" font-size="22" font-weight="800" letter-spacing="-0.02em">Pilot Program</text>
+    <text x="300" y="74" text-anchor="middle" fill="#a8a29e" font-size="12">90 days · done-for-you · 3 spots open</text>
+    <g><circle cx="150" cy="120" r="22" fill="#059669"/><text x="150" y="125" text-anchor="middle" fill="#fff" font-size="14" font-weight="800">1</text><text x="150" y="155" text-anchor="middle" fill="#a8a29e" font-size="10">SAM + NAICS</text></g>
+    <g><circle cx="300" cy="120" r="22" fill="#059669"/><text x="300" y="125" text-anchor="middle" fill="#fff" font-size="14" font-weight="800">2</text><text x="300" y="155" text-anchor="middle" fill="#a8a29e" font-size="10">Capture pipeline</text></g>
+    <g><circle cx="450" cy="120" r="22" fill="#059669"/><text x="450" y="125" text-anchor="middle" fill="#fff" font-size="14" font-weight="800">3</text><text x="450" y="155" text-anchor="middle" fill="#a8a29e" font-size="10">First bid submitted</text></g>
+    <line x1="172" y1="120" x2="278" y2="120" stroke="#059669" stroke-width="1"/>
+    <line x1="322" y1="120" x2="428" y2="120" stroke="#059669" stroke-width="1"/>
+  </g>
+</svg>`;
+
+const HERO_GOODBYE = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 180" width="100%" style="display:block;max-width:600px;background:#f5f5f4;">
+  <g font-family="-apple-system,sans-serif">
+    <text x="300" y="80" text-anchor="middle" fill="#0c0a09" font-size="22" font-weight="800" letter-spacing="-0.02em">Still curious?</text>
+    <text x="300" y="110" text-anchor="middle" fill="#78716c" font-size="13">Three doors below. Pick one — or none.</text>
+    <g stroke="#78716c" stroke-width="1" fill="none">
+      <rect x="60" y="130" width="100" height="36" rx="6"/>
+      <rect x="250" y="130" width="100" height="36" rx="6"/>
+      <rect x="440" y="130" width="100" height="36" rx="6"/>
+    </g>
+  </g>
+</svg>`;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The 12 templates.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const AUDIT_URL = "https://www.capturepilot.com/audit";
+const KIT_URL = "https://www.capturepilot.com/kit";
+const PILOT_URL = "https://www.capturepilot.com/pilot";
+const DASHBOARD_URL = "https://app.capturepilot.com/signup";
+
+export interface NurtureTemplate {
+    subject: string;
+    html: string;
+}
+
+export const NURTURE_TEMPLATES: Record<string, NurtureTemplate> = {
+
+    // ─────────── 1. Welcome (Day 0) ───────────
+    nurture_01_welcome: {
+        subject: "Your Federal Field Manual + a question",
+        html: wrap({
+            preheader: "Here's the Field Manual you downloaded, plus what to do in your first hour.",
+            heroSvg: HERO_WELCOME,
+            body: `
+                <h1 style="margin:0 0 14px;font-size:24px;font-weight:800;color:${COLORS.ink};letter-spacing:-0.02em;">Hey {{first_name}} — quick note from André.</h1>
+                <p style="margin:0 0 14px;">Thanks for grabbing the <strong>Federal Field Manual</strong>. The PDF should be in your inbox already (check spam if not). I'll send you a fresh copy if you reply with "resend".</p>
+                <p style="margin:0 0 14px;">Here's what I'd actually do with the next 60 minutes — in order of impact:</p>
+                <ol style="margin:0 0 16px 18px;padding:0;">
+                  <li style="margin-bottom:8px;"><strong>Page 12 — pick your 3 NAICS codes.</strong> Not 30. Just 3. The fewer, the sharper your matches.</li>
+                  <li style="margin-bottom:8px;"><strong>Page 18 — the 5-minute SAM.gov check.</strong> If you're not registered, this is the #1 thing blocking you from getting paid by the feds.</li>
+                  <li><strong>Page 24 — the Sources Sought trick.</strong> Most contractors skip these. The ones who don't, win 6-12 months earlier.</li>
+                </ol>
+                <p style="margin:0 0 14px;">One quick question — and you can ignore it if you're slammed:</p>
+                <p style="margin:0 0 14px;background:#fafaf9;border-left:3px solid ${COLORS.accent};padding:12px 14px;font-size:14px;">What's the <em>one thing</em> about federal contracting that feels most confusing right now?</p>
+                <p style="margin:0 0 14px;">Reply with one sentence. I read every reply and the answer shapes what I send you next.</p>
+                <p style="margin:0;font-size:14px;color:${COLORS.muted};">— André<br><span style="color:${COLORS.muted};font-size:12px;">P.S. The next email lands in 3 days. It's a 90-second walkthrough of how to read a SAM.gov opportunity without getting lost.</span></p>
+            `,
+            isMarketing: true,
+        }),
+    },
+
+    // ─────────── 2. Opp anatomy (Day 3) ───────────
+    nurture_02_opp_anatomy: {
+        subject: "How to read a SAM opportunity in 90 seconds",
+        html: wrap({
+            preheader: "Opens look intimidating. They're not. Five fields tell you everything.",
+            heroSvg: HERO_OPP_ANATOMY,
+            body: `
+                <h1 style="margin:0 0 14px;font-size:22px;font-weight:800;color:${COLORS.ink};letter-spacing:-0.02em;">SAM.gov opportunities look intimidating. They're not.</h1>
+                <p style="margin:0 0 14px;">When I started, every notice felt like reading a legal brief in a foreign language. Here's the truth: there are 5 fields that matter. Everything else is noise.</p>
+                <p style="margin:0 0 8px;font-weight:700;color:${COLORS.ink};">The 90-second scan:</p>
+                <ol style="margin:0 0 16px 18px;padding:0;font-size:14px;">
+                  <li style="margin-bottom:8px;"><strong>NAICS code</strong> — does it match yours? If no, close the tab. Save 20 minutes.</li>
+                  <li style="margin-bottom:8px;"><strong>Set-aside</strong> — is it open to you? (8(a), WOSB, HUBZone, SDVOSB)</li>
+                  <li style="margin-bottom:8px;"><strong>Notice type</strong> — Sources Sought = 6-18 months early, Solicitation = bid now or never. Both have value, but the strategy is opposite.</li>
+                  <li style="margin-bottom:8px;"><strong>Deadline</strong> — if it's less than 5 business days out and you've never bid before, it's not for you. Move on.</li>
+                  <li><strong>Dollar range</strong> — micro-purchases (under $10K) are easiest for first-time contractors. Pursue those before chasing $10M.</li>
+                </ol>
+                <p style="margin:0 0 14px;">If you've got 30 seconds: open <a href="https://sam.gov/opportunities" style="color:${COLORS.accent};">sam.gov/opportunities</a>, find one in your industry, and check those 5 fields. That's literally it.</p>
+                <p style="margin:0;font-size:14px;color:${COLORS.muted};">— André</p>
+            `,
+            ctaText: "Try our matching engine (free)",
+            ctaUrl: DASHBOARD_URL,
+            isMarketing: true,
+        }),
+    },
+
+    // ─────────── 3. NAICS picks (Day 8) ───────────
+    nurture_03_naics_misses: {
+        subject: "5 NAICS codes most contractors miss",
+        html: wrap({
+            preheader: "The codes you didn't pick are often the ones you'd win.",
+            heroSvg: HERO_NAICS,
+            body: `
+                <h1 style="margin:0 0 14px;font-size:22px;font-weight:800;color:${COLORS.ink};letter-spacing:-0.02em;">The NAICS you didn't pick.</h1>
+                <p style="margin:0 0 14px;">When I help a new contractor pick NAICS codes, they almost always undersell themselves. They pick the obvious code for what they do — and miss the adjacent codes where buyers are actively spending.</p>
+                <p style="margin:0 0 8px;font-weight:700;color:${COLORS.ink};">5 high-spend codes most small businesses miss:</p>
+                <table cellspacing="0" cellpadding="0" border="0" style="width:100%;font-size:13px;margin:0 0 14px;">
+                  <tr><td style="padding:8px;border-bottom:1px solid ${COLORS.border};"><strong>561720</strong> — Janitorial Services <span style="color:${COLORS.muted};">($2.7B+ federal sq ft)</span></td></tr>
+                  <tr><td style="padding:8px;border-bottom:1px solid ${COLORS.border};"><strong>237310</strong> — Highway/Street Construction <span style="color:${COLORS.muted};">(huge state-level overlap)</span></td></tr>
+                  <tr><td style="padding:8px;border-bottom:1px solid ${COLORS.border};"><strong>562910</strong> — Remediation Services <span style="color:${COLORS.muted};">(EPA, DoD, GSA all buy)</span></td></tr>
+                  <tr><td style="padding:8px;border-bottom:1px solid ${COLORS.border};"><strong>541330</strong> — Engineering Services <span style="color:${COLORS.muted};">(crosses 12 agencies)</span></td></tr>
+                  <tr><td style="padding:8px;"><strong>238220</strong> — Plumbing/HVAC Contractors <span style="color:${COLORS.muted};">(facility maint. backbone)</span></td></tr>
+                </table>
+                <p style="margin:0 0 14px;">If any of these are within striking distance of what you actually do, add them to your SAM.gov profile. It's free and takes 2 minutes per code.</p>
+                <p style="margin:0 0 14px;background:#fafaf9;border-left:3px solid ${COLORS.accent};padding:12px 14px;font-size:14px;">Quick favor: reply with what you actually do (one sentence), and I'll flag the 1-2 NAICS you're probably missing.</p>
+                <p style="margin:0;font-size:14px;color:${COLORS.muted};">— André</p>
+            `,
+            isMarketing: true,
+        }),
+    },
+
+    // ─────────── 4. Past performance (Day 15) ───────────
+    nurture_04_past_perf_bootstrap: {
+        subject: "How to look good before you've won anything",
+        html: wrap({
+            preheader: "The past-performance catch-22, solved.",
+            heroSvg: HERO_PAST_PERF,
+            body: `
+                <h1 style="margin:0 0 14px;font-size:22px;font-weight:800;color:${COLORS.ink};letter-spacing:-0.02em;">"But I have no federal experience."</h1>
+                <p style="margin:0 0 14px;">If I had a dollar for every time I heard this, I'd have funded my own SBIR.</p>
+                <p style="margin:0 0 14px;">The catch-22 is real: you can't win federal contracts without past performance, but you can't build past performance without winning contracts. Here's how to break it:</p>
+                <ol style="margin:0 0 16px 18px;padding:0;font-size:14px;">
+                  <li style="margin-bottom:10px;"><strong>Commercial work counts.</strong> Your private-sector contracts ARE past performance. Cite them. Most evaluators just want proof you can deliver — they don't care if the customer was Walmart or the Navy.</li>
+                  <li style="margin-bottom:10px;"><strong>Sub-contract first.</strong> Find a prime in your NAICS who's already won. Offer to sub a slice. You get the experience + a reference; they get a teaming partner. Win/win.</li>
+                  <li style="margin-bottom:10px;"><strong>Chase micro-purchases.</strong> Under-$10K contracts have almost no past-performance requirements. Win 5 of these in a quarter and you have a track record.</li>
+                  <li><strong>Document everything.</strong> Photos, before/afters, customer testimonials. Build a "performance file" you can drop into any proposal in 5 minutes.</li>
+                </ol>
+                <p style="margin:0 0 14px;">The first 12 months are about <strong>building proof</strong>, not winning prime contracts. After that, the compounding starts and it gets easier fast.</p>
+                <p style="margin:0;font-size:14px;color:${COLORS.muted};">— André</p>
+            `,
+            ctaText: "Get the capability statement template",
+            ctaUrl: KIT_URL,
+            isMarketing: true,
+        }),
+    },
+
+    // ─────────── 5. Audit call CTA (Day 22) — CONVERSION ───────────
+    nurture_05_audit_call: {
+        subject: "30 min on the calendar → 3 live opportunities tomorrow",
+        html: wrap({
+            preheader: "Free B2G Audit. We review your setup, you leave with matches in 24h.",
+            heroSvg: HERO_AUDIT_CALL,
+            body: `
+                <h1 style="margin:0 0 14px;font-size:22px;font-weight:800;color:${COLORS.ink};letter-spacing:-0.02em;">A specific offer.</h1>
+                <p style="margin:0 0 14px;">You've gotten 4 emails from me. I figure if any of this is landing, you might want to talk.</p>
+                <p style="margin:0 0 14px;"><strong>30-minute B2G Audit Call.</strong> Free. No deck, no pitch. Here's exactly what happens:</p>
+                <ul style="margin:0 0 16px 18px;padding:0;font-size:14px;">
+                  <li style="margin-bottom:8px;"><strong>Minutes 0-10</strong> — I ask about what you do, who your commercial customers are, what set-asides you might qualify for.</li>
+                  <li style="margin-bottom:8px;"><strong>Minutes 10-20</strong> — I show you live opportunities in your NAICS, sorted by what you'd actually have a shot at.</li>
+                  <li style="margin-bottom:8px;"><strong>Minutes 20-30</strong> — We talk about whether you want help (Pilot Program, $70 Kit, or just keep getting these emails — all are valid).</li>
+                </ul>
+                <p style="margin:0 0 14px;">Within 24 hours of the call, you get 3 opportunities tailored to your business in your inbox. That part happens whether or not you decide to work with us.</p>
+                <p style="margin:0 0 14px;font-size:14px;color:${COLORS.muted};">Heads up: I only do 5 of these per week and slots fill 2-3 weeks out.</p>
+                <p style="margin:0;font-size:14px;color:${COLORS.muted};">— André</p>
+            `,
+            ctaText: "Book the B2G Audit Call",
+            ctaUrl: AUDIT_URL,
+            ctaSecondary: "Or reply with 3 dates that work",
+            ctaSecondaryUrl: "mailto:hello@capturepilot.com?subject=B2G%20Audit%20Call",
+            isMarketing: true,
+        }),
+    },
+
+    // ─────────── 6. Sources Sought (Day 30) ───────────
+    nurture_06_sources_sought: {
+        subject: "The procurement step 80% of contractors skip",
+        html: wrap({
+            preheader: "Sources Sought notices fire 6-18 months early. Here's how to use them.",
+            heroSvg: HERO_SOURCES_SOUGHT,
+            body: `
+                <h1 style="margin:0 0 14px;font-size:22px;font-weight:800;color:${COLORS.ink};letter-spacing:-0.02em;">Where most contractors enter — too late.</h1>
+                <p style="margin:0 0 14px;">A federal procurement has 4 main steps: Sources Sought → Pre-Solicitation → RFP/RFQ → Award. Most small businesses see their first opportunity at step 3 (RFP), give themselves 30 days to bid, and lose to the contractor who's been working the deal since step 1.</p>
+                <p style="margin:0 0 14px;"><strong>Sources Sought notices are step 1.</strong> They're the government saying "we're thinking about buying this in 6-18 months, who can do it?" They don't ask for a bid. They just ask for a capability statement.</p>
+                <p style="margin:0 0 14px;">What you get when you respond:</p>
+                <ul style="margin:0 0 16px 18px;padding:0;font-size:14px;">
+                  <li style="margin-bottom:6px;">Your name in front of the contracting officer 6 months before competition starts.</li>
+                  <li style="margin-bottom:6px;">A direct line to ask questions (most COs reply).</li>
+                  <li>The chance to <strong>influence the requirements</strong> — if you say "this scope would be better as a set-aside," they sometimes listen.</li>
+                </ul>
+                <p style="margin:0 0 14px;">Cost: 30 minutes per response. Reward: you stop being a stranger when the real RFP drops.</p>
+                <p style="margin:0;font-size:14px;color:${COLORS.muted};">— André<br><span style="color:${COLORS.muted};font-size:12px;">P.S. CapturePilot flags every Sources Sought in your NAICS. Open the dashboard and filter Notice Type = "Sources Sought".</span></p>
+            `,
+            isMarketing: true,
+        }),
+    },
+
+    // ─────────── 7. Capability statement teardown (Day 38) ───────────
+    nurture_07_cap_statement: {
+        subject: "Capability statement teardown (and an offer)",
+        html: wrap({
+            preheader: "A real one I rewrote last month. Same company, 3x the response rate.",
+            heroSvg: HERO_CAP_STATEMENT,
+            body: `
+                <h1 style="margin:0 0 14px;font-size:22px;font-weight:800;color:${COLORS.ink};letter-spacing:-0.02em;">The one-page document that gets ignored 90% of the time.</h1>
+                <p style="margin:0 0 14px;">Your capability statement is the federal version of a one-pager. Contracting officers skim them in 8 seconds. If yours doesn't pass the skim test, it gets binned.</p>
+                <p style="margin:0 0 14px;"><strong>What a good one has:</strong></p>
+                <ul style="margin:0 0 16px 18px;padding:0;font-size:14px;">
+                  <li style="margin-bottom:6px;"><strong>Logo + 2-line tagline</strong> at the top. Not your mission statement.</li>
+                  <li style="margin-bottom:6px;"><strong>NAICS codes</strong> as bold chips. Not a paragraph.</li>
+                  <li style="margin-bottom:6px;"><strong>3-5 core competencies</strong> — verbs, not adjectives. "We strip and seal flooring" not "experienced flooring solutions provider".</li>
+                  <li style="margin-bottom:6px;"><strong>3 past performance bullets</strong> with dollar amount + agency + outcome.</li>
+                  <li><strong>UEI, CAGE, set-asides, point of contact</strong> — at the bottom, clear, scannable.</li>
+                </ul>
+                <p style="margin:0 0 14px;background:#fafaf9;border-left:3px solid ${COLORS.accent};padding:12px 14px;font-size:14px;">
+                  <strong>Offer:</strong> reply to this email with your current capability statement (PDF attachment). I'll send back a 5-line teardown — what's working, what to cut, what to add. Free, takes me 10 minutes, no follow-up sales call unless you want one.
+                </p>
+                <p style="margin:0;font-size:14px;color:${COLORS.muted};">— André</p>
+            `,
+            ctaText: "Send mine for a teardown",
+            ctaUrl: "mailto:hello@capturepilot.com?subject=Capability%20Statement%20Teardown",
+            isMarketing: true,
+        }),
+    },
+
+    // ─────────── 8. $70 Kit (Day 45) — CONVERSION ───────────
+    nurture_08_kit: {
+        subject: "The $70 Capture Kit (no upsell, just deliverables)",
+        html: wrap({
+            preheader: "If you don't want a call or a pilot, here's the $70 alternative.",
+            heroSvg: HERO_KIT,
+            body: `
+                <h1 style="margin:0 0 14px;font-size:22px;font-weight:800;color:${COLORS.ink};letter-spacing:-0.02em;">A smaller option.</h1>
+                <p style="margin:0 0 14px;">Not everyone wants a 30-minute call or a 90-day program. Some people just want the materials and to go figure it out themselves.</p>
+                <p style="margin:0 0 14px;">For those people, I made the <strong>$70 Capture Kit</strong>. It's exactly what I'd send a friend starting out:</p>
+                <ul style="margin:0 0 16px 18px;padding:0;font-size:14px;">
+                  <li style="margin-bottom:6px;"><strong>NAICS-targeted opportunity list</strong> — 90 days of live matches, scored, deduplicated, in a Google Sheet.</li>
+                  <li style="margin-bottom:6px;"><strong>Capability statement template</strong> — the actual InDesign + Word files we use for our consulting clients.</li>
+                  <li style="margin-bottom:6px;"><strong>Past-performance bootstrap guide</strong> — how to build a credible track record from commercial work.</li>
+                  <li><strong>SAM.gov walkthrough</strong> — screen-by-screen, no fluff, 18 minutes start to finish.</li>
+                </ul>
+                <p style="margin:0 0 14px;">It's a one-time purchase. No subscription, no upsell. If you decide later you want help, the Pilot Program is still there — but you don't have to commit.</p>
+                <p style="margin:0;font-size:14px;color:${COLORS.muted};">— André<br><span style="color:${COLORS.muted};font-size:12px;">P.S. The kit has helped 70+ small businesses get their first federal contract. Average time-to-first-bid: 6 weeks.</span></p>
+            `,
+            ctaText: "Get the Capture Kit · $70",
+            ctaUrl: KIT_URL,
+            isMarketing: true,
+        }),
+    },
+
+    // ─────────── 9. Fiscal Cliff (Day 55) ───────────
+    nurture_09_fiscal_cliff: {
+        subject: "What to chase in Aug-Sep (year-end fiscal cliff)",
+        html: wrap({
+            preheader: "30% of federal spend happens in the final 2 months of the fiscal year.",
+            heroSvg: HERO_FY_CLIFF,
+            body: `
+                <h1 style="margin:0 0 14px;font-size:22px;font-weight:800;color:${COLORS.ink};letter-spacing:-0.02em;">The year-end fiscal cliff.</h1>
+                <p style="margin:0 0 14px;">Federal fiscal year ends September 30. Any money agencies haven't spent by then expires. So what happens? <strong>~30% of all federal spend gets crammed into August + September</strong>. It's the single most predictable budget pattern in the entire procurement system.</p>
+                <p style="margin:0 0 14px;"><strong>What this means for small businesses:</strong></p>
+                <ul style="margin:0 0 16px 18px;padding:0;font-size:14px;">
+                  <li style="margin-bottom:6px;">Buyers are time-pressured → they prefer contractors they've already worked with OR can onboard fast.</li>
+                  <li style="margin-bottom:6px;">Micro-purchases (under $10K) and simplified acquisitions (up to $250K) explode — perfect entry point if you've never bid.</li>
+                  <li style="margin-bottom:6px;">Sole-source justifications get easier to write — buyers will accept "this is the only contractor who can deliver in 30 days".</li>
+                  <li>Set-aside spending often surges to hit annual goals (8(a), WOSB, HUBZone all have agency targets).</li>
+                </ul>
+                <p style="margin:0 0 14px;"><strong>What to do in June-July:</strong> identify your top 5 agencies (the ones already buying what you sell). Email their small business specialist. Introduce yourself. Say "I'm available for year-end work — micro-purchases and SAP contracts under $250K." That single email puts you on a list most contractors never get on.</p>
+                <p style="margin:0;font-size:14px;color:${COLORS.muted};">— André</p>
+            `,
+            ctaText: "Find the right agencies in the dashboard",
+            ctaUrl: DASHBOARD_URL,
+            isMarketing: true,
+        }),
+    },
+
+    // ─────────── 10. Why bids lose (Day 65) ───────────
+    nurture_10_why_bids_lose: {
+        subject: "Why your last bid lost (without seeing it)",
+        html: wrap({
+            preheader: "The 5 reasons account for 90% of small-business losses.",
+            heroSvg: HERO_BID_LOSS,
+            body: `
+                <h1 style="margin:0 0 14px;font-size:22px;font-weight:800;color:${COLORS.ink};letter-spacing:-0.02em;">I can guess why your last bid lost — even if I haven't seen it.</h1>
+                <p style="margin:0 0 14px;">I've reviewed ~200 small-business federal bid losses in the last 3 years. Here's the pattern, in descending order:</p>
+                <ol style="margin:0 0 16px 18px;padding:0;font-size:14px;">
+                  <li style="margin-bottom:10px;"><strong>Price not justified.</strong> You said "$87,500" but didn't break down labor + materials + overhead + fee. Evaluators bin proposals where they can't audit your math.</li>
+                  <li style="margin-bottom:10px;"><strong>Past performance missing or weak.</strong> You listed projects but didn't include CPARS ratings, references, or outcome metrics ($, hours, sq ft, etc).</li>
+                  <li style="margin-bottom:10px;"><strong>Set-aside mismatch.</strong> Solicitation was 8(a) and you're WOSB — auto-bin. Or you're 8(a) but the work is outside your approved NAICS.</li>
+                  <li style="margin-bottom:10px;"><strong>Incomplete compliance section.</strong> You missed an FAR reference, a representation, or a flow-down clause. These are mechanical — the evaluator doesn't read your technical proposal if compliance fails.</li>
+                  <li><strong>Other</strong> — wrong format, wrong page count, late submission, etc.</li>
+                </ol>
+                <p style="margin:0 0 14px;">The first 4 are <strong>fixable</strong> before you bid again. The 5th means you need a checklist.</p>
+                <p style="margin:0 0 14px;">If you want a free 1-page bid post-mortem, reply with the solicitation number and a 2-sentence description of what happened. I'll tell you which bucket it falls in and what to change next time.</p>
+                <p style="margin:0;font-size:14px;color:${COLORS.muted};">— André</p>
+            `,
+            isMarketing: true,
+        }),
+    },
+
+    // ─────────── 11. Pilot Program (Day 75) — CONVERSION ───────────
+    nurture_11_pilot: {
+        subject: "Pilot Program — 3 spots open this quarter",
+        html: wrap({
+            preheader: "Done-for-you capture. 90 days. From SAM to first bid submitted.",
+            heroSvg: HERO_PILOT,
+            body: `
+                <h1 style="margin:0 0 14px;font-size:22px;font-weight:800;color:${COLORS.ink};letter-spacing:-0.02em;">When the kit isn't enough.</h1>
+                <p style="margin:0 0 14px;">The Capture Kit works for people who'll grind through SAM registration on their own. The Pilot Program is for people who'd rather pay someone to handle the whole damn process so they can stay in their day job.</p>
+                <p style="margin:0 0 14px;"><strong>What we do in 90 days:</strong></p>
+                <ul style="margin:0 0 16px 18px;padding:0;font-size:14px;">
+                  <li style="margin-bottom:8px;"><strong>Week 1-2:</strong> SAM.gov registration, NAICS optimization, set-aside applications.</li>
+                  <li style="margin-bottom:8px;"><strong>Week 3-4:</strong> Capability statement (final, branded, contracting-officer ready).</li>
+                  <li style="margin-bottom:8px;"><strong>Week 5-8:</strong> Active capture pipeline — 5-10 live opportunities tracked, Sources Sought responses sent.</li>
+                  <li><strong>Week 9-12:</strong> First bid submitted. We co-draft. You approve. We file.</li>
+                </ul>
+                <p style="margin:0 0 14px;"><strong>What you do:</strong> 2 weekly check-ins (30 min each). Sign things when we send them. Answer questions about your business.</p>
+                <p style="margin:0 0 14px;"><strong>What it costs:</strong> $4,500 for the 90-day program. Plus 5% of any contract you win during or in the 12 months after (success fee).</p>
+                <p style="margin:0 0 14px;background:#fafaf9;border-left:3px solid ${COLORS.warn};padding:12px 14px;font-size:14px;">3 spots open this quarter. We take 6 clients at a time max — anything more and the personal attention slips.</p>
+                <p style="margin:0;font-size:14px;color:${COLORS.muted};">— André</p>
+            `,
+            ctaText: "Apply to the Pilot Program",
+            ctaUrl: PILOT_URL,
+            ctaSecondary: "Or book a 15-min fit-check call",
+            ctaSecondaryUrl: AUDIT_URL,
+            isMarketing: true,
+        }),
+    },
+
+    // ─────────── 12. Re-engagement / Sunset (Day 90) ───────────
+    nurture_12_goodbye: {
+        subject: "Three doors — or none",
+        html: wrap({
+            preheader: "It's been 90 days. Here's what's next — or how to leave gracefully.",
+            heroSvg: HERO_GOODBYE,
+            body: `
+                <h1 style="margin:0 0 14px;font-size:22px;font-weight:800;color:${COLORS.ink};letter-spacing:-0.02em;">90 days. Final check-in.</h1>
+                <p style="margin:0 0 14px;">You downloaded the Field Manual three months ago. You've gotten 11 emails from me since. I've taken up some of your inbox real estate — I owe you a final clean ask.</p>
+                <p style="margin:0 0 14px;"><strong>Three doors:</strong></p>
+                <table cellspacing="0" cellpadding="0" border="0" style="width:100%;margin:0 0 16px;">
+                  <tr>
+                    <td style="padding:12px;border:1px solid ${COLORS.border};border-radius:8px;font-size:13px;width:33%;vertical-align:top;">
+                      <div style="font-weight:700;color:${COLORS.ink};margin-bottom:6px;">📞 Audit Call</div>
+                      <div style="color:${COLORS.muted};margin-bottom:8px;">Free 30 min. 3 opps after.</div>
+                      <a href="${AUDIT_URL}" style="color:${COLORS.accent};font-weight:700;text-decoration:none;font-size:12px;">Book →</a>
+                    </td>
+                    <td style="padding:0 6px;"></td>
+                    <td style="padding:12px;border:1px solid ${COLORS.border};border-radius:8px;font-size:13px;width:33%;vertical-align:top;">
+                      <div style="font-weight:700;color:${COLORS.ink};margin-bottom:6px;">📦 Capture Kit</div>
+                      <div style="color:${COLORS.muted};margin-bottom:8px;">$70 one-time. Self-serve.</div>
+                      <a href="${KIT_URL}" style="color:${COLORS.accent};font-weight:700;text-decoration:none;font-size:12px;">Get it →</a>
+                    </td>
+                    <td style="padding:0 6px;"></td>
+                    <td style="padding:12px;border:1px solid ${COLORS.border};border-radius:8px;font-size:13px;width:33%;vertical-align:top;">
+                      <div style="font-weight:700;color:${COLORS.ink};margin-bottom:6px;">🚀 Pilot Program</div>
+                      <div style="color:${COLORS.muted};margin-bottom:8px;">$4.5K. Done-for-you.</div>
+                      <a href="${PILOT_URL}" style="color:${COLORS.accent};font-weight:700;text-decoration:none;font-size:12px;">Apply →</a>
+                    </td>
+                  </tr>
+                </table>
+                <p style="margin:0 0 14px;">If none of these fit — that's totally fine. I'd rather have your inbox space available for when something I do <em>actually</em> matters to you.</p>
+                <p style="margin:0 0 14px;"><strong>Reply with one of:</strong></p>
+                <ul style="margin:0 0 14px 18px;padding:0;font-size:14px;">
+                  <li><strong>"Keep emailing"</strong> — I'll keep sending one valuable thing per month.</li>
+                  <li><strong>"Slow down"</strong> — quarterly only.</li>
+                  <li><strong>"Stop"</strong> — I'll unsubscribe you immediately and we're square.</li>
+                </ul>
+                <p style="margin:0;font-size:14px;color:${COLORS.muted};">Either way, thanks for the 90 days.<br>— André</p>
+            `,
+            isMarketing: true,
+        }),
+    },
+};
+
+/**
+ * Sequence metadata — used by the (future) cron scheduler to pick the right
+ * template based on the lead's day-from-signup. Kept here so it lives next to
+ * the template definitions for easy auditing.
+ */
+export const NURTURE_SEQUENCE: Array<{ key: string; day_offset: number; type: "welcome" | "value" | "conversion" | "hybrid" | "sunset"; label: string }> = [
+    { key: "nurture_01_welcome",         day_offset:  0, type: "welcome",    label: "Day 0 · Welcome" },
+    { key: "nurture_02_opp_anatomy",     day_offset:  3, type: "value",      label: "Day 3 · Opportunity anatomy" },
+    { key: "nurture_03_naics_misses",    day_offset:  8, type: "value",      label: "Day 8 · NAICS picks" },
+    { key: "nurture_04_past_perf_bootstrap", day_offset: 15, type: "value",  label: "Day 15 · Past performance bootstrap" },
+    { key: "nurture_05_audit_call",      day_offset: 22, type: "conversion", label: "Day 22 · Audit call CTA" },
+    { key: "nurture_06_sources_sought",  day_offset: 30, type: "value",      label: "Day 30 · Sources Sought" },
+    { key: "nurture_07_cap_statement",   day_offset: 38, type: "hybrid",     label: "Day 38 · Capability statement teardown" },
+    { key: "nurture_08_kit",             day_offset: 45, type: "conversion", label: "Day 45 · $70 Kit" },
+    { key: "nurture_09_fiscal_cliff",    day_offset: 55, type: "value",      label: "Day 55 · Year-end fiscal cliff" },
+    { key: "nurture_10_why_bids_lose",   day_offset: 65, type: "value",      label: "Day 65 · Why bids lose" },
+    { key: "nurture_11_pilot",           day_offset: 75, type: "conversion", label: "Day 75 · Pilot Program" },
+    { key: "nurture_12_goodbye",         day_offset: 90, type: "sunset",     label: "Day 90 · Three doors" },
+];

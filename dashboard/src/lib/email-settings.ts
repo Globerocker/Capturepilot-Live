@@ -46,6 +46,20 @@ export const DEFAULT_EMAIL_SETTINGS: Record<string, EmailConfig> = {
     edu_naics_codes: { enabled: true, audience: ["self_service"], category: "marketing", label: "Learning: NAICS Codes Explained", description: "Explainer on NAICS codes." },
     edu_set_asides: { enabled: true, audience: ["all_users"], category: "marketing", label: "Learning: Set-Aside Programs", description: "Deep dive into set-aside programs." },
     edu_capability_statement: { enabled: true, audience: ["consulting"], category: "marketing", label: "Learning: Capability Statement Guide", description: "Capability statement sections." },
+
+    // 90-day Facebook-lead nurture sequence (see lib/email-nurture-templates.ts)
+    nurture_01_welcome:             { enabled: true, audience: ["lead"], category: "marketing", label: "Nurture 01 · Welcome (Day 0)",                description: "First touch — confirms PDF delivery, sets expectations, asks for the one biggest confusion to shape future emails." },
+    nurture_02_opp_anatomy:         { enabled: true, audience: ["lead"], category: "marketing", label: "Nurture 02 · Opp anatomy (Day 3)",             description: "Teaches the 5 fields that matter on a SAM.gov opportunity. Soft CTA to dashboard." },
+    nurture_03_naics_misses:        { enabled: true, audience: ["lead"], category: "marketing", label: "Nurture 03 · NAICS misses (Day 8)",            description: "5 high-spend NAICS codes most small businesses skip. Reply hook: \"tell me your industry, I'll spot the misses\"." },
+    nurture_04_past_perf_bootstrap: { enabled: true, audience: ["lead"], category: "marketing", label: "Nurture 04 · Past-perf bootstrap (Day 15)",    description: "How to build past performance from $0 in federal awards. Soft CTA to $70 kit's cap-statement template." },
+    nurture_05_audit_call:          { enabled: true, audience: ["lead"], category: "marketing", label: "Nurture 05 · Audit call CTA (Day 22)",         description: "First direct conversion push. Free 30-min B2G Audit, 3 live opps delivered in 24h after the call." },
+    nurture_06_sources_sought:      { enabled: true, audience: ["lead"], category: "marketing", label: "Nurture 06 · Sources Sought (Day 30)",         description: "The procurement step 80% of contractors skip. Re-warm after audit-call push." },
+    nurture_07_cap_statement:       { enabled: true, audience: ["lead"], category: "marketing", label: "Nurture 07 · Cap statement teardown (Day 38)", description: "Hybrid: value content + offer to roast their capability statement for free." },
+    nurture_08_kit:                 { enabled: true, audience: ["lead"], category: "marketing", label: "Nurture 08 · $70 Kit (Day 45)",                description: "Second conversion push at lower price point. Concrete deliverables, no upsell." },
+    nurture_09_fiscal_cliff:        { enabled: true, audience: ["lead"], category: "marketing", label: "Nurture 09 · Year-end fiscal cliff (Day 55)",  description: "Timely: 30% of federal spend happens Aug-Sep. What to do in June-July to prep." },
+    nurture_10_why_bids_lose:       { enabled: true, audience: ["lead"], category: "marketing", label: "Nurture 10 · Why bids lose (Day 65)",          description: "5 reasons account for 90% of small-biz losses. Offer to review a real bid loss for free." },
+    nurture_11_pilot:               { enabled: true, audience: ["lead"], category: "marketing", label: "Nurture 11 · Pilot Program (Day 75)",          description: "Third + highest conversion push. Done-for-you 90-day program at $4.5K + 5% success fee." },
+    nurture_12_goodbye:             { enabled: true, audience: ["lead"], category: "marketing", label: "Nurture 12 · Three doors (Day 90)",            description: "Final sunset. Three options or graceful unsubscribe — protects deliverability + cleans the list." },
 };
 
 // Cache: 60s TTL
