@@ -18,6 +18,8 @@
  * are skipped without a probe.
  */
 
+import { flareGet } from "@/lib/flaresolverr";
+
 const UA = "CapturePilot-Discovery/1.0 (+https://www.capturepilot.com; ops@capturepilot.com)";
 
 export interface DiscoveryResult {
@@ -28,23 +30,45 @@ export interface DiscoveryResult {
     status: "found" | "miss" | "already_known" | "error";
 }
 
+/**
+ * Extract the organizationId from a Bonfire portal HTML page. Bonfire embeds
+ * `var organizationId = "N"` in the page bootstrap; presence of that pattern
+ * is the fingerprint of a real tenant vs a parked subdomain.
+ */
+function extractOrgId(html: string): number | null {
+    const m = html.match(/organizationId\s*=\s*["']?(\d+)["']?/i);
+    if (!m) return null;
+    const id = parseInt(m[1], 10);
+    return Number.isFinite(id) && id > 0 ? id : null;
+}
+
 export async function probeBonfireSlug(slug: string, timeoutMs = 8000): Promise<{
     organizationId: number | null;
     status: "found" | "miss" | "error";
 }> {
+    const url = `https://${slug}.bonfirehub.com/portal/`;
     try {
-        const res = await fetch(`https://${slug}.bonfirehub.com/portal/`, {
+        const res = await fetch(url, {
             headers: { "User-Agent": UA, Accept: "text/html" },
             signal: AbortSignal.timeout(timeoutMs),
             redirect: "follow",
         });
-        if (!res.ok) return { organizationId: null, status: "miss" };
-        const html = await res.text();
-        const m = html.match(/organizationId\s*=\s*["']?(\d+)["']?/i);
-        if (!m) return { organizationId: null, status: "miss" };
-        const id = parseInt(m[1], 10);
-        if (!Number.isFinite(id) || id <= 0) return { organizationId: null, status: "miss" };
-        return { organizationId: id, status: "found" };
+        if (res.ok) {
+            const html = await res.text();
+            const id = extractOrgId(html);
+            if (id) return { organizationId: id, status: "found" };
+            // 200 OK but no orgId → maybe CF challenge page; fall through to
+            // FlareSolverr (real Chromium) which can solve the JS check.
+        } else if (res.status !== 403 && res.status !== 503) {
+            // Genuine 404 / non-CF error → not a real tenant.
+            return { organizationId: null, status: "miss" };
+        }
+        // CF-blocked (403/503) OR 200-with-no-orgId. Retry via FlareSolverr.
+        const flare = await flareGet(url, { timeoutMs: 30000 });
+        if (!flare || flare.status !== 200) return { organizationId: null, status: "miss" };
+        const id = extractOrgId(flare.body);
+        if (id) return { organizationId: id, status: "found" };
+        return { organizationId: null, status: "miss" };
     } catch {
         return { organizationId: null, status: "error" };
     }

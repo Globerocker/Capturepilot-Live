@@ -39,25 +39,52 @@ export async function GET(req: NextRequest) {
         { auth: { persistSession: false } },
     );
 
-    // Load known bonfire prefixes from rss_sources so we skip the probe.
+    // Load known bonfire prefixes from rss_sources. Slugs already with an
+    // org_id get skipped; slugs WITHOUT an org_id get re-probed so any
+    // blind-seeded candidates (typically added manually for missing-state
+    // coverage) finally get their org_id and start fetching data.
     const { data: known, error: knownErr } = await sb
         .from("rss_sources")
-        .select("source_prefix, feed_url")
+        .select("source_prefix, feed_url, bonfire_org_id")
         .eq("provider", "bonfire");
     if (knownErr) return NextResponse.json({ error: knownErr.message }, { status: 500 });
     const knownSlugs = new Set<string>();
-    for (const r of (known || []) as { source_prefix: string; feed_url: string }[]) {
+    const slugsMissingOrgId: string[] = [];
+    for (const r of (known || []) as { source_prefix: string; feed_url: string; bonfire_org_id: number | null }[]) {
+        let slug: string | null = null;
         // source_prefix is e.g. "bonfire-fairfaxcounty"
         if (r.source_prefix?.startsWith("bonfire-")) {
-            knownSlugs.add(r.source_prefix.replace("bonfire-", ""));
+            slug = r.source_prefix.replace("bonfire-", "");
+        } else {
+            try {
+                const h = new URL(r.feed_url).hostname.toLowerCase();
+                if (h.endsWith(".bonfirehub.com")) slug = h.replace(".bonfirehub.com", "");
+            } catch { /* ignore */ }
         }
-        // Also catch from feed_url host (fallback for differently-named rows)
-        try {
-            const h = new URL(r.feed_url).hostname.toLowerCase();
-            if (h.endsWith(".bonfirehub.com")) {
-                knownSlugs.add(h.replace(".bonfirehub.com", ""));
-            }
-        } catch { /* ignore */ }
+        if (!slug) continue;
+        knownSlugs.add(slug);
+        if (!r.bonfire_org_id) slugsMissingOrgId.push(slug);
+    }
+
+    // Backfill pass — re-probe known slugs that don't have an org_id yet.
+    // Runs before the new-tenant discovery so a single cron tick can both
+    // fix the missing-state seeds AND discover new ones.
+    const backfilled: Array<{ slug: string; organizationId: number }> = [];
+    if (slugsMissingOrgId.length > 0) {
+        const backfillBatch = slugsMissingOrgId.slice(0, 30); // cap so it doesn't blow the time budget
+        for (let i = 0; i < backfillBatch.length; i += concurrency) {
+            const slice = backfillBatch.slice(i, i + concurrency);
+            await Promise.all(slice.map(async (slug) => {
+                const r = await probeBonfireSlug(slug, 15_000);
+                if (r.status === "found" && r.organizationId) {
+                    backfilled.push({ slug, organizationId: r.organizationId });
+                    await sb.from("rss_sources")
+                        .update({ bonfire_org_id: r.organizationId })
+                        .eq("source_prefix", `bonfire-${slug}`)
+                        .is("bonfire_org_id", null);
+                }
+            }));
+        }
     }
 
     const candidates = BONFIRE_DISCOVERY_SEEDS
@@ -114,6 +141,8 @@ export async function GET(req: NextRequest) {
         miss,
         errored,
         new_tenants: found.map(f => `${f.slug} (orgId=${f.organizationId})`),
+        backfilled_count: backfilled.length,
+        backfilled: backfilled.map(b => `${b.slug} (orgId=${b.organizationId})`),
         elapsed_ms: Date.now() - startedAt,
     });
 }
