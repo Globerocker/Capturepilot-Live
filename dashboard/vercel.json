@@ -100,10 +100,6 @@
             "schedule": "0 11 * * 4"
         },
         {
-            "path": "/api/cron/sync_govtribe_activity",
-            "schedule": "0 13 * * *"
-        },
-        {
             "path": "/api/cron/backlinks_orchestrator",
             "schedule": "0 6 * * *"
         },

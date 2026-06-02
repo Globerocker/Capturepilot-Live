@@ -170,19 +170,39 @@ export async function GET(req: NextRequest) {
     }
 
     // ─── Cron staleness ──────────────────────────────────────────────────────
-    // "Anything fishy" threshold per the user's alignment: any cron whose last
-    // run is older than its expected interval × 2 fires a `cron_stale` alert.
-    // We approximate the expected interval as 24h for crons we haven't seen
-    // in `cron_runs` lately — that's a generous floor and avoids false-positives
-    // on weekly/monthly crons.
+    // Schedule-aware threshold: daily/sub-daily crons must run within 24h,
+    // weekly within 8 days, monthly within 35 days. The previous fixed-24h
+    // threshold fired false-positive alerts for legitimately-weekly crons
+    // (ingest_sec_filings_primes, ingest_gsa_elibrary, etc) every morning.
+    //
+    // Source of truth is vercel.json; this map mirrors the weekly/monthly
+    // schedule entries. Keep in sync when adding new non-daily crons.
+    const STALE_THRESHOLDS_MS: Record<string, number> = {
+        // Weekly crons (run once a week — give 8 days before flagging stale)
+        "/api/cron/ingest_calc":                     8 * 24 * 3600_000,
+        "/api/cron/competitor_monitor":              8 * 24 * 3600_000,
+        "/api/cron/market_watch_digest":             8 * 24 * 3600_000,
+        "/api/cron/recompete_scan":                  8 * 24 * 3600_000,
+        "/api/cron/ingest_subawards":                8 * 24 * 3600_000,
+        "/api/cron/ingest_dol_wage_determinations":  8 * 24 * 3600_000,
+        "/api/cron/ingest_gsa_elibrary":             8 * 24 * 3600_000,
+        "/api/cron/ingest_sec_filings_primes":       8 * 24 * 3600_000,
+        "/api/cron/publish_next_blog":               8 * 24 * 3600_000,
+        "/api/cron/discover_top_by_naics":           8 * 24 * 3600_000,
+        // Monthly
+        "/api/cron/ingest_federal_hierarchy":        35 * 24 * 3600_000,
+    };
+    const DEFAULT_STALE_MS = 24 * 3600_000; // fall-through for daily+
+
     try {
-        const since = new Date(Date.now() - 48 * 3600_000).toISOString();
+        // Pull a wider window so weekly crons' last run is still in the result set.
+        const since = new Date(Date.now() - 10 * 24 * 3600_000).toISOString();
         const { data: recent } = await sb
             .from("cron_runs")
             .select("route, started_at, status")
             .gte("started_at", since)
             .order("started_at", { ascending: false })
-            .limit(500);
+            .limit(2000);
 
         // Last run + status per route
         const latestPerRoute = new Map<string, { started_at: string; status: string | null }>();
@@ -190,10 +210,11 @@ export async function GET(req: NextRequest) {
             if (!latestPerRoute.has(r.route)) latestPerRoute.set(r.route, { started_at: r.started_at, status: r.status });
         }
 
-        const TWENTY_FOUR_H_AGO = Date.now() - 24 * 3600_000;
+        const nowMs = Date.now();
         for (const [route, info] of latestPerRoute.entries()) {
             const lastMs = new Date(info.started_at).getTime();
-            const stale = lastMs < TWENTY_FOUR_H_AGO;
+            const threshold = STALE_THRESHOLDS_MS[route] ?? DEFAULT_STALE_MS;
+            const stale = (nowMs - lastMs) > threshold;
             const failed = info.status && info.status !== "ok" && info.status !== "success";
             if (!stale && !failed) continue;
 
@@ -206,8 +227,9 @@ export async function GET(req: NextRequest) {
                 .is("resolved_at", null);
             if (existing) continue;
 
+            const thresholdHrs = Math.round(((STALE_THRESHOLDS_MS[route] ?? DEFAULT_STALE_MS) / 3600_000));
             const title = stale
-                ? `Cron ${route} hasn't run in 24h+`
+                ? `Cron ${route} hasn't run in ${thresholdHrs}h+`
                 : `Cron ${route} last run failed (status=${info.status})`;
             newAlerts.push({
                 slug: `cron:${route}`,
