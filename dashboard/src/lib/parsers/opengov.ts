@@ -23,6 +23,8 @@
  * a NIGP→NAICS crosswalk if needed (once project listings are reachable).
  */
 
+import { flarePost, flareGet, extractJsonFromFlareBody } from "@/lib/flaresolverr";
+
 const API_BASE = "https://api.procurement.opengov.com/api/v1";
 const PORTAL_ORIGIN = "https://procurement.opengov.com";
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
@@ -34,6 +36,17 @@ function commonHeaders(): Record<string, string> {
         Referer: `${PORTAL_ORIGIN}/`,
         Accept: "application/json",
     };
+}
+
+/**
+ * True when an HTTP response looks like Cloudflare-blocked us (403/503 + the
+ * usual CF challenge markers in the body). Used to decide whether retrying
+ * via FlareSolverr is worth the extra 5-10s.
+ */
+function isCloudflareBlock(status: number, body?: string): boolean {
+    if (status === 403 || status === 503) return true;
+    if (body && /cloudflare|cf-ray|challenge-platform/i.test(body)) return true;
+    return false;
 }
 
 export interface OpenGovTenant {
@@ -112,19 +125,33 @@ export async function fetchOpenGovProjects(args: {
         const body = {
             paging: { page: args.page ?? 0, pageSize: args.pageSize ?? 50 },
         };
-        const res = await fetch(`${API_BASE}/government/${encodeURIComponent(args.tenantSlug)}/project/public`, {
+        const targetUrl = `${API_BASE}/government/${encodeURIComponent(args.tenantSlug)}/project/public`;
+        const bodyJson = JSON.stringify(body);
+
+        let rawJson: string | null = null;
+        const res = await fetch(targetUrl, {
             method: "POST",
             headers: {
                 ...commonHeaders(),
                 "Content-Type": "application/json",
                 Referer: `${PORTAL_ORIGIN}/portal/${encodeURIComponent(args.tenantSlug)}`,
             },
-            body: JSON.stringify(body),
+            body: bodyJson,
             signal: AbortSignal.timeout(args.timeoutMs ?? 20000),
         });
-        if (!res.ok) return [];
-        // 2025 response shape: { count, rows: [...] }. Older shape used data/results.
-        const j = await res.json() as {
+        if (res.ok) {
+            rawJson = await res.text();
+        } else if (isCloudflareBlock(res.status)) {
+            // Cloudflare blocked the plain-HTTP request. Retry via FlareSolverr
+            // (headless Chromium on the VPS) to clear the JS challenge. Adds
+            // ~5-10s but turns 32 chronically-failing portals back into ok.
+            const flare = await flarePost(targetUrl, bodyJson, { contentType: "application/json" });
+            if (flare && flare.status === 200) {
+                rawJson = extractJsonFromFlareBody(flare.body);
+            }
+        }
+        if (!rawJson) return [];
+        const j = JSON.parse(rawJson) as {
             count?: number;
             rows?: Array<Record<string, unknown>>;
             data?: Array<Record<string, unknown>>;
@@ -173,12 +200,22 @@ export async function fetchOpenGovProjectDetail(args: {
     timeoutMs?: number;
 }): Promise<OpenGovProjectDetail | null> {
     try {
-        const res = await fetch(`${API_BASE}/project/${args.projectId}`, {
+        const targetUrl = `${API_BASE}/project/${args.projectId}`;
+        let rawJson: string | null = null;
+        const res = await fetch(targetUrl, {
             headers: commonHeaders(),
             signal: AbortSignal.timeout(args.timeoutMs ?? 20000),
         });
-        if (!res.ok) return null;
-        const r = await res.json() as Record<string, unknown>;
+        if (res.ok) {
+            rawJson = await res.text();
+        } else if (isCloudflareBlock(res.status)) {
+            const flare = await flareGet(targetUrl);
+            if (flare && flare.status === 200) {
+                rawJson = extractJsonFromFlareBody(flare.body);
+            }
+        }
+        if (!rawJson) return null;
+        const r = JSON.parse(rawJson) as Record<string, unknown>;
         const dept = (r.department as Record<string, unknown> | undefined) || {};
         const contact = (r.primaryContact as Record<string, unknown> | undefined) || {};
         const categorySetId = typeof r.categorySetId === "number" ? r.categorySetId : null;
