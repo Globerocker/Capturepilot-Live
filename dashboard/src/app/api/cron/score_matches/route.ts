@@ -86,30 +86,30 @@ export async function GET(req: NextRequest) {
         }
         stats.users = users.length;
 
-        // All active opportunities (paged, ordered so pages don't overlap)
+        // All active opportunities — KEYSET pagination by id (not OFFSET/LIMIT)
+        // because OFFSET on a 65k+ table takes 30s+ as the offset grows.
+        // Also: we DROP description + structured_requirements from this select.
+        // They're 5-30KB per row and were responsible for the Supabase statement
+        // timeout. Keyword scoring degrades to title-only — acceptable; we can
+        // do a 2-pass full-fidelity rescoring later if matchcount drops too far.
         const seenOppIds = new Set<string>();
         const opps: OpportunityForScoring[] = [];
-        let offset = 0;
+        let lastId: string | null = null;
         while (true) {
             if (Date.now() - startTime > 250_000) break;
-            const { data: batch, error: oppErr } = await db
+            let q = db
                 .from("opportunities")
                 .select(
                     "id, naics_code, psc_code, notice_type, agency, " +
                     "set_aside_code, place_of_performance_state, " +
-                    "award_amount, response_deadline, " +
-                    "title, description, structured_requirements"
+                    "award_amount, response_deadline, title"
                 )
-                // Drop expired + archived opps — they can't be won and pollute
-                // the scoring loop. 23k of the 30k rows in prod are EXPIRED;
-                // scoring those wastes ~80% of the cron budget for zero output.
-                // Notice that we use neq.EXPIRED rather than .in([ACTIVE,...])
-                // so brand-new statuses (e.g. EXPIRING_SOON, AWARDED) are still
-                // considered until we explicitly opt them out.
                 .eq("is_archived", false)
                 .neq("status", "EXPIRED")
                 .order("id", { ascending: true })
-                .range(offset, offset + OPP_BATCH - 1);
+                .limit(OPP_BATCH);
+            if (lastId) q = q.gt("id", lastId);
+            const { data: batch, error: oppErr } = await q;
             if (oppErr) throw oppErr;
             if (!batch || batch.length === 0) break;
             for (const row of (batch as unknown) as OpportunityForScoring[]) {
@@ -118,8 +118,8 @@ export async function GET(req: NextRequest) {
                     opps.push(row);
                 }
             }
+            lastId = (batch[batch.length - 1] as unknown as { id: string }).id;
             if (batch.length < OPP_BATCH) break;
-            offset += OPP_BATCH;
         }
         stats.opps = opps.length;
         if (opps.length === 0) {
