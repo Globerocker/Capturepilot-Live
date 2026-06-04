@@ -135,6 +135,23 @@ export async function loadProposalContext(
 
     let companyContext = "";
     if (user_profile_id) {
+        // Plan gate: ai_proposals is Pro+ only. We check BEFORE the capability
+        // statement check so a Light user gets the upgrade prompt rather than
+        // the "create a cap statement first" 412.
+        const { loadPlanLimits } = await import("@/lib/plan-tier");
+        const { limits, tierLabel } = await loadPlanLimits(user_profile_id);
+        if (!limits.ai_proposals) {
+            return {
+                ok: false,
+                status: 402,  // 402 Payment Required
+                body: {
+                    error: "AI proposal writer requires the Pro plan",
+                    code: "AI_PROPOSALS_REQUIRES_PRO",
+                    current_tier: tierLabel,
+                    upgrade_url: "/billing?upgrade=pro&feature=ai_proposals",
+                },
+            };
+        }
         const { data: profile } = await db.from("user_profiles")
             .select("company_name, naics_codes, sba_certifications, state, employee_count, revenue, years_in_business, federal_awards_count, company_description, website, capability_statement")
             .eq("id", user_profile_id).single();

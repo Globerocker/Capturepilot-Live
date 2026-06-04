@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
 import ExcelJS from "exceljs";
+import { loadPlanLimits } from "@/lib/plan-tier";
 
 export const maxDuration = 60;
 
@@ -47,6 +48,18 @@ export async function POST(req: NextRequest) {
         if (!profile) return NextResponse.json({ error: "Profile not found" }, { status: 404 });
 
         const profileId = (profile as { id: string }).id;
+
+        // Gate: export_data is Pro+ only. Anti-scrape — a Light tier user
+        // could grab 65K opps in 4-5 cancel cycles otherwise.
+        const { limits, tierLabel } = await loadPlanLimits(profileId);
+        if (!limits.export_data) {
+            return NextResponse.json({
+                error: "Export requires the Pro plan",
+                code: "EXPORT_REQUIRES_PRO",
+                current_tier: tierLabel,
+                upgrade_url: "/billing?upgrade=pro&feature=export_data",
+            }, { status: 402 });  // 402 Payment Required
+        }
 
         // Fetch matches scoped to this user
         const { data, error } = await sb
