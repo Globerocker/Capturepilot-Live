@@ -141,6 +141,10 @@ function SignupPageContent() {
       if (analysisId) onboardParams.set("analysis_id", analysisId);
       if (invite?.company_name) onboardParams.set("company", invite.company_name);
       if (invite?.recipient_name) onboardParams.set("name", invite.recipient_name);
+      // Preserve the plan param from /pricing → /signup so it survives
+      // through /onboard and into /billing for the trial-start redirect.
+      const planParam = searchParams.get("plan");
+      if (planParam === "light" || planParam === "pro") onboardParams.set("plan", planParam);
       const onboardQs = onboardParams.toString();
       router.push(`/onboard${onboardQs ? `?${onboardQs}` : ""}`);
     }

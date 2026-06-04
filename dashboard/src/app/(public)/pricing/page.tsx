@@ -208,8 +208,18 @@ export default async function PricingPage() {
             <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-16">
                 {tiers.map(t => {
                     const cta = ctaFor(t);
-                    const monthly = t.monthly_usd === null ? "Custom" : t.monthly_usd === 0 ? "$0" : `$${t.monthly_usd}`;
-                    const yearly = t.yearly_usd === null ? null : `$${t.yearly_usd.toLocaleString()}/yr (save 20%)`;
+                    // Agency tier is enterprise-quoted — hide the raw $399 number
+                    // and route everyone through the "Talk to us" CTA so we can
+                    // price per client-volume during the qualification call.
+                    const isAgency = t.code === "agency" || t.code === "enterprise";
+                    const monthly = isAgency
+                        ? "Custom"
+                        : t.monthly_usd === null
+                            ? "Custom"
+                            : t.monthly_usd === 0
+                                ? "$0"
+                                : `$${t.monthly_usd}`;
+                    const yearly = isAgency ? null : (t.yearly_usd === null ? null : `$${t.yearly_usd.toLocaleString()}/yr (save 20%)`);
                     const isHighlighted = t.code === "pro";
                     return (
                         <div

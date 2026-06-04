@@ -640,7 +640,15 @@ function OnboardPageContent() {
                     </div>
                     <button
                         type="button"
-                        onClick={() => router.push("/billing?from=onboarding")}
+                        onClick={() => {
+                            // Preserve the plan choice from /pricing → /signup → /onboard
+                            // so the billing page knows which tier to highlight as the
+                            // pre-selected option.
+                            const plan = searchParams.get("plan");
+                            const qs = new URLSearchParams({ from: "onboarding" });
+                            if (plan === "light" || plan === "pro") qs.set("plan", plan);
+                            router.push(`/billing?${qs.toString()}`);
+                        }}
                         className="inline-flex items-center bg-emerald-600 text-white font-bold px-8 py-4 rounded-full hover:bg-emerald-700 transition-all shadow-lg text-sm"
                     >
                         Pick a plan + start trial <ArrowRight className="w-4 h-4 ml-2" />
