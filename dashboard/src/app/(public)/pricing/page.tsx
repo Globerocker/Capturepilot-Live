@@ -139,6 +139,17 @@ function ctaFor(tier: PlanTier): { label: string; href: string; primary: boolean
     return { label: `Start 14-day ${tier.label} trial`, href: `/signup?plan=${tier.code}`, primary: tier.code === "pro" };
 }
 
+/**
+ * Stripe-hosted Payment Link URLs (live, with 14-day trial baked in). For
+ * users who'd rather skip the app signup and go straight to Stripe Checkout.
+ * Regenerate via tools/41_create_stripe_products.mjs when prices change —
+ * the script prints these URLs at the end of its run.
+ */
+const PAYMENT_LINKS: Record<string, string> = {
+    light: "https://buy.stripe.com/6oUbJ16zT0zhcmW59kgIo00",   // Light $39/mo
+    pro:   "https://buy.stripe.com/6oU00jbUd3Lt5YydFQgIo02",   // Pro $89/mo
+};
+
 export default async function PricingPage() {
     const tiers = await fetchTiers();
 
@@ -203,7 +214,7 @@ export default async function PricingPage() {
                             <Link
                                 href={cta.href}
                                 className={
-                                    "block text-center font-bold text-sm py-2.5 rounded-lg mb-5 transition-colors " +
+                                    "block text-center font-bold text-sm py-2.5 rounded-lg mb-2 transition-colors " +
                                     (cta.primary
                                         ? "bg-emerald-600 text-white hover:bg-emerald-700"
                                         : "bg-stone-900 text-white hover:bg-stone-800")
@@ -211,6 +222,18 @@ export default async function PricingPage() {
                             >
                                 {cta.label}
                             </Link>
+                            {PAYMENT_LINKS[t.code] ? (
+                                <a
+                                    href={PAYMENT_LINKS[t.code]}
+                                    className="block text-center text-xs text-stone-500 hover:text-stone-700 underline mb-5"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                >
+                                    Or check out directly via Stripe →
+                                </a>
+                            ) : (
+                                <div className="mb-5" />
+                            )}
 
                             <ul className="space-y-2 text-sm flex-1">
                                 {FEATURE_ROWS.slice(0, 8).map(row => {
