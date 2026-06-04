@@ -25,6 +25,7 @@ import {
 import { generateCertRecommendations } from "@/lib/cert-recommendations";
 import { findCompetitors, computeReadinessScore } from "@/lib/quick-checker-helpers";
 import { resolveDescriptions } from "@/lib/fetch-sam-description";
+import { reconcileProfile, type ReconciledProfile } from "@/lib/quick-checker/reconcile";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY!;
@@ -557,6 +558,37 @@ export async function runPostConfirmationPipeline(analysisId: string): Promise<v
             usaspendingAwardCount: usaspendingData?.award_count || 0,
         });
 
+        // ── Phase 3: reconcile crawl claims with SAM + USAspending ──────────
+        // Best-effort — failure never blocks the rest of the pipeline. The
+        // resulting `reconciled` object drives the cert badge "verified" vs
+        // "claimed" rendering on /check + the HubSpot push in Phase 5.
+        let reconciled: ReconciledProfile | null = null;
+        try {
+            const knownUei = (samData?.uei as string | null | undefined)
+                || ((inferredProfile.uei as string | null | undefined) ?? null);
+            const extractionForReconcile = {
+                // Coerce the legacy crawl_data shape into the new schema shape
+                // the reconciler expects. We only need a handful of fields.
+                company_name: companyName,
+                certifications: ((crawlData.certifications as Array<{ type: string; evidence?: string; confidence?: number }>) || []).map(c => ({
+                    type: c.type,
+                    evidence: c.evidence || "",
+                    confidence: c.confidence ?? 0.7,
+                })),
+                headquarters_state: (samData?.state as string | null) || tempProfile.state || null,
+                employee_count_estimate: tempProfile.employee_count,
+                founded_year: (inferredProfile.years_in_business as number | null) || null,
+            } as unknown as Parameters<typeof reconcileProfile>[0]["extraction"];
+
+            reconciled = await reconcileProfile({
+                extraction: extractionForReconcile,
+                uei: knownUei,
+                companyName,
+            });
+        } catch (err) {
+            console.error("[quick-checker-finish] reconcileProfile failed:", err);
+        }
+
         // Finalize
         await sb.from("company_analyses").update({
             status: "complete",
@@ -567,6 +599,7 @@ export async function runPostConfirmationPipeline(analysisId: string): Promise<v
             readiness_score: readinessScore,
             readiness_breakdown: readinessBreakdown,
             competitors,
+            reconciled_profile: reconciled,
         }).eq("id", analysisId);
 
     } catch (error) {
