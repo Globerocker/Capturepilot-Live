@@ -97,6 +97,38 @@ export const QuickCheckerExtraction = z.object({
         twitter: z.string().nullable().default(null),
         youtube: z.string().nullable().default(null),
     }).default({ linkedin: null, facebook: null, twitter: null, youtube: null }),
+
+    // ── Strategic-positioning fields (added Phase 2 of the QC overhaul).
+    //    Surface in HubSpot + on the /check page so a sales rep can open the
+    //    contact and have a call-ready POV. Defaults to empty so existing
+    //    consumers don't break.
+
+    /** 3-5 most-specific phrases describing what THIS company does.
+     *  Drives match scoring + HubSpot custom property `cp_keywords`. */
+    nail_down_keywords: z.array(z.string()).default([]),
+
+    /** Why this firm is a strong federal-contracting candidate today.
+     *  Each entry is a short, evidence-based phrase
+     *  ("Active SAM registration since 2019", "DoD past performance",
+     *  "WOSB-certified", "ISO 9001 quality system"). */
+    strengths: z.array(z.string()).default([]),
+
+    /** Gaps that will hurt federal pursuit. Each entry pairs a deficiency
+     *  with a remediation hint ("No SAM registration — must register before
+     *  bidding", "Site lacks past-performance section — add 3 cases"). */
+    weaknesses: z.array(z.string()).default([]),
+
+    /** Angles the sales rep should lead with on the discovery call.
+     *  Most actionable, prospect-specific framing. Max 5. */
+    pitch_angles: z.array(z.string()).default([]),
+
+    /** Free-form revenue signal pulled from the site (e.g. "Forbes 5000",
+     *  "$5M+ annual revenue", "Bootstrapped"). null if no hint found. */
+    revenue_signal: z.string().nullable().default(null),
+
+    /** Specific federal agencies the company has worked with, named on the
+     *  site. Empty if no government past performance mentioned. */
+    federal_agencies_served: z.array(z.string()).default([]),
 });
 export type QuickCheckerExtraction = z.infer<typeof QuickCheckerExtraction>;
 

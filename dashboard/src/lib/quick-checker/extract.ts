@@ -102,6 +102,14 @@ function heuristicFallback(input: ExtractInput): QuickCheckerExtraction {
         has_gov_experience: /federal|department of defense|u\.s\.\s*air\s*force|u\.s\.\s*army|u\.s\.\s*navy|department of veterans|gsa schedule/i.test(input.markdown),
         gov_experience_evidence: [],
         social_links: { linkedin: null, facebook: null, twitter: null, youtube: null },
+        // Phase 2 strategic fields — heuristic path can't infer these, so
+        // ship empty defaults. The deep-extract path always populates them.
+        nail_down_keywords: [],
+        strengths: [],
+        weaknesses: [],
+        pitch_angles: [],
+        revenue_signal: null,
+        federal_agencies_served: [],
     };
 }
 

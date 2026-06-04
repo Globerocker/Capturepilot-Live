@@ -13,6 +13,7 @@
 
 import { scrapePage, pickInterestingLinks, scrapePages, type FirecrawlPage } from "./firecrawl";
 import { extractStructured } from "./extract";
+import { runDeepExtract } from "./deep-extract";
 import { inferNaics, type InferredNaics } from "./naics";
 import type { QuickCheckerResult } from "./schema";
 import { extractEmails, extractPhones } from "./contacts";
@@ -55,107 +56,113 @@ export async function runQuickCheck(
         return buildEmptyResult(website, started, errors);
     }
 
-    // 1) Homepage
-    const home = await scrapePage(url, { formats: ["markdown", "links"] });
-    if (!home) {
-        errors.push("Homepage scrape returned nothing");
-        return buildEmptyResult(url, started, errors);
-    }
-
-    const maxPages = Math.max(1, Math.min(8, opts.maxPages ?? 5));
-    const extra = opts.extraPages || [];
-    const autoPicked = pickInterestingLinks(home.links, url, maxPages - 1 - extra.length);
-    const picked = [...new Set([...extra.map(normalizeUrl), ...autoPicked])];
-    const extraPages = picked.length > 0 ? await scrapePages(picked, { formats: ["markdown"] }) : [];
-
-    const allPages: FirecrawlPage[] = [home, ...extraPages];
-    const combinedMd = allPages.map(p => p.markdown).join("\n\n---\n\n").slice(0, 40_000);
-
-    // 2) OpenAI structured extraction on the combined content
-    let extraction;
-    let extractionErrors: string[] = [];
+    // ── Phase 2 (June 2026 overhaul) ────────────────────────────────────────
+    // Replaced the single-page Firecrawl + gpt-4o-mini one-shot with the
+    // multi-page deep-extract pipeline. Same return shape so downstream
+    // consumers (analyze-company, brand kit, admin enrich) keep working.
+    //
+    // useLlm=false still routes through the legacy heuristic path — useful
+    // for cheap "is this even a website" probes from the admin UI.
     if (opts.useLlm === false) {
-        // Skip LLM — purely heuristic
+        const home = await scrapePage(url, { formats: ["markdown", "links"] });
+        if (!home) {
+            errors.push("Homepage scrape returned nothing");
+            return buildEmptyResult(url, started, errors);
+        }
         const { extraction: heur, errors: heurErrs } = await extractStructured({
             website: url,
             metaTitle: home.metadata.title || home.metadata.ogTitle,
             metaDescription: home.metadata.description || home.metadata.ogDescription,
             siteName: home.metadata.ogSiteName,
-            markdown: combinedMd,
+            markdown: home.markdown.slice(0, 40_000),
         });
-        extraction = heur;
-        extractionErrors = heurErrs;
-    } else {
-        const { extraction: ex, errors: exErrs } = await extractStructured({
+        errors.push(...heurErrs);
+        if (opts.companyName && opts.companyName.trim().length > 1) {
+            heur.company_name = opts.companyName.trim();
+        }
+        const naicsSuggestions = await inferNaics({
+            companyName: heur.company_name || opts.companyName || url,
+            extraction: heur,
+            pageContent: home.markdown,
+            samNaics: opts.samNaics,
+            usaSpendingNaics: opts.usaSpendingNaics,
+        });
+        return {
             website: url,
-            metaTitle: home.metadata.title || home.metadata.ogTitle,
-            metaDescription: home.metadata.description || home.metadata.ogDescription,
-            siteName: home.metadata.ogSiteName,
-            markdown: combinedMd,
-        });
-        extraction = ex;
-        extractionErrors = exErrs;
+            scraped_at: new Date().toISOString(),
+            source: home.source === "firecrawl" ? "firecrawl" : "fetch-fallback",
+            pages_scraped: [home.url],
+            extraction: heur,
+            naics_suggestions: naicsSuggestions,
+            errors,
+            duration_ms: Date.now() - started,
+            raw_pages: [home],
+        };
     }
-    errors.push(...extractionErrors);
 
-    // 3) Supplement contacts with libphonenumber + email-addresses validated matches
-    //    — the LLM sometimes misses phones inside images/footers but we can still catch them
-    const validPhones = extractPhones(combinedMd);
-    const validEmails = extractEmails(combinedMd);
-    if (validPhones.length > 0 || validEmails.length > 0) {
-        const seenPhones = new Set(extraction.contacts.map(c => (c.phone || "").replace(/\D/g, "")).filter(Boolean));
-        const seenEmails = new Set(extraction.contacts.map(c => (c.email || "").toLowerCase()).filter(Boolean));
-        for (const p of validPhones) {
-            const norm = p.e164.replace(/\D/g, "");
-            if (seenPhones.has(norm)) continue;
-            extraction.contacts.push({
-                email: null,
-                phone: p.national,
-                phone_type: p.type === "mobile" ? "mobile" : "main",
-            });
-            seenPhones.add(norm);
+    // Deep extract — Ollama first, OpenAI fallback. Multi-page crawl.
+    const deep = await runDeepExtract({
+        website: url,
+        companyName: opts.companyName,
+        extraPages: opts.extraPages,
+        maxPages: opts.maxPages,
+    });
+    errors.push(...deep.errors);
+
+    const extraction = deep.extraction;
+
+    // The deep extractor scrapes pages internally, so for the legacy
+    // raw_pages contract we need to re-fetch what it crawled. Lazy: skip
+    // re-scrape and reuse a single homepage fetch for downstream callers
+    // that only care about pages_scraped paths + raw markdown for fallback
+    // contact-validation. Performance: ~1 extra scrape (~2-4s) but the
+    // raw_pages payload is used by 3 routes that expect it.
+    const home = await scrapePage(url, { formats: ["markdown", "links"] });
+    const rawPages: FirecrawlPage[] = home ? [home] : [];
+    const combinedMd = rawPages.map(p => p.markdown).join("\n\n").slice(0, 40_000);
+
+    // Belt-and-suspenders contact overlay even after deep extract — phones
+    // in images / footers sometimes miss the LLM but our libphonenumber
+    // pass catches them.
+    if (rawPages.length > 0) {
+        const validPhones = extractPhones(combinedMd);
+        const validEmails = extractEmails(combinedMd);
+        if (validPhones.length > 0 || validEmails.length > 0) {
+            const seenPhones = new Set(extraction.contacts.map(c => (c.phone || "").replace(/\D/g, "")).filter(Boolean));
+            const seenEmails = new Set(extraction.contacts.map(c => (c.email || "").toLowerCase()).filter(Boolean));
+            for (const p of validPhones) {
+                const norm = p.e164.replace(/\D/g, "");
+                if (seenPhones.has(norm)) continue;
+                extraction.contacts.push({ email: null, phone: p.national, phone_type: p.type === "mobile" ? "mobile" : "main" });
+                seenPhones.add(norm);
+            }
+            for (const e of validEmails) {
+                if (seenEmails.has(e.normalized)) continue;
+                extraction.contacts.push({ email: e.normalized, phone: null, phone_type: null });
+                seenEmails.add(e.normalized);
+            }
         }
-        for (const e of validEmails) {
-            if (seenEmails.has(e.normalized)) continue;
-            extraction.contacts.push({
-                email: e.normalized,
-                phone: null,
-                phone_type: null,
-            });
-            seenEmails.add(e.normalized);
-        }
     }
 
-    // 4) Apply explicit company name override if user provided one
-    if (opts.companyName && opts.companyName.trim().length > 1) {
-        extraction.company_name = opts.companyName.trim();
-    }
-
-    // 5) NAICS inference — uses SAM/USASpending + LLM against whitelist
     const naicsSuggestions = await inferNaics({
         companyName: extraction.company_name || opts.companyName || url,
         extraction,
-        pageContent: combinedMd,
+        pageContent: combinedMd || extraction.long_description,
         samNaics: opts.samNaics,
         usaSpendingNaics: opts.usaSpendingNaics,
     });
 
-    const result: RunQuickCheckOutput = {
+    return {
         website: url,
         scraped_at: new Date().toISOString(),
-        source: allPages.every(p => p.source === "firecrawl")
-            ? "firecrawl"
-            : allPages.every(p => p.source === "fetch-fallback")
-                ? "fetch-fallback"
-                : "mixed",
-        pages_scraped: allPages.map(p => p.url),
+        source: deep.crawl_source,
+        pages_scraped: deep.pages_scraped,
         extraction,
         naics_suggestions: naicsSuggestions,
         errors,
         duration_ms: Date.now() - started,
-        raw_pages: allPages,
+        raw_pages: rawPages,
     };
-    return result;
 }
 
 function buildEmptyResult(website: string, started: number, errors: string[]): RunQuickCheckOutput {
@@ -189,6 +196,12 @@ function buildEmptyResult(website: string, started: number, errors: string[]): R
             has_gov_experience: false,
             gov_experience_evidence: [],
             social_links: { linkedin: null, facebook: null, twitter: null, youtube: null },
+            nail_down_keywords: [],
+            strengths: [],
+            weaknesses: [],
+            pitch_angles: [],
+            revenue_signal: null,
+            federal_agencies_served: [],
         },
         naics_suggestions: [],
         errors,
@@ -273,6 +286,15 @@ export function toLegacyCrawlData(r: RunQuickCheckOutput): Record<string, unknow
         naics_suggestions: r.naics_suggestions,
         quick_checker_source: r.source,
         quick_checker_errors: r.errors,
+        // ── Phase 2 strategic fields — propagate through legacy bridge so
+        // analyze-company, HubSpot push, and the /check UI can all read
+        // them off `crawlData.*` without breaking existing consumers.
+        nail_down_keywords: ex.nail_down_keywords,
+        strengths: ex.strengths,
+        weaknesses: ex.weaknesses,
+        pitch_angles: ex.pitch_angles,
+        revenue_signal: ex.revenue_signal,
+        federal_agencies_served: ex.federal_agencies_served,
     };
 }
 
