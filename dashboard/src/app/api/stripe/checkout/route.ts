@@ -176,9 +176,17 @@ export async function POST(request: Request) {
                 .update({ veteran_discount_code: veteranCouponId })
                 .eq("id", p.id);
         }
-        const allowPromoCodes = !discounts;
 
         try {
+            // Stripe rejects passing BOTH `allow_promotion_codes` (even false)
+            // AND `discounts` in the same Checkout Session — "You may only
+            // specify one of these parameters." So we spread one OR the other,
+            // never both. Veteran auto-discount path → discounts; everyone else
+            // → allow_promotion_codes so they can paste a coupon at checkout.
+            const promoOrDiscount = discounts
+                ? { discounts }
+                : { allow_promotion_codes: true };
+
             const session = await stripe.checkout.sessions.create({
                 customer: customerId,
                 mode: "subscription",
@@ -196,8 +204,7 @@ export async function POST(request: Request) {
                 payment_method_collection: "always",
                 success_url: `${baseUrl}/billing?success=true&plan=${plan}${veteranEligible ? "&veteran=1" : ""}`,
                 cancel_url: `${baseUrl}/billing?canceled=true`,
-                allow_promotion_codes: allowPromoCodes,
-                ...(discounts ? { discounts } : {}),
+                ...promoOrDiscount,
             });
 
             return NextResponse.json({
