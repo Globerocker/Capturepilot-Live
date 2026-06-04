@@ -48,7 +48,15 @@ export function extractPhones(text: string, defaultCountry: "US" | "DE" | "GB" =
         // Skip clearly-not-phone strings
         if (trimmed.length < 10) continue;
         if (/^\d{4,}-\d{4,}$/.test(trimmed) && trimmed.length > 14) continue; // invoice / part no
-        const parsed = parsePhoneNumberFromString(trimmed, defaultCountry);
+        // libphonenumber's min build throws "Cannot read 'hasOwnProperty' of undefined"
+        // when the input is exotic (mixed unicode, special chars). Wrap so the whole
+        // extractor doesn't take the runDeepExtract pipeline down with it.
+        let parsed;
+        try {
+            parsed = parsePhoneNumberFromString(trimmed, defaultCountry);
+        } catch {
+            continue;
+        }
         if (!parsed || !parsed.isValid()) continue;
         const e164 = parsed.number;
         if (seen.has(e164)) continue;

@@ -35,8 +35,17 @@ import { scrapePage, pickInterestingLinks, scrapePages, type FirecrawlPage } fro
 import { extractEmails, extractPhones } from "./contacts";
 import { QuickCheckerExtraction } from "./schema";
 
-const MAX_COMBINED_MD = 35_000;
-const LLM_TIMEOUT_MS = 90_000;
+// Tuned 2026-06-04 after live-prod debug. Hostinger VPS Ollama has no GPU +
+// only 7.8GB RAM — qwen2.5:7b OOMs and qwen2.5:3b can't process more than
+// ~3-6KB in <2 min on CPU. Real-time use REQUIRES a paid provider (DeepSeek
+// $3/mo or OpenAI top-up). Ollama stays as best-effort fallback for offline
+// dev + bulk reruns.
+//   - 6KB cap = ~1500 tokens input, fits on Ollama 3b in ~60-90s
+//   - 1800 max output tokens = full strategic schema, ~30-50s on 3b
+//   - 120s timeout = OpenAI/DeepSeek easily, Ollama 3b sometimes
+const MAX_COMBINED_MD = 6_000;
+const LLM_TIMEOUT_MS = 120_000;
+const LLM_MAX_TOKENS = 1800;
 
 interface DeepExtractInput {
     website: string;
@@ -219,9 +228,26 @@ async function callDeepExtractLLM(
         combined,
     ].filter(Boolean).join("\n");
 
-    // Try Ollama first if configured — free + on the VPS we already pay for.
-    const ollamaAvailable = !!process.env.OLLAMA_URL;
-    const order: Array<"ollama" | "openai"> = ollamaAvailable ? ["ollama", "openai"] : ["openai"];
+    // Provider cascade — first available wins. Ordered by reliability +
+    // cost-effectiveness, NOT raw cost. Real-world reasons:
+    //   - DeepSeek: $0.14/M in · $0.28/M out, ~10s response, paid + always-on.
+    //     The most reliable cheap option.
+    //   - OpenAI: $0.15/M in · $0.60/M out, ~6-10s response. Solid backstop,
+    //     but burns quota when DeepSeek is healthy.
+    //   - Ollama: free (self-hosted), but qwen2.5:7b on a single Hostinger
+    //     VPS OOMs on 15KB+ prompts. Kept as the LAST resort for cheapest
+    //     bulk reruns / offline development.
+    // ENV switches: LLM_PROVIDER=ollama|deepseek|openai forces a specific
+    // provider; otherwise we just walk this list and use the first one with
+    // credentials set.
+    const order: Array<"deepseek" | "openai" | "ollama"> = [];
+    if (process.env.DEEPSEEK_API_KEY) order.push("deepseek");
+    if (process.env.OPENAI_API_KEY)   order.push("openai");
+    if (process.env.OLLAMA_URL)       order.push("ollama");
+    if (order.length === 0) {
+        console.warn("[deep-extract] no LLM providers configured (need DEEPSEEK_API_KEY, OPENAI_API_KEY, or OLLAMA_URL)");
+        return null;
+    }
 
     for (const provider of order) {
         try {
@@ -233,7 +259,7 @@ async function callDeepExtractLLM(
                 ], {
                     provider,
                     temperature: 0.2,
-                    max_tokens: 4000,
+                    max_tokens: LLM_MAX_TOKENS,
                 }),
                 new Promise<Record<string, unknown>>((_, reject) =>
                     setTimeout(() => reject(new Error(`${provider} timeout after ${LLM_TIMEOUT_MS}ms`)), LLM_TIMEOUT_MS),
@@ -246,7 +272,9 @@ async function callDeepExtractLLM(
                 provider,
                 model: provider === "ollama"
                     ? (process.env.OLLAMA_DEFAULT_MODEL || "qwen2.5:7b-instruct")
-                    : (process.env.QUICK_CHECKER_MODEL || "gpt-4o-mini"),
+                    : provider === "deepseek"
+                        ? "deepseek-chat"
+                        : (process.env.QUICK_CHECKER_MODEL || "gpt-4o-mini"),
             };
         } catch (err) {
             console.warn(`[deep-extract] ${provider} failed:`, err instanceof Error ? err.message : err);
