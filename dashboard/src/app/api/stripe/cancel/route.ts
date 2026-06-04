@@ -8,11 +8,14 @@ function getStripe() {
     return new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: "2026-02-25.clover" });
 }
 
-const RETENTION_COUPON_ID = "capturepilot-retention-50pct-3mo";
+// New code per docs/PRICING_STRATEGY.md — 25% off for 2 months on cancel intent.
+// (Was previously 50% off / 3 mo — too generous; revisit if cancel-save rate
+// drops below 30%.) Coupon ID is stable so retries are idempotent.
+const RETENTION_COUPON_ID = "RETAIN25_2MO";
 
 /**
- * Ensures a reusable 50%-off-for-3-months coupon exists in the Stripe account.
- * Returns the coupon id. If Stripe is unavailable, throws.
+ * Ensures the 25%-off-for-2-months retention coupon exists in Stripe.
+ * Returns the coupon id. Throws on Stripe outage.
  */
 async function ensureRetentionCoupon(stripe: Stripe): Promise<string> {
     try {
@@ -23,10 +26,10 @@ async function ensureRetentionCoupon(stripe: Stripe): Promise<string> {
     }
     const coupon = await stripe.coupons.create({
         id: RETENTION_COUPON_ID,
-        percent_off: 50,
+        percent_off: 25,
         duration: "repeating",
-        duration_in_months: 3,
-        name: "Capturepilot Retention — 50% off for 3 months",
+        duration_in_months: 2,
+        name: "CapturePilot Retention — 25% off for 2 months",
     });
     return coupon.id;
 }
@@ -79,7 +82,7 @@ export async function POST(request: NextRequest) {
     const stripe = getStripe();
 
     if (body.action === "accept_offer") {
-        // Apply 50%-off-3-months coupon to the subscription
+        // Apply 25%-off-2-months retention coupon to the subscription
         try {
             const couponId = await ensureRetentionCoupon(stripe);
             await stripe.subscriptions.update(subscriptionId, {
@@ -98,7 +101,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({
                 success: true,
                 retained: true,
-                message: "50% off for 3 months applied to your next invoices.",
+                message: "25% off for 2 months applied to your next invoices.",
             });
         } catch (err) {
             console.error("Retention offer failed:", err);

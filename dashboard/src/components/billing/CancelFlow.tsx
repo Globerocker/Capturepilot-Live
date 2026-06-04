@@ -163,11 +163,11 @@ export default function CancelFlow({ open, onClose, companyName, onComplete }: P
                                 </span>
                             </div>
                             <p className="text-2xl font-bold text-emerald-900 leading-tight">
-                                Stay for 50% off your next 3 months
+                                Stay for 25% off your next 2 months
                             </p>
                             <p className="text-sm text-emerald-800 mt-2">
-                                Keep your full Pro access and try Capturepilot at half price —
-                                applied automatically to your next invoices.
+                                Keep your full Pro access at a quarter off — applied automatically
+                                to your next two invoices, then reverts to your normal rate.
                             </p>
                         </div>
 
@@ -187,7 +187,7 @@ export default function CancelFlow({ open, onClose, companyName, onComplete }: P
                                 ) : (
                                     <CheckCircle2 className="w-4 h-4" />
                                 )}
-                                Accept Offer — Stay for 50% off
+                                Accept Offer — Stay for 25% off
                             </button>
                             <button
                                 type="button"
