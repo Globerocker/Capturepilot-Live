@@ -8,8 +8,9 @@
  * want to slam the DB on every page load.
  */
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { protectCrawl } from "@/lib/crawl-protection";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SbAny = SupabaseClient<any, any, any>;
@@ -37,7 +38,12 @@ interface PublicStats {
     last_updated: string;
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+    // Crawl protection — public counters get hit by every landing-page load
+    // so the limit is generous (120/min/IP) but scrapers still get blocked.
+    const blocked = await protectCrawl(req, { route: "public-stats", maxPerMin: 120 });
+    if (blocked) return blocked;
+
     const sb = createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.SUPABASE_SERVICE_KEY!,

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { protectCrawl } from "@/lib/crawl-protection";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -39,6 +40,11 @@ export async function OPTIONS(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
     const headers = corsHeaders(req.headers.get("origin"));
+    // Crawl protection — public contractor listings are a top scrape target
+    // (80K+ contractors with addresses, NAICS, awards). 30/min/IP gives a
+    // real user plenty of room to browse but kills bulk-scrape patterns.
+    const blocked = await protectCrawl(req, { route: "public-contractors", maxPerMin: 30 });
+    if (blocked) return blocked;
     const url = new URL(req.url);
     const naics = url.searchParams.get("naics");
     const state = url.searchParams.get("state");

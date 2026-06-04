@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { protectCrawl } from "@/lib/crawl-protection";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -38,6 +39,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ slug
     const { slug } = await params;
     const headers = corsHeaders(req.headers.get("origin"));
     if (!slug) return NextResponse.json({ error: "missing slug" }, { status: 400, headers });
+    // Crawl protection — contractor detail pages are individually shallow but
+    // a scraper iterating slug-by-slug could pull all 80K. 60/min/IP is fine
+    // for genuine browse; sustained higher rates get 429.
+    const blocked = await protectCrawl(req, { route: "public-contractor-detail", maxPerMin: 60 });
+    if (blocked) return blocked;
 
     // Use the anon client + RLS rather than service key — anyone reading
     // this endpoint sees what an unauthenticated visitor would.
