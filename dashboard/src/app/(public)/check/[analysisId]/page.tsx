@@ -8,7 +8,7 @@ import {
     ArrowRight, Globe, Phone, Mail, Loader2, Briefcase, Shield,
     TrendingUp, Award, ChevronDown, Clock, Unlock, ExternalLink, DollarSign,
     Linkedin, Facebook, Twitter, Save, FileDown, CheckCircle2, User, Building2, Hash,
-    Swords, AlertTriangle
+    Swords, AlertTriangle, Lock,
 } from "lucide-react";
 import Image from "next/image";
 import clsx from "clsx";
@@ -57,6 +57,10 @@ interface MatchData {
     score_breakdown: Record<string, number>;
     matched_keywords?: string[];
     ai_fit_summary?: string;
+    /** Phase 4: eligibility flag — drives the "Not eligible" lock badge. */
+    eligibility?: "eligible" | "not_eligible_cert" | "not_eligible_size";
+    /** Certs the user would need to bid (only set when eligibility ≠ 'eligible'). */
+    required_certifications?: string[];
     /** 'sam' (federal) / 'sled' / 'grant' — drives source-tier badge. */
     source?: string | null;
     /** 'state' / 'county' / 'city' — refines the SLED badge label. */
@@ -626,6 +630,33 @@ function MatchCard({ match, rank, hero, userNaicsLabels }: { match: MatchData; r
                                     {match.award_amount && match.award_amount > 0 && (
                                         <span className="text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded">
                                             {formatCurrency(match.award_amount)}
+                                        </span>
+                                    )}
+                                    {/* Phase 4: not-eligible lock badge — visible but unbiddable.
+                                        Drives a "Get X cert" CTA so the user knows exactly which
+                                        certification would unlock the match. Two flavors:
+                                          - cert-restricted (8a, SDVOSB, WOSB, HUBZone …)
+                                          - too-large-for-small-business */}
+                                    {match.eligibility === "not_eligible_cert" && (
+                                        <span
+                                            className="text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-300 px-2 py-0.5 rounded inline-flex items-center gap-1"
+                                            title={match.required_certifications && match.required_certifications.length > 0
+                                                ? `Requires ${match.required_certifications.join(" or ")} certification to bid`
+                                                : "Set-aside requires a certification you don't currently hold"}
+                                        >
+                                            <Lock className="w-2.5 h-2.5" />
+                                            {match.required_certifications && match.required_certifications.length > 0
+                                                ? `Need ${match.required_certifications.slice(0, 2).join("/")}`
+                                                : "Cert required"}
+                                        </span>
+                                    )}
+                                    {match.eligibility === "not_eligible_size" && (
+                                        <span
+                                            className="text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-300 px-2 py-0.5 rounded inline-flex items-center gap-1"
+                                            title="Restricted to small businesses — your firm is too large per SBA size standards for this NAICS"
+                                        >
+                                            <Lock className="w-2.5 h-2.5" />
+                                            Too large for SB
                                         </span>
                                     )}
                                 </div>

@@ -109,6 +109,32 @@ export function isSetAsideDisqualified(userCerts: string[], oppSetAside: string 
     return false;
 }
 
+/**
+ * Given an opportunity's set-aside code, return the human-readable list of
+ * certifications that would QUALIFY a bidder. Used by Phase 4 to render
+ * "Required: SDVOSB or 8(a)" CTAs next to the lock badge on ineligible
+ * matches. Returns [] for unrestricted or unknown codes.
+ */
+export function requiredCertificationsForSetAside(oppSetAside: string | null): string[] {
+    if (!oppSetAside) return [];
+    const sa = oppSetAside.toLowerCase();
+    if (
+        sa.includes("no set") || sa === "none" || sa === "null" ||
+        sa.includes("unrestricted") || sa === "small business" || sa === "total small business"
+    ) return [];
+
+    if (sa.includes("8(a)") || sa.includes("8a sole")) return ["8(a)"];
+    if (sa.includes("sdvosb") || sa.includes("service-disabled")) return ["SDVOSB"];
+    if (sa.includes("vosb") || sa.includes("veteran-owned")) return ["VOSB", "SDVOSB"];
+    if (sa.includes("hubzone")) return ["HUBZone"];
+    if (sa.includes("edwosb") || sa.includes("economically disadvantaged")) return ["EDWOSB"];
+    if (sa.includes("wosb") || sa.includes("women-owned")) return ["WOSB", "EDWOSB"];
+    if (sa.includes("indian") || sa.includes("native american") || sa.includes("tribal")) {
+        return ["Indian Economic Enterprise", "8(a)"];
+    }
+    return [];
+}
+
 export function scoreGeo(userState: string, targetStates: string[], oppState: string | null): number {
     // Nationwide: always full geo score
     if (targetStates?.includes("NATIONWIDE")) return 1.0;
@@ -389,6 +415,23 @@ export interface ScoredMatch {
     score_breakdown: Record<string, number>;
     /** Canonical keywords that matched in title/description/requirements. */
     matched_keywords?: string[];
+    /**
+     * Eligibility against the opp's set-aside / size rules.
+     * 'eligible'          — user can submit a bid.
+     * 'not_eligible_cert' — opp is restricted to a cert the user doesn't hold
+     *                       (e.g. SDVOSB-only and the user isn't SDVOSB-verified).
+     * 'not_eligible_size' — opp is restricted to small business and the user
+     *                       is too large by revenue/headcount.
+     *
+     * Matches with non-'eligible' status are still returned by the scoring
+     * functions (so the UI can show them as "Visible but unbiddable — get
+     * X cert to qualify") rather than being silently filtered. Phase 4 of
+     * the Quick Checker overhaul (June 2026).
+     */
+    eligibility?: "eligible" | "not_eligible_cert" | "not_eligible_size";
+    /** Specific cert(s) the user would need to bid. Populated when
+     *  eligibility = "not_eligible_cert" — drives the "Get X cert" CTA. */
+    required_certifications?: string[];
     /** Snapshot fields the Quick Checker UI renders directly (set when enriched).
         Kept as plain optional strings (no null) so spreads with `as ScoredMatch`
         don't fail strict typecheck — null is coerced to undefined at the
@@ -428,23 +471,30 @@ export function scoreOpportunityLeadMagnet(
 ): ScoredMatch | null {
     const W = LEAD_MAGNET_WEIGHTS;
 
-    // HARD GATE #1: if this opp is set-aside-restricted and the user doesn't
-    // carry the matching cert, it's simply not biddable — exclude entirely.
+    // ── Phase 4 (June 2026) — eligibility is a flag, not a hard exclude ──
+    // Was: if the user lacks a set-aside cert, drop the opp entirely. New:
+    // compute eligibility, return the scored match with the flag so the UI
+    // can show "Visible but unbiddable — get SDVOSB cert to qualify." This
+    // matches the founder's spec — users want to see what's out there even
+    // if they can't bid today, so they know which cert is worth pursuing.
+
+    let eligibility: ScoredMatch["eligibility"] = "eligible";
+    let requiredCerts: string[] | undefined;
+
     if (isSetAsideDisqualified(profile.sba_certifications || [], opp.set_aside_code)) {
-        return null;
+        eligibility = "not_eligible_cert";
+        const req = requiredCertificationsForSetAside(opp.set_aside_code);
+        if (req.length > 0) requiredCerts = req;
     }
 
-    // HARD GATE #1b: if the firm is too large to credibly bid on a broad
-    // "small business" set-aside, exclude it. Specific certs (8a, HUBZone, etc.)
-    // override this — those are governed by isSetAsideDisqualified above.
     const setAsideLower = (opp.set_aside_code || "").toLowerCase();
     const isGenericSmallBiz = setAsideLower === "small business" ||
         setAsideLower === "total small business" ||
         setAsideLower.includes("total_small_business") ||
         setAsideLower === "sba" ||
         setAsideLower === "tsb";
-    if (isGenericSmallBiz && isSizeTooLargeForSmallBiz(profile)) {
-        return null;
+    if (eligibility === "eligible" && isGenericSmallBiz && isSizeTooLargeForSmallBiz(profile)) {
+        eligibility = "not_eligible_size";
     }
 
     // HARD GATE #2: NAICS must match at least at 3-digit sub-sector level (0.3+)
@@ -512,26 +562,36 @@ export function scoreOpportunityLeadMagnet(
 
     let total = base + naicsContribution + kwContribution;
 
-    // Deadline-aware reranking: bias the model toward time-sensitive
-    // already-strong matches so the top-5 lead with opportunities the user
-    // can actually act on this week. Triggers only when:
-    //   - the response deadline is between 1 and 14 days out, AND
-    //   - the base score is already strong (≥ 0.55) — we don't want to
-    //     promote weak matches just because they're closing.
-    // Boost is up to +12% (linear): closer deadline = bigger bonus.
+    // ── Phase 4 — 3-digit-prefix penalty without keyword backup ──
+    // A naics score of exactly 0.3 means only the 3-digit sub-sector matches
+    // (e.g. user is in 541511 — custom programming; opp is in 541810 —
+    // marketing). Without any keyword corroboration that's a low-signal
+    // crossover, but the base score (set_aside + geo + cert_bonus) was
+    // letting these clear 0.60 and classify as HOT. Apply a 0.7× penalty
+    // when NAICS is prefix-only and zero keywords hit — keeps "loose
+    // crossover" matches around for transparency but knocks them out of
+    // the HOT bucket.
+    if (naics <= 0.31 && naics > 0 && (!hasKeywords || kwCombined < 0.05)) {
+        total *= 0.7;
+    }
+
+    // Deadline-aware reranking unchanged from prior version.
     let deadlineBoost = 0;
     if (total >= 0.55 && opp.response_deadline) {
         const dt = new Date(opp.response_deadline).getTime();
         if (!Number.isNaN(dt)) {
             const daysOut = (dt - Date.now()) / (1000 * 60 * 60 * 24);
             if (daysOut >= 1 && daysOut <= 14) {
-                deadlineBoost = 0.12 * (1 - (daysOut - 1) / 13); // 12% at 1d, ~0% at 14d
+                deadlineBoost = 0.12 * (1 - (daysOut - 1) / 13);
                 total = Math.min(1.0, total + deadlineBoost);
             }
         }
     }
 
-    if (total < 0.30) return null;
+    // Threshold raised 0.30 → 0.40 (Phase 4). Combined with the prefix
+    // penalty above this drops most cert-only / geo-only matches that
+    // don't actually fit the company.
+    if (total < 0.40) return null;
 
     const breakdown: Record<string, number> = {
         naics: Math.round(naics * 100) / 100,
@@ -552,9 +612,11 @@ export function scoreOpportunityLeadMagnet(
     return {
         opportunity_id: opp.id,
         score: Math.round(total * 10000) / 10000,
-        classification: total >= 0.60 ? "HOT" : total >= 0.40 ? "WARM" : "COLD",
+        classification: total >= 0.65 ? "HOT" : total >= 0.50 ? "WARM" : "COLD",
         score_breakdown: breakdown,
         matched_keywords: kwMatched.length > 0 ? kwMatched : undefined,
+        eligibility,
+        required_certifications: requiredCerts,
     };
 }
 

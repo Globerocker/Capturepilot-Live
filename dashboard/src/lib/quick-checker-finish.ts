@@ -436,6 +436,10 @@ export async function runPostConfirmationPipeline(analysisId: string): Promise<v
                             description_url: detail.description ?? undefined,
                             // Carry source through so the UI can badge federal vs sled/grant.
                             source: (detail as { source?: string }).source ?? undefined,
+                            // Phase 4: carry eligibility flag + required certs forward
+                            // so the UI can lock-badge ineligible matches.
+                            eligibility: r2.eligibility,
+                            required_certifications: r2.required_certifications,
                         } as ScoredMatch);
                     } else {
                         rescored.push(match);
