@@ -9,6 +9,7 @@ import { FileText, Loader2, Plus, Download, Clock, CheckCircle2, AlertCircle, Ar
 import clsx from "clsx";
 import Link from "next/link";
 import ProposalJobProgress, { type ProposalJobStatus } from "@/components/proposals/ProposalJobProgress";
+import { FeatureGate } from "@/components/FeatureGate";
 
 const supabase = createSupabaseClient();
 
@@ -25,7 +26,17 @@ interface ProposalDraft {
     created_at: string;
 }
 
+// Outer wrapper — gates the entire AI proposal flow behind the Pro tier.
+// Light/Free users see the upgrade wall; Pro+ users see the real ProposalsPageInner.
 export default function ProposalsPage() {
+    return (
+        <FeatureGate feature="ai_proposals" requiredTier="pro">
+            <ProposalsPageInner />
+        </FeatureGate>
+    );
+}
+
+function ProposalsPageInner() {
     const router = useRouter();
     const [loading, setLoading] = useState(true);
     const [profileId, setProfileId] = useState<string | null>(null);

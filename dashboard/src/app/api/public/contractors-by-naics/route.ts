@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { protectCrawl } from "@/lib/crawl-protection";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,6 +32,8 @@ function corsHeaders(origin: string | null): Record<string, string> {
 
 export async function GET(req: NextRequest) {
     const headers = corsHeaders(req.headers.get("origin"));
+    const blocked = await protectCrawl(req, { route: "public-contractors-by-naics", maxPerMin: 40 });
+    if (blocked) return blocked;
     const url = new URL(req.url);
     const min = Math.min(Math.max(Number(url.searchParams.get("min")) || 3, 1), 50);
 

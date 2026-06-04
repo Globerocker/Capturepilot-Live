@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { protectCrawl } from "@/lib/crawl-protection";
 
 export const maxDuration = 60;
 
@@ -86,6 +87,11 @@ function bestPoc(block: SamPocBlock | undefined): { name: string | null; title: 
  * ?api_key= URL param is deprecated and rejected).
  */
 export async function GET(req: NextRequest) {
+    // Crawl protection — partners/search is expensive (12 fanout calls to SAM
+    // per request) so the limit is tighter than other public endpoints. 20/min/IP
+    // is enough for a human user exploring; bulk-scrapers get 429.
+    const blocked = await protectCrawl(req, { route: "partners-search", maxPerMin: 20 });
+    if (blocked) return blocked;
     // Try both SAM keys. Key 1 is shared with ingest_sam (1000/day quota);
     // when it hits the daily ceiling the partner search would 502 with
     // "Message throttled out" — exactly what users saw at 2026-05-29.

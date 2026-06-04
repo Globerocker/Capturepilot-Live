@@ -1,15 +1,20 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { scoreOpportunity, type ProfileForScoring, type OpportunityForScoring, type KeywordEntry } from "@/lib/match-scoring";
 import { fireWebhookEvent } from "@/lib/webhooks";
+import { protectCrawl } from "@/lib/crawl-protection";
 
 // Persist all matches with score above MIN_MATCH_SCORE. No hard cap.
 // Previous behavior capped at top 500, which hid ~99% of ~54k opportunities from users.
 const MIN_MATCH_SCORE = 0.3; // classifications: COLD 0.3-0.5, WARM 0.5-0.7, HOT 0.7+
 
-export async function POST() {
+export async function POST(req: NextRequest) {
+    // Crawl protection — match scoring is heavy (40K+ opps × scoring per call).
+    // 5/min is plenty for a real user clicking "Refresh"; abusers get throttled.
+    const blocked = await protectCrawl(req, { route: "matches-refresh", maxPerMin: 5 });
+    if (blocked) return blocked;
     // Auth check
     const cookieStore = await cookies();
     const authSupabase = createServerClient(

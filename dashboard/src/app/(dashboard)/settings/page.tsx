@@ -8,6 +8,8 @@ import {
     Lock, AlertTriangle, Trash2, X, ChevronDown, ChevronUp,
 } from "lucide-react";
 import ServiceCTA from "@/components/ui/ServiceCTA";
+import FeatureRequestForm from "@/components/FeatureRequestForm";
+import ConsultingCTA from "@/components/ConsultingCTA";
 import { createSupabaseClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
@@ -1624,6 +1626,25 @@ export default function SettingsPage() {
                         Foundation lib lives at @/lib/team-accounts; per-row scoping
                         of writes against the team_members table is enforced API-side. */}
                     <TeamMembersSection />
+
+                    {/* Help & Feedback — drop a feature request straight into
+                        HubSpot (48hr SLA on non-trivial items). Also surfaces
+                        the consulting upsell for users who want hands-on help. */}
+                    <section id="help" className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7 scroll-mt-20">
+                        <p className="text-stone-500 text-xs uppercase tracking-widest font-bold mb-4">Help &amp; Feedback</p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <div className="bg-stone-50 border border-stone-200 rounded-xl p-4">
+                                <h3 className="font-bold text-stone-900 mb-1.5 text-sm">Suggest a feature or report a bug</h3>
+                                <p className="text-xs text-stone-500 mb-3 leading-relaxed">
+                                    Goes straight into our HubSpot pipeline. Important and blocking items get a 48-hour response.
+                                </p>
+                                <FeatureRequestForm trigger="button" />
+                            </div>
+                            <div>
+                                <ConsultingCTA variant="sidebar" placement="settings_help" />
+                            </div>
+                        </div>
+                    </section>
 
                     {/* Privacy & Data — GDPR-aligned: export everything, or
                         request deletion with a 7-day grace window. Deletion

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
+import { protectCrawl } from "@/lib/crawl-protection";
 
 export const maxDuration = 30;
 
@@ -20,6 +21,8 @@ export const maxDuration = 30;
  *   Break ties by match_score then discovered_at.
  */
 export async function GET(req: NextRequest) {
+    const blocked = await protectCrawl(req, { route: "partners-suggested", maxPerMin: 30 });
+    if (blocked) return blocked;
     const cookieStore = await cookies();
     const authSupabase = createServerClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,

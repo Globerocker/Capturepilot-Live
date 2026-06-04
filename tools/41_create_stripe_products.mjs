@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * One-shot script: creates the Stripe Product + Price objects for our new
- * Light + Pro tiers (monthly + annual each = 4 prices). Idempotent — if the
- * products/prices already exist (matched by `lookup_key`), it reuses them.
+ * One-shot script: creates the Stripe Product + Price + Payment-Link objects
+ * for the Light + Pro tiers (monthly + annual each = 4 prices, 4 links).
+ * Idempotent — products/prices match by `lookup_key`, links match by metadata.tier_key.
  *
  * Updates plan_tiers in Supabase with the resulting price IDs so the
  * checkout route can look them up by tier code.
@@ -204,6 +204,54 @@ async function main() {
     });
     results.pro = { product_id: proProduct.id, monthly_price_id: proMonthly.id, yearly_price_id: proYearly.id };
 
+    // ── Payment Links (shareable buy.stripe.com URLs) ──
+    // These bypass the in-app checkout entirely. Use them in marketing emails,
+    // ads, embedded buttons, anywhere outside the app. Each links to a
+    // single price + 14-day trial + redirects to the dashboard on completion.
+    console.log("\n─── Payment Links ───");
+    const APP_BASE = process.env.NEXT_PUBLIC_APP_URL || "https://app.capturepilot.com";
+
+    async function findPaymentLinkByTierKey(tierKey) {
+        // Stripe payment links API doesn't filter on metadata directly, so
+        // we list and filter client-side. We have <20 so this is cheap.
+        const data = await stripe("GET", "/payment_links?limit=100&active=true");
+        return data.data?.find(l => l.metadata?.tier_key === tierKey) || null;
+    }
+
+    async function ensurePaymentLink({ priceId, tierKey, label }) {
+        const existing = await findPaymentLinkByTierKey(tierKey);
+        if (existing && existing.line_items?.data?.[0]?.price?.id === priceId) {
+            console.log(`  ↻ Payment Link ${tierKey} exists: ${existing.url}`);
+            return existing;
+        }
+        // Stripe doesn't support updating line_items on a payment link, so
+        // if the price changed we deactivate the old link + create new.
+        if (existing) {
+            await stripe("POST", `/payment_links/${existing.id}`, { active: "false" });
+            console.log(`    ⚠ Deactivated stale link ${existing.id}`);
+        }
+        const body = {
+            "line_items[0][price]": priceId,
+            "line_items[0][quantity]": "1",
+            "after_completion[type]": "redirect",
+            "after_completion[redirect][url]": `${APP_BASE}/billing?welcome=1&tier=${tierKey}`,
+            "subscription_data[trial_period_days]": "14",
+            "metadata[tier_key]": tierKey,
+            "metadata[label]": label,
+            "allow_promotion_codes": "true",
+            "billing_address_collection": "auto",
+        };
+        const created = await stripe("POST", "/payment_links", body);
+        console.log(`  ✓ Payment Link ${tierKey} created: ${created.url}`);
+        return created;
+    }
+
+    const links = {};
+    links.light_monthly = await ensurePaymentLink({ priceId: results.light.monthly_price_id, tierKey: "light_monthly", label: "Light · monthly" });
+    links.light_yearly  = await ensurePaymentLink({ priceId: results.light.yearly_price_id,  tierKey: "light_yearly",  label: "Light · yearly" });
+    links.pro_monthly   = await ensurePaymentLink({ priceId: results.pro.monthly_price_id,   tierKey: "pro_monthly",   label: "Pro · monthly" });
+    links.pro_yearly    = await ensurePaymentLink({ priceId: results.pro.yearly_price_id,    tierKey: "pro_yearly",    label: "Pro · yearly" });
+
     // ── Persist price IDs back to plan_tiers.limits.stripe_* so the checkout
     //    route can look them up without env-var churn. ──
     console.log("\n─── Persisting to plan_tiers ───");
@@ -224,6 +272,11 @@ async function main() {
     console.log(`STRIPE_PRICE_LIGHT_YEARLY=${results.light.yearly_price_id}`);
     console.log(`STRIPE_PRICE_PRO_MONTHLY=${results.pro.monthly_price_id}`);
     console.log(`STRIPE_PRICE_PRO_YEARLY=${results.pro.yearly_price_id}`);
+    console.log("\n═══ Shareable Stripe Payment Links (use in email, ads, marketing) ═══\n");
+    console.log(`Light · $39/mo    → ${links.light_monthly.url}`);
+    console.log(`Light · $374/yr   → ${links.light_yearly.url}`);
+    console.log(`Pro   · $89/mo    → ${links.pro_monthly.url}`);
+    console.log(`Pro   · $854/yr   → ${links.pro_yearly.url}`);
     console.log("\nDone.");
 }
 
