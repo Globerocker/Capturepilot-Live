@@ -282,17 +282,33 @@ function normalizeUrl(u: string): string {
 }
 
 /**
- * Quick website summary via OpenAI when Apollo is unavailable. Fetches the
- * homepage, strips it to plain text, asks gpt-4o-mini for a 3-line summary:
- * what they do, who they serve, federal-contracting signals. Caps at 6s end-to-end
- * so it can't blow the per-lead time budget. Returns null on any failure —
- * the brief just runs without the summary.
+ * Quick website summary — Phase 6 of the Quick Checker overhaul.
+ *
+ * Was: bespoke 8KB raw-fetch + gpt-4o-mini 3-line summary that DIDN'T share
+ * extraction logic with the real Quick Checker. Two parallel pipelines
+ * meant the Facebook-lead BD brief consistently looked thinner than the
+ * lead-magnet output customers saw on /check/[id].
+ *
+ * Now: delegates to runDeepExtract (multi-page crawl + Ollama-first LLM,
+ * full strategic schema with strengths/weaknesses/pitch_angles). The
+ * lead-brief consumer flattens what it needs and ignores the rest, but
+ * downstream HubSpot pushes get the full payload. Same code path means
+ * any future quality improvement to the Quick Checker lifts the BD brief
+ * automatically.
  */
-interface QuickSiteSummary { what_they_do: string; who_they_serve: string; gov_signals: string }
+interface QuickSiteSummary {
+    what_they_do: string;
+    who_they_serve: string;
+    gov_signals: string;
+    // Phase 6 extras — surface in the lead-brief WhatsApp/SMS/email when
+    // available. Each defaults to empty so consumers stay backwards-compatible.
+    strengths?: string[];
+    weaknesses?: string[];
+    pitch_angles?: string[];
+    nail_down_keywords?: string[];
+}
 
 async function quickWebsiteSummary(websiteOrEmail: string): Promise<QuickSiteSummary | null> {
-    const openaiKey = process.env.OPENAI_API_KEY;
-    if (!openaiKey) return null;
     let url = websiteOrEmail;
     if (url.includes("@")) {
         const domain = url.split("@")[1];
@@ -300,44 +316,34 @@ async function quickWebsiteSummary(websiteOrEmail: string): Promise<QuickSiteSum
         url = `https://${domain}`;
     }
     if (!/^https?:\/\//.test(url)) url = `https://${url}`;
-    let html = "";
-    try {
-        const res = await fetch(url, { signal: AbortSignal.timeout(4000), headers: { "user-agent": "Mozilla/5.0 (capturepilot-lead-brief)" } });
-        if (!res.ok) return null;
-        html = await res.text();
-    } catch {
-        return null;
-    }
-    // Crude text extraction — keep first 8k chars to leave headroom for the LLM call.
-    const text = html
-        .replace(/<script[\s\S]*?<\/script>/gi, " ")
-        .replace(/<style[\s\S]*?<\/style>/gi, " ")
-        .replace(/<[^>]+>/g, " ")
-        .replace(/\s+/g, " ")
-        .trim()
-        .slice(0, 8000);
-    if (text.length < 50) return null;
 
     try {
-        const client = new (await import("openai")).default({ apiKey: openaiKey });
-        const completion = await client.chat.completions.create({
-            model: "gpt-4o-mini",
-            response_format: { type: "json_object" },
-            temperature: 0,
-            max_tokens: 250,
-            messages: [
-                {
-                    role: "system",
-                    content: `You read a company homepage and return strict JSON describing the business for a federal-contracting BD call. Schema: {"what_they_do":"<one sentence>","who_they_serve":"<one sentence>","gov_signals":"<one sentence — mentions of SAM, NAICS, set-asides, federal/state/local clients, certifications; or 'none visible' if absent>"}.`,
-                },
-                { role: "user", content: text },
-            ],
-        });
-        const raw = completion.choices[0]?.message?.content || "{}";
-        const parsed = JSON.parse(raw);
-        if (!parsed.what_they_do) return null;
-        return parsed as QuickSiteSummary;
-    } catch {
+        const { runDeepExtract } = await import("@/lib/quick-checker/deep-extract");
+        const result = await runDeepExtract({ website: url, maxPages: 4 });
+        const ex = result.extraction;
+        if (!ex.long_description && !ex.short_description && ex.services.length === 0) return null;
+
+        const whatTheyDo = ex.short_description || ex.long_description.slice(0, 200);
+        const whoTheyServe = ex.industries_served.slice(0, 3).join(", ")
+            || ex.past_customers.slice(0, 3).join(", ")
+            || "broad commercial market — no specific industries surfaced";
+        const govParts: string[] = [];
+        if (ex.has_gov_experience) govParts.push("Federal/agency past performance mentioned");
+        if (ex.certifications.length > 0) govParts.push(`Certifications claimed: ${ex.certifications.map(c => c.type).join(", ")}`);
+        if (ex.federal_agencies_served.length > 0) govParts.push(`Agencies served: ${ex.federal_agencies_served.join(", ")}`);
+        const govSignals = govParts.join(" · ") || "none visible";
+
+        return {
+            what_they_do: whatTheyDo,
+            who_they_serve: whoTheyServe,
+            gov_signals: govSignals,
+            strengths: ex.strengths.length > 0 ? ex.strengths : undefined,
+            weaknesses: ex.weaknesses.length > 0 ? ex.weaknesses : undefined,
+            pitch_angles: ex.pitch_angles.length > 0 ? ex.pitch_angles : undefined,
+            nail_down_keywords: ex.nail_down_keywords.length > 0 ? ex.nail_down_keywords : undefined,
+        };
+    } catch (err) {
+        console.warn("[lead-brief] runDeepExtract failed:", err instanceof Error ? err.message : err);
         return null;
     }
 }
