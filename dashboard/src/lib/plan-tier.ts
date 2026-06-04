@@ -30,7 +30,14 @@ export type FeatureKey =
     | "sam_passthrough"
     | "partners_search"
     | "api_access"
-    | "team_seats";
+    | "team_seats"
+    // ── Migration 107 (Light + Pro restructure, June 2026):
+    | "competitor_profiles"   // view competitor pages (Light+)
+    | "partner_profiles"      // view + save partner pages (Light+)
+    | "state_local_access"    // SLED opportunity feed (Pro+ only)
+    | "ai_proposals"          // full AI proposal writer (Pro+ only)
+    | "ai_summaries"          // per-opportunity AI summaries (Pro+ only)
+    | "export_data";          // CSV/XLSX downloads (Pro+ only, anti-scrape)
 
 export interface PlanLimits {
     max_saved_searches: number;
@@ -41,6 +48,13 @@ export interface PlanLimits {
     partners_search: boolean;
     api_access: boolean;
     team_seats: number;
+    // ── Migration 107:
+    competitor_profiles: boolean;
+    partner_profiles: boolean;
+    state_local_access: boolean;
+    ai_proposals: boolean;
+    ai_summaries: boolean;
+    export_data: boolean;
 }
 
 // Fallback used when the DB lookup fails — equivalent to the Free tier.
@@ -52,6 +66,12 @@ const FALLBACK_LIMITS: PlanLimits = {
     capability_statement_ai: false,
     sam_passthrough: false,
     partners_search: false,
+    competitor_profiles: false,
+    partner_profiles: false,
+    state_local_access: false,
+    ai_proposals: false,
+    ai_summaries: false,
+    export_data: false,
     api_access: false,
     team_seats: 1,
 };

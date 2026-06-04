@@ -746,3 +746,92 @@ export function roleFromJobTitle(title: string | null): BacklinkContactRole {
   if (/communications?\b|comms\b/.test(t)) return "pr";
   return "unknown";
 }
+
+/**
+ * Create a support ticket in HubSpot. Used by the in-app feature-request form
+ * so user feedback lands in our HubSpot support pipeline instead of disappearing
+ * into a Slack channel or an issue tracker we forget to check.
+ *
+ * Pipeline: HUBSPOT_SUPPORT_PIPELINE_ID (env). If unset, falls back to
+ * HubSpot's default support pipeline (id=0).
+ *
+ * Tags "48hr_sla" automatically when urgency != nice_to_have so the support
+ * dashboard can sort by SLA.
+ */
+export async function createSupportTicket(args: {
+    subject: string;
+    body: string;
+    category: "bug" | "feature" | "question" | "other";
+    urgency: "nice_to_have" | "important" | "blocking";
+    requester_email: string;
+    requester_name?: string | null;
+    plan_tier?: string | null;
+    context_feature?: string | null;
+}): Promise<{ id: string } | null> {
+    if (!HUBSPOT_TOKEN) {
+        console.warn("[hubspot] createSupportTicket: HUBSPOT_TOKEN unset — skipping");
+        return null;
+    }
+    // HubSpot ticket priority enum: LOW / MEDIUM / HIGH
+    const priorityMap = { nice_to_have: "LOW", important: "MEDIUM", blocking: "HIGH" } as const;
+    const slaTag = args.urgency === "nice_to_have" ? null : "48hr_sla";
+
+    const properties: Record<string, string> = {
+        subject: args.subject.slice(0, 250),
+        content: [
+            `**Category:** ${args.category}`,
+            `**Urgency:** ${args.urgency}`,
+            `**Plan tier:** ${args.plan_tier || "unknown"}`,
+            args.context_feature ? `**Context feature:** ${args.context_feature}` : "",
+            "",
+            "---",
+            "",
+            args.body,
+            "",
+            "---",
+            `Submitted by ${args.requester_name || args.requester_email} (${args.requester_email})`,
+        ].filter(Boolean).join("\n"),
+        hs_pipeline: process.env.HUBSPOT_SUPPORT_PIPELINE_ID || "0",
+        hs_pipeline_stage: process.env.HUBSPOT_SUPPORT_STAGE_NEW || "1", // 1 = "New" on default pipeline
+        hs_ticket_priority: priorityMap[args.urgency],
+        // Custom property if you've defined one — falls back to subject prefix
+        // if not (still visible in the ticket listing).
+        ...(slaTag ? { sla_tag: slaTag } : {}),
+    };
+
+    try {
+        const res = await fetch(`${BASE}/crm/v3/objects/tickets`, {
+            method: "POST",
+            headers: {
+                Authorization: `Bearer ${HUBSPOT_TOKEN}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ properties }),
+            signal: AbortSignal.timeout(8000),
+        });
+        if (!res.ok) {
+            const errBody = await res.text().catch(() => "");
+            console.warn(`[hubspot] createSupportTicket failed (${res.status}): ${errBody.slice(0, 200)}`);
+            return null;
+        }
+        const data = await res.json() as { id: string };
+
+        // Associate to contact (so the ticket shows up under the user's CRM
+        // record). Non-fatal — best effort.
+        try {
+            const contactId = await getContactByEmail(args.requester_email);
+            if (contactId) {
+                await fetch(`${BASE}/crm/v3/objects/tickets/${data.id}/associations/contacts/${contactId}/ticket_to_contact`, {
+                    method: "PUT",
+                    headers: { Authorization: `Bearer ${HUBSPOT_TOKEN}` },
+                    signal: AbortSignal.timeout(4000),
+                });
+            }
+        } catch { /* non-fatal */ }
+
+        return { id: data.id };
+    } catch (e) {
+        console.warn(`[hubspot] createSupportTicket exception: ${(e as Error).message}`);
+        return null;
+    }
+}
