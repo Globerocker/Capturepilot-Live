@@ -377,32 +377,17 @@ function BillingPageContent() {
         </div>
       )}
 
-      {/* ---- Paywall Banner (shown after beta ends if redirected here) ---- */}
+      {/* ---- Paywall redirect banner (when sent here from a gated feature) ---- */}
       {isPaywallRedirect && (
         <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-5 sm:p-6 mb-6 text-center">
           <p className="text-lg font-bold text-amber-900 mb-1">
-            Beta Has Ended — Subscribe to Continue
+            Subscribe to unlock this feature
           </p>
           <p className="text-sm text-amber-800 leading-relaxed">
-            Your free beta access ended on May 9, 2026. Pick a plan below to restore full access.
-            Beta feedback users keep their <span className="font-bold">$149/mo locked-in</span> rate.
+            Pick a plan below to continue. 14-day free trial included — cancel anytime before day 15.
           </p>
         </div>
       )}
-
-      {/* ---- Beta Banner ---- */}
-      <div className="bg-emerald-50 border-2 border-emerald-300 rounded-2xl p-5 sm:p-6 mb-8 text-center">
-        <p className="text-lg font-bold text-emerald-800 mb-1">
-          PUBLIC BETA — ALL FEATURES FREE
-        </p>
-        <p className="text-sm text-emerald-700 leading-relaxed">
-          You have full access to every Pro feature during our public beta.
-          <br className="hidden sm:block" />
-          Beta ends <span className="font-bold">May 9, 2026</span> (our founder Andre Schuler&apos;s birthday).
-          Beta users who provide feedback get{" "}
-          <span className="font-bold">$149/mo locked-in pricing</span> (25% off forever).
-        </p>
-      </div>
 
       {/* ---- Header ---- */}
       <header className="mb-8 text-center">

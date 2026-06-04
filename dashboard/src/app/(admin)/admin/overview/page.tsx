@@ -104,22 +104,34 @@ export default function AdminOverview() {
     const [dbStatsError, setDbStatsError] = useState<string | null>(null);
 
     useEffect(() => {
+        // Clients power the bottom table; the DB-stats endpoint feeds the
+        // Data Health panel. Run both in parallel. Wrap each in a 15s
+        // timeout so a slow/hung server can't lock the loading state forever
+        // (was a real bug — page stuck on a centered spinner with no signal).
+        const withTimeout = <T,>(p: Promise<T>, ms: number, label: string): Promise<T> =>
+            Promise.race([
+                p,
+                new Promise<T>((_, reject) =>
+                    setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms),
+                ),
+            ]);
+
         (async () => {
-            // Clients power the bottom table; the DB-stats endpoint feeds the
-            // new Data Health panel. Run both in parallel — neither blocks the
-            // other so a slow stats query doesn't delay the client list.
             const [clientsRes, statsRes] = await Promise.allSettled([
-                fetch("/api/admin/clients").then(r => r.json()),
-                fetch("/api/admin/db-stats", { cache: "no-store" }).then(r => r.json()),
+                withTimeout(fetch("/api/admin/clients").then(r => r.json()), 15_000, "/api/admin/clients"),
+                withTimeout(fetch("/api/admin/db-stats", { cache: "no-store" }).then(r => r.json()), 15_000, "/api/admin/db-stats"),
             ]);
             if (clientsRes.status === "fulfilled") {
                 setClients(clientsRes.value.clients || []);
+            } else {
+                console.error("[admin/overview] clients fetch failed:", clientsRes.reason);
             }
             if (statsRes.status === "fulfilled") {
                 if (statsRes.value.error) setDbStatsError(statsRes.value.error);
                 else setDbStats(statsRes.value as DbStats);
             } else {
-                setDbStatsError("Failed to load DB stats");
+                console.error("[admin/overview] db-stats fetch failed:", statsRes.reason);
+                setDbStatsError(statsRes.reason?.message || "Failed to load DB stats");
             }
             setLoading(false);
         })();

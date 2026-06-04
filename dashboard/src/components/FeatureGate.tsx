@@ -32,12 +32,20 @@ type FeatureKey =
     | "api_access"
     | "competitor_profiles"
     | "partner_profiles"
-    | "sam_passthrough";
+    | "sam_passthrough"
+    // Agency-only:
+    | "client_management"
+    | "client_portal"
+    | "white_label"
+    | "bulk_proposal_gen"
+    | "priority_ai_models"
+    | "dedicated_support"
+    | "bulk_outreach";
 
 interface Props {
     feature: FeatureKey;
     /** Tier required to unlock. Used to label the upgrade CTA. */
-    requiredTier?: "light" | "pro";
+    requiredTier?: "light" | "pro" | "agency";
     /** When unlocked → render children. When locked → render UpgradeWall. */
     children: ReactNode;
     /** Optional override for the marketing headline. */
@@ -143,6 +151,76 @@ const FEATURE_MARKETING: Record<FeatureKey, { headline: string; description: str
         ],
         icon: "🔍",
     },
+    client_management: {
+        headline: "Multi-client workspace",
+        description: "Run federal capture for 5, 10, or 50 client companies from one CapturePilot account. Each client gets their own dashboard, pipeline, capability statement, and match feed — without you context-switching.",
+        bullets: [
+            "Unlimited client workspaces under one Agency seat",
+            "Per-client NAICS, certifications, pipeline, and contacts",
+            "Switch clients via dropdown — no re-login, no separate seats",
+        ],
+        icon: "🗂️",
+    },
+    client_portal: {
+        headline: "White-glove client portals",
+        description: "Hand each of your clients a clean, read-only portal so they can see their pipeline, opportunities, and progress without seeing your back-office.",
+        bullets: [
+            "Light-view portal per client (cannot see your other clients)",
+            "Pre-filtered to that client's matches and pipeline only",
+            "Branded login URL: portal.youragency.com/clientname",
+        ],
+        icon: "🪟",
+    },
+    white_label: {
+        headline: "White-label everything",
+        description: "Custom domain, your logo, your colors. Your clients see your brand — not CapturePilot's. Perfect for consultancies who want to sell capture intel as their own service.",
+        bullets: [
+            "Custom domain via CNAME (portal.youragency.com)",
+            "Replace CapturePilot logo + brand colors per client",
+            "Outbound emails (alerts, briefs) sent from your domain",
+        ],
+        icon: "🎨",
+    },
+    bulk_proposal_gen: {
+        headline: "Bulk proposal generation",
+        description: "Generate fully-written first-draft proposals for 5, 10, or 25 opportunities in one batch. Saves 20-40 hours per week for agencies running parallel captures.",
+        bullets: [
+            "Queue up to 25 opps and walk away — drafts ready in minutes",
+            "Each draft tuned to the opp's NAICS + agency + scope",
+            "Token-heavy feature — Agency tier covers the GPT-4o cost",
+        ],
+        icon: "⚡",
+    },
+    priority_ai_models: {
+        headline: "GPT-4o instead of GPT-4o-mini",
+        description: "Pro uses gpt-4o-mini (cost-efficient). Agency uses gpt-4o (smarter, more nuanced) for every AI feature — capability statements, proposals, summaries, win strategies.",
+        bullets: [
+            "GPT-4o on every AI feature (vs gpt-4o-mini on Pro)",
+            "Noticeably better at long-form proposal sections",
+            "Better handling of complex multi-NAICS scope statements",
+        ],
+        icon: "🧠",
+    },
+    dedicated_support: {
+        headline: "Dedicated CSM + Slack channel",
+        description: "Get a named customer success manager + a private Slack channel for your team. Same-day response on weekdays. No ticket-queue purgatory.",
+        bullets: [
+            "Named CSM assigned to your account",
+            "Private Slack channel with our founder + ops team",
+            "Same-day response on weekdays, 24hr on weekends",
+        ],
+        icon: "💬",
+    },
+    bulk_outreach: {
+        headline: "Outbound prospect campaigns",
+        description: "Run bulk email + SMS outreach to potential clients (federal contractors not yet on CapturePilot). Generates qualified leads for your agency's BD pipeline.",
+        bullets: [
+            "Bulk email/SMS via Resend + Twilio (uses your sender)",
+            "Pre-built sequences for capture, teaming, recompete pitches",
+            "All replies routed to your inbox + tracked in pipeline",
+        ],
+        icon: "📤",
+    },
 };
 
 interface LimitsResponse {
@@ -197,10 +275,10 @@ export function FeatureGate({ feature, requiredTier = "pro", children, headline,
 
 /* ──────────────────────────────────────────────────────────────────────── */
 
-function UpgradeWall({ feature, requiredTier, headline, description, trialActive }: { feature: FeatureKey; requiredTier: "light" | "pro"; headline?: string; description?: string; trialActive: boolean }) {
+function UpgradeWall({ feature, requiredTier, headline, description, trialActive }: { feature: FeatureKey; requiredTier: "light" | "pro" | "agency"; headline?: string; description?: string; trialActive: boolean }) {
     const marketing = FEATURE_MARKETING[feature];
-    const tierLabel = requiredTier === "pro" ? "Pro" : "Light";
-    const tierPrice = requiredTier === "pro" ? "$89/mo" : "$39/mo";
+    const tierLabel = requiredTier === "agency" ? "Agency" : requiredTier === "pro" ? "Pro" : "Light";
+    const tierPrice = requiredTier === "agency" ? "$399/mo" : requiredTier === "pro" ? "$89/mo" : "$39/mo";
     return (
         <div className="relative">
             {/* Frosted preview of the locked content (faded screenshot stand-in) */}
@@ -260,9 +338,9 @@ function UpgradeWall({ feature, requiredTier, headline, description, trialActive
  * Inline / compact version — drop into a sidebar or list item where the
  * full UpgradeWall would be too much. 1 line + button.
  */
-function UpgradeInline({ feature, requiredTier, trialActive }: { feature: FeatureKey; requiredTier: "light" | "pro"; trialActive: boolean }) {
+function UpgradeInline({ feature, requiredTier, trialActive }: { feature: FeatureKey; requiredTier: "light" | "pro" | "agency"; trialActive: boolean }) {
     const marketing = FEATURE_MARKETING[feature];
-    const tierLabel = requiredTier === "pro" ? "Pro" : "Light";
+    const tierLabel = requiredTier === "agency" ? "Agency" : requiredTier === "pro" ? "Pro" : "Light";
     return (
         <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm">
             <Lock className="w-4 h-4 text-amber-700 flex-shrink-0" />
@@ -284,10 +362,10 @@ function UpgradeInline({ feature, requiredTier, trialActive }: { feature: Featur
  * Standalone dismissible upgrade nag — useful for the dashboard sidebar.
  * Stores dismissal in localStorage per feature so it doesn't reappear for 7 days.
  */
-export function UpgradeNag({ feature, requiredTier = "pro" }: { feature: FeatureKey; requiredTier?: "light" | "pro" }) {
+export function UpgradeNag({ feature, requiredTier = "pro" }: { feature: FeatureKey; requiredTier?: "light" | "pro" | "agency" }) {
     const [dismissed, setDismissed] = useState(true);
     const storageKey = `upgrade_nag_dismissed_${feature}`;
-    const tierLabel = requiredTier === "pro" ? "Pro" : "Light";
+    const tierLabel = requiredTier === "agency" ? "Agency" : requiredTier === "pro" ? "Pro" : "Light";
 
     useEffect(() => {
         try {

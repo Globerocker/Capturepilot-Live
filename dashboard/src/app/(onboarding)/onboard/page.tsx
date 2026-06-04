@@ -626,12 +626,31 @@ function OnboardPageContent() {
                             Your matches are ready. Head to your dashboard to explore them.
                         </p>
                     )}
+                    {/* Trial gate — first stop after onboarding is /billing so the user
+                        picks a plan + drops a card. Stripe captures the card, gives them
+                        14 days unlocked, then auto-converts on day 15 unless they cancel.
+                        Without this gate they can browse for free indefinitely. */}
+                    <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-6 max-w-md mx-auto">
+                        <p className="text-sm font-bold text-amber-900 mb-1">
+                            Last step: pick a plan to start your 14-day trial
+                        </p>
+                        <p className="text-xs text-amber-800 leading-relaxed">
+                            Card required to unlock full features — we won&apos;t charge for 14 days, and you can cancel anytime before then with zero charge.
+                        </p>
+                    </div>
                     <button
                         type="button"
-                        onClick={() => router.push("/dashboard")}
-                        className="inline-flex items-center bg-black text-white font-bold px-8 py-4 rounded-full hover:bg-stone-800 transition-all shadow-lg text-sm"
+                        onClick={() => router.push("/billing?from=onboarding")}
+                        className="inline-flex items-center bg-emerald-600 text-white font-bold px-8 py-4 rounded-full hover:bg-emerald-700 transition-all shadow-lg text-sm"
                     >
-                        Go to Dashboard <ArrowRight className="w-4 h-4 ml-2" />
+                        Pick a plan + start trial <ArrowRight className="w-4 h-4 ml-2" />
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => router.push("/dashboard?explore=1")}
+                        className="block mx-auto mt-3 text-xs text-stone-400 hover:text-stone-600 underline"
+                    >
+                        Just let me poke around first
                     </button>
                 </div>
             </div>

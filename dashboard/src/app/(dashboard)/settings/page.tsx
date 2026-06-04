@@ -1315,12 +1315,10 @@ export default function SettingsPage() {
                         <div className="flex items-start justify-between">
                             <div>
                                 <h3 className="text-xl font-bold text-stone-900">
-                                    {profile.plan_tier === "free_beta" ? "Free Beta" : "Free Plan"}
+                                    Free Plan
                                 </h3>
                                 <p className="text-xs text-stone-500 mt-0.5">
-                                    {profile.plan_tier === "free_beta"
-                                        ? "Full Pro features during public beta"
-                                        : "Basic features included"}
+                                    Basic features included
                                 </p>
                             </div>
                             <SubscriptionStatusBadge status="free" />

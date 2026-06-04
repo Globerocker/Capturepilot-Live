@@ -37,7 +37,15 @@ export type FeatureKey =
     | "state_local_access"    // SLED opportunity feed (Pro+ only)
     | "ai_proposals"          // full AI proposal writer (Pro+ only)
     | "ai_summaries"          // per-opportunity AI summaries (Pro+ only)
-    | "export_data";          // CSV/XLSX downloads (Pro+ only, anti-scrape)
+    | "export_data"           // CSV/XLSX downloads (Pro+ only, anti-scrape)
+    // ── Migration 111 (Pro maxed, Agency tier introduced):
+    | "client_management"     // multi-client workspace (Agency only)
+    | "client_portal"         // light-view portal handed to each client (Agency only)
+    | "white_label"           // custom domain + logo replacement (Agency only)
+    | "bulk_proposal_gen"     // generate proposals for N opps at once (Agency only — token heavy)
+    | "priority_ai_models"    // gpt-4o for AI features (Pro uses gpt-4o-mini)
+    | "dedicated_support"     // Slack channel + named CSM (Agency only)
+    | "bulk_outreach";        // outbound email/SMS prospect campaigns (Agency only)
 
 export interface PlanLimits {
     max_saved_searches: number;
@@ -55,6 +63,14 @@ export interface PlanLimits {
     ai_proposals: boolean;
     ai_summaries: boolean;
     export_data: boolean;
+    // ── Migration 111 (Agency):
+    client_management: boolean;
+    client_portal: boolean;
+    white_label: boolean;
+    bulk_proposal_gen: boolean;
+    priority_ai_models: boolean;
+    dedicated_support: boolean;
+    bulk_outreach: boolean;
 }
 
 // Fallback used when the DB lookup fails — equivalent to the Free tier.
@@ -73,6 +89,13 @@ const FALLBACK_LIMITS: PlanLimits = {
     ai_summaries: false,
     export_data: false,
     api_access: false,
+    client_management: false,
+    client_portal: false,
+    white_label: false,
+    bulk_proposal_gen: false,
+    priority_ai_models: false,
+    dedicated_support: false,
+    bulk_outreach: false,
     team_seats: 1,
 };
 

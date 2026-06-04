@@ -34,6 +34,14 @@ interface PlanTier {
         ai_proposals?: boolean;
         ai_summaries?: boolean;
         export_data?: boolean;
+        // ── Migration 111 (Agency tier):
+        client_management?: boolean;
+        client_portal?: boolean;
+        white_label?: boolean;
+        bulk_proposal_gen?: boolean;
+        priority_ai_models?: boolean;
+        dedicated_support?: boolean;
+        bulk_outreach?: boolean;
     };
 }
 
@@ -59,6 +67,15 @@ const FEATURE_ROWS: Array<{
     { key: "export_data", label: "Export CSV / XLSX + PDF download", kind: "bool" },
     { key: "api_access", label: "API access + webhooks", kind: "bool" },
     { key: "team_seats", label: "Team seats", kind: "number", unlimitedAt: 999 },
+    // ── Agency-only rows (migration 111) — surface them on /pricing so the
+    // value gap between Pro and Agency is obvious.
+    { key: "client_management", label: "Multi-client workspace", kind: "bool" },
+    { key: "client_portal", label: "White-glove client portals", kind: "bool" },
+    { key: "white_label", label: "White-label (custom domain + logo)", kind: "bool" },
+    { key: "bulk_proposal_gen", label: "Bulk proposal generation", kind: "bool" },
+    { key: "priority_ai_models", label: "GPT-4o on every AI feature", kind: "bool" },
+    { key: "dedicated_support", label: "Dedicated CSM + private Slack", kind: "bool" },
+    { key: "bulk_outreach", label: "Outbound prospect campaigns", kind: "bool" },
 ];
 
 // Competitor comparison data — sourced from docs/PRICING_STRATEGY.md
@@ -135,7 +152,15 @@ function fmtNumber(v: number, unlimitedAt?: number, suffix?: string): string {
 
 function ctaFor(tier: PlanTier): { label: string; href: string; primary: boolean } {
     if (tier.code === "free") return { label: "Start free", href: "/signup", primary: false };
-    if (tier.code === "enterprise") return { label: "Contact sales", href: "mailto:hello@capturepilot.com?subject=Enterprise%20plan%20inquiry", primary: false };
+    // Agency tier is high-touch: route through HubSpot booking, not Stripe.
+    // Bigger ACV + multi-client setup needs a call before checkout.
+    if (tier.code === "agency" || tier.code === "enterprise") {
+        return {
+            label: "Talk to us",
+            href: "https://meetings-na2.hubspot.com/americurial/intro-call?utm_source=pricing&utm_medium=agency_tier_cta",
+            primary: false,
+        };
+    }
     return { label: `Start 14-day ${tier.label} trial`, href: `/signup?plan=${tier.code}`, primary: tier.code === "pro" };
 }
 
