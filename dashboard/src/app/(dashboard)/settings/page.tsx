@@ -498,8 +498,10 @@ export default function SettingsPage() {
         const tier = profile.plan_tier || "free";
         const accountType = profile.account_type || "self_service";
         if (accountType === "consulting") return { label: "Consulting", bg: "bg-emerald-100", text: "text-emerald-700" };
+        if (accountType === "admin") return { label: "Admin", bg: "bg-amber-100", text: "text-amber-700" };
+        if (tier === "agency") return { label: "Agency", bg: "bg-stone-900", text: "text-white" };
         if (tier === "pro" || subscription?.status === "active" || subscription?.status === "trialing") return { label: "Pro", bg: "bg-emerald-100", text: "text-emerald-700" };
-        if (tier === "free_beta") return { label: "Free Beta", bg: "bg-blue-100", text: "text-blue-700" };
+        if (tier === "light") return { label: "Light", bg: "bg-blue-100", text: "text-blue-700" };
         return { label: "Free", bg: "bg-stone-100", text: "text-stone-600" };
     };
 
@@ -1326,8 +1328,8 @@ export default function SettingsPage() {
                         <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
                             <p className="text-sm text-emerald-800 font-medium">Upgrade to Pro</p>
                             <p className="text-xs text-emerald-700 mt-1">
-                                Get unlimited matches, AI proposals, pipeline tools, and more.
-                                Starting at $199/mo with a 30-day free trial.
+                                Unlimited matches, AI proposals, SLED coverage, exports, API access.
+                                $89/mo with a 14-day free trial. Card required (auto-converts on day 15).
                             </p>
                         </div>
                         <Link

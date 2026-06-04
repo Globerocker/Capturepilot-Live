@@ -30,7 +30,13 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 const SEAT_LIMITS_DISPLAY: Record<string, number> = {
-    free: 1, free_beta: 3, starter: 3, pro: 10, consulting: 10, enterprise: 999,
+    free: 1,
+    light: 1,
+    pro: 5,
+    agency: 9999,
+    consulting: 10,
+    // Legacy fallbacks (migration 112 reassigns existing rows):
+    free_beta: 1, starter: 1, enterprise: 9999,
 };
 
 /**
