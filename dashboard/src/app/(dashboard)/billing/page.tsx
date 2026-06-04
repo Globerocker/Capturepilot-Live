@@ -280,21 +280,28 @@ function BillingPageContent() {
 
   /* ---- Handlers ---- */
 
-  const handleUpgrade = async (selectedInterval: Interval) => {
+  const handleUpgrade = async (selectedInterval: Interval, plan: "light" | "pro" = "pro") => {
     setUpgrading(true);
     try {
       const res = await fetch("/api/stripe/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ interval: selectedInterval }),
+        body: JSON.stringify({ interval: selectedInterval, plan }),
       });
       const data = await res.json();
       if (data.url) {
         window.location.href = data.url;
       } else {
+        // Surface the error so we can see why checkout didn't return a URL —
+        // before this, the button would just silently re-enable and the user
+        // had no idea anything happened.
+        console.error("[billing] /api/stripe/checkout returned no url:", data);
+        alert(`Couldn't start checkout. ${data?.error ? `Reason: ${data.error}` : "Try again or email hello@capturepilot.com."}`);
         setUpgrading(false);
       }
-    } catch {
+    } catch (err) {
+      console.error("[billing] checkout fetch failed:", err);
+      alert("Checkout failed. Check your network connection or try again.");
       setUpgrading(false);
     }
   };
@@ -709,7 +716,7 @@ function BillingPageContent() {
                     {upgrading ? (
                       <><Loader2 className="w-4 h-4 animate-spin" /> Redirecting...</>
                     ) : (
-                      <>Upgrade to Pro — Start 30-day Free Trial</>
+                      <>Upgrade to Pro — Start 14-day Free Trial</>
                     )}
                   </button>
                 )}
