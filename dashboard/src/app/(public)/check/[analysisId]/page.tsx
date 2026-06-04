@@ -70,6 +70,30 @@ interface MatchData {
     link_broken?: boolean | null;
 }
 
+/**
+ * Treat anything starting with http(s):// as a fetch URL placeholder rather
+ * than human-readable description text. SAM.gov returns descriptions as URLs
+ * that need a second fetch — un-enriched rows still have the URL sitting in
+ * opportunities.description, and rendering it as text reads as a bug.
+ */
+function isFetchUrl(s: string | null | undefined): boolean {
+    if (!s) return false;
+    return /^https?:\/\//i.test(s.trim());
+}
+
+/**
+ * Clean agency name for display. Some opps come back with "GOV" or a single
+ * letter from SAM's raw payload — treat those as empty. Otherwise return the
+ * string as-is.
+ */
+function cleanAgency(raw: string | null | undefined): string {
+    if (!raw) return "";
+    const s = String(raw).trim();
+    if (s.length < 3) return "";   // single letters, "GOV" tag, etc.
+    if (s.toLowerCase() === "federal agency") return ""; // self-referential placeholder
+    return s;
+}
+
 // Some SLED ingest paths store notice_type as a JSON-encoded blob like
 // `{"description":"Solicitation"}` rather than a plain string. The scoring
 // path tolerates it via .includes() but the UI shouldn't expose the curly
@@ -605,7 +629,7 @@ function MatchCard({ match, rank, hero, userNaicsLabels }: { match: MatchData; r
                                         </span>
                                     )}
                                 </div>
-                                <p className="text-[11px] text-stone-500">{match.agency || "Federal Agency"}</p>
+                                <p className="text-[11px] text-stone-500">{cleanAgency(match.agency) || "Agency name pending"}</p>
                             </div>
                         </div>
                         {deadlineInfo && (
@@ -631,8 +655,15 @@ function MatchCard({ match, rank, hero, userNaicsLabels }: { match: MatchData; r
                         <WhyMatchPanel match={match} userNaicsLabels={userNaicsLabels} />
                     )}
 
-                    {/* Highlighted description snippet */}
-                    {match.description_url && (
+                    {/* Highlighted description snippet — but ONLY render if
+                        description_url actually contains text content.
+                        SAM.gov stores `description` as a fetch URL
+                        (https://api.sam.gov/.../noticedesc?noticeid=...) for
+                        un-enriched opps; rendering that URL as the description
+                        text is the bug the user just reported. The "View on
+                        SAM.gov" button below already covers the click-through
+                        case, so hiding the raw URL is the right move. */}
+                    {match.description_url && !isFetchUrl(match.description_url) && (
                         <p className="text-sm text-stone-700 leading-relaxed">
                             <HighlightedSnippet text={String(match.description_url)} terms={highlightTerms} maxLen={280} />
                         </p>
@@ -740,7 +771,7 @@ function MatchCard({ match, rank, hero, userNaicsLabels }: { match: MatchData; r
                         )}
                     </div>
                     <p className="font-bold text-sm text-black line-clamp-2">{match.title || "Untitled Opportunity"}</p>
-                    <p className="text-xs text-stone-500 mt-0.5">{match.agency || "Federal Agency"}</p>
+                    <p className="text-xs text-stone-500 mt-0.5">{cleanAgency(match.agency) || "Agency name pending"}</p>
                     {match.matched_keywords && match.matched_keywords.length > 0 && (
                         <p className="text-[10px] text-emerald-700 mt-1 truncate">
                             <span className="font-bold uppercase tracking-wider text-emerald-600">Matched:</span> {match.matched_keywords.slice(0, 4).join(" · ")}
