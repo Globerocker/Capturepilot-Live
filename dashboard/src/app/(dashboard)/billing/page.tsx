@@ -18,7 +18,6 @@ import clsx from "clsx";
 import InvoicesSection from "@/components/billing/InvoicesSection";
 import CancelFlow from "@/components/billing/CancelFlow";
 import PlanCardsGrid from "@/components/billing/PlanCardsGrid";
-import { VETERAN_DISCOUNT_PERCENT, discountedPrice, veteranCertLabel } from "@/lib/veteran";
 import { trackWithCapi } from "@/lib/analytics";
 
 const supabase = createSupabaseClient();
@@ -34,9 +33,6 @@ interface BillingInfo {
   trialDaysLeft: number | null;
   nextBillingDate: string | null;
   stripeCustomerId: string | null;
-  isVeteranOwned: boolean;
-  veteranCertType: string | null;
-  veteranCertLabel: string | null;
   uei: string | null;
 }
 
@@ -250,17 +246,6 @@ function BillingPageContent() {
         effectiveStatus = "free";
       else if (!status || status === "none") effectiveStatus = "free";
 
-      const veteranFields = {
-        is_veteran_owned: p.is_veteran_owned as boolean | null,
-        veteran_cert_type: p.veteran_cert_type as string | null,
-        sba_certifications: (p.sba_certifications as string[] | null) || [],
-      };
-      const certs = (veteranFields.sba_certifications || []).map((c) => (c || "").toUpperCase());
-      const isVet =
-        veteranFields.is_veteran_owned === true ||
-        certs.includes("SDVOSB") ||
-        certs.includes("VOSB");
-
       setBilling({
         planTier: accountType === "consulting" ? "consulting" : planTier,
         subscriptionStatus: effectiveStatus,
@@ -268,9 +253,6 @@ function BillingPageContent() {
         trialDaysLeft,
         nextBillingDate: null, // set by Stripe webhook in future
         stripeCustomerId: (p.stripe_customer_id as string) || null,
-        isVeteranOwned: isVet,
-        veteranCertType: veteranFields.veteran_cert_type,
-        veteranCertLabel: veteranCertLabel(veteranFields),
         uei: (p.uei as string) || null,
       });
       setCompanyName((p.company_name as string) || "");
@@ -343,15 +325,6 @@ function BillingPageContent() {
   // Was previously gated to unsubscribed-only, which left trial users
   // with no clickable upgrade path on this page.
   const showPricingCards = !isConsulting;
-
-  const baseMonthly = 199;
-  const baseYearlyMonthly = 159;
-  const baseYearlyTotal = 1908;
-
-  const isVet = billing.isVeteranOwned;
-  const basePrice = interval === "yearly" ? baseYearlyMonthly : baseMonthly;
-  const proPrice = isVet ? discountedPrice(basePrice) : basePrice;
-  const yearlyTotal = isVet ? discountedPrice(baseYearlyTotal) : baseYearlyTotal;
 
   /* ---- Derived display values ---- */
   const planDisplayName =
@@ -554,15 +527,6 @@ function BillingPageContent() {
         </div>
       )}
 
-      {/* ---- Veteran Discount Banner ---- */}
-      {showPricingCards && (
-        <VeteranDiscountBanner
-          isVet={isVet}
-          certLabel={billing.veteranCertLabel}
-          uei={billing.uei}
-        />
-      )}
-
       {/* ---- Plan Cards Grid (Free / Light / Pro) ----
            Always rendered (when not consulting) so trial + active users
            can still see + switch plans. Agency CTA is a separate footer
@@ -576,7 +540,6 @@ function BillingPageContent() {
             setInterval={setInterval}
             upgrading={upgrading}
             onUpgrade={handleUpgrade}
-            isVet={isVet}
           />
         </div>
       )}
@@ -597,160 +560,6 @@ function BillingPageContent() {
           ))}
         </div>
       </div>
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/*  Veteran Discount Banner                                           */
-/* ------------------------------------------------------------------ */
-
-function VeteranDiscountBanner({
-  isVet,
-  certLabel,
-  uei,
-}: {
-  isVet: boolean;
-  certLabel: string | null;
-  uei: string | null;
-}) {
-  const [verifyOpen, setVerifyOpen] = useState(false);
-  const [verifying, setVerifying] = useState(false);
-  const [ueiInput, setUeiInput] = useState(uei || "");
-  const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
-
-  async function runVerify(mode: "sam" | "self_declared") {
-    setVerifying(true);
-    setResult(null);
-    try {
-      const res = await fetch("/api/veteran/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(mode === "sam" ? { mode, uei: ueiInput } : { mode }),
-      });
-      const data = await res.json();
-      if (data.verified) {
-        setResult({
-          ok: true,
-          message:
-            mode === "sam"
-              ? `SDVOSB/VOSB verified via SAM. 20% off is now active.`
-              : `Thanks for your service. 20% veteran discount active — we'll re-verify via SAM monthly.`,
-        });
-        // Reload after short delay so the price updates everywhere
-        setTimeout(() => window.location.reload(), 1500);
-      } else {
-        setResult({ ok: false, message: data.message || data.error || "Verification failed." });
-      }
-    } catch {
-      setResult({ ok: false, message: "Network error. Try again." });
-    } finally {
-      setVerifying(false);
-    }
-  }
-
-  if (isVet) {
-    return (
-      <div className="bg-gradient-to-r from-emerald-50 to-emerald-100 border-2 border-emerald-300 rounded-2xl p-5 mb-6 flex items-start gap-4">
-        <div className="w-10 h-10 rounded-full bg-emerald-600 text-white flex items-center justify-center flex-shrink-0">
-          <Shield className="w-5 h-5" />
-        </div>
-        <div className="flex-1">
-          <p className="text-sm font-bold text-emerald-900">
-            {certLabel || "Veteran-Owned"} · 20% off every paid plan — forever
-          </p>
-          <p className="text-xs text-emerald-700 mt-0.5">
-            Thank you for your service. The discount is automatically applied at checkout.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="bg-gradient-to-r from-stone-50 to-emerald-50 border border-emerald-200 rounded-2xl p-5 mb-6">
-      <div className="flex items-start gap-4">
-        <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center flex-shrink-0">
-          <Shield className="w-5 h-5" />
-        </div>
-        <div className="flex-1">
-          <p className="text-sm font-bold text-stone-900">
-            Veteran-owned business? Get 20% off every plan — forever.
-          </p>
-          <p className="text-xs text-stone-600 mt-0.5">
-            We verify SDVOSB/VOSB certifications via SAM.gov. Not certified yet? Self-declare and
-            we&apos;ll re-verify once your VetCert propagates.
-          </p>
-          {!verifyOpen && (
-            <button
-              type="button"
-              onClick={() => setVerifyOpen(true)}
-              className="mt-3 inline-flex items-center gap-2 text-xs font-bold text-emerald-700 hover:text-emerald-800 underline underline-offset-4"
-            >
-              Verify my veteran status →
-            </button>
-          )}
-        </div>
-      </div>
-
-      {verifyOpen && (
-        <div className="mt-4 pt-4 border-t border-emerald-200 space-y-3">
-          <div>
-            <label className="block text-xs font-bold text-stone-700 mb-1">
-              SAM Unique Entity ID (UEI)
-            </label>
-            <input
-              type="text"
-              value={ueiInput}
-              onChange={(e) => setUeiInput(e.target.value.toUpperCase())}
-              placeholder="e.g. ABC123DEF456"
-              className="w-full px-3 py-2 text-sm border border-stone-300 rounded-lg focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-              maxLength={12}
-            />
-            <p className="text-[10px] text-stone-500 mt-1">
-              12 characters. Found on your SAM.gov registration page.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => runVerify("sam")}
-              disabled={verifying || !ueiInput || ueiInput.length < 12}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white text-xs font-bold rounded-full hover:bg-emerald-700 disabled:opacity-50"
-            >
-              {verifying ? <Loader2 className="w-3 h-3 animate-spin" /> : <Shield className="w-3 h-3" />}
-              Verify via SAM
-            </button>
-            <button
-              type="button"
-              onClick={() => runVerify("self_declared")}
-              disabled={verifying}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-white text-stone-700 text-xs font-bold rounded-full border border-stone-300 hover:bg-stone-50 disabled:opacity-50"
-            >
-              I&apos;ll self-declare
-            </button>
-            <button
-              type="button"
-              onClick={() => setVerifyOpen(false)}
-              className="text-xs text-stone-500 hover:text-stone-700 px-3"
-            >
-              Cancel
-            </button>
-          </div>
-          {result && (
-            <p
-              className={clsx(
-                "text-xs font-medium rounded-lg p-2.5",
-                result.ok
-                  ? "bg-emerald-100 text-emerald-800"
-                  : "bg-amber-100 text-amber-800"
-              )}
-            >
-              {result.message}
-            </p>
-          )}
-        </div>
-      )}
     </div>
   );
 }

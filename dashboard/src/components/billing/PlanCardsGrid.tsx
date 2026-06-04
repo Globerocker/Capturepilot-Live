@@ -15,7 +15,6 @@ import Link from "next/link";
 import { createSupabaseClient } from "@/lib/supabase/client";
 import { CheckCircle2, Loader2, Star, Phone, Check, X as XIcon, ArrowRight, Crown } from "lucide-react";
 import clsx from "clsx";
-import { VETERAN_DISCOUNT_PERCENT, discountedPrice } from "@/lib/veteran";
 
 const sb = createSupabaseClient();
 
@@ -42,8 +41,6 @@ interface Props {
     upgrading: boolean;
     /** Called when user clicks "Start trial" / "Switch to X". Triggers Stripe checkout. */
     onUpgrade: (interval: "monthly" | "yearly", plan: "light" | "pro") => void | Promise<void>;
-    /** Whether the user qualifies for the veteran discount (applied to Pro). */
-    isVet: boolean;
 }
 
 /**
@@ -83,24 +80,22 @@ function bulletsFor(tier: PlanTierRow): string[] {
     return bullets;
 }
 
-function tierPrice(tier: PlanTierRow, interval: "monthly" | "yearly", isVet: boolean): { display: string; sub: string; rawMonthly: number | null } {
+function tierPrice(tier: PlanTierRow, interval: "monthly" | "yearly"): { display: string; sub: string; rawMonthly: number | null } {
     if (tier.monthly_usd === null) return { display: "Custom", sub: "Talk to us", rawMonthly: null };
     if (tier.monthly_usd === 0)    return { display: "$0", sub: "Forever free", rawMonthly: 0 };
     if (interval === "yearly" && tier.yearly_usd) {
         const monthlyEq = Math.round(tier.yearly_usd / 12);
-        const finalMonthly = isVet && tier.code === "pro" ? discountedPrice(monthlyEq) : monthlyEq;
         return {
-            display: `$${finalMonthly}`,
+            display: `$${monthlyEq}`,
             sub: `$${tier.yearly_usd.toLocaleString()}/yr · save 20%`,
-            rawMonthly: finalMonthly,
+            rawMonthly: monthlyEq,
         };
     }
-    const finalMonthly = isVet && tier.code === "pro" ? discountedPrice(tier.monthly_usd) : tier.monthly_usd;
-    return { display: `$${finalMonthly}`, sub: "Billed monthly · cancel anytime", rawMonthly: finalMonthly };
+    return { display: `$${tier.monthly_usd}`, sub: "Billed monthly · cancel anytime", rawMonthly: tier.monthly_usd };
 }
 
 export default function PlanCardsGrid({
-    currentTier, subscriptionStatus, interval, setInterval, upgrading, onUpgrade, isVet,
+    currentTier, subscriptionStatus, interval, setInterval, upgrading, onUpgrade,
 }: Props) {
     const [tiers, setTiers] = useState<PlanTierRow[] | null>(null);
     const [loading, setLoading] = useState(true);
@@ -173,7 +168,7 @@ export default function PlanCardsGrid({
                     const isMostPopular = tier.code === "pro";
                     const isAgency = false; // filtered out above; kept for type safety in CTA branches
                     const isFree = tier.code === "free";
-                    const price = tierPrice(tier, interval, isVet);
+                    const price = tierPrice(tier, interval);
 
                     return (
                         <div key={tier.code} className={clsx(
@@ -270,11 +265,6 @@ export default function PlanCardsGrid({
                                 {!isCurrent && !isAgency && !isFree && (
                                     <p className="text-[10px] text-stone-400 text-center mt-2 leading-tight">
                                         Card required · 14-day trial · auto-converts to ${price.rawMonthly}/mo unless you cancel
-                                    </p>
-                                )}
-                                {isVet && tier.code === "pro" && (
-                                    <p className="text-[10px] text-emerald-600 text-center mt-2 font-bold">
-                                        Veteran-owned: {VETERAN_DISCOUNT_PERCENT}% off applied at checkout
                                     </p>
                                 )}
                             </div>

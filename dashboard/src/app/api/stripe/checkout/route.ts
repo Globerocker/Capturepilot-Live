@@ -3,7 +3,6 @@ import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
 import Stripe from "stripe";
-import { isVeteranEligible } from "@/lib/veteran";
 
 /**
  * Stripe checkout endpoint.
@@ -61,7 +60,7 @@ export async function POST(request: Request) {
 
         const { data: profile } = await admin
             .from("user_profiles")
-            .select("id, stripe_customer_id, stripe_subscription_id, subscription_status, company_name, is_veteran_owned, veteran_cert_type, sba_certifications")
+            .select("id, stripe_customer_id, stripe_subscription_id, subscription_status, company_name")
             .eq("auth_user_id", user.id)
             .single();
 
@@ -164,29 +163,7 @@ export async function POST(request: Request) {
             }
         }
 
-        const veteranEligible = isVeteranEligible(p as Parameters<typeof isVeteranEligible>[0]);
-        const veteranCouponId = process.env.STRIPE_VETERAN_COUPON_ID || "";
-        const discounts =
-            veteranEligible && veteranCouponId
-                ? [{ coupon: veteranCouponId }]
-                : undefined;
-        if (veteranEligible && veteranCouponId) {
-            await admin
-                .from("user_profiles")
-                .update({ veteran_discount_code: veteranCouponId })
-                .eq("id", p.id);
-        }
-
         try {
-            // Stripe rejects passing BOTH `allow_promotion_codes` (even false)
-            // AND `discounts` in the same Checkout Session — "You may only
-            // specify one of these parameters." So we spread one OR the other,
-            // never both. Veteran auto-discount path → discounts; everyone else
-            // → allow_promotion_codes so they can paste a coupon at checkout.
-            const promoOrDiscount = discounts
-                ? { discounts }
-                : { allow_promotion_codes: true };
-
             const session = await stripe.checkout.sessions.create({
                 customer: customerId,
                 mode: "subscription",
@@ -197,20 +174,17 @@ export async function POST(request: Request) {
                         user_profile_id: p.id as string,
                         plan,
                         interval,
-                        veteran_discount: veteranEligible ? "true" : "false",
-                        veteran_cert_type: (p.veteran_cert_type as string) || "",
                     },
                 },
                 payment_method_collection: "always",
-                success_url: `${baseUrl}/billing?success=true&plan=${plan}${veteranEligible ? "&veteran=1" : ""}`,
+                success_url: `${baseUrl}/billing?success=true&plan=${plan}`,
                 cancel_url: `${baseUrl}/billing?canceled=true`,
-                ...promoOrDiscount,
+                allow_promotion_codes: true,
             });
 
             return NextResponse.json({
                 url: session.url,
                 flow: "checkout_new",
-                veteran_discount_applied: veteranEligible && !!veteranCouponId,
             });
         } catch (err) {
             console.error("[stripe/checkout] checkout.sessions.create failed:", err);
