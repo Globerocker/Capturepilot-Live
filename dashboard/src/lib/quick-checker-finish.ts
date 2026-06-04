@@ -26,6 +26,7 @@ import { generateCertRecommendations } from "@/lib/cert-recommendations";
 import { findCompetitors, computeReadinessScore } from "@/lib/quick-checker-helpers";
 import { resolveDescriptions } from "@/lib/fetch-sam-description";
 import { reconcileProfile, type ReconciledProfile } from "@/lib/quick-checker/reconcile";
+import { pushQuickCheckerBriefToHubSpot } from "@/lib/hubspot-brief";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY!;
@@ -55,6 +56,10 @@ interface ScoredMatch {
     classification: string;
     score_breakdown: Record<string, number>;
     matched_keywords?: string[];
+    // Phase 4: eligibility carried through from match-scoring.ts so the
+    // HubSpot push + UI can render lock-badges on ineligible matches.
+    eligibility?: "eligible" | "not_eligible_cert" | "not_eligible_size";
+    required_certifications?: string[];
 }
 
 // MatchForAi + CompanyContextForAi + generateMatchSummary now live in
@@ -605,6 +610,51 @@ export async function runPostConfirmationPipeline(analysisId: string): Promise<v
             competitors,
             reconciled_profile: reconciled,
         }).eq("id", analysisId);
+
+        // ── Phase 5: push the strategic brief to HubSpot ──────────────────
+        // Best-effort, fire-and-forget. Only runs when an email is on the
+        // analysis row + HUBSPOT_TOKEN is configured. The brief lands as a
+        // Note on the contact's timeline with strengths + weaknesses +
+        // pitch_angles + top matches — sales rep opens HubSpot, ready to
+        // call without bouncing back to /check.
+        try {
+            const leadEmail = (analysis.lead_email as string | null)
+                || (analysis.email as string | null)
+                || null;
+            if (leadEmail) {
+                const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://app.capturepilot.com";
+                const top5 = topMatches.slice(0, 5).map(m => ({
+                    title: m.title || null,
+                    agency: m.agency || null,
+                    set_aside_code: m.set_aside_code || null,
+                    score: m.score,
+                    eligibility: m.eligibility,
+                    required_certifications: m.required_certifications,
+                    notice_id: m.notice_id || null,
+                }));
+                await pushQuickCheckerBriefToHubSpot({
+                    email: leadEmail,
+                    companyName,
+                    contactName: (inferredProfile.contact_name as string | null)
+                        || (analysis.lead_name as string | null) || null,
+                    contactPhone: (inferredProfile.contact_phone as string | null) || null,
+                    website: (analysis.website as string | null) || null,
+                    quickCheckerUrl: `${baseUrl}/check/${analysisId}`,
+                    readinessScore,
+                    topMatches: top5,
+                    strengths: (crawlData.strengths as string[]) || [],
+                    weaknesses: (crawlData.weaknesses as string[]) || [],
+                    pitchAngles: (crawlData.pitch_angles as string[]) || [],
+                    nailDownKeywords: (crawlData.nail_down_keywords as string[]) || [],
+                    revenueSignal: (crawlData.revenue_signal as string | null) || null,
+                    federalAgenciesServed: (crawlData.federal_agencies_served as string[]) || [],
+                    reconciled,
+                    naicsCodes: tempProfile.naics_codes,
+                });
+            }
+        } catch (err) {
+            console.error("[quick-checker-finish] HubSpot brief push failed:", err);
+        }
 
     } catch (error) {
         console.error("runPostConfirmationPipeline error:", error);
