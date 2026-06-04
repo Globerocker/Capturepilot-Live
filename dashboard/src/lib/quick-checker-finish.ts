@@ -24,6 +24,7 @@ import {
 } from "@/lib/match-scoring";
 import { generateCertRecommendations } from "@/lib/cert-recommendations";
 import { findCompetitors, computeReadinessScore } from "@/lib/quick-checker-helpers";
+import { resolveDescriptions } from "@/lib/fetch-sam-description";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY!;
@@ -452,6 +453,30 @@ export async function runPostConfirmationPipeline(analysisId: string): Promise<v
             seenTitles.add(title);
             return true;
         }).slice(0, 10);
+
+        // ── Resolve SAM description URLs to actual text ──────────────────────
+        // For Quick Checker matches that still hold a `https://api.sam.gov/...`
+        // URL in opportunities.description (the bulk_enrich_descriptions cron
+        // hasn't caught up yet), inline-fetch the description text so the UI
+        // renders real content instead of an empty card. Caps at 5 parallel
+        // requests with an 8s timeout each — adds ~3-5s to total runtime for
+        // the typical batch of 10 matches, but the UX gain is enormous.
+        try {
+            const resolved = await resolveDescriptions(topMatches.map(m => ({
+                opportunity_id: m.opportunity_id,
+                description: m.description_url,
+            })));
+            topMatches = topMatches.map(m => {
+                const r = resolved.get(m.opportunity_id);
+                if (r && r.text) {
+                    return { ...m, description_url: r.text } as ScoredMatch;
+                }
+                return m;
+            });
+        } catch (err) {
+            console.error("[quick-checker-finish] resolveDescriptions failed:", err);
+            // Non-fatal — UI will fall back to hiding URL-only entries.
+        }
 
         await sb.from("company_analyses").update({ status: "generating" }).eq("id", analysisId);
 
