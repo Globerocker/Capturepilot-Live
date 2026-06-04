@@ -17,6 +17,7 @@ import {
 import clsx from "clsx";
 import InvoicesSection from "@/components/billing/InvoicesSection";
 import CancelFlow from "@/components/billing/CancelFlow";
+import PlanCardsGrid from "@/components/billing/PlanCardsGrid";
 import { VETERAN_DISCOUNT_PERCENT, discountedPrice, veteranCertLabel } from "@/lib/veteran";
 import { trackWithCapi } from "@/lib/analytics";
 
@@ -337,7 +338,11 @@ function BillingPageContent() {
     billing.subscriptionStatus === "trialing" ||
     billing.subscriptionStatus === "past_due";
   const isConsulting = billing.subscriptionStatus === "consulting";
-  const showPricingCards = !isSubscribed && !isConsulting;
+  // Show pricing cards to EVERYONE — including trial + active users — so
+  // they can see all plans + upgrade/downgrade without leaving /billing.
+  // Was previously gated to unsubscribed-only, which left trial users
+  // with no clickable upgrade path on this page.
+  const showPricingCards = !isConsulting;
 
   const baseMonthly = 199;
   const baseYearlyMonthly = 159;
@@ -558,204 +563,21 @@ function BillingPageContent() {
         />
       )}
 
-      {/* ---- Pricing Cards (free / unsubscribed users) ---- */}
+      {/* ---- Plan Cards Grid (Free / Light / Pro) ----
+           Always rendered (when not consulting) so trial + active users
+           can still see + switch plans. Agency CTA is a separate footer
+           inside the grid component. */}
       {showPricingCards && (
-        <div className="mb-10">
-          {/* Monthly / Yearly toggle */}
-          <div className="flex items-center justify-center gap-3 mb-8">
-            <button
-              type="button"
-              onClick={() => setInterval("monthly")}
-              className={clsx(
-                "px-5 py-2 rounded-full text-sm font-bold transition-all",
-                interval === "monthly"
-                  ? "bg-emerald-600 text-white shadow-md"
-                  : "bg-stone-100 text-stone-600 hover:bg-stone-200 border border-stone-200"
-              )}
-            >
-              Monthly
-            </button>
-            <button
-              type="button"
-              onClick={() => setInterval("yearly")}
-              className={clsx(
-                "px-5 py-2 rounded-full text-sm font-bold transition-all",
-                interval === "yearly"
-                  ? "bg-emerald-600 text-white shadow-md"
-                  : "bg-stone-100 text-stone-600 hover:bg-stone-200 border border-stone-200"
-              )}
-            >
-              Yearly
-              {interval !== "yearly" && (
-                <span className="ml-1.5 text-[10px] text-emerald-600 font-bold">
-                  SAVE 20%
-                </span>
-              )}
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 sm:gap-6">
-            {/* ---------- Free Card ---------- */}
-            <div className="rounded-2xl border border-stone-200 bg-white shadow-sm flex flex-col overflow-hidden">
-              <div className="p-6 flex-1 flex flex-col">
-                <p className="font-bold text-xs uppercase tracking-wider text-stone-500 mb-2">
-                  Free
-                </p>
-                <div className="mb-1">
-                  <span className="text-4xl font-bold text-stone-900">$0</span>
-                  <span className="text-sm text-stone-500 ml-1">/mo</span>
-                </div>
-                <p className="text-xs text-stone-500 mb-5">
-                  Get started with federal contracting
-                </p>
-
-                <ul className="space-y-2.5 mb-6 flex-1">
-                  {FREE_FEATURES.map((f) => (
-                    <li key={f} className="flex items-start gap-2 text-sm">
-                      <CheckCircle2 className="w-4 h-4 text-stone-400 flex-shrink-0 mt-0.5" />
-                      <span className="text-stone-700">{f}</span>
-                    </li>
-                  ))}
-                </ul>
-
-                {billing.subscriptionStatus === "free" && (
-                  <div className="w-full py-2.5 rounded-full font-bold text-xs text-center bg-stone-100 text-stone-400 border border-stone-200">
-                    Current Plan
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* ---------- Pro Card ---------- */}
-            <div className="rounded-2xl border-2 border-emerald-500 bg-white shadow-xl flex flex-col overflow-hidden relative">
-              {/* Most Popular badge */}
-              <div className="absolute top-0 right-0 bg-emerald-500 text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl flex items-center gap-1">
-                <Star className="w-3 h-3" /> MOST POPULAR
-              </div>
-              <div className="p-6 flex-1 flex flex-col">
-                <p className="font-bold text-xs uppercase tracking-wider text-emerald-600 mb-2 flex items-center gap-2">
-                  Pro
-                  {isVet && (
-                    <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-800 text-[9px] font-bold px-2 py-0.5 rounded-full normal-case tracking-normal">
-                      <Shield className="w-2.5 h-2.5" />
-                      Veteran {VETERAN_DISCOUNT_PERCENT}% off
-                    </span>
-                  )}
-                </p>
-                <div className="mb-1 flex items-baseline gap-2">
-                  <span className="text-4xl font-bold text-stone-900">
-                    ${proPrice}
-                  </span>
-                  <span className="text-sm text-stone-500">/mo</span>
-                  {isVet && (
-                    <span className="text-sm text-stone-400 line-through">
-                      ${basePrice}
-                    </span>
-                  )}
-                </div>
-                {interval === "yearly" ? (
-                  <div className="flex items-center gap-2 mb-5">
-                    <span className="text-xs text-stone-500">
-                      ${yearlyTotal.toLocaleString()}/yr
-                      {isVet && (
-                        <span className="text-stone-400 line-through ml-1.5">
-                          ${baseYearlyTotal.toLocaleString()}
-                        </span>
-                      )}
-                    </span>
-                    <span className="bg-emerald-100 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                      {isVet ? `SAVE ${VETERAN_DISCOUNT_PERCENT}% + 20%` : "SAVE 20%"}
-                    </span>
-                  </div>
-                ) : (
-                  <p className="text-xs text-stone-500 mb-5">
-                    {isVet
-                      ? `Billed monthly · ${VETERAN_DISCOUNT_PERCENT}% veteran discount applied`
-                      : "Billed monthly"}
-                  </p>
-                )}
-
-                <ul className="space-y-2.5 mb-6 flex-1">
-                  {PRO_FEATURES.map((f) => (
-                    <li key={f} className="flex items-start gap-2 text-sm">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5" />
-                      <span className="text-stone-700">{f}</span>
-                    </li>
-                  ))}
-                </ul>
-
-                {billing.planTier === "pro" && ["active", "trialing"].includes(billing.subscriptionStatus) ? (
-                  <div className="w-full py-3 rounded-full font-bold text-sm bg-emerald-600 text-white text-center shadow-md cursor-default">
-                    <span className="flex items-center justify-center gap-2">
-                      <CheckCircle2 className="w-4 h-4" />
-                      Current Plan
-                    </span>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => handleUpgrade(interval)}
-                    disabled={upgrading}
-                    className="w-full py-3 rounded-full font-bold text-sm bg-emerald-600 text-white hover:bg-emerald-700 active:bg-emerald-800 transition-all shadow-md disabled:opacity-60 inline-flex items-center justify-center gap-2"
-                  >
-                    {upgrading ? (
-                      <><Loader2 className="w-4 h-4 animate-spin" /> Redirecting...</>
-                    ) : (
-                      <>Upgrade to Pro — Start 14-day Free Trial</>
-                    )}
-                  </button>
-                )}
-                <p className="text-[11px] text-stone-500 text-center mt-2.5 font-medium">
-                  {interval === "yearly" ? "Billed yearly — save 20%" : "Billed monthly"} · Cancel anytime
-                </p>
-              </div>
-            </div>
-
-            {/* ---------- Consulting Card ---------- */}
-            <div className="rounded-2xl border border-stone-200 bg-white shadow-sm flex flex-col overflow-hidden relative">
-              {/* Done-For-You badge */}
-              <div className="absolute top-0 right-0 bg-stone-800 text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl">
-                DONE-FOR-YOU
-              </div>
-              <div className="p-6 flex-1 flex flex-col">
-                <p className="font-bold text-xs uppercase tracking-wider text-stone-500 mb-2">
-                  Consulting
-                </p>
-                <div className="mb-1">
-                  <span className="text-lg font-bold text-stone-900">From</span>
-                  <span className="text-4xl font-bold text-stone-900 ml-2">
-                    $2,500
-                  </span>
-                  <span className="text-sm text-stone-500 ml-1">/mo</span>
-                </div>
-                <p className="text-xs text-stone-500 mb-5">
-                  We win contracts for you
-                </p>
-
-                <ul className="space-y-2.5 mb-6 flex-1">
-                  {CONSULTING_FEATURES.map((f) => (
-                    <li key={f} className="flex items-start gap-2 text-sm">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5" />
-                      <span className="text-stone-700">{f}</span>
-                    </li>
-                  ))}
-                </ul>
-
-                <a
-                  href="https://meetings-na2.hubspot.com/americurial/intro-call"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full py-3 rounded-full font-bold text-sm bg-stone-900 text-white hover:bg-stone-800 transition-all text-center flex items-center justify-center gap-2"
-                >
-                  <Phone className="w-4 h-4" />
-                  Book Qualification Call
-                </a>
-                <p className="text-[11px] text-stone-400 text-center mt-2.5">
-                  We only take clients we can win for.
-                </p>
-              </div>
-            </div>
-          </div>
+        <div className="max-w-5xl mx-auto">
+          <PlanCardsGrid
+            currentTier={billing.planTier}
+            subscriptionStatus={billing.subscriptionStatus}
+            interval={interval}
+            setInterval={setInterval}
+            upgrading={upgrading}
+            onUpgrade={handleUpgrade}
+            isVet={isVet}
+          />
         </div>
       )}
 
