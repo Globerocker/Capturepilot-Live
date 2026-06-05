@@ -28,6 +28,8 @@ import { resolveDescriptions } from "@/lib/fetch-sam-description";
 import { reconcileProfile, type ReconciledProfile } from "@/lib/quick-checker/reconcile";
 import { pushQuickCheckerBriefToHubSpot } from "@/lib/hubspot-brief";
 import { enrichFirmographics } from "@/lib/quick-checker/firmographics";
+import { detectRecompetes } from "@/lib/quick-checker/recompete";
+import { suggestGeoExpansion, type GeoExpansionResult } from "@/lib/quick-checker/geo-expansion";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY!;
@@ -61,6 +63,9 @@ interface ScoredMatch {
     // HubSpot push + UI can render lock-badges on ineligible matches.
     eligibility?: "eligible" | "not_eligible_cert" | "not_eligible_size";
     required_certifications?: string[];
+    // Phase 19: recompete flag from USAspending cross-reference.
+    is_recompete?: boolean;
+    incumbent_name?: string | null;
 }
 
 /**
@@ -545,6 +550,42 @@ export async function runPostConfirmationPipeline(analysisId: string): Promise<v
             }
         }
 
+        // ── Phase 17 — progressive write of preview_matches ──
+        // First batch lands in the DB now (after Pass 2 rescore, before AI
+        // summaries). The /check page polls every 2s in active states, so
+        // users see real matches within 5-10s instead of staring at a
+        // spinner for 30-60s while AI summaries generate.
+        try {
+            const earlyTop = topMatches.slice(0, 10);
+            await sb.from("company_analyses")
+                .update({ preview_matches: earlyTop })
+                .eq("id", analysisId);
+        } catch (err) {
+            console.error("[quick-checker-finish] progressive preview_matches write failed:", err);
+        }
+
+        // ── Phase 19 — recompete detection on top matches ──
+        // Best-effort: flag matches as likely recompetes by looking up
+        // prior USAspending awards on (NAICS, agency). Failures don't
+        // block the pipeline — just no recompete badges on cards.
+        try {
+            const flags = await detectRecompetes(topMatches.map(m => ({
+                opportunity_id: m.opportunity_id,
+                naics_code: m.naics_code,
+                agency: m.agency,
+                place_of_performance_state: m.place_of_performance_state,
+            })));
+            topMatches = topMatches.map(m => {
+                const f = flags.get(m.opportunity_id);
+                if (f && f.is_recompete) {
+                    return { ...m, is_recompete: true, incumbent_name: f.incumbent_name } as ScoredMatch & { is_recompete?: boolean; incumbent_name?: string | null };
+                }
+                return m;
+            });
+        } catch (err) {
+            console.error("[quick-checker-finish] recompete detection failed:", err);
+        }
+
         // ── Phase 11 — dedupe + freshness filter ──
         //
         // 1) Title+Agency dedupe (was: title-only). Two opps with same title
@@ -761,6 +802,23 @@ export async function runPostConfirmationPipeline(analysisId: string): Promise<v
             console.error("[quick-checker-finish] reconcileProfile failed:", err);
         }
 
+        // ── Phase 20 — geo expansion suggestions ──
+        // Compute the top 5 states the user is NOT already targeting,
+        // ranked by opp count in their primary NAICS codes. Surfaced on
+        // /check as a "+N more opps if you add FL/GA/LA" banner. Cheap
+        // (~one Supabase query) but high-leverage — most first-time
+        // bidders under-target geographically.
+        let geoExpansion: GeoExpansionResult | null = null;
+        try {
+            geoExpansion = await suggestGeoExpansion(
+                sb,
+                tempProfile.naics_codes || [],
+                tempProfile.target_states || [],
+            );
+        } catch (err) {
+            console.error("[quick-checker-finish] geo expansion failed:", err);
+        }
+
         // Finalize
         await sb.from("company_analyses").update({
             status: "complete",
@@ -772,6 +830,7 @@ export async function runPostConfirmationPipeline(analysisId: string): Promise<v
             readiness_breakdown: readinessBreakdown,
             competitors,
             reconciled_profile: reconciled,
+            geo_expansion: geoExpansion,
         }).eq("id", analysisId);
 
         // ── Phase 5: push the strategic brief to HubSpot ──────────────────

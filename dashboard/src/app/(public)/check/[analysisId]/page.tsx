@@ -61,6 +61,10 @@ interface MatchData {
     eligibility?: "eligible" | "not_eligible_cert" | "not_eligible_size";
     /** Certs the user would need to bid (only set when eligibility ≠ 'eligible'). */
     required_certifications?: string[];
+    /** Phase 19: USAspending cross-reference flagged this as a likely recompete. */
+    is_recompete?: boolean;
+    /** Phase 19: name of the current incumbent (last awardee on this NAICS+agency+state combo). */
+    incumbent_name?: string | null;
     /** 'sam' (federal) / 'sled' / 'grant' — drives source-tier badge. */
     source?: string | null;
     /** 'state' / 'county' / 'city' — refines the SLED badge label. */
@@ -203,6 +207,44 @@ function StrategicBriefPanel(props: {
                     )}
                 </div>
             )}
+        </div>
+    );
+}
+
+/**
+ * Phase 20 — Geo expansion banner. High-contrast cyan callout above the
+ * matches list that quantifies the opportunity cost of single-state
+ * targeting and names the top 3 states the user should add.
+ */
+function GeoExpansionBanner(props: {
+    expansion: {
+        total_potential_opps: number;
+        suggestions: Array<{ state: string; opp_count: number }>;
+        summary: string;
+    };
+}) {
+    const { expansion } = props;
+    if (expansion.suggestions.length === 0) return null;
+    return (
+        <div className="bg-cyan-50 border border-cyan-200 rounded-2xl p-4 sm:p-5">
+            <div className="flex items-start gap-3">
+                <div className="bg-cyan-500/15 p-2 rounded-lg flex-shrink-0">
+                    <MapPin className="w-4 h-4 text-cyan-700" />
+                </div>
+                <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold uppercase tracking-widest text-cyan-700 mb-1">Expand your geo reach</p>
+                    <p className="text-sm text-stone-800 font-medium leading-snug mb-2">
+                        {expansion.summary}
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                        {expansion.suggestions.slice(0, 5).map(s => (
+                            <span key={s.state} className="inline-flex items-center gap-1 bg-white border border-cyan-200 px-2 py-0.5 rounded text-[11px] font-medium text-cyan-900">
+                                {s.state} <span className="text-cyan-600 font-bold">+{s.opp_count}</span>
+                            </span>
+                        ))}
+                    </div>
+                </div>
+            </div>
         </div>
     );
 }
@@ -364,6 +406,16 @@ interface AnalysisData {
         industries?: { value: string[] | null; source: string };
         first_seen_online?: { value: string | null; source: string };
         notes?: string[];
+    } | null;
+    // ── Phase 20 geo expansion suggestions:
+    geo_expansion?: {
+        total_potential_opps: number;
+        suggestions: Array<{
+            state: string;
+            opp_count: number;
+            naics_breakdown: Array<{ naics: string; count: number }>;
+        }>;
+        summary: string;
     } | null;
     sam_data: {
         uei?: string;
@@ -683,6 +735,52 @@ function WhyMatchPanel({ match, userNaicsLabels }: { match: MatchData; userNaics
                 ),
             });
         }
+    }
+
+    // ── Phase 18 — additional signals: jackpot, industry-agency, past-perf ──
+    if ((bd.jackpot_bonus || 0) > 0) {
+        reasons.push({
+            key: "jackpot",
+            chip: (
+                <span className="text-[10px] font-bold bg-yellow-100 text-yellow-900 border border-yellow-300 px-2 py-0.5 rounded-md">
+                    🔥 NAICS + keywords jackpot (+{Math.round((bd.jackpot_bonus || 0) * 100)}%)
+                </span>
+            ),
+        });
+    }
+    if ((bd.industry_agency || 0) > 0) {
+        reasons.push({
+            key: "industry_agency",
+            chip: (
+                <span className="text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200 px-2 py-0.5 rounded-md">
+                    Industry × agency affinity (+{Math.round((bd.industry_agency || 0) * 100)}%)
+                </span>
+            ),
+        });
+    }
+    if ((bd.past_performance || 0) >= 0.7) {
+        reasons.push({
+            key: "past_perf",
+            chip: (
+                <span className="text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded-md">
+                    Past performance fit
+                </span>
+            ),
+        });
+    }
+    // Phase 19 — recompete badge (set by the recompete cross-reference)
+    if (match.is_recompete) {
+        reasons.push({
+            key: "recompete",
+            chip: (
+                <span
+                    className="text-[10px] font-bold bg-orange-50 text-orange-800 border border-orange-200 px-2 py-0.5 rounded-md"
+                    title={match.incumbent_name ? `Likely recompete — current incumbent: ${match.incumbent_name}` : "Likely recompete of an existing contract"}
+                >
+                    🔁 Recompete{match.incumbent_name ? ` — incumbent: ${match.incumbent_name}` : ""}
+                </span>
+            ),
+        });
     }
 
     if (reasons.length === 0) return null;
@@ -1254,7 +1352,12 @@ export default function CheckResultsPage() {
                     const next = (await res.json()) as AnalysisData;
                     setData(next);
                     if (IN_PROGRESS_STATUSES.has(next.status)) {
-                        pollRef.current = window.setTimeout(poll, 3000);
+                        // Phase 17 — tighter cadence during scoring/generating
+                        // so the progressive preview_matches landing pops in
+                        // within 2s instead of 3s. Backs off once "finding_*"
+                        // (longer-running phases) so we don't hammer the API.
+                        const fast = next.status === "scoring" || next.status === "generating";
+                        pollRef.current = window.setTimeout(poll, fast ? 2000 : 3500);
                     }
                 }
             } catch { /* ignore */ }
@@ -1598,6 +1701,15 @@ export default function CheckResultsPage() {
                                 firmographics={data.firmographics || null}
                             />
                         ) : null}
+
+                        {/* ── Phase 20 — geo expansion banner ──
+                            High-leverage nudge: most first-time bidders under-target
+                            geographically. Shows top 3 states they're NOT yet targeting
+                            ranked by opp count in their primary NAICS. Only renders if
+                            at least 1 untapped state has ≥1 opp. */}
+                        {data.geo_expansion && data.geo_expansion.total_potential_opps > 0 && (
+                            <GeoExpansionBanner expansion={data.geo_expansion} />
+                        )}
 
                         {/* Quick Stats */}
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
