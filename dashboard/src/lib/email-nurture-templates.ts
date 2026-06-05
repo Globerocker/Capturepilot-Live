@@ -92,23 +92,20 @@ function wrap(args: {
         ? `<a href="{{unsubscribe_url}}" style="color:${COLORS.muted};text-decoration:underline;">Unsubscribe</a> · `
         : "";
 
-    // Signature block — vector mark + name + role + small avatar circle.
-    // The avatar uses an inline SVG of the CP monogram on emerald (works in
-    // every client). When a real headshot lands at
-    // https://www.capturepilot.com/andre.jpg replace the <svg> with
-    // <img src="..." alt="André" width="48" height="48" style="border-radius:24px;">.
+    // Signature block — real headshot (hosted at /team/andre-headshot.jpg
+    // after the next website deploy; before that, the americurial.com
+    // mirror serves the same image). Square cropped, ~12 KB, lazy-loaded
+    // by every modern client.
     const signature = `
       <tr><td style="padding:8px 28px 20px;">
         <table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr>
-          <td style="vertical-align:middle;padding-right:12px;">
-            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
-              <circle cx="24" cy="24" r="24" fill="${COLORS.accent}"/>
-              <text x="24" y="31" text-anchor="middle" font-family="${FONT}" font-size="18" font-weight="800" fill="#ffffff" letter-spacing="-0.04em">AS</text>
-            </svg>
+          <td style="vertical-align:middle;padding-right:14px;">
+            <img src="https://www.capturepilot.com/team/andre-headshot.jpg" alt="André Schüler" width="56" height="56" style="display:block;border:0;border-radius:28px;object-fit:cover;">
           </td>
           <td style="vertical-align:middle;">
-            <div style="font-family:'Brush Script MT',cursive;font-size:24px;color:${COLORS.ink};line-height:1;">André</div>
-            <div style="font-size:12px;color:${COLORS.muted};margin-top:2px;">Founder · CapturePilot</div>
+            <div style="font-family:'Brush Script MT','Lucida Handwriting',cursive;font-size:26px;color:${COLORS.ink};line-height:1;">André</div>
+            <div style="font-size:13px;font-weight:600;color:${COLORS.ink};margin-top:3px;">André Schüler</div>
+            <div style="font-size:12px;color:${COLORS.muted};">Founder · CapturePilot</div>
           </td>
         </tr></table>
       </td></tr>
@@ -143,17 +140,13 @@ function wrap(args: {
   <tr><td align="center">
     <table class="cp-card" role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" style="max-width:600px;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid ${COLORS.border};">
 
-      <!-- header: CP monogram + wordmark -->
-      <tr><td style="padding:20px 28px;border-bottom:1px solid ${COLORS.border};">
+      <!-- header: real CapturePilot brand mark + wordmark -->
+      <tr><td style="padding:18px 28px;border-bottom:1px solid ${COLORS.border};">
         <table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr>
           <td style="vertical-align:middle;padding-right:10px;">
-            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-              <rect width="32" height="32" rx="6" fill="${COLORS.ink}"/>
-              <text x="16" y="22" text-anchor="middle" font-family="${FONT}" font-size="14" font-weight="800" fill="#ffffff" letter-spacing="-0.04em">CP</text>
-            </svg>
+            <img src="https://www.capturepilot.com/cp-icon-black.png" alt="CapturePilot" width="36" height="36" style="display:block;border:0;border-radius:6px;">
           </td>
-          <td style="vertical-align:middle;font-size:14px;font-weight:700;color:${COLORS.ink};letter-spacing:-0.01em;">CapturePilot</td>
-          <td align="right" style="vertical-align:middle;font-size:12px;color:${COLORS.muted};"><a href="https://www.capturepilot.com/pricing" style="color:${COLORS.muted};text-decoration:none;">See pricing</a></td>
+          <td style="vertical-align:middle;font-size:16px;font-weight:700;color:${COLORS.ink};letter-spacing:-0.01em;">CapturePilot</td>
         </tr></table>
       </td></tr>
 
@@ -231,16 +224,29 @@ const HERO_NAICS = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 180
   <text x="300" y="170" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="10" fill="#78716c">Green = high small-business spend</text>
 </svg>`;
 
+// Past-performance compounding chart — 3 yearly groups, each with 4 bars
+// and a centered label sitting ABOVE the tallest bar (NOT overlapping the
+// next group's bars like v1 did). Layout: 600w × 180h SVG, three 160-px
+// columns with 30px gap, baseline at y=140, labels at y=22.
 const HERO_PAST_PERF = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 180" width="100%" style="display:block;max-width:600px;background:#f5f5f4;">
   <g font-family="-apple-system,sans-serif">
-    <text x="30" y="40" font-size="13" font-weight="700" fill="#0c0a09">Year 1 — bootstrap</text>
-    ${[20, 25, 30, 35, 40, 35, 45].map((h, i) => `<rect x="${30 + i*18}" y="${100-h}" width="12" height="${h}" fill="#a8a29e"/>`).join("")}
-    <text x="170" y="40" font-size="13" font-weight="700" fill="#0c0a09">Year 2 — sub-contracts</text>
-    ${[35, 50, 55, 60, 70, 75, 80].map((h, i) => `<rect x="${170 + i*18}" y="${100-h}" width="12" height="${h}" fill="#44403c"/>`).join("")}
-    <text x="310" y="40" font-size="13" font-weight="700" fill="#0c0a09">Year 3 — prime</text>
-    ${[80, 90, 105, 115, 110, 130, 140].map((h, i) => `<rect x="${310 + i*18}" y="${145-h}" width="12" height="${h}" fill="#059669"/>`).join("")}
-    <line x1="20" y1="148" x2="580" y2="148" stroke="#78716c" stroke-width="1"/>
-    <text x="300" y="165" text-anchor="middle" font-size="11" fill="#78716c">Performance compounds — start small, win bigger</text>
+    <!-- baseline -->
+    <line x1="40" y1="140" x2="560" y2="140" stroke="#d6d3d1" stroke-width="1"/>
+
+    <!-- Year 1 group (x=60-180), light grey -->
+    <text x="120" y="22" text-anchor="middle" font-size="12" font-weight="700" fill="#0c0a09">Year 1 · bootstrap</text>
+    ${[18, 26, 32, 40].map((h, i) => `<rect x="${66 + i*22}" y="${140-h}" width="14" height="${h}" rx="2" fill="#a8a29e"/>`).join("")}
+
+    <!-- Year 2 group (x=220-340), dark grey -->
+    <text x="280" y="22" text-anchor="middle" font-size="12" font-weight="700" fill="#0c0a09">Year 2 · subs</text>
+    ${[44, 56, 64, 72].map((h, i) => `<rect x="${226 + i*22}" y="${140-h}" width="14" height="${h}" rx="2" fill="#44403c"/>`).join("")}
+
+    <!-- Year 3 group (x=380-500), emerald -->
+    <text x="440" y="22" text-anchor="middle" font-size="12" font-weight="700" fill="#0c0a09">Year 3 · prime</text>
+    ${[88, 100, 112, 120].map((h, i) => `<rect x="${386 + i*22}" y="${140-h}" width="14" height="${h}" rx="2" fill="#059669"/>`).join("")}
+
+    <!-- caption -->
+    <text x="300" y="165" text-anchor="middle" font-size="11" fill="#78716c">Past performance compounds — start small, win bigger</text>
   </g>
 </svg>`;
 
