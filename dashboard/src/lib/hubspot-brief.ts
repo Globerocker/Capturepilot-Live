@@ -217,6 +217,156 @@ function splitName(full?: string | null): { firstname?: string; lastname?: strin
 }
 
 /**
+ * Map the freeform certifications we store internally to the canonical
+ * HubSpot dropdown_key values (see docs/certifications-and-clearances.md).
+ * Returns unique entries. Unknown inputs are dropped silently.
+ */
+function toCertDropdownKeys(certs: string[]): string[] {
+    const out = new Set<string>();
+    for (const raw of certs) {
+        const s = (raw || "").toUpperCase().replace(/[()\s]/g, "");
+        if (!s) continue;
+        const map: Record<string, string> = {
+            "8A": "EIGHT_A", "8AA": "EIGHT_A",
+            "HUBZONE": "HUBZONE",
+            "WOSB": "WOSB", "EDWOSB": "EDWOSB",
+            "VOSB": "VOSB", "SDVOSB": "SDVOSB",
+            "SDB": "SDB",
+            "SBASMALLBUSINESS": "SBA_SMALL_BUSINESS", "SBA": "SBA_SMALL_BUSINESS",
+            "DBE": "DBE", "MBE": "MBE_STATE",
+            "MENTORPROTEGE": "MENTOR_PROTEGE",
+            "NATIVEAMERICANOWNED": "NATIVE_AMERICAN_OWNED",
+            "TRIBAL8A": "TRIBAL_8A", "ANC8A": "ANC_8A", "NHO8A": "NHO_8A",
+        };
+        if (map[s]) out.add(map[s]);
+    }
+    return Array.from(out);
+}
+
+/**
+ * Best-effort domain extraction. Accepts URL or email; strips protocol,
+ * www., trailing slash + path. Returns null on garbage.
+ */
+function extractDomain(websiteOrEmail?: string | null): string | null {
+    if (!websiteOrEmail) return null;
+    const s = String(websiteOrEmail).trim();
+    if (!s) return null;
+    if (s.includes("@")) {
+        const part = s.split("@")[1] || "";
+        return part.toLowerCase() || null;
+    }
+    try {
+        const url = s.match(/^https?:\/\//) ? s : `https://${s}`;
+        const h = new URL(url).hostname.replace(/^www\./, "").toLowerCase();
+        return h || null;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Phase 21 — Contact ↔ Company sync.
+ *
+ * Upserts a HubSpot Company keyed on `domain`, populates the same CP custom
+ * properties we write to the contact (cp_set_aside_certifications,
+ * cp_security_clearance, cp_set_asides_verified_by, cp_uei, cp_naics_codes,
+ * cp_readiness_score, cp_sam_registered, cp_quick_checker_url) + standard
+ * HubSpot fields (name, domain, numberofemployees, industry,
+ * year_founded, state). Then associates the contact to this company.
+ *
+ * HubSpot also runs its own auto-create-company-from-email-domain rule —
+ * we lookup by domain first and reuse the existing company in that case
+ * rather than creating a duplicate. Falls back to creation when nothing
+ * matches. Best-effort: failures log + skip.
+ *
+ * Returns the company ID on success or null on any failure / no domain.
+ */
+async function syncCompanyForContact(args: {
+    contactId: string;
+    domain: string;
+    companyName: string;
+    properties: Record<string, string>;
+}): Promise<string | null> {
+    if (!HUBSPOT_TOKEN || !args.domain) return null;
+
+    // 1) Search for an existing company by domain
+    let companyId: string | null = null;
+    try {
+        const sres = await fetch(`${BASE}/crm/v3/objects/companies/search`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${HUBSPOT_TOKEN}`, "Content-Type": "application/json" },
+            body: JSON.stringify({
+                filterGroups: [{ filters: [{ propertyName: "domain", operator: "EQ", value: args.domain }] }],
+                properties: ["domain", "name"],
+                limit: 1,
+            }),
+            signal: AbortSignal.timeout(10_000),
+        });
+        if (sres.ok) {
+            const sjson = await sres.json() as { results?: Array<{ id?: string }> };
+            companyId = sjson.results?.[0]?.id || null;
+        }
+    } catch (err) {
+        console.warn("[HubSpot] company search failed:", err instanceof Error ? err.message : err);
+    }
+
+    // 2) Create or update
+    const properties: Record<string, string> = {
+        name: args.companyName,
+        domain: args.domain,
+        ...args.properties,
+    };
+
+    try {
+        if (companyId) {
+            const ures = await fetch(`${BASE}/crm/v3/objects/companies/${companyId}`, {
+                method: "PATCH",
+                headers: { Authorization: `Bearer ${HUBSPOT_TOKEN}`, "Content-Type": "application/json" },
+                body: JSON.stringify({ properties }),
+                signal: AbortSignal.timeout(10_000),
+            });
+            if (!ures.ok) {
+                const t = await ures.text().catch(() => "");
+                console.warn(`[HubSpot] company update ${ures.status}:`, t.slice(0, 200));
+            }
+        } else {
+            const cres = await fetch(`${BASE}/crm/v3/objects/companies`, {
+                method: "POST",
+                headers: { Authorization: `Bearer ${HUBSPOT_TOKEN}`, "Content-Type": "application/json" },
+                body: JSON.stringify({ properties }),
+                signal: AbortSignal.timeout(10_000),
+            });
+            if (cres.ok) {
+                const cjson = await cres.json() as { id?: string };
+                companyId = cjson.id || null;
+            } else {
+                const t = await cres.text().catch(() => "");
+                console.warn(`[HubSpot] company create ${cres.status}:`, t.slice(0, 200));
+            }
+        }
+    } catch (err) {
+        console.warn("[HubSpot] company upsert failed:", err instanceof Error ? err.message : err);
+    }
+
+    if (!companyId) return null;
+
+    // 3) Associate contact → company (Primary Company). associationTypeId 1
+    //    = "Contact to Company" (Primary). HubSpot dedupes if already linked.
+    try {
+        await fetch(`${BASE}/crm/v4/objects/contacts/${args.contactId}/associations/companies/${companyId}`, {
+            method: "PUT",
+            headers: { Authorization: `Bearer ${HUBSPOT_TOKEN}`, "Content-Type": "application/json" },
+            body: JSON.stringify([{ associationCategory: "HUBSPOT_DEFINED", associationTypeId: 1 }]),
+            signal: AbortSignal.timeout(10_000),
+        });
+    } catch (err) {
+        console.warn("[HubSpot] contact→company association failed:", err instanceof Error ? err.message : err);
+    }
+
+    return companyId;
+}
+
+/**
  * Push the full strategic brief to HubSpot — upsert the contact, create
  * the note. Returns the HubSpot contact ID + note ID for downstream logging.
  */
@@ -234,6 +384,14 @@ export async function pushQuickCheckerBriefToHubSpot(input: QuickCheckerBriefInp
 
     const { firstname, lastname } = splitName(input.contactName);
 
+    // Phase 21 — reconcile cert sources into the dropdown_key strings
+    // HubSpot's multi-select expects. Verified SAM > crawl-claimed, with
+    // a provenance flag so the rep can SEE which list to trust.
+    const verifiedCerts = toCertDropdownKeys(input.reconciled?.verified_certifications || []);
+    const claimedCerts  = toCertDropdownKeys(input.reconciled?.crawl_claimed_unverified || []);
+    const allCertKeys   = Array.from(new Set([...verifiedCerts, ...claimedCerts]));
+    const certProvenance = verifiedCerts.length > 0 ? "SAM" : (claimedCerts.length > 0 ? "CRAWL" : "MANUAL");
+
     const contactId = await upsertHubSpotContact({
         email: input.email,
         firstname,
@@ -248,16 +406,49 @@ export async function pushQuickCheckerBriefToHubSpot(input: QuickCheckerBriefInp
             uei: input.reconciled?.uei.value || undefined,
             business_state: input.reconciled?.state.value || undefined,
             sam_registered: input.reconciled?.sam_active,
+            // Phase 21: new multi-select replaces the bool veteran_owned.
+            // HubSpot expects checkbox values as semicolon-joined string.
+            cp_set_aside_certifications: allCertKeys.length > 0 ? allCertKeys.join(";") : undefined,
+            cp_set_asides_verified_by: allCertKeys.length > 0 ? certProvenance : undefined,
+            // Legacy bool — kept in sync for backwards-compat dashboards.
             veteran_owned: (input.reconciled?.verified_certifications || []).some(c =>
                 c.toUpperCase() === "VOSB" || c.toUpperCase() === "SDVOSB",
             ),
             matched_opportunities_count: input.topMatches?.length,
             lead_source_cp: "quick_checker",
-        },
+        } as Record<string, unknown>,
     });
 
     if (!contactId) {
         return { contact_id: null, note_id: null, skipped_reason: "upsertHubSpotContact returned null" };
+    }
+
+    // ── Phase 21 — Contact ↔ Company sync ──
+    // Mirror the CP custom properties onto the company so company-level
+    // segmentation works in HubSpot reports without the rep having to
+    // re-key data on both objects. Domain is the dedupe key.
+    const domain = extractDomain(input.website) || extractDomain(input.email);
+    if (domain) {
+        const companyProps: Record<string, string> = {};
+        if (allCertKeys.length > 0) {
+            companyProps.cp_set_aside_certifications = allCertKeys.join(";");
+            companyProps.cp_set_asides_verified_by   = certProvenance;
+        }
+        if (input.reconciled?.uei.value)       companyProps.cp_uei = input.reconciled.uei.value;
+        if ((input.naicsCodes || []).length)   companyProps.cp_naics_codes = input.naicsCodes!.slice(0, 5).join(", ");
+        if (typeof input.readinessScore === "number") companyProps.cp_readiness_score = String(input.readinessScore);
+        if (input.reconciled?.sam_active !== undefined) companyProps.cp_sam_registered = String(!!input.reconciled.sam_active);
+        if (input.quickCheckerUrl)             companyProps.cp_quick_checker_url = input.quickCheckerUrl;
+        // Standard HubSpot company properties — populate when we have them.
+        if (input.reconciled?.state.value)     companyProps.state = input.reconciled.state.value;
+        if (input.website)                     companyProps.website = input.website;
+
+        await syncCompanyForContact({
+            contactId,
+            domain,
+            companyName: input.companyName,
+            properties: companyProps,
+        });
     }
 
     const noteId = await createNoteOnContact(contactId, formatBriefHtml(input));
