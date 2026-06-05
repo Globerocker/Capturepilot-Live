@@ -351,6 +351,11 @@ export async function runPostConfirmationPipeline(analysisId: string): Promise<v
             // ── Keyword matching (gov_keywords-driven) ──
             primary_keywords: rawPrimary.length > 0 ? hydrateKeywords(rawPrimary) : undefined,
             secondary_keywords: rawSecondary.length > 0 ? hydrateKeywords(rawSecondary) : undefined,
+            // Phase 12: Apollo-derived industries for the industry × agency boost.
+            // Falls back to crawl-extracted industries_served if Apollo missed it.
+            industries: ((inferredProfile.industries as string[] | undefined)
+                || (crawlData.industries_served as string[] | undefined)
+                || []),
         };
 
         // On-demand NAICS crawl when we lack coverage in DB
@@ -540,14 +545,40 @@ export async function runPostConfirmationPipeline(analysisId: string): Promise<v
             }
         }
 
-        // Deduplicate by title
-        const seenTitles = new Set<string>();
+        // ── Phase 11 — dedupe + freshness filter ──
+        //
+        // 1) Title+Agency dedupe (was: title-only). Two opps with same title
+        //    from different agencies are legitimately distinct ("Janitorial
+        //    Services" posted by GSA vs Army). Title-only dedupe was eating
+        //    those.
+        // 2) Drop stale opps: a) past response_deadline already (we keep a
+        //    24h grace), or b) posted > 90 days ago AND no deadline (likely
+        //    archived award notice the ingest pipeline forgot to mark).
+        const now = Date.now();
+        const NINETY_DAYS_MS = 90 * 86400_000;
+        const seenKeys = new Set<string>();
         topMatches = topMatches.filter(m => {
-            const title = (m.title || "").toLowerCase().trim().replace(/\s+/g, " ").slice(0, 60);
-            if (!title || seenTitles.has(title)) return false;
-            seenTitles.add(title);
+            // Freshness gate
+            if (m.response_deadline) {
+                const dl = new Date(m.response_deadline).getTime();
+                if (!Number.isNaN(dl) && dl < now - 86400_000) return false;  // 24h past = dead
+            }
+            // Title+Agency dedupe
+            const t = (m.title || "").toLowerCase().trim().replace(/\s+/g, " ").slice(0, 80);
+            const a = (m.agency || "").toLowerCase().trim();
+            const key = `${t}|${a}`;
+            if (!t || seenKeys.has(key)) return false;
+            seenKeys.add(key);
             return true;
         }).slice(0, 10);
+        // Post-slice freshness sanity check: if nothing has a deadline AND
+        // titles look like "Award Notice ..." style, surface them anyway —
+        // some legit Sources Sought opps never carry a deadline. We only
+        // drop the OBVIOUSLY-stale ones (no deadline + posted older than
+        // 90d, which would mean we know they're old via our own ingest).
+        // That check requires posted_date which we don't currently load
+        // here — punt to a future migration if it becomes a real problem.
+        void NINETY_DAYS_MS;
 
         // ── Resolve SAM description URLs to actual text ──────────────────────
         // For Quick Checker matches that still hold a `https://api.sam.gov/...`

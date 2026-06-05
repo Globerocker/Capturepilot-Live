@@ -98,6 +98,115 @@ function cleanAgency(raw: string | null | undefined): string {
     return s;
 }
 
+/**
+ * Phase 13 — Strategic Brief panel rendered on /check above the matches list.
+ * Identical content to the HubSpot Note pushed in Phase 5, but native on the
+ * user's own result page so they don't need to bounce to HubSpot to see it.
+ *
+ * Layout: 3 columns on desktop (strengths / weaknesses / pitch angles),
+ * stacks on mobile. Firmographics chip row below shows employees, founded
+ * year, revenue band — with per-field source attribution ("Apollo", "SAM").
+ */
+function StrategicBriefPanel(props: {
+    strengths: string[];
+    weaknesses: string[];
+    pitchAngles: string[];
+    nailDownKeywords: string[];
+    federalAgenciesServed: string[];
+    revenueSignal: string | null;
+    firmographics: {
+        employee_count?: { value: number | null; source: string };
+        revenue?: { value: number | null; source: string };
+        revenue_band?: { value: string | null; source: string };
+        founded_year?: { value: number | null; source: string };
+        years_in_business?: { value: number | null; source: string };
+        industries?: { value: string[] | null; source: string };
+    } | null;
+}) {
+    const { strengths, weaknesses, pitchAngles, nailDownKeywords, federalAgenciesServed, revenueSignal, firmographics } = props;
+    const fm = firmographics || {};
+    const fmChips: Array<{ label: string; value: string; source: string }> = [];
+    if (fm.employee_count?.value)      fmChips.push({ label: "Employees",   value: String(fm.employee_count.value),   source: fm.employee_count.source });
+    if (fm.founded_year?.value)        fmChips.push({ label: "Founded",     value: String(fm.founded_year.value),     source: fm.founded_year.source });
+    if (fm.years_in_business?.value)   fmChips.push({ label: "Years",       value: String(fm.years_in_business.value), source: fm.years_in_business.source });
+    if (fm.revenue_band?.value)        fmChips.push({ label: "Revenue",     value: fm.revenue_band.value.replace(/_/g, "-").replace(/m/g, "M"), source: fm.revenue_band.source });
+    if (fm.industries?.value && fm.industries.value.length > 0) {
+        fmChips.push({ label: "Industry", value: fm.industries.value[0], source: fm.industries.source });
+    }
+
+    return (
+        <div className="border border-emerald-200 bg-emerald-50/40 rounded-2xl p-5 sm:p-6 space-y-4">
+            <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-emerald-600" />
+                <h3 className="text-sm font-bold uppercase tracking-widest text-emerald-700">Strategic Brief</h3>
+                <span className="text-[10px] text-emerald-600/70">Auto-generated from your website + SAM + USAspending</span>
+            </div>
+
+            {/* Firmographics chip row */}
+            {fmChips.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                    {fmChips.map(c => (
+                        <span key={c.label} className="inline-flex items-center gap-1 bg-white border border-stone-200 px-2.5 py-1 rounded-lg text-[11px]">
+                            <span className="text-stone-500 font-semibold">{c.label}:</span>
+                            <span className="font-bold text-stone-900">{c.value}</span>
+                            <span className="text-[9px] text-emerald-600 ml-1 uppercase">{c.source}</span>
+                        </span>
+                    ))}
+                </div>
+            )}
+
+            {nailDownKeywords.length > 0 && (
+                <div>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500 mb-1">What they do</p>
+                    <div className="flex flex-wrap gap-1.5">
+                        {nailDownKeywords.slice(0, 6).map(k => (
+                            <span key={k} className="bg-emerald-100 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded text-[11px] font-medium">{k}</span>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {strengths.length > 0 && (
+                    <div>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-700 mb-2">💪 Strengths</p>
+                        <ul className="space-y-1.5 text-sm text-stone-700 list-disc list-inside marker:text-emerald-500">
+                            {strengths.slice(0, 6).map((s, i) => <li key={i} className="leading-snug">{s}</li>)}
+                        </ul>
+                    </div>
+                )}
+                {weaknesses.length > 0 && (
+                    <div>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-amber-700 mb-2">⚠️ Weaknesses</p>
+                        <ul className="space-y-1.5 text-sm text-stone-700 list-disc list-inside marker:text-amber-500">
+                            {weaknesses.slice(0, 6).map((w, i) => <li key={i} className="leading-snug">{w}</li>)}
+                        </ul>
+                    </div>
+                )}
+                {pitchAngles.length > 0 && (
+                    <div>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-blue-700 mb-2">🎯 Pitch angles</p>
+                        <ul className="space-y-1.5 text-sm text-stone-700 list-disc list-inside marker:text-blue-500">
+                            {pitchAngles.slice(0, 6).map((p, i) => <li key={i} className="leading-snug">{p}</li>)}
+                        </ul>
+                    </div>
+                )}
+            </div>
+
+            {(federalAgenciesServed.length > 0 || revenueSignal) && (
+                <div className="border-t border-emerald-200/50 pt-3 flex flex-wrap items-center gap-3 text-[11px] text-stone-600">
+                    {federalAgenciesServed.length > 0 && (
+                        <span><strong>Past federal:</strong> {federalAgenciesServed.join(", ")}</span>
+                    )}
+                    {revenueSignal && (
+                        <span><strong>Revenue signal:</strong> {revenueSignal}</span>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+}
+
 // Some SLED ingest paths store notice_type as a JSON-encoded blob like
 // `{"description":"Solicitation"}` rather than a plain string. The scoring
 // path tolerates it via .includes() but the UI shouldn't expose the curly
@@ -236,7 +345,26 @@ interface AnalysisData {
         pages_crawled?: string[];
         revenue_signals?: { estimate: number; source: string } | null;
         past_clients?: string[];
+        // ── Phase 2/13 strategic profile (from deep-extract):
+        nail_down_keywords?: string[];
+        strengths?: string[];
+        weaknesses?: string[];
+        pitch_angles?: string[];
+        revenue_signal?: string | null;
+        federal_agencies_served?: string[];
+        industries_served?: string[];
     };
+    // ── Phase 8 firmographics cascade output (Apollo + SAM + OpenCorp + Wayback):
+    firmographics?: {
+        employee_count?: { value: number | null; source: string };
+        revenue?: { value: number | null; source: string };
+        revenue_band?: { value: string | null; source: string };
+        founded_year?: { value: number | null; source: string };
+        years_in_business?: { value: number | null; source: string };
+        industries?: { value: string[] | null; source: string };
+        first_seen_online?: { value: string | null; source: string };
+        notes?: string[];
+    } | null;
     sam_data: {
         uei?: string;
         cage_code?: string;
@@ -476,7 +604,10 @@ function HighlightedSnippet({ text, terms, maxLen = 280 }: { text: string | null
         <span>
             {parts.map((part, i) =>
                 termSet.has(part.toLowerCase())
-                    ? <strong key={i} className="bg-yellow-100 text-emerald-900 px-0.5 rounded">{part}</strong>
+                    // Phase 15 — louder highlight: bold + yellow-400 background,
+                    // black text for contrast. Visually unmissable when scanning
+                    // a long opp description.
+                    ? <mark key={i} className="bg-yellow-300 text-stone-900 font-bold px-1 py-0.5 rounded shadow-sm">{part}</mark>
                     : <span key={i}>{part}</span>
             )}
         </span>
@@ -1451,6 +1582,22 @@ export default function CheckResultsPage() {
                         {data.company_summary && (
                             <p className="text-sm text-stone-600 leading-relaxed">{data.company_summary}</p>
                         )}
+
+                        {/* ── Phase 13 — Strategic Brief panel (strengths/weaknesses/pitch_angles) ──
+                            Surfaces the same call-ready POV that ships to HubSpot, so
+                            users see it natively without bouncing to HubSpot. Only renders
+                            if the deep-extract pipeline populated at least one field. */}
+                        {(crawl.strengths?.length || crawl.weaknesses?.length || crawl.pitch_angles?.length) ? (
+                            <StrategicBriefPanel
+                                strengths={crawl.strengths || []}
+                                weaknesses={crawl.weaknesses || []}
+                                pitchAngles={crawl.pitch_angles || []}
+                                nailDownKeywords={crawl.nail_down_keywords || []}
+                                federalAgenciesServed={crawl.federal_agencies_served || []}
+                                revenueSignal={crawl.revenue_signal || null}
+                                firmographics={data.firmographics || null}
+                            />
+                        ) : null}
 
                         {/* Quick Stats */}
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

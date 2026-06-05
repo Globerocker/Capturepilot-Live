@@ -508,6 +508,49 @@ Return up to 3 most-likely 6-digit NAICS codes for this company's federal-contra
         .eq("id", lead.id);
     if (saveErr) throw new Error(`save brief: ${saveErr.message}`);
 
+    // ── Phase 14 — push FULL Quick Checker strategic brief to HubSpot ──
+    // The lead-brief already produces a slim summary, but the rich strategic
+    // POV (strengths/weaknesses/pitch_angles/top matches with eligibility)
+    // only lands in HubSpot when /api/analyze-company/confirm runs through
+    // quick-checker-finish. For Facebook leads, fire the same HubSpot push
+    // inline using the lead-brief data we already have. Best-effort — any
+    // failure just logs and doesn't block the email/SMS/WA sends.
+    try {
+        if (lead.email) {
+            const { pushQuickCheckerBriefToHubSpot } = await import("@/lib/hubspot-brief");
+            const topForHubspot = topMatches.slice(0, 5).map(m => ({
+                title: m.title || null,
+                agency: m.agency || null,
+                // lead-brief.ts OpportunityMatch is slimmer than the quick-checker
+                // ScoredMatch — only title/agency/naics_code/deadline survive. Pad
+                // the rest with null so the HubSpot Note still renders cleanly.
+                set_aside_code: null,
+                score: undefined,
+                notice_id: m.id || null,
+            }));
+            await pushQuickCheckerBriefToHubSpot({
+                email: lead.email,
+                companyName: companyName || lead.company || lead.email.split("@")[0],
+                contactName: [lead.first_name, lead.last_name].filter(Boolean).join(" ") || null,
+                contactPhone: phone || null,
+                website: resolvedWebsite || apollo.organization_website || sam?.website || null,
+                quickCheckerUrl: null, // FB leads don't have an /check page until they sign up
+                readinessScore: null, // Lead-brief flow doesn't compute readiness
+                topMatches: topForHubspot,
+                strengths: websiteSummary?.strengths || [],
+                weaknesses: websiteSummary?.weaknesses || [],
+                pitchAngles: websiteSummary?.pitch_angles || [],
+                nailDownKeywords: websiteSummary?.nail_down_keywords || [],
+                revenueSignal: null,
+                federalAgenciesServed: [],
+                reconciled: null,
+                naicsCodes: likelyNaics,
+            });
+        }
+    } catch (err) {
+        console.warn("[lead-brief] HubSpot strategic-brief push failed:", err instanceof Error ? err.message : err);
+    }
+
     const emailRes = await sendBriefEmail(brief);
     if (emailRes.sent) {
         await sb

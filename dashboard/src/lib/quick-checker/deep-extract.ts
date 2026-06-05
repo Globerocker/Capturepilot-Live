@@ -134,10 +134,16 @@ CORE RULES
   is whose problems they solve.
 - Certifications are real ONLY if the text says so word-for-word (e.g. "Veteran-Owned",
   "SDVOSB certified", "WOSB"). Put the exact quote in 'evidence'.
-- "nail_down_keywords": 3-5 PHRASES (not single words) that hyper-specifically describe what THIS
-  company is best at. These drive federal-contract matching, so be ruthless: "fleet maintenance
-  for Class-8 trucks" beats "maintenance services". NEVER return empty unless the page has zero
-  substantive content.
+- "nail_down_keywords": 3-5 short phrases (STRICT: 2-4 WORDS EACH) that hyper-specifically describe
+  what THIS company is best at. These drive federal-contract matching, so each phrase MUST be
+  short enough to plausibly appear in a government solicitation title. Good: "fleet maintenance",
+  "class-8 trucks", "obsolete electronics", "DOT inspections". Bad: "fleet maintenance for
+  Class-8 trucks and trailers" (too long, won't match RFP titles). NEVER return empty unless
+  the page has zero substantive content. NEVER include slashes — split into two entries.
+- "capability_keywords": 8-15 SINGLE-WORD or 2-WORD phrases (STRICT max 2 words) that are likely
+  to appear in federal opp titles for this company's domain. Good: "electronics", "wholesalers",
+  "components", "schneider", "obsolete parts". Bad: "electronic component broker reseller"
+  (too long, won't match). Tag the 3-5 most central as "primary", rest "secondary".
 - "strengths": 3-5 short evidence-based phrases. Each must be a CREDIBLE federal-contracting
   asset (e.g. "Active SAM since 2019", "DoD past performance with NAVAIR", "WOSB-certified",
   "ISO 9001 quality system", "10+ years in business", "30+ engineers on staff"). Skip generic

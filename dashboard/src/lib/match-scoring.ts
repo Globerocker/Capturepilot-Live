@@ -373,6 +373,10 @@ export interface ProfileForScoring {
     // magnet. Specific certs (8a, HUBZone, WOSB, SDVOSB) override the size check.
     employee_count?: number | null;
     annual_revenue_band?: string | null;
+    // Phase 12: Apollo-derived industries (e.g. "electrical/electronic
+    // manufacturing"). Drives the industry × agency affinity boost in
+    // scoreOpportunityLeadMagnet.
+    industries?: string[];
 }
 
 /**
@@ -595,6 +599,47 @@ export function scoreOpportunityLeadMagnet(
         total = Math.min(1.0, total + jackpotBonus);
     }
 
+    // ── Phase 12 — industry × agency affinity boost ──
+    // When a profile's industries (from Apollo enrichment, fed in via
+    // profile.industries) match the opp.agency historically, give a small
+    // structural boost. Defense / DoD opps for "electrical/electronic
+    // manufacturing" firms shouldn't need a perfect title-keyword hit to
+    // rank highly — the industry alignment is itself signal.
+    // Conservative +0.05 so it can't carry a bad-NAICS match alone, but
+    // tips ties in the right direction.
+    let industryAgencyBonus = 0;
+    if (profile.industries && profile.industries.length > 0 && opp.agency) {
+        const agency = opp.agency.toLowerCase();
+        for (const ind of profile.industries) {
+            const i = String(ind).toLowerCase();
+            // Defense industries → DoD, Navy, Army, Air Force, DLA
+            if (/electronic|electrical|defense|aerospace|manufactur|technology/.test(i)
+                && /defense|dod|army|navy|air ?force|marine|dla|defense logistics/.test(agency)) {
+                industryAgencyBonus = 0.05;
+                break;
+            }
+            // Construction industries → Army Corps of Engineers, VA, GSA
+            if (/construction|engineering|infrastructure/.test(i)
+                && /army corps|engineer|veterans|va |gsa|interior/.test(agency)) {
+                industryAgencyBonus = 0.05;
+                break;
+            }
+            // Healthcare → VA, HHS, DoD military health
+            if (/health|medical|pharma/.test(i)
+                && /veterans|va |hhs|health|medical|military health/.test(agency)) {
+                industryAgencyBonus = 0.05;
+                break;
+            }
+            // IT services → wherever; weaker since IT is everywhere — only fire on civilian agencies that buy a lot
+            if (/information|software|it services|technolog/.test(i)
+                && /irs|usda|state department|commerce|treasury/.test(agency)) {
+                industryAgencyBonus = 0.03;
+                break;
+            }
+        }
+        if (industryAgencyBonus > 0) total = Math.min(1.0, total + industryAgencyBonus);
+    }
+
     // Deadline-aware reranking unchanged from prior version.
     let deadlineBoost = 0;
     if (total >= 0.55 && opp.response_deadline) {
@@ -630,6 +675,9 @@ export function scoreOpportunityLeadMagnet(
     }
     if (jackpotBonus > 0) {
         breakdown.jackpot_bonus = Math.round(jackpotBonus * 100) / 100;
+    }
+    if (industryAgencyBonus > 0) {
+        breakdown.industry_agency = Math.round(industryAgencyBonus * 100) / 100;
     }
 
     return {
