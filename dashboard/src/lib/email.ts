@@ -23,6 +23,7 @@ import {
 import { isEmailEnabled, getEmailCategory } from "./email-settings";
 import { getDripSequence } from "./drip-sequences";
 import { loadCustomTemplate, renderMergeTags } from "./email-custom-template";
+import { NURTURE_TEMPLATES } from "./email-nurture-templates";
 
 let _resend: Resend | null = null;
 function getResend(): Resend | null {
@@ -111,6 +112,12 @@ export async function dispatchScheduledEmail(params: {
     contactName: string;
 }): Promise<boolean> {
     const { templateKey, email, contactName } = params;
+    // Any nurture_* template comes from NURTURE_TEMPLATES — generic dispatch
+    // through sendNurtureSequenceEmail so adding a new nurture step doesn't
+    // require touching this switch.
+    if (templateKey.startsWith("nurture_")) {
+        return sendNurtureSequenceEmail(templateKey, email, contactName);
+    }
     switch (templateKey) {
         case "edu_contracting_101": return sendEduContracting101Email(email, contactName);
         case "edu_naics_codes": return sendEduNaicsCodesEmail(email, contactName);
@@ -120,6 +127,31 @@ export async function dispatchScheduledEmail(params: {
             console.warn(`[dispatch] no handler for template ${templateKey}`);
             return false;
     }
+}
+
+/**
+ * Generic sender for the 12-email Facebook nurture sequence. Looks up the
+ * pre-rendered HTML in NURTURE_TEMPLATES (lib/email-nurture-templates.ts)
+ * and substitutes {{first_name}} from the lead's contactName before send.
+ *
+ * The HTML stays static — we don't run it through the Unlayer custom-template
+ * layer because the nurture HTML is hand-crafted with inline SVG heroes
+ * that the editor would mangle.
+ */
+export async function sendNurtureSequenceEmail(
+    templateKey: string,
+    to: string,
+    contactName: string,
+): Promise<boolean> {
+    const tmpl = NURTURE_TEMPLATES[templateKey];
+    if (!tmpl) {
+        console.warn(`[nurture] no template found for key ${templateKey}`);
+        return false;
+    }
+    const firstName = (contactName || "").trim().split(/\s+/)[0] || "there";
+    const html = tmpl.html.replace(/\{\{\s*first_name\s*\}\}/g, firstName);
+    const subject = tmpl.subject.replace(/\{\{\s*first_name\s*\}\}/g, firstName);
+    return send(templateKey, to, subject, html);
 }
 
 /** Shared send wrapper — checks DB-backed settings toggle, logs, catches errors */

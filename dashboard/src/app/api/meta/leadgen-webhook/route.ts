@@ -6,6 +6,8 @@ import { sendCAPIEvent, newEventId } from "@/lib/meta-capi";
 import { enrichPersonViaApollo } from "@/lib/lead-enrichment";
 import { upsertHubSpotContact } from "@/lib/hubspot";
 import { enqueueLeadBrief } from "@/lib/lead-brief";
+import { enqueueDripSequence } from "@/lib/email";
+import { looksGibberishName } from "@/lib/lead-validation";
 
 export const runtime = "nodejs";
 // Webhook responses must be fast (Meta tolerates ~20s before timeout). All
@@ -303,6 +305,25 @@ async function processLead({ leadgenId, formId, accessToken, db }: ProcessArgs):
         } catch (e) {
             console.warn("[leadgen-webhook] enqueueLeadBrief failed (non-fatal):", (e as Error).message);
         }
+    }
+
+    // 6. Enroll the lead in the 90-day fb_nurture sequence — 12 emails over
+    //    90 days mixing 70% value with 30% conversion. Skip if the submission
+    //    looks gibberish (spam-bot) so we don't waste sends or hurt Resend's
+    //    domain reputation. The first nurture lands on day 0, so this fires
+    //    immediately if the cron tick is close enough.
+    if (!looksGibberishName(firstName, lastName, company)) {
+        try {
+            await enqueueDripSequence({
+                sequenceKey: "fb_nurture",
+                email,
+                contactName: [firstName, lastName].filter(Boolean).join(" ") || undefined,
+            });
+        } catch (e) {
+            console.warn("[leadgen-webhook] enqueue fb_nurture failed (non-fatal):", (e as Error).message);
+        }
+    } else {
+        console.log("[leadgen-webhook] skipped fb_nurture enrollment — gibberish name");
     }
 
     // Server-side CAPI fire. Meta already counts the form submission since

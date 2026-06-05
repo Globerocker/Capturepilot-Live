@@ -2,9 +2,11 @@
  * Drip sequence definitions — scheduled educational email series.
  *
  * Each sequence is enrolled via enqueueDripSequence() after a triggering event
- * (signup, onboarding, etc.). The process_scheduled_emails cron then picks up
- * due rows and sends them.
+ * (signup, onboarding, Facebook lead intake). The process_scheduled_emails
+ * cron picks up due rows and sends them.
  */
+
+import { NURTURE_SEQUENCE } from "./email-nurture-templates";
 
 export interface DripStep {
     /** Days after enrollment to send this email */
@@ -39,6 +41,19 @@ export const DRIP_SEQUENCES: Record<string, DripSequence> = {
             { dayOffset: 1, templateKey: "edu_naics_codes" },
             { dayOffset: 4, templateKey: "edu_set_asides" },
         ],
+    },
+    /**
+     * 90-day Facebook-lead nurture — 12 emails, 70% value / 30% conversion.
+     * Defined in NURTURE_SEQUENCE (lib/email-nurture-templates.ts); we just
+     * mirror those keys + day_offsets into the generic drip mechanism so
+     * /api/cron/process_scheduled_emails picks them up automatically.
+     * Enrolled from /api/meta/leadgen-webhook on every fresh FB lead.
+     */
+    fb_nurture: {
+        key: "fb_nurture",
+        name: "Facebook Lead 90-Day Nurture",
+        description: "12-email warm-up sequence for Meta lead-ad submissions.",
+        steps: NURTURE_SEQUENCE.map(s => ({ dayOffset: s.day_offset, templateKey: s.key })),
     },
 };
 
