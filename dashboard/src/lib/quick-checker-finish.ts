@@ -877,6 +877,40 @@ export async function runPostConfirmationPipeline(analysisId: string): Promise<v
                     required_certifications: m.required_certifications,
                     notice_id: m.notice_id || null,
                 }));
+                // Phase 21 v2 — merge user-confirmed certs (from confirm
+                // payload) into the reconciled set BEFORE pushing. The
+                // crawl might miss VOSB/SDVOSB and SAM might not have it
+                // yet, but the user clicked the checkbox so we should
+                // trust + persist.
+                const userCerts = tempProfile.sba_certifications || [];
+                const reconciledForHub = reconciled ? {
+                    ...reconciled,
+                    verified_certifications: Array.from(new Set([
+                        ...(reconciled.verified_certifications || []),
+                        ...userCerts,
+                    ])),
+                } : (userCerts.length > 0 ? {
+                    // Synthesize a minimal reconciled blob carrying just the
+                    // user-supplied certs so the dropdown_key mapper fires.
+                    company_name: { value: companyName, source: "crawl" as const },
+                    legal_name: { value: companyName, source: "crawl" as const },
+                    uei: { value: null, source: "missing" as const },
+                    cage_code: { value: null, source: "missing" as const },
+                    state: { value: tempProfile.state || null, source: "crawl" as const },
+                    website: { value: null, source: "missing" as const },
+                    verified_certifications: userCerts,
+                    crawl_claimed_unverified: [] as string[],
+                    all_certifications: userCerts.map(c => ({ type: c, source: "crawl" as const, verified: false })),
+                    federal_revenue_lifetime: { value: null, source: "missing" as const },
+                    federal_revenue_last_year: { value: null, source: "missing" as const },
+                    federal_award_count: { value: null, source: "missing" as const },
+                    employee_count: { value: tempProfile.employee_count ?? null, source: "crawl" as const },
+                    founded_year: { value: null, source: "missing" as const },
+                    sam_active: false,
+                    has_federal_pp: false,
+                    notes: ["User-confirmed certs only — not SAM-verified"],
+                } : null);
+
                 await pushQuickCheckerBriefToHubSpot({
                     email: leadEmail,
                     companyName,
@@ -893,7 +927,7 @@ export async function runPostConfirmationPipeline(analysisId: string): Promise<v
                     nailDownKeywords: (crawlData.nail_down_keywords as string[]) || [],
                     revenueSignal: (crawlData.revenue_signal as string | null) || null,
                     federalAgenciesServed: (crawlData.federal_agencies_served as string[]) || [],
-                    reconciled,
+                    reconciled: reconciledForHub,
                     naicsCodes: tempProfile.naics_codes,
                 });
             }
