@@ -183,13 +183,24 @@ async function recordSend(
     if (error) console.warn(`[recordSend] DB insert failed for ${r.email}:`, error.message);
 }
 
-async function alreadySent(sb: ReturnType<typeof createClient>, cohort: Cohort, email: string): Promise<boolean> {
-    const { count } = await sb
+async function alreadySent(
+    sb: ReturnType<typeof createClient>,
+    cohort: Cohort,
+    email: string,
+    excludeOtherCohorts: boolean,
+): Promise<boolean> {
+    // Default (smoke-test) mode: only dedup within the SAME cohort.
+    // --exclude-other-cohorts (full-rollout mode): dedup across ALL cohorts so
+    // a recipient already touched by a higher-priority cohort is skipped here.
+    let q = sb
         .from("reengage_sends")
         .select("id", { count: "exact", head: true })
-        .eq("cohort", cohort)
         .eq("email", email)
         .neq("status", "failed");
+    if (!excludeOtherCohorts) {
+        q = q.eq("cohort", cohort);
+    }
+    const { count } = await q;
     return (count || 0) > 0;
 }
 
@@ -204,6 +215,7 @@ async function main() {
     const limitArg = args.indexOf("--limit");
     const limit = limitArg >= 0 ? parseInt(args[limitArg + 1] || "0", 10) : 0;
     const dryRun = args.includes("--dry-run");
+    const excludeOtherCohorts = args.includes("--exclude-other-cohorts");
 
     const sb = createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -213,10 +225,11 @@ async function main() {
     const resend = new Resend(process.env.RESEND_API_KEY!);
     const templateKey = TEMPLATE_BY_COHORT[cohort];
 
-    console.log(`Cohort:     ${cohort}`);
-    console.log(`Template:   ${templateKey}`);
-    console.log(`Limit:      ${limit > 0 ? limit : "ALL"}`);
-    console.log(`Dry-run:    ${dryRun ? "YES (no sends)" : "no"}`);
+    console.log(`Cohort:       ${cohort}`);
+    console.log(`Template:     ${templateKey}`);
+    console.log(`Limit:        ${limit > 0 ? limit : "ALL"}`);
+    console.log(`Dry-run:      ${dryRun ? "YES (no sends)" : "no"}`);
+    console.log(`Cross-cohort: ${excludeOtherCohorts ? "EXCLUDE recipients already sent in OTHER cohorts" : "within-cohort dedup only"}`);
     console.log("");
 
     const candidates = await loadRecipients(sb, cohort);
@@ -225,7 +238,7 @@ async function main() {
     // Dedup against prior sends
     const fresh: Recipient[] = [];
     for (const c of candidates) {
-        if (await alreadySent(sb, cohort, c.email)) continue;
+        if (await alreadySent(sb, cohort, c.email, excludeOtherCohorts)) continue;
         fresh.push(c);
         if (limit > 0 && fresh.length >= limit) break;
     }
