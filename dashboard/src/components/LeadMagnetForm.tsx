@@ -1,9 +1,27 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { Mail, MapPin, CheckCircle2, Loader2, Pencil, Search, Plus, Phone, Users, DollarSign, Calendar, Sparkles, User } from "lucide-react";
+import { useState, useMemo, useEffect, useRef } from "react";
+import { Mail, MapPin, CheckCircle2, Loader2, Pencil, Search, Plus, Phone, Users, DollarSign, Calendar, Sparkles, User, Linkedin } from "lucide-react";
 import clsx from "clsx";
 import { NAICS_CODES } from "@/lib/naics-codes";
+import { createSupabaseClient } from "@/lib/supabase/client";
+
+/**
+ * LinkedIn OAuth prefill payload — populated by the parent /check page when
+ * the user returns from the LinkedIn OAuth round-trip (?linkedin=1). Wins
+ * over manual form state and auto-submits once present.
+ */
+export interface LinkedInPrefill {
+    first_name?: string;
+    last_name?: string;
+    email?: string;
+    /** Full https://www.linkedin.com/in/<handle> URL when available */
+    linkedin_url?: string;
+    linkedin_headline?: string;
+    linkedin_picture_url?: string;
+    linkedin_locale?: string;
+    linkedin_email_verified?: boolean;
+}
 
 const US_STATES = [
     "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA",
@@ -43,9 +61,17 @@ interface LeadMagnetFormProps {
     }) => void;
     /** When true, treat email + phone as required and re-label CTA as "Send My Full Report". */
     requireContact?: boolean;
+    /**
+     * Verified identity payload sourced from LinkedIn OAuth. When supplied,
+     * the form auto-submits on first render — phone validation is relaxed
+     * because LinkedIn doesn't expose phone numbers and we want to honor
+     * the "verified-data shortcut" promise. Manual entry still works when
+     * this is undefined.
+     */
+    linkedinPrefill?: LinkedInPrefill | null;
 }
 
-export function LeadMagnetForm({ analysisId, inferredProfile, inferredNaics, crawlerConfidence, onUpdate, requireContact = true }: LeadMagnetFormProps) {
+export function LeadMagnetForm({ analysisId, inferredProfile, inferredNaics, crawlerConfidence, onUpdate, requireContact = true, linkedinPrefill = null }: LeadMagnetFormProps) {
     // Never auto-collapse when contact info is required — we need the user to actively submit.
     const autoConfirmed = !requireContact && (crawlerConfidence ?? 0) >= 0.6 && inferredNaics.length > 0;
     const [collapsed, setCollapsed] = useState(autoConfirmed);
@@ -77,11 +103,12 @@ export function LeadMagnetForm({ analysisId, inferredProfile, inferredNaics, cra
         (inferredProfile.state as string) || ""
     );
     const [email, setEmail] = useState(
-        (contactPerson.email as string) || (inferredProfile.email as string) || ""
+        linkedinPrefill?.email || (contactPerson.email as string) || (inferredProfile.email as string) || ""
     );
     const [phone, setPhone] = useState(initialPhone);
-    const [firstName, setFirstName] = useState(initialFirstName);
-    const [lastName, setLastName] = useState(initialLastName);
+    const [firstName, setFirstName] = useState(linkedinPrefill?.first_name || initialFirstName);
+    const [lastName, setLastName] = useState(linkedinPrefill?.last_name || initialLastName);
+    const [linkedinLoading, setLinkedinLoading] = useState(false);
     const [employeeCount, setEmployeeCount] = useState<string>(initialEmployees ? String(initialEmployees) : "");
     const [yearsInBusiness, setYearsInBusiness] = useState<string>(initialYears ? String(initialYears) : "");
     const [revenueBand, setRevenueBand] = useState<string>("");
@@ -126,32 +153,68 @@ export function LeadMagnetForm({ analysisId, inferredProfile, inferredNaics, cra
         );
     }
 
-    function validate(): string | null {
-        if (selectedNaics.length === 0) return "Select at least one NAICS code";
-        if (!companyName.trim()) return "Enter your company name";
-        if (requireContact) {
-            if (!firstName.trim()) return "Enter your first name";
-            if (!lastName.trim()) return "Enter your last name";
-            if (!email.trim()) return "Enter your email — we'll send your full report there";
-            const cleanEmail = email.trim();
-            if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(cleanEmail)) return "That email doesn't look right";
-            if (cleanEmail.length > 100) return "That email is too long — please double-check";
-            if ((cleanEmail.match(/@/g) || []).length !== 1) return "That email doesn't look right";
-            if (!phone.trim()) return "Enter a phone number so we can verify your report";
-            const cleanPhone = phone.replace(/\D/g, "");
-            if (cleanPhone.length < 7) return "That phone number looks too short — include area code";
+    async function handleLinkedInLogin() {
+        setLinkedinLoading(true);
+        setError("");
+        try {
+            const sb = createSupabaseClient();
+            // We round-trip through /auth/callback so PKCE code exchange
+            // happens server-side, then bounce back to the check page with
+            // ?linkedin=1 so the parent can pick the verified payload off
+            // the supabase session.
+            const redirectTo = `${window.location.origin}/auth/callback?intent=lead_prefill&analysis_id=${encodeURIComponent(analysisId)}`;
+            const { error: oauthError } = await sb.auth.signInWithOAuth({
+                provider: "linkedin_oidc",
+                options: {
+                    redirectTo,
+                    scopes: "openid profile email",
+                },
+            });
+            if (oauthError) {
+                setError(oauthError.message || "LinkedIn sign-in failed");
+                setLinkedinLoading(false);
+            }
+            // On success the browser navigates away; no further state to set.
+        } catch (e) {
+            setError((e as Error).message || "LinkedIn sign-in failed");
+            setLinkedinLoading(false);
         }
-        return null;
     }
 
-    async function handleSubmit() {
-        const err = validate();
-        if (err) {
-            setError(err);
-            return;
+    async function handleSubmit(overrides?: { linkedin?: LinkedInPrefill | null }) {
+        // When the LinkedIn auto-submit fires immediately after the OAuth
+        // round-trip, React state may not have flushed yet (setFirstName
+        // setEmail etc. were queued in the parent's effect). Use the
+        // explicit overrides payload as the source of truth in that case.
+        const li = overrides?.linkedin || null;
+        const effectiveFirstName = (li?.first_name || firstName).trim();
+        const effectiveLastName = (li?.last_name || lastName).trim();
+        const effectiveEmail = (li?.email || email).trim();
+        const effectivePhone = phone.trim();
+
+        // Inline validation so the LinkedIn auto-submit doesn't get blocked
+        // by stale form-state in the regular validate() helper.
+        if (selectedNaics.length === 0) { setError("Select at least one NAICS code"); return; }
+        if (!companyName.trim()) { setError("Enter your company name"); return; }
+        if (requireContact) {
+            if (!effectiveFirstName) { setError("Enter your first name"); return; }
+            if (!effectiveLastName) { setError("Enter your last name"); return; }
+            if (!effectiveEmail) { setError("Enter your email — we'll send your full report there"); return; }
+            if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(effectiveEmail)) { setError("That email doesn't look right"); return; }
+            if (effectiveEmail.length > 100) { setError("That email is too long — please double-check"); return; }
+            if ((effectiveEmail.match(/@/g) || []).length !== 1) { setError("That email doesn't look right"); return; }
+            // Phone required only when there's no LinkedIn-verified identity.
+            if (!li && !linkedinPrefill) {
+                if (!effectivePhone) { setError("Enter a phone number so we can verify your report"); return; }
+                const cleanPhone = effectivePhone.replace(/\D/g, "");
+                if (cleanPhone.length < 7) { setError("That phone number looks too short — include area code"); return; }
+            }
         }
+
         setSubmitting(true);
         setError("");
+
+        const linkedinPayload = li || linkedinPrefill;
 
         try {
             const res = await fetch("/api/lead-magnet/confirm", {
@@ -159,11 +222,11 @@ export function LeadMagnetForm({ analysisId, inferredProfile, inferredNaics, cra
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     analysis_id: analysisId,
-                    email: email.trim() || undefined,
-                    phone: phone.trim() || undefined,
-                    first_name: firstName.trim() || undefined,
-                    last_name: lastName.trim() || undefined,
-                    contact_name: [firstName.trim(), lastName.trim()].filter(Boolean).join(" ") || undefined,
+                    email: effectiveEmail || undefined,
+                    phone: effectivePhone || undefined,
+                    first_name: effectiveFirstName || undefined,
+                    last_name: effectiveLastName || undefined,
+                    contact_name: [effectiveFirstName, effectiveLastName].filter(Boolean).join(" ") || undefined,
                     company_name: companyName.trim(),
                     state,
                     naics_codes: selectedNaics,
@@ -171,6 +234,13 @@ export function LeadMagnetForm({ analysisId, inferredProfile, inferredNaics, cra
                     employee_count: employeeCount ? Number(employeeCount) : undefined,
                     years_in_business: yearsInBusiness ? Number(yearsInBusiness) : undefined,
                     annual_revenue_band: revenueBand || undefined,
+                    // LinkedIn-verified identity fields (optional)
+                    linkedin_url: linkedinPayload?.linkedin_url || undefined,
+                    linkedin_headline: linkedinPayload?.linkedin_headline || undefined,
+                    linkedin_picture_url: linkedinPayload?.linkedin_picture_url || undefined,
+                    linkedin_locale: linkedinPayload?.linkedin_locale || undefined,
+                    linkedin_email_verified: linkedinPayload?.linkedin_email_verified ?? undefined,
+                    linkedin_verified: linkedinPayload ? true : undefined,
                 }),
             });
 
@@ -188,6 +258,25 @@ export function LeadMagnetForm({ analysisId, inferredProfile, inferredNaics, cra
             setSubmitting(false);
         }
     }
+
+    // Auto-submit once when LinkedIn prefill arrives. We guard with a ref so
+    // a state-driven re-render (e.g. submitting flag flipping) doesn't kick
+    // off a second POST.
+    const autoSubmittedRef = useRef(false);
+    useEffect(() => {
+        if (!linkedinPrefill) return;
+        if (autoSubmittedRef.current) return;
+        if (submitted || submitting) return;
+        // Must have at least an email (LinkedIn always returns it when the
+        // user grants the email scope) and a company name picked up by the
+        // crawler / form prefill. Without company_name the API rejects the
+        // payload, so fall back to letting the user click submit themselves.
+        if (!linkedinPrefill.email) return;
+        if (!companyName.trim()) return;
+        autoSubmittedRef.current = true;
+        void handleSubmit({ linkedin: linkedinPrefill });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [linkedinPrefill, companyName]);
 
     // Get label for a NAICS code
     function naicsLabel(code: string): string {
@@ -503,6 +592,43 @@ export function LeadMagnetForm({ analysisId, inferredProfile, inferredNaics, cra
                     <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">
                         {requireContact ? "Last step — who should we send the report to?" : "Contact details (optional)"}
                     </p>
+
+                    {/* LinkedIn auth shortcut — pulls verified first/last/email
+                        straight from the OAuth payload. We don't get phone from
+                        LinkedIn so phone validation is skipped when this path
+                        is used. Only shown when contact info is gated; the
+                        "Review & Refine" mode skips identity capture entirely. */}
+                    {requireContact && !linkedinPrefill && (
+                        <>
+                            <button
+                                type="button"
+                                onClick={() => { void handleLinkedInLogin(); }}
+                                disabled={linkedinLoading || submitting}
+                                className="w-full bg-white border-2 border-[#0A66C2] text-[#0A66C2] rounded-xl py-3 px-4 font-bold text-sm flex items-center justify-center gap-2 hover:bg-[#0A66C2]/5 transition-colors disabled:opacity-50"
+                            >
+                                {linkedinLoading ? (
+                                    <><Loader2 className="w-4 h-4 animate-spin" /> Redirecting to LinkedIn…</>
+                                ) : (
+                                    <><Linkedin className="w-4 h-4" /> Continue with LinkedIn — auto-fill verified info</>
+                                )}
+                            </button>
+                            <div className="flex items-center gap-3 py-1">
+                                <div className="flex-1 h-px bg-stone-200" />
+                                <span className="text-[10px] font-bold text-stone-400 uppercase tracking-widest">— OR —</span>
+                                <div className="flex-1 h-px bg-stone-200" />
+                            </div>
+                        </>
+                    )}
+
+                    {/* If LinkedIn auth already succeeded, surface a confirmation
+                        chip so the user understands why their fields are filled. */}
+                    {linkedinPrefill && (
+                        <div className="flex items-center gap-2 bg-[#0A66C2]/10 border border-[#0A66C2]/30 rounded-xl px-3 py-2 text-xs text-[#0A66C2] font-bold">
+                            <Linkedin className="w-4 h-4" />
+                            Verified via LinkedIn — {linkedinPrefill.first_name} {linkedinPrefill.last_name}
+                        </div>
+                    )}
+
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                             <label className="block text-xs font-bold text-stone-500 mb-1.5">
@@ -573,7 +699,7 @@ export function LeadMagnetForm({ analysisId, inferredProfile, inferredNaics, cra
 
                 <button
                     type="button"
-                    onClick={handleSubmit}
+                    onClick={() => { void handleSubmit(); }}
                     disabled={submitting}
                     className="w-full bg-gradient-to-r from-emerald-600 to-blue-600 text-white py-3.5 rounded-2xl font-bold text-sm hover:opacity-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50 shadow-md"
                 >

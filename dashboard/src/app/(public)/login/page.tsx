@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Linkedin } from "lucide-react";
 import { createSupabaseClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
@@ -38,6 +38,22 @@ export default function LoginPage() {
       provider: "google",
       options: {
         redirectTo: `${window.location.origin}/auth/callback`,
+      },
+    });
+    if (error) {
+      setError(friendlyError(error.message));
+      setLoading(false);
+    }
+  };
+
+  const handleLinkedInLogin = async () => {
+    setLoading(true);
+    setError("");
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "linkedin_oidc",
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+        scopes: "openid profile email",
       },
     });
     if (error) {
@@ -122,6 +138,16 @@ export default function LoginPage() {
               />
             </svg>
             <span>Continue with Google</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleLinkedInLogin}
+            disabled={loading}
+            className="w-full mt-3 bg-white border-2 border-stone-200 hover:border-[#0A66C2] hover:bg-[#0A66C2]/5 text-stone-800 font-bold py-3 rounded-xl flex items-center justify-center gap-3 transition-colors disabled:opacity-50"
+          >
+            <Linkedin className="w-5 h-5 text-[#0A66C2]" />
+            <span>Continue with LinkedIn</span>
           </button>
 
           <div className="flex items-center my-6">

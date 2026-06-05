@@ -74,6 +74,22 @@ export interface QuickCheckerBriefInput {
     } | null;
     /** Contact job title (e.g. "CEO", "Founder"). */
     contactJobTitle?: string | null;
+    /**
+     * LinkedIn-sourced enrichment (Phase 24).
+     *
+     * Populated when the lead authenticated via LinkedIn OIDC — we push the
+     * profile URL / photo / headline + flip `cp_linkedin_verified=true` so
+     * sales reps can tell "real human with a LinkedIn account" apart from
+     * raw email captures. Uses HubSpot's stock `hs_linkedin_url` when we
+     * have a public URL, plus our custom cp_linkedin_* mirror props for
+     * the data points HubSpot doesn't ship a stock field for.
+     */
+    linkedin?: {
+        linkedin_url?: string | null;
+        linkedin_picture_url?: string | null;
+        linkedin_headline?: string | null;
+        linkedin_verified?: boolean;
+    } | null;
 }
 
 /**
@@ -510,6 +526,20 @@ export async function pushQuickCheckerBriefToHubSpot(input: QuickCheckerBriefInp
             ),
             matched_opportunities_count: input.topMatches?.length,
             lead_source_cp: "quick_checker",
+            // ── LinkedIn enrichment (Phase 24) ──
+            // hs_linkedin_url is HubSpot's stock contact field — populates the
+            // LinkedIn-icon link on the contact card. cp_linkedin_* mirrors
+            // are for HubSpot reports / lists (filterable). cp_linkedin_verified
+            // is the trust signal: `true` means we have a verified OIDC link,
+            // not a guessed URL from Apollo / scraping.
+            hs_linkedin_url: input.linkedin?.linkedin_url || undefined,
+            cp_linkedin_url: input.linkedin?.linkedin_url || undefined,
+            cp_linkedin_picture_url: input.linkedin?.linkedin_picture_url || undefined,
+            cp_linkedin_headline: input.linkedin?.linkedin_headline || undefined,
+            cp_linkedin_verified:
+                typeof input.linkedin?.linkedin_verified === "boolean"
+                    ? input.linkedin.linkedin_verified
+                    : undefined,
         } as Record<string, unknown>,
     });
 

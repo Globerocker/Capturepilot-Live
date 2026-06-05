@@ -4,7 +4,7 @@ import { useState, Suspense, useEffect } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
-import { ArrowRight, CheckCircle2, Loader2, Gift } from "lucide-react";
+import { ArrowRight, CheckCircle2, Loader2, Gift, Linkedin } from "lucide-react";
 import clsx from "clsx";
 import { createSupabaseClient } from "@/lib/supabase/client";
 import { trackWithCapi } from "@/lib/analytics";
@@ -85,6 +85,26 @@ function SignupPageContent() {
       provider: "google",
       options: {
         redirectTo: `${window.location.origin}/auth/callback${qs ? `?${qs}` : ""}`,
+      },
+    });
+    if (error) {
+      setError(friendlyError(error.message));
+      setLoading(false);
+    }
+  };
+
+  const handleLinkedInLogin = async () => {
+    setLoading(true);
+    setError("");
+    const callbackParams = new URLSearchParams();
+    if (analysisId) callbackParams.set("analysis_id", analysisId);
+    if (inviteToken) callbackParams.set("invite", inviteToken);
+    const qs = callbackParams.toString();
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "linkedin_oidc",
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback${qs ? `?${qs}` : ""}`,
+        scopes: "openid profile email",
       },
     });
     if (error) {
@@ -228,6 +248,17 @@ function SignupPageContent() {
               />
             </svg>
             <span>Sign up with Google</span>
+          </button>
+
+          {/* LinkedIn OAuth */}
+          <button
+            type="button"
+            onClick={handleLinkedInLogin}
+            disabled={loading}
+            className="w-full mt-3 bg-white border-2 border-stone-200 hover:border-[#0A66C2] hover:bg-[#0A66C2]/5 text-stone-800 font-bold py-3 rounded-xl flex items-center justify-center gap-3 transition-colors disabled:opacity-50"
+          >
+            <Linkedin className="w-5 h-5 text-[#0A66C2]" />
+            <span>Continue with LinkedIn</span>
           </button>
 
           <div className="flex items-center my-6">

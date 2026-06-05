@@ -1,15 +1,16 @@
 /**
  * Single source of truth for the $70 Federal Launch Kit — list of digital goods.
  *
- * Each asset points at a Google Drive folder/file. The buyer lands on
- * /startup-pack/download/[token] and sees these grouped by category.
+ * Each asset points either at a local file under `/public/starter-pack/<file>`
+ * (the canonical delivery path after the 2026-06 rebuild) or at a Google Drive
+ * share URL (legacy / Canva mocks / Calendly).
  *
- * HOW TO UPDATE THE DRIVE LINKS
- * 1. Make sure the Drive folder/file is shared "Anyone with the link can view".
- * 2. Paste the share URL into `gdriveUrl`. We support folder URLs and file URLs.
- * 3. If you want a direct-download button (single file only), set `gdriveFileId`
- *    to the file ID. We render a "Download" button that hits
- *    `https://drive.google.com/uc?export=download&id=<fileId>`.
+ * HOW TO UPDATE THE LINKS
+ * 1. Drop the file into `dashboard/public/starter-pack/` (commit it — under ~1 MB).
+ * 2. Set `localPath: "/starter-pack/<filename>"`. The UI auto-fills download
+ *    + preview URLs from the local path.
+ * 3. For Drive/Canva/Calendly only assets, leave `localPath` undefined and set
+ *    `gdriveUrl` to the share URL.
  *
  * KEEP THIS FILE SAFE TO COMMIT — these are public-share links anyway, no secrets.
  */
@@ -44,10 +45,19 @@ export interface StartupPackAsset {
     description: string;
     /** Format chip — "PDF", "DOCX", "XLSX", "Canva", "Video", "Calendly". */
     format: string;
-    /** Public Google Drive share URL (folder or file). Required. */
+    /**
+     * Public Google Drive share URL (folder or file). Optional.
+     * Either `localPath` or `gdriveUrl` must be set for the asset to be live.
+     */
     gdriveUrl: string;
     /** Optional: single-file Drive ID for a direct download button. */
     gdriveFileId?: string;
+    /**
+     * Optional: local file under `/public/starter-pack/<filename>`. When set,
+     * the UI serves the file directly from Next's static handler — no Drive
+     * round-trip, no rate limits, no token gymnastics.
+     */
+    localPath?: string;
     /** Optional: page count / sheet count / duration — for the chip. */
     sizeHint?: string;
     /** Optional: badge ("Most Popular", "Quick Win") on the card. */
@@ -130,8 +140,8 @@ export const STARTUP_PACK_SECTIONS: AssetSection[] = [
 // ──────────────────────────────────────────────────────────────────────────────
 // ASSET LIST
 //
-// 👉 PASTE GOOGLE DRIVE URLS BELOW.
-// Empty `gdriveUrl: ""` strings render a "Coming Soon" disabled state.
+// `localPath` wins when present — file is served from /public/starter-pack/.
+// Empty `gdriveUrl: ""` + no `localPath` renders a "Coming soon" disabled card.
 // ──────────────────────────────────────────────────────────────────────────────
 export const STARTUP_PACK_ASSETS: StartupPackAsset[] = [
     // ── SAM.gov Registration Kit ─────────────────────────────────────────────
@@ -143,6 +153,7 @@ export const STARTUP_PACK_ASSETS: StartupPackAsset[] = [
         format: "PDF",
         sizeHint: "32 pages",
         gdriveUrl: "",
+        localPath: "/starter-pack/01_SAM_Registration_Kit/FLK_01_SAM_Registration_Walkthrough.pdf",
         badge: "Start Here",
     },
     {
@@ -151,7 +162,9 @@ export const STARTUP_PACK_ASSETS: StartupPackAsset[] = [
         title: "SAM.gov Pre-Registration Checklist",
         description: "Every document, identifier and field you need ready BEFORE starting registration. Saves the 2-week DUNS/UEI back-and-forth.",
         format: "XLSX",
+        sizeHint: "1 sheet",
         gdriveUrl: "",
+        localPath: "/starter-pack/01_SAM_Registration_Kit/FLK_01_SAM_PreReg_Checklist.xlsx",
     },
     {
         id: "sam-naics-picker",
@@ -160,14 +173,16 @@ export const STARTUP_PACK_ASSETS: StartupPackAsset[] = [
         description: "How to pick the right primary + secondary NAICS codes during registration — these determine 80% of your matches.",
         format: "PDF",
         gdriveUrl: "",
+        localPath: "/starter-pack/01_SAM_Registration_Kit/FLK_01_NAICS_Code_Picker.pdf",
     },
     {
         id: "sam-renewal-reminder-template",
         category: "sam_gov",
         title: "SAM.gov Annual Renewal Reminder Kit",
         description: "Calendar templates + email reminders so your registration never expires (the #1 cause of bid rejection).",
-        format: "DOCX",
+        format: "PDF",
         gdriveUrl: "",
+        localPath: "/starter-pack/01_SAM_Registration_Kit/FLK_01_SAM_Renewal_Kit.pdf",
     },
 
     // ── Capability Statement Kit ─────────────────────────────────────────────
@@ -179,25 +194,28 @@ export const STARTUP_PACK_ASSETS: StartupPackAsset[] = [
         format: "DOCX",
         sizeHint: "1 page",
         gdriveUrl: "",
+        localPath: "/starter-pack/02_Capability_Statement_Kit/FLK_02_Capability_Statement_Template.docx",
         badge: "Most Popular",
     },
     {
         id: "cap-statement-canva",
         category: "capability_statement",
-        title: "Capability Statement — Canva Brand Kit",
-        description: "Three styled Canva variants (modern / classic / federal). Edit colors + logo in 10 minutes.",
-        format: "Canva",
+        title: "Capability Statement — Branded Design Kit",
+        description: "Three styled variants (modern / classic / federal). Use as visual reference when designing your own.",
+        format: "PDF",
         sizeHint: "3 variants",
         gdriveUrl: "",
+        localPath: "/starter-pack/02_Capability_Statement_Kit/FLK_02_Capability_Statement_Canva_Kit.pdf",
     },
     {
         id: "cap-statement-walkthrough",
         category: "capability_statement",
         title: "How to Write a Federal Capability Statement",
-        description: "12-page written walkthrough — exactly what to put in each section, with annotated examples.",
+        description: "Written walkthrough — exactly what to put in each section, with annotated examples.",
         format: "PDF",
         sizeHint: "12 pages",
         gdriveUrl: "",
+        localPath: "/starter-pack/02_Capability_Statement_Kit/FLK_02_How_to_Write_Capability_Statement.pdf",
     },
 
     // ── Solicitation-Type Playbooks ──────────────────────────────────────────
@@ -209,6 +227,7 @@ export const STARTUP_PACK_ASSETS: StartupPackAsset[] = [
         format: "PDF",
         sizeHint: "24 pages",
         gdriveUrl: "",
+        localPath: "/starter-pack/03_Solicitation_Playbooks/FLK_03_Sources_Sought_RFI_Playbook.pdf",
         badge: "Highest ROI",
     },
     {
@@ -219,6 +238,7 @@ export const STARTUP_PACK_ASSETS: StartupPackAsset[] = [
         format: "PDF",
         sizeHint: "18 pages",
         gdriveUrl: "",
+        localPath: "/starter-pack/03_Solicitation_Playbooks/FLK_03_Pre_Solicitation_Playbook.pdf",
     },
     {
         id: "playbook-solicitation",
@@ -228,6 +248,7 @@ export const STARTUP_PACK_ASSETS: StartupPackAsset[] = [
         format: "PDF",
         sizeHint: "32 pages",
         gdriveUrl: "",
+        localPath: "/starter-pack/03_Solicitation_Playbooks/FLK_03_RFP_Response_Playbook.pdf",
     },
     {
         id: "playbook-rfq",
@@ -237,6 +258,7 @@ export const STARTUP_PACK_ASSETS: StartupPackAsset[] = [
         format: "PDF",
         sizeHint: "12 pages",
         gdriveUrl: "",
+        localPath: "/starter-pack/03_Solicitation_Playbooks/FLK_03_RFQ_Playbook.pdf",
     },
     {
         id: "playbook-idiq-task-order",
@@ -246,6 +268,17 @@ export const STARTUP_PACK_ASSETS: StartupPackAsset[] = [
         format: "PDF",
         sizeHint: "20 pages",
         gdriveUrl: "",
+        localPath: "/starter-pack/03_Solicitation_Playbooks/FLK_03_IDIQ_GWAC_Task_Order_Playbook.pdf",
+    },
+    {
+        id: "playbook-market-research",
+        category: "solicitation_playbooks",
+        title: "Federal Market Research Playbook",
+        description: "How to research an agency, find the right contract vehicle, and identify the real decision-makers before you bid.",
+        format: "PDF",
+        sizeHint: "16 pages",
+        gdriveUrl: "",
+        localPath: "/starter-pack/03_Solicitation_Playbooks/FLK_03_Market_Research_Playbook.pdf",
     },
     {
         id: "playbook-debrief",
@@ -255,6 +288,7 @@ export const STARTUP_PACK_ASSETS: StartupPackAsset[] = [
         format: "PDF",
         sizeHint: "14 pages",
         gdriveUrl: "",
+        badge: "Coming next drop",
     },
 
     // ── Bid / No-Bid Decision Toolkit ────────────────────────────────────────
@@ -266,6 +300,7 @@ export const STARTUP_PACK_ASSETS: StartupPackAsset[] = [
         format: "XLSX",
         sizeHint: "1 sheet",
         gdriveUrl: "",
+        localPath: "/starter-pack/04_Bid_No_Bid_Decision_Toolkit/FLK_04_Bid_No_Bid_Decision_Matrix.xlsx",
     },
     {
         id: "pwin-calculator",
@@ -273,7 +308,9 @@ export const STARTUP_PACK_ASSETS: StartupPackAsset[] = [
         title: "PWin (Probability of Win) Calculator",
         description: "The exact 10-factor model used by GovCon consultants — customer fit, past perf, price-to-win, capture maturity.",
         format: "XLSX",
+        sizeHint: "1 sheet",
         gdriveUrl: "",
+        localPath: "/starter-pack/04_Bid_No_Bid_Decision_Toolkit/FLK_04_PWin_Calculator.xlsx",
     },
     {
         id: "competitive-bid-analysis",
@@ -281,7 +318,9 @@ export const STARTUP_PACK_ASSETS: StartupPackAsset[] = [
         title: "Competitive Bid Analysis Worksheet",
         description: "Map the incumbent + likely bidders for every RFP. Find the wedge before you commit.",
         format: "XLSX",
+        sizeHint: "1 sheet",
         gdriveUrl: "",
+        localPath: "/starter-pack/04_Bid_No_Bid_Decision_Toolkit/FLK_04_Competitive_Bid_Analysis.xlsx",
     },
 
     // ── Certifications ────────────────────────────────────────────────────────
@@ -291,7 +330,9 @@ export const STARTUP_PACK_ASSETS: StartupPackAsset[] = [
         title: "8(a) Certification Self-Assessment",
         description: "Eligibility checklist + document prep list. Know in 10 minutes if you qualify.",
         format: "XLSX",
+        sizeHint: "1 sheet",
         gdriveUrl: "",
+        localPath: "/starter-pack/05_Certification_Eligibility_Worksheets/FLK_05_8a_Certification_Self_Assessment.xlsx",
     },
     {
         id: "cert-hubzone",
@@ -299,7 +340,9 @@ export const STARTUP_PACK_ASSETS: StartupPackAsset[] = [
         title: "HUBZone Eligibility Worksheet",
         description: "Map check + employee residency calculator + document prep list.",
         format: "XLSX",
+        sizeHint: "1 sheet",
         gdriveUrl: "",
+        localPath: "/starter-pack/05_Certification_Eligibility_Worksheets/FLK_05_HUBZone_Eligibility_Worksheet.xlsx",
     },
     {
         id: "cert-wosb",
@@ -307,7 +350,9 @@ export const STARTUP_PACK_ASSETS: StartupPackAsset[] = [
         title: "WOSB / EDWOSB Self-Cert Pack",
         description: "Required forms + sample affidavits. Self-certification path explained.",
         format: "XLSX",
+        sizeHint: "1 sheet",
         gdriveUrl: "",
+        localPath: "/starter-pack/05_Certification_Eligibility_Worksheets/FLK_05_WOSB_EDWOSB_Self_Cert.xlsx",
     },
     {
         id: "cert-sdvosb",
@@ -316,6 +361,7 @@ export const STARTUP_PACK_ASSETS: StartupPackAsset[] = [
         description: "Step-by-step CVE application walkthrough. Common rejection reasons + how to avoid them.",
         format: "PDF",
         gdriveUrl: "",
+        localPath: "/starter-pack/05_Certification_Eligibility_Worksheets/FLK_05_VOSB_SDVOSB_CVE_Guide.pdf",
     },
 
     // ── Past Performance ─────────────────────────────────────────────────────
@@ -325,7 +371,9 @@ export const STARTUP_PACK_ASSETS: StartupPackAsset[] = [
         title: "Past-Performance Reference Template",
         description: "The exact 1-page format contracting officers expect. Includes scoring rubric.",
         format: "DOCX",
+        sizeHint: "1 page",
         gdriveUrl: "",
+        localPath: "/starter-pack/06_Past_Performance_Reference_Templates/FLK_06_Past_Performance_Reference_Template.docx",
     },
     {
         id: "past-perf-commercial",
@@ -335,6 +383,7 @@ export const STARTUP_PACK_ASSETS: StartupPackAsset[] = [
         format: "PDF",
         sizeHint: "8 pages",
         gdriveUrl: "",
+        localPath: "/starter-pack/06_Past_Performance_Reference_Templates/FLK_06_Commercial_to_Federal_Past_Performance.pdf",
     },
 
     // ── Outreach ─────────────────────────────────────────────────────────────
@@ -343,18 +392,20 @@ export const STARTUP_PACK_ASSETS: StartupPackAsset[] = [
         category: "outreach",
         title: "10 Contracting Officer Email Templates",
         description: "Cold outreach, RFI follow-up, post-award debrief — the full capture cycle.",
-        format: "DOCX",
+        format: "PDF",
         sizeHint: "10 templates",
         gdriveUrl: "",
+        localPath: "/starter-pack/07_Contracting_Officer_Outreach_Library/FLK_07_CO_Email_Templates.pdf",
     },
     {
         id: "outreach-cor-templates",
         category: "outreach",
         title: "COR / Program Manager Scripts",
         description: "5 templates for engaging Contracting Officer Representatives and PMs — the actual decision influencers.",
-        format: "DOCX",
+        format: "PDF",
         sizeHint: "5 templates",
         gdriveUrl: "",
+        localPath: "/starter-pack/07_Contracting_Officer_Outreach_Library/FLK_07_COR_PM_Conversation_Scripts.pdf",
     },
     {
         id: "outreach-linkedin",
@@ -363,6 +414,7 @@ export const STARTUP_PACK_ASSETS: StartupPackAsset[] = [
         description: "Connection request + 3-touch DM sequence that opens conversations with contracting officers.",
         format: "PDF",
         gdriveUrl: "",
+        localPath: "/starter-pack/07_Contracting_Officer_Outreach_Library/FLK_07_LinkedIn_Outreach_Scripts.pdf",
     },
     {
         id: "outreach-industry-day",
@@ -372,6 +424,7 @@ export const STARTUP_PACK_ASSETS: StartupPackAsset[] = [
         format: "PDF",
         sizeHint: "10 pages",
         gdriveUrl: "",
+        localPath: "/starter-pack/07_Contracting_Officer_Outreach_Library/FLK_07_Industry_Day_Playbook.pdf",
     },
 
     // ── Pricing ───────────────────────────────────────────────────────────────
@@ -383,6 +436,7 @@ export const STARTUP_PACK_ASSETS: StartupPackAsset[] = [
         format: "XLSX",
         sizeHint: "5 sheets",
         gdriveUrl: "",
+        localPath: "/starter-pack/08_Price_to_Win_Toolkit/FLK_08_Price_to_Win_Worksheet.xlsx",
     },
     {
         id: "labor-rates",
@@ -391,6 +445,7 @@ export const STARTUP_PACK_ASSETS: StartupPackAsset[] = [
         description: "Current GSA-schedule rate ranges by labor category. Updated for FY2026.",
         format: "PDF",
         gdriveUrl: "",
+        localPath: "/starter-pack/08_Price_to_Win_Toolkit/FLK_08_Federal_Labor_Rate_Benchmarks_FY2026.pdf",
     },
     {
         id: "indirect-rate-calc",
@@ -398,7 +453,9 @@ export const STARTUP_PACK_ASSETS: StartupPackAsset[] = [
         title: "Indirect Rate Calculator",
         description: "G&A + fringe + overhead in one workbook. Defensible rates for any cost-reimbursable contract.",
         format: "XLSX",
+        sizeHint: "1 sheet",
         gdriveUrl: "",
+        localPath: "/starter-pack/08_Price_to_Win_Toolkit/FLK_08_Indirect_Rate_Calculator.xlsx",
     },
 
     // ── Internal Best-Practice Library ───────────────────────────────────────
@@ -408,16 +465,19 @@ export const STARTUP_PACK_ASSETS: StartupPackAsset[] = [
         title: "Capture Maturity Self-Audit",
         description: "Our internal scorecard — score your firm on the 7 capability dimensions that predict win rate.",
         format: "XLSX",
+        sizeHint: "1 sheet",
         gdriveUrl: "",
+        localPath: "/starter-pack/09_Internal_Best_Practice_Library/FLK_09_Capture_Maturity_Self_Audit.xlsx",
     },
     {
         id: "bp-color-team-reviews",
         category: "best_practices",
         title: "Color-Team Review Templates",
         description: "Pink, Red, Gold review checklists + scoring rubrics. Used inside CapturePilot for every managed-client bid.",
-        format: "DOCX",
+        format: "PDF",
         sizeHint: "3 templates",
         gdriveUrl: "",
+        localPath: "/starter-pack/09_Internal_Best_Practice_Library/FLK_09_Color_Team_Review_Templates.pdf",
     },
     {
         id: "bp-far-decoder",
@@ -427,6 +487,7 @@ export const STARTUP_PACK_ASSETS: StartupPackAsset[] = [
         format: "PDF",
         sizeHint: "24 pages",
         gdriveUrl: "",
+        localPath: "/starter-pack/09_Internal_Best_Practice_Library/FLK_09_FAR_Clause_Quick_Reference_Decoder.pdf",
     },
     {
         id: "bp-teaming-agreement",
@@ -435,6 +496,7 @@ export const STARTUP_PACK_ASSETS: StartupPackAsset[] = [
         description: "Mutually-fair teaming agreement we use with our own subs. Lawyer-reviewed.",
         format: "DOCX",
         gdriveUrl: "",
+        localPath: "/starter-pack/09_Internal_Best_Practice_Library/FLK_09_Teaming_Agreement_Template.docx",
     },
     {
         id: "bp-compliance-matrix",
@@ -442,10 +504,21 @@ export const STARTUP_PACK_ASSETS: StartupPackAsset[] = [
         title: "Compliance Matrix Template",
         description: "The exact L/M/Section-cross-walk we use internally for every RFP response.",
         format: "XLSX",
+        sizeHint: "1 sheet",
         gdriveUrl: "",
+        localPath: "/starter-pack/09_Internal_Best_Practice_Library/FLK_09_Compliance_Matrix_Template.xlsx",
     },
 
     // ── Onboarding call ──────────────────────────────────────────────────────
+    {
+        id: "founder-call-guide",
+        category: "onboarding",
+        title: "Founder Onboarding Call — Prep Guide",
+        description: "What to bring + what we'll cover in the 30-min capture call so you walk out with a target opportunity.",
+        format: "PDF",
+        gdriveUrl: "",
+        localPath: "/starter-pack/10_Bonus_Founder_Onboarding_Call/FLK_10_Founder_Onboarding_Call.pdf",
+    },
     {
         id: "founder-call",
         category: "onboarding",
@@ -465,10 +538,36 @@ export const STARTUP_PACK_FULL_PRICE_CENTS = 15000; // $150.00
 export const STARTUP_PACK_OFFER_DAYS = 7;          // countdown from analysis created_at
 
 /**
- * Resolve a Drive URL to a renderable shape for the UI.
+ * Resolve an asset to a renderable shape for the UI.
  * Returns { previewUrl, downloadUrl } — both may be undefined for empty entries.
+ *
+ * Resolution order:
+ *   1. `localPath` + `token` → both URLs go through /api/startup-pack/file/<token>/<id>
+ *      (token-gated streaming, rejects anyone without a valid non-refunded purchase)
+ *   1b. `localPath` without `token` → admin/staff preview: raw /starter-pack/<file>
+ *   2. `gdriveUrl` non-Drive (Calendly, etc) → previewUrl pass-through
+ *   3. `gdriveUrl` Drive → previewUrl + optional downloadUrl from gdriveFileId
+ *
+ * Why the optional token: the buyer download page passes the access_token so
+ * every file URL becomes token-scoped — the request runs through the route
+ * handler that re-validates the token before streaming. Without it, file URLs
+ * fall back to the raw /public path, which is only safe for staff previews
+ * since anyone who guesses a filename could wget it.
  */
-export function resolveDriveLinks(asset: StartupPackAsset): { previewUrl?: string; downloadUrl?: string } {
+export function resolveDriveLinks(
+    asset: StartupPackAsset,
+    token?: string,
+): { previewUrl?: string; downloadUrl?: string } {
+    if (asset.localPath && asset.localPath.trim()) {
+        const path = asset.localPath.trim();
+        if (token) {
+            const gated = `/api/startup-pack/file/${encodeURIComponent(token)}/${encodeURIComponent(asset.id)}`;
+            return { previewUrl: gated, downloadUrl: `${gated}?dl=1` };
+        }
+        // No token = unauthed preview mode (admin/staff); fall back to raw path.
+        return { previewUrl: path, downloadUrl: path };
+    }
+
     const url = asset.gdriveUrl?.trim();
     if (!url) return {};
 

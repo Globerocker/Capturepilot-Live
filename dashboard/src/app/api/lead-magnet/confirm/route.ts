@@ -28,6 +28,14 @@ export async function POST(request: NextRequest) {
             employee_count,
             years_in_business,
             annual_revenue_band,
+            // LinkedIn-verified identity (optional). Sent when the user took
+            // the "Continue with LinkedIn" shortcut on the LeadMagnetForm.
+            linkedin_url,
+            linkedin_headline,
+            linkedin_picture_url,
+            linkedin_locale,
+            linkedin_email_verified,
+            linkedin_verified,
         } = body as {
             analysis_id?: string;
             email?: string;
@@ -42,7 +50,14 @@ export async function POST(request: NextRequest) {
             employee_count?: number;
             years_in_business?: number;
             annual_revenue_band?: string;
+            linkedin_url?: string;
+            linkedin_headline?: string;
+            linkedin_picture_url?: string;
+            linkedin_locale?: string;
+            linkedin_email_verified?: boolean;
+            linkedin_verified?: boolean;
         };
+        const isLinkedinVerified = !!(linkedin_verified || linkedin_url || linkedin_email_verified === true);
         // Compute the merged "full name" from either form path:
         // - new UI sends first_name + last_name (required on /check)
         // - any older caller may still send the combined contact_name
@@ -224,7 +239,7 @@ export async function POST(request: NextRequest) {
         // Update corrected profile in inferred_profile — merge nested contact_person carefully
         const existingProfile = (analysis.inferred_profile as Record<string, unknown>) || {};
         const existingContact = (existingProfile.contact_person as Record<string, unknown> | null) || null;
-        const mergedContact = (mergedName || phone || email)
+        const mergedContact = (mergedName || phone || email || isLinkedinVerified)
             ? {
                 ...(existingContact || {}),
                 ...(mergedName ? { name: mergedName } : {}),
@@ -232,7 +247,18 @@ export async function POST(request: NextRequest) {
                 ...(last_name?.trim() ? { last_name: last_name.trim() } : {}),
                 ...(email ? { email } : {}),
                 ...(phone ? { phone, mobile_phone: phone } : {}),
-                source: existingContact?.source || "user_confirmed",
+                // LinkedIn-verified shortcut: persist whichever fields the OAuth
+                // payload supplied so downstream consumers (HubSpot push, lead
+                // brief, sales views) can show the LinkedIn provenance.
+                ...(linkedin_url ? { linkedin_url } : {}),
+                ...(linkedin_headline ? { linkedin_headline } : {}),
+                ...(linkedin_picture_url ? { linkedin_picture_url } : {}),
+                ...(linkedin_locale ? { linkedin_locale } : {}),
+                ...(typeof linkedin_email_verified === "boolean" ? { linkedin_email_verified } : {}),
+                ...(isLinkedinVerified ? { linkedin_verified: true } : {}),
+                // Bump the source when LinkedIn supplied the data — beats the
+                // generic "user_confirmed" tag for downstream sales triage.
+                source: isLinkedinVerified ? "linkedin_oauth" : (existingContact?.source || "user_confirmed"),
             }
             : existingContact;
 
@@ -263,6 +289,41 @@ export async function POST(request: NextRequest) {
         if (annual_revenue_band) updatePayload.annual_revenue_band = annual_revenue_band;
 
         await sb.from("company_analyses").update(updatePayload).eq("id", analysis_id);
+
+        // Persist LinkedIn-verified identity to marketing_leads when we have
+        // an email. Best-effort: patch fields if a row exists; otherwise let
+        // the regular leads pipeline create the canonical row. Swallows stale
+        // PostgREST schema-cache errors (PGRST204) for the same reason the
+        // /api/leads pipeline does.
+        if (email && isLinkedinVerified) {
+            try {
+                const liUpdate: Record<string, unknown> = {
+                    linkedin_verified: true,
+                    linkedin_synced_at: new Date().toISOString(),
+                };
+                if (linkedin_url) liUpdate.linkedin_url = linkedin_url;
+                if (linkedin_headline) liUpdate.linkedin_headline = linkedin_headline;
+                if (linkedin_picture_url) liUpdate.linkedin_picture_url = linkedin_picture_url;
+                if (linkedin_locale) liUpdate.linkedin_locale = linkedin_locale;
+                if (typeof linkedin_email_verified === "boolean") liUpdate.linkedin_email_verified = linkedin_email_verified;
+                if (first_name?.trim()) liUpdate.first_name = first_name.trim();
+                if (last_name?.trim()) liUpdate.last_name = last_name.trim();
+
+                const liPatch = await sb
+                    .from("marketing_leads")
+                    .update(liUpdate)
+                    .eq("email", email);
+                if (liPatch.error) {
+                    const msg = liPatch.error.message || "";
+                    const cacheStale = msg.includes("schema cache") || (liPatch.error as { code?: string }).code === "PGRST204";
+                    if (!cacheStale) {
+                        console.warn("[lead-magnet/confirm] LinkedIn marketing_leads patch non-fatal:", msg);
+                    }
+                }
+            } catch (e) {
+                console.warn("[lead-magnet/confirm] LinkedIn marketing_leads write failed (non-fatal):", e);
+            }
+        }
 
         // Send Quick Checker results email if lead provided an email
         if (email) {

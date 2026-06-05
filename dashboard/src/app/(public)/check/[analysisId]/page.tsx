@@ -12,7 +12,8 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import clsx from "clsx";
-import { LeadMagnetForm } from "@/components/LeadMagnetForm";
+import { LeadMagnetForm, type LinkedInPrefill } from "@/components/LeadMagnetForm";
+import { createSupabaseClient } from "@/lib/supabase/client";
 import { OpportunityLandscape, ConversionBottomSection, type OpportunityStats } from "@/components/OpportunityLandscape";
 import ReadinessScoreCard from "@/components/ReadinessScoreCard";
 import NaicsEditModal from "@/components/NaicsEditModal";
@@ -1263,9 +1264,72 @@ export default function CheckResultsPage() {
     const [pdfEmail, setPdfEmail] = useState("");
     const [pdfName, setPdfName] = useState("");
     const [pdfError, setPdfError] = useState("");
+    // LinkedIn OAuth prefill — populated when the user returns from the
+    // LinkedIn round-trip with ?linkedin=1. Passed straight into the
+    // LeadMagnetForm, which auto-submits once the payload arrives.
+    const [linkedinPrefill, setLinkedinPrefill] = useState<LinkedInPrefill | null>(null);
     const pollRef = useRef<number | null>(null);
 
     const analysisId = params.analysisId as string;
+
+    // After the LinkedIn OAuth round-trip the callback bounces us back here
+    // with ?linkedin=1. Pull the verified identity off the supabase session
+    // and hand it to the LeadMagnetForm so it can auto-submit. Strips the
+    // query param afterwards so a refresh doesn't re-trigger the prefill.
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+        if (!analysisId) return;
+        const url = new URL(window.location.href);
+        if (url.searchParams.get("linkedin") !== "1") return;
+
+        let cancelled = false;
+        (async () => {
+            try {
+                const sb = createSupabaseClient();
+                const { data: { user } } = await sb.auth.getUser();
+                if (cancelled) return;
+                if (!user) return;
+                // Supabase normalises LinkedIn OIDC claims onto user_metadata.
+                // Field names vary between provider versions (linkedin vs
+                // linkedin_oidc) — read defensively.
+                const meta = (user.user_metadata || {}) as Record<string, unknown>;
+                const fullName = String(meta.full_name || meta.name || "").trim();
+                const parts = fullName.split(/\s+/).filter(Boolean);
+                const firstName = String(meta.given_name || meta.first_name || (parts.length > 0 ? parts[0] : "")).trim();
+                const lastName = String(meta.family_name || meta.last_name || (parts.length > 1 ? parts.slice(1).join(" ") : "")).trim();
+                const email = String(user.email || meta.email || "").trim();
+                const linkedinUrl = String(meta.linkedin_url || meta.profile || meta.sub || "").trim();
+                const headline = String(meta.headline || "").trim();
+                const picture = String(meta.picture || meta.avatar_url || meta.picture_url || "").trim();
+                const locale = typeof meta.locale === "string"
+                    ? meta.locale
+                    : (meta.locale && typeof meta.locale === "object" && "language" in (meta.locale as Record<string, unknown>)
+                        ? String((meta.locale as Record<string, unknown>).language || "")
+                        : "");
+                const emailVerified = typeof meta.email_verified === "boolean" ? meta.email_verified : undefined;
+
+                setLinkedinPrefill({
+                    first_name: firstName || undefined,
+                    last_name: lastName || undefined,
+                    email: email || undefined,
+                    linkedin_url: linkedinUrl && /^https?:\/\//i.test(linkedinUrl) ? linkedinUrl : undefined,
+                    linkedin_headline: headline || undefined,
+                    linkedin_picture_url: picture || undefined,
+                    linkedin_locale: locale || undefined,
+                    linkedin_email_verified: emailVerified,
+                });
+
+                // Drop the ?linkedin=1 marker so a refresh / back-button doesn't
+                // re-prefill (the form has its own once-per-mount guard but
+                // keeping the URL clean is the friendlier behaviour).
+                url.searchParams.delete("linkedin");
+                window.history.replaceState({}, "", url.pathname + (url.search ? url.search : ""));
+            } catch {
+                // Swallow — user can still fill the form manually.
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [analysisId]);
 
     useEffect(() => {
         if (!analysisId) return;
@@ -1900,6 +1964,7 @@ export default function CheckResultsPage() {
                         inferredNaics={naics}
                         crawlerConfidence={data.crawler_confidence}
                         requireContact
+                        linkedinPrefill={linkedinPrefill}
                         onUpdate={(d) => {
                             setUpdatedMatches(d.updated_matches as MatchData[]);
                             setUpdatedCertRecs(d.cert_recommendations as CertRecommendation[]);

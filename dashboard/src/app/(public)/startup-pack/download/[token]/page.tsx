@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import {
     Loader2, FileText, Search, Scale, Award, Trophy, Mail, DollarSign, Video,
-    ExternalLink, Download, CheckCircle2, ArrowRight, AlertCircle, Sparkles, PlayCircle,
-    ClipboardCheck, BookOpen, Building2,
+    ExternalLink, Download, CheckCircle2, ArrowRight, AlertCircle, Sparkles,
+    ClipboardCheck, BookOpen, Building2, ChevronDown,
 } from "lucide-react";
 import clsx from "clsx";
 import {
@@ -22,6 +22,12 @@ import {
 const ICON_MAP: Record<AssetSection["icon"], React.ComponentType<{ className?: string }>> = {
     FileText, Search, Scale, Award, Trophy, Mail, DollarSign, Video, ClipboardCheck, BookOpen, Building2,
 };
+
+/** Anchor id for a category section — used by the sticky nav + overview tiles. */
+const anchorIdFor = (cat: string) => `category-${cat}`;
+
+/** Two-digit display index ("01", "02", … "10"). */
+const sectionNumber = (i: number) => String(i + 1).padStart(2, "0");
 
 interface AccessData {
     ok: boolean;
@@ -91,7 +97,7 @@ export default function StartupPackDownloadPage() {
         );
     }
 
-    const totalAssets = STARTUP_PACK_ASSETS.filter(a => a.gdriveUrl).length;
+    const totalAssets = STARTUP_PACK_ASSETS.filter(a => a.localPath || a.gdriveUrl).length;
     const comingSoonCount = STARTUP_PACK_ASSETS.length - totalAssets;
     const buyer = access.company_name?.trim() || access.email?.split("@")[0] || "there";
 
@@ -132,37 +138,15 @@ export default function StartupPackDownloadPage() {
                     </div>
                 </section>
 
-                {/* Welcome video — TODO: drop in the founder orientation video (YouTube/Vimeo embed
-                    or a direct MP4). Until then we render a polished placeholder so the page never
-                    ships with a "Rickroll" or broken iframe. */}
-                <section className="bg-gradient-to-br from-stone-900 to-stone-800 rounded-[28px] overflow-hidden shadow-xl">
-                    <div className="relative aspect-video flex items-center justify-center px-6 text-center">
-                        <div>
-                            <div className="w-16 h-16 rounded-2xl bg-emerald-500/20 flex items-center justify-center mx-auto mb-4 ring-4 ring-emerald-500/10">
-                                <PlayCircle className="w-8 h-8 text-emerald-400" />
-                            </div>
-                            <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-300">Coming this week</p>
-                            <h3 className="font-bold text-xl text-white mt-1">Founder orientation video</h3>
-                            <p className="text-white/65 text-sm mt-2 max-w-md mx-auto leading-relaxed">
-                                A 4-minute walkthrough of every asset and the 30-day plan to your first
-                                federal RFI response. We&apos;ll email you the link as soon as it&apos;s up.
-                            </p>
-                        </div>
-                    </div>
-                    <div className="border-t border-white/10 p-5 sm:p-6 flex items-start gap-3">
-                        <PlayCircle className="w-6 h-6 text-emerald-400 flex-shrink-0 mt-0.5" />
-                        <div className="text-white/90 text-sm">
-                            <p className="font-bold mb-1">Don&apos;t wait for the video — start below</p>
-                            <p className="text-white/65 leading-relaxed">
-                                Every asset is live and downloadable right now. Open the Capability Statement template first.
-                            </p>
-                        </div>
-                    </div>
-                </section>
+                {/* Sticky category nav — 10 pills, jump to any kit. */}
+                <CategoryNav />
 
-                {/* Asset sections */}
-                {STARTUP_PACK_SECTIONS.map((section) => (
-                    <SectionBlock key={section.category} section={section} />
+                {/* "What's in this kit" — 10-tile overview grid replacing the old video placeholder. */}
+                <KitOverview />
+
+                {/* Asset sections — each with anchor id + collapsible body. */}
+                {STARTUP_PACK_SECTIONS.map((section, i) => (
+                    <SectionBlock key={section.category} section={section} index={i} />
                 ))}
 
                 {/* Footer / next steps */}
@@ -207,25 +191,155 @@ export default function StartupPackDownloadPage() {
     );
 }
 
-function SectionBlock({ section }: { section: AssetSection }) {
+// ──────────────────────────────────────────────────────────────────────────────
+// Sticky category nav — 10 pills that scroll to the matching section anchor.
+// Lives just below the hero, sticks at top with a soft backdrop blur. Uses
+// native anchor links (`href="#category-..."`) so it works without JS too.
+// ──────────────────────────────────────────────────────────────────────────────
+function CategoryNav() {
+    return (
+        <nav
+            aria-label="Kit categories"
+            className="sticky top-2 z-30 bg-white/85 backdrop-blur-md border border-stone-200 rounded-2xl px-3 py-2.5 shadow-sm"
+        >
+            <div className="flex items-center gap-2 overflow-x-auto scrollbar-thin">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-stone-400 px-2 flex-shrink-0">
+                    Jump to
+                </span>
+                {STARTUP_PACK_SECTIONS.map((section, i) => {
+                    const Icon = ICON_MAP[section.icon] || FileText;
+                    const count = STARTUP_PACK_ASSETS.filter(a => a.category === section.category).length;
+                    return (
+                        <a
+                            key={section.category}
+                            href={`#${anchorIdFor(section.category)}`}
+                            className="group inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-stone-50 hover:bg-emerald-50 border border-stone-200 hover:border-emerald-300 text-xs font-bold text-stone-700 hover:text-emerald-700 whitespace-nowrap transition-colors flex-shrink-0"
+                        >
+                            <span className="text-[10px] tabular-nums text-stone-400 group-hover:text-emerald-500">
+                                {sectionNumber(i)}
+                            </span>
+                            <Icon className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">{section.label.replace(/ Kit$| Playbooks$| Library$| Toolkit$| Worksheets$| Templates$/i, "")}</span>
+                            <span className="text-[10px] font-semibold tabular-nums bg-stone-200 group-hover:bg-emerald-200 text-stone-600 group-hover:text-emerald-800 px-1.5 py-0.5 rounded">
+                                {count}
+                            </span>
+                        </a>
+                    );
+                })}
+            </div>
+        </nav>
+    );
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// "What's in this kit" — 10 clickable tiles, mirrors the brand aesthetic of
+// the rest of the page (emerald gradient, stone surfaces, rounded-[28px]).
+// Replaces the old "Coming this week" video placeholder.
+// ──────────────────────────────────────────────────────────────────────────────
+function KitOverview() {
+    return (
+        <section className="bg-white border border-stone-200 rounded-[28px] p-6 sm:p-8 shadow-sm">
+            <div className="flex items-start gap-3 mb-5">
+                <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center flex-shrink-0">
+                    <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                    <h2 className="font-bold text-lg text-stone-900">What&apos;s in this kit</h2>
+                    <p className="text-sm text-stone-500 leading-snug">
+                        Ten kits, every template you need. Click any tile to jump straight to it.
+                    </p>
+                </div>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
+                {STARTUP_PACK_SECTIONS.map((section, i) => {
+                    const Icon = ICON_MAP[section.icon] || FileText;
+                    const count = STARTUP_PACK_ASSETS.filter(a => a.category === section.category).length;
+                    return (
+                        <a
+                            key={section.category}
+                            href={`#${anchorIdFor(section.category)}`}
+                            className="group relative bg-gradient-to-br from-stone-50 to-white hover:from-emerald-50 hover:to-white border border-stone-200 hover:border-emerald-300 rounded-2xl p-4 transition-all hover:shadow-md hover:-translate-y-0.5"
+                        >
+                            <div className="flex items-center justify-between mb-2.5">
+                                <span className="text-[10px] font-bold tabular-nums uppercase tracking-widest text-stone-400 group-hover:text-emerald-500">
+                                    {sectionNumber(i)}
+                                </span>
+                                <span className="text-[10px] font-bold tabular-nums bg-stone-100 group-hover:bg-emerald-100 text-stone-600 group-hover:text-emerald-700 px-1.5 py-0.5 rounded">
+                                    {count} {count === 1 ? "asset" : "assets"}
+                                </span>
+                            </div>
+                            <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center mb-2">
+                                <Icon className="w-4.5 h-4.5" />
+                            </div>
+                            <p className="font-bold text-[13px] text-stone-900 leading-snug">
+                                {section.label}
+                            </p>
+                        </a>
+                    );
+                })}
+            </div>
+        </section>
+    );
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// SectionBlock — one per category. Has #category-<cat> anchor, numbered label,
+// asset-count chip, and a collapse/expand toggle (default = expanded).
+// ──────────────────────────────────────────────────────────────────────────────
+function SectionBlock({ section, index }: { section: AssetSection; index: number }) {
     const Icon = ICON_MAP[section.icon] || FileText;
-    const assets = STARTUP_PACK_ASSETS.filter(a => a.category === section.category);
+    const assets = useMemo(
+        () => STARTUP_PACK_ASSETS.filter(a => a.category === section.category),
+        [section.category],
+    );
+    const [open, setOpen] = useState(true);
     if (assets.length === 0) return null;
 
     return (
-        <section>
-            <div className="flex items-start gap-3 mb-4 px-1">
+        <section
+            id={anchorIdFor(section.category)}
+            // Scroll-margin so the sticky nav doesn't overlap the section header when jumping.
+            className="scroll-mt-24"
+        >
+            <button
+                type="button"
+                onClick={() => setOpen(o => !o)}
+                aria-expanded={open ? "true" : "false"}
+                aria-controls={`${anchorIdFor(section.category)}-body`}
+                className="w-full flex items-start gap-3 mb-4 px-1 text-left group"
+            >
                 <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center flex-shrink-0">
                     <Icon className="w-5 h-5" />
                 </div>
-                <div>
-                    <h2 className="font-bold text-lg text-stone-900">{section.label}</h2>
-                    <p className="text-sm text-stone-500 leading-snug">{section.description}</p>
+                <div className="flex-1 min-w-0">
+                    <div className="flex items-center flex-wrap gap-2">
+                        <span className="text-[10px] font-bold tabular-nums uppercase tracking-widest text-stone-400">
+                            {sectionNumber(index)} ·
+                        </span>
+                        <h2 className="font-bold text-lg text-stone-900 group-hover:text-emerald-700 transition-colors">
+                            {section.label}
+                        </h2>
+                        <span className="text-[10px] font-bold tabular-nums bg-stone-100 text-stone-600 border border-stone-200 px-2 py-0.5 rounded">
+                            {assets.length} {assets.length === 1 ? "asset" : "assets"}
+                        </span>
+                    </div>
+                    <p className="text-sm text-stone-500 leading-snug mt-0.5">{section.description}</p>
                 </div>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {assets.map(asset => <AssetCard key={asset.id} asset={asset} />)}
-            </div>
+                <ChevronDown
+                    className={clsx(
+                        "w-5 h-5 text-stone-400 group-hover:text-stone-600 flex-shrink-0 mt-2 transition-transform",
+                        open ? "rotate-180" : "rotate-0",
+                    )}
+                />
+            </button>
+            {open && (
+                <div
+                    id={`${anchorIdFor(section.category)}-body`}
+                    className="grid grid-cols-1 md:grid-cols-2 gap-3"
+                >
+                    {assets.map(asset => <AssetCard key={asset.id} asset={asset} />)}
+                </div>
+            )}
         </section>
     );
 }
@@ -233,6 +347,15 @@ function SectionBlock({ section }: { section: AssetSection }) {
 function AssetCard({ asset }: { asset: StartupPackAsset }) {
     const { previewUrl, downloadUrl } = resolveDriveLinks(asset);
     const available = !!previewUrl;
+    const isLocal = !!asset.localPath;
+    const isCalendly = asset.format === "Calendly";
+
+    // Label the primary CTA based on where the file lives.
+    const openLabel = isCalendly
+        ? "Open in Calendly"
+        : isLocal
+            ? "View"
+            : "Open in Drive";
 
     return (
         <div
@@ -269,11 +392,12 @@ function AssetCard({ asset }: { asset: StartupPackAsset }) {
                             className="inline-flex items-center gap-1.5 bg-emerald-600 text-white text-xs font-bold px-3 py-2 rounded-lg hover:bg-emerald-700 transition-colors"
                         >
                             <ExternalLink className="w-3.5 h-3.5" />
-                            Open in {asset.format === "Calendly" ? "Calendly" : "Drive"}
+                            {openLabel}
                         </a>
-                        {downloadUrl && (
+                        {downloadUrl && !isCalendly && (
                             <a
                                 href={downloadUrl}
+                                download={isLocal ? "" : undefined}
                                 className="inline-flex items-center gap-1.5 bg-white border border-stone-200 text-stone-700 text-xs font-bold px-3 py-2 rounded-lg hover:border-stone-300 transition-colors"
                             >
                                 <Download className="w-3.5 h-3.5" /> Download
