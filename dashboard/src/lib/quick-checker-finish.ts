@@ -63,6 +63,48 @@ interface ScoredMatch {
     required_certifications?: string[];
 }
 
+/**
+ * Decompose a nail-down phrase into smaller phrase-aliases so the strict
+ * scoreKeywords/phraseHits matcher can still hit federal opp titles.
+ *
+ * Example: "electronic component broker/reseller" →
+ *   ["electronic component broker", "electronic component",
+ *    "component broker", "broker", "reseller"]
+ *
+ * Drops the long canonical (we only need the SHORT sub-phrases as aliases —
+ * the canonical itself stays as the primary entry for attribution). Skips
+ * tokens that are stopword-y or too short.
+ */
+const PHRASE_STOPWORDS = new Set([
+    "a", "an", "the", "and", "or", "of", "for", "with", "to", "in", "on",
+    "at", "by", "as", "from", "into", "is", "are", "be", "this", "these",
+]);
+function deriveAliasesFromPhrase(phrase: string): string[] {
+    const cleaned = phrase.toLowerCase()
+        .split(/[\/|]/)             // split on / and |
+        .map(s => s.trim())
+        .filter(Boolean);
+    const tokens: string[][] = cleaned.map(part =>
+        part.split(/\s+/).filter(w => w.length > 0 && !PHRASE_STOPWORDS.has(w))
+    );
+    const out = new Set<string>();
+    for (const arr of tokens) {
+        if (arr.length === 0) continue;
+        // sliding windows: lengths 3, 2, 1
+        for (const len of [3, 2, 1]) {
+            for (let i = 0; i + len <= arr.length; i++) {
+                const sub = arr.slice(i, i + len).join(" ");
+                // skip if too short or matches the original whole phrase
+                if (sub.length < 3) continue;
+                if (sub === phrase.toLowerCase().trim()) continue;
+                out.add(sub);
+            }
+        }
+    }
+    // Cap to avoid alias-bloat — top 6 longest substrings retain most signal.
+    return Array.from(out).sort((a, b) => b.length - a.length).slice(0, 6);
+}
+
 // MatchForAi + CompanyContextForAi + generateMatchSummary now live in
 // lib/match-summary.ts so the rescore endpoint can reuse them — see the
 // comment at the top of that file. Local imports kept identical so the
@@ -222,19 +264,52 @@ export async function runPostConfirmationPipeline(analysisId: string): Promise<v
         const certifications = (crawlData.certifications as { type: string; confidence: number }[]) || [];
         const detectedStates = (crawlData.detected_states as string[]) || [];
 
-        // ── Phase 9 — auto-promote nail_down_keywords to primary_keywords ──
+        // ── Phase 9 — auto-promote crawl keywords to primary_keywords ──
         // When the user didn't curate their own keywords, fall back to the
-        // 3-5 nail-down phrases the deep-extract pipeline produced. These
-        // are HYPER-SPECIFIC by design ("fleet maintenance for Class-8 trucks"
-        // not "trucks") so they make the matcher pop on the right opps
-        // instead of carpet-bombing every 541xxx code.
+        // crawl output. Two sources, two roles:
+        //
+        //   nail_down_keywords  — 3-5 hyper-specific phrases. Great for
+        //     attribution ("matched: 'fleet maintenance for Class-8 trucks'"),
+        //     bad for raw matching because federal opp titles are short. We
+        //     keep them as canonical "keywords" + auto-derive 1-3 word
+        //     SUB-PHRASES as aliases so the phrase matcher can still hit
+        //     opp titles that share the key terms.
+        //
+        //   capability_keywords  — 8-20 shorter phrases, usually 1-3 words.
+        //     These match federal opp titles directly. We promote them as
+        //     secondary keywords so they boost score but don't claim the
+        //     spotlight.
         let rawPrimary = (inferredProfile.primary_keywords as Array<{ keyword: string; aliases?: string[] }> | undefined) || [];
-        const rawSecondary = (inferredProfile.secondary_keywords as Array<{ keyword: string; aliases?: string[] }> | undefined) || [];
+        let rawSecondary = (inferredProfile.secondary_keywords as Array<{ keyword: string; aliases?: string[] }> | undefined) || [];
+
         if (rawPrimary.length === 0) {
             const nailDown = (crawlData.nail_down_keywords as string[]) || [];
             if (nailDown.length > 0) {
-                rawPrimary = nailDown.slice(0, 5).map(k => ({ keyword: String(k).toLowerCase().trim() }));
-                console.log("[quick-checker-finish] auto-filled primary_keywords from nail_down_keywords:", rawPrimary.map(k => k.keyword).join(", "));
+                rawPrimary = nailDown.slice(0, 5).map(k => {
+                    const canonical = String(k).toLowerCase().trim();
+                    // Derive aliases by splitting on slashes + extracting
+                    // 1-3 word substrings. "electronic component broker/reseller"
+                    // → ["electronic component broker", "electronic component",
+                    //    "broker", "reseller"]. Drops stopword-y trailing words.
+                    const aliases = deriveAliasesFromPhrase(canonical);
+                    return aliases.length > 0 ? { keyword: canonical, aliases } : { keyword: canonical };
+                });
+                console.log("[quick-checker-finish] auto-filled primary_keywords from nail_down_keywords:",
+                    rawPrimary.map(k => `${k.keyword} (+${(k.aliases || []).length} aliases)`).join(", "));
+            }
+        }
+
+        if (rawSecondary.length === 0) {
+            const capKws = (crawlData.capability_keywords as Array<{ keyword: string; tier?: string }> | undefined) || [];
+            if (capKws.length > 0) {
+                rawSecondary = capKws
+                    .map(k => String(k.keyword || "").toLowerCase().trim())
+                    .filter(k => k.length >= 3 && k.length <= 60)
+                    .filter((v, i, a) => a.indexOf(v) === i)
+                    .slice(0, 10)
+                    .map(k => ({ keyword: k }));
+                console.log("[quick-checker-finish] auto-filled secondary_keywords from capability_keywords:",
+                    rawSecondary.map(k => k.keyword).join(", "));
             }
         }
         const allKeywordTerms = [...rawPrimary, ...rawSecondary].map(k => k.keyword).filter(Boolean);
