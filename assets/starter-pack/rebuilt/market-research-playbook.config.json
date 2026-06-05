@@ -1,0 +1,129 @@
+{
+  "id": "market-research-playbook",
+  "title": "Market Research Playbook",
+  "slug": "market-research-playbook",
+  "pages": 12,
+  "footerLabel": "CAPTUREPILOT · MARKET RESEARCH PLAYBOOK",
+  "headerLabel": "MARKET RESEARCH PLAYBOOK",
+  "parts": [
+    {
+      "type": "cover",
+      "eyebrow": "FEDERAL LAUNCH KIT · SOLICITATION PLAYBOOKS",
+      "titleLines": [
+        "Find the work",
+        "before it",
+        "posts."
+      ],
+      "accentWord": "before",
+      "pages": 12,
+      "toolStrip": [
+        { "num": "01", "title": "8 data sources", "desc": "Free and paid tools that map federal spend" },
+        { "num": "02", "title": "6-step framework", "desc": "From target list to ranked opportunity queue" },
+        { "num": "03", "title": "Agency intel", "desc": "Budgets, IG reports, strategic plans" },
+        { "num": "04", "title": "Competitor file", "desc": "Vendor history, GSA prices, teaming patterns" }
+      ]
+    },
+
+    {
+      "type": "toc",
+      "title": "Inside this playbook.",
+      "parts": [
+        {
+          "label": "PART ONE · WHERE THE DATA LIVES",
+          "items": [
+            { "code": "M01", "title": "The Tool Arsenal", "desc": "Eight sources that cover almost every federal buy worth pursuing — what each one shows and what it costs.", "page": 4 },
+            { "code": "M02", "title": "Opportunity Identification Framework", "desc": "A six-step process that turns a blank screen into a ranked queue of contracts to chase.", "page": 5 }
+          ]
+        },
+        {
+          "label": "PART TWO · HOW THE OPERATORS WORK IT",
+          "items": [
+            { "code": "M03", "title": "Agency Intelligence Gathering", "desc": "Five habits that put you ahead of the contractors who only watch SAM.gov.", "page": 7 },
+            { "code": "M04", "title": "Competitive Intelligence Checklist", "desc": "Five boxes that build a working file on every incumbent before you write a single page.", "page": 8 },
+            { "code": "M05", "title": "Your Research Cadence", "desc": "What to do daily, weekly, and monthly so the pipeline doesn't dry up.", "page": 10 }
+          ]
+        }
+      ]
+    },
+
+    {
+      "type": "founder",
+      "headline": "Market research is the work that makes every other proposal easier.",
+      "accentWord": "easier",
+      "paragraphs": [
+        "First federal pursuit I ran solo, I skipped the research and went straight to writing. Forty-eight hours into a proposal, I realized the incumbent had held the work for nine years, had a 4.8 CPARS, and the agency had already requested a sole-source justification. I'd been writing into a buy that was already decided.",
+        "Twenty bucks of research time on USASpending and FPDS would have told me that on day one. I would have skipped that pursuit and put the hours into one I could actually win.",
+        "Market research isn't busywork. It's the filter that decides which forty hours of proposal writing actually pay off. The contractors who do it systematically win more, waste less time, and build a pipeline that doesn't depend on the SAM.gov daily digest.",
+        "This playbook is the version I built for our team after that lost pursuit. Eight tools, a six-step framework, and the checklists that make sure you never write into a decided buy again."
+      ],
+      "ctaText": "Book a B2G Audit call",
+      "ctaUrl": "https://meetings-na2.hubspot.com/americurial/intro-call",
+      "ctaButtonLabel": "Book the call →",
+      "ctaEyebrow": "30 MIN · NO PITCH"
+    },
+
+    {
+      "type": "dark",
+      "partLabel": "PART ONE · WHERE THE DATA LIVES",
+      "headline": "The federal buy is public. Most contractors never read it.",
+      "accentWord": "public",
+      "paragraphs": [
+        "Every dollar the federal government spends is logged. USASpending, FPDS, SAM, eBuy, GSA Advantage — the trail is there for anyone willing to open eight browser tabs and read.",
+        "The next two pages cover the tool arsenal and the six-step framework that turns those tabs into a ranked queue of opportunities you can actually win."
+      ],
+      "headerLabel": "PART ONE"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "THE TOOL ARSENAL",
+      "markdown": "<div class=\"eyebrow\">THE TOOL ARSENAL · WHERE TO RESEARCH</div>\n\n# Eight sources cover almost every federal buy.\n\nThe market is public. Pick the tools that match what you're trying to learn — historic spend, future spend, who the incumbent is, what the agency cares about — and the picture comes into focus fast. **Start free.** The first four (SAM, USASpending, FPDS, CALC) are enough to build a real pipeline — we ran the first eighteen months of CapturePilot research on nothing else. Add the paid tools when revenue justifies them.\n\n<table>\n  <thead>\n    <tr><th>Tool</th><th>URL</th><th>What it reveals</th></tr>\n  </thead>\n  <tbody>\n    <tr><td><strong>SAM.gov</strong></td><td>sam.gov</td><td>Active solicitations, pre-solicitations, awards. Set email alerts by NAICS and agency.</td></tr>\n    <tr><td><strong>USASpending.gov</strong></td><td>usaspending.gov</td><td>Historical contract awards by agency, NAICS, vendor. Follow the money to find the recompetes.</td></tr>\n    <tr><td><strong>FPDS-NG</strong></td><td>fpds.gov</td><td>Award details, contract types, ceiling values, modifications. The system of record under the hood.</td></tr>\n    <tr><td><strong>GSA CALC</strong></td><td>calc.gsa.gov</td><td>Benchmark labor rates for professional services. Tells you what the government is actually paying.</td></tr>\n    <tr><td><strong>GovWin IQ</strong></td><td>govwin.com (paid)</td><td>Industry forecasting, contact intelligence, bid intelligence. Worth it once you're over $2M revenue.</td></tr>\n    <tr><td><strong>HigherGov</strong></td><td>highergov.com (paid)</td><td>Opportunity analytics, spend trends, incumbent data. Cheaper than GovWin, similar coverage.</td></tr>\n    <tr><td><strong>SBIR.gov</strong></td><td>sbir.gov</td><td>R&amp;D solicitations — separate from SAM, often overlooked. Real money if your work touches innovation.</td></tr>\n    <tr><td><strong>Acquisition.gov</strong></td><td>acquisition.gov</td><td>FAR and DFARS reference, policy updates. Read it before the contracting officer cites it at you.</td></tr>\n  </tbody>\n</table>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "OPPORTUNITY IDENTIFICATION",
+      "markdown": "<div class=\"eyebrow\">OPPORTUNITY IDENTIFICATION FRAMEWORK</div>\n\n# Six steps from blank screen to ranked queue.\n\nRun this end to end the first time. After that it becomes a weekly rhythm — about ninety minutes on a Monday morning to refresh the list. A new entrant who runs it once a quarter will have a pipeline that looks four-to-six quarters ahead, while a contractor who only reads the SAM.gov daily digest is reacting to buys already three weeks into the capture window.\n\n<table>\n  <thead>\n    <tr><th>Step</th><th>What to do</th><th>Why it matters</th></tr>\n  </thead>\n  <tbody>\n    <tr>\n      <td><strong>1</strong></td>\n      <td><strong>Define your target.</strong> 3-5 specific agencies, 2-4 NAICS codes, contract size range ($X-$Y).</td>\n      <td>Narrow targets win. A firm chasing every agency wins none of them.</td>\n    </tr>\n    <tr>\n      <td><strong>2</strong></td>\n      <td><strong>Run a USASpending.gov search.</strong> Filter by agency, NAICS, period of performance ending in the next 12 months — these are recompetes.</td>\n      <td>Recompetes are the easiest federal money for a new entrant. The work is defined and the buyer already knows what good looks like.</td>\n    </tr>\n    <tr>\n      <td><strong>3</strong></td>\n      <td><strong>Export results to a spreadsheet.</strong> Rank by contract value and probability of set-aside alignment with your certifications.</td>\n      <td>Forces the comparison to be honest. The $4M recompete you can't qualify for is worth less than the $400K one you can.</td>\n    </tr>\n    <tr>\n      <td><strong>4</strong></td>\n      <td><strong>For each top-20 opportunity, identify the incumbent.</strong> Pull their CPARS rating if it's public.</td>\n      <td>A 4.8 CPARS incumbent with no past performance issues is almost always going to win the recompete. Save your hours for the wobbly ones.</td>\n    </tr>\n    <tr>\n      <td><strong>5</strong></td>\n      <td><strong>Set SAM.gov email alerts</strong> for each target agency and NAICS combination.</td>\n      <td>The alert lands the day a sources sought or pre-sol posts. You're researching the buy while the rest of the market is still scrolling SAM.</td>\n    </tr>\n    <tr>\n      <td><strong>6</strong></td>\n      <td><strong>Review agency acquisition forecasts.</strong> Most agencies publish them at the start of each fiscal year (October).</td>\n      <td>Forecasts give you 6-12 months of warning on the biggest buys. They're not contractual but they're directionally right about 70 percent of the time.</td>\n    </tr>\n  </tbody>\n</table>\n"
+    },
+
+    {
+      "type": "dark",
+      "partLabel": "PART TWO · HOW THE OPERATORS WORK IT",
+      "headline": "Tools find the buys. Habits win them.",
+      "accentWord": "Habits",
+      "paragraphs": [
+        "The next pages are about the rhythm — the agency intelligence, the competitor files, and the weekly cadence that turn a research session into a working pipeline.",
+        "None of this is hard. It's just consistent. The firms that do it for a year out-position the ones that do it for two weeks."
+      ],
+      "headerLabel": "PART TWO"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "AGENCY INTELLIGENCE",
+      "markdown": "<div class=\"eyebrow\">AGENCY INTELLIGENCE GATHERING</div>\n\n# Five habits that put you ahead of the SAM-only crowd.\n\nThe vendors who only read SAM.gov are reading the same screen as everyone else. The vendors who do this work are reading the agency's mind six months earlier.\n\n<table>\n  <thead>\n    <tr><th>Habit</th><th>Where to find it</th><th>What it tells you</th></tr>\n  </thead>\n  <tbody>\n    <tr>\n      <td><strong>Subscribe to agency news and Congressional testimony</strong></td>\n      <td>Agency newsroom pages; Congress.gov hearings</td>\n      <td>Budget priorities reveal future procurements 12-18 months before they post.</td>\n    </tr>\n    <tr>\n      <td><strong>Attend agency-hosted small business events and industry days</strong></td>\n      <td>OSDBU calendars; SBA Procurement Center Reps</td>\n      <td>You meet contracting officers and program managers in person. One conversation beats six unanswered emails.</td>\n    </tr>\n    <tr>\n      <td><strong>Build LinkedIn connections with agency acquisition staff and program offices</strong></td>\n      <td>LinkedIn search by agency + title</td>\n      <td>Visibility into staff movement, posted RFIs, and the kind of work each office actually owns.</td>\n    </tr>\n    <tr>\n      <td><strong>Follow agency IG and GAO reports</strong></td>\n      <td>oversight.gov; gao.gov</td>\n      <td>Problems flagged in one report create procurement opportunities in the next budget cycle. The IG names the gap, the agency funds the fix.</td>\n    </tr>\n    <tr>\n      <td><strong>Track agency strategic plans on their websites</strong></td>\n      <td>Agency .gov sites; performance.gov</td>\n      <td>3-5 year buying priorities. If modernization shows up in the plan, modernization work is coming in the procurement schedule.</td>\n    </tr>\n  </tbody>\n</table>\n\n<div class=\"callout callout--emerald\">\n  <div style=\"font-family:'IBM Plex Mono', monospace; font-size:8.5pt; font-weight:600; letter-spacing:0.16em; color:#047857; text-transform:uppercase; margin-bottom:2mm;\">FIELD TIP</div>\n  <strong>Pick one agency. Go deep before you go wide.</strong> Reading the strategic plan, three IG reports, and the last two budget hearings for a single agency takes about four hours. After that you'll know more about their priorities than half the incumbents.\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "COMPETITIVE INTELLIGENCE",
+      "markdown": "<div class=\"eyebrow\">COMPETITIVE INTELLIGENCE CHECKLIST</div>\n\n# Five boxes. Build the file before you write the page.\n\nEvery competitive proposal is also a competition with a specific incumbent or a small set of likely bidders. Knowing who they are and what they charge changes how you price, how you team, and whether you bid at all.\n\n<table>\n  <thead>\n    <tr><th>Box</th><th>What to verify</th><th>How long it takes</th></tr>\n  </thead>\n  <tbody>\n    <tr>\n      <td><strong>☐ 1</strong></td>\n      <td>Identified the top 3-5 competitors for each target opportunity (incumbent plus likely challengers)</td>\n      <td>30 minutes per buy — USASpending vendor search by NAICS and agency</td>\n    </tr>\n    <tr>\n      <td><strong>☐ 2</strong></td>\n      <td>Pulled competitor past performance from USASpending (sort by vendor name)</td>\n      <td>20 minutes — export to a sheet and total their contract value over 36 months</td>\n    </tr>\n    <tr>\n      <td><strong>☐ 3</strong></td>\n      <td>Checked competitor SAM.gov profiles for certifications and NAICS codes</td>\n      <td>10 minutes per vendor — tells you which set-asides they qualify for</td>\n    </tr>\n    <tr>\n      <td><strong>☐ 4</strong></td>\n      <td>Reviewed any competitor GSA Schedule prices (public via GSA Advantage)</td>\n      <td>15 minutes — gives you a real ceiling for your own pricing</td>\n    </tr>\n    <tr>\n      <td><strong>☐ 5</strong></td>\n      <td>Assessed competitor teaming relationships (primes and subs from FPDS data)</td>\n      <td>30 minutes — shows you who they sub with and which primes you could approach instead</td>\n    </tr>\n  </tbody>\n</table>\n\n<div class=\"callout\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">WHY THIS MATTERS</div>\n  <p style=\"margin:0;\">A two-hour competitive file before bid-no-bid is the difference between an 18 percent win rate and a 42 percent win rate. We've measured it across the firms running our capture process. The files don't have to be pretty. They have to be done.</p>\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "YOUR RESEARCH CADENCE",
+      "markdown": "<div class=\"eyebrow\">YOUR RESEARCH CADENCE</div>\n\n# A weekly rhythm beats a quarterly sprint.\n\nMarket research falls apart when it's a one-off project. It works when it's a habit. The cadence below is what our internal team runs and what we recommend to the firms in the consulting portal.\n\n<table>\n  <thead>\n    <tr><th>Rhythm</th><th>What to do</th><th>Time budget</th></tr>\n  </thead>\n  <tbody>\n    <tr>\n      <td><strong>Daily (10 min)</strong></td>\n      <td>Scan SAM.gov alerts and eBuy notifications. Triage into chase, watch, or pass.</td>\n      <td>10 minutes, before coffee</td>\n    </tr>\n    <tr>\n      <td><strong>Weekly (90 min)</strong></td>\n      <td>Run a USASpending recompete search for each target NAICS. Update the pipeline sheet. Pull one competitor file.</td>\n      <td>Monday morning, 90 minutes</td>\n    </tr>\n    <tr>\n      <td><strong>Monthly (3 hours)</strong></td>\n      <td>Read one agency strategic plan or budget hearing. Refresh agency forecast review. Audit the pipeline against your win rate.</td>\n      <td>First Friday of the month</td>\n    </tr>\n    <tr>\n      <td><strong>Quarterly (1 day)</strong></td>\n      <td>Re-run the six-step opportunity identification framework end to end. Re-pick your target agencies and NAICS based on what won the last quarter.</td>\n      <td>One full day, end of each quarter</td>\n    </tr>\n  </tbody>\n</table>\n\n<div class=\"callout callout--emerald\">\n  <div style=\"font-family:'IBM Plex Mono', monospace; font-size:8.5pt; font-weight:600; letter-spacing:0.16em; color:#047857; text-transform:uppercase; margin-bottom:2mm;\">FIELD TIP</div>\n  <strong>Put the cadence on the calendar before you need it.</strong> A repeating Monday 8:30 calendar block survives a busy quarter. A vague intention to 'do research weekly' doesn't. The block is the system.\n</div>\n\n<div class=\"callout\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">WHY THIS MATTERS</div>\n  <p style=\"margin:0;\">A firm that runs this rhythm for six months has a pipeline that's six months deep. A firm that runs it for a year has the kind of forward visibility that lets you say no to bad bids without panicking about cash flow. That's the real outcome of market research — not a list of opportunities, but the confidence to walk away from the wrong ones.</p>\n</div>\n"
+    },
+
+    {
+      "type": "back-cover",
+      "eyebrow": "WHAT'S NEXT",
+      "headline": "Stop doing the research by hand.",
+      "accentWord": "hand",
+      "body": "CapturePilot runs the six-step framework for you. It pulls SAM, USASpending, FPDS, and SBIR every morning, ranks the buys against your NAICS and certifications, builds the competitor file, and tells you which recompetes are actually winnable. Free 14-day trial. No card. Get the full Federal Launch Kit at capturepilot.com/startup-pack.",
+      "ctaText": "Get the full Federal Launch Kit",
+      "ctaUrl": "https://www.capturepilot.com/startup-pack"
+    }
+  ]
+}

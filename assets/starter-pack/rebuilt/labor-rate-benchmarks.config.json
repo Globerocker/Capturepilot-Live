@@ -1,0 +1,144 @@
+{
+  "id": "labor-rate-benchmarks",
+  "title": "Federal Labor Rate Benchmarks FY2026",
+  "slug": "flk-federal-labor-rate-benchmarks-fy2026",
+  "pages": 12,
+  "footerLabel": "CAPTUREPILOT · FEDERAL LEAD KIT",
+  "headerLabel": "FEDERAL LABOR RATE BENCHMARKS FY2026",
+  "parts": [
+    {
+      "type": "cover",
+      "eyebrow": "FEDERAL LEAD KIT · 08 · PRICE-TO-WIN TOOLKIT",
+      "titleLines": [
+        "Federal Labor",
+        "Rate Benchmarks",
+        "FY2026."
+      ],
+      "accentWord": "Benchmarks",
+      "pages": 12,
+      "toolStrip": [
+        { "num": "01", "title": "IT & Cyber Rates", "desc": "GS-9 through GS-15 hourly and annual rates for developers, analysts, architects, and program leads" },
+        { "num": "02", "title": "Professional Services", "desc": "Program analysts, management consultants, financial analysts, project managers — Low / Mid / High market" },
+        { "num": "03", "title": "Indirect Rate Guidance", "desc": "Typical ranges for fringe, overhead, G&A, FCCOM, and profit — with the FAR/DFARS citations evaluators check" },
+        { "num": "04", "title": "Sources to Verify", "desc": "GSA CALC, DoL Wage Determinations, BLS OES — anchor every rate to a published source" }
+      ]
+    },
+
+    {
+      "type": "toc",
+      "title": "Inside this benchmark guide.",
+      "parts": [
+        {
+          "label": "PART ONE · DIRECT LABOR RATES",
+          "items": [
+            { "code": "L01", "title": "How to Read These Numbers", "desc": "What SCA WD means, what Market Low/Mid/High mean, and how to translate them into a wrap rate.", "page": 4 },
+            { "code": "L02", "title": "IT & Cybersecurity Categories", "desc": "Developers, cyber analysts, sysadmins, network engineers, data scientists, cloud architects, IT program managers.", "page": 5 },
+            { "code": "L03", "title": "Professional Services Categories", "desc": "Program analysts, consultants, financial analysts, training, technical writing, project and program managers.", "page": 6 }
+          ]
+        },
+        {
+          "label": "PART TWO · INDIRECTS, ESCALATION & PRICE-TO-WIN",
+          "items": [
+            { "code": "L04", "title": "Indirect Rate Guidance", "desc": "Fringe, overhead, G&A, FCCOM, profit — typical ranges, what each one includes, where to verify.", "page": 8 },
+            { "code": "L05", "title": "Annual Escalation & FAR 52.222-43", "desc": "How to escalate option years without losing a cost-realism fight.", "page": 9 },
+            { "code": "L06", "title": "Regional Wage Adjustments", "desc": "Locality multipliers and the DoL WD numbers that drive them.", "page": 10 },
+            { "code": "L07", "title": "Defending Your Rates", "desc": "What evaluators look for, how cost realism kills a proposal, and the three documents to have ready.", "page": 11 }
+          ]
+        }
+      ]
+    },
+
+    {
+      "type": "founder",
+      "headline": "The proposal didn't lose on technical. It lost on a $4.20 fringe miscalculation.",
+      "accentWord": "fringe",
+      "paragraphs": [
+        "Second federal proposal I ever priced, I built a wrap rate from a blog post. 30% fringe, 25% overhead, 12% G&A, 9% profit. Looked clean. Looked competitive. I won technical and lost on cost realism.",
+        "The debrief was short. The evaluator walked me through DoL Wage Determination 2015-4281 for the locality, showed me the SCA-mandated health and welfare rate, and added it line by line to my fringe number. My 30% was actually 38%. Across 24 FTEs over five option years, that was $1.4M of unfunded fringe the government would have had to absorb. Unrealistic cost. Rejection.",
+        "I built this benchmark guide so the next contractor doesn't lose a winnable bid to a number they pulled from the wrong source. Every rate here is anchored to GSA CALC, DoL Wage Determinations, or BLS OES. Use them as starting points, then verify against your locality and contract type before you submit.",
+        "Rates change. Verify against calc.gsa.gov and sam.gov/wage-determinations before every bid. The minute your wrap rate stops matching a published source, you're one cost-realism challenge away from losing."
+      ],
+      "ctaText": "Book a B2G Audit call",
+      "ctaUrl": "https://meetings-na2.hubspot.com/americurial/intro-call",
+      "ctaButtonLabel": "Book the call →",
+      "ctaEyebrow": "30 MIN · NO PITCH"
+    },
+
+    {
+      "type": "dark",
+      "partLabel": "PART ONE · DIRECT LABOR RATES",
+      "headline": "Knowing the market rate for every category you propose is the highest-value investment in your price-to-win process.",
+      "accentWord": "highest-value",
+      "paragraphs": [
+        "The next three pages give you nationwide blended rates for IT, cyber, and professional services labor categories — GS equivalents, SCA Wage Determination hourly rates, and Market Low / Mid / High annual salaries.",
+        "Always verify against GSA CALC and DoL Wage Determinations for your specific region and contract. These numbers are the starting point, not the final answer."
+      ],
+      "headerLabel": "PART ONE"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "HOW TO READ THESE NUMBERS",
+      "html": "<div class=\"eyebrow\">L01 · HOW TO READ THE BENCHMARKS</div>\n\n<h1>Four columns. Four different uses.</h1>\n\n<p style=\"color:#57534e; font-size:10pt;\">Each labor category in this guide carries four data points. They are not interchangeable. Pick the right one for the contract type and the cost volume you're building.</p>\n\n<table>\n  <thead>\n    <tr><th style=\"width:22%;\">Column</th><th style=\"width:18%;\">What it is</th><th>When to use it</th></tr>\n  </thead>\n  <tbody>\n    <tr>\n      <td><strong>GS Equivalent</strong></td>\n      <td>OPM General Schedule grade</td>\n      <td>Use for resume mapping and to justify experience levels in a key-personnel matrix. Evaluators expect this in technical volume.</td>\n    </tr>\n    <tr>\n      <td><strong>SCA WD Rate</strong></td>\n      <td>Service Contract Act hourly minimum</td>\n      <td>The floor. If your direct rate falls below this for an SCA-covered position, the contract will reject. Pulled from DoL Wage Determinations.</td>\n    </tr>\n    <tr>\n      <td><strong>Market Low</strong></td>\n      <td>10th-25th percentile annual salary</td>\n      <td>Use when you have an aggressive price-to-win target and your candidate pool is junior or in a low-cost-of-living region.</td>\n    </tr>\n    <tr>\n      <td><strong>Market Mid</strong></td>\n      <td>50th percentile annual salary</td>\n      <td>The defensible default. Cost-realism reviewers expect to see most of your proposed rates at or near Mid for a standard locality.</td>\n    </tr>\n    <tr>\n      <td><strong>Market High</strong></td>\n      <td>75th-90th percentile annual salary</td>\n      <td>Use for cleared positions, scarce specialties (zero-day researchers, FedRAMP authorizers), or high-cost localities like the DC metro and the Bay Area.</td>\n    </tr>\n  </tbody>\n</table>\n\n<h2 style=\"margin-top:9mm;\">The headline numbers.</h2>\n\n<table>\n  <thead>\n    <tr><th>Metric</th><th>Value</th><th>What it tells you</th></tr>\n  </thead>\n  <tbody>\n    <tr><td><strong>Average IT labor rate</strong></td><td>$65.42 / hr</td><td>Nationwide blended direct hourly across the IT categories in this guide. Useful as a sanity check for a wrap rate build.</td></tr>\n    <tr><td><strong>Annual escalation</strong></td><td>3-5%</td><td>Apply across option years. FAR 52.222-43 covers the mechanism for SCA-covered work.</td></tr>\n    <tr><td><strong>Typical overhead</strong></td><td>35-55%</td><td>Of direct labor plus fringe, for IT and professional-services firms. Lower if you're virtual; higher with brick-and-mortar offices.</td></tr>\n  </tbody>\n</table>\n\n<div class=\"callout callout--emerald\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">FIELD TIP</div>\n  <p style=\"margin:0;\">Convert hourly to annual by multiplying by 2,080 (40 hrs/wk × 52 wks). Convert annual to hourly by dividing by 2,080. Use 1,920 if you're modeling against productive hours after holidays and PTO.</p>\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "IT & CYBERSECURITY CATEGORIES",
+      "html": "<div class=\"eyebrow\">L02 · IT & CYBERSECURITY LABOR CATEGORIES</div>\n\n<h1>IT and cyber benchmarks.</h1>\n\n<p style=\"color:#57534e; font-size:10pt;\">Nationwide blended. SCA WD rates are minimums where the position is SCA-covered. Market salaries assume a standard locality — verify the DC, NYC, San Francisco, and Boston metros at 10-25% higher.</p>\n\n<table>\n  <thead>\n    <tr><th style=\"width:32%;\">Labor Category</th><th>GS Equiv</th><th>SCA WD Rate</th><th>Market Low</th><th>Market Mid</th><th>Market High</th></tr>\n  </thead>\n  <tbody>\n    <tr><td>Junior Software Developer</td><td>GS-9</td><td>$26.50/hr</td><td>$55K</td><td>$72K</td><td>$90K</td></tr>\n    <tr><td>Mid-Level Software Developer</td><td>GS-11</td><td>$31.75/hr</td><td>$80K</td><td>$105K</td><td>$130K</td></tr>\n    <tr><td>Senior Software Developer</td><td>GS-13</td><td>$42.20/hr</td><td>$105K</td><td>$135K</td><td>$165K</td></tr>\n    <tr><td>Lead / Principal Developer</td><td>GS-14</td><td>$51.50/hr</td><td>$130K</td><td>$165K</td><td>$200K</td></tr>\n    <tr><td>Cybersecurity Analyst I</td><td>GS-9</td><td>$27.80/hr</td><td>$58K</td><td>$75K</td><td>$95K</td></tr>\n    <tr><td>Cybersecurity Analyst II</td><td>GS-11</td><td>$35.20/hr</td><td>$80K</td><td>$105K</td><td>$128K</td></tr>\n    <tr><td>Senior Cybersecurity Engineer</td><td>GS-13</td><td>$46.10/hr</td><td>$110K</td><td>$140K</td><td>$175K</td></tr>\n    <tr><td>Systems Administrator</td><td>GS-9/11</td><td>$28.50/hr</td><td>$60K</td><td>$78K</td><td>$100K</td></tr>\n    <tr><td>Network Engineer</td><td>GS-11/12</td><td>$34.75/hr</td><td>$80K</td><td>$105K</td><td>$130K</td></tr>\n    <tr><td>Data Scientist</td><td>GS-12/13</td><td>$38.90/hr</td><td>$95K</td><td>$125K</td><td>$160K</td></tr>\n    <tr><td>Cloud Architect</td><td>GS-13/14</td><td>$48.50/hr</td><td>$120K</td><td>$155K</td><td>$195K</td></tr>\n    <tr><td>Program Manager (IT)</td><td>GS-14</td><td>$52.30/hr</td><td>$130K</td><td>$165K</td><td>$210K</td></tr>\n  </tbody>\n</table>\n\n<div class=\"callout\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">CLEARANCE PREMIUM</div>\n  <p style=\"margin:0;\">Add 10-15% for Secret, 20-30% for Top Secret, 35-50% for TS/SCI with full-scope poly. The premium is bigger for senior cyber and cloud architect roles because the cleared candidate pool is small and the agencies know it.</p>\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "PROFESSIONAL SERVICES CATEGORIES",
+      "html": "<div class=\"eyebrow\">L03 · PROFESSIONAL SERVICES LABOR CATEGORIES</div>\n\n<h1>Professional services benchmarks.</h1>\n\n<p style=\"color:#57534e; font-size:10pt;\">Same column rules as IT. Program management roles run hotter in DC and Northern Virginia — verify against the locality before you submit.</p>\n\n<table>\n  <thead>\n    <tr><th style=\"width:32%;\">Labor Category</th><th>GS Equiv</th><th>SCA WD Rate</th><th>Market Low</th><th>Market Mid</th><th>Market High</th></tr>\n  </thead>\n  <tbody>\n    <tr><td>Administrative Assistant</td><td>GS-5/6</td><td>$18.40/hr</td><td>$35K</td><td>$45K</td><td>$58K</td></tr>\n    <tr><td>Program Analyst I</td><td>GS-9</td><td>$26.50/hr</td><td>$52K</td><td>$68K</td><td>$85K</td></tr>\n    <tr><td>Program Analyst II</td><td>GS-11</td><td>$31.75/hr</td><td>$68K</td><td>$88K</td><td>$110K</td></tr>\n    <tr><td>Senior Program Analyst</td><td>GS-13</td><td>$42.20/hr</td><td>$90K</td><td>$118K</td><td>$145K</td></tr>\n    <tr><td>Management Consultant I</td><td>GS-11</td><td>$30.50/hr</td><td>$65K</td><td>$85K</td><td>$108K</td></tr>\n    <tr><td>Senior Management Consultant</td><td>GS-13/14</td><td>$45.00/hr</td><td>$105K</td><td>$135K</td><td>$170K</td></tr>\n    <tr><td>Financial Analyst</td><td>GS-11/12</td><td>$32.80/hr</td><td>$70K</td><td>$92K</td><td>$115K</td></tr>\n    <tr><td>Training Specialist</td><td>GS-9/11</td><td>$27.20/hr</td><td>$55K</td><td>$72K</td><td>$90K</td></tr>\n    <tr><td>Technical Writer</td><td>GS-9/11</td><td>$27.90/hr</td><td>$55K</td><td>$70K</td><td>$88K</td></tr>\n    <tr><td>Project Manager</td><td>GS-12/13</td><td>$38.50/hr</td><td>$85K</td><td>$112K</td><td>$140K</td></tr>\n    <tr><td>Senior Program Manager</td><td>GS-14/15</td><td>$53.40/hr</td><td>$130K</td><td>$168K</td><td>$210K</td></tr>\n  </tbody>\n</table>\n\n<div class=\"callout callout--emerald\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">FIELD TIP</div>\n  <p style=\"margin:0;\">PMP, ITIL, and federal-specific certs (FAC-P/PM, DAWIA) push a project manager from Mid to High in many evaluations. List the certifications on the resume and reference them in the price narrative when you're proposing High-end rates.</p>\n</div>\n"
+    },
+
+    {
+      "type": "dark",
+      "partLabel": "PART TWO · INDIRECTS, ESCALATION & PRICE-TO-WIN",
+      "headline": "Direct labor is half the math. Indirects, escalation, and defensibility decide the other half.",
+      "accentWord": "Defensibility",
+      "paragraphs": [
+        "The next four pages cover the wrap rate components evaluators audit, the FAR clauses that govern option-year escalation, the locality math that breaks proposals across regions, and the three documents that protect your rates in a cost-realism review.",
+        "Get these right and a price-to-win submission survives the technical-evaluation hand-off into the cost-evaluation team. Get them wrong and a strong technical score still loses."
+      ],
+      "headerLabel": "PART TWO"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "INDIRECT RATE GUIDANCE",
+      "html": "<div class=\"eyebrow\">L04 · INDIRECT RATE GUIDANCE</div>\n\n<h1>Build the wrap. Defend each layer.</h1>\n\n<p style=\"color:#57534e; font-size:10pt;\">Direct labor by itself doesn't tell the government what it actually costs you to put a person on the contract. The indirect rates below stack on top of direct labor to produce a fully-loaded billable rate. Each layer needs a source the cost-evaluation team can verify.</p>\n\n<table>\n  <thead>\n    <tr><th style=\"width:22%;\">Indirect Rate</th><th style=\"width:22%;\">Typical Range (IT/Services)</th><th>What's Included</th><th style=\"width:22%;\">Source to Verify</th></tr>\n  </thead>\n  <tbody>\n    <tr><td><strong>Fringe Benefits</strong></td><td>28-38% of direct labor</td><td>Health insurance, retirement match, FICA, leave, life and disability</td><td>Your payroll records and benefits broker statements</td></tr>\n    <tr><td><strong>Overhead</strong></td><td>15-35% of direct labor + fringe</td><td>Office rent, admin staff, indirect labor, facilities, IT equipment</td><td>Incurred cost submission (ICS), prior-year actuals</td></tr>\n    <tr><td><strong>G&amp;A</strong></td><td>8-18% of total cost input</td><td>Executive salaries, accounting, legal, business development, corporate IT</td><td>DCAA-reviewed rate proposal</td></tr>\n    <tr><td><strong>Facilities Cost of Money (FCCOM)</strong></td><td>0.5-2% (cost-type only)</td><td>Imputed cost of capital invested in facilities used on the contract</td><td>FAR 31.205-10 calculation</td></tr>\n    <tr><td><strong>Profit / Fee</strong></td><td>8-15% (FFP); 6-10% (Cost-Plus)</td><td>Fee earned on top of direct + indirect costs on cost-reimbursable contracts</td><td>Weighted Guidelines (DFARS 215.404-71)</td></tr>\n  </tbody>\n</table>\n\n<div class=\"callout callout--emerald\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">FIELD TIP</div>\n  <p style=\"margin:0;\">Always anchor your rate proposal to published data. GSA CALC (calc.gsa.gov), DoL Wage Determinations (sam.gov/wage-determinations), and BLS Occupational Employment Statistics (bls.gov/oes). Unsupported rates trigger cost realism challenges, and a cost realism finding will hand the win to a competitor whose math was less ambitious but better documented.</p>\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "ANNUAL ESCALATION & FAR 52.222-43",
+      "html": "<div class=\"eyebrow\">L05 · ANNUAL ESCALATION</div>\n\n<h1>Option years are where weak pricing collapses.</h1>\n\n<p style=\"color:#57534e; font-size:10pt;\">A five-year contract with no escalation looks competitive on day one and loses money by year three. The government expects to see escalation. The trick is to escalate at a rate the cost-realism team will accept.</p>\n\n<table>\n  <thead>\n    <tr><th style=\"width:28%;\">Escalation Source</th><th>Typical Annual</th><th>When to use it</th></tr>\n  </thead>\n  <tbody>\n    <tr><td><strong>FAR 52.222-43 (Price Adjustment)</strong></td><td>Tracks DoL Wage Determination revisions, usually 2-4%</td><td>SCA-covered service contracts. The clause requires the government to adjust your rates when the WD updates. Don't bury escalation; cite the clause.</td></tr>\n    <tr><td><strong>BLS Employment Cost Index (ECI)</strong></td><td>3-4% recent years</td><td>Professional and management positions not covered by SCA. Cite the most recent quarterly ECI release.</td></tr>\n    <tr><td><strong>Internal salary survey (Radford, PayScale)</strong></td><td>3-5%</td><td>Cleared and specialty IT positions where commercial labor markets move faster than federal indices.</td></tr>\n    <tr><td><strong>Locality pay adjustment (OPM)</strong></td><td>2-5% varies by metro</td><td>For positions explicitly tied to government locality pay tables — useful in DC, San Francisco, San Diego.</td></tr>\n  </tbody>\n</table>\n\n<h2 style=\"margin-top:9mm;\">A worked example.</h2>\n\n<p style=\"color:#57534e; font-size:9.5pt;\">Senior Software Developer, $135,000 base year, 5-year contract with four option years at 3.5% annual escalation.</p>\n\n<table>\n  <thead>\n    <tr><th>Period</th><th>Annual Salary</th><th>Hourly (÷2,080)</th></tr>\n  </thead>\n  <tbody>\n    <tr><td>Base Year</td><td>$135,000</td><td>$64.90</td></tr>\n    <tr><td>Option Year 1</td><td>$139,725</td><td>$67.18</td></tr>\n    <tr><td>Option Year 2</td><td>$144,615</td><td>$69.53</td></tr>\n    <tr><td>Option Year 3</td><td>$149,677</td><td>$71.96</td></tr>\n    <tr><td>Option Year 4</td><td>$154,915</td><td>$74.48</td></tr>\n  </tbody>\n</table>\n\n<div class=\"callout\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">WHY THIS MATTERS</div>\n  <p style=\"margin:0;\">A bidder who escalates at 0% across five option years looks 17% cheaper on the total evaluated price. The cost-realism evaluator will adjust those rates upward to a realistic level, and the price advantage disappears. Worse, the adjusted price often pushes them out of the competitive range entirely.</p>\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "REGIONAL WAGE ADJUSTMENTS",
+      "html": "<div class=\"eyebrow\">L06 · REGIONAL WAGE ADJUSTMENTS</div>\n\n<h1>One locality multiplier can wipe out your margin.</h1>\n\n<p style=\"color:#57534e; font-size:10pt;\">The nationwide numbers in this guide assume a standard locality. The DoL Wage Determination for the actual place of performance overrides them. Pull the right WD before you finalize the cost volume.</p>\n\n<table>\n  <thead>\n    <tr><th>Metro / Region</th><th>Typical IT Multiplier</th><th>What drives it</th></tr>\n  </thead>\n  <tbody>\n    <tr><td><strong>Washington DC / Northern VA</strong></td><td>1.15 - 1.30 ×</td><td>Cleared talent concentration and federal locality pay. The default benchmark for most federal IT bids.</td></tr>\n    <tr><td><strong>San Francisco Bay Area</strong></td><td>1.30 - 1.55 ×</td><td>Commercial tech competition for the same engineers the federal contract needs.</td></tr>\n    <tr><td><strong>New York Metro</strong></td><td>1.20 - 1.40 ×</td><td>Cost of living and finance-sector salary anchoring.</td></tr>\n    <tr><td><strong>Boston</strong></td><td>1.15 - 1.30 ×</td><td>Defense and life-science labs pulling on the same engineering pool.</td></tr>\n    <tr><td><strong>Huntsville AL</strong></td><td>1.00 - 1.10 ×</td><td>Army contracts, lower cost of living, deep cleared workforce. Cheaper than DC for the same Top Secret talent.</td></tr>\n    <tr><td><strong>Colorado Springs</strong></td><td>1.05 - 1.15 ×</td><td>Space Force and NORAD demand on a smaller candidate pool.</td></tr>\n    <tr><td><strong>San Antonio / Austin</strong></td><td>1.00 - 1.15 ×</td><td>16th Air Force cyber, growing tech market.</td></tr>\n    <tr><td><strong>Remote / Nationwide</strong></td><td>0.90 - 1.00 ×</td><td>Use a blended national rate. Document the work-from-anywhere model in your cost narrative.</td></tr>\n  </tbody>\n</table>\n\n<div class=\"callout callout--emerald\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">FIELD TIP</div>\n  <p style=\"margin:0;\">Pull the active Wage Determination from sam.gov/wage-determinations before every SCA-covered bid. Search by state, county, and WD number cited in the solicitation. If the solicitation doesn't cite one and the work is SCA-covered, ask the contracting officer in writing. Don't guess.</p>\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "DEFENDING YOUR RATES",
+      "html": "<div class=\"eyebrow\">L07 · DEFENDING YOUR RATES IN COST REALISM</div>\n\n<h1>Three documents protect every number you propose.</h1>\n\n<p style=\"color:#57534e; font-size:10pt;\">Cost realism is the evaluation factor that kills more bids than any technical weakness. The evaluator's job is to decide whether your proposed rates are realistic for the work. Have these three documents ready before you submit and the audit becomes a formality instead of a fire.</p>\n\n<table>\n  <thead>\n    <tr><th style=\"width:24%;\">Document</th><th>What it contains</th><th style=\"width:24%;\">Where to source it</th></tr>\n  </thead>\n  <tbody>\n    <tr><td><strong>1. Wrap Rate Build</strong></td><td>Direct labor + fringe + overhead + G&amp;A + FCCOM + profit, with each layer cited to a source</td><td>Internal accounting; DCAA-reviewed indirect rate agreement if you have one</td></tr>\n    <tr><td><strong>2. Compensation Plan</strong></td><td>Position descriptions, salary bands, benefits package, and the rationale for each band</td><td>HR records, benefits broker, comparable-position market study (Radford, PayScale, GSA CALC)</td></tr>\n    <tr><td><strong>3. Basis of Estimate (BOE)</strong></td><td>For every labor category: hours, rate, source citation, escalation method, and total cost by year</td><td>Pricing spreadsheet plus a written narrative for the cost volume</td></tr>\n  </tbody>\n</table>\n\n<h2 style=\"margin-top:9mm;\">The five most common cost-realism findings.</h2>\n\n<table>\n  <thead>\n    <tr><th>Finding</th><th>How to avoid it</th></tr>\n  </thead>\n  <tbody>\n    <tr><td><strong>Proposed labor rates below the SCA Wage Determination</strong></td><td>Pull the active WD for the locality. Compare every SCA-covered position. Raise rates that fall below the WD minimum before submission.</td></tr>\n    <tr><td><strong>Zero or below-market escalation across option years</strong></td><td>Escalate at 3-5% citing FAR 52.222-43, BLS ECI, or your internal salary survey. Show the math in the BOE.</td></tr>\n    <tr><td><strong>Unrealistically low fringe rate</strong></td><td>Walk through your benefits package. If you offer health insurance, retirement match, and PTO, you're at 28%+ fringe. Anything lower needs documentation.</td></tr>\n    <tr><td><strong>Overhead rate inconsistent with company size</strong></td><td>A 25-person firm with offices in three cities cannot defend a 10% overhead rate. Match the rate to the cost structure.</td></tr>\n    <tr><td><strong>Key personnel proposed at rates below their commercial salary</strong></td><td>If the resume shows a $185K base and you propose them at $120K, the evaluator assumes you'll lose them and downgrade. Match the rate to the commercial market for the named individual.</td></tr>\n  </tbody>\n</table>\n\n<div class=\"callout\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">WHY THIS MATTERS</div>\n  <p style=\"margin:0;\">A cost-realism upward adjustment usually adds 8-15% to your proposed price. On a competitive bid that often pushes you from first to third on the cost factor and out of the award entirely. The documents above take a couple of days to prepare the first time and twenty minutes per future bid to refresh. The cost of skipping them is a six-month win.</p>\n</div>\n"
+    },
+
+    {
+      "type": "back-cover",
+      "eyebrow": "WHAT'S NEXT",
+      "headline": "Rates change. The defensibility process doesn't.",
+      "accentWord": "defensibility",
+      "body": "Pull the active Wage Determination before every bid. Anchor every rate to GSA CALC, DoL WD, or BLS OES. Escalate option years at 3-5% with a cited source. Keep the wrap rate build, compensation plan, and basis of estimate updated. CapturePilot builds the cost volume scaffolding into every proposal draft so the math is right before the technical narrative is even finished. Free 14-day trial. No card. The full Federal Lead Kit at capturepilot.com/startup-pack.",
+      "ctaText": "Get the full Federal Lead Kit",
+      "ctaUrl": "https://www.capturepilot.com/startup-pack",
+      "footerLabel": "CAPTUREPILOT · FEDERAL LEAD KIT"
+    }
+  ]
+}

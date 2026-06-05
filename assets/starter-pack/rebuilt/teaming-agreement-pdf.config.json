@@ -1,0 +1,56 @@
+{
+  "id": "teaming-agreement-pdf",
+  "title": "Teaming Agreement Template",
+  "slug": "flk-teaming-agreement-template",
+  "pages": 5,
+  "footerLabel": "CAPTUREPILOT · FEDERAL LEAD KIT",
+  "headerLabel": "TEAMING AGREEMENT TEMPLATE",
+  "parts": [
+    {
+      "type": "cover",
+      "eyebrow": "FEDERAL LEAD KIT · 09 · INTERNAL BEST-PRACTICE LIBRARY",
+      "titleLines": [
+        "Teaming",
+        "Agreement",
+        "Template."
+      ],
+      "accentWord": "Template",
+      "pages": 5,
+      "toolStrip": [
+        { "num": "01", "title": "Key Clauses to Include", "desc": "Ten clauses every federal teaming agreement needs — what each one does and where the leverage sits in negotiation" },
+        { "num": "02", "title": "Execution Checklist", "desc": "Ten line items to verify before signatures go on the page, including the 'shall' vs 'best efforts' language test" },
+        { "num": "03", "title": "Common Mistakes", "desc": "Five mistakes that turn a TA into a liability — vetting failures, unenforceable language, late signatures" },
+        { "num": "04", "title": "Legal Reminder", "desc": "Where to bring in an attorney, what to flag for review, and the two-week-before-submission rule" }
+      ]
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "PAGE 1 · WHAT A TEAMING AGREEMENT IS AND THE TEN CLAUSES IT NEEDS",
+      "html": "<div class=\"eyebrow\">PRE-AWARD AGREEMENT · BEFORE THE RFP IS WON</div>\n\n<h1>Teaming Agreement — Key Clauses and Structure.</h1>\n\n<p style=\"color:#57534e; font-size:10pt; margin-top:-2mm;\">Key clauses and structure for federal contractor teaming arrangements.</p>\n\n<div class=\"callout callout--emerald\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">LEGAL NOTICE</div>\n  <p style=\"margin:0;\">This template is provided for educational and planning purposes only. Have a qualified attorney review any teaming agreement before execution, particularly exclusivity clauses and IP provisions.</p>\n</div>\n\n<p style=\"margin-top:6mm;\">A teaming agreement (TA) defines the relationship between a prime contractor and its proposed subcontractors <strong>before</strong> an RFP is won. It is NOT the subcontract. The subcontract is executed after award. The TA is the pre-award handshake that says: if we win, here's the work split, here's how we behave during the bid, here's who owns what we build together.</p>\n\n<h2 style=\"margin-top:8mm;\">Key Clauses to Include.</h2>\n\n<table>\n  <thead>\n    <tr>\n      <th style=\"width:24%;\">Clause</th>\n      <th style=\"width:36%;\">Purpose</th>\n      <th>Negotiation Points</th>\n    </tr>\n  </thead>\n  <tbody>\n    <tr><td style=\"font-weight:600;\">Opportunity Identification</td><td>Defines the specific solicitation(s) this TA covers</td><td>Be specific. Broad TAs can create problems on other bids</td></tr>\n    <tr><td style=\"font-weight:600;\">Teaming Roles</td><td>Defines prime vs. sub, work split, and each party's scope</td><td>Nail down the % work allocation and specific task areas</td></tr>\n    <tr><td style=\"font-weight:600;\">Exclusivity</td><td>Whether either party can team with competitors on this bid</td><td>Mutual exclusivity is standard; define exceptions carefully</td></tr>\n    <tr><td style=\"font-weight:600;\">Confidentiality / NDA</td><td>Protects proprietary information shared during bid prep</td><td>Define 'Confidential Information' precisely; set term (2-5 years)</td></tr>\n    <tr><td style=\"font-weight:600;\">Cost and Pricing</td><td>Who prepares what portions of the price proposal</td><td>Agree on rates and markups before the proposal is due</td></tr>\n    <tr><td style=\"font-weight:600;\">Subcontract Commitment</td><td>Prime's obligation to award sub the agreed work upon win</td><td>'Shall' is enforceable; 'will use best efforts' is not</td></tr>\n    <tr><td style=\"font-weight:600;\">IP and Data Rights</td><td>Who owns technical data, software, and approaches developed during the bid</td><td>Background IP vs. foreground IP. Critical for tech companies</td></tr>\n    <tr><td style=\"font-weight:600;\">Governance</td><td>Decision-making process, proposal review, dispute resolution</td><td>Name a specific POC from each party with authority</td></tr>\n    <tr><td style=\"font-weight:600;\">Term and Termination</td><td>Duration of the TA and exit conditions</td><td>Should survive through the award decision at minimum</td></tr>\n    <tr><td style=\"font-weight:600;\">No Agency</td><td>Confirms neither party can bind the other to third parties</td><td>Standard clause. Non-negotiable</td></tr>\n  </tbody>\n</table>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "PAGE 2 · EXECUTION CHECKLIST",
+      "markdown": "## Teaming Agreement Checklist.\n\nRun this list before signatures hit the page. If any line is unchecked, the TA is not ready to execute.\n\n- [ ] Both parties' full legal names, addresses, and authorized signatories defined\n- [ ] Opportunity / solicitation specifically identified (SAM.gov notice number)\n- [ ] Work allocation percentages agreed (e.g., Prime: 60%, Sub: 40%)\n- [ ] Exclusivity terms clearly stated and mutually acknowledged\n- [ ] NDA provisions adequate for the sensitivity of information being shared\n- [ ] Subcontract commitment language uses 'shall' not 'will endeavor to'\n- [ ] IP ownership defined for both pre-existing and newly developed materials\n- [ ] Governing law and dispute resolution specified\n- [ ] Signatures from authorized officers (not just employees) of both parties\n- [ ] Executed copies held by both parties\n\n## Common Teaming Agreement Mistakes.\n\n**Too many TAs, too little vetting.** Signing TAs with unverified partners is worse than going solo. Vet every partner: check their SAM registration, past performance rating, and financial stability.\n\n**'Best efforts' subcontract commitment.** Courts have routinely found 'best efforts' language is unenforceable. Get a 'shall award' commitment in writing.\n\n**No work allocation in writing.** If the work split isn't in the TA, the prime can give you nothing and it's legal. Be specific.\n\n**Missing exclusivity on both sides.** If you sign exclusivity but the prime doesn't, they can team with your competitor and still use your IP.\n\n**Signed too late.** A TA signed after the proposal is submitted has reduced legal standing. Execute at least 2 weeks before submission.\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "PAGE 3 · FIELD NOTES AND NEGOTIATION POSTURE",
+      "html": "<h2>How to use this template.</h2>\n\n<p style=\"color:#57534e; font-size:9.5pt;\">The clauses table on page one is the skeleton. Most teaming agreements you'll see in the wild are five to fifteen pages and run those same ten sections in the same order. Print the page-one table, redline it during negotiation, and hand it to counsel as the basis for the draft.</p>\n\n<div class=\"callout callout--emerald\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">FIELD TIP — THE 'SHALL' TEST</div>\n  <p style=\"margin:0;\">Open the draft, search for the word 'endeavor', 'best efforts', and 'reasonable efforts'. Every hit is a clause the other party can walk away from with no legal exposure. Replace with 'shall' where you have the leverage. If the prime won't sign a 'shall award' commitment, you're being kept on the bench as a placeholder, not a teammate.</p>\n</div>\n\n<h2 style=\"margin-top:8mm;\">Vet the partner before you sign.</h2>\n\n<p style=\"color:#57534e; font-size:9.5pt;\">A bad partner sinks a good bid. Before you put your name on a TA, pull these four data points on the other firm. Twenty minutes of vetting saves twenty months of cleanup.</p>\n\n<table>\n  <tbody>\n    <tr><td style=\"width:30%; font-weight:600;\">SAM.gov registration</td><td>Active, not expired. Look at the registration date and any exclusions list.</td></tr>\n    <tr><td style=\"font-weight:600;\">CPARS / past performance</td><td>Pull their public past-performance record. Look for trend, not single scores.</td></tr>\n    <tr><td style=\"font-weight:600;\">Financial stability</td><td>Dun &amp; Bradstreet, state corporate filings, any open litigation on PACER.</td></tr>\n    <tr><td style=\"font-weight:600;\">Small-business status</td><td>Verify the certification they're claiming (8(a), SDVOSB, WOSB, HUBZone) is current on SAM.gov.</td></tr>\n  </tbody>\n</table>\n\n<h2 style=\"margin-top:9mm;\">When to bring in counsel.</h2>\n\n<p style=\"color:#57534e; font-size:9.5pt;\">Three sections of the TA need an attorney's eyes, every time:</p>\n\n<p style=\"margin:0 0 2mm 0; color:#57534e; font-size:9.5pt;\"><strong>1. Exclusivity.</strong> The wrong scope here can block you from bidding adjacent opportunities for the term of the agreement.</p>\n<p style=\"margin:0 0 2mm 0; color:#57534e; font-size:9.5pt;\"><strong>2. IP and data rights.</strong> Foreground IP, background IP, and government-purpose rights interact in ways that surprise non-specialists. Get it wrong and you're licensing your own software back from your partner.</p>\n<p style=\"margin:0 0 2mm 0; color:#57534e; font-size:9.5pt;\"><strong>3. Subcontract commitment language.</strong> 'Shall award' vs. 'will negotiate in good faith' vs. 'reserves the right' — three phrases that look similar and behave nothing alike in court.</p>\n\n<div class=\"callout\" style=\"margin-top:6mm;\">\n  <p style=\"margin:0; color:#57534e;\"><strong>Timing rule:</strong> get the TA executed at least two weeks before proposal submission. A TA dated the day of submission, or after, gives a court reason to question whether the parties actually relied on it. The earlier the signature, the stronger the document.</p>\n</div>\n"
+    },
+
+    {
+      "type": "back-cover",
+      "eyebrow": "WHAT'S NEXT",
+      "headline": "A signed TA is the difference between a teammate and a placeholder.",
+      "accentWord": "teammate",
+      "body": "Use the page-one clause table as your negotiation map. Run the page-two checklist before signatures. Have counsel review exclusivity, IP, and subcontract commitment language. Execute at least two weeks before submission, and keep an executed copy on file with the proposal. CapturePilot tracks your teaming partners alongside the opportunities they're attached to, so the next time you bid with the same prime, the TA template, contact, and work-split history are already on the page.",
+      "ctaText": "Get the full Federal Lead Kit",
+      "ctaUrl": "https://www.capturepilot.com/startup-pack",
+      "footerLabel": "CAPTUREPILOT · FEDERAL LEAD KIT"
+    }
+  ]
+}

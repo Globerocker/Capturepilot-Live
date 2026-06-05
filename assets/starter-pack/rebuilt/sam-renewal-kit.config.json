@@ -1,0 +1,101 @@
+{
+  "id": "sam-renewal-kit",
+  "title": "SAM.gov Annual Renewal Reminder Kit",
+  "slug": "sam-renewal-kit",
+  "pages": 8,
+  "footerLabel": "CAPTUREPILOT · SAM.GOV RENEWAL KIT",
+  "headerLabel": "SAM.GOV RENEWAL",
+  "parts": [
+    {
+      "type": "cover",
+      "eyebrow": "FEDERAL LAUNCH KIT · SAM.GOV",
+      "titleLines": [
+        "SAM.gov",
+        "Annual Renewal",
+        "Kit."
+      ],
+      "accentWord": "Renewal",
+      "pages": 8,
+      "toolStrip": [
+        { "num": "01", "title": "60-Day Checklist", "desc": "Start two months before expiration" },
+        { "num": "02", "title": "Renewal Day", "desc": "Step-by-step inside SAM.gov" },
+        { "num": "03", "title": "What Changes", "desc": "The seven fields that move most" },
+        { "num": "04", "title": "Troubleshooting", "desc": "IRS mismatch, locked Reps & Certs, CAGE expiry" }
+      ]
+    },
+
+    {
+      "type": "toc",
+      "title": "Inside this kit.",
+      "parts": [
+        {
+          "label": "PART ONE · BEFORE YOU RENEW",
+          "items": [
+            { "code": "P01", "title": "Why Renewal Day Matters", "desc": "An expired SAM.gov record stops federal payments cold. Here's the timeline that keeps you paid.", "page": 3 },
+            { "code": "P02", "title": "60-Day Pre-Renewal Checklist", "desc": "Nine items to confirm before you touch the renewal button.", "page": 4 }
+          ]
+        },
+        {
+          "label": "PART TWO · RENEWAL DAY",
+          "items": [
+            { "code": "P03", "title": "Renewal Day Checklist", "desc": "Eight steps inside SAM.gov, in the order the system wants them.", "page": 5 },
+            { "code": "P04", "title": "What Changes Most Often", "desc": "Seven fields that drift between renewals — and what the government wants you to do with each.", "page": 6 }
+          ]
+        },
+        {
+          "label": "PART THREE · WHEN IT BREAKS",
+          "items": [
+            { "code": "P05", "title": "Renewal Troubleshooting", "desc": "Six common failure modes and the fix for each.", "page": 7 },
+            { "code": "P06", "title": "Annual Renewal Calendar", "desc": "A 12-month rhythm so renewal never sneaks up on you again.", "page": 7 }
+          ]
+        }
+      ]
+    },
+
+    {
+      "type": "dark",
+      "partLabel": "PART ONE · BEFORE YOU RENEW",
+      "headline": "An expired SAM.gov record stops federal payments cold.",
+      "accentWord": "stops",
+      "paragraphs": [
+        "If your SAM.gov registration lapses, the government can't pay you on active contracts and you're excluded from new awards. Reactivation usually takes seven to ten business days. Sometimes longer when IRS data or CAGE codes need to resync.",
+        "Start the renewal 60 days before your expiration date. That window absorbs the typical hiccups — name mismatches, banking changes, Reps & Certs questions you weren't expecting — without putting any payment at risk."
+      ],
+      "headerLabel": "PART ONE"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "60-DAY PRE-RENEWAL CHECKLIST",
+      "markdown": "<div class=\"eyebrow\">PART ONE · BEFORE YOU RENEW</div>\n\n# 60-Day Pre-Renewal Checklist\n\nRun this two months before your SAM.gov expiration date. Each item takes five to fifteen minutes. Doing them now means renewal day is a 30-minute exercise instead of a week-long fire drill.\n\n<div class=\"callout callout--emerald\">\n  <div style=\"font-family:'IBM Plex Mono', monospace; font-size:8.5pt; font-weight:600; letter-spacing:0.16em; color:#047857; text-transform:uppercase; margin-bottom:2mm;\">WHY 60 DAYS</div>\n  <strong>Reactivation isn't instant.</strong> A clean renewal posts in about 24 hours. A messy one — IRS name mismatch, expired CAGE, banking change — can take 7 to 10 business days. Starting at 60 days gives you a full month of margin before any payment is at risk.\n</div>\n\n<table>\n  <thead>\n    <tr><th style=\"width:8%;\">#</th><th>Action</th><th>Why it matters</th></tr>\n  </thead>\n  <tbody>\n    <tr><td>1</td><td>Log into sam.gov and open your entity registration.</td><td>Confirms your Login.gov and entity-admin access still work before you're under deadline.</td></tr>\n    <tr><td>2</td><td>Note the exact expiration date. Set a calendar reminder for today plus 50 days.</td><td>Renewal Day lands inside your 60-day window with no surprises.</td></tr>\n    <tr><td>3</td><td>Review all business information for changes — address, phone, key personnel.</td><td>SAM is the source of truth for every contracting officer who looks you up.</td></tr>\n    <tr><td>4</td><td>Confirm your EIN and legal name match IRS records exactly.</td><td>An IRS mismatch is the single most common renewal failure. Punctuation counts.</td></tr>\n    <tr><td>5</td><td>Verify NAICS codes still reflect your active service lines.</td><td>Drop codes you no longer pursue. Add anything you've added in the last year.</td></tr>\n    <tr><td>6</td><td>Check banking and EFT information is current.</td><td>Payment goes to the account in SAM. Wrong account, wrong payee.</td></tr>\n    <tr><td>7</td><td>Review every Reps &amp; Certs answer based on current status — not historical.</td><td>These are annual certifications under penalty of False Claims Act exposure.</td></tr>\n    <tr><td>8</td><td>Update fiscal year end date if your fiscal year changed.</td><td>Drives size-standard calculations on revenue-based NAICS codes.</td></tr>\n    <tr><td>9</td><td>Review Points of Contact. Update anyone who left or changed roles.</td><td>Contracting officers email these people for award notices and clarifications.</td></tr>\n  </tbody>\n</table>\n\n<div class=\"callout\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">FIELD TIP</div>\n  <p style=\"margin:0;\">Print this checklist and walk through it with your bookkeeper. They'll catch the EIN and fiscal-year items faster than you will, and the banking line should be reviewed by whoever signs your checks.</p>\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "RENEWAL DAY CHECKLIST",
+      "markdown": "<div class=\"eyebrow\">PART TWO · RENEWAL DAY</div>\n\n# Renewal Day Checklist\n\nDo these eight steps in order, inside sam.gov. Don't create a new registration — that resets your CAGE code and starts the whole vetting cycle over.\n\n<table>\n  <thead>\n    <tr><th style=\"width:8%;\">#</th><th>Step</th><th>Watch out for</th></tr>\n  </thead>\n  <tbody>\n    <tr><td>1</td><td>Click <strong>Renew Entity Registration</strong>. Do NOT click Create New Registration.</td><td>If you don't see a Renew button, navigate to <strong>Edit Entity Registration</strong> instead.</td></tr>\n    <tr><td>2</td><td>Review every section systematically. Don't skip sections that look unchanged.</td><td>SAM occasionally adds new required fields between renewals. Click through each one.</td></tr>\n    <tr><td>3</td><td>Update the Assertions section with any new NAICS or PSC codes.</td><td>This is where set-aside eligibility lives. Wrong code, wrong matches.</td></tr>\n    <tr><td>4</td><td>Re-certify all Representations &amp; Certifications. Required annually by law.</td><td>Answer each one based on today's status, not what you answered last year.</td></tr>\n    <tr><td>5</td><td>Confirm your small business size status is still accurate.</td><td>If you've grown past a size standard, you must rerepresent under 13 CFR 121.404(g).</td></tr>\n    <tr><td>6</td><td>Update any certifications that changed — 8(a) graduation, HUBZone recert, WOSB.</td><td>Stale certifications get you barred from set-aside awards you'd otherwise win.</td></tr>\n    <tr><td>7</td><td>Submit the renewal and note the submission confirmation number.</td><td>If anything bounces, that confirmation number is the only way Federal Service Desk can find your case.</td></tr>\n    <tr><td>8</td><td>Send the renewal confirmation to your legal and compliance team.</td><td>They need a copy on file for any audit or proposal cover letter that asks for registration date.</td></tr>\n  </tbody>\n</table>\n\n<div class=\"callout callout--emerald\">\n  <div style=\"font-family:'IBM Plex Mono', monospace; font-size:8.5pt; font-weight:600; letter-spacing:0.16em; color:#047857; text-transform:uppercase; margin-bottom:2mm;\">STAT LINE</div>\n  <p style=\"margin:0;\"><strong>60 days</strong> before expiration is when renewal starts. <strong>10 days</strong> is the typical reactivation window if something breaks. <strong>3 years</strong> is how long a CAGE code stays valid — set a separate reminder for it.</p>\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "WHAT CHANGES MOST OFTEN",
+      "markdown": "<div class=\"eyebrow\">PART TWO · RENEWAL DAY</div>\n\n# What Changes Most Often at Renewal\n\nThese seven fields drift between renewals more than any others. Walk through each one with the team member who owns it.\n\n<table>\n  <thead>\n    <tr><th>Field</th><th>Why it changes</th><th>What to do</th></tr>\n  </thead>\n  <tbody>\n    <tr>\n      <td><strong>Small Business Status</strong></td>\n      <td>Revenue growth crosses the size threshold on a key NAICS.</td>\n      <td>Recalculate the rolling 3-year average. Update every affected Rep &amp; Cert.</td>\n    </tr>\n    <tr>\n      <td><strong>NAICS Codes</strong></td>\n      <td>New service lines added or older ones dropped.</td>\n      <td>Add and remove codes based on what you actually pursue today.</td>\n    </tr>\n    <tr>\n      <td><strong>Points of Contact</strong></td>\n      <td>Staff turnover in finance, contracts, or admin roles.</td>\n      <td>Replace anyone who left. Verify the current people are still authorized.</td>\n    </tr>\n    <tr>\n      <td><strong>Banking Info</strong></td>\n      <td>New bank account or routing number after a switch or merger.</td>\n      <td>Update EFT info. Verify with a zero-dollar test transfer before the next invoice.</td>\n    </tr>\n    <tr>\n      <td><strong>Address</strong></td>\n      <td>Office move — even a temporary one.</td>\n      <td>Update physical and mailing addresses separately. They can be different.</td>\n    </tr>\n    <tr>\n      <td><strong>Ownership</strong></td>\n      <td>New partners, acquisition, or stock changes.</td>\n      <td>Major changes may require a new CAGE code. Contact DLA at cage.dla.mil.</td>\n    </tr>\n    <tr>\n      <td><strong>Certifications</strong></td>\n      <td>SDVOSB CVE recertification (every 3 years), HUBZone annual, 8(a) anniversary.</td>\n      <td>Check the CVE portal at vetcert.va.gov. Sync the dates onto your renewal calendar.</td>\n    </tr>\n  </tbody>\n</table>\n\n<div class=\"callout\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">WHY THIS MATTERS</div>\n  <p style=\"margin:0;\">A wrong banking record is the single most common payment-fraud vector in federal contracting. A wrong size status on a set-aside contract is False Claims Act exposure. These aren't paperwork updates — they're audit defense.</p>\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "TROUBLESHOOTING + CALENDAR",
+      "markdown": "<div class=\"eyebrow\">PART THREE · WHEN IT BREAKS</div>\n\n# Renewal Troubleshooting\n\nSix things that go wrong on renewal day, and how to fix each one without a Federal Service Desk ticket.\n\n<table>\n  <thead>\n    <tr><th style=\"width:30%;\">Problem</th><th>Fix</th></tr>\n  </thead>\n  <tbody>\n    <tr>\n      <td><strong>IRS mismatch on renewal</strong></td>\n      <td>Your legal name or EIN doesn't match IRS records. Call the IRS at 800-829-4933 and confirm the registered name on file before you resubmit.</td>\n    </tr>\n    <tr>\n      <td><strong>CAGE code expired</strong></td>\n      <td>CAGE codes are valid for 3 years. If yours expired, contact DLA at cage.dla.mil to renew it before SAM will accept your registration.</td>\n    </tr>\n    <tr>\n      <td><strong>Can't find entity after renewal</strong></td>\n      <td>SAM.gov data refreshes nightly. Wait 24 hours. If you still can't find the record, check your submission status using the confirmation number from step 7.</td>\n    </tr>\n    <tr>\n      <td><strong>Size standard changed since last renewal</strong></td>\n      <td>SBA updates size standards annually. Re-verify at sba.gov/size-standards and update every affected NAICS line in your Reps &amp; Certs.</td>\n    </tr>\n    <tr>\n      <td><strong>Reps &amp; Certs section locked</strong></td>\n      <td>You may need to navigate to <strong>Edit Entity Registration</strong> rather than <strong>Renew</strong>. The Renew flow sometimes locks Reps &amp; Certs when a prior field is incomplete.</td>\n    </tr>\n    <tr>\n      <td><strong>Submission stuck in pending</strong></td>\n      <td>Open a Federal Service Desk ticket at fsd.gov with your submission confirmation number. The average response is 3 business days.</td>\n    </tr>\n  </tbody>\n</table>\n\n<div class=\"callout callout--emerald\">\n  <div style=\"font-family:'IBM Plex Mono', monospace; font-size:8.5pt; font-weight:600; letter-spacing:0.16em; color:#047857; text-transform:uppercase; margin-bottom:2mm;\">ANNUAL RENEWAL CALENDAR</div>\n  <p style=\"margin:0 0 2mm;\"><strong>January.</strong> Review expiration dates for every entity registration the company holds.</p>\n  <p style=\"margin:0 0 2mm;\"><strong>February–March.</strong> Confirm SBA size standards haven't changed for any of your primary NAICS codes.</p>\n  <p style=\"margin:0 0 2mm;\"><strong>May.</strong> Begin the renewal cycle if you expire between June and July. Don't wait for the email reminder.</p>\n  <p style=\"margin:0;\"><strong>October 1.</strong> Federal fiscal year starts. Prime time to add new NAICS codes before Q1 opportunities post.</p>\n</div>\n"
+    },
+
+    {
+      "type": "back-cover",
+      "eyebrow": "WHAT'S NEXT",
+      "headline": "Stop tracking renewal dates in a spreadsheet.",
+      "accentWord": "spreadsheet",
+      "body": "CapturePilot tracks SAM.gov expiration, CAGE renewal, CVE recert, and HUBZone anniversary for every entity on your team. We email the owner 90, 60, and 30 days out. No missed dates, no payment holds. Free 14-day trial. No card required.",
+      "ctaText": "Get the full Federal Launch Kit",
+      "ctaUrl": "https://www.capturepilot.com/startup-pack"
+    }
+  ]
+}

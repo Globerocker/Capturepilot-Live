@@ -1,0 +1,56 @@
+{
+  "id": "cap-statement-template-pdf",
+  "title": "Capability Statement — Editable Template",
+  "slug": "flk-capability-statement-template",
+  "pages": 4,
+  "footerLabel": "CAPTUREPILOT · FEDERAL LEAD KIT",
+  "headerLabel": "CAPABILITY STATEMENT",
+  "parts": [
+    {
+      "type": "cover",
+      "eyebrow": "FEDERAL LEAD KIT · 02 · CAPABILITY STATEMENT KIT",
+      "titleLines": [
+        "Capability",
+        "Statement",
+        "Template."
+      ],
+      "accentWord": "Template",
+      "pages": 4,
+      "toolStrip": [
+        { "num": "01", "title": "Company Block", "desc": "CAGE, UEI, NAICS, PSC — the registrar info a contracting officer scans first" },
+        { "num": "02", "title": "Core Competencies", "desc": "Four to six specific capabilities with measurable detail" },
+        { "num": "03", "title": "Past Performance", "desc": "Agency, contract number, dollar value, period, NAICS, POC" },
+        { "num": "04", "title": "Certifications", "desc": "SB, SDVOSB, 8(a), HUBZone, WOSB, ISO, CMMC — the boxes that matter" }
+      ]
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "PAGE 1 · COMPANY & COMPETENCIES",
+      "html": "<div class=\"eyebrow\">FILL-IN-THE-BLANK · ONE-PAGE FORMAT</div>\n\n<h1>Capability Statement — Federal Contractor Editable Template.</h1>\n\n<div class=\"callout\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">HOW TO USE THIS TEMPLATE</div>\n  <p style=\"margin:0;\">Replace every <strong>[BRACKETED]</strong> field with your company's information. Print or save as PDF after completing. For an editable digital version, see the Google Docs link in your kit.</p>\n</div>\n\n<div class=\"eyebrow\" style=\"margin-top:8mm;\">COMPANY HEADER BLOCK</div>\n\n<table>\n  <tbody>\n    <tr>\n      <td style=\"width:34%; font-weight:600;\">Company Legal Name</td>\n      <td>[YOUR COMPANY NAME, LLC / INC / LLP]</td>\n    </tr>\n    <tr>\n      <td style=\"font-weight:600;\">Website</td>\n      <td>[www.yourcompany.com]</td>\n    </tr>\n    <tr>\n      <td style=\"font-weight:600;\">CAGE Code</td>\n      <td>[5-character CAGE]</td>\n    </tr>\n    <tr>\n      <td style=\"font-weight:600;\">UEI</td>\n      <td>[12-character Unique Entity ID]</td>\n    </tr>\n    <tr>\n      <td style=\"font-weight:600;\">DUNS (legacy)</td>\n      <td>[9-digit DUNS, if applicable]</td>\n    </tr>\n    <tr>\n      <td style=\"font-weight:600;\">Primary NAICS</td>\n      <td>[Code] — [Description]</td>\n    </tr>\n    <tr>\n      <td style=\"font-weight:600;\">Additional NAICS</td>\n      <td>[Code], [Code], [Code]</td>\n    </tr>\n    <tr>\n      <td style=\"font-weight:600;\">PSC Codes</td>\n      <td>[Code] — [Description]</td>\n    </tr>\n  </tbody>\n</table>\n\n<h2>Core Competencies.</h2>\n\n<p style=\"color:#57534e; font-size:9.5pt;\">List four to six specific capabilities. Be precise — 'IT support' is weak. 'Tier 2 helpdesk supporting 10,000-user enterprise networks' is strong.</p>\n\n<table>\n  <tbody>\n    <tr><td style=\"width:14%; font-weight:600;\">Competency 1</td><td>[Specific capability with measurable detail]</td></tr>\n    <tr><td style=\"font-weight:600;\">Competency 2</td><td>[Specific capability with measurable detail]</td></tr>\n    <tr><td style=\"font-weight:600;\">Competency 3</td><td>[Specific capability with measurable detail]</td></tr>\n    <tr><td style=\"font-weight:600;\">Competency 4</td><td>[Specific capability with measurable detail]</td></tr>\n    <tr><td style=\"font-weight:600;\">Competency 5</td><td>[Specific capability with measurable detail]</td></tr>\n    <tr><td style=\"font-weight:600;\">Competency 6</td><td>[Specific capability with measurable detail]</td></tr>\n  </tbody>\n</table>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "PAGE 2 · DIFFERENTIATORS & PAST PERFORMANCE",
+      "html": "<h2>Differentiators.</h2>\n\n<p style=\"color:#57534e; font-size:9.5pt;\">Three reasons an agency should choose you over every other contractor in your space. Be concrete. No buzzwords.</p>\n\n<div class=\"callout callout--emerald\">\n  <p style=\"margin:0 0 3mm 0;\"><strong>1.</strong> [What makes you uniquely capable — a proprietary process, specialized team, unique certification, or speed advantage.]</p>\n  <p style=\"margin:0 0 3mm 0;\"><strong>2.</strong> [Your track record that directly applies to federal work — specific outcomes, clearance levels, past agency experience.]</p>\n  <p style=\"margin:0;\"><strong>3.</strong> [A client or mission-impact proof point — not generic praise, a real result with numbers.]</p>\n</div>\n\n<h2 style=\"margin-top:10mm;\">Past Performance.</h2>\n\n<p style=\"color:#57534e; font-size:9.5pt;\">Three to five contracts that prove you can deliver. List federal first, then commercial. POC line should be a real human a contracting officer can call.</p>\n\n<table>\n  <thead>\n    <tr>\n      <th>Agency / Client</th>\n      <th>Contract #</th>\n      <th>Value</th>\n      <th>Period</th>\n      <th>NAICS</th>\n      <th>POC</th>\n    </tr>\n  </thead>\n  <tbody>\n    <tr>\n      <td>[Agency Name]</td>\n      <td>[Contract #]</td>\n      <td>[$XXX,XXX]</td>\n      <td>[MM/YY–MM/YY]</td>\n      <td>[NAICS]</td>\n      <td>[Name, Phone]</td>\n    </tr>\n    <tr>\n      <td>[Agency Name]</td>\n      <td>[Contract #]</td>\n      <td>[$XXX,XXX]</td>\n      <td>[MM/YY–MM/YY]</td>\n      <td>[NAICS]</td>\n      <td>[Name, Phone]</td>\n    </tr>\n    <tr>\n      <td>[Agency Name]</td>\n      <td>[Contract #]</td>\n      <td>[$XXX,XXX]</td>\n      <td>[MM/YY–MM/YY]</td>\n      <td>[NAICS]</td>\n      <td>[Name, Phone]</td>\n    </tr>\n    <tr>\n      <td>[Commercial Client]</td>\n      <td>N/A</td>\n      <td>[$XXX,XXX]</td>\n      <td>[MM/YY–MM/YY]</td>\n      <td>[NAICS]</td>\n      <td>[Name, Phone]</td>\n    </tr>\n  </tbody>\n</table>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "PAGE 3 · CERTIFICATIONS & POINT OF CONTACT",
+      "html": "<h2>Certifications & Socioeconomic Status.</h2>\n\n<p style=\"color:#57534e; font-size:9.5pt;\">Check every status that applies. Keep this section current — agencies search SAM by certification, and a missed checkbox costs you set-aside opportunities.</p>\n\n<table>\n  <tbody>\n    <tr><td style=\"width:60%;\">Small Business (SB)</td><td>[ ] Check if applicable</td></tr>\n    <tr><td>SDVOSB / VOSB (Service-Disabled Veteran-Owned)</td><td>[ ] Check if applicable</td></tr>\n    <tr><td>8(a) Business Development</td><td>[ ] Check if applicable</td></tr>\n    <tr><td>HUBZone</td><td>[ ] Check if applicable</td></tr>\n    <tr><td>WOSB / EDWOSB (Women-Owned)</td><td>[ ] Check if applicable</td></tr>\n    <tr><td>ISO 9001:2015 Certified</td><td>[ ] Check if applicable</td></tr>\n    <tr><td>CMMC Level [X]</td><td>[ ] Check if applicable</td></tr>\n    <tr><td>Other: [Certification]</td><td>[ ] Check if applicable</td></tr>\n  </tbody>\n</table>\n\n<h2 style=\"margin-top:10mm;\">Point of Contact.</h2>\n\n<p style=\"color:#57534e; font-size:9.5pt;\">One person. Direct line. The contracting officer should never have to figure out who to call.</p>\n\n<table>\n  <tbody>\n    <tr>\n      <td style=\"width:18%; font-weight:600;\">Name</td>\n      <td style=\"width:38%;\">[Full Name, Title]</td>\n      <td style=\"width:14%; font-weight:600;\">Phone</td>\n      <td>[Direct line]</td>\n    </tr>\n    <tr>\n      <td style=\"font-weight:600;\">Email</td>\n      <td>[email@company.com]</td>\n      <td style=\"font-weight:600;\">Address</td>\n      <td>[Street, City, State ZIP]</td>\n    </tr>\n  </tbody>\n</table>\n\n<div class=\"callout\" style=\"margin-top:10mm;\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">FIELD TIP</div>\n  <p style=\"margin:0;\">Save the finished file as <strong>[Company]_Capability_Statement_[YYYY-MM].pdf</strong>. Refresh the date stamp every quarter, even if nothing else changes. Old date stamps signal a dead vendor.</p>\n</div>\n"
+    },
+
+    {
+      "type": "back-cover",
+      "eyebrow": "WHAT'S NEXT",
+      "headline": "A capability statement is a door opener, not a contract.",
+      "accentWord": "opener",
+      "body": "Fill in this template, send it to a contracting officer, then move to the next play in the kit — the Sources Sought response. CapturePilot drafts both for you in about ten minutes, with your CAGE, UEI, and past performance pre-populated.",
+      "ctaText": "Get the full Federal Lead Kit",
+      "ctaUrl": "https://www.capturepilot.com/startup-pack",
+      "footerLabel": "CAPTUREPILOT · FEDERAL LEAD KIT"
+    }
+  ]
+}

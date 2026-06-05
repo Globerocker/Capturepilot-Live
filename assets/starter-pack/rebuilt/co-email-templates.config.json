@@ -1,0 +1,175 @@
+{
+  "id": "flk-co-email-templates",
+  "title": "10 Contracting Officer Email Templates",
+  "slug": "flk-co-email-templates",
+  "pages": 14,
+  "footerLabel": "CAPTUREPILOT · CO EMAIL TEMPLATES",
+  "headerLabel": "CO EMAIL TEMPLATES",
+  "parts": [
+    {
+      "type": "cover",
+      "eyebrow": "FEDERAL LAUNCH KIT · OUTREACH",
+      "titleLines": [
+        "10 emails",
+        "every CO has",
+        "read before."
+      ],
+      "accentWord": "every",
+      "pages": 14,
+      "toolStrip": [
+        { "num": "01", "title": "10 templates", "desc": "Every stage from first contact to recompete" },
+        { "num": "02", "title": "FAR-aware", "desc": "FAR 15.506 debrief language baked in" },
+        { "num": "03", "title": "Plain text", "desc": "Paste into Outlook, edit the brackets, send" },
+        { "num": "04", "title": "Subject lines", "desc": "Written to survive the CO's inbox triage" }
+      ]
+    },
+
+    {
+      "type": "toc",
+      "title": "Inside this library.",
+      "parts": [
+        {
+          "label": "PART ONE · FIRST CONTACT",
+          "items": [
+            { "code": "E01", "title": "First Outreach After SAM Registration", "desc": "Introduce the firm, the NAICS, and a 15-minute ask. No pitch.", "page": 4 },
+            { "code": "E02", "title": "Response to Sources Sought Notice", "desc": "The cover note that ships with your capability submission.", "page": 5 },
+            { "code": "E03", "title": "Industry Day Follow-Up", "desc": "Thank-you with three intelligent questions about the requirement.", "page": 5 },
+            { "code": "E04", "title": "Teaming Partner Approach", "desc": "Outreach to another firm where a joint bid makes sense.", "page": 6 }
+          ]
+        },
+        {
+          "label": "PART TWO · ACTIVE PROCUREMENT",
+          "items": [
+            { "code": "E05", "title": "Post-Award Thank You", "desc": "What to send the day after the award notice posts.", "page": 8 },
+            { "code": "E06", "title": "Debrief Request After Loss", "desc": "FAR 15.506 language, written so the request can't be denied.", "page": 9 },
+            { "code": "E07", "title": "Capability Brief Follow-Up", "desc": "Twenty-minute call ask after a market research submission.", "page": 10 }
+          ]
+        },
+        {
+          "label": "PART THREE · LONG-CYCLE",
+          "items": [
+            { "code": "E08", "title": "Small Business Office Outreach", "desc": "OSDBU introduction tied to specific NAICS and target agency.", "page": 11 },
+            { "code": "E09", "title": "Modification / Change Request", "desc": "REA notification under the Changes clause.", "page": 12 },
+            { "code": "E10", "title": "Annual Check-In", "desc": "Pre-FY relationship maintenance with the program office.", "page": 13 }
+          ]
+        }
+      ]
+    },
+
+    {
+      "type": "founder",
+      "headline": "A generic email is worse than no email. The CO can spot a copy-paste in three seconds.",
+      "accentWord": "worse",
+      "paragraphs": [
+        "I have watched contracting officers triage their inbox. The first read is the subject line. The second is the first sentence. If either one looks like a mail merge, the email moves to a folder nobody opens again.",
+        "These ten templates are the ones we hand new clients on day one. Every blank in brackets is a blank you have to fill in by hand. The agency mission line, the specific NAICS, the named requirement, the COR's actual title. The template gives you the structure. You have to bring the homework.",
+        "The fastest way to lose a CO is to send the same email you sent the previous agency with the agency name swapped. The fastest way to build a relationship is to send three sentences that prove you read the sources sought notice line by line.",
+        "Use these as starting points. Then rewrite every one before it leaves your outbox."
+      ],
+      "ctaText": "Book a B2G outreach audit",
+      "ctaUrl": "https://meetings-na2.hubspot.com/americurial/intro-call",
+      "ctaButtonLabel": "Book the call →",
+      "ctaEyebrow": "30 MIN · NO PITCH"
+    },
+
+    {
+      "type": "dark",
+      "partLabel": "PART ONE · FIRST CONTACT",
+      "headline": "The four emails that introduce you to the agency.",
+      "accentWord": "introduce",
+      "paragraphs": [
+        "First-contact emails do two things. They prove you are a real firm with real capability, and they ask for one specific next step. Nothing else. The CO doesn't have time for your origin story.",
+        "Subject lines on this page are written to survive a 200-email inbox. Keep them. Edit only the brackets."
+      ],
+      "headerLabel": "PART ONE"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "E01 · FIRST OUTREACH",
+      "html": "<div class=\"eyebrow\">PART ONE · FIRST CONTACT</div>\n<h1>Template 01. First outreach after SAM.gov registration.</h1>\n<p>The introduction email. Sent once your SAM record is active and you have identified a target agency and NAICS. Goal is a 15-minute call, not a sale.</p>\n\n<div class=\"callout callout--emerald\">\n  <div style=\"font-family:'IBM Plex Mono', monospace; font-size:8.5pt; font-weight:600; letter-spacing:0.16em; color:#047857; text-transform:uppercase; margin-bottom:2mm;\">SUBJECT LINE</div>\n  <strong>[Company Name] — Introducing Our Capabilities for [NAICS Code] Requirements</strong>\n</div>\n\n<div style=\"background:#fafaf9; border:1px solid #e7e5e4; border-radius:4px; padding:5mm; font-family:'IBM Plex Sans', sans-serif; font-size:10pt; line-height:1.55; color:#1c1917;\">\n<p style=\"margin:0 0 3mm 0;\">Dear [CO/KO Name],</p>\n<p style=\"margin:0 0 3mm 0;\">I'm reaching out to introduce [Company Name], a [size status] small business specializing in [1-line service description]. We recently confirmed our SAM.gov registration (UEI: XXXX) and are actively pursuing federal opportunities within your agency.</p>\n<p style=\"margin:0 0 3mm 0;\">Our relevant capabilities include [2-3 specific capabilities tied to agency mission]. We have recent experience supporting [comparable agency or sector].</p>\n<p style=\"margin:0 0 3mm 0;\">I'd welcome a brief 15-minute call to learn more about your upcoming requirements and to share how we might support your mission. Would [date/time] work, or feel free to suggest a time that does?</p>\n<p style=\"margin:0 0 3mm 0;\">Thank you for your time.</p>\n<p style=\"margin:0;\">[Name], [Title]<br>[Company] | [Phone] | [Email]</p>\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "E02 + E03",
+      "html": "<div class=\"eyebrow\">PART ONE · FIRST CONTACT</div>\n<h1>Template 02. Response to a sources sought notice.</h1>\n<p>The cover note that ships with your capability statement when you respond to a sources sought or RFI. Short, specific, references the notice number.</p>\n\n<div class=\"callout callout--emerald\">\n  <div style=\"font-family:'IBM Plex Mono', monospace; font-size:8.5pt; font-weight:600; letter-spacing:0.16em; color:#047857; text-transform:uppercase; margin-bottom:2mm;\">SUBJECT LINE</div>\n  <strong>Response to [Notice #] — [Company Name] Capability Statement Attached</strong>\n</div>\n\n<div style=\"background:#fafaf9; border:1px solid #e7e5e4; border-radius:4px; padding:5mm; font-family:'IBM Plex Sans', sans-serif; font-size:10pt; line-height:1.55; color:#1c1917;\">\n<p style=\"margin:0 0 3mm 0;\">Dear [CO Name],</p>\n<p style=\"margin:0 0 3mm 0;\">Please find attached [Company Name]'s response to the Sources Sought Notice [Notice #] posted [date].</p>\n<p style=\"margin:0 0 3mm 0;\">As a [size/certification status] small business under NAICS [code], we have [X] years of direct experience in [specific relevant area]. Our team [specific differentiator relevant to this requirement].</p>\n<p style=\"margin:0 0 3mm 0;\">We welcome the opportunity to provide additional information or schedule a meeting to discuss the upcoming requirement in greater detail.</p>\n<p style=\"margin:0;\">[Signature]</p>\n</div>\n\n<h1 style=\"margin-top:8mm;\">Template 03. Industry Day follow-up.</h1>\n<p>Sent within 48 hours of the event. Three questions, not ten. Each one demonstrates you read the briefing materials.</p>\n\n<div class=\"callout callout--emerald\">\n  <div style=\"font-family:'IBM Plex Mono', monospace; font-size:8.5pt; font-weight:600; letter-spacing:0.16em; color:#047857; text-transform:uppercase; margin-bottom:2mm;\">SUBJECT LINE</div>\n  <strong>Thank You — [Agency] Industry Day + Follow-Up Questions</strong>\n</div>\n\n<div style=\"background:#fafaf9; border:1px solid #e7e5e4; border-radius:4px; padding:5mm; font-family:'IBM Plex Sans', sans-serif; font-size:10pt; line-height:1.55; color:#1c1917;\">\n<p style=\"margin:0 0 3mm 0;\">Dear [CO/PM Name],</p>\n<p style=\"margin:0 0 3mm 0;\">Thank you for the informative presentation at the [Agency] Industry Day on [date]. [Company Name] is highly interested in the [requirement name] procurement.</p>\n<p style=\"margin:0 0 3mm 0;\">Based on our review of the draft materials, we have the following questions for your consideration:</p>\n<ol style=\"margin:0 0 3mm 5mm; padding:0;\">\n  <li>[Specific, intelligent question about technical requirements]</li>\n  <li>[Question about small business set-aside determination]</li>\n  <li>[Question about key personnel or clearance requirements]</li>\n</ol>\n<p style=\"margin:0 0 3mm 0;\">We look forward to the formal solicitation and appreciate any guidance you can provide. Please let us know if a brief meeting to discuss our capabilities would be helpful.</p>\n<p style=\"margin:0;\">[Signature]</p>\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "E04 · TEAMING",
+      "html": "<div class=\"eyebrow\">PART ONE · FIRST CONTACT</div>\n<h1>Template 04. Teaming partner approach.</h1>\n<p>The outreach email when you have identified another firm whose capability complements yours on a specific upcoming bid. One call, no NDA yet.</p>\n\n<div class=\"callout callout--emerald\">\n  <div style=\"font-family:'IBM Plex Mono', monospace; font-size:8.5pt; font-weight:600; letter-spacing:0.16em; color:#047857; text-transform:uppercase; margin-bottom:2mm;\">SUBJECT LINE</div>\n  <strong>Teaming Interest — [Solicitation Name] — [Your Company] + [Their Company]</strong>\n</div>\n\n<div style=\"background:#fafaf9; border:1px solid #e7e5e4; border-radius:4px; padding:5mm; font-family:'IBM Plex Sans', sans-serif; font-size:10pt; line-height:1.55; color:#1c1917;\">\n<p style=\"margin:0 0 3mm 0;\">Dear [Name],</p>\n<p style=\"margin:0 0 3mm 0;\">I came across your company in relation to the upcoming [solicitation name / agency requirement]. We believe there may be a strong complementary fit between our teams.</p>\n<p style=\"margin:0 0 3mm 0;\">[Company Name] brings [your capability] and holds [relevant certifications/clearances]. Based on publicly available information, your team brings [their known capability]. Together, we could present a compelling full-service approach.</p>\n<p style=\"margin:0 0 3mm 0;\">Would you be open to a brief call this week to explore a potential teaming arrangement? I'm available [time options].</p>\n<p style=\"margin:0;\">[Signature]</p>\n</div>\n\n<div class=\"callout\" style=\"border-left: 4px solid #f59e0b; background: #fffbeb; margin-top:6mm;\">\n  <div style=\"font-family:'IBM Plex Mono', monospace; font-size:8.5pt; font-weight:600; letter-spacing:0.16em; color:#b45309; text-transform:uppercase; margin-bottom:2mm;\">FIELD TIP</div>\n  <p style=\"margin:0;\">Send this 60 to 90 days before the RFP drops, not 7 days after. Teaming agreements take time to negotiate. The firm that approaches first usually leads the bid, which means the firm that drags its feet ends up as the sub.</p>\n</div>\n"
+    },
+
+    {
+      "type": "dark",
+      "partLabel": "PART TWO · ACTIVE PROCUREMENT",
+      "headline": "Three emails that run during the bid and right after.",
+      "accentWord": "during",
+      "paragraphs": [
+        "Active procurement emails are sent while the source-selection clock is running or in the days right after award. Tone is professional, brief, and on the record.",
+        "Two of the three reference FAR clauses by number. That is intentional. The CO reads a FAR reference and knows the requester has done the work."
+      ],
+      "headerLabel": "PART TWO"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "E05 · POST-AWARD",
+      "html": "<div class=\"eyebrow\">PART TWO · ACTIVE PROCUREMENT</div>\n<h1>Template 05. Post-award thank you and relationship building.</h1>\n<p>Sent the day after the award notice posts. Sets the tone for the next 12 months of performance, names the kick-off POC, and opens the channel for problem-resolution before the first issue lands.</p>\n\n<div class=\"callout callout--emerald\">\n  <div style=\"font-family:'IBM Plex Mono', monospace; font-size:8.5pt; font-weight:600; letter-spacing:0.16em; color:#047857; text-transform:uppercase; margin-bottom:2mm;\">SUBJECT LINE</div>\n  <strong>Thank You — [Contract Award] — Committed to Exceptional Performance</strong>\n</div>\n\n<div style=\"background:#fafaf9; border:1px solid #e7e5e4; border-radius:4px; padding:5mm; font-family:'IBM Plex Sans', sans-serif; font-size:10pt; line-height:1.55; color:#1c1917;\">\n<p style=\"margin:0 0 3mm 0;\">Dear [CO/COR Name],</p>\n<p style=\"margin:0 0 3mm 0;\">Thank you for the award of [contract number / name]. We are honored by the trust placed in [Company Name] and are fully committed to exceeding your expectations throughout this performance period.</p>\n<p style=\"margin:0 0 3mm 0;\">Our kick-off team is ready to begin per our proposed transition plan. [Name], who will serve as our primary POC, will be reaching out within [X] business days to schedule the kick-off meeting.</p>\n<p style=\"margin:0 0 3mm 0;\">Please don't hesitate to contact me directly for anything you need.</p>\n<p style=\"margin:0;\">[Signature]</p>\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "E06 · DEBRIEF",
+      "html": "<div class=\"eyebrow\">PART TWO · ACTIVE PROCUREMENT</div>\n<h1>Template 06. Debrief request after a loss.</h1>\n<p>FAR 15.506 gives unsuccessful offerors the right to a debrief. The request has to be in writing within three days of award notification or you lose the right. Keep this template in a folder where you can find it on award day.</p>\n\n<div class=\"callout callout--emerald\">\n  <div style=\"font-family:'IBM Plex Mono', monospace; font-size:8.5pt; font-weight:600; letter-spacing:0.16em; color:#047857; text-transform:uppercase; margin-bottom:2mm;\">SUBJECT LINE</div>\n  <strong>Request for Debriefing — [Solicitation Number]</strong>\n</div>\n\n<div style=\"background:#fafaf9; border:1px solid #e7e5e4; border-radius:4px; padding:5mm; font-family:'IBM Plex Sans', sans-serif; font-size:10pt; line-height:1.55; color:#1c1917;\">\n<p style=\"margin:0 0 3mm 0;\">Dear [CO Name],</p>\n<p style=\"margin:0 0 3mm 0;\">Pursuant to FAR 15.506, I respectfully request a written or oral debriefing regarding our proposal submitted in response to [Solicitation Number]. Our firm was not selected for award.</p>\n<p style=\"margin:0 0 3mm 0;\">We are eager to understand the strengths and weaknesses of our proposal to improve future submissions. We are flexible on timing and format.</p>\n<p style=\"margin:0 0 3mm 0;\">Thank you for your consideration.</p>\n<p style=\"margin:0;\">[Signature]</p>\n</div>\n\n<div class=\"callout\" style=\"border-left: 4px solid #f59e0b; background: #fffbeb; margin-top:6mm;\">\n  <div style=\"font-family:'IBM Plex Mono', monospace; font-size:8.5pt; font-weight:600; letter-spacing:0.16em; color:#b45309; text-transform:uppercase; margin-bottom:2mm;\">TIMING NOTE</div>\n  <p style=\"margin:0;\">The three-day clock starts the day after the unsuccessful-offeror notice. Miss the window and the CO can decline. For a FAR Part 15 award above the simplified acquisition threshold, request the debrief in writing the same day you read the notice. Keep your filed copy with timestamp.</p>\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "E07 · CAP BRIEF FOLLOW-UP",
+      "html": "<div class=\"eyebrow\">PART TWO · ACTIVE PROCUREMENT</div>\n<h1>Template 07. Capability brief follow-up.</h1>\n<p>Sent two to three weeks after a market research submission with no response. Short, direct, offers a 20-minute call. Do not chase past two follow-ups.</p>\n\n<div class=\"callout callout--emerald\">\n  <div style=\"font-family:'IBM Plex Mono', monospace; font-size:8.5pt; font-weight:600; letter-spacing:0.16em; color:#047857; text-transform:uppercase; margin-bottom:2mm;\">SUBJECT LINE</div>\n  <strong>Follow-Up: [Company Name] Capability Brief — [Date]</strong>\n</div>\n\n<div style=\"background:#fafaf9; border:1px solid #e7e5e4; border-radius:4px; padding:5mm; font-family:'IBM Plex Sans', sans-serif; font-size:10pt; line-height:1.55; color:#1c1917;\">\n<p style=\"margin:0 0 3mm 0;\">Dear [Name],</p>\n<p style=\"margin:0 0 3mm 0;\">I wanted to follow up on the capability brief we submitted on [date] in response to your market research for [requirement].</p>\n<p style=\"margin:0 0 3mm 0;\">We remain very interested in this opportunity and would welcome a 20-minute call to discuss how our experience in [relevant area] addresses your requirements.</p>\n<p style=\"margin:0 0 3mm 0;\">Is there anything additional we can provide to support your planning process?</p>\n<p style=\"margin:0;\">[Signature]</p>\n</div>\n"
+    },
+
+    {
+      "type": "dark",
+      "partLabel": "PART THREE · LONG-CYCLE",
+      "headline": "Three emails that build the relationship over years, not weeks.",
+      "accentWord": "years",
+      "paragraphs": [
+        "Long-cycle outreach is what separates the firms with three contracts from the firms with thirty. Small business office introductions, contract modifications, and annual check-ins are the work that compounds.",
+        "Send each of these on the cadence the agency expects. One OSDBU intro per target agency per year. One REA per material change. One annual check-in before the new fiscal year starts."
+      ],
+      "headerLabel": "PART THREE"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "E08 · OSDBU OUTREACH",
+      "html": "<div class=\"eyebrow\">PART THREE · LONG-CYCLE</div>\n<h1>Template 08. Small Business Office (OSDBU) outreach.</h1>\n<p>The OSDBU exists to connect small firms with program offices that have upcoming requirements. Use this template once per target agency. Reference the specific NAICS codes you are chasing.</p>\n\n<div class=\"callout callout--emerald\">\n  <div style=\"font-family:'IBM Plex Mono', monospace; font-size:8.5pt; font-weight:600; letter-spacing:0.16em; color:#047857; text-transform:uppercase; margin-bottom:2mm;\">SUBJECT LINE</div>\n  <strong>Introduction — [Company Name] — [Size/Cert Status] Small Business</strong>\n</div>\n\n<div style=\"background:#fafaf9; border:1px solid #e7e5e4; border-radius:4px; padding:5mm; font-family:'IBM Plex Sans', sans-serif; font-size:10pt; line-height:1.55; color:#1c1917;\">\n<p style=\"margin:0 0 3mm 0;\">Dear [OSDBU/Small Business Office Director],</p>\n<p style=\"margin:0 0 3mm 0;\">I'm reaching out to introduce [Company Name], a [certification status] small business headquartered in [location] with [X] years of experience in [primary service area].</p>\n<p style=\"margin:0 0 3mm 0;\">We are registered in SAM.gov (UEI: XXXX) and actively seeking contracting opportunities with [Agency]. Specifically, we are pursuing requirements under NAICS [codes].</p>\n<p style=\"margin:0 0 3mm 0;\">Could you advise on the best approach for connecting with program offices that have upcoming requirements in our focus area? We would also welcome any guidance on upcoming small business set-aside opportunities.</p>\n<p style=\"margin:0 0 3mm 0;\">Thank you for supporting small businesses in federal contracting.</p>\n<p style=\"margin:0;\">[Signature]</p>\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "E09 · CONTRACT CHANGE",
+      "html": "<div class=\"eyebrow\">PART THREE · LONG-CYCLE</div>\n<h1>Template 09. Modification or contract change request.</h1>\n<p>Notification of a Request for Equitable Adjustment under the Changes clause. Notify in writing as soon as you identify the change. Document everything. The REA itself is a separate, formal package; this email is the heads-up.</p>\n\n<div class=\"callout callout--emerald\">\n  <div style=\"font-family:'IBM Plex Mono', monospace; font-size:8.5pt; font-weight:600; letter-spacing:0.16em; color:#047857; text-transform:uppercase; margin-bottom:2mm;\">SUBJECT LINE</div>\n  <strong>Request for Equitable Adjustment — Contract [Number]</strong>\n</div>\n\n<div style=\"background:#fafaf9; border:1px solid #e7e5e4; border-radius:4px; padding:5mm; font-family:'IBM Plex Sans', sans-serif; font-size:10pt; line-height:1.55; color:#1c1917;\">\n<p style=\"margin:0 0 3mm 0;\">Dear [CO Name],</p>\n<p style=\"margin:0 0 3mm 0;\">Pursuant to the Changes clause of our contract [number], we are formally notifying you of a change to the work that entitles us to an equitable adjustment.</p>\n<p style=\"margin:0 0 3mm 0;\">[Brief description of the change and its impact on cost/schedule.]</p>\n<p style=\"margin:0 0 3mm 0;\">We are prepared to submit a detailed Request for Equitable Adjustment (REA) with full cost documentation within [X] business days. Please advise if you'd prefer to discuss this matter in advance of the formal submission.</p>\n<p style=\"margin:0;\">[Signature]</p>\n</div>\n\n<div class=\"callout\" style=\"border-left: 4px solid #f59e0b; background: #fffbeb; margin-top:6mm;\">\n  <div style=\"font-family:'IBM Plex Mono', monospace; font-size:8.5pt; font-weight:600; letter-spacing:0.16em; color:#b45309; text-transform:uppercase; margin-bottom:2mm;\">FIELD TIP</div>\n  <p style=\"margin:0;\">Track every directed change, constructive change, defective spec, or government delay in a separate log from day one. Without dated emails and a contemporaneous record, the REA usually fails the cost-realism review. Build the file before you need it.</p>\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "E10 · ANNUAL CHECK-IN",
+      "html": "<div class=\"eyebrow\">PART THREE · LONG-CYCLE</div>\n<h1>Template 10. Annual check-in and relationship maintenance.</h1>\n<p>Sent in August or September, ahead of the federal fiscal year reset on October 1. Reconnects with program offices that have gone quiet but where the relationship still matters.</p>\n\n<div class=\"callout callout--emerald\">\n  <div style=\"font-family:'IBM Plex Mono', monospace; font-size:8.5pt; font-weight:600; letter-spacing:0.16em; color:#047857; text-transform:uppercase; margin-bottom:2mm;\">SUBJECT LINE</div>\n  <strong>Annual Check-In — [Company Name] — Upcoming Requirements?</strong>\n</div>\n\n<div style=\"background:#fafaf9; border:1px solid #e7e5e4; border-radius:4px; padding:5mm; font-family:'IBM Plex Sans', sans-serif; font-size:10pt; line-height:1.55; color:#1c1917;\">\n<p style=\"margin:0 0 3mm 0;\">Dear [CO/PM Name],</p>\n<p style=\"margin:0 0 3mm 0;\">I wanted to reach out to reconnect as we approach the new federal fiscal year. Working with your team on [previous contract or interaction] was a highlight for our company.</p>\n<p style=\"margin:0 0 3mm 0;\">We've expanded our capabilities this year, including [new service/certification/staff], which aligns well with [agency mission area]. Are there any upcoming requirements where our team could provide support?</p>\n<p style=\"margin:0 0 3mm 0;\">We'd welcome a brief call to catch up and understand how we can continue to serve [agency].</p>\n<p style=\"margin:0;\">[Signature]</p>\n</div>\n\n<h2 style=\"margin-top:8mm;\">Before you hit send on any of the ten.</h2>\n<p>Three rules that apply to every template in this library. Each one will save you from an email the CO won't answer.</p>\n<ol>\n  <li><strong>Personalize every bracket.</strong> The brackets are the work. Generic capability lines and unedited subject lines are the fastest way into the deleted folder.</li>\n  <li><strong>One ask per email.</strong> A 15-minute call. A debrief. A teaming call. Never two at once. The CO will say no to the easier one and ignore the other.</li>\n  <li><strong>Send from a real human, not an alias.</strong> info@ and sales@ get filtered. A named sender with a real signature and a real phone number gets opened.</li>\n</ol>\n"
+    },
+
+    {
+      "type": "back-cover",
+      "eyebrow": "WHAT'S NEXT",
+      "headline": "Templates get you started. The right contact gets you a contract.",
+      "accentWord": "right",
+      "body": "CapturePilot pulls every CO, COR, and OSDBU contact from SAM.gov and matches them to the opportunities you can actually win. It tells you which template to send, when to send it, and what the agency has been buying for the last three years. Free 14-day trial, no card.",
+      "ctaText": "Get the full Federal Launch Kit →",
+      "ctaUrl": "https://www.capturepilot.com/startup-pack"
+    }
+  ]
+}

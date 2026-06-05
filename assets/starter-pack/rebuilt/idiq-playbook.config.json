@@ -1,0 +1,151 @@
+{
+  "id": "flk-idiq-gwac-task-order-playbook",
+  "title": "IDIQ / GWAC Task-Order Playbook",
+  "slug": "flk-idiq-gwac-task-order-playbook",
+  "pages": 14,
+  "footerLabel": "CAPTUREPILOT · IDIQ / GWAC TASK-ORDER PLAYBOOK",
+  "headerLabel": "IDIQ / GWAC",
+  "parts": [
+    {
+      "type": "cover",
+      "eyebrow": "FEDERAL LAUNCH KIT · SOLICITATION_PLAYBOOKS",
+      "titleLines": [
+        "The vehicle is",
+        "the door. The",
+        "task order is",
+        "the work."
+      ],
+      "accentWord": "task",
+      "pages": 14,
+      "toolStrip": [
+        { "num": "01", "title": "$2.3T+ annual spend", "desc": "GWAC and MAC vehicles in FY2025" },
+        { "num": "02", "title": "75% of IT", "desc": "Bought through a vehicle, not open market" },
+        { "num": "03", "title": "5-10 yr periods", "desc": "Typical IDIQ life with options" },
+        { "num": "04", "title": "2-5 yr onramps", "desc": "Major vehicles reopen on this cadence" }
+      ]
+    },
+
+    {
+      "type": "toc",
+      "title": "Inside this playbook.",
+      "parts": [
+        {
+          "label": "PART ONE · GET ON THE VEHICLE",
+          "items": [
+            { "code": "P01", "title": "What an IDIQ actually is", "desc": "Why the vehicle is eligibility, not revenue, and where the money really moves.", "page": 4 },
+            { "code": "P02", "title": "Major GWAC and IDIQ vehicles", "desc": "OASIS+, STARS III, SEWP V, CIO-SP4, Alliant 3, VETS 2, Mentor-Protege.", "page": 5 },
+            { "code": "P03", "title": "Getting on a vehicle", "desc": "The five-step onramp strategy and why subbing first saves you years.", "page": 6 }
+          ]
+        },
+        {
+          "label": "PART TWO · WIN THE TASK ORDER",
+          "items": [
+            { "code": "P04", "title": "Task order competition strategy", "desc": "Why winning task orders is a different sport from open-market bids.", "page": 8 },
+            { "code": "P05", "title": "Task order response checklist", "desc": "Six verification gates before you click submit.", "page": 9 },
+            { "code": "P06", "title": "Teaming on vehicles", "desc": "Building the prime-sub relationships that close capability gaps.", "page": 10 },
+            { "code": "P07", "title": "Pricing and labor categories", "desc": "Vehicle ceiling rates, loaded labor, and how not to lose on cost realism.", "page": 11 },
+            { "code": "P08", "title": "Operating cadence after award", "desc": "What the first ninety days on a task order look like.", "page": 12 }
+          ]
+        }
+      ]
+    },
+
+    {
+      "type": "founder",
+      "headline": "We watched a firm spend two years getting on OASIS+ and never win a single task order.",
+      "accentWord": "single",
+      "paragraphs": [
+        "They had the cert. They had the past performance. They had the proposal binder on the shelf. What they didn't have was a name inside the agency, a teaming partner with complementary labor categories, and a habit of responding to every RFI in their NAICS even when they knew they couldn't win.",
+        "Getting on a vehicle is the easy part. It's a paperwork drill. Six to twelve months of past performance writeups, key personnel resumes, and price submissions. You can pay a consultant to walk you through it.",
+        "Winning a task order is a different sport. Three to fourteen days from drop to submission. Teams already assembled. Tech approach already drafted. Pricing already walked. The firms that win task orders on day one are the firms that started preparing eighteen months earlier — not on the proposal, on the relationships.",
+        "This playbook covers both halves. The onramp drill, and the operating cadence that turns a vehicle slot into actual revenue."
+      ],
+      "ctaText": "Book a B2G vehicle strategy call",
+      "ctaUrl": "https://meetings-na2.hubspot.com/americurial/intro-call",
+      "ctaButtonLabel": "Book the call →",
+      "ctaEyebrow": "30 MIN · NO PITCH"
+    },
+
+    {
+      "type": "dark",
+      "partLabel": "PART ONE · GET ON THE VEHICLE",
+      "headline": "An IDIQ is a hunting license. Task orders are the hunt.",
+      "accentWord": "hunting",
+      "paragraphs": [
+        "Indefinite Delivery, Indefinite Quantity contracts are vehicles, not work. Being on one means you are eligible to compete for task orders against the other holders. Nothing more.",
+        "Roughly seventy-five percent of federal IT and a growing share of professional services now flows through these vehicles. If you're not on at least one, large chunks of the market are closed to you. The next three pages cover which vehicles matter, how to get on, and what the onramp drill actually looks like."
+      ],
+      "headerLabel": "PART ONE"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "01 · WHAT AN IDIQ IS",
+      "html": "<div class=\"eyebrow\">PART ONE · GET ON THE VEHICLE</div>\n<h1>The vehicle is the door. The task order is the work.</h1>\n<p>An IDIQ (Indefinitely Delivered, Indefinitely Quantity) contract is a vehicle, not a contract for actual work. Being on the vehicle means you're eligible to compete. Task orders are where the money actually flows. Three numbers anchor how big this market is.</p>\n\n<table>\n  <thead>\n    <tr><th>Metric</th><th>FY2025 number</th><th>What it means</th></tr>\n  </thead>\n  <tbody>\n    <tr>\n      <td><strong>GWAC / MAC annual spend</strong></td>\n      <td><strong>$2.3T+</strong><br><span style=\"color:#78716c; font-size:9pt;\">FY2025 estimate</span></td>\n      <td>Total work flowing through vehicle contracts, not open-market bids</td>\n    </tr>\n    <tr>\n      <td><strong>IT spend via vehicles</strong></td>\n      <td><strong>~75%</strong><br><span style=\"color:#78716c; font-size:9pt;\">Most IT work is vehicle-based</span></td>\n      <td>If you're not on a vehicle, three-quarters of federal IT is closed to you</td>\n    </tr>\n    <tr>\n      <td><strong>Typical IDIQ period</strong></td>\n      <td><strong>5-10 years</strong><br><span style=\"color:#78716c; font-size:9pt;\">Base plus options</span></td>\n      <td>Long-cycle commitment, which is why onramps only open every 2-5 years</td>\n    </tr>\n  </tbody>\n</table>\n\n<div class=\"callout callout--emerald\">\n  <div style=\"font-family:'IBM Plex Mono', monospace; font-size:8.5pt; font-weight:600; letter-spacing:0.16em; color:#047857; text-transform:uppercase; margin-bottom:2mm;\">PLAIN LANGUAGE</div>\n  <strong>Vehicle = eligibility. Task order = revenue.</strong> A firm with five vehicle slots and zero task orders has revenue of zero. A firm with one vehicle slot and seven task orders is doing fine. Track the second number, not the first.\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "02 · MAJOR VEHICLES",
+      "html": "<div class=\"eyebrow\">PART ONE · GET ON THE VEHICLE</div>\n<h1>Major GWAC and IDIQ vehicles worth pursuing.</h1>\n<p>There are dozens of vehicles. These eight cover the majority of the spend that small and mid-sized firms can realistically chase. Match your NAICS, size status, and target agency to a vehicle before you spend a dollar on the proposal.</p>\n\n<table>\n  <thead>\n    <tr><th>Vehicle</th><th>Agency</th><th>Focus Area</th><th>Set-Aside</th><th>Est. Ceiling</th></tr>\n  </thead>\n  <tbody>\n    <tr><td><strong>OASIS+</strong></td><td>GSA</td><td>Professional Services (all domains)</td><td>Full / Small / SB pools</td><td>$60B</td></tr>\n    <tr><td><strong>STARS III</strong></td><td>GSA</td><td>IT Services (8(a) and small business)</td><td>8(a) + SB</td><td>$50B</td></tr>\n    <tr><td><strong>SEWP V</strong></td><td>NASA</td><td>IT Products &amp; Services</td><td>None (all sizes)</td><td>$20B</td></tr>\n    <tr><td><strong>CIO-SP4</strong></td><td>NIH</td><td>IT &amp; Health IT</td><td>SB / 8(a) / WOSB / HUBZone pools</td><td>$20B</td></tr>\n    <tr><td><strong>Alliant 3</strong></td><td>GSA</td><td>Complex IT (enterprise)</td><td>Full &amp; Open</td><td>$75B</td></tr>\n    <tr><td><strong>Mentor-Protege</strong></td><td>DoD / SBA</td><td>Joint ventures with large primes</td><td>SB only</td><td>Varies</td></tr>\n    <tr><td><strong>VETS 2</strong></td><td>GSA</td><td>IT Services</td><td>SDVOSB only</td><td>$5B</td></tr>\n    <tr><td><strong>8(a) STARS III</strong></td><td>GSA</td><td>IT — 8(a) only</td><td>8(a)</td><td>Part of STARS III</td></tr>\n  </tbody>\n</table>\n\n<div class=\"callout\" style=\"border-left: 4px solid #f59e0b; background: #fffbeb;\">\n  <div style=\"font-family:'IBM Plex Mono', monospace; font-size:8.5pt; font-weight:600; letter-spacing:0.16em; color:#b45309; text-transform:uppercase; margin-bottom:2mm;\">DON'T CHASE EVERY VEHICLE</div>\n  <p style=\"margin:0;\">Pick two or three. Each one is six to twelve months of paperwork and a multi-year commitment to keeping your past performance, key personnel, and pricing current. Firms that chase eight vehicles win on zero. Firms with three vehicles and a focused task-order strategy are the ones billing real revenue.</p>\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "03 · ONRAMP STRATEGY",
+      "html": "<div class=\"eyebrow\">PART ONE · GET ON THE VEHICLE</div>\n<h1>Getting on a vehicle: the onramp strategy.</h1>\n<p>Major vehicles reopen for new entrants every two to five years. Miss the window and you wait. Five moves to make before, during, and after the onramp solicitation hits SAM.</p>\n\n<ol>\n  <li><strong>Identify two or three vehicles aligned to your NAICS, size status, and target agencies.</strong> Don't go wide. Pick the ones where you have past performance the eval panel will actually score.</li>\n  <li><strong>Monitor SAM.gov for onramp solicitations.</strong> Major vehicles reopen every two to five years. Set saved searches on the vehicle name and the program office that runs it.</li>\n  <li><strong>Prepare your vehicle proposal package well in advance.</strong> They require detailed past performance packages, key personnel resumes, technical capability narratives, and sometimes financial statements. Six months of prep is the floor, not the ceiling.</li>\n  <li><strong>Consider subcontracting to a prime on a vehicle first.</strong> Build the experience and the relationships before pursuing your own slot. A year as a sub on STARS III teaches you more about the vehicle than a binder of templates.</li>\n  <li><strong>Review debriefs from unsuccessful onramp bids.</strong> Even your own losses. Especially your own losses. The debrief tells you exactly what the eval panel weighted and where the gaps were.</li>\n</ol>\n\n<h2>What 'subbing first' really gets you</h2>\n<p>The firms that show up to an onramp with a winning proposal usually spent the previous cycle as a sub on the existing vehicle. They have direct task-order experience. They have a relationship with the contracting office. They know which clauses get enforced and which ones get waived. They have key personnel who've already passed agency suitability checks. That's the unfair advantage. It's not in any template.</p>\n\n<div class=\"callout callout--emerald\">\n  <div style=\"font-family:'IBM Plex Mono', monospace; font-size:8.5pt; font-weight:600; letter-spacing:0.16em; color:#047857; text-transform:uppercase; margin-bottom:2mm;\">FIELD TIP</div>\n  <strong>Set the onramp alert eighteen months out.</strong> The official solicitation hits SAM maybe ninety days before submission. The smart firms are watching industry days, draft RFP releases, and program office signaling a year and a half before that. By the time the solicitation drops, your proposal should be 80% done.\n</div>\n"
+    },
+
+    {
+      "type": "dark",
+      "partLabel": "PART TWO · WIN THE TASK ORDER",
+      "headline": "Three to fourteen days from drop to submission. Win the work before the RFP appears.",
+      "accentWord": "before",
+      "paragraphs": [
+        "Open-market bids give you thirty to sixty days. Task orders on a vehicle give you a fraction of that — sometimes 72 hours. The firms that win are the ones who treated the previous twelve months as the proposal period.",
+        "Reusable technical content. Pre-cleared key personnel. Pre-signed teaming agreements. Pricing already walked against the vehicle ceiling. The next five pages cover the operating cadence that gets you there."
+      ],
+      "headerLabel": "PART TWO"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "04 · TO COMPETITION",
+      "html": "<div class=\"eyebrow\">PART TWO · WIN THE TASK ORDER</div>\n<h1>Task order competition strategy.</h1>\n<p>Once you're on a vehicle, winning task orders is a different sport from open-market bids. Six habits separate the firms that bill from the firms that don't.</p>\n\n<ul>\n  <li><strong>Respond to EVERY RFI within your NAICS</strong> — even if you can't win this one. You're building name recognition with the contracting office for the next three.</li>\n  <li><strong>Build a library of reusable technical approach content</strong> organized by capability area. When the TO drops with a 72-hour clock, you should be assembling, not writing.</li>\n  <li><strong>Invest in key personnel who hold relevant clearances and agency relationships.</strong> A program manager with a Secret clearance and seven years at the agency is worth more than three junior engineers.</li>\n  <li><strong>Track your competitors' task order wins at FPDS.gov.</strong> Read the awards. Read the SOWs. Understand which firms keep winning at which agencies and why.</li>\n  <li><strong>Pursue teaming agreements with complementary firms on the same vehicle.</strong> If you do cyber, find the firms doing cloud migration. The TO that needs both is the TO you both win.</li>\n  <li><strong>Negotiate strong teaming agreements BEFORE task orders drop.</strong> Paper the relationship while there's no pressure. When the TO hits and you have 72 hours, you don't have time to lawyer a JV.</li>\n</ul>\n\n<h2>Why open-market habits get you killed on a vehicle</h2>\n<p>Open-market bids reward thoroughness. Twelve-page management plans. Six-page past performance writeups. Full graphics treatments. Task orders reward speed and fit. A clean fifteen-page response submitted on hour 48 of a 72-hour window beats a beautiful thirty-page response submitted late. The eval panel scores on clarity, technical alignment, and price realism — not page count.</p>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "05 · RESPONSE CHECKLIST",
+      "html": "<div class=\"eyebrow\">PART TWO · WIN THE TASK ORDER</div>\n<h1>Task order response checklist.</h1>\n<p>Six gates between drafting and submission. If you can't check all six, don't submit. Walking away from a half-baked TO response is cheaper than the rework you'll do on the next one if you submit garbage now.</p>\n\n<table>\n  <thead>\n    <tr><th style=\"width:14mm;\">Done</th><th>Action</th></tr>\n  </thead>\n  <tbody>\n    <tr><td style=\"text-align:center; font-size:14pt; color:#10b981;\">&#9744;</td><td>Confirmed all team members are on the same vehicle. Check PIID / vehicle contract numbers, not just company names.</td></tr>\n    <tr><td style=\"text-align:center; font-size:14pt; color:#10b981;\">&#9744;</td><td>Technical approach tailored to this specific agency mission. Not templated from the previous task order.</td></tr>\n    <tr><td style=\"text-align:center; font-size:14pt; color:#10b981;\">&#9744;</td><td>Key personnel confirmed as available and compliant with qualifications in the TO PWS. Letters of commitment dated within the proposal window.</td></tr>\n    <tr><td style=\"text-align:center; font-size:14pt; color:#10b981;\">&#9744;</td><td>Pricing consistent with vehicle rates. You cannot exceed your vehicle ceiling rates without a modification, and you don't have time for a modification.</td></tr>\n    <tr><td style=\"text-align:center; font-size:14pt; color:#10b981;\">&#9744;</td><td>Past performance references are directly relevant to this TO scope. Not your three best refs from the cap statement — the three most relevant for this specific work.</td></tr>\n    <tr><td style=\"text-align:center; font-size:14pt; color:#10b981;\">&#9744;</td><td>Submitted on time via the correct portal (e-Buy, GSA Advantage, or agency portal). Confirm receipt. Screenshot the confirmation.</td></tr>\n  </tbody>\n</table>\n\n<div class=\"callout\" style=\"border-left: 4px solid #f59e0b; background: #fffbeb;\">\n  <div style=\"font-family:'IBM Plex Mono', monospace; font-size:8.5pt; font-weight:600; letter-spacing:0.16em; color:#b45309; text-transform:uppercase; margin-bottom:2mm;\">PORTAL TRAP</div>\n  <p style=\"margin:0;\">Most vehicle task orders use a specific portal — e-Buy for GSA, NITAAC ESPS for CIO-SP4, NASA SEWP's own portal. Submitting to the wrong system or emailing the KO directly disqualifies you regardless of the proposal quality. The portal opens close on the dot. The portal does not care that you uploaded at 5:00:14 PM. You're out.</p>\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "06 · TEAMING",
+      "html": "<div class=\"eyebrow\">PART TWO · WIN THE TASK ORDER</div>\n<h1>Teaming on vehicles.</h1>\n<p>Most task orders need a capability mix no single small firm holds. Teaming closes the gap, but only if the paperwork and the relationship are both in place before the TO drops.</p>\n\n<h2>Three teaming structures</h2>\n<table>\n  <thead>\n    <tr><th>Structure</th><th>When to use it</th><th>Watch-outs</th></tr>\n  </thead>\n  <tbody>\n    <tr>\n      <td><strong>Prime / Sub</strong></td>\n      <td>You hold the vehicle slot, sub does specific tasks. Default for most TOs.</td>\n      <td>Sub's labor categories must map to your vehicle. Confirm before bidding.</td>\n    </tr>\n    <tr>\n      <td><strong>Joint Venture</strong></td>\n      <td>You and a partner both contribute size status (8(a) JV, SDVOSB JV, etc.) for set-aside work.</td>\n      <td>JV agreement must be SBA-approved BEFORE the TO drops. Three months of lead time.</td>\n    </tr>\n    <tr>\n      <td><strong>Mentor-Protege JV</strong></td>\n      <td>Small business teams with a large prime. JV inherits the small business size for the work.</td>\n      <td>Mentor-Protege agreement must be approved by SBA. Six to nine months of setup.</td>\n    </tr>\n  </tbody>\n</table>\n\n<h2>Paperwork to have ready</h2>\n<ul>\n  <li>Mutual NDA — signed at first conversation. No exceptions.</li>\n  <li>Teaming agreement — signed before the TO drops. Include scope, revenue split, exclusivity, and dispute resolution.</li>\n  <li>Subcontract template — pre-negotiated terms so you're not lawyering when the clock is ticking.</li>\n  <li>Vehicle confirmation — both firms' PIID on the same vehicle, current and in good standing.</li>\n  <li>Past performance package from the sub — three relevant refs they'll let you cite in your proposal.</li>\n</ul>\n\n<div class=\"callout callout--emerald\">\n  <div style=\"font-family:'IBM Plex Mono', monospace; font-size:8.5pt; font-weight:600; letter-spacing:0.16em; color:#047857; text-transform:uppercase; margin-bottom:2mm;\">RELATIONSHIPS FIRST, PAPERWORK SECOND</div>\n  <strong>The teaming agreement is a record of the relationship. It is not the relationship.</strong> The firms that win TOs together have usually worked together on something — a small subcontract, a joint white paper, even a marketing event — before they bid. Trust is what survives a hard schedule. The MSA is what you reach for when trust runs thin.\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "07 · PRICING",
+      "html": "<div class=\"eyebrow\">PART TWO · WIN THE TASK ORDER</div>\n<h1>Pricing and labor categories.</h1>\n<p>Vehicle pricing is constrained. You bid the labor categories on your vehicle at rates at or below your ceiling. Three places small firms lose on cost.</p>\n\n<h2>The three pricing failure modes</h2>\n<ol>\n  <li><strong>Bidding above ceiling rates.</strong> Your vehicle proposal locked in a maximum hourly rate per labor category. Bid above and the TO is technically non-compliant. The KO can't legally award it.</li>\n  <li><strong>Loaded labor rates that don't survive cost realism.</strong> The eval panel runs your rates against agency-specific benchmarks. If your senior engineer is bid at $95/hr in DC, the realism reviewer flags it as unrealistic and you lose the cost score.</li>\n  <li><strong>Skipping the price-to-win analysis.</strong> Walk the labor mix. Walk the loaded rates. Compare against the last three awards at the same agency for similar work (FPDS, USASpending). The winning bid is usually within 3-5% of the IGCE — not below it.</li>\n</ol>\n\n<h2>Labor category mapping</h2>\n<p>Every vehicle has a labor category schedule. When the TO drops, the PWS will name skill levels — usually 'Senior', 'Mid', 'Junior' across job families. Your job: map the TO's named roles to your vehicle's labor categories before you write a line of price narrative. If the TO needs a 'Cyber Architect' and your vehicle only has 'Senior Engineer', you have to make the case that they're equivalent. Some agencies will accept it. Some won't.</p>\n\n<table>\n  <thead>\n    <tr><th>TO names this role</th><th>Map to vehicle category</th><th>Justification needed?</th></tr>\n  </thead>\n  <tbody>\n    <tr><td>Senior Cyber Engineer</td><td>Senior Engineer (Cyber)</td><td>Usually no — direct match</td></tr>\n    <tr><td>Cloud Solutions Architect</td><td>Senior Engineer (Cloud)</td><td>Yes — include resume with cert</td></tr>\n    <tr><td>Program Manager</td><td>Program Manager</td><td>No — universal category</td></tr>\n    <tr><td>Junior Analyst</td><td>Mid-Level Analyst (lowest tier)</td><td>Yes — bid at floor of your ceiling</td></tr>\n  </tbody>\n</table>\n\n<div class=\"callout\" style=\"border-left: 4px solid #f59e0b; background: #fffbeb;\">\n  <div style=\"font-family:'IBM Plex Mono', monospace; font-size:8.5pt; font-weight:600; letter-spacing:0.16em; color:#b45309; text-transform:uppercase; margin-bottom:2mm;\">LOWBALLING IS A TRAP</div>\n  <p style=\"margin:0;\">Bidding 20% below your competitors looks like a win until the realism review zeroes it out. Then the contract gets awarded at full price to the firm whose numbers held up. Build the IGCE first. Bid within 5% of it. Win the technical score and let the price be defensible, not aggressive.</p>\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "08 · POST-AWARD",
+      "html": "<div class=\"eyebrow\">PART TWO · WIN THE TASK ORDER</div>\n<h1>The first ninety days on a task order.</h1>\n<p>Winning the TO is the start, not the finish. The ninety days after award decide whether the COR rates you a 'Very Good' or an 'Exceptional' on your CPARS — which is what wins your next three task orders.</p>\n\n<h2>Days 1-30: stand up</h2>\n<ul>\n  <li>Kickoff meeting within 5 business days of award. Bring the named PM, the technical lead, and one of the key personnel from the proposal. Not the BD team.</li>\n  <li>Confirm clearances for every person on the staffing plan. If anyone's clearance lapses, replace before they show up to a SCIF and embarrass you.</li>\n  <li>Stand up the project management plan, communications cadence, and risk register the proposal promised.</li>\n  <li>Submit the first invoice on day 30 even if it's small. Cash flow signals operational maturity.</li>\n</ul>\n\n<h2>Days 31-60: execute</h2>\n<ul>\n  <li>Hit the first deliverable date. Not the second one. The first one is the trust test.</li>\n  <li>Weekly status report to the COR. Brief format. Status, risks, asks. Three pages, not thirty.</li>\n  <li>Document every change request. Get COR signoff in writing before doing the work. Scope creep without a mod kills your margin.</li>\n</ul>\n\n<h2>Days 61-90: position</h2>\n<ul>\n  <li>Schedule a thirty-day check-in with the COR. Ask what's working, what's not, and what they wish they'd asked for in the PWS.</li>\n  <li>Start building the next task order conversation. The agency has a forecast. Get on it.</li>\n  <li>Capture quotes for the CPARS narrative. The COR's words at month two are gold for the formal review at month twelve.</li>\n</ul>\n\n<div class=\"callout callout--emerald\">\n  <div style=\"font-family:'IBM Plex Mono', monospace; font-size:8.5pt; font-weight:600; letter-spacing:0.16em; color:#047857; text-transform:uppercase; margin-bottom:2mm;\">CPARS IS THE COMPOUND INTEREST</div>\n  <strong>One 'Exceptional' CPARS rating is worth more than three 'Very Good' ratings.</strong> The next eval panel reads them. The COR who rates you talks to other CORs. The firms with a wall of Exceptionals on STARS III are the firms who win three TOs in a row at the same agency. Build for that, starting in week one.\n</div>\n"
+    },
+
+    {
+      "type": "back-cover",
+      "eyebrow": "WHAT'S NEXT",
+      "headline": "Stop chasing every vehicle. Win the task orders on the ones you already hold.",
+      "accentWord": "win",
+      "body": "CapturePilot tracks task order drops across e-Buy, GSA Advantage, NITAAC, SEWP, and 30+ agency portals. It maps each TO to the vehicles you hold, scores it against your past performance, and shows you which ones are worth the 72-hour sprint. Free 14-day trial. No card.",
+      "ctaText": "Get the full Federal Launch Kit →",
+      "ctaUrl": "https://www.capturepilot.com/startup-pack"
+    }
+  ]
+}

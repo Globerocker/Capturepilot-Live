@@ -1,0 +1,137 @@
+{
+  "id": "commercial-to-federal-pp",
+  "title": "Converting Commercial Work into Federal Past Performance",
+  "slug": "commercial-to-federal-pp",
+  "pages": 12,
+  "footerLabel": "CAPTUREPILOT · COMMERCIAL TO FEDERAL PAST PERFORMANCE",
+  "headerLabel": "COMMERCIAL TO FEDERAL PP",
+  "parts": [
+    {
+      "type": "cover",
+      "eyebrow": "FEDERAL LAUNCH KIT · PAST-PERFORMANCE REFERENCE TEMPLATES",
+      "titleLines": [
+        "Convert commercial work",
+        "into federal past",
+        "performance."
+      ],
+      "accentWord": "federal",
+      "pages": 12,
+      "toolStrip": [
+        { "num": "01", "title": "FAR 15.305(a)(2)", "desc": "Commercial past performance is explicitly allowed" },
+        { "num": "02", "title": "4 dimensions", "desc": "Relevance, recency, quality, complexity" },
+        { "num": "03", "title": "3-year window", "desc": "Most agencies score the last 36 months" },
+        { "num": "04", "title": "5-field narrative", "desc": "Overview, scope, complexity, performance, reference" }
+      ]
+    },
+
+    {
+      "type": "toc",
+      "title": "Inside this guide.",
+      "parts": [
+        {
+          "label": "PART ONE · THE FRAMING RULES",
+          "items": [
+            { "code": "F01", "title": "Why commercial past performance counts", "desc": "What FAR 15.305(a)(2) actually says and the three numbers that matter.", "page": 4 },
+            { "code": "F02", "title": "The four-dimension framing framework", "desc": "Relevance, recency, performance quality, complexity — what evaluators score.", "page": 5 },
+            { "code": "F03", "title": "Narrative template for a commercial reference", "desc": "The five-field structure that turns a commercial job into a scoreable entry.", "page": 6 }
+          ]
+        },
+        {
+          "label": "PART TWO · TRANSLATE AND VERIFY",
+          "items": [
+            { "code": "T01", "title": "Commercial-to-federal translation table", "desc": "Seven terms a CO needs to see in federal language, with usage examples.", "page": 8 },
+            { "code": "T02", "title": "Reference verification checklist", "desc": "Five steps before you submit, so the call from the eval panel doesn't surprise anyone.", "page": 9 },
+            { "code": "T03", "title": "Common mistakes that get refs ignored", "desc": "Eight failure modes we see on most first proposals.", "page": 10 },
+            { "code": "T04", "title": "What to do when you have no federal refs", "desc": "Three plays to build a federal-grade reference book in twelve months.", "page": 11 }
+          ]
+        }
+      ]
+    },
+
+    {
+      "type": "founder",
+      "headline": "You don't need a government contract to bid on a government contract.",
+      "accentWord": "don't",
+      "paragraphs": [
+        "Half the small businesses we onboard tell us the same thing in the first call: 'We have great commercial customers but no federal past performance, so we can't bid.' That isn't true. FAR 15.305(a)(2) explicitly tells contracting officers to consider commercial past performance when scoring proposals. The problem isn't that you don't have it. The problem is the way most firms write it up makes evaluators skip it.",
+        "I've watched proposal teams hand in references like 'Provided IT support to ACME Corp from 2022 to 2024.' One sentence. No scale. No scope. No problem solved. The evaluator reads that line, can't map it to the requirement, and gives the section a 'Neutral' rating. Neutral isn't bad — but in a competitive eval, neutral loses to a competitor who wrote three paragraphs that match the SOW line for line.",
+        "The fix is framing. Same commercial job, same outcomes, but rewritten so the four things a federal evaluator scores — relevance, recency, quality, complexity — are right there in the first read. We've used this exact structure on commercial-only firms who landed their first GSA Schedule, their first Sources Sought response, and their first $250K SAP award without a single federal contract on the books.",
+        "This guide is the framing checklist I wish every new client started with. Four dimensions. One narrative template. One translation table. One verification list. Run it on every commercial job you'd consider citing, and your past-performance volume will look the same as a firm that's been bidding for five years."
+      ],
+      "ctaText": "Book a B2G past-performance review",
+      "ctaUrl": "https://meetings-na2.hubspot.com/americurial/intro-call",
+      "ctaButtonLabel": "Book the call →",
+      "ctaEyebrow": "30 MIN · NO PITCH"
+    },
+
+    {
+      "type": "dark",
+      "partLabel": "PART ONE · THE FRAMING RULES",
+      "headline": "FAR allows it. Framing decides if it counts.",
+      "accentWord": "counts",
+      "paragraphs": [
+        "FAR 15.305(a)(2) is the regulation that tells federal evaluators to consider commercial past performance. It's been on the books for over twenty years. The challenge is never the rule itself — it's that commercial references arrive in commercial language, and evaluators score in federal language.",
+        "The next three pages cover the four dimensions an evaluator scores against and the five-field narrative structure that turns any commercial job into a reference a contracting officer can read, recognize, and rate."
+      ],
+      "headerLabel": "PART ONE"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "WHY IT COUNTS",
+      "html": "<div class=\"eyebrow\">PART ONE · THE FRAMING RULES</div>\n<h1>Why commercial past performance counts.</h1>\n<p>You do not need a government contract to bid for federal work. FAR 15.305(a)(2) explicitly directs contracting officers to consider commercial past performance during the source selection. The challenge is never the rule — the challenge is framing the work so a federal evaluator can score it.</p>\n\n<table>\n  <thead>\n    <tr><th>Compliance</th><th>References</th><th>Lookback</th></tr>\n  </thead>\n  <tbody>\n    <tr>\n      <td><strong>100%</strong><br><span style=\"color:#78716c; font-size:9pt;\">FAR allows commercial work</span></td>\n      <td><strong>3+ references</strong><br><span style=\"color:#78716c; font-size:9pt;\">Minimum for most proposals</span></td>\n      <td><strong>3 years</strong><br><span style=\"color:#78716c; font-size:9pt;\">Recent work scores higher</span></td>\n    </tr>\n  </tbody>\n</table>\n\n<h2>What the rule actually says</h2>\n<p>FAR 15.305(a)(2)(ii) reads: 'The evaluation should take into account past performance information regarding predecessor companies, key personnel who have relevant experience, or subcontractors that will perform major or critical aspects of the requirement when such information is relevant to the instant acquisition.' Commercial references are explicitly fair game. Most solicitations repeat this in Section L or M. Read it before you assume you cannot bid.</p>\n\n<div class=\"callout callout--emerald\">\n  <div style=\"font-family:'IBM Plex Mono', monospace; font-size:8.5pt; font-weight:600; letter-spacing:0.16em; color:#047857; text-transform:uppercase; margin-bottom:2mm;\">FIELD TIP</div>\n  <strong>Cite the FAR reference in your proposal narrative.</strong> One sentence in your past-performance volume — 'Per FAR 15.305(a)(2)(ii), the references below include commercial engagements that are relevant in scope and complexity to the instant requirement' — tells the evaluator you know the rule and frames their reading before they hit the first reference.\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "FOUR DIMENSIONS",
+      "html": "<div class=\"eyebrow\">PART ONE · THE FRAMING RULES</div>\n<h1>The framing framework.</h1>\n<p>Federal evaluators score past performance on four dimensions. For every commercial project you cite, your narrative has to answer all four. If one is missing, the reference gets a 'Neutral' rating, which in a competitive eval usually loses.</p>\n\n<table>\n  <thead>\n    <tr><th>Dimension</th><th>What evaluators look for</th><th>How to frame commercial work</th></tr>\n  </thead>\n  <tbody>\n    <tr>\n      <td><strong>Relevance</strong></td>\n      <td>Does the prior work resemble the current requirement in scope, complexity, and domain?</td>\n      <td>Match the NAICS code. Emphasize scale (number of users, square footage, systems). Use federal-equivalent terminology.</td>\n    </tr>\n    <tr>\n      <td><strong>Recency</strong></td>\n      <td>Was the work performed in the last three years?</td>\n      <td>Use month and year dates. If work ended more than three years ago, note an ongoing relationship or follow-on work.</td>\n    </tr>\n    <tr>\n      <td><strong>Performance Quality</strong></td>\n      <td>Were deliverables on time, within budget, and within spec?</td>\n      <td>Quantify outcomes: 'delivered fifteen days early,' '8% under budget,' '99.7% uptime.' Provide a reachable reference.</td>\n    </tr>\n    <tr>\n      <td><strong>Complexity</strong></td>\n      <td>Was the work at least as complex as the target contract?</td>\n      <td>Describe constraints: tight deadlines, multi-site, sensitive data, regulated environment (HIPAA, SOC 2, PCI).</td>\n    </tr>\n  </tbody>\n</table>\n\n<h2>How evaluators score</h2>\n<p>Most evaluations use a five-point adjectival scale: Exceptional, Very Good, Satisfactory, Marginal, Unsatisfactory — plus 'Neutral' when there's not enough information to rate. A commercial reference with all four dimensions covered usually scores Satisfactory or higher. A commercial reference that only describes what you did, with no scale or constraint, usually scores Neutral. Neutral is the silent killer of small-business proposals.</p>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "NARRATIVE TEMPLATE",
+      "html": "<div class=\"eyebrow\">PART ONE · THE FRAMING RULES</div>\n<h1>Narrative template for a commercial reference.</h1>\n<p>Use this five-field structure when you write a commercial past-performance entry into a proposal. Each field maps to one of the dimensions on the previous page. Keep each reference to roughly a half page so the evaluator can read all three to five of them without losing context.</p>\n\n<ol>\n  <li><strong>Client Overview.</strong> '[Client Name], a [industry] company with [scale descriptor — e.g., 5,000 employees, 12 locations, $400M annual revenue].' One sentence. The scale is what an evaluator uses to gauge relevance.</li>\n  <li><strong>Scope.</strong> '[Your company] provided [service] over [period] under a [contract type — fixed price, T&amp;M, retainer] engagement valued at [$X].' Period of performance and dollar value are the two facts a CO uses to compare your reference against the target requirement.</li>\n  <li><strong>Complexity.</strong> 'The engagement required [specific technical or operational challenge that parallels federal requirements — multi-site rollout, regulated data, 24/7 SLA, integration with legacy systems].' This is the field most firms skip. It's the field that pulls the reference out of 'Neutral.'</li>\n  <li><strong>Performance.</strong> '[Specific measurable outcomes — on-time delivery, cost savings, quality metrics, customer-reported satisfaction].' Numbers, not adjectives. 'On time and on budget' is a self-rating. '12 days early, 6% under budget, zero defects on UAT' is performance data.</li>\n  <li><strong>Reference.</strong> '[Name, Title, Phone, Email] is available to discuss our performance.' Use a real human who has agreed to take the call. Title should be senior enough that the evaluator believes their assessment.</li>\n</ol>\n\n<h2>A working example</h2>\n<p>Bad: 'Provided IT managed services to a regional healthcare client from 2022 to present.'</p>\n<p>Good: 'Provided 24/7 managed IT services to Riverview Health, a 1,400-bed regional hospital network with 11 sites, from March 2023 to present. The $2.4M three-year T&amp;M engagement covered endpoint management for 4,200 clinical workstations, HIPAA-compliant backup, and a 99.9% uptime SLA. Delivered the initial site cutover 14 days ahead of schedule and held uptime at 99.94% for eight consecutive quarters. Reference: Maria Chen, CIO, 555-0142, mchen@riverviewhealth.org.'</p>\n<p>Same job. One reads as filler. The other reads as a federal-grade reference an evaluator can score without asking a single follow-up question.</p>\n"
+    },
+
+    {
+      "type": "dark",
+      "partLabel": "PART TWO · TRANSLATE AND VERIFY",
+      "headline": "Same work. Federal vocabulary.",
+      "accentWord": "vocabulary",
+      "paragraphs": [
+        "Commercial language and federal language describe the same activities with different nouns. 'Client' becomes 'requiring activity.' 'Project manager' becomes 'Contracting Officer's Representative.' 'SLA' becomes 'Acceptable Quality Level.' Evaluators pattern-match. If they read 'client,' they read it as commercial. If they read 'requiring activity,' they read it as federal-fluent.",
+        "The next three pages give you a translation table, a five-step reference verification list, and the eight failure modes we see on most first proposals. Plus a contingency plan if you genuinely have no federal references yet."
+      ],
+      "headerLabel": "PART TWO"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "TRANSLATION TABLE",
+      "html": "<div class=\"eyebrow\">PART TWO · TRANSLATE AND VERIFY</div>\n<h1>Commercial-to-federal translation table.</h1>\n<p>Seven terms that evaluators expect to see in federal language. Replace the commercial word with the federal equivalent everywhere it appears in your past-performance narratives, then keep the table in your proposal toolkit for every future bid.</p>\n\n<table>\n  <thead>\n    <tr><th>Commercial term</th><th>Federal equivalent</th><th>Usage example</th></tr>\n  </thead>\n  <tbody>\n    <tr>\n      <td><strong>Client</strong></td>\n      <td>Government Customer / Requiring Activity</td>\n      <td>Replace 'client' with 'requiring activity' in the proposal narrative.</td>\n    </tr>\n    <tr>\n      <td><strong>Project Manager</strong></td>\n      <td>Contracting Officer's Representative (COR)</td>\n      <td>Frame your PM as performing COR-equivalent duties for the commercial engagement.</td>\n    </tr>\n    <tr>\n      <td><strong>Deliverable</strong></td>\n      <td>Contract Data Requirements List (CDRL) item</td>\n      <td>List deliverables in a table similar to a CDRL format with delivery dates.</td>\n    </tr>\n    <tr>\n      <td><strong>SLA</strong></td>\n      <td>Performance Standard / Acceptable Quality Level (AQL)</td>\n      <td>Translate SLA targets to AQL language: '99.9% uptime measured monthly.'</td>\n    </tr>\n    <tr>\n      <td><strong>Invoice</strong></td>\n      <td>Invoice / Voucher</td>\n      <td>Federal invoicing is similar. Note net-30 and EFT compliance if you have it.</td>\n    </tr>\n    <tr>\n      <td><strong>Data Security</strong></td>\n      <td>FISMA / FedRAMP / CMMC equivalent</td>\n      <td>Map your commercial security controls (SOC 2, ISO 27001) to the relevant federal framework.</td>\n    </tr>\n    <tr>\n      <td><strong>Quality Assurance</strong></td>\n      <td>Quality Control Plan (QCP)</td>\n      <td>Structure your QA narrative as a mini QCP with surveillance and corrective action.</td>\n    </tr>\n  </tbody>\n</table>\n\n<div class=\"callout callout--emerald\">\n  <div style=\"font-family:'IBM Plex Mono', monospace; font-size:8.5pt; font-weight:600; letter-spacing:0.16em; color:#047857; text-transform:uppercase; margin-bottom:2mm;\">FIELD TIP</div>\n  <strong>Run a find-and-replace pass on every proposal.</strong> Search for 'client,' 'project manager,' 'SLA,' and 'deliverable.' If any of those words made it into your past-performance volume, you've left commercial language on the page. Five-minute fix. Often worth one to two adjectival rating notches.\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "VERIFY + MISTAKES",
+      "html": "<div class=\"eyebrow\">PART TWO · TRANSLATE AND VERIFY</div>\n<h1>Reference verification checklist.</h1>\n<p>Run this list before you submit. The eval panel will call. If your reference isn't expecting it, can't be reached, or describes a different scope than you wrote up, the rating drops two notches and the proposal usually loses.</p>\n\n<table>\n  <thead>\n    <tr><th style=\"width:14mm;\">Done</th><th>Verification step</th></tr>\n  </thead>\n  <tbody>\n    <tr><td style=\"text-align:center; font-size:14pt; color:#10b981;\">&#9744;</td><td>Called or emailed reference within the last 60 days to confirm availability.</td></tr>\n    <tr><td style=\"text-align:center; font-size:14pt; color:#10b981;\">&#9744;</td><td>Reference has confirmed their title and contact information are current.</td></tr>\n    <tr><td style=\"text-align:center; font-size:14pt; color:#10b981;\">&#9744;</td><td>Reference knows they may be contacted by a federal contracting officer or evaluator.</td></tr>\n    <tr><td style=\"text-align:center; font-size:14pt; color:#10b981;\">&#9744;</td><td>Reference is prepared to discuss scope, your performance, and measurable outcomes.</td></tr>\n    <tr><td style=\"text-align:center; font-size:14pt; color:#10b981;\">&#9744;</td><td>Reference contact info on the form matches exactly what is listed in your proposal.</td></tr>\n  </tbody>\n</table>\n\n<h2>Eight common mistakes that get commercial refs ignored</h2>\n<ol>\n  <li><strong>Vague scope.</strong> 'IT support' is not a scope. 'Endpoint management for 4,200 clinical workstations across 11 sites' is a scope.</li>\n  <li><strong>No dollar value.</strong> Evaluators need to compare your commercial reference dollar value against the target contract value. Skip it and the relevance score drops.</li>\n  <li><strong>No period of performance.</strong> Month-and-year start and end. 'Ongoing since 2023' is acceptable. '2023' is not.</li>\n  <li><strong>Adjectives instead of numbers.</strong> 'Excellent uptime' is your opinion. '99.94% uptime measured monthly' is performance data.</li>\n  <li><strong>Unreachable reference.</strong> The single fastest way to score Neutral. Confirm the phone number before you submit.</li>\n  <li><strong>Junior reference.</strong> A reference who reports to your day-to-day point of contact won't be credible. Aim for director-level or above.</li>\n  <li><strong>Mismatched NAICS.</strong> If the reference is in a different NAICS family from the target solicitation, the relevance score drops. Note the federal-equivalent NAICS in the entry header.</li>\n  <li><strong>No complexity statement.</strong> Without a complexity sentence, the evaluator cannot judge whether the work was hard enough to count. This is the most common omission on first proposals.</li>\n</ol>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "NO FEDERAL REFS YET",
+      "html": "<div class=\"eyebrow\">PART TWO · TRANSLATE AND VERIFY</div>\n<h1>What to do when you have zero federal references.</h1>\n<p>Some firms genuinely have no federal work yet. That is fine. The first goal is to build a reference book that looks federal-grade inside twelve months. Three plays to run in parallel.</p>\n\n<h2>Play 1 — Subcontract on a small federal award</h2>\n<p>Find a small prime with a $50K-$250K SAP award in your NAICS. Offer to perform a defined chunk of the scope at cost or near-cost in exchange for a Letter of Past Performance that documents your role, dollar value, and outcome. Twelve weeks of effort usually yields one federal reference. Two awards yield three references. Three references put you over the typical past-performance minimum.</p>\n\n<h2>Play 2 — Win a micro-purchase</h2>\n<p>Micro-purchases under $10K do not require a competitive solicitation. Contracting officers can buy directly via credit card. Build a one-page capability sheet, walk it into the small business office at a local installation, and ask what they buy under the micro-purchase threshold. A $4,800 services purchase you deliver well becomes a federal past-performance reference inside 60 days.</p>\n\n<h2>Play 3 — Frame relevant commercial work to federal standard</h2>\n<p>While the first two plays run, use the framework in this guide to convert your strongest three to five commercial engagements into federal-grade references. Most firms can cite at least three commercial jobs in the target NAICS with the four dimensions covered. With the FAR 15.305(a)(2) citation up front, those three references are enough to bid most Sources Sought, RFI, and small SAP solicitations.</p>\n\n<div class=\"callout\" style=\"border-left: 4px solid #f59e0b; background: #fffbeb;\">\n  <div style=\"font-family:'IBM Plex Mono', monospace; font-size:8.5pt; font-weight:600; letter-spacing:0.16em; color:#b45309; text-transform:uppercase; margin-bottom:2mm;\">REALITY CHECK</div>\n  <p style=\"margin:0;\">Even with all three plays running, expect six to twelve months before your reference book reads as federal-fluent. That timeline is normal. The firms that quit at month four because 'we don't have past performance' are the ones who never bid. The firms that keep running the playbook usually have a federal contract by month twelve.</p>\n</div>\n"
+    },
+
+    {
+      "type": "back-cover",
+      "eyebrow": "WHAT'S NEXT",
+      "headline": "Stop disqualifying yourself before the bid.",
+      "accentWord": "yourself",
+      "body": "CapturePilot scores your commercial past performance against every active Sources Sought, RFI, and SAP solicitation in your NAICS — so you can see which of your commercial jobs maps to which opening, and what framing to use. Free 14-day trial. No card.",
+      "ctaText": "Get the full Federal Launch Kit →",
+      "ctaUrl": "https://www.capturepilot.com/startup-pack"
+    }
+  ]
+}

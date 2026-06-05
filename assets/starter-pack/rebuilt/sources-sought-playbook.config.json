@@ -1,0 +1,155 @@
+{
+  "id": "sources-sought-playbook",
+  "title": "Sources Sought / RFI Playbook",
+  "slug": "sources-sought-rfi-playbook",
+  "pages": 14,
+  "footerLabel": "CAPTUREPILOT · SOURCES SOUGHT / RFI PLAYBOOK",
+  "headerLabel": "SOURCES SOUGHT / RFI",
+  "parts": [
+    {
+      "type": "cover",
+      "eyebrow": "FEDERAL LAUNCH KIT · SOLICITATION PLAYBOOKS",
+      "titleLines": [
+        "Sources Sought",
+        "and RFIs,",
+        "Won Early."
+      ],
+      "accentWord": "Early",
+      "pages": 14,
+      "toolStrip": [
+        { "num": "01", "title": "What & Why", "desc": "The 3 to 6 month head start most firms miss" },
+        { "num": "02", "title": "5-Part Response", "desc": "The structure agencies expect" },
+        { "num": "03", "title": "Checklists", "desc": "Pre and post submission, no guessing" },
+        { "num": "04", "title": "Templates", "desc": "Copy-paste language you can ship today" }
+      ]
+    },
+
+    {
+      "type": "toc",
+      "title": "Inside this playbook.",
+      "footerLabel": "CAPTUREPILOT · SOURCES SOUGHT / RFI PLAYBOOK",
+      "parts": [
+        {
+          "label": "PART ONE · WHY THIS MATTERS",
+          "items": [
+            { "code": "P01", "title": "What a Sources Sought Notice actually is", "desc": "Market research, not a contract. Why ignoring it costs you the next RFP.", "page": 5 },
+            { "code": "P02", "title": "The 3 to 6 month head start", "desc": "How the agency uses your response to shape the solicitation.", "page": 6 },
+            { "code": "P03", "title": "Why most contractors skip it (and why that's wrong)", "desc": "The compounding effect of consistent responses.", "page": 7 }
+          ]
+        },
+        {
+          "label": "PART TWO · HOW TO RESPOND",
+          "items": [
+            { "code": "P04", "title": "The 5-Part response structure", "desc": "Company overview, capability, technical, teaming, questions.", "page": 9 },
+            { "code": "P05", "title": "Pre-response checklist", "desc": "Eight checks before you start writing.", "page": 10 },
+            { "code": "P06", "title": "Post-response actions", "desc": "Follow-up, tracking, pre-positioning for the RFP.", "page": 11 },
+            { "code": "P07", "title": "Templates and copy-paste language", "desc": "Opening paragraph, teaming statement, questions to ask.", "page": 12 },
+            { "code": "P08", "title": "Common mistakes that kill responses", "desc": "Late, generic, off-NAICS, no follow-up.", "page": 13 }
+          ]
+        }
+      ]
+    },
+
+    {
+      "type": "founder",
+      "headline": "The RFP is written before it's released. Make sure your name is in it.",
+      "accentWord": "your",
+      "paragraphs": [
+        "When I started chasing federal work, I treated Sources Sought notices the way most people do. I read them. Decided they weren't real contracts. Moved on. Six months later, the RFP would drop, and the requirements read like someone else's capability statement.",
+        "Because they were. A competitor had responded to the SSN, explained what was possible, suggested NAICS adjustments, and quietly shaped the PWS. By the time the RFP hit the street, we were bidding on a contract built around another firm's stack.",
+        "That's the game. The agency publishes an SSN because they're three to six months out and they don't yet know what's possible. The contractors who respond get to define what's possible. The ones who don't, bid on someone else's definition.",
+        "This playbook is the response structure I wish someone had handed me four years ago. Five parts, two checklists, a few templates. Use it on every SSN that matches your NAICS. Within a year you'll be the firm whose language ends up in the PWS."
+      ],
+      "ctaText": "Book a B2G Audit call",
+      "ctaUrl": "https://meetings-na2.hubspot.com/americurial/intro-call",
+      "ctaButtonLabel": "Book the call →",
+      "ctaEyebrow": "30 MIN · NO PITCH",
+      "footerLabel": "CAPTUREPILOT · SOURCES SOUGHT / RFI PLAYBOOK"
+    },
+
+    {
+      "type": "dark",
+      "partLabel": "PART ONE · WHY THIS MATTERS",
+      "headline": "Sources Sought notices are market research. They're also the only chance to influence the contract before it's written.",
+      "accentWord": "influence",
+      "paragraphs": [
+        "An SSN or RFI isn't a contract. It's the agency asking the market four questions: who can do this, how much will it cost, can we set it aside for small business, and is our acquisition strategy realistic.",
+        "Your answer to those questions becomes the foundation of the RFP. The next three pages cover what an SSN actually is, why the head start matters, and why most contractors leave this advantage on the table."
+      ],
+      "footerLabel": "CAPTUREPILOT · SOURCES SOUGHT / RFI PLAYBOOK",
+      "headerLabel": "PART ONE"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "P01 · WHAT IT IS",
+      "html": "<div class=\"eyebrow\">P01 · WHAT IT IS</div>\n\n<h1>A Sources Sought Notice is the agency doing market research before they write the contract.</h1>\n\n<p>A Sources Sought Notice (SSN) or Request for Information (RFI) is a market research document the agency publishes on SAM.gov three to six months before a formal procurement. The notice is short, the response window is tight, and the agency has four jobs they're trying to finish.</p>\n\n<div class=\"stat-row\">\n  <div class=\"stat-card\">\n    <div class=\"stat-value\">72 hrs</div>\n    <div class=\"stat-label\">TYPICAL RESPONSE WINDOW</div>\n    <div class=\"stat-sub\">Some as short as 48 hours</div>\n  </div>\n  <div class=\"stat-card\">\n    <div class=\"stat-value\">3-6 mo</div>\n    <div class=\"stat-label\">BEFORE RFP RELEASE</div>\n    <div class=\"stat-sub\">Typical lead time</div>\n  </div>\n  <div class=\"stat-card\">\n    <div class=\"stat-value\">40%</div>\n    <div class=\"stat-label\">WIN-RATE LIFT</div>\n    <div class=\"stat-sub\">For firms who respond consistently</div>\n  </div>\n</div>\n\n<h2>What the agency is actually trying to figure out</h2>\n\n<ul>\n  <li><strong>Is there enough small business competition</strong> to justify a set-aside, and which set-aside type fits.</li>\n  <li><strong>Which firms have real capability</strong>, not just registrations on SAM.gov.</li>\n  <li><strong>How to refine the Performance Work Statement</strong> so the requirements aren't impossible or absurdly expensive.</li>\n  <li><strong>What the market price range is</strong>, before the Independent Government Cost Estimate gets locked in.</li>\n  <li><strong>Whether the acquisition strategy holds up</strong> — set-aside type, contract vehicle, period of performance.</li>\n</ul>\n\n<div class=\"callout callout--emerald\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">WHY THIS MATTERS</div>\n  <p style=\"margin:0;\"><strong>The agency writes the RFP using the answers you send back.</strong> Your NAICS suggestion, your set-aside recommendation, your description of how the work actually gets done — that language can show up verbatim in the final solicitation. Firms who don't respond are bidding on a document shaped by their competitors.</p>\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "P02 · THE HEAD START",
+      "html": "<div class=\"eyebrow\">P02 · THE HEAD START</div>\n\n<h1>Three to six months of head start, before the rest of the market knows the contract exists.</h1>\n\n<p>The gap between an SSN being posted and the RFP dropping is usually three to six months. Sometimes longer on civilian agencies, sometimes shorter on DoD. That window is the most valuable strategic asset in federal contracting and almost nobody uses it well.</p>\n\n<h2>What you can do during the SSN-to-RFP window</h2>\n\n<table>\n  <thead>\n    <tr><th>Action</th><th>Why it matters</th><th>When to start</th></tr>\n  </thead>\n  <tbody>\n    <tr>\n      <td><strong>Build relationships with the program office</strong></td>\n      <td>The KO writes the contract. The program office decides who wins it. A 15-minute capability call before the RFP is worth more than any proposal section.</td>\n      <td>Within 2 weeks of submitting the SSN response</td>\n    </tr>\n    <tr>\n      <td><strong>Line up teaming partners</strong></td>\n      <td>If your capability statement has gaps, you need a teammate signed before the RFP drops. After the RFP, every good prime is already taken.</td>\n      <td>Within 30 days</td>\n    </tr>\n    <tr>\n      <td><strong>Pull past awards on FPDS and USAspending</strong></td>\n      <td>Understand who the incumbent is, what they charged, what got modded. The pricing intelligence is the difference between a competitive bid and a wishful one.</td>\n      <td>Same week as the SSN response</td>\n    </tr>\n    <tr>\n      <td><strong>Pre-draft your capability narrative</strong></td>\n      <td>When the RFP drops you'll have 30 days, not 30 weeks. Sections you can pre-write: corporate experience, key personnel bios, past performance writeups.</td>\n      <td>60-90 days before expected RFP</td>\n    </tr>\n  </tbody>\n</table>\n\n<div class=\"callout\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">FIELD TIP</div>\n  <p style=\"margin:0;\">Use CapturePilot's pipeline view to flag every SSN you respond to with a follow-up reminder for the expected RFP date. Set it 2 weeks before, not on the day. You want to be calling the KO before the solicitation hits the street.</p>\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "P03 · WHY MOST SKIP IT",
+      "html": "<div class=\"eyebrow\">P03 · THE COMPOUND EFFECT</div>\n\n<h1>Most contractors skip SSNs because \"there's no contract to win.\" That logic costs them every contract that follows.</h1>\n\n<p>The argument against responding to Sources Sought notices is straightforward: it's free work, the contract isn't real yet, and you might not even bid when the RFP comes out. All of that is true. None of it changes the math.</p>\n\n<h2>What consistent SSN responses actually build</h2>\n\n<ul>\n  <li><strong>Name recognition with the KO and program office.</strong> By the third response on similar requirements, your firm's name shows up in the agency's mental model of \"who does this kind of work.\"</li>\n  <li><strong>Inclusion in teaming invitations.</strong> Primes pulling teams together for the eventual RFP get a list of SSN respondents from the KO. If you didn't respond, you're not on the list.</li>\n  <li><strong>Sole-source justifications.</strong> When an agency justifies a sole-source award, they document who else they considered. SSN respondents are the documented candidates.</li>\n  <li><strong>PWS language that fits your stack.</strong> If you describe how the work gets done, that description shapes the requirements. The next firm bids on a contract built around your methodology.</li>\n  <li><strong>NAICS and set-aside influence.</strong> Your suggestion of the right NAICS or set-aside type often becomes the agency's final choice. That can mean the contract is set aside for firms exactly like yours.</li>\n</ul>\n\n<div class=\"callout callout--emerald\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">DO THE MATH</div>\n  <p style=\"margin:0;\">A 4-hour SSN response costs you about $400 in labor. A $2M contract awarded 9 months later, partially shaped by that response, pays for the next 50 SSN responses. Firms who respond consistently see a measurable lift in win rate. Firms who don't, never see the contract.</p>\n</div>\n"
+    },
+
+    {
+      "type": "dark",
+      "partLabel": "PART TWO · HOW TO RESPOND",
+      "headline": "Five sections. Two checklists. One template. Ship one SSN response a week and your pipeline changes inside a quarter.",
+      "accentWord": "Five",
+      "paragraphs": [
+        "Every SSN response that lands well uses the same five-part structure. Every response that gets discarded misses at least one of them. The next pages cover the structure, the checklists you run before and after, and the templated language you can copy into your first response today.",
+        "Read it once. Save it. Use it next week. The first response takes 4 hours. By the fifth, you'll do it in 90 minutes."
+      ],
+      "footerLabel": "CAPTUREPILOT · SOURCES SOUGHT / RFI PLAYBOOK",
+      "headerLabel": "PART TWO"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "P04 · 5-PART STRUCTURE",
+      "html": "<div class=\"eyebrow\">P04 · THE 5-PART RESPONSE STRUCTURE</div>\n\n<h1>Five sections. Same order every time. No fluff.</h1>\n\n<table>\n  <thead>\n    <tr><th>Section</th><th>What goes in it</th><th>Length</th></tr>\n  </thead>\n  <tbody>\n    <tr>\n      <td><strong>1. Company Overview</strong></td>\n      <td>Who you are, size status, NAICS alignment, security clearances held. Reference your SAM UEI and CAGE code. Two to three sentences, no marketing language.</td>\n      <td>2-3 sentences</td>\n    </tr>\n    <tr>\n      <td><strong>2. Capability Statement</strong></td>\n      <td>Attach your 1-page capability statement as a PDF AND include a brief narrative (1-2 paragraphs) describing relevant experience directly tied to the stated requirement. The narrative is the part the KO reads.</td>\n      <td>1-2 paragraphs + attachment</td>\n    </tr>\n    <tr>\n      <td><strong>3. Technical Approach</strong></td>\n      <td>Only if the SSN asks technical questions. Answer them directly. Show you understand the mission. Introduce your methodology without giving away your differentiators.</td>\n      <td>As asked, 1-2 pages max</td>\n    </tr>\n    <tr>\n      <td><strong>4. Teaming Statement</strong></td>\n      <td>If solo performance seems risky, name your teaming strategy: \"We intend to prime with [Partner] as a major subcontractor for [specific capability].\" Signals you've thought through gaps.</td>\n      <td>2-3 sentences</td>\n    </tr>\n    <tr>\n      <td><strong>5. Questions &amp; Feedback</strong></td>\n      <td>Ask 1-3 thoughtful questions about the requirement. Suggest a NAICS or set-aside if the agency's choice seems off. Demonstrates engagement and gets your name in front of the KO.</td>\n      <td>1-3 questions</td>\n    </tr>\n  </tbody>\n</table>\n\n<div class=\"callout\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">FIELD TIP</div>\n  <p style=\"margin:0;\">Keep total length to 3 pages. KOs are reading 20 of these for the same notice. Sections 1, 2, and 5 are mandatory. Sections 3 and 4 are conditional on what the SSN asks for.</p>\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "P05 · PRE-RESPONSE CHECKLIST",
+      "html": "<div class=\"eyebrow\">P05 · BEFORE YOU START WRITING</div>\n\n<h1>Eight checks. Run them in this order.</h1>\n\n<ol>\n  <li><strong>Read the SSN completely.</strong> Every attachment. Every question. Most disqualifying responses miss a buried requirement in attachment B.</li>\n  <li><strong>Identify the contracting officer and program office.</strong> Look them up on linkedin.com and usaspending.gov. Past awards under the same KO tell you what they value.</li>\n  <li><strong>Pull the agency's procurement history for this requirement on fpds.gov.</strong> What did the incumbent charge? When does the current contract expire? Did it get extended or recompeted?</li>\n  <li><strong>Confirm your NAICS code aligns with what the agency listed.</strong> If they listed 541330 and you're 541512, decide whether to address that gap in your response or skip the SSN.</li>\n  <li><strong>Identify teaming partners if your capability has gaps.</strong> Reach out before you respond, not after. You want to name them in section 4.</li>\n  <li><strong>Draft the response in Word or Google Docs first.</strong> Edit for clarity, length, and adjective overuse before you submit. PDF only at the end.</li>\n  <li><strong>Review submission instructions carefully.</strong> Some SSNs want email submission, some want SAM portal upload, some want beta.sam.gov. The wrong channel is the same as no submission.</li>\n  <li><strong>Submit 2 to 4 hours early.</strong> Last-minute submissions get lost in agency email queues, blocked by attachment scanners, or land after the deadline because of clock-skew.</li>\n</ol>\n\n<div class=\"callout callout--emerald\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">FIELD TIP</div>\n  <p style=\"margin:0;\">Build a 1-page SSN response template in Google Docs. Fill in the company overview and capability sections once, then duplicate the file for each new SSN. You'll cut response time from 4 hours to 90 minutes after the third one.</p>\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "P06 · POST-RESPONSE",
+      "html": "<div class=\"eyebrow\">P06 · AFTER YOU SUBMIT</div>\n\n<h1>The response is the start. The next 60 days decide whether it actually moves anything.</h1>\n\n<p>Most firms submit the SSN response and forget about it. The ones who win the eventual RFP do four specific things in the days and weeks after the response goes in.</p>\n\n<table>\n  <thead>\n    <tr><th>Action</th><th>How to do it</th><th>Timing</th></tr>\n  </thead>\n  <tbody>\n    <tr>\n      <td><strong>Send a brief follow-up email to the KO</strong></td>\n      <td>If contact info was in the SSN, send a short note: \"We submitted our response to [Solicitation #]. We'd welcome a brief call to discuss any clarifying questions or share additional context.\"</td>\n      <td>Within 5 business days of submission</td>\n    </tr>\n    <tr>\n      <td><strong>Track the opportunity in your pipeline</strong></td>\n      <td>Add it as a Pre-Solicitation deal in your CRM or pipeline tool. Set a follow-up reminder for 2 weeks before the expected RFP date.</td>\n      <td>Same day as submission</td>\n    </tr>\n    <tr>\n      <td><strong>Subscribe to the SAM.gov notice</strong></td>\n      <td>You get email alerts for amendments, related postings, and the eventual solicitation. The RFP often drops on a Friday afternoon — you want to know within minutes.</td>\n      <td>Same day as submission</td>\n    </tr>\n    <tr>\n      <td><strong>Begin pre-positioning</strong></td>\n      <td>Identify who owns the program office budget. Find out who will evaluate proposals. Look for industry days, agency conferences, or virtual meetings where you can show up.</td>\n      <td>Over the following 60 days</td>\n    </tr>\n  </tbody>\n</table>\n\n<div class=\"callout\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">FIELD TIP</div>\n  <p style=\"margin:0;\">If the agency holds an industry day after the SSN, show up. The attendee list is often available afterward, and primes pulling teams together start their calls from that list. Skipping the industry day is the same as skipping the SSN.</p>\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "P07 · TEMPLATES",
+      "html": "<div class=\"eyebrow\">P07 · COPY-PASTE LANGUAGE</div>\n\n<h1>Three templates you can adapt today.</h1>\n\n<div class=\"callout\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">TEMPLATE 1 · OPENING PARAGRAPH</div>\n  <p style=\"margin:0;\">\"[Company Name] is a [size status] small business (UEI: XXXX, CAGE: XXXX) with [X] years of experience in [specific capability]. We are fully registered in SAM.gov and hold [list certifications]. This response addresses [Notice #] for [description of requirement].\"</p>\n</div>\n\n<div class=\"callout\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">TEMPLATE 2 · TEAMING STATEMENT</div>\n  <p style=\"margin:0;\">\"To fully address the scope described in this notice, [Company Name] intends to prime with [Partner Name] as a major subcontractor for [specific capability]. This teaming structure provides [specific qualification — e.g., security clearance level, geographic coverage, specialized labor category] while preserving small business prime status under NAICS [code].\"</p>\n</div>\n\n<div class=\"callout callout--emerald\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">TEMPLATE 3 · QUESTIONS TO ASK</div>\n  <p style=\"margin:0;\">Pick 1-3, adapt to the specific notice:</p>\n  <ul style=\"margin:2mm 0 0 4mm; padding:0;\">\n    <li>\"Will the agency consider a multiple-award IDIQ structure to broaden the small business pool?\"</li>\n    <li>\"Has the agency considered NAICS [alternate code] given the [specific aspect] of the requirement?\"</li>\n    <li>\"What is the anticipated period of performance and the expected number of option years?\"</li>\n    <li>\"Will the solicitation include a security clearance requirement at the [Secret/TS/SCI] level?\"</li>\n    <li>\"Is the agency open to a small business set-aside under [8(a) / HUBZone / WOSB / SDVOSB] given the available pool of qualified firms?\"</li>\n  </ul>\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "P08 · COMMON MISTAKES",
+      "html": "<div class=\"eyebrow\">P08 · WHAT KILLS A RESPONSE</div>\n\n<h1>Five mistakes that move your response from the \"qualified vendor\" pile to the \"not considered\" pile.</h1>\n\n<table>\n  <thead>\n    <tr><th>Mistake</th><th>What it looks like</th><th>Fix</th></tr>\n  </thead>\n  <tbody>\n    <tr>\n      <td><strong>Late submission</strong></td>\n      <td>Submitting in the final hour and missing the deadline because of agency email delays, attachment scanners, or the wrong submission channel.</td>\n      <td>Submit 2 to 4 hours early. Confirm receipt by sending a follow-up email asking the KO to acknowledge.</td>\n    </tr>\n    <tr>\n      <td><strong>Generic capability statement</strong></td>\n      <td>Attaching your standard 1-pager without adding a narrative paragraph tied to the specific requirement. KO sees the same document 20 times.</td>\n      <td>Always include 1-2 paragraphs of narrative that reference the SSN's specific language and your matching experience.</td>\n    </tr>\n    <tr>\n      <td><strong>Off-NAICS response</strong></td>\n      <td>Responding to an SSN where your primary NAICS doesn't match what the agency listed, without addressing the gap.</td>\n      <td>Either skip the SSN, or address the alignment in your response: \"Our primary NAICS is [code], which covers [scope] including the work described.\"</td>\n    </tr>\n    <tr>\n      <td><strong>No follow-up</strong></td>\n      <td>Submitting the response and going silent. The KO has no idea you actually want to win the eventual contract.</td>\n      <td>Send a follow-up email within 5 business days. Add the opportunity to your pipeline. Show up to the industry day.</td>\n    </tr>\n    <tr>\n      <td><strong>Selling, not informing</strong></td>\n      <td>Writing a sales pitch instead of answering the agency's market research questions. SSNs aren't a place to sell — they're a place to demonstrate fit.</td>\n      <td>Answer the questions in plain language. Save the differentiators for the proposal. Less is more.</td>\n    </tr>\n  </tbody>\n</table>\n\n<div class=\"callout callout--emerald\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">BOTTOM LINE</div>\n  <p style=\"margin:0;\">An SSN response that gets remembered is short, specific, on-NAICS, and followed up. Get those four things right and you'll be in the conversation when the RFP drops — usually six to twelve months later, sometimes sooner.</p>\n</div>\n"
+    },
+
+    {
+      "type": "back-cover",
+      "eyebrow": "WHAT'S NEXT",
+      "headline": "Stop missing Sources Sought notices. Get the next one in your inbox the day it posts.",
+      "accentWord": "missing",
+      "body": "CapturePilot watches SAM.gov for SSNs that match your NAICS, set-asides, and target agencies. We send the response-ready notice to your inbox the day it drops, with the suggested response language and the KO's contact info pre-pulled. Free 14-day trial, no card required.",
+      "ctaText": "Get the full Federal Launch Kit",
+      "ctaUrl": "https://www.capturepilot.com/startup-pack",
+      "footerLabel": "CAPTUREPILOT · SOURCES SOUGHT / RFI PLAYBOOK"
+    }
+  ]
+}

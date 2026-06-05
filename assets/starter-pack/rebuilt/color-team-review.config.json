@@ -1,0 +1,148 @@
+{
+  "id": "color-team-review",
+  "title": "Color-Team Review Templates",
+  "slug": "flk-color-team-review-templates",
+  "pages": 12,
+  "footerLabel": "CAPTUREPILOT · FEDERAL LEAD KIT",
+  "headerLabel": "COLOR-TEAM REVIEW TEMPLATES",
+  "parts": [
+    {
+      "type": "cover",
+      "eyebrow": "FEDERAL LAUNCH KIT · BEST_PRACTICES",
+      "titleLines": [
+        "Color-Team",
+        "Review",
+        "Templates."
+      ],
+      "accentWord": "Review",
+      "pages": 12,
+      "toolStrip": [
+        { "num": "01", "title": "Pink Team", "desc": "Outline and strategy review at week 2-3 of the proposal — catch compliance and win-theme gaps before writing burns hours" },
+        { "num": "02", "title": "Red Team", "desc": "Independent full-draft review at week 4-5 by reviewers who are not on the writing team — scored across 9 categories" },
+        { "num": "03", "title": "Gold Team", "desc": "Final pre-submission executive check three days before deadline — compliance only, no rewrites" },
+        { "num": "04", "title": "Process Tools", "desc": "Reviewer assignment grid, scoring sheet, governance, and the small-team adaptation when you don't have 15 reviewers" }
+      ]
+    },
+
+    {
+      "type": "toc",
+      "title": "Inside this guide.",
+      "footerLabel": "CAPTUREPILOT · FEDERAL LEAD KIT",
+      "parts": [
+        {
+          "label": "PART ONE · THE THREE COLOR TEAMS",
+          "items": [
+            { "code": "P01", "title": "Pink Team — Outline and Strategy", "desc": "Compliance, win strategy, and resources before the writing starts.", "page": 4 },
+            { "code": "P02", "title": "Red Team — Full Draft Review", "desc": "Independent SME scoring across nine categories.", "page": 5 },
+            { "code": "P03", "title": "Gold Team — Final Pre-Submission", "desc": "Compliance-only sweep, three days from deadline.", "page": 6 }
+          ]
+        },
+        {
+          "label": "PART TWO · RUNNING THE REVIEW",
+          "items": [
+            { "code": "P04", "title": "Reviewer assignment and roles", "desc": "Who sits on which team, and why a writer can never be a reviewer.", "page": 8 },
+            { "code": "P05", "title": "Scoring rubric and thresholds", "desc": "How to read a Red Team score and decide what to fix.", "page": 9 },
+            { "code": "P06", "title": "Small-team adaptation", "desc": "When you have three people, not thirty.", "page": 10 },
+            { "code": "P07", "title": "Submission day checklist", "desc": "The last forty-eight hours, sequenced.", "page": 11 }
+          ]
+        }
+      ]
+    },
+
+    {
+      "type": "founder",
+      "headline": "The proposal you submit is only as good as the last person who read it cold.",
+      "accentWord": "cold",
+      "paragraphs": [
+        "The first proposal I led, we wrote for three weeks straight and submitted without a real outside read. We thought we were tight. The agency debrief came back and the evaluator had circled four places where we'd answered the wrong question. Section L asked one thing, we delivered another. Lost the bid, lost the protest.",
+        "Color-team reviews exist because you cannot evaluate your own writing. The writer reads what they meant. The reviewer reads what's on the page. Those are different documents, and the federal evaluator only ever sees the second one.",
+        "Pink Team catches strategy and compliance before you've burned three weeks writing the wrong thing. Red Team scores the draft the way the government will. Gold Team is the last set of fresh eyes before the upload button. None of them are optional on a proposal worth more than $50,000.",
+        "These templates are the exact checklists and rubric I run on every proposal we touch. Use them as-is on your next bid. Then adapt them once you've felt where they bite."
+      ],
+      "ctaText": "Book a B2G Audit call",
+      "ctaUrl": "https://meetings-na2.hubspot.com/americurial/intro-call",
+      "ctaButtonLabel": "Book the call →",
+      "ctaEyebrow": "30 MIN · NO PITCH",
+      "footerLabel": "CAPTUREPILOT · FEDERAL LEAD KIT"
+    },
+
+    {
+      "type": "dark",
+      "partLabel": "PART ONE · THE THREE COLOR TEAMS",
+      "headline": "Three structured reviews, three different jobs. Run them in sequence or skip the bid.",
+      "accentWord": "sequence",
+      "paragraphs": [
+        "Color-team reviews are not a single checkpoint. They're a sequence of three independent reads, each with a different scope and a different reviewer pool. Pink Team checks the plan. Red Team scores the draft. Gold Team verifies the package.",
+        "The next three pages give you the full checklist for each team — what to ask, what to score, what to refuse to touch at that stage. The single biggest mistake firms make is letting Gold Team rewrite content. That's a Red Team job, and at three days from deadline it's too late."
+      ],
+      "footerLabel": "CAPTUREPILOT · FEDERAL LEAD KIT",
+      "headerLabel": "PART ONE"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "P01 · PINK TEAM",
+      "html": "<div class=\"eyebrow\">P01 · PINK TEAM — OUTLINE & STRATEGY REVIEW</div>\n\n<h1>Pink Team reviews the outline and compliance matrix before the writing starts.</h1>\n\n<p>Conducted one to two weeks into the proposal period, typically week 2 of a 4 to 6 week effort. Reviewers are the capture lead, proposal manager, and at least one senior technical lead. The goal is to catch strategy and compliance gaps before $20,000 of writing labor goes into the wrong direction.</p>\n\n<div class=\"stat-row\">\n  <div class=\"stat-card\">\n    <div class=\"stat-value\">Wk 2-3</div>\n    <div class=\"stat-label\">WHEN TO RUN IT</div>\n    <div class=\"stat-sub\">Before drafting begins</div>\n  </div>\n  <div class=\"stat-card\">\n    <div class=\"stat-value\">3-5</div>\n    <div class=\"stat-label\">REVIEWERS</div>\n    <div class=\"stat-sub\">Capture, PM, tech lead</div>\n  </div>\n  <div class=\"stat-card\">\n    <div class=\"stat-value\">2 hrs</div>\n    <div class=\"stat-label\">TYPICAL DURATION</div>\n    <div class=\"stat-sub\">One working session</div>\n  </div>\n</div>\n\n<h2>Compliance checks</h2>\n<ul>\n  <li>Every Section L requirement has a corresponding section in the outline</li>\n  <li>Page limits assigned to each section based on evaluation weight</li>\n  <li>Required forms and attachments listed in the submission checklist</li>\n  <li>Proposal manager confirmed volume owners are assigned and acknowledged</li>\n</ul>\n\n<h2>Win strategy checks</h2>\n<ul>\n  <li>Three win themes defined and incorporated into section headings</li>\n  <li>Discriminators clearly identified for each evaluation criterion</li>\n  <li>Competitive analysis complete — strengths and weaknesses mapped</li>\n  <li>Ghost narrative strategy developed for known competitor weaknesses</li>\n</ul>\n\n<h2>Resource checks</h2>\n<ul>\n  <li>All key personnel confirmed as available and willing to be named</li>\n  <li>Teaming agreements signed or near signature</li>\n  <li>Pricing assumptions agreed by all team leads</li>\n  <li>Graphics and figure list approved by proposal manager</li>\n</ul>\n\n<div class=\"callout callout--emerald\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">DECISION GATE</div>\n  <p style=\"margin:0;\">If Pink Team can't tick every compliance box, the bid is not ready to draft. Push the writing back two days and fix the outline. Drafting against a broken outline costs ten times what re-outlining costs.</p>\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "P02 · RED TEAM",
+      "html": "<div class=\"eyebrow\">P02 · RED TEAM — FULL DRAFT REVIEW</div>\n\n<h1>Red Team is an independent review of the complete draft. The reviewers cannot be on the writing team.</h1>\n\n<p>Run Red Team at week 4 of a 6-week proposal, or week 3 of a 4-week proposal. Reviewers are subject matter experts who haven't seen the draft, scoring each category on a 1 to 5 scale. The output is a numeric score plus written comments, returned within forty-eight hours.</p>\n\n<h2>Red Team scoring rubric</h2>\n\n<table>\n  <thead>\n    <tr>\n      <th style=\"width:24%;\">Review Category</th>\n      <th>Question the reviewer answers</th>\n      <th style=\"width:14%;\">Score 1-5</th>\n    </tr>\n  </thead>\n  <tbody>\n    <tr><td><strong>Compliance</strong></td><td>Does every Section L element appear in the response?</td><td>____</td></tr>\n    <tr><td><strong>Win Themes</strong></td><td>Are win themes evident in every major section?</td><td>____</td></tr>\n    <tr><td><strong>Technical Approach</strong></td><td>Is our approach specific, detailed, and differentiated?</td><td>____</td></tr>\n    <tr><td><strong>Past Performance</strong></td><td>Is past performance highly relevant and recent?</td><td>____</td></tr>\n    <tr><td><strong>Key Personnel</strong></td><td>Do resumes directly address the qualifications required?</td><td>____</td></tr>\n    <tr><td><strong>Management Approach</strong></td><td>Is the management plan credible and staffed appropriately?</td><td>____</td></tr>\n    <tr><td><strong>Risk Management</strong></td><td>Are risks identified and mitigations specific, not generic?</td><td>____</td></tr>\n    <tr><td><strong>Graphics & Figures</strong></td><td>Do graphics add information value, not just decor?</td><td>____</td></tr>\n    <tr><td><strong>Readability</strong></td><td>Can a non-expert evaluator understand and follow the narrative?</td><td>____</td></tr>\n    <tr><td><strong>Ghost Writing</strong></td><td>Is the narrative specific enough that it ONLY applies to us?</td><td>____</td></tr>\n  </tbody>\n</table>\n\n<div class=\"callout callout--emerald\" style=\"margin-top:6mm;\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">RED TEAM SCORE THRESHOLDS</div>\n  <p style=\"margin:0;\"><strong>45-50:</strong> Submit as-is, light copy edits only. &nbsp; <strong>35-44:</strong> Revise two sections, re-review the changes. &nbsp; <strong>Under 35:</strong> Major rewrite required — push the bid/no-bid decision back to capture leadership.</p>\n</div>\n\n<h2 style=\"margin-top:8mm;\">How to run the session</h2>\n<ul>\n  <li>Deliver the full draft to reviewers 48 hours before the session, not at the session</li>\n  <li>Each reviewer scores independently in writing before discussion</li>\n  <li>Walk the scorecard category by category, lowest score first</li>\n  <li>Capture every comment in a tracked action log with an owner and a due date</li>\n  <li>Writers do not defend the draft in the room — they listen and take notes</li>\n</ul>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "P03 · GOLD TEAM",
+      "html": "<div class=\"eyebrow\">P03 · GOLD TEAM — FINAL PRE-SUBMISSION REVIEW</div>\n\n<h1>Gold Team is a final executive check. Focus is compliance, not content. Do not rewrite at this stage.</h1>\n\n<p>Run Gold Team three days before the deadline. Reviewers are the proposal manager, the authorized signing official, and one capture lead. The job is to verify the package is ready to upload — not to improve the writing. If Gold Team finds content problems, the proposal is in trouble and you should escalate, not edit.</p>\n\n<h2>Gold Team checklist</h2>\n<ul>\n  <li>File naming convention matches Section L requirements exactly</li>\n  <li>All page limits verified — character count if required, not just eyeballing</li>\n  <li>All forms fully completed and signed by an authorized official</li>\n  <li>All required attachments present (resumes, past performance, subK plans, reps and certs)</li>\n  <li>No proprietary markings on sections that shouldn't have them</li>\n  <li>No track changes, comments, or revision marks visible in any file</li>\n  <li>PDF is text-searchable, not scanned images, unless the agency requires otherwise</li>\n  <li>Submission portal tested and logged in 48 hours before deadline</li>\n  <li>Final files uploaded and confirmation receipt saved</li>\n  <li>Hard copy submission prepared and shipped if required (confirm address)</li>\n</ul>\n\n<div class=\"callout callout--emerald\" style=\"margin-top:6mm;\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">THE RULE THAT MATTERS MOST</div>\n  <p style=\"margin:0;\">Gold Team does not rewrite. If a reviewer wants to change a sentence at this stage, the answer is no unless the sentence is factually wrong or non-compliant. Every late edit at Gold Team is a chance to introduce a new typo, break a cross-reference, or blow a page limit by one line. Compliance only.</p>\n</div>\n\n<div class=\"callout\" style=\"margin-top:6mm;\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">FIELD TIP — THE 48-HOUR PORTAL TEST</div>\n  <p style=\"margin:0;\">Two days before deadline, log into the submission portal with the actual user account and upload a placeholder file. Confirm the portal accepts your file types, the upload completes, and the receipt arrives by email. Government portals fail on deadline day far more often than anyone admits.</p>\n</div>\n"
+    },
+
+    {
+      "type": "dark",
+      "partLabel": "PART TWO · RUNNING THE REVIEW",
+      "headline": "The checklist is the easy part. Running the review takes structure, the right reviewers, and the willingness to say no-bid.",
+      "accentWord": "structure",
+      "paragraphs": [
+        "Three teams, three jobs, but every team needs the same things to work — independent reviewers, a written rubric, a scheduled session, and a tracked action log. Skip any of those and you've held a meeting, not a review.",
+        "The next four pages cover how to assign reviewers, how to read a Red Team score, what to do when you're a five-person firm without fifteen reviewers on the bench, and the final forty-eight hours before submission."
+      ],
+      "footerLabel": "CAPTUREPILOT · FEDERAL LEAD KIT",
+      "headerLabel": "PART TWO"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "P04 · REVIEWER ASSIGNMENT",
+      "html": "<div class=\"eyebrow\">P04 · REVIEWER ASSIGNMENT AND ROLES</div>\n\n<h1>A writer can never be a reviewer on their own section. That's the only rule that matters.</h1>\n\n<p>The whole point of a color-team review is to get a fresh read from someone who hasn't been staring at the draft for three weeks. Mixing writers into the reviewer pool defeats the exercise. Build the reviewer roster at kickoff, before anyone has written a word.</p>\n\n<h2>Reviewer assignment grid</h2>\n\n<table>\n  <thead>\n    <tr>\n      <th style=\"width:20%;\">Team</th>\n      <th style=\"width:24%;\">Who sits on it</th>\n      <th>What they bring</th>\n      <th style=\"width:18%;\">Time commitment</th>\n    </tr>\n  </thead>\n  <tbody>\n    <tr>\n      <td><strong>Pink Team</strong></td>\n      <td>Capture lead, proposal manager, one senior tech lead</td>\n      <td>Strategy judgment and compliance discipline</td>\n      <td>2 hours, week 2-3</td>\n    </tr>\n    <tr>\n      <td><strong>Red Team</strong></td>\n      <td>3-5 SMEs not on the writing team, ideally including a former federal evaluator</td>\n      <td>Independent scoring across nine categories</td>\n      <td>4 hours review + 2 hour session, week 4-5</td>\n    </tr>\n    <tr>\n      <td><strong>Gold Team</strong></td>\n      <td>Proposal manager, signing official, capture lead</td>\n      <td>Final compliance verification and sign-off</td>\n      <td>2 hours, 3 days before deadline</td>\n    </tr>\n  </tbody>\n</table>\n\n<h2>Roles that never change</h2>\n<ul>\n  <li><strong>Proposal manager</strong> — owns the schedule, the action log, and the page count. Attends every review.</li>\n  <li><strong>Capture lead</strong> — owns the win strategy and competitive positioning. Attends Pink and Gold.</li>\n  <li><strong>Volume owner</strong> — owns one section of the proposal end to end. Attends Pink, defends nothing at Red.</li>\n  <li><strong>Reviewer</strong> — scores in writing before the session. Does not edit, does not rewrite.</li>\n  <li><strong>Recorder</strong> — captures every comment with an owner and a due date. Often the proposal manager, can be a separate person.</li>\n</ul>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "P05 · SCORING AND THRESHOLDS",
+      "html": "<div class=\"eyebrow\">P05 · HOW TO READ A RED TEAM SCORE</div>\n\n<h1>The Red Team score is a decision tool, not a grade. Treat it that way.</h1>\n\n<p>Each of the ten categories on the Red Team rubric is scored 1 to 5. Total possible: 50. Average the scores from each reviewer to get a single number, then map it against the thresholds below. Outliers matter more than averages — one reviewer scoring a 1 on Compliance is a bigger problem than three reviewers averaging 3.5.</p>\n\n<h2>Score-to-action mapping</h2>\n\n<table>\n  <thead>\n    <tr>\n      <th style=\"width:18%;\">Score</th>\n      <th style=\"width:24%;\">Status</th>\n      <th>What to do next</th>\n    </tr>\n  </thead>\n  <tbody>\n    <tr>\n      <td><strong>45-50</strong></td>\n      <td>Ready to submit</td>\n      <td>Light copy edits, fix any single-reviewer red flags, ship to Gold Team.</td>\n    </tr>\n    <tr>\n      <td><strong>35-44</strong></td>\n      <td>Revise two sections</td>\n      <td>Identify the two lowest-scoring categories, rewrite those sections, re-review the changes only.</td>\n    </tr>\n    <tr>\n      <td><strong>Under 35</strong></td>\n      <td>Major rewrite</td>\n      <td>Stop. Bring capture leadership back in. Reassess the bid/no-bid decision against the deadline.</td>\n    </tr>\n  </tbody>\n</table>\n\n<h2>How to weigh outlier scores</h2>\n<ul>\n  <li>Any single 1 or 2 score requires a written comment from the reviewer — no naked low scores.</li>\n  <li>If one reviewer scores significantly below the others, walk that category first and decide if they saw something the others missed.</li>\n  <li>Compliance scores are not averaged. One reviewer flagging a missed Section L requirement is enough to require a fix.</li>\n  <li>The session ends when every action item has a named owner and a due date. Not before.</li>\n</ul>\n\n<div class=\"callout callout--emerald\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">THE NO-BID CONVERSATION</div>\n  <p style=\"margin:0;\">A Red Team score under 35 with seven days to deadline is usually a no-bid. The math: rewriting two sections takes three days, re-reviewing takes one, Gold Team takes one, and you still need a day of buffer for the portal upload. Submitting a low-scoring proposal hurts your past performance file when you lose.</p>\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "P06 · SMALL-TEAM ADAPTATION",
+      "html": "<div class=\"eyebrow\">P06 · WHEN YOU HAVE THREE PEOPLE, NOT THIRTY</div>\n\n<h1>The full color-team process assumes a 15-person proposal shop. Here's how to run it with five people or fewer.</h1>\n\n<p>Most small federal contractors don't have a bench of independent reviewers. That doesn't mean skip the review — it means adapt the structure. The principles still hold: independent eyes, written scoring, tracked actions. The format gets lighter.</p>\n\n<h2>The five-person small-firm version</h2>\n\n<table>\n  <thead>\n    <tr>\n      <th style=\"width:24%;\">Team</th>\n      <th>Adaptation</th>\n    </tr>\n  </thead>\n  <tbody>\n    <tr>\n      <td><strong>Pink Team</strong></td>\n      <td>Owner plus one outside advisor (a former federal contracting officer on retainer, a teaming partner, or a paid capture consultant). One hour, by phone, against the checklist.</td>\n    </tr>\n    <tr>\n      <td><strong>Red Team</strong></td>\n      <td>Two outside reviewers minimum. Pay them $500-$1,500 for an 8-hour review against the rubric. Never use staff who wrote the draft.</td>\n    </tr>\n    <tr>\n      <td><strong>Gold Team</strong></td>\n      <td>Owner, signing official, and one other internal person who has not read the draft before. Compliance checklist only, 90 minutes.</td>\n    </tr>\n  </tbody>\n</table>\n\n<h2>Where small teams find independent reviewers</h2>\n<ul>\n  <li><strong>Retained advisors</strong> — keep one or two former federal evaluators on a small monthly retainer for review work</li>\n  <li><strong>Teaming partners</strong> — a sub on this bid can be a Red Team reviewer on your next solo bid, in trade</li>\n  <li><strong>PTAC and APEX Accelerators</strong> — free or low-cost proposal review through your state's procurement assistance center</li>\n  <li><strong>Paid capture consultants</strong> — budget $1,500-$5,000 per proposal review on bids over $250,000</li>\n  <li><strong>Industry peers</strong> — a non-competing firm in an adjacent NAICS will often trade reviews</li>\n</ul>\n\n<div class=\"callout callout--emerald\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">DO THE MATH</div>\n  <p style=\"margin:0;\">A $1,500 Red Team review on a $400,000 contract is 0.4% of the contract value. If it lifts your win probability from 15% to 25%, the expected value of that $1,500 spend is $40,000. There is no proposal worth more than $50,000 that doesn't justify a paid outside review.</p>\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "P07 · SUBMISSION DAY",
+      "html": "<div class=\"eyebrow\">P07 · THE LAST 48 HOURS</div>\n\n<h1>Submission day is not the day to find out the portal is broken.</h1>\n\n<p>The forty-eight hours before deadline are the highest-risk window in the entire proposal cycle. Files get overwritten. Page limits slip by one line. Portal credentials expire. The fix is sequence — do the same things in the same order on every bid.</p>\n\n<h2>The 48-hour countdown</h2>\n\n<table>\n  <thead>\n    <tr>\n      <th style=\"width:22%;\">When</th>\n      <th>What to do</th>\n    </tr>\n  </thead>\n  <tbody>\n    <tr>\n      <td><strong>T-48 hours</strong></td>\n      <td>Gold Team review complete. Action log closed. Final files locked, version-numbered, and moved to a read-only folder.</td>\n    </tr>\n    <tr>\n      <td><strong>T-36 hours</strong></td>\n      <td>Portal test with a placeholder upload. Confirm login, file type acceptance, and email receipt. Screenshot every step.</td>\n    </tr>\n    <tr>\n      <td><strong>T-24 hours</strong></td>\n      <td>Final compliance sweep — page count, file naming, attachment list, signatures. Print the Section L matrix one more time.</td>\n    </tr>\n    <tr>\n      <td><strong>T-12 hours</strong></td>\n      <td>First upload attempt. If the portal accepts the package, do not re-upload to make a small change. Save changes for a documented amendment.</td>\n    </tr>\n    <tr>\n      <td><strong>T-2 hours</strong></td>\n      <td>Confirmation email saved to the bid folder. PDF screenshot of the portal showing the timestamped submission. Phone call to the KO if the portal does not return a receipt.</td>\n    </tr>\n    <tr>\n      <td><strong>T-0</strong></td>\n      <td>Deadline. Walk away from the keyboard. Late submissions are non-compliant, no matter how good the proposal.</td>\n    </tr>\n  </tbody>\n</table>\n\n<div class=\"callout callout--emerald\" style=\"margin-top:6mm;\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">POST-SUBMISSION</div>\n  <p style=\"margin:0;\">Within 24 hours of submission, archive the full bid folder including the Pink, Red, and Gold scorecards. Win or lose, those scorecards are the most valuable lessons-learned document you'll have for the next proposal. Reuse the high-scoring sections verbatim. Rewrite the low-scoring categories first on the next bid.</p>\n</div>\n"
+    },
+
+    {
+      "type": "back-cover",
+      "eyebrow": "WHAT'S NEXT",
+      "headline": "A proposal without a color-team review is a draft, not a submission.",
+      "accentWord": "submission",
+      "body": "Run Pink Team at week 2-3 against the outline. Run Red Team at week 4-5 against the full draft and score it 1 to 5 across ten categories. Run Gold Team three days from deadline on compliance only. Keep the scorecards. Reuse what worked, rewrite what didn't. CapturePilot tracks every bid you run through these reviews and surfaces the patterns across your win-loss record automatically.",
+      "ctaText": "Get the full Federal Launch Kit",
+      "ctaUrl": "https://www.capturepilot.com/startup-pack",
+      "footerLabel": "CAPTUREPILOT · FEDERAL LEAD KIT"
+    }
+  ]
+}

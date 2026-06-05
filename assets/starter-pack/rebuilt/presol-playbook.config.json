@@ -1,0 +1,111 @@
+{
+  "id": "flk-pre-solicitation-playbook",
+  "title": "Pre-Solicitation Playbook",
+  "slug": "flk-pre-solicitation-playbook",
+  "pages": 8,
+  "footerLabel": "CAPTUREPILOT · PRE-SOLICITATION PLAYBOOK",
+  "headerLabel": "PRE-SOLICITATION",
+  "parts": [
+    {
+      "type": "cover",
+      "eyebrow": "FEDERAL LAUNCH KIT · SOLICITATION_PLAYBOOKS",
+      "titleLines": [
+        "Win the contract",
+        "before the RFP",
+        "drops."
+      ],
+      "accentWord": "before",
+      "pages": 8,
+      "toolStrip": [
+        { "num": "01", "title": "90-180 days", "desc": "The capture window that decides the bid" },
+        { "num": "02", "title": "3-5 contacts", "desc": "KO, COR, PM, Budget Officer, SBO" },
+        { "num": "03", "title": "Research stack", "desc": "FPDS, USASpending, PB, GAO, eLibrary" },
+        { "num": "04", "title": "OCI guardrails", "desc": "Influence without disqualifying yourself" }
+      ]
+    },
+
+    {
+      "type": "toc",
+      "title": "Inside this playbook.",
+      "parts": [
+        {
+          "label": "PART ONE · SPOT THE WINDOW",
+          "items": [
+            { "code": "P01", "title": "What pre-solicitation actually is", "desc": "The 90-180 day window before an RFP drops and why it decides most awards.", "page": 3 },
+            { "code": "P02", "title": "Step 1 - Find the opportunities", "desc": "Sources sought, recompete forecasts, industry days, sub-tier chatter.", "page": 3 }
+          ]
+        },
+        {
+          "label": "PART TWO · DO THE WORK",
+          "items": [
+            { "code": "P03", "title": "Step 2 - Research the requirement", "desc": "Incumbent, budget, program office, historical buy, problem driver.", "page": 4 },
+            { "code": "P04", "title": "Step 3 - Build the strategy", "desc": "Cap brief, AAP meeting, teaming, key personnel, price-to-win.", "page": 5 }
+          ]
+        },
+        {
+          "label": "PART THREE · STAY COMPLIANT",
+          "items": [
+            { "code": "P05", "title": "Pre-solicitation contact checklist", "desc": "Six steps to run before the solicitation hits the street.", "page": 6 },
+            { "code": "P06", "title": "OCI guardrails", "desc": "How to engage without disqualifying yourself from the bid.", "page": 6 }
+          ]
+        }
+      ]
+    },
+
+    {
+      "type": "founder",
+      "headline": "Most small firms find the RFP, then start the work. By then it's already lost.",
+      "accentWord": "already",
+      "paragraphs": [
+        "I worked an Army recompete last year where the incumbent had been in front of the COR for fourteen months. Three industry days. Two cap briefs. One white paper on a capability gap the incumbent could not fill. By the time the solicitation hit SAM, the eval was a formality.",
+        "The challenger firm spent forty hours on the proposal. They scored a 78. The incumbent scored a 91. Nobody on the eval panel was surprised.",
+        "Pre-solicitation is the only phase where a small business actually has leverage. You can shape requirements, build relationships, and arrive at RFP release knowing the buyer better than the incumbent does. Or you can wait for the RFP, write a great proposal, and lose to someone who started six months earlier.",
+        "This playbook is the version of that capture cycle I wish we'd handed every new client. Three steps. One checklist. One compliance line you do not cross."
+      ],
+      "ctaText": "Book a B2G capture call",
+      "ctaUrl": "https://meetings-na2.hubspot.com/americurial/intro-call",
+      "ctaButtonLabel": "Book the call →",
+      "ctaEyebrow": "30 MIN · NO PITCH"
+    },
+
+    {
+      "type": "dark",
+      "partLabel": "PART ONE · SPOT THE WINDOW",
+      "headline": "The capture phase most small businesses skip.",
+      "accentWord": "skip",
+      "paragraphs": [
+        "Pre-solicitation runs ninety to one hundred eighty days before a formal RFP. Contractors who engage in this window shape requirements, build relationships, and arrive at RFP release with a built-in advantage.",
+        "Firms that wait for the solicitation are usually competing for second place. The next page covers how to find these windows and what to do once you spot one."
+      ],
+      "headerLabel": "PART ONE"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "STEP 1 · FIND THE WINDOW",
+      "html": "<div class=\"eyebrow\">PART ONE · SPOT THE WINDOW</div>\n<h1>Step 1. Identify pre-solicitation opportunities.</h1>\n<p>The pre-solicitation phase is the ninety to one hundred eighty days before a formal RFP. Contractors who engage here shape requirements, build relationships, and arrive at RFP release with a built-in advantage. Three numbers to anchor the work.</p>\n\n<table>\n  <thead>\n    <tr><th>Window</th><th>Touch points</th><th>PWin shift</th></tr>\n  </thead>\n  <tbody>\n    <tr>\n      <td><strong>90-180 days</strong><br><span style=\"color:#78716c; font-size:9pt;\">Before the RFP drops</span></td>\n      <td><strong>3-5 contacts</strong><br><span style=\"color:#78716c; font-size:9pt;\">KO, COR, PM, Budget Officer</span></td>\n      <td><strong>PWin +30%</strong><br><span style=\"color:#78716c; font-size:9pt;\">Engaged vs blind bid (conservative)</span></td>\n    </tr>\n  </tbody>\n</table>\n\n<h2>Where to look</h2>\n<ul>\n  <li>Monitor SAM.gov 'Pre-Solicitation' notice type. Set email alerts on your NAICS codes so the notice hits your inbox the day it posts.</li>\n  <li>Track incumbents on USASpending.gov. Contracts expiring in twelve to eighteen months are your best targets because the recompete planning has already started inside the agency.</li>\n  <li>Review agency acquisition forecasts. Most agencies publish an annual procurement forecast (PB and the budget justification books). The line items are your map.</li>\n  <li>Attend industry days and small business outreach events. These exist specifically to announce upcoming work.</li>\n  <li>Network with other contractors. Subs often hear about upcoming primes before public notice.</li>\n</ul>\n\n<div class=\"callout callout--emerald\">\n  <div style=\"font-family:'IBM Plex Mono', monospace; font-size:8.5pt; font-weight:600; letter-spacing:0.16em; color:#047857; text-transform:uppercase; margin-bottom:2mm;\">FIELD TIP</div>\n  <strong>Run the SAM alert with two saved searches.</strong> One on your primary NAICS for direct work. One on the agency's parent NAICS family for teaming heads-up. The second one is how you catch primes who'll need you before they post a sources sought.\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "STEP 2 · RESEARCH",
+      "html": "<div class=\"eyebrow\">PART TWO · DO THE WORK</div>\n<h1>Step 2. Research the requirement.</h1>\n<p>Once you find a window, you have ninety days to figure out what the agency actually needs and who decides. Five research targets. Each one answers a question the eval panel will score on.</p>\n\n<table>\n  <thead>\n    <tr><th>Research target</th><th>Where to find it</th><th>What you're looking for</th></tr>\n  </thead>\n  <tbody>\n    <tr>\n      <td><strong>Current incumbent</strong></td>\n      <td>FPDS.gov or USASpending.gov search by agency + NAICS</td>\n      <td>Contract value, period, type, and whether it's a set-aside</td>\n    </tr>\n    <tr>\n      <td><strong>Agency budget</strong></td>\n      <td>President's Budget (PB) and Congressional justification books</td>\n      <td>Is this work funded? Is there a budget line item?</td>\n    </tr>\n    <tr>\n      <td><strong>Program office</strong></td>\n      <td>Agency org charts, SAM.gov POC fields, LinkedIn</td>\n      <td>Who is the COR, Program Manager, and their supervisor</td>\n    </tr>\n    <tr>\n      <td><strong>Historical purchases</strong></td>\n      <td>USASpending.gov 'Advanced Search' by PSC code + agency</td>\n      <td>Volume, price range, and preferred contract types</td>\n    </tr>\n    <tr>\n      <td><strong>Requirements drivers</strong></td>\n      <td>GAO reports, IG reports, agency strategic plans</td>\n      <td>Why does this agency need this? What problem are they solving?</td>\n    </tr>\n  </tbody>\n</table>\n\n<h1 style=\"margin-top:8mm;\">Step 3. Build your pre-solicitation strategy.</h1>\n<p>Research without action is a hobby. Six moves to make in the window between 'I spotted the opportunity' and 'the RFP just dropped'.</p>\n\n<ol>\n  <li>Write a one-page capability brief tailored specifically to this requirement. Not your generic cap statement. This one answers the COR's actual problem.</li>\n  <li>Request an Advance Acquisition Planning meeting or Industry Engagement meeting. Most agencies allow this. Email the contracting officer with a specific, time-boxed agenda.</li>\n  <li>Prepare three to five intelligent questions about the requirement that demonstrate your domain expertise. Submit them through the sources sought response or the agency's industry day Q&amp;A.</li>\n  <li>Identify teaming partners if there are gaps in your capability for this specific work. Have the NDA and the memorandum of agreement ready before the RFP drops.</li>\n  <li>Begin drafting key personnel resumes now. It usually takes four to six weeks to get the right people confirmed and their letters of commitment signed.</li>\n  <li>Develop your price-to-win estimate using market data from FPDS and GSA CALC. Walk the labor categories. Walk the loaded rates. Compare against the incumbent's historical pricing.</li>\n</ol>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "STEP 3 · CHECKLIST",
+      "html": "<div class=\"eyebrow\">PART THREE · STAY COMPLIANT</div>\n<h1>Pre-solicitation contact checklist.</h1>\n<p>Print this. Tape it to the wall. Cross off each line as you go. If you can't check at least four before the solicitation drops, you are not ready to bid.</p>\n\n<table>\n  <thead>\n    <tr><th style=\"width:14mm;\">Done</th><th>Action</th></tr>\n  </thead>\n  <tbody>\n    <tr><td style=\"text-align:center; font-size:14pt; color:#10b981;\">&#9744;</td><td>KO or PCO contact attempted via email. Professional, brief, specific request.</td></tr>\n    <tr><td style=\"text-align:center; font-size:14pt; color:#10b981;\">&#9744;</td><td>COR or Program Manager identified on LinkedIn. Title, tenure, and supervisor confirmed.</td></tr>\n    <tr><td style=\"text-align:center; font-size:14pt; color:#10b981;\">&#9744;</td><td>Industry day or pre-solicitation conference attended. If remote-only, notes reviewed.</td></tr>\n    <tr><td style=\"text-align:center; font-size:14pt; color:#10b981;\">&#9744;</td><td>One-on-one meeting requested with the agency small business office.</td></tr>\n    <tr><td style=\"text-align:center; font-size:14pt; color:#10b981;\">&#9744;</td><td>Capability brief sent per the agency's market research request.</td></tr>\n    <tr><td style=\"text-align:center; font-size:14pt; color:#10b981;\">&#9744;</td><td>All agency questions asked within the submitted sources sought or RFI response.</td></tr>\n  </tbody>\n</table>\n\n<div class=\"callout\" style=\"border-left: 4px solid #f59e0b; background: #fffbeb;\">\n  <div style=\"font-family:'IBM Plex Mono', monospace; font-size:8.5pt; font-weight:600; letter-spacing:0.16em; color:#b45309; text-transform:uppercase; margin-bottom:2mm;\">COMPLIANCE NOTE - OCI</div>\n  <p style=\"margin:0;\">Do not attempt to influence technical requirements in a way that gives you an unfair competitive advantage. Vendors who draft SOWs or specifications and then bid on them may face Organizational Conflict of Interest disqualification. Engage to inform, not to lock out competitors. The line between 'shaping requirements' and 'writing your own SOW' is the line between winning the contract and being barred from it.</p>\n</div>\n\n<h2 style=\"margin-top:8mm;\">What the score looks like at RFP release</h2>\n<p>Firms that run the full pre-solicitation cycle show up to the bid with five things their competitors don't have. A named COR who recognizes the company. A draft technical approach already pressure-tested against the agency's stated problem. Key personnel resumes pre-cleared. A price-to-win that survives a cost realism review. And a teaming structure that closes the capability gaps the eval panel cares about. That's the thirty-point PWin shift. Not magic, just calendar time used well.</p>\n"
+    },
+
+    {
+      "type": "back-cover",
+      "eyebrow": "WHAT'S NEXT",
+      "headline": "Stop reading about pre-solicitation. Start running it.",
+      "accentWord": "running",
+      "body": "CapturePilot tracks every sources sought, pre-solicitation notice, and recompete signal across SAM.gov and 30+ SLED portals. It scores them against your NAICS, set-asides, and past performance. Then it tells you which window to work first. Free 14-day trial. No card.",
+      "ctaText": "Get the full Federal Launch Kit →",
+      "ctaUrl": "https://www.capturepilot.com/startup-pack"
+    }
+  ]
+}

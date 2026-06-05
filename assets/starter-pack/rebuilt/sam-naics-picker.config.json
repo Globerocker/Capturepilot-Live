@@ -1,0 +1,135 @@
+{
+  "id": "flk-sam-naics-picker",
+  "title": "NAICS Code Picker for SAM.gov",
+  "slug": "sam-naics-picker",
+  "pages": 12,
+  "footerLabel": "CAPTUREPILOT · SAM.GOV REGISTRATION KIT",
+  "headerLabel": "NAICS CODE PICKER",
+  "parts": [
+    {
+      "type": "cover",
+      "eyebrow": "FEDERAL LAUNCH KIT · SAM.GOV REGISTRATION",
+      "titleLines": [
+        "Pick the NAICS",
+        "codes that win",
+        "set-asides."
+      ],
+      "accentWord": "win",
+      "pages": 12,
+      "toolStrip": [
+        { "num": "01", "title": "Selection Method", "desc": "Seven steps from service list to short list" },
+        { "num": "02", "title": "Top 15 Codes", "desc": "Size standards plus FY25 fed spend" },
+        { "num": "03", "title": "Self-Assessment", "desc": "Five sectors, twenty-plus codes to score" },
+        { "num": "04", "title": "Size Standard Trap", "desc": "Small under one code, large under another" }
+      ]
+    },
+    {
+      "type": "toc",
+      "title": "Inside this guide.",
+      "footerLabel": "CAPTUREPILOT · SAM.GOV REGISTRATION KIT",
+      "parts": [
+        {
+          "label": "/ HOW TO USE",
+          "items": [
+            { "code": "G01", "title": "Why NAICS picks matter in SAM.gov", "desc": "Your codes decide which set-asides you can bid and what counts as small.", "page": 3 }
+          ]
+        },
+        {
+          "label": "PART ONE · METHOD",
+          "items": [
+            { "code": "M01", "title": "Selection methodology, seven steps", "desc": "From services list to primary plus five-to-ten secondary codes.", "page": 5 },
+            { "code": "M02", "title": "Top federal NAICS by spend", "desc": "Fifteen codes ranked by FY25 federal obligations and SBA size standard.", "page": 6 }
+          ]
+        },
+        {
+          "label": "PART TWO · SELF-CHECK",
+          "items": [
+            { "code": "S01", "title": "IT, engineering, construction", "desc": "Score yourself on three core sectors before you certify.", "page": 9 },
+            { "code": "S02", "title": "Professional and staffing services", "desc": "Twelve more codes plus the size-standard trap that catches growing firms.", "page": 10 },
+            { "code": "S03", "title": "What to do next", "desc": "Turn the worksheet into a SAM.gov rep with five-to-ten codes.", "page": 11 }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "founder",
+      "headline": "Most firms pick three codes and wonder why nothing matches.",
+      "accentWord": "nothing",
+      "paragraphs": [
+        "I built CapturePilot because we kept seeing the same pattern. A firm registers in SAM, picks the two or three NAICS codes that feel obvious, and then waits for set-aside opportunities that never appear. Six months in, they assume federal contracting is closed to them.",
+        "It isn't closed. Their NAICS list is too short. Agencies search by NAICS. If you aren't listed under the code a contracting officer types into SAM, you are invisible. Five-to-ten codes is the working range. Some firms carry fifteen.",
+        "This picker is the worksheet I wish we'd had. Seven steps to build the list. Fifteen high-spend codes with the FY25 dollar figures. A self-assessment so you don't certify under a size standard you can't actually meet.",
+        "Run it before you finalize your SAM rep. Re-run it every twelve months — your services change, your revenue changes, the size standards change."
+      ],
+      "ctaText": "Book a 30-min SAM walk-through",
+      "ctaUrl": "https://meetings-na2.hubspot.com/americurial/intro-call",
+      "ctaButtonLabel": "Book the call →",
+      "ctaEyebrow": "30 MIN · NO PITCH",
+      "footerLabel": "CAPTUREPILOT · SAM.GOV REGISTRATION KIT"
+    },
+    {
+      "type": "dark",
+      "partLabel": "PART ONE · METHOD",
+      "headline": "Pick the codes the way contracting officers actually search.",
+      "accentWord": "actually",
+      "paragraphs": [
+        "Your NAICS codes in SAM.gov do two jobs. They decide which set-aside contracts you qualify for, and they decide what size standard the SBA applies to you. Pick the wrong primary and you end up 'large' on the contracts you wanted, 'small' on contracts you can't deliver.",
+        "The next pages cover the seven-step selection method, then the fifteen NAICS codes with the highest federal spend in FY25 so you know which ones are worth fighting for."
+      ],
+      "footerLabel": "CAPTUREPILOT · SAM.GOV REGISTRATION KIT",
+      "headerLabel": "PART ONE"
+    },
+    {
+      "type": "content",
+      "headerLabel": "SELECTION METHODOLOGY",
+      "html": "<div class=\"eyebrow\">PART ONE · METHODOLOGY</div>\n\n<h1>Seven steps from services list to SAM-ready NAICS short list.</h1>\n\n<p>Your NAICS codes in SAM.gov determine which set-aside contracts you qualify for and what your small-business size standard is. Choose strategically. Don't pick from memory.</p>\n\n<ol>\n  <li><strong>List every service or product your company delivers.</strong> Not just what you do today — include what you're capable of performing with current staff and equipment.</li>\n  <li><strong>Look up each service on census.gov/naics.</strong> Use the keyword search to find candidate codes. Write down every match, even close ones.</li>\n  <li><strong>Check the size standard for each code at sba.gov/size-standards.</strong> The standard is either revenue-based ($X million averaged over five years) or employee-based.</li>\n  <li><strong>Confirm you qualify as 'small'</strong> under the size standard for each candidate code. If you don't, drop the code or note it for later.</li>\n  <li><strong>Prioritize codes where federal spending is significant.</strong> Check usaspending.gov by NAICS — a code with $50M in annual spend is a different conversation than one with $500M.</li>\n  <li><strong>Select your primary NAICS</strong> — the one that best represents your core business. This is what agencies use to classify your proposals and what shows in most SAM searches.</li>\n  <li><strong>Add 5–10 secondary NAICS codes.</strong> More codes equals more opportunities to appear in searches. Cap it at what you can credibly perform — overreach gets you removed for cause.</li>\n</ol>\n\n<div class=\"callout callout--emerald\">\n  <div style=\"font-family:'IBM Plex Mono', monospace; font-size:8.5pt; font-weight:600; letter-spacing:0.16em; color:#047857; text-transform:uppercase; margin-bottom:2mm;\">FIELD TIP</div>\n  <strong>Run this every twelve months.</strong> Size standards update. Your revenue changes. The services you can credibly perform shift as you hire. A NAICS list you set during SAM registration in year one is wrong by year three.\n</div>\n"
+    },
+    {
+      "type": "content",
+      "headerLabel": "TOP NAICS BY FEDERAL SPEND",
+      "html": "<div class=\"eyebrow\">PART ONE · MARKET REFERENCE</div>\n\n<h1>Top 15 federal NAICS codes by sector.</h1>\n\n<p>Federal obligations in FY25, ranked by total spend with the SBA size standard you'll certify against. Use this to weight your list — a code with $12B in spend deserves more attention than one with $1B.</p>\n\n<table>\n  <thead>\n    <tr><th>NAICS</th><th>Description</th><th>Size Standard</th><th>FY25 Fed Spend</th></tr>\n  </thead>\n  <tbody>\n    <tr><td><strong>541512</strong></td><td>Computer Systems Design Services</td><td>$34M revenue</td><td>$12.4B</td></tr>\n    <tr><td><strong>541511</strong></td><td>Custom Computer Programming</td><td>$34M revenue</td><td>$8.9B</td></tr>\n    <tr><td><strong>541519</strong></td><td>Other Computer Services</td><td>$34M revenue</td><td>$6.1B</td></tr>\n    <tr><td><strong>541330</strong></td><td>Engineering Services</td><td>$25.5M revenue</td><td>$9.2B</td></tr>\n    <tr><td><strong>236220</strong></td><td>Commercial &amp; Institutional Building Construction</td><td>$45M revenue</td><td>$7.8B</td></tr>\n    <tr><td><strong>561210</strong></td><td>Facilities Support Services</td><td>$47M revenue</td><td>$6.4B</td></tr>\n    <tr><td><strong>541611</strong></td><td>Management Consulting</td><td>$24.5M revenue</td><td>$5.1B</td></tr>\n    <tr><td><strong>562910</strong></td><td>Remediation Services</td><td>$25.5M revenue</td><td>$3.8B</td></tr>\n    <tr><td><strong>611430</strong></td><td>Professional &amp; Mgmt Development Training</td><td>$16.5M revenue</td><td>$2.9B</td></tr>\n    <tr><td><strong>336414</strong></td><td>Guided Missile &amp; Space Vehicle Mfg</td><td>1,250 employees</td><td>$18.2B</td></tr>\n    <tr><td><strong>621111</strong></td><td>Offices of Physicians (except Mental Health)</td><td>$16.5M revenue</td><td>$1.4B</td></tr>\n    <tr><td><strong>561320</strong></td><td>Temporary Staffing Agencies</td><td>$34M revenue</td><td>$4.7B</td></tr>\n    <tr><td><strong>561110</strong></td><td>Office Administrative Services</td><td>$34M revenue</td><td>$2.1B</td></tr>\n    <tr><td><strong>518210</strong></td><td>Data Processing, Hosting</td><td>$34M revenue</td><td>$3.6B</td></tr>\n    <tr><td><strong>511210</strong></td><td>Software Publishers</td><td>$34M revenue</td><td>$5.3B</td></tr>\n  </tbody>\n</table>\n\n<div class=\"callout\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">HOW TO READ THIS</div>\n  <p style=\"margin:0;\">FY25 spend numbers come from USASpending.gov rollups across all federal agencies. A code with $12B in spend doesn't mean you'll see $12B in opportunities — most of that is awarded to large primes. But it tells you the addressable market is real. Codes under $1B in annual spend are niche; treat them as secondary.</p>\n</div>\n"
+    },
+    {
+      "type": "content",
+      "headerLabel": "READING THE TABLE",
+      "html": "<div class=\"eyebrow\">PART ONE · INTERPRETATION</div>\n\n<h1>Three things the spend table doesn't say out loud.</h1>\n\n<p>The fifteen codes above are the starting point, not the answer. Three patterns are worth pulling out before you build your own list.</p>\n\n<h2>Revenue-based vs. employee-based</h2>\n<p>Most codes use revenue, averaged over your last five completed fiscal years. A few — manufacturing, aerospace, defense supply — use employee count. 336414 (Guided Missile &amp; Space Vehicle Mfg) is 1,250 employees, not dollars. If you're a 30-person engineering shop that does some integration work, you might be 'small' under both 541330 and 336414 — but the certification math is different for each.</p>\n\n<h2>The IT cluster is one market with three doors</h2>\n<p>541511, 541512, and 541519 together account for over $27B in FY25 spend. Most IT services firms qualify for all three. Pick the one closest to your core delivery as primary, then add the other two as secondary. Same size standard ($34M revenue), same buyers, three more ways to show up in agency searches.</p>\n\n<h2>Facilities and remediation are quieter, set-aside heavier</h2>\n<p>561210 (Facilities Support), 562910 (Remediation), and 561720 (Janitorial) don't crack the top of the spend list, but a much higher percentage of those dollars goes through small-business set-asides. If you can credibly perform in these areas, the win rate per opportunity is usually better than chasing IT integration prime awards.</p>\n\n<div class=\"callout callout--emerald\">\n  <div style=\"font-family:'IBM Plex Mono', monospace; font-size:8.5pt; font-weight:600; letter-spacing:0.16em; color:#047857; text-transform:uppercase; margin-bottom:2mm;\">FIELD TIP</div>\n  <strong>Don't pick a primary based on what pays best.</strong> Pick it based on what you've actually delivered in the last twenty-four months with documented past performance. A primary you can't defend on a CPARS reference will hurt you in evaluations.\n</div>\n"
+    },
+    {
+      "type": "dark",
+      "partLabel": "PART TWO · SELF-CHECK",
+      "headline": "Score yourself against the codes before you certify.",
+      "accentWord": "before",
+      "paragraphs": [
+        "The next two pages are the working sheet. Five sectors. Twenty-plus codes. Check every code your company can credibly perform — meaning you have the staff, the equipment, and at least one piece of past performance you'd hand to an evaluator.",
+        "If you can't check a box honestly, don't put the code in SAM. The set-aside opportunities you'd see are the same ones that get you removed for cause when you can't deliver."
+      ],
+      "footerLabel": "CAPTUREPILOT · SAM.GOV REGISTRATION KIT",
+      "headerLabel": "PART TWO"
+    },
+    {
+      "type": "content",
+      "headerLabel": "SELF-ASSESSMENT · CORE",
+      "html": "<div class=\"eyebrow\">PART TWO · WORKING SHEET</div>\n\n<h1>NAICS code self-assessment.</h1>\n\n<p>For each service area below, check every code your company can credibly perform. Honest check means: you have the staff, the equipment, and at least one piece of past performance you can defend.</p>\n\n<h2>Information Technology &amp; Cybersecurity</h2>\n<ul style=\"list-style:none; padding-left:0;\">\n  <li>&#9744;&nbsp; <strong>541512</strong> — Systems Integration</li>\n  <li>&#9744;&nbsp; <strong>541511</strong> — Custom Software Development</li>\n  <li>&#9744;&nbsp; <strong>541519</strong> — IT Support / Help Desk / NOC</li>\n  <li>&#9744;&nbsp; <strong>518210</strong> — Cloud / Hosting / Data Center</li>\n  <li>&#9744;&nbsp; <strong>511210</strong> — Software as a Service (SaaS)</li>\n</ul>\n\n<h2>Engineering &amp; Technical</h2>\n<ul style=\"list-style:none; padding-left:0;\">\n  <li>&#9744;&nbsp; <strong>541330</strong> — Civil / Structural / Mechanical Engineering</li>\n  <li>&#9744;&nbsp; <strong>541310</strong> — Architectural Services</li>\n  <li>&#9744;&nbsp; <strong>541350</strong> — Building Inspection Services</li>\n  <li>&#9744;&nbsp; <strong>541360</strong> — Geophysical Surveying / Mapping</li>\n  <li>&#9744;&nbsp; <strong>541380</strong> — Testing Laboratories</li>\n</ul>\n\n<h2>Construction &amp; Facilities</h2>\n<ul style=\"list-style:none; padding-left:0;\">\n  <li>&#9744;&nbsp; <strong>236220</strong> — Commercial / Institutional Construction</li>\n  <li>&#9744;&nbsp; <strong>237310</strong> — Highway / Street / Bridge Construction</li>\n  <li>&#9744;&nbsp; <strong>561210</strong> — Facilities Support / O&amp;M</li>\n  <li>&#9744;&nbsp; <strong>561720</strong> — Janitorial Services</li>\n  <li>&#9744;&nbsp; <strong>562910</strong> — Remediation / Environmental Cleanup</li>\n</ul>\n"
+    },
+    {
+      "type": "content",
+      "headerLabel": "SELF-ASSESSMENT · SERVICES",
+      "html": "<div class=\"eyebrow\">PART TWO · WORKING SHEET (CONTINUED)</div>\n\n<h1>Professional, staffing, and the size-standard trap.</h1>\n\n<h2>Professional Services</h2>\n<ul style=\"list-style:none; padding-left:0;\">\n  <li>&#9744;&nbsp; <strong>541611</strong> — Management Consulting</li>\n  <li>&#9744;&nbsp; <strong>541612</strong> — HR Consulting</li>\n  <li>&#9744;&nbsp; <strong>541613</strong> — Marketing Consulting</li>\n  <li>&#9744;&nbsp; <strong>541990</strong> — Other Professional Services</li>\n  <li>&#9744;&nbsp; <strong>611430</strong> — Training &amp; Education</li>\n</ul>\n\n<h2>Staffing &amp; Administrative</h2>\n<ul style=\"list-style:none; padding-left:0;\">\n  <li>&#9744;&nbsp; <strong>561320</strong> — Temporary Staffing</li>\n  <li>&#9744;&nbsp; <strong>561110</strong> — Office Administrative Services</li>\n  <li>&#9744;&nbsp; <strong>561410</strong> — Document Preparation</li>\n  <li>&#9744;&nbsp; <strong>561720</strong> — Clerical Staffing</li>\n</ul>\n\n<div class=\"callout callout--emerald\">\n  <div style=\"font-family:'IBM Plex Mono', monospace; font-size:8.5pt; font-weight:600; letter-spacing:0.16em; color:#047857; text-transform:uppercase; margin-bottom:2mm;\">SIZE STANDARD TRAP</div>\n  <p style=\"margin:0 0 2mm 0;\"><strong>You can be 'small' under one NAICS and 'large' under another.</strong> A 40-person consulting firm at $26M revenue is small under 541330 ($25.5M — barely over, watch the five-year average), large under 541611 ($24.5M), and small under 541512 ($34M). The certification math is per-code.</p>\n  <p style=\"margin:0;\">Always verify at the SBA size standards tool before you certify. A wrong rep is a False Claims Act exposure, not just a paperwork error.</p>\n</div>\n\n<h2>Once your boxes are checked</h2>\n<p>Count your checks. If you have more than ten honest checks, narrow to the eight or nine you can defend with the strongest past performance. If you have fewer than three, your services list is probably too narrow — re-read step one of the methodology and add anything you've delivered commercially that could translate to federal.</p>\n"
+    },
+    {
+      "type": "content",
+      "headerLabel": "PUT IT INTO SAM",
+      "html": "<div class=\"eyebrow\">PART TWO · NEXT STEPS</div>\n\n<h1>Turn the worksheet into a SAM.gov registration that wins.</h1>\n\n<p>You have a primary NAICS, five-to-ten secondary codes, and a size-standard check for each. Three things to do before you hit submit in SAM.</p>\n\n<h2>1. Verify each size standard, one more time</h2>\n<p>Pull the current SBA size standards table at <strong>sba.gov/size-standards</strong>. The standards update — what was $30M last year is $34M now for several IT codes. Use your five-year revenue average, not last year's number. If you're within 10% of the threshold on your primary, document the calculation in a file you can hand to a contracting officer if challenged.</p>\n\n<h2>2. Put the right code as primary</h2>\n<p>Your primary NAICS shows in most SAM exports and agency dashboards. Pick the code that matches the work you're actually selling — not the one with the highest spend, not the one with the most generous size standard. If a contracting officer pulls your record while screening for a sources sought, the primary is what they read first.</p>\n\n<h2>3. Document why you picked each secondary</h2>\n<p>Keep a one-page internal note: for each NAICS in your SAM record, list one piece of past performance, one capability statement reference, and the size-standard math. When you renew SAM next year and someone on your team asks 'why do we have 561720 in here,' the answer is on file.</p>\n\n<div class=\"callout\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">WHAT TO DO NEXT</div>\n  <p style=\"margin:0;\">Once the codes are in, set a recurring calendar reminder for ninety days before SAM renewal. Re-run this worksheet. Drop codes you didn't bid under. Add codes you've grown into. The list is a living document, not a one-time decision.</p>\n</div>\n"
+    },
+    {
+      "type": "back-cover",
+      "eyebrow": "WHAT'S NEXT",
+      "headline": "Stop guessing which codes pay. Score them.",
+      "accentWord": "Score",
+      "body": "CapturePilot pulls your NAICS list, scores each code against live federal opportunities, and tells you which secondary codes are actually generating matches. Free 14-day trial. No card.",
+      "ctaText": "Get the full Federal Launch Kit",
+      "ctaUrl": "https://www.capturepilot.com/startup-pack",
+      "footerLabel": "CAPTUREPILOT · SAM.GOV REGISTRATION KIT"
+    }
+  ]
+}

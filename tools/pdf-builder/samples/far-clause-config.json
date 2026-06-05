@@ -1,0 +1,139 @@
+{
+  "id": "flk-far-quick-reference",
+  "title": "FAR Clause Quick-Reference Decoder",
+  "slug": "flk-far-quick-reference",
+  "pages": 10,
+  "footerLabel": "CAPTUREPILOT · THE FEDERAL FAR PLAYBOOK",
+  "headerLabel": "FAR DECODER",
+  "parts": [
+    {
+      "type": "cover",
+      "eyebrow": "FEDERAL LAUNCH KIT · FAR DECODER",
+      "titleLines": [
+        "FAR Clauses,",
+        "Decoded for",
+        "Operators."
+      ],
+      "accentWord": "Decoded",
+      "pages": 10,
+      "toolStrip": [
+        { "num": 1, "title": "Risk Legend", "desc": "CRITICAL to LOW, fast triage" },
+        { "num": 2, "title": "40 Clauses", "desc": "The ones that bite first" },
+        { "num": 3, "title": "Watch List", "desc": "Three obligations per clause" },
+        { "num": 4, "title": "Plain English", "desc": "No legalese, no fluff" }
+      ]
+    },
+
+    {
+      "type": "toc",
+      "title": "Forty clauses. One decoder.",
+      "footerLabel": "CAPTUREPILOT · THE FEDERAL FAR PLAYBOOK",
+      "parts": [
+        {
+          "label": "/ HOW TO USE",
+          "items": [
+            { "code": "G01", "title": "How to Read This Guide", "desc": "Risk levels, watch points, and what to do when a clause shows up in your contract.", "page": 3 }
+          ]
+        },
+        {
+          "label": "PART ONE · WHO CAN BID",
+          "items": [
+            { "code": "P09", "title": "FAR Part 9 — Contractor Qualifications", "desc": "Debarment checks, integrity, suspension. The first place a contract dies.", "page": 5 },
+            { "code": "P19", "title": "FAR Part 19 — Small Business Programs", "desc": "Set-asides, subcontracting plans, rerepresentation. The most-violated area in federal.", "page": 6 }
+          ]
+        },
+        {
+          "label": "PART TWO · HOW YOU PAY PEOPLE",
+          "items": [
+            { "code": "P22", "title": "FAR Part 22 — Labor Standards", "desc": "Service Contract Act, EEO, E-Verify, anti-trafficking. Wage determinations matter.", "page": 7 }
+          ]
+        },
+        {
+          "label": "PART THREE · MONEY MOVES",
+          "items": [
+            { "code": "P32", "title": "FAR Part 32 — Payment & Financing", "desc": "Prompt payment, SAM.gov banking, accelerated pay to small subs.", "page": 8 },
+            { "code": "P49", "title": "FAR Part 49 — Termination", "desc": "T for Convenience, T for Default, Excusable Delays. Know your rights.", "page": 9 }
+          ]
+        }
+      ]
+    },
+
+    {
+      "type": "founder",
+      "headline": "FAR clauses don't read your contract. You do.",
+      "accentWord": "you",
+      "paragraphs": [
+        "First federal award I worked on, a clause we'd never heard of triggered a 45-day delay. Cost the client about $18,000 in idle subcontractor time. The clause was four lines long. It said we had to flow a specific provision down to every sub over $35,000.",
+        "We hadn't. Because nobody read it. Because it looked like every other line in a 280-page solicitation.",
+        "This decoder is the version of that document I wish we'd had. Forty clauses, the ones that actually decide whether your contract gets paid on time, audited, or quietly terminated. Plain English. One risk rating each. Three watch points per clause.",
+        "Read it before you sign. Re-read it before you submit a mod. That's the discipline."
+      ],
+      "ctaText": "Book a 30-min FAR walk-through",
+      "ctaUrl": "https://meetings-na2.hubspot.com/americurial/intro-call",
+      "ctaButtonLabel": "Book the call →",
+      "ctaEyebrow": "30 MIN · NO PITCH",
+      "footerLabel": "CAPTUREPILOT · THE FEDERAL FAR PLAYBOOK"
+    },
+
+    {
+      "type": "dark",
+      "partLabel": "PART ONE · WHO CAN BID",
+      "headline": "Two FAR Parts decide whether you can even sign.",
+      "accentWord": "even",
+      "paragraphs": [
+        "FAR Part 9 says the government won't contract with anyone debarred, suspended, or otherwise excluded. FAR Part 19 says small business set-asides only work if you actually qualify and stay qualified.",
+        "Get either wrong and the contract is void. The next pages cover the clauses that show up most often, what they mean in plain English, and what to watch."
+      ],
+      "footerLabel": "CAPTUREPILOT · THE FEDERAL FAR PLAYBOOK",
+      "headerLabel": "PART ONE"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "FAR PART 9 · QUALIFICATIONS",
+      "markdown": "<div class=\"eyebrow\">FAR PART 9 · CONTRACTOR QUALIFICATIONS</div>\n\n# Responsibility, debarment, and the SAM.gov check that ends careers.\n\nBefore award, the contracting officer must find you a *responsible* prospective contractor. Part 9 also says you cannot subcontract to anyone who is debarred, suspended, or proposed for debarment. The check sounds simple. The penalty for skipping it is not.\n\n<table>\n  <thead>\n    <tr><th>Clause</th><th>Plain English</th><th>Watch points</th><th>Risk</th></tr>\n  </thead>\n  <tbody>\n    <tr>\n      <td><strong>52.209-6</strong><br><span style=\"color:#78716c; font-size:9pt;\">Protecting the Gov't Interest When Subcontracting with Debarred Contractors</span></td>\n      <td>Before awarding any subcontract over $35,000, you must check SAM.gov to confirm the proposed sub is not debarred or suspended. The government will not catch this one for you.</td>\n      <td>Check every sub in SAM.gov before award · Save a dated screenshot with the check · Flow this clause down to your subs</td>\n      <td><span class=\"risk-pill risk-high\">HIGH</span></td>\n    </tr>\n    <tr>\n      <td><strong>52.209-10</strong><br><span style=\"color:#78716c; font-size:9pt;\">Prohibition on Contracting with Inverted Domestic Corporations</span></td>\n      <td>You certify you are not an inverted domestic corporation — a company that moved overseas primarily to avoid US taxes. A false certification voids the contract.</td>\n      <td>Verify corporate structure before certifying · Disclose any recent M&amp;A that changed domicile · Reps and Certs violation can mean debarment</td>\n      <td><span class=\"risk-pill risk-medium\">MEDIUM</span></td>\n    </tr>\n  </tbody>\n</table>\n\n<div class=\"callout callout--emerald\">\n  <div style=\"font-family:'IBM Plex Mono', monospace; font-size:8.5pt; font-weight:600; letter-spacing:0.16em; color:#047857; text-transform:uppercase; margin-bottom:2mm;\">FIELD TIP</div>\n  <strong>Build the SAM.gov check into your subcontract template.</strong> Make it a line item on the procurement checklist with a screenshot field and a date stamp. If your COR asks for it eighteen months later, you have it.\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "FAR PART 19 · SMALL BUSINESS",
+      "markdown": "<div class=\"eyebrow\">FAR PART 19 · SMALL BUSINESS PROGRAMS</div>\n\n# Set-asides, subcontracting plans, and the rerepresentation trap.\n\nPart 19 is the most-violated section in federal contracting. Not because it is hard. Because the rules change while the contract is live. You grow past the size standard. You acquire a company. You miss the annual rerep deadline. Each of those is a False Claims Act exposure.\n\n<table>\n  <thead>\n    <tr><th>Clause</th><th>Plain English</th><th>Watch points</th><th>Risk</th></tr>\n  </thead>\n  <tbody>\n    <tr>\n      <td><strong>52.219-6</strong><br><span style=\"color:#78716c; font-size:9pt;\">Notice of Total Small Business Set-Aside</span></td>\n      <td>This contract is set aside exclusively for small businesses. You must qualify under the primary NAICS at time of offer AND throughout performance. If you grow past the size standard you must self-report.</td>\n      <td>Verify size eligibility before each offer · Rerepresent annually under 52.219-28 · Large business fronting as small = False Claims Act</td>\n      <td><span class=\"risk-pill risk-critical\">CRITICAL</span></td>\n    </tr>\n    <tr>\n      <td><strong>52.219-9</strong><br><span style=\"color:#78716c; font-size:9pt;\">Small Business Subcontracting Plan</span></td>\n      <td>Required on contracts over $750,000 ($1.5M for manufacturing) awarded to large businesses. You submit a written plan with specific percentage goals and report semi-annually in eSRS.</td>\n      <td>Submit ISR / SSR by Oct 30 and Apr 30 · Missed goals can be a material breach · Required even on Commercial Item contracts above threshold</td>\n      <td><span class=\"risk-pill risk-critical\">CRITICAL</span></td>\n    </tr>\n    <tr>\n      <td><strong>52.219-14</strong><br><span style=\"color:#78716c; font-size:9pt;\">Limitations on Subcontracting</span></td>\n      <td>Caps how much of a set-aside contract you can subcontract to non-similarly-situated entities. Services: at least 50% of labor by the prime. Supply: 50% of cost of manufacturing.</td>\n      <td>Track labor hours by prime vs sub monthly · Document similarly-situated status for every sub · Get legal review before crossing the 50% line</td>\n      <td><span class=\"risk-pill risk-critical\">CRITICAL</span></td>\n    </tr>\n    <tr>\n      <td><strong>52.219-28</strong><br><span style=\"color:#78716c; font-size:9pt;\">Post-Award Small Business Program Rerepresentation</span></td>\n      <td>Requires you to rerepresent your small business status when your contract is modified to increase value beyond a dollar threshold, after a merger or acquisition, or annually on contracts exceeding 5 years.</td>\n      <td>Calendar reminder for the annual rerep · Consult counsel after any acquisition · A false rerep is False Claims Act exposure</td>\n      <td><span class=\"risk-pill risk-high\">HIGH</span></td>\n    </tr>\n  </tbody>\n</table>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "FAR PART 22 · LABOR",
+      "markdown": "<div class=\"eyebrow\">FAR PART 22 · LABOR STANDARDS</div>\n\n# Wage determinations, E-Verify, and the Service Contract Act trap.\n\nFAR Part 22 covers how you pay the people doing the work. The Service Contract Act is where most small primes get into trouble — they bid before pulling the wage determination, then discover the fringe rate eats their margin.\n\n<table>\n  <thead>\n    <tr><th>Clause</th><th>Plain English</th><th>Watch points</th><th>Risk</th></tr>\n  </thead>\n  <tbody>\n    <tr>\n      <td><strong>52.222-41</strong><br><span style=\"color:#78716c; font-size:9pt;\">Service Contract Labor Standards</span></td>\n      <td>The Service Contract Act requires you to pay workers on covered service contracts at least the prevailing wage and fringe rate set by DoL for that locality and occupation. Underpaying SCA workers means back wages and debarment.</td>\n      <td>Pull the wage determination before bidding and before each option · Post the WD at the worksite · Fringe must be paid — you cannot substitute cash for health insurance</td>\n      <td><span class=\"risk-pill risk-critical\">CRITICAL</span></td>\n    </tr>\n    <tr>\n      <td><strong>52.222-50</strong><br><span style=\"color:#78716c; font-size:9pt;\">Combating Trafficking in Persons</span></td>\n      <td>Prohibits forced labor and commercial sex acts by you or your subs on all contracts. Requires an awareness program and a compliance plan on contracts over $550,000 performed outside the US.</td>\n      <td>Train employees on the prohibition · Establish a reporting mechanism · Flow this clause down regardless of sub tier or dollar value</td>\n      <td><span class=\"risk-pill risk-high\">HIGH</span></td>\n    </tr>\n    <tr>\n      <td><strong>52.222-54</strong><br><span style=\"color:#78716c; font-size:9pt;\">Employment Eligibility Verification</span></td>\n      <td>Requires E-Verify for new hires and for employees performing on the contract. Applies to most service contracts where employees work at federal facilities or on federal property.</td>\n      <td>Enroll in E-Verify before award (3 days) · Verify new hires within 3 business days of hire · Verify existing assigned employees within 30 days</td>\n      <td><span class=\"risk-pill risk-high\">HIGH</span></td>\n    </tr>\n  </tbody>\n</table>\n\n<div class=\"callout\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">WHY THIS MATTERS</div>\n  <p style=\"margin:0;\">A wrong wage determination on a 5-year option contract is a six-figure mistake. We have seen primes lose every cent of margin in year two because they bid using a year-zero rate. Pull the WD fresh every option exercise. Track the change in writing.</p>\n</div>\n"
+    },
+
+    {
+      "type": "dark",
+      "partLabel": "PART TWO · MONEY MOVES",
+      "headline": "How you get paid. How you stop getting paid.",
+      "accentWord": "paid",
+      "paragraphs": [
+        "Part 32 covers invoicing and the SAM.gov banking record that decides where the money lands. Part 49 covers termination — for the government's convenience, or for your default. Most small primes confuse the two and lose money settling.",
+        "Both parts share a pattern: the government has powerful unilateral rights, and your only protection is documentation."
+      ],
+      "footerLabel": "CAPTUREPILOT · THE FEDERAL FAR PLAYBOOK",
+      "headerLabel": "PART TWO"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "FAR PART 32 + 49",
+      "markdown": "<div class=\"eyebrow\">FAR PART 32 · PAYMENT &amp; FINANCING</div>\n\n# The SAM.gov bank record is the contract's payment instruction.\n\nIf your banking info in SAM is wrong, your payment goes nowhere. If a fraudster changed your SAM banking record, your payment goes to them. This is the single most common payment-fraud vector in federal.\n\n<table>\n  <thead>\n    <tr><th>Clause</th><th>Plain English</th><th>Watch points</th><th>Risk</th></tr>\n  </thead>\n  <tbody>\n    <tr>\n      <td><strong>52.232-25</strong><br><span style=\"color:#78716c; font-size:9pt;\">Prompt Payment</span></td>\n      <td>Requires the government to pay within 30 days of a proper invoice (7 days for construction). If payment is late, the government owes interest. You must pay your subs within 7 days of receiving payment.</td>\n      <td>Submit a 'proper' invoice with PO number, period of performance, CLIN, bank info · Pay subs within 7 days · Document the date you received gov payment</td>\n      <td><span class=\"risk-pill risk-medium\">MEDIUM</span></td>\n    </tr>\n    <tr>\n      <td><strong>52.232-33</strong><br><span style=\"color:#78716c; font-size:9pt;\">Payment by Electronic Funds Transfer — SAM</span></td>\n      <td>Payment goes to the bank account registered in your SAM.gov profile. If your banking info is wrong, your payment goes to the wrong place — or to a fraudster who changed your SAM record.</td>\n      <td>Lock SAM with a dedicated entity administrator · Login.gov MFA on every admin · Verify bank account every renewal — check routing AND account numbers</td>\n      <td><span class=\"risk-pill risk-critical\">CRITICAL</span></td>\n    </tr>\n  </tbody>\n</table>\n\n<div class=\"eyebrow\" style=\"margin-top:8mm;\">FAR PART 49 · TERMINATION</div>\n\n## When the government can walk away — and what they owe you when they do.\n\n<table>\n  <thead>\n    <tr><th>Clause</th><th>Plain English</th><th>Watch points</th><th>Risk</th></tr>\n  </thead>\n  <tbody>\n    <tr>\n      <td><strong>52.249-2</strong><br><span style=\"color:#78716c; font-size:9pt;\">Termination for Convenience of the Government (Fixed-Price)</span></td>\n      <td>The government can terminate your contract for any reason — budget, change in requirements, political. They owe you allowable costs incurred, profit on work done, and settlement costs. You are NOT entitled to profit on work not yet performed.</td>\n      <td>Stop work immediately on the terminated portion · Submit termination settlement proposal within 1 year · Track settlement-prep costs separately · Do not accept inventory or make new commitments after the notice</td>\n      <td><span class=\"risk-pill risk-high\">HIGH</span></td>\n    </tr>\n    <tr>\n      <td><strong>52.249-8</strong><br><span style=\"color:#78716c; font-size:9pt;\">Default (Fixed-Price Supply and Service)</span></td>\n      <td>The government can terminate for default if you fail to deliver on time, fail to make progress, or fail to perform any other contract provision. Unlike T for Convenience, you are not paid for work done — and the government can hold you liable for reprocurement costs.</td>\n      <td>If you are behind, request an extension BEFORE the delivery date passes · Force majeure must be documented and reported immediately · Respond in writing to every cure notice and show-cause letter within the timeframe given</td>\n      <td><span class=\"risk-pill risk-critical\">CRITICAL</span></td>\n    </tr>\n  </tbody>\n</table>\n\n## Quarterly FAR compliance checklist\n\nPrint this page. Walk it with your CO and your subcontracts lead every quarter.\n\n- [ ] Pulled the current wage determination for every active service contract\n- [ ] Verified SAM.gov banking record matches the controller's records\n- [ ] Confirmed every sub over $35,000 is clear in SAM.gov (no debarment, no suspension)\n- [ ] Filed the small business subcontracting ISR / SSR for the period\n- [ ] Re-represented small business status under 52.219-28 where required\n- [ ] E-Verify enrollment is current and every covered hire has been run\n- [ ] Reviewed every cure notice and show-cause letter received this quarter\n- [ ] Captured a fresh SAM.gov screenshot for the procurement audit file\n"
+    },
+
+    {
+      "type": "back-cover",
+      "eyebrow": "WHAT'S NEXT",
+      "headline": "Stop reading clauses. Start scoring them.",
+      "accentWord": "scoring",
+      "body": "CapturePilot ingests your contracts, flags the high-risk clauses, and routes the watch points to the right person on your team. Free 14-day trial. No card.",
+      "ctaText": "Start free trial →",
+      "ctaUrl": "https://capturepilot.com/signup",
+      "footerLabel": "CAPTUREPILOT · THE FEDERAL FAR PLAYBOOK"
+    }
+  ]
+}

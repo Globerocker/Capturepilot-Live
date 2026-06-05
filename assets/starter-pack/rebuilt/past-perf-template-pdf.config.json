@@ -1,0 +1,50 @@
+{
+  "id": "past-perf-template-pdf",
+  "title": "Past-Performance Reference Template",
+  "slug": "flk-past-performance-reference-template",
+  "pages": 5,
+  "footerLabel": "CAPTUREPILOT · FEDERAL LEAD KIT",
+  "headerLabel": "PAST-PERFORMANCE REFERENCE",
+  "parts": [
+    {
+      "type": "cover",
+      "eyebrow": "FEDERAL LEAD KIT · 06 · PAST-PERFORMANCE REFERENCE",
+      "titleLines": [
+        "Past-Performance",
+        "Reference",
+        "Template."
+      ],
+      "accentWord": "Template",
+      "pages": 5,
+      "toolStrip": [
+        { "num": "01", "title": "Contract Identification", "desc": "Agency, contract number, NAICS, value, period of performance — the facts an evaluator scans first" },
+        { "num": "02", "title": "Reference Contact", "desc": "A real human a contracting officer can call, with the date you last verified the number" },
+        { "num": "03", "title": "Scope & Relevance", "desc": "What you actually did and how it maps to the contract you're bidding now" },
+        { "num": "04", "title": "Performance Ratings", "desc": "CPARS-aligned categories: Technical, Schedule, Management, Cost Control, Small Business" }
+      ]
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "PAGE 1 · CONTRACT IDENTIFICATION & REFERENCE CONTACT",
+      "html": "<div class=\"eyebrow\">FILL-IN-THE-BLANK · ONE TEMPLATE PER CONTRACT</div>\n\n<h1>Past-Performance Reference — Federal-Grade Documentation.</h1>\n\n<p style=\"color:#57534e; font-size:10pt; margin-top:-2mm;\">Federal-grade documentation of your completed work, in the format evaluators expect.</p>\n\n<div class=\"callout callout--emerald\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">HOW TO USE THIS TEMPLATE</div>\n  <p style=\"margin:0;\">Complete one template per contract. Get approval from your POC before you list them as a reference. Federal evaluators do call these contacts. A dead phone line tanks your past-performance score faster than a low rating.</p>\n</div>\n\n<h2 style=\"margin-top:8mm;\">Contract Identification.</h2>\n\n<table>\n  <tbody>\n    <tr>\n      <td style=\"width:22%; font-weight:600;\">Agency / Client</td>\n      <td style=\"width:34%;\">[Department / Agency / Commercial Client Name]</td>\n      <td style=\"width:14%; font-weight:600;\">Contract Type</td>\n      <td>[FFP / T&amp;M / Cost-Plus / IDIQ]</td>\n    </tr>\n    <tr>\n      <td style=\"font-weight:600;\">Contract Number</td>\n      <td>[PIID or PO Number]</td>\n      <td style=\"font-weight:600;\">Delivery Order #</td>\n      <td>[If applicable]</td>\n    </tr>\n    <tr>\n      <td style=\"font-weight:600;\">Program / Project</td>\n      <td>[Project or program common name]</td>\n      <td style=\"font-weight:600;\">NAICS Code</td>\n      <td>[Code]</td>\n    </tr>\n    <tr>\n      <td style=\"font-weight:600;\">Contract Value</td>\n      <td>[$XXX,XXX total]</td>\n      <td style=\"font-weight:600;\">Your Share</td>\n      <td>[$XXX,XXX if subcontractor]</td>\n    </tr>\n    <tr>\n      <td style=\"font-weight:600;\">Period of Performance</td>\n      <td>[MM/DD/YYYY – MM/DD/YYYY]</td>\n      <td style=\"font-weight:600;\">Option Years</td>\n      <td>[X of Y exercised]</td>\n    </tr>\n    <tr>\n      <td style=\"font-weight:600;\">Set-Aside Type</td>\n      <td>[Full &amp; Open / 8(a) / SDVOSB / etc.]</td>\n      <td style=\"font-weight:600;\">Small Bus. Role</td>\n      <td>[Prime / Sub / JV]</td>\n    </tr>\n  </tbody>\n</table>\n\n<h2 style=\"margin-top:10mm;\">Reference Contact (Must Be Current).</h2>\n\n<table>\n  <tbody>\n    <tr><td style=\"width:32%; font-weight:600;\">Contracting Officer / COR</td><td>[Full Name, Title]</td></tr>\n    <tr><td style=\"font-weight:600;\">Phone (direct)</td><td>[###-###-####]</td></tr>\n    <tr><td style=\"font-weight:600;\">Email</td><td>[official government or company email]</td></tr>\n    <tr><td style=\"font-weight:600;\">Last contacted / verified</td><td>[Date you confirmed this POC is still reachable]</td></tr>\n  </tbody>\n</table>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "PAGE 2 · SCOPE, RELEVANCE, AND CPARS RATINGS",
+      "html": "<h2>Scope of Work Performed.</h2>\n\n<p style=\"color:#57534e; font-size:9.5pt;\">Describe what your company actually did. Be specific. Include technologies used, number of staff deployed, locations supported, and the mission outcome. Three to five sentences minimum. Don't just copy the original SOW — paraphrase in your own voice.</p>\n\n<div class=\"callout\">\n  <p style=\"margin:0; color:#57534e;\">[Your company deployed X staff across Y locations to deliver Z service for the [agency]. Over the [duration] period of performance, the team [specific technical actions — e.g. operated a 24/7 tier-2 helpdesk for a 6,500-user enterprise network, supported [system name], maintained [SLA percentage] uptime]. The contract closed with [measurable outcome — e.g. zero security incidents, 98% customer satisfaction, $X cost avoidance]. [Add one sentence on transition, hand-off, or any option-year exercise to show longevity.]]</p>\n</div>\n\n<h2 style=\"margin-top:9mm;\">Relevance to Target Requirement.</h2>\n\n<p style=\"color:#57534e; font-size:9.5pt;\">Explain how this past performance maps to the specific contract you're bidding. Match scope, agency type, complexity, and technical domain. This section often shows up verbatim in proposals — pre-draft it here for reuse.</p>\n\n<div class=\"callout\">\n  <p style=\"margin:0; color:#57534e;\">[This contract maps directly to [target solicitation #] because [shared NAICS, similar agency, comparable dollar value, same set-aside type, equivalent technical scope]. The team that performed this work is the same team proposed for [target contract] — see Key Personnel resumes. Specifically, our experience with [requirement A, B, C] from this contract addresses Sections [L/M references] of the target RFP.]</p>\n</div>\n\n<h2 style=\"margin-top:9mm;\">Performance Ratings (CPARS or Self-Reported).</h2>\n\n<table>\n  <thead>\n    <tr>\n      <th style=\"width:32%;\">Category</th>\n      <th>Rating</th>\n      <th style=\"width:22%;\">Notes</th>\n    </tr>\n  </thead>\n  <tbody>\n    <tr><td>Technical Performance</td><td><ul class=\"task-list\" style=\"list-style:none;padding-left:0;margin:0;\"><li>Exceptional</li><li>Very Good</li><li>Satisfactory</li><li>Marginal</li><li>Unsatisfactory</li></ul></td><td>[CPARS ref or note]</td></tr>\n    <tr><td>Schedule / Delivery</td><td><ul class=\"task-list\" style=\"list-style:none;padding-left:0;margin:0;\"><li>Exceptional</li><li>Very Good</li><li>Satisfactory</li><li>Marginal</li><li>Unsatisfactory</li></ul></td><td>[On-time %]</td></tr>\n    <tr><td>Management</td><td><ul class=\"task-list\" style=\"list-style:none;padding-left:0;margin:0;\"><li>Exceptional</li><li>Very Good</li><li>Satisfactory</li><li>Marginal</li><li>Unsatisfactory</li></ul></td><td>[Staffing notes]</td></tr>\n    <tr><td>Cost Control (if cost-type)</td><td><ul class=\"task-list\" style=\"list-style:none;padding-left:0;margin:0;\"><li>Exceptional</li><li>Very Good</li><li>Satisfactory</li><li>N/A</li></ul></td><td>[Variance %]</td></tr>\n    <tr><td>Small Business Subcontracting</td><td><ul class=\"task-list\" style=\"list-style:none;padding-left:0;margin:0;\"><li>Exceptional</li><li>Very Good</li><li>Satisfactory</li><li>N/A</li></ul></td><td>[Sub %]</td></tr>\n  </tbody>\n</table>\n\n<div class=\"callout callout--emerald\" style=\"margin-top:8mm;\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">FIELD TIP</div>\n  <p style=\"margin:0;\">If you have an active CPARS rating, pull the report and quote the evaluator's narrative verbatim under Notes. If the contract is commercial or pre-CPARS, ask your POC for one written paragraph you can attach — federal evaluators weigh a signed customer letter heavier than a self-checked box.</p>\n</div>\n"
+    },
+
+    {
+      "type": "back-cover",
+      "eyebrow": "WHAT'S NEXT",
+      "headline": "Past performance is the single biggest factor an evaluator can verify.",
+      "accentWord": "verify",
+      "body": "Three completed references in this format, with current POCs and CPARS-aligned ratings, will out-rank a glossy brochure every time. Build one template per contract, keep the POC verification dates fresh, and reuse the Scope and Relevance sections in your next proposal. CapturePilot pulls your past performance into draft proposals automatically once the templates are on file.",
+      "ctaText": "Get the full Federal Lead Kit",
+      "ctaUrl": "https://www.capturepilot.com/startup-pack",
+      "footerLabel": "CAPTUREPILOT · FEDERAL LEAD KIT"
+    }
+  ]
+}

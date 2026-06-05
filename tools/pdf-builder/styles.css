@@ -1,0 +1,987 @@
+/* ─────────────────────────────────────────────────────────────────────
+   CapturePilot Federal Launch Kit — Master PDF Styles (UNIFIED PIPELINE)
+   ─────────────────────────────────────────────────────────────────────
+   ARCHITECTURE
+   ────────────
+   Every page — cover, TOC, founder, dark divider, content, back cover —
+   flows through the SAME Chromium print pass. There are no separate
+   "fixed" vs "flow" runs. There is ONE page counter (Chromium's), ONE
+   header template (Chromium-managed), ONE footer template (also
+   Chromium-managed). The body never paints its own footer.
+
+   Each top-level section is a <section class="doc-section doc-section--X">
+   that breaks to a fresh page (page-break-before:always) and applies its
+   visual treatment (light cream + dot-grid, dark forest green + grid
+   lines, etc.) directly on the section root via `.doc-section--*`. There
+   is no `.page` wrapper anywhere.
+
+   The page size + margins are set via Playwright's `page.pdf()` options
+   (Letter, 22mm top / 22mm bottom reserved for the Chromium header +
+   footer). We DON'T set @page { margin } here because it would clobber
+   Playwright's value and break the header/footer reservation.
+   ───────────────────────────────────────────────────────────────────── */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=IBM+Plex+Mono:wght@400;500;600&family=Caveat:wght@600&display=swap');
+
+:root {
+  --emerald:        #10b981;
+  --emerald-bright: #34d399;
+  --emerald-dark:   #047857;
+  --emerald-deep:   #065f46;
+  --emerald-bg:     #ecfdf5;
+  --emerald-bg-soft:#f0fdf4;
+
+  --ink:            #0c0a09;
+  --stone-50:       #fafaf9;
+  --stone-100:      #f5f5f4;
+  --stone-200:      #e7e5e4;
+  --stone-300:      #d6d3d1;
+  --stone-400:      #a8a29e;
+  --stone-500:      #78716c;
+  --stone-600:      #57534e;
+  --stone-700:      #44403c;
+  --stone-800:      #292524;
+  --stone-900:      #1c1917;
+
+  --cream-bg:       #fafaf9;
+  --dark-bg:        #0A1512;
+  --dark-bg-2:      #0d1c18;
+
+  --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --mono: 'IBM Plex Mono', 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+  --cursive: 'Caveat', 'Apple Chancery', cursive;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--sans);
+  color: var(--ink);
+  font-size: 9.5pt;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   DOC SECTIONS — every page is one of these. Page-break rules + per
+   variant background. Chromium handles pagination automatically.
+   ───────────────────────────────────────────────────────────────────── */
+
+.doc-section {
+  position: relative;
+  page-break-before: always;
+  break-before: page;
+  /* Each section claims the full printable column width. Chromium
+     reserves the top/bottom for the header/footer templates via
+     page.pdf({margin}) so we just paint inside. */
+  padding: 6mm 14mm 6mm 14mm;
+  width: 100%;
+  /* Keep the visual background extending across the full printable
+     area even if the section content is short. */
+  min-height: calc(11in - 1.7in); /* 0.85in top + 0.85in bottom = 1.7in */
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.doc-section:first-of-type {
+  page-break-before: auto;
+  break-before: auto;
+}
+
+/* Light variant: cream bg + subtle emerald dot grid. We extend the bg
+   into the Chromium header/footer band via large outset using box-shadow
+   so the page LOOKS full-bleed even though our content is inside the
+   margin reservation. */
+.doc-section--light,
+.doc-section--toc,
+.doc-section--founder,
+.doc-section--content {
+  background-color: var(--cream-bg);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='22' height='22'><circle cx='2' cy='2' r='0.55' fill='%2310b981' fill-opacity='0.22'/></svg>");
+  background-repeat: repeat;
+  background-position: 0 0;
+  color: var(--ink);
+}
+
+/* Dark variant: forest green + grid lines (no dots) */
+.doc-section--dark,
+.doc-section--cover,
+.doc-section--back-cover {
+  background-color: var(--dark-bg);
+  background-image:
+    linear-gradient(to right,  rgba(16,185,129,0.08) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(16,185,129,0.08) 1px, transparent 1px);
+  background-size: 60px 60px;
+  background-position: 0 0;
+  color: #f5f5f4;
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   SECTION-LOCAL HEADER (small CP brand + section label, painted INSIDE
+   the section body — distinct from Chromium's per-page running header).
+   We keep this on content + light pages where it complements the
+   typography. The cover / back-cover / dark divider use their own
+   bespoke chrome.
+   ───────────────────────────────────────────────────────────────────── */
+
+.doc-hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 6mm;
+  margin-bottom: 4mm;
+}
+.doc-hdr__brand {
+  display: flex;
+  align-items: center;
+  gap: 3mm;
+}
+.doc-hdr__logo {
+  width: 8mm;
+  height: 8mm;
+  display: block;
+  border: 0;
+}
+.doc-section--dark .doc-hdr__logo--dark,
+.doc-section--cover .doc-hdr__logo--dark,
+.doc-section--back-cover .doc-hdr__logo--dark {
+  display: none;
+}
+.doc-section--light .doc-hdr__logo--light,
+.doc-section--toc .doc-hdr__logo--light,
+.doc-section--founder .doc-hdr__logo--light,
+.doc-section--content .doc-hdr__logo--light {
+  display: none;
+}
+.doc-hdr__wordmark {
+  font-weight: 800;
+  font-size: 12pt;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+.doc-section--dark .doc-hdr__wordmark,
+.doc-section--cover .doc-hdr__wordmark,
+.doc-section--back-cover .doc-hdr__wordmark { color: #f5f5f4; }
+
+.doc-hdr__label {
+  font-family: var(--mono);
+  font-size: 8pt;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--stone-500);
+}
+.doc-section--dark .doc-hdr__label,
+.doc-section--cover .doc-hdr__label,
+.doc-section--back-cover .doc-hdr__label { color: var(--emerald-bright); }
+
+/* ─────────────────────────────────────────────────────────────────────
+   PILL + MONO LABEL
+   ───────────────────────────────────────────────────────────────────── */
+
+.pill {
+  display: inline-block;
+  padding: 2.4mm 5mm;
+  border: 1.2pt solid var(--emerald);
+  border-radius: 999px;
+  font-family: var(--mono);
+  font-size: 8.5pt;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--emerald);
+  background: transparent;
+}
+.doc-section--dark .pill,
+.doc-section--cover .pill,
+.doc-section--back-cover .pill {
+  color: var(--emerald-bright);
+  border-color: var(--emerald-bright);
+}
+
+.mono-label {
+  font-family: var(--mono);
+  font-size: 8.5pt;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--emerald-dark);
+}
+.doc-section--dark .mono-label,
+.doc-section--cover .mono-label,
+.doc-section--back-cover .mono-label { color: var(--emerald-bright); }
+
+/* ─────────────────────────────────────────────────────────────────────
+   HEADLINES
+   ───────────────────────────────────────────────────────────────────── */
+
+.headline {
+  font-family: var(--sans);
+  font-weight: 900;
+  font-size: 44pt;
+  line-height: 1.02;
+  letter-spacing: -0.035em;
+  color: var(--ink);
+  margin: 0;
+}
+.doc-section--dark .headline,
+.doc-section--cover .headline,
+.doc-section--back-cover .headline { color: #ffffff; }
+.headline strong, .headline em {
+  color: var(--emerald);
+  font-weight: 900;
+  font-style: normal;
+}
+.doc-section--dark .headline strong,
+.doc-section--dark .headline em,
+.doc-section--cover .headline strong,
+.doc-section--cover .headline em,
+.doc-section--back-cover .headline strong,
+.doc-section--back-cover .headline em { color: var(--emerald-bright); }
+
+.headline--md { font-size: 28pt; line-height: 1.05; }
+.headline--sm { font-size: 22pt; line-height: 1.1; }
+
+/* ─────────────────────────────────────────────────────────────────────
+   COVER PAGE
+   ───────────────────────────────────────────────────────────────────── */
+
+.cover {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(11in - 1.7in - 12mm);
+}
+.cover__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 8mm;
+}
+.cover__pages {
+  display: flex;
+  align-items: baseline;
+  gap: 2mm;
+}
+.cover__pages-num {
+  font-family: var(--sans);
+  font-weight: 900;
+  font-size: 26pt;
+  color: var(--emerald-bright);
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+.cover__pages-label {
+  font-family: var(--mono);
+  font-size: 9pt;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  color: var(--emerald-bright);
+}
+
+.cover__eyebrow { margin: 3mm 0 6mm 0; }
+.cover__title { margin: 0 0 6mm 0; }
+
+.cover__inside-label {
+  font-family: var(--mono);
+  font-size: 9pt;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--emerald-bright);
+  margin: 3mm 0 3mm 0;
+}
+
+.cover__checklist {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2.5mm;
+}
+.cover__checklist li {
+  display: flex;
+  align-items: center;
+  gap: 4mm;
+  font-size: 12pt;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: -0.01em;
+}
+
+.check-box {
+  width: 7mm;
+  height: 7mm;
+  border-radius: 1.8mm;
+  background: var(--emerald);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.check-box svg { width: 4mm; height: 4mm; display: block; }
+
+.cover__toolstrip {
+  margin-top: auto;
+  background: rgba(255,255,255,0.04);
+  border: 1pt solid rgba(16,185,129,0.32);
+  border-radius: 3mm;
+  padding: 5mm 5mm 4mm 5mm;
+}
+.cover__toolstrip-hdr {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-family: var(--mono);
+  font-size: 8pt;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(245,245,244,0.7);
+  margin-bottom: 4mm;
+}
+.cover__toolstrip-hdr span:last-child { color: var(--emerald-bright); }
+
+.cover__tools {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4mm;
+}
+.cover__tool {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5mm;
+}
+.tool-num {
+  display: inline-block;
+  width: 7mm;
+  height: 7mm;
+  border-radius: 1.4mm;
+  background: rgba(16,185,129,0.15);
+  border: 1pt solid var(--emerald);
+  color: var(--emerald-bright);
+  font-family: var(--mono);
+  font-size: 8.5pt;
+  font-weight: 600;
+  text-align: center;
+  line-height: 6.4mm;
+}
+.tool-title {
+  font-weight: 800;
+  font-size: 10pt;
+  color: #ffffff;
+  letter-spacing: -0.015em;
+  margin-top: 1mm;
+}
+.tool-desc {
+  font-size: 8pt;
+  color: rgba(245,245,244,0.6);
+  line-height: 1.3;
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   TOC
+   ───────────────────────────────────────────────────────────────────── */
+
+.toc__title {
+  margin: 3mm 0 4mm 0;
+  font-size: 24pt;
+  line-height: 1.06;
+}
+
+.toc__part-label {
+  font-family: var(--mono);
+  font-size: 8pt;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--emerald-dark);
+  margin: 3.5mm 0 1mm 0;
+}
+
+.toc__row {
+  display: grid;
+  grid-template-columns: 12mm 1fr 14mm;
+  gap: 3mm;
+  align-items: start;
+  padding: 1.6mm 0;
+  border-top: 0.6pt dashed var(--stone-300);
+}
+.toc__row:last-child { border-bottom: 0.6pt dashed var(--stone-300); }
+
+.toc__code {
+  font-family: var(--mono);
+  font-size: 8.5pt;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--emerald-dark);
+  padding-top: 0.4mm;
+}
+.toc__item-title {
+  font-weight: 800;
+  font-size: 10pt;
+  letter-spacing: -0.015em;
+  color: var(--ink);
+  margin: 0 0 0.5mm 0;
+}
+.toc__item-desc {
+  font-size: 8.5pt;
+  color: var(--stone-600);
+  margin: 0;
+  line-height: 1.3;
+}
+.toc__page {
+  font-family: var(--mono);
+  font-size: 8.5pt;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  color: var(--stone-500);
+  text-align: right;
+  padding-top: 0.4mm;
+}
+
+/* Dense mode for big decks (16+ entries) — keeps TOC on one page */
+.toc--dense .toc__row { padding: 1.1mm 0; }
+.toc--dense .toc__item-title { font-size: 9pt; }
+.toc--dense .toc__item-desc { font-size: 8pt; line-height: 1.25; }
+.toc--dense .toc__code,
+.toc--dense .toc__page { font-size: 8pt; }
+.toc--dense .toc__part-label { margin: 2.5mm 0 0.7mm 0; }
+
+/* ─────────────────────────────────────────────────────────────────────
+   FOUNDER PAGE
+   ───────────────────────────────────────────────────────────────────── */
+
+.founder {
+  display: grid;
+  grid-template-columns: 62mm 1fr;
+  gap: 10mm;
+  margin-top: 3mm;
+}
+
+.founder__photo {
+  width: 62mm;
+  height: 75mm;
+  border-radius: 2mm;
+  overflow: hidden;
+  background: var(--stone-200);
+}
+.founder__photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.founder__name {
+  font-weight: 900;
+  font-size: 16pt;
+  letter-spacing: -0.02em;
+  margin: 4mm 0 1mm 0;
+  color: var(--ink);
+}
+.founder__role {
+  font-size: 9.5pt;
+  color: var(--stone-600);
+  margin: 0;
+}
+.founder__location {
+  font-family: var(--mono);
+  font-size: 8pt;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--stone-500);
+  margin: 1mm 0 3mm 0;
+}
+
+.founder__signature {
+  margin: 5mm 0 2mm 0;
+  line-height: 1;
+  background: transparent;
+}
+.founder__signature img {
+  display: block;
+  max-width: 60mm;
+  height: auto;
+  margin-top: 0;
+  background: transparent;
+  border: 0;
+}
+/* If for ANY reason the inlined SVG fails to render, the fallback text
+   stays hidden by default. JS in render.mjs unhides it only when img
+   errors. Keep cursive subtle so a fallback won't look like a bug. */
+.founder__signature--text {
+  display: none;
+  font-family: var(--cursive);
+  font-size: 28pt;
+  color: var(--emerald-dark);
+  line-height: 1;
+}
+
+.founder__chip-row {
+  background: var(--emerald-bg);
+  border: 1pt solid var(--emerald);
+  border-radius: 2mm;
+  padding: 2.5mm 3.5mm;
+  font-family: var(--mono);
+  font-size: 7.5pt;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--emerald-deep);
+  line-height: 1.4;
+  margin-bottom: 3mm;
+}
+
+.founder__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2mm;
+}
+.chip {
+  display: inline-block;
+  padding: 1.4mm 2.8mm;
+  border: 0.8pt solid var(--stone-300);
+  border-radius: 999px;
+  font-family: var(--mono);
+  font-size: 7.5pt;
+  color: var(--stone-700);
+  background: white;
+}
+
+.founder__eyebrow {
+  font-family: var(--mono);
+  font-size: 8pt;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--emerald-dark);
+  margin-bottom: 2.5mm;
+}
+
+.founder__headline {
+  font-weight: 900;
+  font-size: 22pt;
+  line-height: 1.08;
+  letter-spacing: -0.025em;
+  margin: 0 0 5mm 0;
+  color: var(--ink);
+}
+.founder__headline strong { color: var(--emerald); font-weight: 900; }
+
+.founder__body p {
+  font-size: 10pt;
+  color: var(--stone-700);
+  line-height: 1.45;
+  margin: 0 0 3mm 0;
+}
+
+.founder__cta {
+  margin-top: 4mm;
+  background: var(--emerald-bg);
+  border: 1pt solid var(--emerald);
+  border-radius: 3mm;
+  padding: 4mm;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4mm;
+}
+.founder__cta-text { flex: 1; }
+.founder__cta-eyebrow {
+  font-family: var(--mono);
+  font-size: 7.5pt;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--emerald-dark);
+  margin-bottom: 1.5mm;
+}
+.founder__cta-title {
+  font-weight: 800;
+  font-size: 11.5pt;
+  color: var(--ink);
+  letter-spacing: -0.015em;
+  margin: 0 0 1mm 0;
+}
+.founder__cta-url {
+  font-family: var(--mono);
+  font-size: 7.5pt;
+  color: var(--stone-500);
+  word-break: break-all;
+}
+.cta-btn {
+  display: inline-block;
+  background: var(--emerald);
+  color: white;
+  font-weight: 700;
+  font-size: 10pt;
+  padding: 2.6mm 5mm;
+  border-radius: 999px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   DARK PANEL DIVIDER
+   ───────────────────────────────────────────────────────────────────── */
+
+.dark-panel {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: calc(11in - 1.7in - 50mm);
+}
+.dark-panel__partlabel {
+  font-family: var(--mono);
+  font-size: 9pt;
+  font-weight: 500;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--emerald-bright);
+  margin: 0 0 5mm 0;
+}
+.dark-panel__headline {
+  font-weight: 900;
+  font-size: 38pt;
+  line-height: 1.04;
+  letter-spacing: -0.03em;
+  color: #ffffff;
+  margin: 0 0 10mm 0;
+  max-width: 85%;
+}
+.dark-panel__headline strong { color: var(--emerald-bright); font-weight: 900; }
+.dark-panel__body { max-width: 110mm; }
+.dark-panel__body p {
+  font-size: 11pt;
+  color: rgba(245,245,244,0.78);
+  line-height: 1.5;
+  margin: 0 0 3mm 0;
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   CONTENT TYPOGRAPHY (light flowing pages)
+   ───────────────────────────────────────────────────────────────────── */
+
+.doc-section--content h1 {
+  font-weight: 900;
+  font-size: 22pt;
+  line-height: 1.06;
+  letter-spacing: -0.025em;
+  color: var(--ink);
+  margin: 3mm 0 4mm 0;
+}
+.doc-section--content h1 strong { color: var(--emerald); font-weight: 900; }
+
+.doc-section--content h2 {
+  font-weight: 900;
+  font-size: 13pt;
+  line-height: 1.18;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  margin: 5mm 0 2mm 0;
+  page-break-after: avoid;
+  break-after: avoid;
+}
+.doc-section--content h3 {
+  font-weight: 800;
+  font-size: 10.5pt;
+  letter-spacing: -0.01em;
+  color: var(--emerald-dark);
+  margin: 4mm 0 1.5mm 0;
+  page-break-after: avoid;
+  break-after: avoid;
+}
+
+.doc-section--content .eyebrow {
+  font-family: var(--mono);
+  font-size: 8pt;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--emerald-dark);
+  margin: 0 0 1.5mm 0;
+}
+
+.doc-section--content p {
+  font-size: 9.5pt;
+  color: var(--stone-800);
+  line-height: 1.5;
+  margin: 0 0 2.5mm 0;
+}
+.doc-section--content p strong { color: var(--ink); font-weight: 700; }
+
+.doc-section--content ul,
+.doc-section--content ol {
+  margin: 0 0 3mm 0;
+  padding-left: 0;
+  list-style: none;
+}
+.doc-section--content ul li {
+  position: relative;
+  padding-left: 7mm;
+  margin: 0 0 2mm 0;
+  font-size: 9.5pt;
+  color: var(--stone-800);
+  line-height: 1.45;
+}
+.doc-section--content ul li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 1.5mm;
+  width: 3mm;
+  height: 3mm;
+  border-radius: 0.8mm;
+  background: var(--emerald);
+}
+
+/* Task-list items: a real-styled green checkbox sits in the bullet slot
+   instead of the round bullet. We render this as INTENTIONAL static
+   chrome (no AcroForm), so it has to read as a checkbox at a glance:
+   slightly larger than the regular bullet, sharper corners, distinct
+   green outline. Document the "fill in by hand" pattern via the spec. */
+.doc-section--content ul li.task-item {
+  padding-left: 0;
+  list-style: none;
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+}
+.doc-section--content ul li.task-item::before { content: none; display: none; }
+
+.doc-section--content ol { counter-reset: ord; }
+.doc-section--content ol li {
+  position: relative;
+  padding-left: 8mm;
+  margin: 0 0 2mm 0;
+  font-size: 9.5pt;
+  color: var(--stone-800);
+  line-height: 1.45;
+  counter-increment: ord;
+}
+.doc-section--content ol li::before {
+  content: counter(ord, decimal-leading-zero);
+  position: absolute;
+  left: 0;
+  top: 0.3mm;
+  font-family: var(--mono);
+  font-size: 8pt;
+  font-weight: 600;
+  color: var(--emerald);
+  letter-spacing: 0.06em;
+}
+
+.doc-section--content blockquote {
+  border-left: 3pt solid var(--emerald);
+  background: var(--emerald-bg);
+  padding: 3mm 4mm;
+  margin: 3mm 0;
+  border-radius: 0 2mm 2mm 0;
+  color: var(--stone-800);
+}
+.doc-section--content blockquote p:last-child { margin-bottom: 0; }
+
+.doc-section--content a {
+  color: var(--emerald-dark);
+  text-decoration: underline;
+}
+
+.doc-section--content code {
+  background: var(--stone-100);
+  border: 0.5pt solid var(--stone-200);
+  border-radius: 1mm;
+  padding: 0.3mm 1.3mm;
+  font-family: var(--mono);
+  font-size: 8.5pt;
+  color: var(--stone-900);
+}
+
+.doc-section--content .callout {
+  border: 1pt solid var(--stone-200);
+  border-radius: 2.5mm;
+  padding: 4mm;
+  margin: 3mm 0;
+  background: white;
+}
+.doc-section--content .callout--emerald {
+  border-color: var(--emerald);
+  background: var(--emerald-bg);
+}
+
+.step-num {
+  display: inline-flex;
+  width: 7mm; height: 7mm;
+  border-radius: 1.4mm;
+  background: var(--emerald-bg);
+  border: 1pt solid var(--emerald);
+  color: var(--emerald-dark);
+  font-family: var(--mono);
+  font-size: 8.5pt;
+  font-weight: 600;
+  align-items: center;
+  justify-content: center;
+  margin-right: 2mm;
+}
+
+.doc-section--content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 3mm 0;
+  font-size: 8.5pt;
+  background: white;
+  border: 1pt solid var(--stone-200);
+  border-radius: 2mm;
+  overflow: hidden;
+}
+.doc-section--content thead { background: var(--stone-100); }
+.doc-section--content th {
+  text-align: left;
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 7.5pt;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--stone-700);
+  padding: 1.5mm 3mm;
+  border-bottom: 1pt solid var(--stone-200);
+}
+.doc-section--content td {
+  padding: 1.5mm 3mm;
+  border-bottom: 0.5pt solid var(--stone-200);
+  vertical-align: top;
+  color: var(--stone-800);
+}
+.doc-section--content tr:last-child td { border-bottom: none; }
+
+/* Keep dangerous-to-split blocks together. */
+table, blockquote, .callout, tr {
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+h2, h3 {
+  page-break-after: avoid;
+  break-after: avoid;
+}
+
+/* Risk badges (used in FAR sample) */
+.risk-pill {
+  display: inline-block;
+  padding: 0.8mm 2.5mm;
+  font-family: var(--mono);
+  font-size: 7.5pt;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  border-radius: 999px;
+}
+.risk-critical { background: #fee2e2; color: #991b1b; border: 0.6pt solid #fca5a5; }
+.risk-high     { background: #ffedd5; color: #9a3412; border: 0.6pt solid #fdba74; }
+.risk-medium   { background: var(--emerald-bg); color: var(--emerald-deep); border: 0.6pt solid var(--emerald); }
+.risk-low      { background: var(--stone-100); color: var(--stone-700); border: 0.6pt solid var(--stone-300); }
+
+/* ─────────────────────────────────────────────────────────────────────
+   STATIC CHECKBOX GRAPHICS (intentional fallback — NOT AcroForm widgets)
+   ─────────────────────────────────────────────────────────────────────
+   Chromium's printToPDF does NOT preserve HTML <input type="checkbox">
+   as PDF AcroForm widgets, and attempting to overlay pdf-lib widgets at
+   per-page coordinates is unreliable with the Chromium-managed
+   header/footer margins.
+
+   So we render the checkboxes as INTENTIONAL static chrome: a clean
+   white square with a 1.5pt emerald border that reads unambiguously as
+   "check this by hand." Print users grab a pen; on-screen users see a
+   visual cue. Consistent across all 24 PDFs.
+   ───────────────────────────────────────────────────────────────────── */
+input[type="checkbox"] {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  width: 4.2mm;
+  height: 4.2mm;
+  vertical-align: middle;
+  border: 1.5pt solid var(--emerald);
+  border-radius: 1.2mm;
+  background: white;
+  margin: 0 2.5mm 0 0;
+  flex-shrink: 0;
+  position: relative;
+  top: 0.4mm;
+  padding: 0;
+  display: inline-block;
+}
+input[type="checkbox"]:checked {
+  background-color: var(--emerald);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path d='M3 8 L7 12 L13 4' stroke='white' stroke-width='2.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 80% 80%;
+}
+
+li.task-item > input[type="checkbox"] {
+  margin-right: 3mm;
+  margin-top: 0.6mm;
+}
+li.task-item > span {
+  display: inline-block;
+  flex: 1;
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   BACK COVER
+   ───────────────────────────────────────────────────────────────────── */
+
+.back {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0 4mm;
+  min-height: calc(11in - 1.7in - 30mm);
+}
+.back__eyebrow {
+  font-family: var(--mono);
+  font-size: 9pt;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--emerald-bright);
+  margin-bottom: 5mm;
+}
+.back__headline {
+  font-weight: 900;
+  font-size: 36pt;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  color: #ffffff;
+  margin: 0 0 6mm 0;
+  max-width: 95%;
+}
+.back__headline strong { color: var(--emerald-bright); font-weight: 900; }
+.back__body {
+  font-size: 12pt;
+  line-height: 1.45;
+  color: rgba(245,245,244,0.78);
+  max-width: 130mm;
+  margin: 0 0 8mm 0;
+}
+.back__cta-btn {
+  display: inline-block;
+  background: var(--emerald);
+  color: var(--dark-bg);
+  font-weight: 800;
+  font-size: 12pt;
+  padding: 3.6mm 7mm;
+  border-radius: 999px;
+  text-decoration: none;
+  letter-spacing: -0.01em;
+}
+.back__url {
+  margin-top: 4mm;
+  font-family: var(--mono);
+  font-size: 8.5pt;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(245,245,244,0.55);
+}

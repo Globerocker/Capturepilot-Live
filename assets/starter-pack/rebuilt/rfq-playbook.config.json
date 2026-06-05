@@ -1,0 +1,122 @@
+{
+  "id": "rfq-playbook",
+  "title": "RFQ (Request for Quote) Playbook",
+  "slug": "rfq-playbook",
+  "pages": 10,
+  "footerLabel": "CAPTUREPILOT · RFQ PLAYBOOK",
+  "headerLabel": "RFQ PLAYBOOK",
+  "parts": [
+    {
+      "type": "cover",
+      "eyebrow": "FEDERAL LAUNCH KIT · SOLICITATION PLAYBOOKS",
+      "titleLines": [
+        "RFQ.",
+        "The fastest",
+        "money in federal."
+      ],
+      "accentWord": "fastest",
+      "pages": 10,
+      "toolStrip": [
+        { "num": "01", "title": "Under $250K", "desc": "Simplified Acquisition Threshold buys" },
+        { "num": "02", "title": "10-Day Window", "desc": "Quote turns are days, not months" },
+        { "num": "03", "title": "GSA Schedule", "desc": "eBuy quotes against your SIN" },
+        { "num": "04", "title": "Net-30 EFT", "desc": "Paid into your SAM.gov bank record" }
+      ]
+    },
+
+    {
+      "type": "toc",
+      "title": "Inside this playbook.",
+      "parts": [
+        {
+          "label": "PART ONE · WHAT AN RFQ ACTUALLY IS",
+          "items": [
+            { "code": "R01", "title": "RFQ vs RFP — Know the Difference", "desc": "Eight differences that change how you respond, what you write, and how fast you get paid.", "page": 4 },
+            { "code": "R02", "title": "GSA Schedule Quotes", "desc": "eBuy, FAR 8.405-2, and the price-ceiling rule most primes forget.", "page": 5 }
+          ]
+        },
+        {
+          "label": "PART TWO · HOW TO RESPOND",
+          "items": [
+            { "code": "R03", "title": "Quote Response Best Practices", "desc": "Seven moves that separate winning quotes from the ones that get tossed on price alone.", "page": 7 },
+            { "code": "R04", "title": "Quote Response Checklist", "desc": "Seven boxes to tick before you hit send. Skip one and the CO disqualifies you.", "page": 8 }
+          ]
+        }
+      ]
+    },
+
+    {
+      "type": "founder",
+      "headline": "RFQs pay in 30 days. RFPs pay in a year.",
+      "accentWord": "pay",
+      "paragraphs": [
+        "First federal buy I won was an RFQ. About $42,000 for service parts. Six emails over four days, a one-page price sheet with a short technical narrative, a PO in my inbox the next Tuesday. The money hit the bank thirty-one days after invoice.",
+        "Every founder I talk to is chasing the $5M RFP. They should be chasing forty RFQs first. Faster cash, fewer competitors, real past performance built one CLIN at a time. That past performance is what unlocks the bigger work later.",
+        "This playbook is the version I wish I'd had on that first one. What an RFQ actually is, where it lives (eBuy vs SAM.gov), how to price it, and the seven-box checklist that keeps a quote from getting tossed for the wrong reason.",
+        "Run a quote a week. Build the muscle. The cash flow alone is worth it."
+      ],
+      "ctaText": "Book a B2G Audit call",
+      "ctaUrl": "https://meetings-na2.hubspot.com/americurial/intro-call",
+      "ctaButtonLabel": "Book the call →",
+      "ctaEyebrow": "30 MIN · NO PITCH"
+    },
+
+    {
+      "type": "dark",
+      "partLabel": "PART ONE · WHAT AN RFQ ACTUALLY IS",
+      "headline": "An RFQ is not a small RFP. The rules are different.",
+      "accentWord": "different",
+      "paragraphs": [
+        "Request for Quote lives under FAR Part 13 — Simplified Acquisitions. The threshold is $250,000 for FY2026, the evaluation is usually price plus delivery plus past performance, and the response window is days, not months.",
+        "Get the category wrong and you'll over-engineer a 60-page proposal for a buy that wanted a one-page price sheet. The next pages cover what an RFQ actually requires and how GSA Schedule quotes work."
+      ],
+      "headerLabel": "PART ONE"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "RFQ FUNDAMENTALS",
+      "markdown": "<div class=\"eyebrow\">RFQ FUNDAMENTALS</div>\n\n# The fastest path to federal revenue.\n\nThe Request for Quote is the federal government's streamlined buying mechanism for purchases under the Simplified Acquisition Threshold. Three numbers that matter:\n\n<table>\n  <thead>\n    <tr><th>Threshold</th><th>Window</th><th>Competition</th></tr>\n  </thead>\n  <tbody>\n    <tr>\n      <td><strong>$250K</strong><br><span style=\"color:#78716c; font-size:9pt;\">SAT ceiling, FY2026</span></td>\n      <td><strong>10 days</strong><br><span style=\"color:#78716c; font-size:9pt;\">Typical quote window</span></td>\n      <td><strong>3 quotes</strong><br><span style=\"color:#78716c; font-size:9pt;\">Minimum for most SAT buys</span></td>\n    </tr>\n  </tbody>\n</table>\n\n## RFQ vs RFP — Know the difference.\n\n<table>\n  <thead>\n    <tr><th>Element</th><th>RFQ</th><th>RFP</th></tr>\n  </thead>\n  <tbody>\n    <tr><td><strong>Threshold</strong></td><td>Under SAT ($250K)</td><td>Any amount; common &gt;$250K</td></tr>\n    <tr><td><strong>Formality</strong></td><td>Informal quote / order</td><td>Formal proposal with volumes</td></tr>\n    <tr><td><strong>FAR Reference</strong></td><td>Part 13 (Simplified Acq.)</td><td>Part 15 (Negotiation)</td></tr>\n    <tr><td><strong>Evaluation</strong></td><td>Price + delivery + past perf</td><td>Technical + mgmt + price</td></tr>\n    <tr><td><strong>Contract Type</strong></td><td>PO or BPA call</td><td>FFP, T&amp;M, Cost-Plus</td></tr>\n    <tr><td><strong>Response Time</strong></td><td>Days to 2 weeks</td><td>30-90 days typical</td></tr>\n    <tr><td><strong>Protest Rights</strong></td><td>Limited</td><td>Full GAO rights</td></tr>\n  </tbody>\n</table>\n\n<div class=\"callout callout--emerald\">\n  <div style=\"font-family:'IBM Plex Mono', monospace; font-size:8.5pt; font-weight:600; letter-spacing:0.16em; color:#047857; text-transform:uppercase; margin-bottom:2mm;\">FIELD TIP</div>\n  <strong>If you see 'RFQ' on a buy over $250K, read again.</strong> It's almost certainly a GSA Schedule order under FAR 8.4 — different rules, same word.\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "GSA SCHEDULE QUOTES",
+      "markdown": "<div class=\"eyebrow\">GSA SCHEDULE QUOTES · FAR 8.405-2</div>\n\n# eBuy is where Schedule quotes live.\n\nIf the RFQ is against a GSA Schedule vehicle (MAS, OASIS, STARS III), the rules shift. Same word, different game.\n\n<table>\n  <thead>\n    <tr><th>Rule</th><th>What it means</th><th>What to do</th></tr>\n  </thead>\n  <tbody>\n    <tr>\n      <td><strong>Hold the Schedule</strong></td>\n      <td>Your firm must hold the relevant GSA Schedule AND the SIN must cover the scope.</td>\n      <td>Check SIN coverage first. Adding one takes 60-90 days.</td>\n    </tr>\n    <tr>\n      <td><strong>Three-quote min</strong></td>\n      <td>Agencies must compare 3 Schedule holders before awarding (FAR 8.405-2).</td>\n      <td>Watch eBuy daily. Respond fast — be one of the three.</td>\n    </tr>\n    <tr>\n      <td><strong>Quote via eBuy</strong></td>\n      <td>ebuy.gsa.gov is the portal. Email and phone quotes don't count.</td>\n      <td>Register primary + backup notification email.</td>\n    </tr>\n    <tr>\n      <td><strong>Price ceiling</strong></td>\n      <td>Your price must be at or below your GSA-negotiated catalog rate.</td>\n      <td>Discount off catalog when the buy is competitive.</td>\n    </tr>\n    <tr>\n      <td><strong>Orders &gt;$25K</strong></td>\n      <td>Agency may require a brief technical approach, key personnel, refs.</td>\n      <td>Read the RFQ. Submit exactly what they ask for.</td>\n    </tr>\n  </tbody>\n</table>\n\n<div class=\"callout\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">WHY THIS MATTERS</div>\n  <p style=\"margin:0;\">GSA Schedule quotes are where most small primes get their first repeatable federal revenue. Set up the alerts, respond inside the window, price under catalog. Six months of that and you have a real federal book.</p>\n</div>\n"
+    },
+
+    {
+      "type": "dark",
+      "partLabel": "PART TWO · HOW TO RESPOND",
+      "headline": "Seven moves separate the winning quote from the rest.",
+      "accentWord": "winning",
+      "paragraphs": [
+        "Most disqualifications on RFQs aren't about price. They're about a missing CLIN, a name that doesn't match SAM.gov, or a delivery date the contracting officer doesn't believe.",
+        "The next two pages cover the seven practices that win quotes — and the seven-box checklist to run before you hit send."
+      ],
+      "headerLabel": "PART TWO"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "QUOTE RESPONSE PLAYBOOK",
+      "markdown": "<div class=\"eyebrow\">QUOTE RESPONSE BEST PRACTICES</div>\n\n# Seven moves that win quotes.\n\n<table>\n  <thead>\n    <tr><th>#</th><th>Move</th><th>Why it works</th></tr>\n  </thead>\n  <tbody>\n    <tr><td><strong>1</strong></td><td><strong>Read the RFQ completely</strong></td><td>The CO writes the disqualifications into the RFQ. Read them first.</td></tr>\n    <tr><td><strong>2</strong></td><td><strong>Confirm POP delivery</strong></td><td>Late delivery is recorded in CPARS and shows up in every future eval.</td></tr>\n    <tr><td><strong>3</strong></td><td><strong>Research fpds.gov</strong></td><td>If the last three buys went for $42-48 per unit, don't quote $61.</td></tr>\n    <tr><td><strong>4</strong></td><td><strong>Price competitively, not recklessly</strong></td><td>SAT buys go low — but sub-market pricing flags you as a risk too.</td></tr>\n    <tr><td><strong>5</strong></td><td><strong>Include a brief tech narrative</strong></td><td>One page is enough. Gives the CO something to point at on award.</td></tr>\n    <tr><td><strong>6</strong></td><td><strong>Aggressive delivery only if real</strong></td><td>Fast delivery wins ties. Missed delivery is a negative past-perf event.</td></tr>\n    <tr><td><strong>7</strong></td><td><strong>Confirm payment terms</strong></td><td>Verify your SAM banking is current — net 30 EFT goes to that record.</td></tr>\n  </tbody>\n</table>\n\n<div class=\"callout callout--emerald\">\n  <div style=\"font-family:'IBM Plex Mono', monospace; font-size:8.5pt; font-weight:600; letter-spacing:0.16em; color:#047857; text-transform:uppercase; margin-bottom:2mm;\">FIELD TIP</div>\n  <strong>Build a quote template before you need it.</strong> One-page Word doc — company info, CLIN table, delivery box, T&amp;Cs, signature. When the 10-day window lands, you fill in numbers, not format.\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "QUOTE RESPONSE CHECKLIST",
+      "markdown": "<div class=\"eyebrow\">QUOTE RESPONSE CHECKLIST</div>\n\n# Seven boxes. Run them before every submit.\n\nA missed box is the easiest disqualification in federal. The CO doesn't owe you a chance to fix it. Tick each before you hit send.\n\n- [ ] Quote covers all required line items (CLINs) exactly as specified\n- [ ] Delivery date confirmed with the team actually doing the work — call the warehouse or PM, don't guess\n- [ ] Pricing includes all costs: labor, materials, shipping, installation. Burdened, not raw\n- [ ] Company info matches SAM.gov registration exactly (legal name, address, UEI)\n- [ ] POC contact info included (name, title, email, phone)\n- [ ] Quote signed by an authorized representative — not the intern who built the doc\n- [ ] Submitted via the correct method: email to the listed CO, eBuy portal, or fax for the legacy agencies\n\n<div class=\"callout\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">WHY THIS MATTERS</div>\n  <p style=\"margin:0;\">We've seen quotes lose on price by $4,000 that should have been disqualified for a SAM.gov name mismatch. The CO caught the mismatch on the winner and re-awarded. Don't be the firm that wins on price and loses on paperwork.</p>\n</div>\n"
+    },
+
+    {
+      "type": "back-cover",
+      "eyebrow": "WHAT'S NEXT",
+      "headline": "Stop hunting for RFQs. Have them routed to you.",
+      "accentWord": "routed",
+      "body": "CapturePilot watches SAM.gov and eBuy for the RFQs that match your NAICS, SIN, and certifications — then drops them into your inbox the day they post. Free 14-day trial. No card. Get the full Federal Launch Kit at capturepilot.com/startup-pack.",
+      "ctaText": "Get the full Federal Launch Kit",
+      "ctaUrl": "https://www.capturepilot.com/startup-pack"
+    }
+  ]
+}

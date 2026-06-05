@@ -1,0 +1,148 @@
+{
+  "id": "industry-day-playbook",
+  "title": "Industry Day & Pre-Bid Conference Playbook",
+  "slug": "industry-day-playbook",
+  "pages": 12,
+  "footerLabel": "CAPTUREPILOT · INDUSTRY DAY & PRE-BID PLAYBOOK",
+  "headerLabel": "INDUSTRY DAY & PRE-BID",
+  "parts": [
+    {
+      "type": "cover",
+      "eyebrow": "FEDERAL LAUNCH KIT · CONTRACTING OFFICER OUTREACH",
+      "titleLines": [
+        "Industry Days,",
+        "Run Like",
+        "an Operator."
+      ],
+      "accentWord": "Operator",
+      "pages": 12,
+      "toolStrip": [
+        { "num": "01", "title": "Prep 48-72 hrs out", "desc": "Read the pre-sol, brief the team, print the one-pagers" },
+        { "num": "02", "title": "Run the room", "desc": "Roles, questions, attendance sheet, network during breaks" },
+        { "num": "03", "title": "Follow up in 24 hrs", "desc": "Emails, LinkedIn, written Q&A inside the window" },
+        { "num": "04", "title": "Convert to intel", "desc": "Three things that weren't in the written documents" }
+      ]
+    },
+
+    {
+      "type": "toc",
+      "title": "Inside this playbook.",
+      "footerLabel": "CAPTUREPILOT · INDUSTRY DAY & PRE-BID PLAYBOOK",
+      "parts": [
+        {
+          "label": "PART ONE · BEFORE THE EVENT",
+          "items": [
+            { "code": "P01", "title": "Why most contractors waste industry day", "desc": "They show up, sit in the back, and leave. The few who win arrive prepared.", "page": 4 },
+            { "code": "P02", "title": "Pre-event preparation checklist", "desc": "Eight checks to run in the 48 to 72 hours before doors open.", "page": 5 },
+            { "code": "P03", "title": "Assign roles and rehearse", "desc": "Who asks questions, who networks, who takes notes.", "page": 6 }
+          ]
+        },
+        {
+          "label": "PART TWO · DURING & AFTER",
+          "items": [
+            { "code": "P04", "title": "How to run the room", "desc": "Arrive early, sign in, ask 1-2 prepared questions, talk to the right people on breaks.", "page": 8 },
+            { "code": "P05", "title": "Questions worth asking", "desc": "Set-aside, key personnel, transition, performance, budget, teaming.", "page": 9 },
+            { "code": "P06", "title": "Post-event follow-up in 24 hours", "desc": "Emails, LinkedIn, written Q&A, and the bid/no-bid call.", "page": 10 },
+            { "code": "P07", "title": "Convert the day into intel", "desc": "Three items that weren't in the pre-sol, captured before they fade.", "page": 11 }
+          ]
+        }
+      ]
+    },
+
+    {
+      "type": "founder",
+      "headline": "The contract is shaped at industry day. Show up like that's true, because it is.",
+      "accentWord": "shaped",
+      "paragraphs": [
+        "I sat through my first federal industry day with no plan, no questions, and no idea who was actually in the room. I walked out with a coffee cup, a name badge, and zero intel. The firm sitting two rows ahead of me won the contract eight months later.",
+        "What they did was not complicated. They had three people in the room with assigned roles. One person asked two prepared questions in the open session. One person worked the breaks and walked out with six business cards. One person sat quietly and wrote down everything, including the verbal asides that never made the recording.",
+        "Industry days and pre-bid conferences are the rare moment when the contracting officer, the program manager, your competitors, and your potential teaming partners are in the same room at the same time. The agency is telling you what they actually want, in plain language, before the requirements get sanitized for the formal solicitation.",
+        "This playbook is the prep, run-of-show, and follow-up I wish someone had handed me before my first one. Use it on the next industry day on your radar. You'll walk out with intel the firms who skipped will never have."
+      ],
+      "ctaText": "Book a B2G Audit call",
+      "ctaUrl": "https://meetings-na2.hubspot.com/americurial/intro-call",
+      "ctaButtonLabel": "Book the call →",
+      "ctaEyebrow": "30 MIN · NO PITCH",
+      "footerLabel": "CAPTUREPILOT · INDUSTRY DAY & PRE-BID PLAYBOOK"
+    },
+
+    {
+      "type": "dark",
+      "partLabel": "PART ONE · BEFORE THE EVENT",
+      "headline": "Most firms show up cold. The ones who win do 48 to 72 hours of homework first.",
+      "accentWord": "homework",
+      "paragraphs": [
+        "Industry days are one of the most underutilized opportunities in federal BD. The format invites passivity, the agenda looks generic, and the agency rarely tells you the real reason they're holding it. Treating it like a passive sit-and-listen is a strategic mistake.",
+        "Part One covers what to do in the 48 to 72 hours before the event: read the pre-sol cold, look up the contracting officer and program manager, pull the incumbent's contract on USAspending, prep three to five written questions, and assign roles to every person on your team."
+      ],
+      "footerLabel": "CAPTUREPILOT · INDUSTRY DAY & PRE-BID PLAYBOOK",
+      "headerLabel": "PART ONE"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "P01 · WHY MOST WASTE IT",
+      "html": "<div class=\"eyebrow\">P01 · WHY MOST CONTRACTORS WASTE INDUSTRY DAY</div>\n\n<h1>Industry days are one of the most underutilized opportunities in federal BD.</h1>\n\n<p>Most contractors show up, sit in the back, and leave. The ones who win show up prepared, with a plan, with assigned roles, and with three to five questions written down before they walked through the door.</p>\n\n<div class=\"stat-row\">\n  <div class=\"stat-card\">\n    <div class=\"stat-value\">1-2 hrs</div>\n    <div class=\"stat-label\">TYPICAL DURATION</div>\n    <div class=\"stat-sub\">Sometimes a full day</div>\n  </div>\n  <div class=\"stat-card\">\n    <div class=\"stat-value\">48 hrs</div>\n    <div class=\"stat-label\">PRE-SUBMISSION Q&amp;A</div>\n    <div class=\"stat-sub\">Submit written questions early</div>\n  </div>\n  <div class=\"stat-card\">\n    <div class=\"stat-value\">24 hrs</div>\n    <div class=\"stat-label\">FOLLOW-UP WINDOW</div>\n    <div class=\"stat-sub\">After the event closes</div>\n  </div>\n</div>\n\n<h2>What an industry day actually is</h2>\n\n<p>An industry day or pre-bid conference is the agency telling the market: we are about to release a solicitation, here is what we think we want, please tell us if our thinking is realistic. It usually happens 30 to 90 days before the formal RFP drops.</p>\n\n<ul>\n  <li><strong>The contracting officer is in the room.</strong> So is the program manager. So are the technical evaluators. You may never get all three in the same place again until award.</li>\n  <li><strong>Verbal comments matter.</strong> The agency will say things out loud they will never write in a solicitation. Those clarifications are how the experienced bidders calibrate.</li>\n  <li><strong>Your competitors are visible.</strong> The attendance list, the questions other firms ask, the people networking during breaks. All of it tells you who is serious about bidding.</li>\n</ul>\n\n<div class=\"callout callout--emerald\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">WHY THIS MATTERS</div>\n  <p style=\"margin:0;\"><strong>Industry days are the last cheap intelligence opportunity before the RFP locks in.</strong> Skipping one because it's optional is the same as skipping a free read of the customer's mind. The cost is one or two hours. The value is the difference between a generic proposal and a calibrated one.</p>\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "P02 · PRE-EVENT CHECKLIST",
+      "html": "<div class=\"eyebrow\">P02 · PRE-EVENT PREPARATION (48 to 72 HOURS BEFORE)</div>\n\n<h1>Eight checks. Run them in this order. Skip none.</h1>\n\n<ol>\n  <li><strong>Download and read every pre-solicitation document.</strong> The notice itself, the draft Statement of Work, every attachment. Most disqualifying gaps are buried in attachment B.</li>\n  <li><strong>Research the contracting officer and program manager on LinkedIn and the agency site.</strong> What is their background? What have they bought before? Past awards under the same KO tell you what they value.</li>\n  <li><strong>Review the incumbent contract on USAspending.gov.</strong> Who has it now, what are they charging, when does it expire, did it get modded or extended? You need to know who you're competing against.</li>\n  <li><strong>Prepare three to five specific written questions to submit in advance</strong> if the agency accepts pre-event questions. Substance, not process. The pre-submitted questions are often answered live and on the record.</li>\n  <li><strong>Print 10 to 15 copies of your one-page capability statement.</strong> Hand them to the contracting officer, the program manager, and any teaming candidate you talk to during breaks.</li>\n  <li><strong>Confirm the attendance method.</strong> In person vs. virtual, registration required, badge pickup, dial-in details. The wrong logistics means you don't get in the room.</li>\n  <li><strong>Brief your team and assign roles.</strong> One person asks questions, one networks, one takes notes. No overlap. Everyone knows their job before walking in.</li>\n  <li><strong>Prepare a 30-second elevator pitch for your company.</strong> Who you are, the size status, the NAICS you prime, and the one thing you're known for. You'll use it eight times during breaks.</li>\n</ol>\n\n<div class=\"callout callout--emerald\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">FIELD TIP</div>\n  <p style=\"margin:0;\">Build a shared Google Doc the day registration opens. Drop the pre-sol PDFs, the KO research, the incumbent contract notes, and the draft questions in one place. Everyone on the team reads it before the event. No surprises in the room.</p>\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "P03 · ASSIGN ROLES",
+      "html": "<div class=\"eyebrow\">P03 · ROLES, REHEARSAL, AND READINESS</div>\n\n<h1>If you walk in without assigned roles, two of your three people will sit silent for an hour.</h1>\n\n<p>Industry days reward small teams who divide the work. Three people, three jobs. If you only have one person attending, that one person does all three jobs and accepts the trade-offs.</p>\n\n<table>\n  <thead>\n    <tr><th>Role</th><th>What they do</th><th>What they bring</th></tr>\n  </thead>\n  <tbody>\n    <tr>\n      <td><strong>The Question-Asker</strong></td>\n      <td>Stands up in the open session and asks one or two of your prepared questions. Builds visibility with the contracting officer and the rest of the room. The KO remembers the firms who asked sharp questions.</td>\n      <td>The list of prepared questions, the company elevator pitch, business cards.</td>\n    </tr>\n    <tr>\n      <td><strong>The Networker</strong></td>\n      <td>Works the breaks. Talks to potential teaming partners. Introduces themselves to the program office staff. Walks out with six to ten business cards and notes on who said what.</td>\n      <td>Capability statement copies, business cards, the elevator pitch, and a pen for back-of-card notes.</td>\n    </tr>\n    <tr>\n      <td><strong>The Note-Taker</strong></td>\n      <td>Sits quietly in the back and writes down everything. Slides, verbal comments, Q&amp;A responses, the names of other firms who asked questions. Records audio if the agency permits it.</td>\n      <td>Laptop or notepad, the agenda printed out, a list of competitors to watch for.</td>\n    </tr>\n  </tbody>\n</table>\n\n<div class=\"callout\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">FIELD TIP</div>\n  <p style=\"margin:0;\">Rehearse the elevator pitch out loud the night before. Not in your head. Out loud. The first time you say it under pressure should not be when the program manager extends a hand at the coffee station.</p>\n</div>\n"
+    },
+
+    {
+      "type": "dark",
+      "partLabel": "PART TWO · DURING & AFTER",
+      "headline": "Arrive 15 minutes early. Sign the sheet. Ask one sharp question. Follow up inside 24 hours.",
+      "accentWord": "early",
+      "paragraphs": [
+        "The work that decides whether industry day pays off happens in three windows: the 15 minutes before the formal session, the breaks during the event, and the 24 hours after it ends. Most contractors only show up for the middle and wonder why nothing comes of it.",
+        "Part Two covers how to run the room while you're in it, which questions actually move the needle, and the exact follow-up sequence that turns a one-hour event into six months of pipeline traction."
+      ],
+      "footerLabel": "CAPTUREPILOT · INDUSTRY DAY & PRE-BID PLAYBOOK",
+      "headerLabel": "PART TWO"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "P04 · DURING THE EVENT",
+      "html": "<div class=\"eyebrow\">P04 · HOW TO RUN THE ROOM</div>\n\n<h1>The event is short. The behaviors that pay off are specific.</h1>\n\n<p>An industry day usually runs 60 to 120 minutes of content with one or two breaks. The behaviors below are what separate the firms who walk out with intel from the firms who walk out with a coffee cup.</p>\n\n<ul>\n  <li><strong>Arrive 15 minutes early.</strong> Introductions happen before the formal session starts. The contracting officer is often at the front of the room, not yet behind the lectern, and willing to shake hands.</li>\n  <li><strong>Sign the attendance sheet.</strong> Your presence is recorded and confirms your interest. Primes pulling teams together later pull the attendance list from the KO. If your name is not on it, you're not on the list.</li>\n  <li><strong>Take detailed notes on everything.</strong> Slides, verbal comments, Q&amp;A responses, the names of every firm that asked a question. The verbal asides are the highest-value intelligence in the room.</li>\n  <li><strong>Ask one or two prepared questions publicly.</strong> Builds visibility with the agency and signals you have done the reading. Two sharp questions beat ten unfocused ones.</li>\n  <li><strong>Network during breaks.</strong> Connect with potential teaming partners. Find the other small businesses in your NAICS. Introduce yourself to program office staff who are not at the lectern.</li>\n  <li><strong>Listen for anything NOT in the written documents.</strong> Verbal clarifications, scope changes, set-aside hints, schedule slippage. Contracting officer clarifications are the reason you're in the room.</li>\n  <li><strong>Note which contractors are in the room.</strong> These are your competitors. Who showed up, who asked questions, who already seemed to know the program staff.</li>\n</ul>\n\n<div class=\"callout callout--emerald\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">FIELD TIP</div>\n  <p style=\"margin:0;\">Hand your one-page capability statement to the contracting officer at the start, not the end. At the end the KO is collecting fifteen of them. At the start, yours is the only one in their hand and you get 30 seconds of attention.</p>\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "P05 · QUESTIONS WORTH ASKING",
+      "html": "<div class=\"eyebrow\">P05 · QUESTIONS WORTH ASKING AT INDUSTRY DAY</div>\n\n<h1>Intelligent questions differentiate you. Ask about substance, not process.</h1>\n\n<p>The wrong questions ask about logistics, deadlines, or things already covered in the pre-sol. The right questions surface intel the agency hasn't yet written down. Pick two or three from the table below, adapt them to the specific notice, and write them out before you arrive.</p>\n\n<table>\n  <thead>\n    <tr><th>Question Type</th><th>Example Questions</th></tr>\n  </thead>\n  <tbody>\n    <tr>\n      <td><strong>Set-Aside Strategy</strong></td>\n      <td>Is the agency planning a set-aside? What size standards are being considered? Will this be a partial or total small business set-aside?</td>\n    </tr>\n    <tr>\n      <td><strong>Key Personnel</strong></td>\n      <td>Will key personnel requirements be included? What qualifications are most important for the program manager role?</td>\n    </tr>\n    <tr>\n      <td><strong>Transition</strong></td>\n      <td>What does the agency expect from the incoming contractor during transition? Is there a phased transition requirement?</td>\n    </tr>\n    <tr>\n      <td><strong>Performance Standards</strong></td>\n      <td>What AQLs or performance standards will be used to evaluate contractor performance?</td>\n    </tr>\n    <tr>\n      <td><strong>Budget</strong></td>\n      <td>Is there a publicized IGCE or budget estimate? What is the anticipated contract type?</td>\n    </tr>\n    <tr>\n      <td><strong>Teaming</strong></td>\n      <td>Will the agency consider experience from proposed subcontractors in the past performance evaluation?</td>\n    </tr>\n  </tbody>\n</table>\n\n<div class=\"callout\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">FIELD TIP</div>\n  <p style=\"margin:0;\">If the agency accepts pre-submitted questions 48 hours out, submit yours early. Pre-submitted questions are often answered live, on the record, and read into the official transcript. That's intel every other bidder gets too, but you're the one whose name is attached to the smart question.</p>\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "P06 · POST-EVENT FOLLOW-UP",
+      "html": "<div class=\"eyebrow\">P06 · POST-EVENT FOLLOW-UP (WITHIN 24 HOURS)</div>\n\n<h1>The 24 hours after the event is when most of the value gets captured or lost.</h1>\n\n<p>Memories fade fast. Cards get buried. The contracting officer hears from a dozen firms in the first 48 hours. If you're not one of them, you've already given up most of what you came for. Run this sequence the same day or the morning after, no exceptions.</p>\n\n<ol>\n  <li><strong>Send follow-up emails to agency contacts you met.</strong> Brief, professional, reference the event by name. Recap one specific topic from the conversation. Include your capability statement as an attachment.</li>\n  <li><strong>Connect on LinkedIn with agency personnel and potential teaming partners.</strong> Personalize the connection request with one sentence about where you met. Generic requests get ignored.</li>\n  <li><strong>Review your notes and identify three intelligence items that weren't in the written pre-sol.</strong> Verbal clarifications, scope hints, set-aside signals. Write them down in plain language while it's still fresh.</li>\n  <li><strong>Assess the competitive landscape.</strong> Who showed up? Any surprises? Did the incumbent send their capture team? Did a prime you weren't expecting walk in with five people?</li>\n  <li><strong>Refine your bid or no-bid decision based on what you learned.</strong> Industry day is the cheapest no-bid trigger you'll ever get. If the requirement shifted in a direction that no longer fits, walking away is the right call.</li>\n  <li><strong>Submit any follow-up written questions to the contracting officer inside the stated Q&amp;A window.</strong> Often 5 to 10 business days. Reference the event and the specific topic. Written answers go on the record and benefit every bidder, including you.</li>\n</ol>\n\n<div class=\"callout callout--emerald\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">FIELD TIP</div>\n  <p style=\"margin:0;\">Add the opportunity to your pipeline as a Pre-Solicitation deal the same day. Set a follow-up reminder for two weeks before the expected RFP drop date. You want to be calling the KO before the solicitation hits the street, not after.</p>\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "P07 · CONVERT TO INTEL",
+      "html": "<div class=\"eyebrow\">P07 · TURN THE DAY INTO PIPELINE</div>\n\n<h1>Capture three things that weren't in the written documents. Everything else is bonus.</h1>\n\n<p>The single highest-value output of an industry day is the verbal intel: the contracting officer's clarifications, the program manager's preferences, the scope changes mentioned in passing. Most of it never makes it into the formal Q&amp;A transcript. If your team doesn't capture it within 24 hours, it's gone.</p>\n\n<h2>The three-item capture exercise</h2>\n\n<table>\n  <thead>\n    <tr><th>Item</th><th>What to capture</th><th>Why it matters</th></tr>\n  </thead>\n  <tbody>\n    <tr>\n      <td><strong>1. A scope or requirement that shifted</strong></td>\n      <td>Anything the agency said out loud that contradicts or refines what's in the draft Statement of Work. Even small wording changes.</td>\n      <td>This shapes how you write the technical approach. The firms still bidding the draft SOW will read like they weren't paying attention.</td>\n    </tr>\n    <tr>\n      <td><strong>2. A preference the program office revealed</strong></td>\n      <td>What the program manager said matters most: transition speed, key personnel quals, geographic presence, past performance with a specific agency.</td>\n      <td>Your proposal narrative leads with the preference. The competitors guess.</td>\n    </tr>\n    <tr>\n      <td><strong>3. A signal about the competitive field</strong></td>\n      <td>Who showed up. Which primes were already chummy with the KO. Whether any small business set-aside seems realistic given the pool.</td>\n      <td>Drives your teaming strategy and your bid or no-bid call. Sometimes the biggest signal is who didn't show up.</td>\n    </tr>\n  </tbody>\n</table>\n\n<div class=\"callout callout--emerald\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">BOTTOM ON THE GROUND</div>\n  <p style=\"margin:0;\">Industry days reward the firms that treat them like reconnaissance, not seminars. Prep cold, run the room with assigned roles, follow up inside 24 hours, and capture three items that weren't in the written documents. Do that on every industry day in your pipeline for a year. Your win rate moves.</p>\n</div>\n"
+    },
+
+    {
+      "type": "back-cover",
+      "eyebrow": "WHAT'S NEXT",
+      "headline": "Know about every industry day for your NAICS the day it's posted.",
+      "accentWord": "every",
+      "body": "CapturePilot watches SAM.gov for industry day notices, pre-bid conferences, and sources sought tied to your NAICS, set-asides, and target agencies. We send the event-ready notice to your inbox with the contracting officer's contact info and the linked pre-sol attachments already pulled. Prep faster, show up sharper, follow up on time. Free 14-day trial, no card required.",
+      "ctaText": "Get the full Federal Launch Kit",
+      "ctaUrl": "https://www.capturepilot.com/startup-pack",
+      "footerLabel": "CAPTUREPILOT · INDUSTRY DAY & PRE-BID PLAYBOOK"
+    }
+  ]
+}

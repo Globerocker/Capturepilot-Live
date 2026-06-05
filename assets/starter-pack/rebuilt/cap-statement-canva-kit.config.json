@@ -1,0 +1,109 @@
+{
+  "id": "cap-statement-canva-kit",
+  "title": "Capability Statement — Canva Brand Kit",
+  "slug": "cap-statement-canva-kit",
+  "pages": 8,
+  "footerLabel": "CAPTUREPILOT · CAPABILITY STATEMENT KIT",
+  "headerLabel": "CAP STATEMENT KIT",
+  "parts": [
+    {
+      "type": "cover",
+      "eyebrow": "FEDERAL LAUNCH KIT · CAPABILITY STATEMENT",
+      "titleLines": [
+        "A branded",
+        "cap statement,",
+        "in 30 minutes."
+      ],
+      "accentWord": "branded",
+      "pages": 8,
+      "toolStrip": [
+        { "num": "01", "title": "Canva Brand Kit", "desc": "Logo, colors, fonts in one place" },
+        { "num": "02", "title": "Template Map", "desc": "Every section, what to swap" },
+        { "num": "03", "title": "Color Palettes", "desc": "Five sector-tested combos" },
+        { "num": "04", "title": "Print + PDF", "desc": "Export settings that pass" }
+      ]
+    },
+
+    {
+      "type": "toc",
+      "title": "Inside this kit.",
+      "footerLabel": "CAPTUREPILOT · CAPABILITY STATEMENT KIT",
+      "parts": [
+        {
+          "label": "PART ONE · SETUP",
+          "items": [
+            { "code": "S01", "title": "Set Up Your Brand Kit in Canva", "desc": "Logo, hex codes, fonts — saved once, applied everywhere.", "page": 4 },
+            { "code": "S02", "title": "Customize the Template", "desc": "Section-by-section swap list with design tips.", "page": 5 }
+          ]
+        },
+        {
+          "label": "PART TWO · EXPORT + POLISH",
+          "items": [
+            { "code": "S03", "title": "Export Your Capability Statement", "desc": "PDF settings for print, email, and the one-page rule.", "page": 6 },
+            { "code": "S04", "title": "Color Palettes for Federal Contractors", "desc": "Five sector-tested combos with hex codes.", "page": 7 }
+          ]
+        },
+        {
+          "label": "/ WRAP",
+          "items": [
+            { "code": "W01", "title": "What's Next", "desc": "Where the rest of the Federal Launch Kit fits in.", "page": 8 }
+          ]
+        }
+      ]
+    },
+
+    {
+      "type": "dark",
+      "partLabel": "PART ONE · SETUP",
+      "headline": "A cap statement is a one-page sales sheet, not a brochure.",
+      "accentWord": "one-page",
+      "paragraphs": [
+        "Contracting officers see dozens of these a week. If your contact info isn't visible on page one, they move on. This kit walks you through the CapturePilot Canva template — brand kit setup, the section-by-section swap list, and the export settings that actually print.",
+        "Open canva.com/templates and search 'federal capability statement', or use the kit link you got with this download. A free Canva account is enough."
+      ],
+      "footerLabel": "CAPTUREPILOT · CAPABILITY STATEMENT KIT",
+      "headerLabel": "PART ONE"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "STEP 1 · BRAND KIT",
+      "html": "<div class=\"eyebrow\">STEP 1 · SET UP YOUR BRAND KIT IN CANVA</div>\n\n<h1>Five minutes of setup saves an hour per design.</h1>\n\n<p>Canva's Brand Kit lives in the left sidebar. Once it's set, every new design pulls your logo, colors, and fonts automatically. Do this before you open the template.</p>\n\n<ol>\n  <li><strong>Open Canva</strong> (free or Pro) and click <em>Brand Kit</em> in the left sidebar.</li>\n  <li><strong>Upload your logo</strong> in PNG or SVG. Transparent background preferred. SVG scales without pixelating.</li>\n  <li><strong>Add your brand colors</strong> by entering hex codes (for example, <code>#1D4ED8</code> for navy). Primary, accent, neutral — three is enough.</li>\n  <li><strong>Set your brand fonts</strong>. One for headers, one for body. If you don't have brand fonts yet, pick a clean sans like Inter or Source Sans.</li>\n  <li><strong>Save the kit</strong>. It applies automatically to every new Canva design from this point forward.</li>\n</ol>\n\n<div class=\"callout callout--emerald\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">FIELD TIP</div>\n  <strong>Don't have a logo yet?</strong> Use a clean text wordmark in your primary brand font, set in your primary color. A clear text logo beats a messy graphic every time.\n</div>\n\n<h2>Why this matters before you touch the template</h2>\n\n<p>The CapturePilot template is wired to your Brand Kit. Logo placeholders pull your uploaded logo. Header bars and accents pull your primary color. Skip this step and you'll be hand-swapping every element on every page.</p>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "STEP 2 · TEMPLATE SWAP LIST",
+      "html": "<div class=\"eyebrow\">STEP 2 · CUSTOMIZE THE TEMPLATE</div>\n\n<h1>Section by section, what to replace and how.</h1>\n\n<p>Open the template and work top to bottom. Don't skip — every section matters to a contracting officer scanning your sheet.</p>\n\n<table>\n  <thead>\n    <tr><th>Section</th><th>What to replace</th><th>Design tip</th></tr>\n  </thead>\n  <tbody>\n    <tr>\n      <td><strong>Header / Logo Area</strong></td>\n      <td>Replace placeholder logo with yours. Update company name.</td>\n      <td>Logo should be at least 300 DPI. Use SVG when you have it.</td>\n    </tr>\n    <tr>\n      <td><strong>Company Overview Box</strong></td>\n      <td>Delete placeholder text. Paste your 2-4 sentence overview.</td>\n      <td>Keep it under 75 words. Bold one key number (years in business, contracts delivered, revenue).</td>\n    </tr>\n    <tr>\n      <td><strong>Core Competencies</strong></td>\n      <td>Replace each item with your own. Four to six entries.</td>\n      <td>Start each line with a strong verb. Keep formatting consistent across all six.</td>\n    </tr>\n    <tr>\n      <td><strong>Differentiators Column</strong></td>\n      <td>Write three specific differentiators. Use the formula from the main cap statement guide.</td>\n      <td>Put your strongest differentiator first. Generic claims get ignored — be specific.</td>\n    </tr>\n  </tbody>\n</table>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "STEP 2 · TEMPLATE SWAP LIST",
+      "html": "<div class=\"eyebrow\">STEP 2 · CUSTOMIZE THE TEMPLATE (CONTINUED)</div>\n\n<h2>Past performance, certifications, contact, accents.</h2>\n\n<table>\n  <thead>\n    <tr><th>Section</th><th>What to replace</th><th>Design tip</th></tr>\n  </thead>\n  <tbody>\n    <tr>\n      <td><strong>Past Performance Table</strong></td>\n      <td>Fill in contract details from your records.</td>\n      <td>Include the POC name. Agencies call the POCs you list. If you can't list one, leave the row out.</td>\n    </tr>\n    <tr>\n      <td><strong>Certifications / Badges</strong></td>\n      <td>Delete the certs you don't hold. Keep only the ones you've verified.</td>\n      <td>SDVOSB badge only if you're CVE-verified. False badges kill credibility on the spot.</td>\n    </tr>\n    <tr>\n      <td><strong>Contact Block</strong></td>\n      <td>Name, title, phone, email, address, website.</td>\n      <td>Use a monitored email — not a personal Gmail. A @company.com address signals you're a real shop.</td>\n    </tr>\n    <tr>\n      <td><strong>Color Accents</strong></td>\n      <td>Apply your brand color to header bars and icons.</td>\n      <td>One accent color reads more professional than three or four.</td>\n    </tr>\n  </tbody>\n</table>\n\n<div class=\"callout\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">WHY THIS MATTERS</div>\n  <p style=\"margin:0;\">Every placeholder you forget to replace is a tell that you rushed. Contracting officers notice the same way you'd notice a typo in a resume. Slow down on the swap pass.</p>\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "STEP 3 · EXPORT SETTINGS",
+      "html": "<div class=\"eyebrow\">STEP 3 · EXPORT YOUR CAPABILITY STATEMENT</div>\n\n<h1>The export settings that don't get you rejected.</h1>\n\n<ol>\n  <li>Click <strong>Share</strong> &rarr; <strong>Download</strong> in Canva.</li>\n  <li>Choose <strong>PDF Print</strong> for the highest quality output.</li>\n  <li>Tick <strong>Crop marks and bleed</strong> if you're submitting to a print shop.</li>\n  <li>For email attachments, choose <strong>PDF Standard</strong> instead — smaller file, cleaner inboxes.</li>\n  <li>Name the file <code>[CompanyName]_CapStatement_FY2026.pdf</code>. Contracting officers grep for company names.</li>\n  <li>Save a copy in both PDF and original Canva format so you can edit it next quarter without starting over.</li>\n</ol>\n\n<div class=\"callout callout--emerald\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">PRO TIP · ONE-PAGE RULE</div>\n  <p style=\"margin:0;\"><strong>If your cap statement runs past page one, it's already failed.</strong> Contracting officers scan dozens a week. Page two means your company description is too long or your formatting is too loose. Cut the overview by half. Trim past-performance rows to the three most relevant. Move long bios to a separate one-pager.</p>\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "STEP 4 · COLOR PALETTES",
+      "html": "<div class=\"eyebrow\">STEP 4 · COLOR PALETTES FOR FEDERAL CONTRACTORS</div>\n\n<h1>Five sector-tested combos. Drop in the hex codes.</h1>\n\n<p>Pick the row that matches what you sell. Drop the hex codes straight into your Canva Brand Kit and you're done.</p>\n\n<table>\n  <thead>\n    <tr><th>Sector</th><th>Primary</th><th>Accent</th><th>Neutral</th><th>Why it works</th></tr>\n  </thead>\n  <tbody>\n    <tr>\n      <td><strong>Defense / IC</strong></td>\n      <td>Navy <code>#1B2A4A</code></td>\n      <td>Gold <code>#C9A84C</code></td>\n      <td>Gray <code>#4B5563</code></td>\n      <td>Conservative. Trust signals for DoD and intel buyers.</td>\n    </tr>\n    <tr>\n      <td><strong>IT / Cyber</strong></td>\n      <td>Dark <code>#0F172A</code></td>\n      <td>Green <code>#22C55E</code></td>\n      <td>Gray <code>#6B7280</code></td>\n      <td>Tech-forward without looking like a consumer app.</td>\n    </tr>\n    <tr>\n      <td><strong>Healthcare</strong></td>\n      <td>Blue <code>#1E40AF</code></td>\n      <td>Teal <code>#0D9488</code></td>\n      <td>Warm Gray <code>#78716C</code></td>\n      <td>Clean and clinical. Reads trustworthy to VA and HHS buyers.</td>\n    </tr>\n    <tr>\n      <td><strong>Construction</strong></td>\n      <td>Dark Green <code>#14532D</code></td>\n      <td>Orange <code>#EA580C</code></td>\n      <td>Stone <code>#D6D3D1</code></td>\n      <td>Grounded, structural. Works for USACE, GSA, NAVFAC.</td>\n    </tr>\n    <tr>\n      <td><strong>Pro Services</strong></td>\n      <td>Charcoal <code>#1C1917</code></td>\n      <td>Emerald <code>#059669</code></td>\n      <td>Sand <code>#E7E5E4</code></td>\n      <td>Executive, consultancy feel. Pairs with serif body fonts.</td>\n    </tr>\n  </tbody>\n</table>\n"
+    },
+
+    {
+      "type": "back-cover",
+      "eyebrow": "WHAT'S NEXT",
+      "headline": "Get the rest of the kit.",
+      "accentWord": "rest",
+      "body": "This kit is one piece of the CapturePilot Federal Launch Kit — the full kit covers SAM.gov registration, NAICS picking, set-aside certifications, past-performance writing, and the search workflow that finds your first contract. Free to download. No card.",
+      "ctaText": "Get the full Federal Launch Kit",
+      "ctaUrl": "https://www.capturepilot.com/startup-pack",
+      "footerLabel": "CAPTUREPILOT · CAPABILITY STATEMENT KIT"
+    }
+  ]
+}

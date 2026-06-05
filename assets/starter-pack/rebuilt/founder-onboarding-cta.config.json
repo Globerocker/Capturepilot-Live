@@ -1,0 +1,56 @@
+{
+  "id": "founder-onboarding-cta",
+  "title": "Book Your 30-Min Founder Onboarding Call",
+  "slug": "flk-founder-onboarding-call",
+  "pages": 5,
+  "footerLabel": "CAPTUREPILOT · FOUNDER ONBOARDING CALL",
+  "headerLabel": "FOUNDER ONBOARDING CALL",
+  "parts": [
+    {
+      "type": "cover",
+      "eyebrow": "FEDERAL LAUNCH KIT · BONUS · FOUNDER ONBOARDING",
+      "titleLines": [
+        "Book your",
+        "30-min founder",
+        "onboarding call."
+      ],
+      "accentWord": "founder",
+      "pages": 5,
+      "toolStrip": [
+        { "num": "01", "title": "30 minutes", "desc": "Focused walk-through, not a sales pitch. Bring your hardest bid question." },
+        { "num": "02", "title": "Free with your kit", "desc": "Included in the Federal Launch Kit. One call per company." },
+        { "num": "03", "title": "1-on-1 with our team", "desc": "Direct time with the people who built the platform. No SDR layer." },
+        { "num": "04", "title": "You leave with 3 action items", "desc": "A written recap lands in your inbox within one business day." }
+      ]
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "WHY · WHAT WE COVER",
+      "html": "<div class=\"eyebrow\">PART ONE · WHAT THE CALL IS FOR</div>\n<h1>Walk through your first federal bid with our capture lead.</h1>\n<p>This is the call we wish every new contractor took before they sent their first proposal. Thirty minutes, on Zoom, with the person who has read more sources sought notices than is healthy. You bring the bid you're working on. We bring the questions you didn't know to ask.</p>\n\n<div class=\"callout callout--emerald\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">THE LOGISTICS</div>\n  <table style=\"width:100%; border:none;\">\n    <tbody>\n      <tr>\n        <td style=\"width:33%; border:none; padding:0 4mm 0 0; vertical-align:top;\"><strong style=\"font-size:13pt; color:#047857;\">30 min</strong><br><span style=\"font-family:'IBM Plex Mono', monospace; font-size:8pt; letter-spacing:0.14em; color:#57534e;\">DURATION</span><br><span style=\"font-size:9.5pt; color:#1c1917;\">Focused and actionable. We don't run over.</span></td>\n        <td style=\"width:33%; border:none; padding:0 4mm 0 0; vertical-align:top;\"><strong style=\"font-size:13pt; color:#047857;\">Free</strong><br><span style=\"font-family:'IBM Plex Mono', monospace; font-size:8pt; letter-spacing:0.14em; color:#57534e;\">COST</span><br><span style=\"font-size:9.5pt; color:#1c1917;\">Included with the Federal Launch Kit. No card, no upsell.</span></td>\n        <td style=\"width:33%; border:none; padding:0; vertical-align:top;\"><strong style=\"font-size:13pt; color:#047857;\">1-on-1</strong><br><span style=\"font-family:'IBM Plex Mono', monospace; font-size:8pt; letter-spacing:0.14em; color:#57534e;\">FORMAT</span><br><span style=\"font-size:9.5pt; color:#1c1917;\">You and our capture lead. Camera optional.</span></td>\n      </tr>\n    </tbody>\n  </table>\n</div>\n\n<h2 style=\"margin-top:9mm;\">What we cover in 30 minutes.</h2>\n<p>The agenda is yours, but the version we run when you don't have a strong preference looks like this. Five blocks, roughly six minutes each, with the last ten reserved for whatever you came in with.</p>\n\n<ol>\n  <li><strong>Your SAM.gov registration and certifications.</strong> We read the entity record live and flag anything that will get you bounced (expired reps and certs, wrong NAICS primary, missing CAGE, set-aside paperwork that hasn't been filed).</li>\n  <li><strong>Your three best initial targets.</strong> Based on your NAICS, location, and agency familiarity, we name the three opportunities or programs we'd chase first. Specific notices, not generic advice.</li>\n  <li><strong>A capability statement spot-check.</strong> The five things evaluators look for in the first seven seconds. We don't rewrite the document on the call. We tell you which corners are weakest.</li>\n  <li><strong>Walk through one real solicitation.</strong> Bring a sources sought, an RFI, or a draft RFP you're considering. We read sections L and M with you and flag the disqualifiers.</li>\n  <li><strong>Your two or three biggest questions.</strong> Nothing is too basic. We answer the ones you've been embarrassed to ask anyone with a federal contracting accent.</li>\n</ol>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "PREP · AFTER THE CALL",
+      "html": "<div class=\"eyebrow\">PART TWO · BEFORE, DURING, AFTER</div>\n<h1>Come prepared. Leave with a plan.</h1>\n<p>Thirty minutes is enough time if you walk in with the right artifacts on the desk. Use the checklist below the day before, not the morning of. If you can only bring two of the five, bring the first and the fourth.</p>\n\n<h2>Come prepared with.</h2>\n<ul>\n  <li>Your company name and website URL.</li>\n  <li>Your SAM.gov UEI number, if you have one registered. If you don't, bring the date you started the registration.</li>\n  <li>Your primary NAICS code and the agencies you're targeting. A best guess is fine, this is what we'll pressure-test on the call.</li>\n  <li>One specific opportunity or question you want to focus the conversation on. Notice number is gold.</li>\n  <li>Your current capability statement, even if it's a draft or a half-rewrite. A messy version tells us more than a polished one.</li>\n</ul>\n\n<h2 style=\"margin-top:8mm;\">What happens after the call.</h2>\n<p>Within one business day, you'll get a short email from the person you spoke with. No CRM-generated nurture sequence, just the recap. It includes:</p>\n<ul>\n  <li>The three priority action items we agreed on, in order.</li>\n  <li>Links to the specific notices or agency pages we referenced on the call.</li>\n  <li>Any template, checklist, or playbook from the Federal Launch Kit we pointed you to during the conversation.</li>\n  <li>A direct reply address if you want to come back with one more question. No ticketing system.</li>\n</ul>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "HOW TO BOOK · GROUND RULES",
+      "html": "<div class=\"eyebrow\">PART THREE · BOOKING THE CALL</div>\n<h1>How to get on the calendar.</h1>\n<p>Two ways to book, one rule about who attends. We confirm every request within one business day, usually within an hour during US working time. If you don't hear back by the next morning, resend the email — it means our inbox filter ate it.</p>\n\n<div class=\"callout callout--emerald\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">HOW TO BOOK</div>\n  <p style=\"margin:0 0 2mm 0;\"><strong>Online:</strong> capturepilot.com/onboarding-call</p>\n  <p style=\"margin:0 0 2mm 0;\"><strong>Email:</strong> hello@capturepilot.com</p>\n  <p style=\"margin:0;\"><strong>Subject line:</strong> Onboarding Call — [Your Company Name]. We'll send you a calendar link within one business day.</p>\n</div>\n\n<div class=\"callout\" style=\"border-left: 4px solid #f59e0b; background: #fffbeb; margin-top:6mm;\">\n  <div class=\"eyebrow\" style=\"color:#b45309; margin-bottom:2mm;\">ONE CALL PER COMPANY</div>\n  <p style=\"margin:0;\">The onboarding call is one-per-company, not one-per-person. If you have a co-founder, a capture lead, or a proposal writer on the team, invite them. We'd rather do thirty minutes with the three people who matter than three separate calls with one of them at a time.</p>\n</div>\n\n<h2 style=\"margin-top:9mm;\">A few ground rules.</h2>\n<p>None of these are precious. They exist because we tried the alternative and it didn't work.</p>\n<ul>\n  <li><strong>Cameras optional, but encouraged.</strong> Body language tells us when we're moving too fast or skipping past something you don't yet have a name for.</li>\n  <li><strong>Reschedules are free.</strong> Federal work is chaotic. If a contracting officer calls you ninety seconds before our slot, take the call. Reply to the calendar invite and we'll find another window.</li>\n  <li><strong>Recordings are yours.</strong> If you want to record the call for your team, say so at the start. We'll hit record on our end and send you the file with the recap.</li>\n</ul>\n"
+    },
+
+    {
+      "type": "back-cover",
+      "eyebrow": "WHAT'S NEXT",
+      "headline": "The kit gets you started. The call gets you bidding.",
+      "accentWord": "bidding",
+      "body": "The Federal Launch Kit gives you the templates, checklists, and playbooks. The onboarding call closes the gap between reading and shipping. Book the call when you have a real bid in front of you. Bring the notice number. We'll do the rest.",
+      "ctaText": "Get the full Federal Launch Kit",
+      "ctaUrl": "https://www.capturepilot.com/startup-pack",
+      "footerLabel": "CAPTUREPILOT · FEDERAL LAUNCH KIT"
+    }
+  ]
+}

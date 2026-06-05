@@ -1,0 +1,151 @@
+{
+  "id": "linkedin-outreach-scripts",
+  "title": "LinkedIn Outreach Scripts for KO/COR",
+  "slug": "linkedin-outreach-scripts",
+  "pages": 14,
+  "footerLabel": "CAPTUREPILOT · LINKEDIN OUTREACH SCRIPTS",
+  "headerLabel": "LINKEDIN OUTREACH",
+  "parts": [
+    {
+      "type": "cover",
+      "eyebrow": "FEDERAL LAUNCH KIT · CONTRACTING OFFICER OUTREACH",
+      "titleLines": [
+        "LinkedIn",
+        "Outreach for",
+        "KOs and CORs."
+      ],
+      "accentWord": "KOs",
+      "pages": 14,
+      "toolStrip": [
+        { "num": "01", "title": "6 Scripts", "desc": "Cold, warm, post-event, post-solicitation" },
+        { "num": "02", "title": "Rules of Engagement", "desc": "What you can and can't ask a KO" },
+        { "num": "03", "title": "Profile Tune-Up", "desc": "Headline, About, Featured, Connections" },
+        { "num": "04", "title": "Follow-Up Cadence", "desc": "When to send, when to back off" }
+      ]
+    },
+
+    {
+      "type": "toc",
+      "title": "Inside this guide.",
+      "parts": [
+        {
+          "label": "PART ONE · THE RULES",
+          "items": [
+            { "code": "L01", "title": "What a KO can and can't share on LinkedIn", "desc": "Procurement-sensitive info is off-limits. Mission talk is fair game.", "page": 4 },
+            { "code": "L02", "title": "Profile tune-up before you reach out", "desc": "Headline, About, Featured, and Connections that pass the 5-second test.", "page": 5 }
+          ]
+        },
+        {
+          "label": "PART TWO · THE SCRIPTS",
+          "items": [
+            { "code": "L03", "title": "Cold connection request", "desc": "Under 300 characters. No ask. Just signal who you are.", "page": 7 },
+            { "code": "L04", "title": "Follow-up after acceptance", "desc": "2 to 3 days later. One ask, easy to say yes to.", "page": 8 },
+            { "code": "L05", "title": "After an industry day or conference", "desc": "Within 24 hours. Reference something specific.", "page": 9 },
+            { "code": "L06", "title": "Comment-then-connect (passive nurturing)", "desc": "Warm the connection before you ask for it.", "page": 10 },
+            { "code": "L07", "title": "After a solicitation is released", "desc": "Cite the notice. Keep sensitive questions off LinkedIn.", "page": 11 },
+            { "code": "L08", "title": "Small Business Office introduction", "desc": "OSDBU reps are paid to help. Use them.", "page": 12 }
+          ]
+        }
+      ]
+    },
+
+    {
+      "type": "founder",
+      "headline": "The KO is a person with a procurement schedule, not a sales target.",
+      "accentWord": "person",
+      "paragraphs": [
+        "Early in my federal work I sent the kind of LinkedIn message every founder sends. Long pitch, three asks, a calendar link at the bottom. The KO at the agency I was chasing never replied. Six months later I learned why. He'd flagged it to his small business office as an example of how not to reach out.",
+        "Federal contracting officers can't take a sales call the way a commercial buyer can. They're bound by FAR Part 3, conflict-of-interest rules, and an agency policy that says any unsolicited info about an active procurement has to go through formal channels. Send the wrong message and you don't just get ignored, you get marked as someone who doesn't understand the rules.",
+        "The scripts in this guide are the ones that work. I've used every one of them. Short. Mission-focused. No ask in the first message. The goal is to be remembered, not to close. When the RFP drops six months later, you want the KO to recognize your firm's name from three thoughtful interactions, not one bad pitch.",
+        "Read the rules on page 4 before you copy a single script. The rules are what keep this professional."
+      ],
+      "ctaText": "Book a B2G Audit call",
+      "ctaUrl": "https://meetings-na2.hubspot.com/americurial/intro-call",
+      "ctaButtonLabel": "Book the call →",
+      "ctaEyebrow": "30 MIN · NO PITCH"
+    },
+
+    {
+      "type": "dark",
+      "partLabel": "PART ONE · THE RULES",
+      "headline": "Contracting officers are prohibited from sharing procurement-sensitive info informally. Build the relationship anyway.",
+      "accentWord": "anyway",
+      "paragraphs": [
+        "Every script in this guide assumes you understand what a KO can and can't discuss on LinkedIn. Mission, agency direction, public solicitations, industry days — fair game. Pricing, source-selection criteria, anything tied to an active procurement — off-limits.",
+        "The next two pages cover the rules of engagement and the profile tune-up you should do before you send the first connection request. Skip these and the scripts won't work."
+      ],
+      "headerLabel": "PART ONE"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "L01 · THE RULES",
+      "html": "<div class=\"eyebrow\">L01 · WHAT A KO CAN AND CAN'T SHARE</div>\n\n<h1>Know the line before you send a single message.</h1>\n\n<p>FAR Part 3 governs contracting officer ethics. The short version: no procurement-sensitive information can flow informally, and any contact that creates the appearance of impropriety puts the KO at career risk. Keep your outreach on the right side of that line and the relationship is welcome. Cross it once and you're done at that agency.</p>\n\n<table>\n  <thead>\n    <tr><th>Fair Game</th><th>Off-Limits</th></tr>\n  </thead>\n  <tbody>\n    <tr>\n      <td><strong>Agency mission and strategic direction</strong></td>\n      <td><strong>Source-selection criteria on active procurements</strong></td>\n    </tr>\n    <tr>\n      <td><strong>Public solicitations and their requirements</strong></td>\n      <td><strong>Competitor pricing or bid intent</strong></td>\n    </tr>\n    <tr>\n      <td><strong>Upcoming industry days and conferences</strong></td>\n      <td><strong>Internal IGCE or budget figures</strong></td>\n    </tr>\n    <tr>\n      <td><strong>General market research questions</strong></td>\n      <td><strong>Specific evaluation factors or weightings</strong></td>\n    </tr>\n    <tr>\n      <td><strong>Capability overviews (no ask)</strong></td>\n      <td><strong>Any request for an inside track</strong></td>\n    </tr>\n    <tr>\n      <td><strong>Past performance references on public awards</strong></td>\n      <td><strong>Discussion of an active proposal under evaluation</strong></td>\n    </tr>\n  </tbody>\n</table>\n\n<div class=\"callout callout--emerald\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">THE 5-WORD TEST</div>\n  <p style=\"margin:0;\"><strong>If your message could be read aloud at an Inspector General hearing without embarrassing the KO, send it.</strong> If it couldn't, rewrite it or move the conversation to the formal channel (a Sources Sought response, an RFI question, or a contracting office email address).</p>\n</div>\n\n<h2>Three things that will get you blocked</h2>\n\n<ul>\n  <li><strong>Asking about an active procurement.</strong> If a solicitation is on the street, every clarification has to go through the Q&amp;A process on SAM.gov. Not LinkedIn DMs.</li>\n  <li><strong>Sending a calendar link in the first message.</strong> Calendly in the cold connection note signals you don't know the etiquette. Build rapport across two or three touches first.</li>\n  <li><strong>Pitching teaming on someone else's behalf.</strong> Don't tell a KO who they should be teaming with. That's the prime's call, not yours.</li>\n</ul>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "L02 · PROFILE TUNE-UP",
+      "html": "<div class=\"eyebrow\">L02 · BEFORE THE FIRST CONNECTION REQUEST</div>\n\n<h1>If a KO clicks your profile, the first 5 seconds decide whether they accept.</h1>\n\n<p>Federal buyers vet every connection request. They click your profile, scan the headline, glance at the About section, and decide in about 5 seconds. If your headline says \"CEO at [Company]\" with no federal context, you lose. Below is the tune-up that gets you to yes.</p>\n\n<table>\n  <thead>\n    <tr><th>Profile Element</th><th>What to put there</th></tr>\n  </thead>\n  <tbody>\n    <tr>\n      <td><strong>Headline</strong></td>\n      <td>Certification, primary capability, target agency sector. Example: <em>\"SDVOSB | Federal IT &amp; Cybersecurity | Serving DHS &amp; DoD\"</em>. 220 characters max — use them.</td>\n    </tr>\n    <tr>\n      <td><strong>About Section</strong></td>\n      <td>Write for the agency decision-maker reading it. Include UEI, CAGE, certifications, and a 3-sentence capability statement. No marketing fluff. End with a contact email tied to your domain.</td>\n    </tr>\n    <tr>\n      <td><strong>Experience</strong></td>\n      <td>Frame every position around outcomes, not job descriptions. Quantify: contract values, agency names where public, staff size, performance period. \"Led $4.2M task order on GSA STARS III for VA\" beats \"Managed federal projects.\"</td>\n    </tr>\n    <tr>\n      <td><strong>Featured Section</strong></td>\n      <td>Pin your capability statement PDF, a recent award announcement, or a relevant project write-up. KOs check this before they accept. Empty Featured section signals you're not serious.</td>\n    </tr>\n    <tr>\n      <td><strong>Connections</strong></td>\n      <td>Actively connect with KOs, CORs, OSDBU reps, and program managers at your target agencies. Mutual connections in the agency dramatically raise acceptance rate.</td>\n    </tr>\n    <tr>\n      <td><strong>Activity</strong></td>\n      <td>Comment thoughtfully on agency posts and program office announcements once or twice a week. KOs notice activity in their sector before they notice a cold DM.</td>\n    </tr>\n  </tbody>\n</table>\n\n<div class=\"callout\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">FIELD TIP</div>\n  <p style=\"margin:0;\">Run a search for your own headline. If it returns 200 other firms with the same wording (\"SDVOSB | Federal Contractor | Veteran-Owned\"), rewrite. Specificity beats certification soup every time — name the capability and the agency sector.</p>\n</div>\n"
+    },
+
+    {
+      "type": "dark",
+      "partLabel": "PART TWO · THE SCRIPTS",
+      "headline": "Six scripts. Each one for a specific moment. Copy, adapt, send.",
+      "accentWord": "Six",
+      "paragraphs": [
+        "The next six pages cover the six outreach situations you'll actually encounter: cold, post-acceptance, post-event, comment-then-connect, post-solicitation, and the small business office intro. Every script is under 300 characters where LinkedIn requires it, and every script has a tip on timing and what to avoid.",
+        "Pick the one that matches your situation. Adapt the bracketed fields. Send. The first three feel awkward — by the tenth, it's muscle memory."
+      ],
+      "headerLabel": "PART TWO"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "L03 · COLD CONNECTION",
+      "html": "<div class=\"eyebrow\">L03 · SCRIPT 1 OF 6</div>\n\n<h1>Cold connection request.</h1>\n\n<p>The first touch. No ask. The only goal is acceptance. LinkedIn caps connection notes at 300 characters, so every word has to earn its place.</p>\n\n<div class=\"callout\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">THE SCRIPT</div>\n  <p style=\"margin:0;\">\"Hi [Name], I lead [Company Name], a [size status] small business serving [agency type/sector]. I came across your profile while researching [agency]'s work in [area]. I'd welcome the opportunity to connect and learn more about your mission. No ask — just building the right network.\"</p>\n</div>\n\n<h2>What makes this work</h2>\n\n<ul>\n  <li><strong>Mentions size status up front.</strong> KOs care about small business participation. Lead with it.</li>\n  <li><strong>Names a specific area of agency work.</strong> Shows you've done homework beyond a SAM.gov keyword search.</li>\n  <li><strong>Closes with \"no ask.\"</strong> Removes the suspicion that you're trying to sell. Acceptance rate jumps when this line is in.</li>\n</ul>\n\n<h2>Common variations</h2>\n\n<table>\n  <thead>\n    <tr><th>Situation</th><th>Adapt the script</th></tr>\n  </thead>\n  <tbody>\n    <tr>\n      <td>You have a mutual connection</td>\n      <td>Open with \"Hi [Name], we're both connected to [Mutual Name] at [Agency]…\" — acceptance rate roughly doubles.</td>\n    </tr>\n    <tr>\n      <td>You attended their agency's industry day</td>\n      <td>Open with \"Hi [Name], I attended [Agency]'s industry day on [date]…\" — use the post-event script (L05) instead if within 24 hours.</td>\n    </tr>\n    <tr>\n      <td>You're certified in something the agency emphasizes</td>\n      <td>Lead with the cert: \"Hi [Name], as a HUBZone firm in [region], I've been following [Agency]'s work on…\"</td>\n    </tr>\n  </tbody>\n</table>\n\n<div class=\"callout callout--emerald\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">FIELD TIP</div>\n  <p style=\"margin:0;\"><strong>Keep under 300 characters. No ask in the connection request.</strong> If your message is longer, LinkedIn will cut it mid-sentence. If it has an ask, the KO will hit decline.</p>\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "L04 · POST-ACCEPTANCE",
+      "html": "<div class=\"eyebrow\">L04 · SCRIPT 2 OF 6</div>\n\n<h1>Follow-up message after they accept.</h1>\n\n<p>They accepted the connection. Now you have one window — usually the first week — where a single thoughtful message gets read. Send too soon and it feels automated. Wait too long and you're back to cold.</p>\n\n<div class=\"callout\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">THE SCRIPT</div>\n  <p style=\"margin:0;\">\"Hi [Name], thanks for connecting. [Company Name] specializes in [1-line capability]. We've recently been supporting [similar agency or mission area] and have been looking at [agency] as a potential fit. Would a brief 15-minute intro call be appropriate? I'm happy to work around your schedule.\"</p>\n</div>\n\n<h2>What this message does well</h2>\n\n<ul>\n  <li><strong>Anchors capability in past performance.</strong> \"Supporting [agency]\" beats \"specializing in [buzzword].\"</li>\n  <li><strong>One ask, easy to say yes to.</strong> 15 minutes is a calendar slot, not a commitment. Offering to work around their schedule signals you respect their time.</li>\n  <li><strong>No calendar link.</strong> Save it for the reply. Calendly in this message reads as a sales sequence.</li>\n</ul>\n\n<h2>Timing matters</h2>\n\n<table>\n  <thead>\n    <tr><th>When you send</th><th>What happens</th></tr>\n  </thead>\n  <tbody>\n    <tr><td>Within 1 hour of acceptance</td><td>Reads as automated. Reply rate drops sharply.</td></tr>\n    <tr><td>2 to 3 days after acceptance</td><td>Optimal window. Reply rate is highest.</td></tr>\n    <tr><td>1 week after acceptance</td><td>Still works. Lead with \"thanks for connecting last week…\"</td></tr>\n    <tr><td>More than 2 weeks</td><td>You've gone cold. Wait for a trigger (a post they share, an industry day) before reaching back out.</td></tr>\n  </tbody>\n</table>\n\n<div class=\"callout callout--emerald\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">FIELD TIP</div>\n  <p style=\"margin:0;\">If they don't reply within 10 days, don't follow up. Switch to the comment-then-connect pattern (L06). Two unanswered DMs in a row puts you on the \"don't accept\" list.</p>\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "L05 · AFTER AN EVENT",
+      "html": "<div class=\"eyebrow\">L05 · SCRIPT 3 OF 6</div>\n\n<h1>After an industry day or conference.</h1>\n\n<p>The 24 hours after an industry day is the single highest-leverage window in federal BD. The KO remembers faces and conversations. The attendee list is fresh. Send the right message in that window and you skip past the cold-outreach phase entirely.</p>\n\n<div class=\"callout\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">THE SCRIPT</div>\n  <p style=\"margin:0;\">\"Hi [Name], it was great to meet you at [event name] on [date]. The discussion around [specific topic from the event] was particularly valuable. [Company Name] would be well-positioned to support [related requirement]. Would a brief follow-up call be appropriate?\"</p>\n</div>\n\n<h2>Three rules for this script</h2>\n\n<ul>\n  <li><strong>Send within 24 hours.</strong> By day three, half the attendees have already followed up. By day seven, you're a forgotten name on a sign-in sheet.</li>\n  <li><strong>Reference something specific.</strong> A panel topic, a question from the Q&amp;A, a comment the KO made. Generic \"great meeting you\" notes blur together.</li>\n  <li><strong>Tie your capability to what they discussed.</strong> If the panel covered zero trust architecture, your message mentions your zero trust work. If it covered facility maintenance, that's your hook.</li>\n</ul>\n\n<div class=\"callout\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">WHAT TO ATTACH</div>\n  <p style=\"margin:0;\">Pin your capability statement to your Featured section before the event. The KO clicks your profile when they accept the connection — you want a 1-pager waiting for them. Don't attach the PDF in the message. They'll see it on the profile.</p>\n</div>\n\n<div class=\"callout callout--emerald\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">FIELD TIP</div>\n  <p style=\"margin:0;\">After every industry day, pull the attendee list (often emailed to registrants or posted to the event page) and connect with every KO, COR, and program manager listed. Acceptance rate within the first 24 hours is typically 60% or higher. After 72 hours, it drops to about 20%.</p>\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "L06 · COMMENT-THEN-CONNECT",
+      "html": "<div class=\"eyebrow\">L06 · SCRIPT 4 OF 6</div>\n\n<h1>Comment-then-connect. The slow play that works.</h1>\n\n<p>This is the highest-acceptance approach for cold outreach. You comment thoughtfully on something the KO posted or shared, wait 24 to 48 hours, then send the connection request referencing the post. Acceptance rates run higher than any other cold approach because the KO has already seen your name in a positive context.</p>\n\n<div class=\"callout\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">STEP 1 · LEAVE A THOUGHTFUL COMMENT</div>\n  <p style=\"margin:0;\">On their post about an agency mission, initiative, hire, or industry day. Add something specific — a related project, a relevant data point, a follow-up question. No promotion of your firm. No links.</p>\n</div>\n\n<div class=\"callout\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">STEP 2 · WAIT 24 TO 48 HOURS</div>\n  <p style=\"margin:0;\">Long enough for the KO to see and likely react to your comment. Short enough that the post is still top of mind when the connection request lands.</p>\n</div>\n\n<div class=\"callout\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">STEP 3 · CONNECTION REQUEST</div>\n  <p style=\"margin:0;\">\"Hi [Name], I found your post on [topic] really insightful. [Company Name] works in this space — I'd welcome the chance to connect and exchange perspectives.\"</p>\n</div>\n\n<h2>What to comment on</h2>\n\n<table>\n  <thead>\n    <tr><th>Type of post</th><th>What a good comment looks like</th></tr>\n  </thead>\n  <tbody>\n    <tr>\n      <td>Agency mission or strategic initiative</td>\n      <td>A related public data point, a parallel from another agency, a clarifying question about scope.</td>\n    </tr>\n    <tr>\n      <td>New hire announcement at the agency</td>\n      <td>A brief \"congrats to [Name], looking forward to seeing the work in [area].\" Keep it short.</td>\n    </tr>\n    <tr>\n      <td>Industry day or conference announcement</td>\n      <td>\"Adding to the calendar. The [topic] panel is the one I'm most interested in.\"</td>\n    </tr>\n    <tr>\n      <td>Past award or contract announcement</td>\n      <td>\"Congratulations on the award. Curious how the [specific aspect] of the requirement is shaping execution.\"</td>\n    </tr>\n  </tbody>\n</table>\n\n<div class=\"callout callout--emerald\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">FIELD TIP</div>\n  <p style=\"margin:0;\"><strong>Best approach for cold outreach.</strong> Warms the connection before you ask for it. Pair this with a thoughtful Featured section and your acceptance rate climbs into the 70 to 80 percent range, versus around 30 percent for a true cold ask.</p>\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "L07 · AFTER A SOLICITATION",
+      "html": "<div class=\"eyebrow\">L07 · SCRIPT 5 OF 6</div>\n\n<h1>After a solicitation is released.</h1>\n\n<p>An RFP or RFQ is on the street and the KO is named in the notice. This is the message you send to flag intent to bid and request a clarifying call. Tread carefully — once a solicitation is active, every substantive question has to go through the formal Q&amp;A channel.</p>\n\n<div class=\"callout\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">THE SCRIPT</div>\n  <p style=\"margin:0;\">\"Hi [Name], I noticed [solicitation name] has been posted. [Company Name] has direct experience in [specific relevant area] and is preparing a response. Would it be appropriate to schedule a brief call to ask a couple of clarifying questions about the requirement?\"</p>\n</div>\n\n<h2>What you can and can't ask on that call</h2>\n\n<table>\n  <thead>\n    <tr><th>OK to ask</th><th>Don't ask</th></tr>\n  </thead>\n  <tbody>\n    <tr>\n      <td>Whether a pre-proposal site visit is planned</td>\n      <td>How they'll weigh price vs technical</td>\n    </tr>\n    <tr>\n      <td>Logistical questions about submission format</td>\n      <td>What the IGCE is or what the budget looks like</td>\n    </tr>\n    <tr>\n      <td>Whether amendments are expected</td>\n      <td>Whether your firm is the incumbent's likely competitor</td>\n    </tr>\n    <tr>\n      <td>Pointers to publicly available reference documents</td>\n      <td>Any feedback on your draft technical approach</td>\n    </tr>\n  </tbody>\n</table>\n\n<h2>Where the substantive questions go</h2>\n\n<ul>\n  <li><strong>SAM.gov Q&amp;A.</strong> Every active solicitation has a Q&amp;A tab. Questions and answers are published to all bidders. This is the only channel for clarifications that affect bid strategy.</li>\n  <li><strong>The contracting office email address.</strong> Listed in the notice. Use for procedural or administrative questions.</li>\n  <li><strong>Not LinkedIn DMs.</strong> Anything you ask informally about an active procurement creates an appearance issue for the KO. Don't put them in that spot.</li>\n</ul>\n\n<div class=\"callout callout--emerald\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">FIELD TIP</div>\n  <p style=\"margin:0;\"><strong>Cite the solicitation number in your email follow-up. Do not send sensitive questions via LinkedIn.</strong> If the KO agrees to a call, follow up by official email with the notice number in the subject line. Creates a clean paper trail and shows you understand the process.</p>\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "L08 · SMALL BUSINESS OFFICE",
+      "html": "<div class=\"eyebrow\">L08 · SCRIPT 6 OF 6</div>\n\n<h1>Small Business Office introduction.</h1>\n\n<p>OSDBU and small business representatives at every federal agency exist specifically to help small businesses navigate the agency. Reaching out to them is appropriate, expected, and one of the highest-yield touches you can make. They know who in the program offices to introduce you to, what set-asides are coming up, and which upcoming buys fit your profile.</p>\n\n<div class=\"callout\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">THE SCRIPT</div>\n  <p style=\"margin:0;\">\"Hi [Name], I understand you support small business outreach for [agency]. [Company Name] is a [cert status] small business focused on [capability]. We're actively pursuing opportunities with [agency]. I'd appreciate any guidance on the best way to connect with relevant program offices. Thank you for your work supporting small businesses.\"</p>\n</div>\n\n<h2>Why this is different from KO outreach</h2>\n\n<ul>\n  <li><strong>OSDBU reps are paid to take this meeting.</strong> Their performance is measured in part by small business engagement and set-aside award rates at their agency.</li>\n  <li><strong>They can introduce you to KOs directly.</strong> An internal warm intro from the OSDBU office gets a faster reply than any cold message you send.</li>\n  <li><strong>They know the forecast.</strong> Many agencies share their Small Business Procurement Forecast with OSDBU first. If you're a known small business in their orbit, you hear about upcoming buys months earlier.</li>\n</ul>\n\n<h2>What to bring to the first call</h2>\n\n<table>\n  <thead>\n    <tr><th>Item</th><th>Why it matters</th></tr>\n  </thead>\n  <tbody>\n    <tr><td><strong>Capability statement (1 page, PDF)</strong></td><td>OSDBU forwards this to relevant program offices. Make it specific, dated, and contact-info-complete.</td></tr>\n    <tr><td><strong>Your NAICS codes and certifications</strong></td><td>They filter introductions by NAICS and cert status. Give them the full list up front.</td></tr>\n    <tr><td><strong>2-3 target programs at the agency</strong></td><td>Specific is better than \"we want to work with you.\" Name the program offices you've identified as a fit.</td></tr>\n    <tr><td><strong>Past performance summary</strong></td><td>One paragraph per relevant past project. Public references only. Don't make them dig.</td></tr>\n  </tbody>\n</table>\n\n<div class=\"callout callout--emerald\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">FIELD TIP</div>\n  <p style=\"margin:0;\"><strong>OSDBU and small business reps are specifically there to help. This is appropriate and appreciated.</strong> Don't skip this step. Most firms go straight to the KO and miss the warm intro the OSDBU could have given them. Start every agency campaign with this message.</p>\n</div>\n"
+    },
+
+    {
+      "type": "back-cover",
+      "eyebrow": "WHAT'S NEXT",
+      "headline": "Six scripts won't matter if you can't see the next solicitation coming.",
+      "accentWord": "see",
+      "body": "CapturePilot tracks SAM.gov for the notices that match your NAICS, set-asides, and target agencies, then pulls the KO and contracting office contact info into your pipeline. Pair these scripts with the right list and you stop guessing who to reach out to. Free 14-day trial, no card required.",
+      "ctaText": "Get the full Federal Launch Kit",
+      "ctaUrl": "https://www.capturepilot.com/startup-pack",
+      "footerLabel": "CAPTUREPILOT · LINKEDIN OUTREACH SCRIPTS"
+    }
+  ]
+}

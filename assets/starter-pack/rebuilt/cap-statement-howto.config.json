@@ -1,0 +1,142 @@
+{
+  "id": "cap-statement-howto",
+  "title": "How to Write a Federal Capability Statement",
+  "slug": "cap-statement-howto",
+  "pages": 12,
+  "footerLabel": "CAPTUREPILOT · CAPABILITY STATEMENT KIT",
+  "headerLabel": "CAP STATEMENT KIT",
+  "parts": [
+    {
+      "type": "cover",
+      "eyebrow": "FEDERAL LAUNCH KIT · CAPABILITY STATEMENT",
+      "titleLines": [
+        "How to Write",
+        "a Federal",
+        "Capability Statement."
+      ],
+      "accentWord": "Statement.",
+      "pages": 12,
+      "toolStrip": [
+        { "num": "01", "title": "1-page rule", "desc": "Two pages max. Never longer." },
+        { "num": "02", "title": "5 sections", "desc": "Overview, competencies, diffs, past perf, certs" },
+        { "num": "03", "title": "Strong vs weak", "desc": "Side-by-side examples per section" },
+        { "num": "04", "title": "6-month rule", "desc": "When to refresh, what to change" }
+      ]
+    },
+
+    {
+      "type": "toc",
+      "title": "The single most-used document in federal contracting.",
+      "parts": [
+        {
+          "label": "/ HOW TO USE",
+          "items": [
+            { "code": "G01", "title": "Why this document decides early meetings", "desc": "Why a contracting officer keeps yours or trashes it in 12 seconds.", "page": 3 }
+          ]
+        },
+        {
+          "label": "PART ONE · THE FIVE SECTIONS",
+          "items": [
+            { "code": "S01", "title": "Section 1 — Company Overview", "desc": "Three sentences. Three questions answered in sequence. Strong and weak examples.", "page": 5 },
+            { "code": "S02", "title": "Section 2 — Core Competencies", "desc": "Four to six specific capabilities. Weak label vs strong description.", "page": 6 },
+            { "code": "S03", "title": "Section 3 — Differentiators", "desc": "Where most cap statements fail. The unique-attribute + evidence formula.", "page": 7 }
+          ]
+        },
+        {
+          "label": "PART TWO · PROOF + DESIGN",
+          "items": [
+            { "code": "S04", "title": "Section 4 — Past Performance", "desc": "Three to five contracts with the fields a CO actually checks.", "page": 9 },
+            { "code": "S05", "title": "Section 5 — Certifications & Contact", "desc": "What goes in the corner. Which certs are self-cert and which are verified.", "page": 10 },
+            { "code": "L01", "title": "Layout & Design Rules", "desc": "Length, logo, font, color, columns, file format, refresh cadence.", "page": 11 }
+          ]
+        }
+      ]
+    },
+
+    {
+      "type": "founder",
+      "headline": "Most cap statements get thrown out in the first 12 seconds.",
+      "accentWord": "12 seconds.",
+      "paragraphs": [
+        "A contracting officer at a mid-sized DoD command told me she gets about forty cap statements a week from small businesses chasing her NAICS. She keeps maybe three. The rest go in a folder she never opens again.",
+        "The three she keeps all do the same thing: they tell her in the first paragraph what the company does, who they do it for, and one number that proves they can actually do it. That's it. No mission statement. No 'committed to excellence.' No stock photos of handshakes.",
+        "I've written and rewritten about two hundred cap statements over the last few years. The ones that open doors are usually shorter than the ones that don't. They use real contract numbers. They list real references with real phone numbers. They sit on one page.",
+        "This guide is the version of the brief I give every client before they redo theirs. Five sections, the layout rules, and side-by-side examples of strong vs weak language so you can tell which one you've written."
+      ],
+      "ctaText": "Book a 30-min cap statement review",
+      "ctaUrl": "https://meetings-na2.hubspot.com/americurial/intro-call",
+      "ctaButtonLabel": "Book the call →",
+      "ctaEyebrow": "30 MIN · NO PITCH"
+    },
+
+    {
+      "type": "dark",
+      "partLabel": "PART ONE · THE FIVE SECTIONS",
+      "headline": "Five sections. One page. No filler.",
+      "accentWord": "filler.",
+      "paragraphs": [
+        "Every federal cap statement uses the same five sections in roughly the same order: Company Overview, Core Competencies, Differentiators, Past Performance, Certifications & Contact. That part isn't optional.",
+        "What is optional is how you fill them. The next three pages cover the first three sections, with side-by-side examples of language that works and language that gets you ignored."
+      ],
+      "headerLabel": "PART ONE"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "SECTION 1 · COMPANY OVERVIEW",
+      "html": "<div class=\"eyebrow\">SECTION 1 · COMPANY OVERVIEW</div>\n\n<h1>Two to four sentences. Three questions, in order.</h1>\n\n<p>The overview lives at the top of the page. It's the part a contracting officer reads before they decide whether to keep scrolling. It must answer three questions in sequence, in the same order, every time:</p>\n\n<ol>\n  <li><strong>What do you do?</strong> Your core service, not your mission statement.</li>\n  <li><strong>Who do you serve?</strong> Specific agencies or mission areas if possible.</li>\n  <li><strong>What's the proof?</strong> One concrete number that establishes credibility.</li>\n</ol>\n\n<div class=\"callout callout--emerald\">\n  <div style=\"font-family:'IBM Plex Mono', monospace; font-size:8.5pt; font-weight:600; letter-spacing:0.16em; color:#047857; text-transform:uppercase; margin-bottom:2mm;\">STRONG EXAMPLE</div>\n  <p style=\"margin:0;\">\"Meridian Defense Group provides cybersecurity and network operations services to DoD and Intelligence Community clients. We hold active Secret and TS/SCI cleared staff on 6 current federal contracts totaling $4.2M in active performance.\"</p>\n</div>\n\n<div class=\"callout\" style=\"border-left-color:#dc2626;\">\n  <div style=\"font-family:'IBM Plex Mono', monospace; font-size:8.5pt; font-weight:600; letter-spacing:0.16em; color:#dc2626; text-transform:uppercase; margin-bottom:2mm;\">WEAK EXAMPLE — AVOID</div>\n  <p style=\"margin:0 0 2mm 0;\">\"We are a dynamic small business committed to excellence in delivering solutions to our valued government clients.\"</p>\n  <p style=\"margin:0; color:#78716c; font-size:9.5pt;\">This says nothing concrete. Every bad cap statement reads like this. The CO has read it forty times this week.</p>\n</div>\n\n<div class=\"callout\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">WHY THIS WORKS</div>\n  <p style=\"margin:0;\">The strong version answers all three questions in one sentence each. \"Cybersecurity and network ops\" (what). \"DoD and IC\" (who). \"6 contracts, $4.2M\" (proof). A reader who only gets through the first paragraph still knows whether to call you.</p>\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "SECTION 2 · CORE COMPETENCIES",
+      "html": "<div class=\"eyebrow\">SECTION 2 · CORE COMPETENCIES</div>\n\n<h1>Four to six specific capabilities. Make each one a sentence, not a label.</h1>\n\n<p>This is the section every cap statement gets lazy on. People list five generic categories and move on. The contracting officer scanning your document needs to know <em>exactly</em> what you do — not what bucket you fit in.</p>\n\n<p>Every competency line should be:</p>\n<ul>\n  <li><strong>Specific</strong> enough that a contracting officer knows what you actually do</li>\n  <li><strong>Measurable</strong> where possible — scale, clearance level, technology stack</li>\n  <li><strong>Relevant</strong> to the agency's mission or a known procurement type</li>\n</ul>\n\n<table>\n  <thead>\n    <tr><th style=\"width:35%;\">Weak (don't do this)</th><th>Strong (do this)</th></tr>\n  </thead>\n  <tbody>\n    <tr>\n      <td>IT Support Services</td>\n      <td>Tier 2/3 helpdesk supporting 10,000+ end users on NIPR and SIPR networks</td>\n    </tr>\n    <tr>\n      <td>Construction Management</td>\n      <td>Design-Build construction management for healthcare and laboratory facilities, LEED certified</td>\n    </tr>\n    <tr>\n      <td>Consulting Services</td>\n      <td>Organizational redesign and M&amp;A integration for federal agencies undergoing BRAC consolidation</td>\n    </tr>\n    <tr>\n      <td>Cybersecurity</td>\n      <td>Zero Trust Architecture implementation, CMMC Level 2 consulting, and FISMA compliance audits</td>\n    </tr>\n    <tr>\n      <td>Logistics</td>\n      <td>OCONUS supply chain coordination for 3 active DLA contracts across CENTCOM and AFRICOM AORs</td>\n    </tr>\n  </tbody>\n</table>\n\n<div class=\"callout callout--emerald\">\n  <div style=\"font-family:'IBM Plex Mono', monospace; font-size:8.5pt; font-weight:600; letter-spacing:0.16em; color:#047857; text-transform:uppercase; margin-bottom:2mm;\">FIELD TIP</div>\n  <p style=\"margin:0;\">Read each line aloud and ask: <em>could ten other companies write this exact sentence?</em> If yes, it's still too generic. Add the scale, the customer, or the technology stack until only you could have written it.</p>\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "SECTION 3 · DIFFERENTIATORS",
+      "html": "<div class=\"eyebrow\">SECTION 3 · DIFFERENTIATORS</div>\n\n<h1>Where most cap statements collapse. Use the formula.</h1>\n\n<p>Differentiators are supposed to tell a contracting officer why you, specifically, can do this work better than the other forty cap statements on her desk. Most don't. Most list \"customer focus\" and \"quality work\" — which isn't a differentiator, it's the minimum bar.</p>\n\n<p>Use this formula on every bullet:</p>\n\n<div class=\"callout callout--emerald\" style=\"text-align:center;\">\n  <p style=\"margin:0; font-family:'IBM Plex Mono', monospace; font-size:11pt; font-weight:600; color:#047857;\">[Unique attribute] + [Evidence] + [Benefit to the agency]</p>\n</div>\n\n<p style=\"margin-top:6mm;\">Three examples that actually do the work:</p>\n\n<ul>\n  <li><strong>Only SDVOSB in the mid-Atlantic with both CMMC Level 2 certification AND TS/SCI cleared staff</strong> available for short-notice task orders. (Attribute: unique combo. Evidence: certifications. Benefit: speed.)</li>\n  <li><strong>Proprietary 4-phase O&amp;M transition methodology reduced facility downtime 34% on our last 3 federal handovers</strong> — referenced in our CPARS narratives. (Attribute: methodology. Evidence: number + CPARS. Benefit: lower transition risk.)</li>\n  <li><strong>12-year consecutive CPARS rating of 'Exceptional' across 18 federal contracts</strong> — available upon request. (Attribute: track record. Evidence: CPARS. Benefit: low performance risk.)</li>\n</ul>\n\n<div class=\"callout\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">WHAT TO STRIP</div>\n  <p style=\"margin:0 0 2mm 0;\">Cut anything that sounds like a brochure: \"customer focused,\" \"quality driven,\" \"results oriented,\" \"committed to excellence,\" \"trusted partner.\" None of those words mean anything to a contracting officer because every other vendor uses them.</p>\n  <p style=\"margin:0;\">If you can replace the word with its opposite and the sentence still sounds like marketing, the word isn't doing any work.</p>\n</div>\n"
+    },
+
+    {
+      "type": "dark",
+      "partLabel": "PART TWO · PROOF + DESIGN",
+      "headline": "Past performance, certifications, and the layout rules that make it look professional.",
+      "accentWord": "professional.",
+      "paragraphs": [
+        "Sections 4 and 5 are where you prove the claims you made on page one. Past performance shows you've done this before. Certifications show you're verified to do it. Without both, the rest of the document is just marketing.",
+        "The last page covers the layout discipline that separates a cap statement that looks like a contractor's brochure from one that looks like a vendor a CO will actually call back."
+      ],
+      "headerLabel": "PART TWO"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "SECTION 4 · PAST PERFORMANCE",
+      "html": "<div class=\"eyebrow\">SECTION 4 · PAST PERFORMANCE</div>\n\n<h1>Three to five contracts. The fields a CO actually checks.</h1>\n\n<p>Past performance turns a cap statement from a brochure into a vendor file. List three to five contracts, recent first. Include every field below. If you can't fill a field, leave the contract out — a half-listed contract is worse than no contract.</p>\n\n<table>\n  <thead>\n    <tr><th style=\"width:30%;\">Field</th><th>What to include</th></tr>\n  </thead>\n  <tbody>\n    <tr><td>Contracting agency</td><td>Customer name. If you were a sub, list the prime AND the federal agency the prime served.</td></tr>\n    <tr><td>Contract number</td><td>The actual contract or task order number. CO will look it up in FPDS.</td></tr>\n    <tr><td>Contract value</td><td>Your share — not the total prime value if you were a sub.</td></tr>\n    <tr><td>Period of performance</td><td>MM/YY to MM/YY. \"Ongoing\" is fine if current.</td></tr>\n    <tr><td>NAICS code</td><td>The NAICS the contract was awarded under. Shows relevance to the opportunity.</td></tr>\n    <tr><td>Reference POC</td><td>Name, title, phone, email. Someone who will actually pick up.</td></tr>\n  </tbody>\n</table>\n\n<div class=\"callout\" style=\"border-left-color:#10b981;\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">NO FEDERAL PAST PERFORMANCE YET?</div>\n  <p style=\"margin:0;\">Don't fake it. List 2-3 commercial projects, frame them with federal relevance, and include real references. See <strong>'06 — Converting Commercial Work to Federal Past Performance'</strong> for the full reframing playbook.</p>\n</div>\n\n<div class=\"callout callout--emerald\">\n  <div style=\"font-family:'IBM Plex Mono', monospace; font-size:8.5pt; font-weight:600; letter-spacing:0.16em; color:#047857; text-transform:uppercase; margin-bottom:2mm;\">FIELD TIP</div>\n  <p style=\"margin:0;\">Call every POC on your reference list every six months. One in three will have moved in a year — a dead reference is worse than no reference.</p>\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "SECTION 5 · CERTIFICATIONS & CONTACT",
+      "html": "<div class=\"eyebrow\">SECTION 5 · CERTIFICATIONS &amp; CONTACT</div>\n\n<h1>Only list what you actually hold.</h1>\n\n<p>Certifications go in the bottom-right corner of a one-page layout. Two rules: only list what you can prove, and use the verified source (not a self-cert) when one exists. A false claim here is federal certification fraud.</p>\n\n<table>\n  <thead>\n    <tr><th style=\"width:35%;\">Certification</th><th>What counts as proof</th></tr>\n  </thead>\n  <tbody>\n    <tr><td><strong>Active SAM.gov registration</strong></td><td>Required for every federal vendor. CAGE + UEI on the cap statement.</td></tr>\n    <tr><td><strong>Small Business designation</strong></td><td>NAICS-by-NAICS — show the codes you qualify under.</td></tr>\n    <tr><td><strong>SDVOSB / VOSB</strong></td><td>VetCert verified. Self-cert is no longer valid.</td></tr>\n    <tr><td><strong>8(a)</strong></td><td>Only if SBA-approved. Include cert date + program end date.</td></tr>\n    <tr><td><strong>HUBZone</strong></td><td>Only if SBA-certified. Recertify annually or status drops.</td></tr>\n    <tr><td><strong>WOSB / EDWOSB</strong></td><td>SAM self-cert is legally sufficient — third-party is stronger.</td></tr>\n    <tr><td><strong>Security clearances</strong></td><td>List clearance held by key staff. \"5 staff with TS/SCI\" beats \"cleared.\"</td></tr>\n    <tr><td><strong>Industry certs</strong></td><td>ISO 9001, CMMC, PMP, OSHA, LEED. Include certifying body + renewal year.</td></tr>\n  </tbody>\n</table>\n\n<div class=\"callout\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">CONTACT BLOCK</div>\n  <p style=\"margin:0;\">Company name, address, phone, email, website, SAM UEI, CAGE code, primary NAICS. Large enough to read at a glance.</p>\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "LAYOUT & DESIGN RULES",
+      "html": "<div class=\"eyebrow\">LAYOUT &amp; DESIGN RULES</div>\n\n<h1>It's a marketing document. Make it look like one.</h1>\n\n<p>A cap statement is the cover letter to every federal opportunity you'll ever chase. Break the rules below and your document goes in the trash pile regardless of how good the content is.</p>\n\n<table>\n  <thead>\n    <tr><th style=\"width:25%;\">Element</th><th>Guideline</th></tr>\n  </thead>\n  <tbody>\n    <tr><td><strong>Length</strong></td><td>One page preferred. Two pages absolute maximum. Never three.</td></tr>\n    <tr><td><strong>Logo</strong></td><td>Top-left. Vector format at print resolution — no pixelated PNGs.</td></tr>\n    <tr><td><strong>Font</strong></td><td>One font family, max two weights. 10-12pt body, 14-16pt headers.</td></tr>\n    <tr><td><strong>Color</strong></td><td>Match your brand. One consistent accent color for headers and bars.</td></tr>\n    <tr><td><strong>Columns</strong></td><td>Two columns — competencies left, past performance right.</td></tr>\n    <tr><td><strong>Contact</strong></td><td>Bottom of page. Large enough to read at arm's length.</td></tr>\n    <tr><td><strong>File format</strong></td><td>Send as PDF, never Word. <code>CompanyName_CapStatement_2026.pdf</code></td></tr>\n    <tr><td><strong>Update frequency</strong></td><td>Every 6 months, or immediately after a major new award.</td></tr>\n  </tbody>\n</table>\n\n<div class=\"callout callout--emerald\">\n  <div style=\"font-family:'IBM Plex Mono', monospace; font-size:8.5pt; font-weight:600; letter-spacing:0.16em; color:#047857; text-transform:uppercase; margin-bottom:2mm;\">REFRESH CADENCE + FINAL CHECK</div>\n  <p style=\"margin:0 0 2mm 0;\">Calendar reminder for January 1 and July 1. Re-verify every past performance reference, every certification expiry, every NAICS. A stale cap statement is a missed contract.</p>\n  <p style=\"margin:0;\">Then hand it to someone who's never seen your company. Give them 30 seconds. If they can't tell you what you do, who you do it for, and why the government should hire you — rewrite the overview.</p>\n</div>\n"
+    },
+
+    {
+      "type": "back-cover",
+      "eyebrow": "WHAT'S NEXT",
+      "headline": "Stop staring at a blank doc. Let the engine draft it.",
+      "accentWord": "draft",
+      "body": "CapturePilot's Capability Statement builder pulls your SAM.gov registration, past awards, and certifications, then drafts a one-page cap statement following the rules in this guide. Edit in-app or export to PDF. Free 14-day trial. No card.",
+      "ctaText": "Get the full Federal Launch Kit",
+      "ctaUrl": "https://www.capturepilot.com/startup-pack"
+    }
+  ]
+}

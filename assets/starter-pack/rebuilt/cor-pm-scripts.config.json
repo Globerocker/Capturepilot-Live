@@ -1,0 +1,149 @@
+{
+  "id": "cor-pm-scripts",
+  "title": "COR / Program Manager Conversation Scripts",
+  "slug": "cor-pm-conversation-scripts",
+  "pages": 12,
+  "footerLabel": "CAPTUREPILOT · COR / PM CONVERSATION SCRIPTS",
+  "headerLabel": "COR / PM SCRIPTS",
+  "parts": [
+    {
+      "type": "cover",
+      "eyebrow": "FEDERAL LAUNCH KIT · CONTRACTING OFFICER OUTREACH",
+      "titleLines": [
+        "Talk to your COR.",
+        "Keep the option",
+        "year."
+      ],
+      "accentWord": "option",
+      "pages": 12,
+      "toolStrip": [
+        { "num": "01", "title": "Kick-Off Scripts", "desc": "Land the relationship in the first 30 days" },
+        { "num": "02", "title": "Monthly Check-Ins", "desc": "The 5-minute call that protects CPARS" },
+        { "num": "03", "title": "Problem Disclosure", "desc": "How to break bad news without losing the option" },
+        { "num": "04", "title": "Option Year Ask", "desc": "The 60-day conversation that wins continuity" }
+      ]
+    },
+
+    {
+      "type": "toc",
+      "title": "Inside this guide.",
+      "footerLabel": "CAPTUREPILOT · COR / PM CONVERSATION SCRIPTS",
+      "parts": [
+        {
+          "label": "PART ONE · WHO THEY ARE AND WHY IT MATTERS",
+          "items": [
+            { "code": "C01", "title": "COR vs PM — who does what", "desc": "The two people who decide whether your option gets exercised. Know the difference.", "page": 4 },
+            { "code": "C02", "title": "What good performance management looks like", "desc": "Cadence, transparency, and the four touchpoints that move CPARS.", "page": 5 },
+            { "code": "C03", "title": "The cost of a silent contract", "desc": "Why \"no news\" is the worst news on a federal contract.", "page": 6 }
+          ]
+        },
+        {
+          "label": "PART TWO · FIVE SCRIPTS YOU'LL USE EVERY YEAR",
+          "items": [
+            { "code": "C04", "title": "Script 1 — Kick-off meeting opening", "desc": "Land the relationship on day one with the right tone.", "page": 8 },
+            { "code": "C05", "title": "Script 2 — Monthly status check-in", "desc": "The five-minute call that prevents 90% of CPARS surprises.", "page": 9 },
+            { "code": "C06", "title": "Script 3 — Proactive problem disclosure", "desc": "Break bad news in a way that protects the relationship.", "page": 10 },
+            { "code": "C07", "title": "Script 4 — CPARS interim review request", "desc": "Get the honest feedback before the formal evaluation.", "page": 11 },
+            { "code": "C08", "title": "Script 5 — Option year conversation", "desc": "The 60-day ask that wins the next year of revenue.", "page": 11 }
+          ]
+        }
+      ]
+    },
+
+    {
+      "type": "founder",
+      "headline": "I lost an option year because I never picked up the phone.",
+      "accentWord": "phone",
+      "paragraphs": [
+        "Year one of my first federal contract, I shipped every deliverable on time. Clean invoices, no missed dates, no warranty claims. I thought I was running a perfect contract.",
+        "Six months in, the COR stopped answering emails for two weeks. I assumed she was busy. Three months later the contract ended and the option wasn't exercised. The debrief took 20 minutes. The PM had been frustrated by something small in month three — a status report format I'd changed without asking — and nobody on my side knew. He told the COR. The COR told nobody. By the time the option decision came up, the file had \"acceptable but not preferred\" written all over it.",
+        "Performance doesn't keep you on the contract. Relationship does. The COR and PM are talking to each other every week about your work. If you're not in those conversations, you don't get to defend yourself.",
+        "These five scripts are what I use now. Kick-off, monthly, problem, CPARS, option year. Copy them. Adapt them to your voice. The discipline is calling on a cadence, not having the perfect words. The first call is the hardest. By month four you're running the playbook in your sleep."
+      ],
+      "ctaText": "Book a B2G Audit call",
+      "ctaUrl": "https://meetings-na2.hubspot.com/americurial/intro-call",
+      "ctaButtonLabel": "Book the call →",
+      "ctaEyebrow": "30 MIN · NO PITCH",
+      "footerLabel": "CAPTUREPILOT · COR / PM CONVERSATION SCRIPTS"
+    },
+
+    {
+      "type": "dark",
+      "partLabel": "PART ONE · WHO THEY ARE AND WHY IT MATTERS",
+      "headline": "The COR writes the CPARS. The PM decides if the option gets exercised. You need both.",
+      "accentWord": "both",
+      "paragraphs": [
+        "The Contracting Officer signs the contract. The Contracting Officer's Representative (COR) lives with it day to day. The Program Manager (PM) owns the mission outcome. These are your two relationships once the award is in hand, and the next three pages explain what each one cares about and why most contractors get the cadence wrong.",
+        "Get this right and you'll know your CPARS rating before it's written. Get it wrong and you'll find out at the same time the next contracting officer does."
+      ],
+      "footerLabel": "CAPTUREPILOT · COR / PM CONVERSATION SCRIPTS",
+      "headerLabel": "PART ONE"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "C01 · COR vs PM",
+      "html": "<div class=\"eyebrow\">C01 · WHO DOES WHAT</div>\n\n<h1>Two people, two different conversations. Know which one you're having.</h1>\n\n<p>On most federal contracts you'll have a Contracting Officer's Representative (COR) and a separate Program Manager (PM). Sometimes they're the same person. Most of the time they're not. The roles overlap, and contractors who treat them as interchangeable miss the signal.</p>\n\n<table>\n  <thead>\n    <tr><th>Role</th><th>What they own</th><th>What they care about</th></tr>\n  </thead>\n  <tbody>\n    <tr>\n      <td><strong>Contracting Officer's Representative (COR)</strong></td>\n      <td>Day-to-day administration of the contract. Reviews deliverables, approves invoices, writes the CPARS rating, surfaces problems to the Contracting Officer.</td>\n      <td>Documentation, compliance, no surprises. They get judged on whether the contract runs cleanly.</td>\n    </tr>\n    <tr>\n      <td><strong>Program Manager (PM)</strong></td>\n      <td>The mission outcome the contract was bought to deliver. Decides whether the work is actually solving the problem and whether the option year is worth it.</td>\n      <td>Results, responsiveness, whether your team understands what they're trying to accomplish. They own the budget decision.</td>\n    </tr>\n    <tr>\n      <td><strong>Contracting Officer (CO)</strong></td>\n      <td>The contract itself — signature authority, mods, terminations. You'll talk to them rarely after award.</td>\n      <td>Legal cover, FAR compliance, contract file integrity.</td>\n    </tr>\n  </tbody>\n</table>\n\n<h2>Where the lines blur</h2>\n\n<ul>\n  <li><strong>The COR can recommend an option non-exercise.</strong> The CO signs it, but the recommendation comes from the COR's CPARS narrative and the PM's mission feedback.</li>\n  <li><strong>The PM rarely writes CPARS directly.</strong> They give input to the COR. If the PM is frustrated and you don't know, the COR's narrative will reflect it.</li>\n  <li><strong>Some agencies combine the roles.</strong> Small civilian agencies often have one person doing both jobs. Same scripts apply, fewer meetings.</li>\n</ul>\n\n<div class=\"callout callout--emerald\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">WHY THIS MATTERS</div>\n  <p style=\"margin:0;\"><strong>Your monthly check-in goes to the COR. Your quarterly performance summary goes to the PM.</strong> Different audiences, different message. The COR wants to know the contract is clean. The PM wants to know the mission is on track.</p>\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "C02 · CADENCE",
+      "html": "<div class=\"eyebrow\">C02 · WHAT GOOD LOOKS LIKE</div>\n\n<h1>Cadence beats charisma. The contractors who keep options are on a schedule, not a feeling.</h1>\n\n<p>Most option non-exercises trace back to a relationship that went silent in months 4 through 8. You delivered the work. You sent the invoices. You stopped calling. By the time the option decision lands, the COR has nothing to defend you with.</p>\n\n<div class=\"stat-row\">\n  <div class=\"stat-card\">\n    <div class=\"stat-value\">5 min</div>\n    <div class=\"stat-label\">MONTHLY CHECK-IN</div>\n    <div class=\"stat-sub\">Often nothing more</div>\n  </div>\n  <div class=\"stat-card\">\n    <div class=\"stat-value\">30 min</div>\n    <div class=\"stat-label\">QUARTERLY REVIEW</div>\n    <div class=\"stat-sub\">Written summary + metrics</div>\n  </div>\n  <div class=\"stat-card\">\n    <div class=\"stat-value\">60 days</div>\n    <div class=\"stat-label\">PRE-OPTION CONVERSATION</div>\n    <div class=\"stat-sub\">Before the decision lands on the CO's desk</div>\n  </div>\n</div>\n\n<h2>The four touchpoints that move CPARS</h2>\n\n<ol>\n  <li><strong>Weekly brief email.</strong> Two to four sentences, even when nothing changed. Builds the habit. Creates the paper trail.</li>\n  <li><strong>Monthly 30-minute call.</strong> Standing slot on the COR's calendar. Same time every month. They can cancel — but the slot exists.</li>\n  <li><strong>Quarterly written performance summary.</strong> One page. Metrics, deliverables shipped, risks flagged, asks. The COR forwards it to the PM.</li>\n  <li><strong>Six-month CPARS interim conversation.</strong> Request a 20-minute meeting before the formal rating is drafted. You'll hear what's coming and have a chance to fix what's fixable.</li>\n</ol>\n\n<div class=\"callout\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">FIELD TIP</div>\n  <p style=\"margin:0;\">Book the standing monthly call in week one of the contract. Use a recurring calendar invite, not an ad-hoc email each month. The friction of asking every time is what kills the cadence by month four.</p>\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "C03 · SILENT CONTRACTS",
+      "html": "<div class=\"eyebrow\">C03 · THE COST OF NO NEWS</div>\n\n<h1>A silent contract is a contract you're already losing. You just don't know it yet.</h1>\n\n<p>Most contractors stop calling the COR around month four. The work is in rhythm, the invoices are clearing, the team is heads-down on delivery. From the COR's chair, the file is going quiet — and quiet is not what they want.</p>\n\n<h2>What the COR is doing when you're not talking</h2>\n\n<ul>\n  <li><strong>Reading status reports without context.</strong> The numbers look fine but they can't ask follow-ups. They infer, sometimes wrong.</li>\n  <li><strong>Hearing the PM's frustrations one-sided.</strong> If the PM is unhappy about something small, you're not in the room to explain or fix it.</li>\n  <li><strong>Drafting the CPARS narrative.</strong> Most CORs write the narrative from memory plus the file. If your last memorable contact was the kick-off, your narrative will read like a kick-off.</li>\n  <li><strong>Listening to the next prime pitching them.</strong> Competitors are calling your CORs the same way you should be. They're asking how the current vendor is doing and offering themselves as a follow-on option.</li>\n</ul>\n\n<table>\n  <thead>\n    <tr><th>What the COR thinks</th><th>When you're silent</th><th>When you're calling monthly</th></tr>\n  </thead>\n  <tbody>\n    <tr>\n      <td>About the team</td>\n      <td>Faceless contractor</td>\n      <td>Named operators they trust</td>\n    </tr>\n    <tr>\n      <td>About problems</td>\n      <td>Hidden until they explode</td>\n      <td>Flagged early with a plan</td>\n    </tr>\n    <tr>\n      <td>About the option</td>\n      <td>Unclear, defaults to \"compete it\"</td>\n      <td>Already framed as continuity</td>\n    </tr>\n    <tr>\n      <td>About CPARS</td>\n      <td>Mostly file review</td>\n      <td>Memory of specific wins</td>\n    </tr>\n  </tbody>\n</table>\n\n<div class=\"callout callout--emerald\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">BOTTOM TRUTH</div>\n  <p style=\"margin:0;\">The contract that gets re-competed is almost always the one that went silent in the middle. Pick up the phone in month four. Send the quarterly summary in month six. Ask for the interim CPARS in month seven. The work is the same. The outcome is different.</p>\n</div>\n"
+    },
+
+    {
+      "type": "dark",
+      "partLabel": "PART TWO · FIVE SCRIPTS YOU'LL USE EVERY YEAR",
+      "headline": "Five scripts. One playbook. Use them on every federal contract you hold.",
+      "accentWord": "Five",
+      "paragraphs": [
+        "These scripts came out of a $4M contract we ran for an Army program office, and a couple of recompetes that didn't go our way. The phrasing isn't sacred — adapt to your voice. The structure is what matters: tone, sequencing, what to put in writing.",
+        "Kick-off in week one. Monthly check-ins through year one. Proactive disclosure when something breaks. CPARS interim at month six. Option year ask at month ten. Run that cycle on every contract and the option exercise rate climbs sharply inside a year."
+      ],
+      "footerLabel": "CAPTUREPILOT · COR / PM CONVERSATION SCRIPTS",
+      "headerLabel": "PART TWO"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "C04 · SCRIPT 1 — KICK-OFF",
+      "html": "<div class=\"eyebrow\">C04 · SCRIPT 1 · KICK-OFF MEETING OPENING</div>\n\n<h1>Land the relationship on day one. Tone now sets cadence later.</h1>\n\n<p>The kick-off is your one shot to set expectations on both sides. Get the tone right and the COR knows you'll be easy to work with. Get it wrong and every monthly call after this one will feel like a rescue mission.</p>\n\n<div class=\"callout\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">THE SCRIPT</div>\n  <p style=\"margin:0;\">\"Thank you all for joining today. [Company Name] is honored to be supporting [Agency] on this mission. Before we get into the technical details, I want to share our team's commitment: we'll be proactive, transparent, and responsive throughout this contract. If something isn't working, I want you to tell me before it becomes a problem, and I'll do the same. Our goal is a CPARS rating that reflects the effort this team is going to put in. Now, let me introduce our proposed team structure...\"</p>\n</div>\n\n<h2>Why this works</h2>\n\n<ul>\n  <li><strong>You name the relationship explicitly.</strong> Most contractors talk about deliverables. You're talking about how you'll behave when things go wrong. That's what the COR remembers.</li>\n  <li><strong>You ask for early warning.</strong> The phrase \"tell me before it becomes a problem\" gives the COR permission to flag things they'd otherwise sit on.</li>\n  <li><strong>You name CPARS out loud.</strong> Most vendors avoid the word because it sounds transactional. Saying it early shows you understand the game and you're playing for the long term.</li>\n  <li><strong>You commit before you ask.</strong> Proactive, transparent, responsive — three behaviors the agency wishes every contractor would default to.</li>\n</ul>\n\n<div class=\"callout callout--emerald\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">FIELD TIP</div>\n  <p style=\"margin:0;\">Send a short follow-up email within 24 hours: thank you, recap of the team structure, proposed cadence for monthly check-ins, and a calendar invite for the first one. Don't wait for the COR to schedule it.</p>\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "C05 · SCRIPT 2 — MONTHLY",
+      "html": "<div class=\"eyebrow\">C05 · SCRIPT 2 · MONTHLY STATUS CHECK-IN</div>\n\n<h1>Five minutes once a month is enough to keep the relationship in your column.</h1>\n\n<p>The monthly call is the smallest, highest-leverage move on this list. You're not selling anything. You're not asking for anything. You're confirming the work is on track and surfacing one risk before it becomes a problem.</p>\n\n<div class=\"callout\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">THE SCRIPT</div>\n  <p style=\"margin:0;\">\"Good [morning/afternoon], [Name]. Quick update from our side: [Deliverable X] was submitted on [date] — any feedback from your end? We're on track for [next milestone] on [date]. One thing I want to flag proactively: [specific risk or challenge] — our mitigation plan is [brief description]. Anything on your end I should know about? Any changes to your priorities or upcoming requirements I can help you plan for?\"</p>\n</div>\n\n<h2>Four moves inside one short call</h2>\n\n<table>\n  <thead>\n    <tr><th>Move</th><th>What it accomplishes</th></tr>\n  </thead>\n  <tbody>\n    <tr>\n      <td><strong>1. Confirm a delivered item</strong></td>\n      <td>Triggers feedback you'd otherwise never hear. Most COR feedback only comes when prompted.</td>\n    </tr>\n    <tr>\n      <td><strong>2. Affirm the next milestone</strong></td>\n      <td>Builds the calendar in their head. They start tracking with you instead of after you.</td>\n    </tr>\n    <tr>\n      <td><strong>3. Flag one risk proactively</strong></td>\n      <td>Demonstrates you're managing the work, not riding it. Even a small risk well-flagged builds trust.</td>\n    </tr>\n    <tr>\n      <td><strong>4. Ask about their world</strong></td>\n      <td>This is where you learn about upcoming requirements, budget pressure, and the next opportunity months before it's posted.</td>\n    </tr>\n  </tbody>\n</table>\n\n<div class=\"callout callout--emerald\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">FIELD TIP</div>\n  <p style=\"margin:0;\">Send a 4-line recap email after every monthly call. Date, what we discussed, what we agreed, when the next call is. The COR forwards it to the PM half the time without telling you. That's how the PM stays in the loop.</p>\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "C06 · SCRIPT 3 — PROBLEM",
+      "html": "<div class=\"eyebrow\">C06 · SCRIPT 3 · PROACTIVE PROBLEM DISCLOSURE</div>\n\n<h1>Break bad news first. Always with a plan attached.</h1>\n\n<p>Problems on federal contracts are not the issue. Hidden problems are. The COR's biggest fear is being surprised in front of the PM or the CO. Your job when something breaks is to call before they hear it from anyone else, and to bring a fix with you.</p>\n\n<div class=\"callout\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">THE SCRIPT</div>\n  <p style=\"margin:0;\">\"[Name], I need to brief you on something. [Clear description of the issue]. Here's what happened: [facts, no spin]. Our plan to resolve it is [specific steps, timelines, owners]. The impact on performance is [honest assessment]. I wanted to bring this to you directly rather than let you find out another way. Can we schedule 20 minutes this week to walk through our remediation plan?\"</p>\n</div>\n\n<h2>The four rules of disclosure</h2>\n\n<ol>\n  <li><strong>You call first.</strong> Not email. Phone. Email is the follow-up. The call is the trust move.</li>\n  <li><strong>Facts before plan.</strong> Tell them what happened in plain language before you tell them what you're doing about it. Don't lead with the fix — it reads like deflection.</li>\n  <li><strong>Honest impact.</strong> Don't soften the assessment. If it pushes delivery by two weeks, say two weeks. If it costs $18,000 in rework, say $18,000. Soft estimates that drift bigger destroy credibility faster than the original problem.</li>\n  <li><strong>Plan with owners and dates.</strong> A fix without a name and a date is a wish. Bring both.</li>\n</ol>\n\n<div class=\"callout callout--emerald\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">WHY THIS WORKS</div>\n  <p style=\"margin:0;\"><strong>Transparency about problems, delivered early with a plan, consistently produces better CPARS outcomes than attempted cover-ups.</strong> The CORs we've talked to all say the same thing: the contractor who calls first when something breaks is the contractor who keeps the option.</p>\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "C07/C08 · CPARS + OPTION YEAR",
+      "html": "<div class=\"eyebrow\">C07 · SCRIPT 4 · CPARS INTERIM REVIEW REQUEST</div>\n\n<h1>Get the honest feedback before the formal rating is locked in.</h1>\n\n<p>Around month six you'll be approaching the interim CPARS window. Most contractors find out their rating when it's posted. The ones who keep options ask for the conversation 30 days before the draft is written.</p>\n\n<div class=\"callout\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">THE SCRIPT</div>\n  <p style=\"margin:0;\">\"[Name], we're approaching our 6-month interim CPARS period. We'd welcome a brief conversation to get your honest assessment of our performance so far. We're particularly focused on [area] and [area] and would value your feedback on whether we're meeting your expectations. Is there anything we could be doing differently that would make your job easier?\"</p>\n</div>\n\n<h2>What you're actually asking for</h2>\n\n<ul>\n  <li><strong>A preview of the rating direction.</strong> You'll hear whether it's tracking Satisfactory, Very Good, or Exceptional. That gives you 60 to 90 days to course-correct.</li>\n  <li><strong>The one thing they wish was different.</strong> Every COR has it. Most won't volunteer it. Asking the question gives them permission.</li>\n  <li><strong>An ask back: what would make your job easier?</strong> Often a small format change, a reporting cadence, an escalation path. Free wins.</li>\n</ul>\n\n<div class=\"eyebrow\" style=\"margin-top:8mm;\">C08 · SCRIPT 5 · OPTION YEAR CONVERSATION</div>\n\n<h1>Ask for the option year 60 days before the decision lands on the CO's desk.</h1>\n\n<div class=\"callout\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">THE SCRIPT</div>\n  <p style=\"margin:0;\">\"We're coming up on the option year decision point and want to make our case directly: [Specific results from the base year — deliverables delivered, metrics met, value-adds provided]. We've also invested in [capability upgrade, new personnel, new tool] that will make option year performance even stronger. We're committed to this mission and would welcome the opportunity to continue. Is there anything we can do in the next 60 days to support a positive option exercise decision?\"</p>\n</div>\n\n<h2>Relationship maintenance checklist</h2>\n\n<table>\n  <thead>\n    <tr><th>Cadence</th><th>Action</th></tr>\n  </thead>\n  <tbody>\n    <tr><td><strong>Weekly</strong></td><td>Send a brief status email even when no problems exist</td></tr>\n    <tr><td><strong>Monthly</strong></td><td>Schedule a standing 30-minute call with the COR</td></tr>\n    <tr><td><strong>Quarterly</strong></td><td>Provide a written performance summary with metrics</td></tr>\n    <tr><td><strong>Six months</strong></td><td>Request an interim CPARS discussion</td></tr>\n    <tr><td><strong>Annually</strong></td><td>Brief the PM on team changes, capability additions, upcoming capacity</td></tr>\n    <tr><td><strong>Pre-option</strong></td><td>Document all performance wins; request a meeting to discuss continuity</td></tr>\n  </tbody>\n</table>\n"
+    },
+
+    {
+      "type": "back-cover",
+      "eyebrow": "WHAT'S NEXT",
+      "headline": "Don't lose the option year on a silent contract.",
+      "accentWord": "silent",
+      "body": "CapturePilot tracks every contract in your pipeline — kick-off date, CPARS interim window, option year decision. The platform reminds you when each conversation is due and surfaces the right script for the moment. Free 14-day trial, no card. Get the full Federal Launch Kit at capturepilot.com/startup-pack.",
+      "ctaText": "Get the full Federal Launch Kit",
+      "ctaUrl": "https://www.capturepilot.com/startup-pack",
+      "footerLabel": "CAPTUREPILOT · COR / PM CONVERSATION SCRIPTS"
+    }
+  ]
+}

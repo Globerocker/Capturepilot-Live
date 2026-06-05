@@ -1,0 +1,185 @@
+{
+  "id": "rfp-playbook",
+  "title": "Solicitation / RFP Response Playbook",
+  "slug": "rfp-playbook",
+  "pages": 18,
+  "footerLabel": "CAPTUREPILOT · SOLICITATION / RFP RESPONSE PLAYBOOK",
+  "headerLabel": "RFP RESPONSE",
+  "parts": [
+    {
+      "type": "cover",
+      "eyebrow": "FEDERAL LAUNCH KIT · SOLICITATION PLAYBOOKS",
+      "titleLines": [
+        "Write a winning",
+        "federal proposal.",
+        "Not a resume."
+      ],
+      "accentWord": "winning",
+      "pages": 18,
+      "toolStrip": [
+        { "num": "01", "title": "RFP Shred", "desc": "Section C, L, M, H, attachments" },
+        { "num": "02", "title": "Win Strategy", "desc": "Themes, discriminators, ghosting" },
+        { "num": "03", "title": "Three Volumes", "desc": "Tech, Mgmt, Price done right" },
+        { "num": "04", "title": "Submission", "desc": "Final checklist that catches rejects" }
+      ]
+    },
+
+    {
+      "type": "toc",
+      "title": "Inside this playbook.",
+      "footerLabel": "CAPTUREPILOT · SOLICITATION / RFP RESPONSE PLAYBOOK",
+      "parts": [
+        {
+          "label": "/ ORIENTATION",
+          "items": [
+            { "code": "G01", "title": "What a Federal RFP Actually Is", "desc": "The argument vs the resume — what evaluators are really scoring.", "page": 3 }
+          ]
+        },
+        {
+          "label": "PART ONE · TEAR THE RFP APART",
+          "items": [
+            { "code": "P01", "title": "Phase 1 — Structured RFP Shred (Days 1-3)", "desc": "Section C, L, M, H, and attachments. What to extract and what to output.", "page": 5 },
+            { "code": "P02", "title": "Building the Compliance Matrix", "desc": "Every shall, will, must — mapped to a section owner.", "page": 6 },
+            { "code": "P03", "title": "Phase 2 — Win Strategy (Days 3-7)", "desc": "Win themes, competitor analysis, discriminators, kickoff.", "page": 7 }
+          ]
+        },
+        {
+          "label": "PART TWO · WRITE THE THREE VOLUMES",
+          "items": [
+            { "code": "P04", "title": "Technical Volume — Where Proposals Are Won", "desc": "The five-part pattern for every major task plus the ghost writing test.", "page": 9 },
+            { "code": "P05", "title": "Management Volume Checklist", "desc": "Org chart, key personnel, QC, transition, risk.", "page": 11 },
+            { "code": "P06", "title": "Price Volume Basics", "desc": "Section B, wage determinations, indirect rates, DCAA.", "page": 13 },
+            { "code": "P07", "title": "Common Mistakes That Get You Tossed", "desc": "Non-responsive, page-limit busts, missed amendments.", "page": 14 },
+            { "code": "P08", "title": "Final Submission Checklist", "desc": "Forms, file naming, portal test, confirmation email.", "page": 16 }
+          ]
+        }
+      ]
+    },
+
+    {
+      "type": "founder",
+      "headline": "Most small primes write proposals like resumes. Evaluators don't read resumes.",
+      "accentWord": "evaluators",
+      "paragraphs": [
+        "First federal proposal I helped write was 142 pages. We described the company. We described the team. We described how much we cared about quality. We lost to a 38-page response that answered the actual question — can you do this work, here, for this price.",
+        "A federal RFP is an argument, not a resume. Section M tells you exactly how the evaluators will score you. Section L tells you exactly how to format the argument. Section C tells you what work has to get done. If your proposal doesn't trace, line by line, back to those three sections, it doesn't matter how good your company is.",
+        "This playbook is the response process we run with clients now. Three weeks, three volumes, one compliance matrix. Same pattern whether you're chasing a $250K SAP buy or a $40M IDIQ. The discipline is what wins. The discipline is also the part nobody teaches you.",
+        "Read it before you start your next response. Re-read Phase 1 the day the RFP drops. That's the part that decides whether the rest is worth doing."
+      ],
+      "ctaText": "Book a 30-min proposal review",
+      "ctaUrl": "https://meetings-na2.hubspot.com/americurial/intro-call",
+      "ctaButtonLabel": "Book the call →",
+      "ctaEyebrow": "30 MIN · NO PITCH",
+      "footerLabel": "CAPTUREPILOT · SOLICITATION / RFP RESPONSE PLAYBOOK"
+    },
+
+    {
+      "type": "dark",
+      "partLabel": "PART ONE · TEAR THE RFP APART",
+      "headline": "Day one decides everything. Most teams skip it.",
+      "accentWord": "everything",
+      "paragraphs": [
+        "Federal response windows run 30 to 60 days. The companies that win spend the first three days reading, not writing. They build a structured shred of every section that matters — C, L, M, H, plus the attachments most teams ignore.",
+        "Skip the shred and you'll discover the Section L page limit on day 25, the unannounced security requirement on day 28, and the wage determination that kills your margin on day 31. By then you can't fix it. The next five pages are the shred you should have done."
+      ],
+      "footerLabel": "CAPTUREPILOT · SOLICITATION / RFP RESPONSE PLAYBOOK",
+      "headerLabel": "PART ONE · SHRED"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "P01 · STRUCTURED RFP SHRED",
+      "html": "<div class=\"eyebrow\">PHASE 1 · DAYS 1-3</div>\n<h1>The shred. Five sections, one matrix, no writing yet.</h1>\n<p>A federal RFP is an argument — not a resume. The evaluators are asking one question: can this company do this work, on time, at this price, without becoming our problem? Your job is to prove it, structured exactly the way Section M tells you to.</p>\n<p>Before you write a single word of prose, run this shred. It usually takes one senior person two days. If you can't spare that time, you can't afford to bid.</p>\n\n<h2>The three numbers that frame every response</h2>\n<table>\n  <thead><tr><th>Number</th><th>What it represents</th><th>Why it matters</th></tr></thead>\n  <tbody>\n    <tr><td><strong>30-60 days</strong></td><td>Typical federal response window.</td><td>Start the shred on day one. Skip it and you'll discover blockers on day 25.</td></tr>\n    <tr><td><strong>3 volumes</strong></td><td>Technical + Management + Price.</td><td>Each has a different reader, scoring weight, and failure mode.</td></tr>\n    <tr><td><strong>100 points</strong></td><td>Typical evaluation total in Section M.</td><td>Know the weight split before you decide how deep to write each section.</td></tr>\n  </tbody>\n</table>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "P01 · SHRED (CONT.)",
+      "html": "<div class=\"eyebrow\">PHASE 1 · CONTINUED</div>\n<h1>Section-by-section: what to extract, what to output.</h1>\n<table>\n  <thead>\n    <tr><th>RFP Section</th><th>What to Extract</th><th>What to Output</th></tr>\n  </thead>\n  <tbody>\n    <tr>\n      <td><strong>Section C</strong><br><span style=\"color:#78716c; font-size:9pt;\">PWS / SOW</span></td>\n      <td>Every task, deliverable, and requirement. Highlight every <em>shall</em>, <em>will</em>, and <em>must</em> in yellow. Note frequency, location, deliverable format.</td>\n      <td>Requirements matrix — the spine of your compliance matrix and your technical volume outline.</td>\n    </tr>\n    <tr>\n      <td><strong>Section L</strong><br><span style=\"color:#78716c; font-size:9pt;\">Instructions to Offerors</span></td>\n      <td>Page limits per volume, font, margins, line spacing, file format, volume order, submission portal, due date and time zone.</td>\n      <td>Proposal outline template with hard page limits baked into every section header.</td>\n    </tr>\n    <tr>\n      <td><strong>Section M</strong><br><span style=\"color:#78716c; font-size:9pt;\">Evaluation Criteria</span></td>\n      <td>Factor weights, LPTA vs Best Value, technical vs price trade-off language, sub-factor descriptions in order.</td>\n      <td>Scoring guide for your writer team — they write to the criteria, in the criteria's order.</td>\n    </tr>\n    <tr>\n      <td><strong>Section H</strong><br><span style=\"color:#78716c; font-size:9pt;\">Special Contract Requirements</span></td>\n      <td>Transition plan, security clearances, reporting cadence, key personnel commitments, government-furnished property.</td>\n      <td>Risk and compliance checklist with go/no-go items flagged for the capture lead.</td>\n    </tr>\n    <tr>\n      <td><strong>Attachments</strong><br><span style=\"color:#78716c; font-size:9pt;\">DD254, WDs, CDRLs</span></td>\n      <td>DD254 classification guide, DoL wage determination, CDRLs, reporting templates, government-furnished equipment lists.</td>\n      <td>Folded into the relevant volume — wage determinations into Price, DD254 into Management.</td>\n    </tr>\n  </tbody>\n</table>\n\n<div class=\"callout callout--emerald\">\n  <div style=\"font-family:'IBM Plex Mono', monospace; font-size:8.5pt; font-weight:600; letter-spacing:0.16em; color:#047857; text-transform:uppercase; margin-bottom:2mm;\">FIELD TIP</div>\n  <strong>Section L beats Section C every time.</strong> A perfectly compliant technical answer in the wrong volume order, with the wrong file name, or one page over the limit gets marked non-responsive and never scored. Section L is the gate. Section C is the test.\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "P02 · COMPLIANCE MATRIX",
+      "html": "<div class=\"eyebrow\">PHASE 1 · THE COMPLIANCE MATRIX</div>\n<h1>Every shall, will, and must — mapped to one owner.</h1>\n<p>The compliance matrix is a spreadsheet. Boring. Tedious. The single most important document in your response. Build it from the Section C shred and every evaluator will see, line by line, that you read the requirement and answered it.</p>\n\n<table>\n  <thead>\n    <tr><th>Column</th><th>What goes in</th><th>Why it matters</th></tr>\n  </thead>\n  <tbody>\n    <tr>\n      <td><strong>Req ID</strong></td>\n      <td>C.3.1, C.3.2.a — exact section number from the PWS.</td>\n      <td>Lets the evaluator find it without searching. They will not search.</td>\n    </tr>\n    <tr>\n      <td><strong>Requirement text</strong></td>\n      <td>Verbatim quote of the shall/will/must sentence.</td>\n      <td>No paraphrase. Paraphrase is where compliance gets lost.</td>\n    </tr>\n    <tr>\n      <td><strong>Volume / Section</strong></td>\n      <td>Tech §2.3 or Mgmt §1.4 — exactly where in your proposal it is addressed.</td>\n      <td>Evaluator scoring sheet maps to this column.</td>\n    </tr>\n    <tr>\n      <td><strong>Owner</strong></td>\n      <td>One name. Not a team. Not a department.</td>\n      <td>If two people own it, nobody does.</td>\n    </tr>\n    <tr>\n      <td><strong>Status</strong></td>\n      <td>Draft / In review / Final / Verified.</td>\n      <td>The pink-team and red-team gates run off this column.</td>\n    </tr>\n    <tr>\n      <td><strong>Risk</strong></td>\n      <td>Green / Yellow / Red — can we actually do it?</td>\n      <td>Red items go to the capture lead in week one, not week three.</td>\n    </tr>\n  </tbody>\n</table>\n\n<h2>How to populate it on day two</h2>\n<ol>\n  <li>Print Section C. Yellow highlighter on every <em>shall</em>, <em>will</em>, and <em>must</em>. Don't miss conditional requirements like <em>if the contractor proposes X, the contractor shall Y</em>.</li>\n  <li>Number each highlighted line with a Req ID that traces back to the PWS section.</li>\n  <li>Drop each line into the matrix. Resist the urge to summarize. Verbatim only.</li>\n  <li>Assign a volume and owner before you leave the room.</li>\n  <li>Schedule a 30-minute matrix review with the proposal manager twice a week until submission.</li>\n</ol>\n\n<div class=\"callout\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">WHY THIS MATTERS</div>\n  <p style=\"margin:0;\">We have reviewed losing proposals where the company wrote a great technical narrative — but missed three Section C requirements entirely. The evaluator marked the proposal non-responsive on those three items. Game over. A 90-minute matrix build on day two would have caught all three.</p>\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "P03 · WIN STRATEGY",
+      "html": "<div class=\"eyebrow\">PHASE 2 · DAYS 3-7</div>\n<h1>Win strategy. The argument you're going to make.</h1>\n<p>Now that the shred is done, you decide what story you're telling. Win strategy is not a marketing exercise. It's a forecast of how the evaluators will score, where you have an edge, and where you'll get beat if you don't address it.</p>\n\n<h2>The five-step strategy session</h2>\n<ol>\n  <li><strong>Define three win themes.</strong> The three messages you want every evaluator to remember when they put the proposal down. Write them on a whiteboard. Every section of every volume supports at least one of them.</li>\n  <li><strong>Run a competitor analysis.</strong> Who else will bid? Pull the incumbent off USAspending. Pull the likely bidders off FPDS. What are their weaknesses? Past performance issues? Recent loss of key personnel? Compliance findings?</li>\n  <li><strong>Identify your discriminators.</strong> What do you have that competitors can't credibly claim? A named subject matter expert with 20 years on this exact program. A teaming partner with the cleared facility. A QC process that produced zero CARs across three audits.</li>\n  <li><strong>Hold a kickoff with proposed team leads.</strong> Get their real experience into the proposal. The technical lead knows things the proposal manager doesn't. Capture them in a recorded session and feed it to the writers.</li>\n  <li><strong>Assign section owners.</strong> Set internal due dates five days before the government deadline. Build pink-team (content) and red-team (compliance) gates into the schedule.</li>\n</ol>\n\n<h2>The ghosting test</h2>\n<p>Once you have your themes, write a one-sentence ghost line for each competitor weakness. Something like: <em>Programs of this complexity have failed in the past when the contractor relied on a virtual PMO with no on-site supervision.</em> Don't name the competitor. Let the evaluator do that math.</p>\n\n<div class=\"callout callout--emerald\">\n  <div style=\"font-family:'IBM Plex Mono', monospace; font-size:8.5pt; font-weight:600; letter-spacing:0.16em; color:#047857; text-transform:uppercase; margin-bottom:2mm;\">FIELD TIP</div>\n  <strong>Three themes. No more.</strong> A proposal with seven win themes has no win themes. Pick the three that move Section M scores the most, and beat them into every executive summary, transition plan, and risk matrix in the document.\n</div>\n"
+    },
+
+    {
+      "type": "dark",
+      "partLabel": "PART TWO · WRITE THE THREE VOLUMES",
+      "headline": "The technical volume wins it. The management volume keeps it. The price volume seals it.",
+      "accentWord": "wins",
+      "paragraphs": [
+        "Most federal RFPs ask for three volumes — Technical, Management, and Price. Each one has a different reader, a different scoring weight, and a different failure mode. The next five pages cover the structure that works, the checklists that prevent rejects, and the price moves that quietly kill your margin in year two.",
+        "Section M tells you the weight split. Read it again. Twice. Then write each volume in the order, and to the depth, that the weights demand."
+      ],
+      "footerLabel": "CAPTUREPILOT · SOLICITATION / RFP RESPONSE PLAYBOOK",
+      "headerLabel": "PART TWO · VOLUMES"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "P04 · TECHNICAL VOLUME",
+      "html": "<div class=\"eyebrow\">VOLUME 1 · TECHNICAL APPROACH</div>\n<h1>The technical volume is where proposals are won or lost.</h1>\n<p>The technical volume answers one question per major task: <em>how, specifically, will you do this work?</em> Not that you can. How. Step by step. With your people, your tools, your past outcomes.</p>\n\n<h2>The five-part pattern for every major task</h2>\n<ol>\n  <li><strong>Restate the requirement.</strong> Shows you read Section C. Use the government's own language.</li>\n  <li><strong>Present your specific approach.</strong> How you will do it — not that you can. Step-by-step methodology, named tools, real timelines.</li>\n  <li><strong>Introduce your team's relevant experience.</strong> For this specific task. Not a generic past performance dump. The person who will run this task, what they did on a similar program, what the outcome was.</li>\n  <li><strong>Include a graphic, timeline, or methodology diagram.</strong> Evaluators read these first. A clear visual is worth two pages of prose.</li>\n  <li><strong>End with a risk statement and mitigation.</strong> Shows maturity. Pretending nothing can go wrong reads as inexperience.</li>\n</ol>\n\n<div class=\"callout callout--emerald\">\n  <div style=\"font-family:'IBM Plex Mono', monospace; font-size:8.5pt; font-weight:600; letter-spacing:0.16em; color:#047857; text-transform:uppercase; margin-bottom:2mm;\">THE GHOST WRITING TEST</div>\n  <strong>Cover your company name throughout your technical volume.</strong> If the narrative could belong to any company, it isn't differentiated. Every section should only make sense coming from you — specific staff names, specific tools, specific past outcomes, specific facility addresses.\n</div>\n\n<h2>What evaluators actually mark down</h2>\n<table>\n  <thead><tr><th>Pattern</th><th>Why it costs you points</th></tr></thead>\n  <tbody>\n    <tr><td><strong>Marketing voice.</strong> \"World-class.\" \"Best-in-breed.\" \"Proven solutions.\"</td><td>Reads as unserious. Evaluators are usually senior technical people. They want specifics, not adjectives.</td></tr>\n    <tr><td><strong>Generic methodology.</strong> A PMI process diagram with your logo on it.</td><td>Tells them you don't have a methodology — you have a stock graphic.</td></tr>\n    <tr><td><strong>No named personnel.</strong> \"Our experienced team will...\"</td><td>Evaluators want to see the person. By name. With a resume in Volume 2.</td></tr>\n    <tr><td><strong>No risk statement.</strong> Everything will be fine.</td><td>Either you haven't done the work before, or you're lying. Both score the same.</td></tr>\n  </tbody>\n</table>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "P04 · TECHNICAL VOLUME (CONT.)",
+      "html": "<div class=\"eyebrow\">VOLUME 1 · CONTINUED</div>\n<h1>Graphics, transitions, and the executive summary that gets read.</h1>\n\n<h2>The executive summary problem</h2>\n<p>Most exec summaries are one page of recycled marketing copy. The good ones are one page that names the three win themes, the named program manager, the proposed transition timeline, and one quantified outcome from a similar past contract. That's it. No throat-clearing. No company history. No \"we're excited to submit.\"</p>\n\n<h2>Graphics that actually score</h2>\n<ul>\n  <li><strong>Methodology diagram.</strong> Boxes and arrows. Show inputs, your process steps, outputs. Label each step with the person responsible and the deliverable.</li>\n  <li><strong>Transition timeline.</strong> 30/60/90-day Gantt with named milestones. Phase-in starts the day after award.</li>\n  <li><strong>Organization chart.</strong> Names, titles, percent-time committed, security clearances. One page.</li>\n  <li><strong>Quality control flow.</strong> What gets inspected, how often, by whom, what triggers a CAR.</li>\n</ul>\n\n<h2>The transition plan</h2>\n<p>For a recompete or a new requirement, the transition plan is where evaluators decide whether you can actually start on day one. Cover at minimum:</p>\n<ul>\n  <li>Phase-in schedule with weekly milestones for the first 60 days</li>\n  <li>Incumbent capture plan — how you'll keep the people who matter</li>\n  <li>Knowledge transfer approach — site walks, document review, shadow shifts</li>\n  <li>Risk register — top five transition risks and your mitigation for each</li>\n  <li>Go-live readiness criteria — measurable, signed off by the contracting officer's representative</li>\n</ul>\n\n<div class=\"callout\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">WHY THIS MATTERS</div>\n  <p style=\"margin:0;\">On a recompete, a weak transition plan is often the single biggest discriminator against the incumbent. The incumbent will say their transition risk is zero because they're already there. Yours has to show that you've thought through every operational risk they're hiding behind.</p>\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "P05 · MANAGEMENT VOLUME",
+      "markdown": "<div class=\"eyebrow\">VOLUME 2 · MANAGEMENT APPROACH</div>\n\n# Management volume — how you'll actually run the contract.\n\nThe management volume answers a different question: *once you win, how do you keep it from blowing up?* Evaluators have seen contracts go sideways. They're looking for evidence you've run one before.\n\n## Management Volume Checklist\n\n- [ ] **Organization chart** with named key personnel and their proposed roles. Percent-time committed for each role.\n- [ ] **Key personnel resumes** aligned to Section H requirements — often five to ten pages max per person. Tailored to this contract, not a generic CV.\n- [ ] **Quality Control Plan** — describe your QC process, not just that you have one. Inspection cadence, sampling method, corrective action workflow, root cause tooling.\n- [ ] **Subcontractor management approach** — if applicable. Selection criteria, oversight cadence, flowdown clauses, performance management.\n- [ ] **Transition plan** (in / out) — critical for recompetes. Sometimes graded separately under Section M.\n- [ ] **Risk management matrix** — top ten risks, probability, impact, owner, mitigation, residual risk score.\n- [ ] **Communication plan** with the COR / KO — meeting cadence, reporting formats, escalation path.\n- [ ] **Personnel retention strategy** — especially for recompetes where the incumbent staff is the program.\n\n## Key personnel — the resume mistakes that kill you\n\n- **Generic CVs.** Cut anything not relevant to this contract. Five tight pages beats fifteen pages of unrelated work.\n- **No commitment letters.** If Section H requires named key personnel commitment, include signed letters of intent.\n- **Padding clearances.** If you claim Secret clearance for a role, the resume better show it active. Lapsed clearances get flagged.\n- **Same person on three contracts.** Evaluators check. If your proposed program manager is also proposed as program manager on two other open RFPs, you have a credibility problem.\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "P05 · MANAGEMENT VOLUME (CONT.)",
+      "html": "<div class=\"eyebrow\">VOLUME 2 · CONTINUED</div>\n<h1>Past performance — the section that loses more bids than any other.</h1>\n\n<h2>What evaluators want from a past performance citation</h2>\n<table>\n  <thead><tr><th>Element</th><th>What to include</th></tr></thead>\n  <tbody>\n    <tr><td><strong>Relevance</strong></td><td>Same NAICS, same scope, same scale, same customer type. The closer to this RFP, the higher the score.</td></tr>\n    <tr><td><strong>Recency</strong></td><td>Within the last three years. Older contracts score lower, even if they're more relevant.</td></tr>\n    <tr><td><strong>Outcome</strong></td><td>One quantified result. \"Reduced average response time from 14 days to 6 days.\" Numbers, not adjectives.</td></tr>\n    <tr><td><strong>CPARS</strong></td><td>If you have a strong CPARS rating, cite it. If you have a weak one, address it head-on with what changed.</td></tr>\n    <tr><td><strong>Contact</strong></td><td>Current COR name, phone, email. Verify the contact still works there before you submit.</td></tr>\n    <tr><td><strong>Role</strong></td><td>Prime vs sub. Evaluators discount sub experience because you didn't run the contract.</td></tr>\n  </tbody>\n</table>\n\n<h2>The three-references rule</h2>\n<p>Most RFPs cap past performance at three to five citations. Pick the three with the highest combined relevance + recency + outcome score. Don't pad. A weak fourth citation drags the average down.</p>\n\n<div class=\"callout callout--emerald\">\n  <div style=\"font-family:'IBM Plex Mono', monospace; font-size:8.5pt; font-weight:600; letter-spacing:0.16em; color:#047857; text-transform:uppercase; margin-bottom:2mm;\">FIELD TIP</div>\n  <strong>Pre-call your past performance contacts.</strong> Two weeks before submission, call the COR for every citation you plan to use. Confirm they're still in the role. Tell them the contract you're bidding and ask if they're willing to take a call from the evaluator. If they hesitate, swap the citation.\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "P06 · PRICE VOLUME",
+      "html": "<div class=\"eyebrow\">VOLUME 3 · PRICE</div>\n<h1>Price volume — read Section B before you build anything.</h1>\n<p>Price is the volume where small primes lose money for the next five years. The pricing template looks simple. The trap is in Section B and the wage determination.</p>\n\n<h2>The pricing-discipline checklist</h2>\n<ul>\n  <li><strong>Read Section B carefully.</strong> Every CLIN must be priced exactly as specified. CLIN structure errors are a non-responsive finding.</li>\n  <li><strong>Pull the wage determination from SAM.gov.</strong> Fresh. For this state and county. Don't reuse last year's WD — DoL refreshes them quarterly.</li>\n  <li><strong>Verify your indirect rates are current and defensible.</strong> If you're audited, you'll have to support every G&amp;A, overhead, and fringe number.</li>\n  <li><strong>Don't underprice to win.</strong> Low price plus poor execution equals termination and past performance damage. A loss is better than a contract you can't deliver.</li>\n  <li><strong>For cost-plus contracts, confirm your accounting system is DCAA-compliant before bidding.</strong> If it isn't, you can't bill on a cost-reimbursable contract. Period.</li>\n  <li><strong>Build a price-to-win analysis.</strong> What did the incumbent bid? What's the IGCE? What's the lowest you can go and still execute?</li>\n</ul>\n\n<h2>The option-year trap</h2>\n<p>Most service contracts have a base year plus four option years. The government can exercise the options unilaterally. If your base-year price is built on a wage rate that escalates 4% per year and you priced 2% escalation into the options, you eat the difference for four years.</p>\n\n<table>\n  <thead><tr><th>Number</th><th>What it represents</th><th>Common mistake</th></tr></thead>\n  <tbody>\n    <tr><td><strong>Direct labor</strong></td><td>Hours × loaded wage rate per labor category.</td><td>Using outdated WD. Pull fresh on submission day.</td></tr>\n    <tr><td><strong>Fringe</strong></td><td>SCA health + welfare, paid leave, FICA, FUTA, SUTA.</td><td>Substituting cash for the health rate. Not allowed.</td></tr>\n    <tr><td><strong>Overhead</strong></td><td>Indirect labor, supervision, facilities, depreciation.</td><td>Pricing on year-zero rate. Use forward pricing pool.</td></tr>\n    <tr><td><strong>G&amp;A</strong></td><td>Executive, accounting, HR, IT — company-wide indirects.</td><td>Inconsistent base. Pick total cost input and stick with it.</td></tr>\n    <tr><td><strong>Fee / profit</strong></td><td>Margin you take after all the above.</td><td>Squeezing fee to win. Cost-plus fee is regulated; fixed-price fee is your only buffer.</td></tr>\n  </tbody>\n</table>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "P07 · MISTAKES THAT TOSS YOU",
+      "html": "<div class=\"eyebrow\">FAILURE MODES</div>\n<h1>The eight mistakes that get you marked non-responsive.</h1>\n<p>A non-responsive finding means your proposal never gets scored. The evaluator stops reading. There is no recovery. Every one of these is preventable on day one of the response.</p>\n\n<table>\n  <thead><tr><th>#</th><th>Mistake</th><th>How to prevent it</th></tr></thead>\n  <tbody>\n    <tr><td>1</td><td><strong>Over the page limit.</strong> Even by half a page.</td><td>Hard-cap each section in your outline on day one. Count pages every pink team review.</td></tr>\n    <tr><td>2</td><td><strong>Wrong font or margin.</strong> 11-pt instead of 12-pt, 0.5\" margins instead of 1\".</td><td>Build a Section L formatting style guide. Lock it in the template on day one.</td></tr>\n    <tr><td>3</td><td><strong>Missed amendment.</strong> Government posts SF30 on day 22, you don't acknowledge it.</td><td>Monitor SAM.gov for the notice daily. Acknowledge every amendment in your submission cover.</td></tr>\n    <tr><td>4</td><td><strong>Wrong file naming.</strong> Section L specified Vol1_Tech_CompanyName.pdf and you submitted Technical Volume Final v3.pdf.</td><td>Build the file name into the outline filename on day one.</td></tr>\n    <tr><td>5</td><td><strong>Wrong volume order in submission.</strong> Section L said Tech first, Price last; you uploaded Price first.</td><td>Number files 01_, 02_, 03_ to force order in the submission portal.</td></tr>\n    <tr><td>6</td><td><strong>Missing form.</strong> SF33 unsigned, SF1449 missing, SF30 not acknowledged.</td><td>Forms checklist on the cover sheet. Two-person signature check.</td></tr>\n    <tr><td>7</td><td><strong>Submitted late.</strong> Server clock disagrees with portal clock by 30 seconds.</td><td>Submit four hours early. Document confirmation timestamp.</td></tr>\n    <tr><td>8</td><td><strong>Wrong portal.</strong> Submitted via SAM.gov when Section L said FedConnect or PIEE.</td><td>Test the portal 48 hours out. Make sure the account is provisioned.</td></tr>\n  </tbody>\n</table>\n\n<div class=\"callout\">\n  <div class=\"eyebrow\" style=\"margin-bottom:2mm;\">WHY THIS MATTERS</div>\n  <p style=\"margin:0;\">Every one of these is a finding we've seen kill an otherwise strong proposal in the past three years. Half came from companies who had won federal contracts before. The discipline that wins is procedural, not creative. Build the procedures into your outline on day one.</p>\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "P07 · MISTAKES (CONT.)",
+      "html": "<div class=\"eyebrow\">FAILURE MODES · PROCESS</div>\n<h1>Pink team. Red team. Gold team. The three reviews that catch what you'll miss.</h1>\n\n<table>\n  <thead><tr><th>Review</th><th>When</th><th>Reviewers</th><th>What they're looking for</th></tr></thead>\n  <tbody>\n    <tr><td><strong>Pink team</strong></td><td>50-60% draft</td><td>Senior writers + capture lead</td><td>Does the content answer Section M? Are win themes present? Story straight?</td></tr>\n    <tr><td><strong>Red team</strong></td><td>85-90% draft</td><td>Outsiders who haven't read the RFP</td><td>Compliance. Every requirement in the matrix has an answer. Page limits clean. Forms signed.</td></tr>\n    <tr><td><strong>Gold team</strong></td><td>Final, 48 hours out</td><td>Capture lead + proposal manager + executive sponsor</td><td>Submission risk. File naming. Portal test. Amendment acknowledgements. Pricing arithmetic.</td></tr>\n  </tbody>\n</table>\n\n<h2>The 48-hour cutoff</h2>\n<p>Stop writing 48 hours before the deadline. The last two days are for compliance review, formatting, file conversion, portal upload, and the gold team. Teams that write through to hour zero submit late, miss forms, or upload the wrong volume order.</p>\n\n<div class=\"callout callout--emerald\">\n  <div style=\"font-family:'IBM Plex Mono', monospace; font-size:8.5pt; font-weight:600; letter-spacing:0.16em; color:#047857; text-transform:uppercase; margin-bottom:2mm;\">FIELD TIP</div>\n  <strong>Write the schedule backwards from the deadline.</strong> Submission upload at T-4 hours. Gold team at T-12. Red team complete at T-48. Pink team at T-7 days. Working backwards is the only way to make the math survive contact with reality.\n</div>\n"
+    },
+
+    {
+      "type": "content",
+      "headerLabel": "P08 · FINAL CHECKLIST",
+      "markdown": "<div class=\"eyebrow\">FINAL · 24 HOURS OUT</div>\n\n# Final submission checklist — the gate before upload.\n\nPrint this. Walk through it line by line with one other person. Initial each box. If a box can't be checked, stop and fix it before you upload.\n\n- [ ] **All volumes at or under page limits** — count carefully. Evaluators reject non-compliant proposals.\n- [ ] **All required forms signed**: SF33, SF1449, SF30 for every amendment, representations and certifications current.\n- [ ] **Attachments in correct format** (PDF unless otherwise specified, no Word docs, no password protection).\n- [ ] **File naming convention matches Section L** requirements — exact case, exact underscores, no spaces.\n- [ ] **Volume order matches Section L** — leading zeros on file names force the portal to display them in order.\n- [ ] **Submission portal tested and account verified** at least 48 hours before deadline. Password works. Upload limit confirmed.\n- [ ] **Every amendment acknowledged** by SF30 in the proposal cover.\n- [ ] **Past performance contacts verified** — phone numbers and emails still work. Contacts know they may be called.\n- [ ] **Pricing arithmetic checked** — totals match across volumes, escalation applied to every option year.\n- [ ] **Compliance matrix complete** — every Section C requirement has a volume and section reference.\n- [ ] **Confirmation email or receipt saved** after submission. Screenshot the timestamp from the portal.\n- [ ] **Backup copy delivered** per Section L (sometimes a CD or thumb drive is still required at a physical address).\n\n## After submission\n\n- Save the full submission package to a write-once folder with the timestamp.\n- Calendar the expected award date and the protest window.\n- Schedule the debrief request — request it in writing within five business days of any award notification, regardless of outcome.\n- Hold a 60-minute internal lessons-learned within two weeks while it's fresh.\n"
+    },
+
+    {
+      "type": "back-cover",
+      "eyebrow": "WHAT'S NEXT",
+      "headline": "Stop chasing every RFP. Score them first.",
+      "accentWord": "score",
+      "body": "CapturePilot ingests the RFPs in your NAICS, scores them against your capability statement and past performance, and surfaces the ones you can actually win. Compliance matrix templates and Section M scoring guides included. Free 14-day trial. No card.",
+      "ctaText": "Get the full Federal Launch Kit",
+      "ctaUrl": "https://www.capturepilot.com/startup-pack",
+      "footerLabel": "CAPTUREPILOT · SOLICITATION / RFP RESPONSE PLAYBOOK"
+    }
+  ]
+}
