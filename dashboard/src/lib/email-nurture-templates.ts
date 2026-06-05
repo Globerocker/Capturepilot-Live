@@ -92,20 +92,20 @@ function wrap(args: {
         ? `<a href="{{unsubscribe_url}}" style="color:${COLORS.muted};text-decoration:underline;">Unsubscribe</a> · `
         : "";
 
-    // Signature block — real headshot (hosted at /team/andre-headshot.jpg
-    // after the next website deploy; before that, the americurial.com
-    // mirror serves the same image). Square cropped, ~12 KB, lazy-loaded
-    // by every modern client.
+    // Signature block — real headshot (256×256 JPEG, ~12 KB, hosted at
+    // www.capturepilot.com/team/andre-headshot.jpg) paired with the actual
+    // ink-signature SVG (200px wide, scales crisp at any DPI). The ASCII
+    // duplicate A.Schueler.svg is used instead of the umlaut filename to
+    // avoid URL-encoding quirks in older email clients.
     const signature = `
-      <tr><td style="padding:8px 28px 20px;">
+      <tr><td style="padding:12px 28px 20px;">
         <table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr>
           <td style="vertical-align:middle;padding-right:14px;">
             <img src="https://www.capturepilot.com/team/andre-headshot.jpg" alt="André Schüler" width="56" height="56" style="display:block;border:0;border-radius:28px;object-fit:cover;">
           </td>
           <td style="vertical-align:middle;">
-            <div style="font-family:'Brush Script MT','Lucida Handwriting',cursive;font-size:26px;color:${COLORS.ink};line-height:1;">André</div>
-            <div style="font-size:13px;font-weight:600;color:${COLORS.ink};margin-top:3px;">André Schüler</div>
-            <div style="font-size:12px;color:${COLORS.muted};">Founder · CapturePilot</div>
+            <img src="https://www.capturepilot.com/A.Schueler.svg" alt="André Schüler" width="180" height="auto" style="display:block;border:0;max-width:180px;height:auto;">
+            <div style="font-size:12px;color:${COLORS.muted};margin-top:2px;">Founder · CapturePilot</div>
           </td>
         </tr></table>
       </td></tr>
