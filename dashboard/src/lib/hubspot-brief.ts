@@ -419,13 +419,14 @@ export async function pushQuickCheckerBriefToHubSpot(input: QuickCheckerBriefInp
         company: input.companyName,
         lifecyclestage: "lead",
         extra: {
-            // ── Standard HubSpot properties (Phase 22 audit) ──
-            hs_analytics_source: "OTHER_CAMPAIGNS",
-            hs_analytics_source_data_1: "Quick Checker",
-            hs_analytics_source_data_2: input.quickCheckerUrl || undefined,
+            // ── Standard HubSpot CONTACT properties (Phase 22 audit) ──
+            // Note: hs_analytics_source* are READ-ONLY on contacts (tracker-
+            // controlled). numberofemployees lives on company only.
+            // `industry` is a closed enum (~150 values) — Apollo strings
+            // like "electrical/electronic manufacturing" don't match, so
+            // we route those to the company via hs_keywords. Use
+            // lead_source_cp custom prop to mark Quick Checker origin.
             hs_lead_status: "NEW",
-            industry: inferredIndustry,
-            numberofemployees: empCount,
             annualrevenue: revenueDollars,
             jobtitle: input.contactJobTitle || undefined,
             state: input.reconciled?.state.value || undefined,
@@ -461,21 +462,24 @@ export async function pushQuickCheckerBriefToHubSpot(input: QuickCheckerBriefInp
 
         // ── HubSpot STANDARD company fields (Phase 22) ──
         // These show up in the default company view and feed every HubSpot
-        // report. Always write them when we have data so reps don't need
-        // to switch between standard + custom tabs to see the basics.
+        // report. NOTE: `industry` is a CLOSED enum (~150 standard values)
+        // — arbitrary strings like "electrical/electronic manufacturing"
+        // get rejected. Skip it and stash the industry string in
+        // hs_keywords alongside the NAICS codes, where free text is OK.
+        // Same with hs_analytics_source* — read-only on contact, writable
+        // on company per HubSpot's docs.
         companyProps.lifecyclestage = "lead";
         companyProps.hs_lead_status = "NEW";
-        companyProps.hs_analytics_source = "OTHER_CAMPAIGNS";
-        companyProps.hs_analytics_source_data_1 = "Quick Checker";
-        if (input.quickCheckerUrl)         companyProps.hs_analytics_source_data_2 = input.quickCheckerUrl;
-        if (inferredIndustry)              companyProps.industry = inferredIndustry;
         if (empCount)                      companyProps.numberofemployees = String(empCount);
         if (revenueDollars)                companyProps.annualrevenue = String(revenueDollars);
         const foundedYear = (input.firmographics as { founded_year?: { value?: number | null } } | undefined)?.founded_year?.value;
         if (foundedYear)                   companyProps.founded_year = String(foundedYear);
         if (input.reconciled?.state.value) companyProps.state = input.reconciled.state.value;
         if (input.website)                 companyProps.website = input.website;
-        if ((input.naicsCodes || []).length) companyProps.hs_keywords = input.naicsCodes!.slice(0, 5).join(", ");
+        // hs_keywords looked like the right home for industry + NAICS, but
+        // this HubSpot account has it locked to a custom enum too. Stash
+        // both in cp_naics_codes (custom text) below — no standard field
+        // accepts arbitrary text on this portal.
         // Description: short strategic brief — leads with strengths so the
         // rep sees the pitch angle the moment they open the company.
         if (input.strengths && input.strengths.length > 0) {
