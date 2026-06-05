@@ -390,6 +390,19 @@ export async function pushQuickCheckerBriefToHubSpot(input: QuickCheckerBriefInp
     if (!input.email) {
         return { contact_id: null, note_id: null, skipped_reason: "No email — cannot upsert contact" };
     }
+    // Reject obviously-broken emails before hitting HubSpot — bulk backfill
+    // surfaced rows like "contracts.786-477-0477hello@govconedu.comlearngovcon"
+    // (scraped concatenation of phone + email + page text). HubSpot rejects
+    // anyway, this just spares the wasted POST + the 400-log noise.
+    const cleanEmail = input.email.trim().toLowerCase();
+    const emailOk = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(cleanEmail)
+        && cleanEmail.length <= 100
+        && (cleanEmail.match(/@/g) || []).length === 1
+        && !/[^\w.+\-@]/.test(cleanEmail.replace(/[@.]/g, ""));
+    if (!emailOk) {
+        return { contact_id: null, note_id: null, skipped_reason: `Invalid email: ${input.email}` };
+    }
+    input = { ...input, email: cleanEmail };
 
     const { firstname, lastname } = splitName(input.contactName);
 
