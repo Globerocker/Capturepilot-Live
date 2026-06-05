@@ -375,6 +375,51 @@ async function syncCompanyForContact(args: {
     return companyId;
 }
 
+// ---------------------------------------------------------------------------
+// Lead-quality classifier (Phase 23)
+// ---------------------------------------------------------------------------
+// Single signal that lets sales filter to "real prospects with intent" in one
+// click instead of slogging through every Facebook submission. Two outputs:
+//   cp_lead_quality — our domain enum (HOT_BIZ / WARM_BIZ / COLD_BIZ /
+//                     FREE_EMAIL_ONLY / GIBBERISH / UNSCORED)
+//   hs_lead_status  — flipped to UNQUALIFIED when GIBBERISH so HubSpot's own
+//                     prospect views auto-hide spam (built-in behavior).
+// Inputs we look at: email domain, readiness score, cert count, name shape.
+// Order matters — GIBBERISH wins over FREE_EMAIL_ONLY wins over biz buckets,
+// because a fake submission with a free email shouldn't read as "fake first".
+import { looksFreeEmailDomain, looksGibberishName, checkEmailShape } from "./lead-validation";
+
+/**
+ * Classify the lead into one of our 6 quality buckets. Pure function —
+ * called once per push at the top of pushQuickCheckerBriefToHubSpot, no
+ * side effects. Returns BOTH the enum string for cp_lead_quality AND a
+ * hint for whether we should also flip hs_lead_status to UNQUALIFIED.
+ */
+function classifyLeadQuality(args: {
+    email: string;
+    firstName?: string | null;
+    lastName?: string | null;
+    company?: string | null;
+    readinessScore?: number | null;
+    certCount?: number;
+    hasWebsite?: boolean;
+}): { quality: "HOT_BIZ" | "WARM_BIZ" | "COLD_BIZ" | "FREE_EMAIL_ONLY" | "GIBBERISH" | "UNSCORED"; markUnqualified: boolean } {
+    if (looksGibberishName(args.firstName, args.lastName, args.company)) {
+        return { quality: "GIBBERISH", markUnqualified: true };
+    }
+    if (looksFreeEmailDomain(args.email) || !args.hasWebsite) {
+        return { quality: "FREE_EMAIL_ONLY", markUnqualified: false };
+    }
+    const score = typeof args.readinessScore === "number" ? args.readinessScore : null;
+    if (score === null) return { quality: "UNSCORED", markUnqualified: false };
+    // readiness_score is 0-100 in our pipeline. 70/40 cutoffs mirror the
+    // High/Medium/Low bands already used in the contact-note rendering.
+    const certs = args.certCount || 0;
+    if (score >= 70 && certs >= 1) return { quality: "HOT_BIZ", markUnqualified: false };
+    if (score >= 40)               return { quality: "WARM_BIZ", markUnqualified: false };
+    return { quality: "COLD_BIZ", markUnqualified: false };
+}
+
 /**
  * Push the full strategic brief to HubSpot — upsert the contact, create
  * the note. Returns the HubSpot contact ID + note ID for downstream logging.
@@ -390,17 +435,13 @@ export async function pushQuickCheckerBriefToHubSpot(input: QuickCheckerBriefInp
     if (!input.email) {
         return { contact_id: null, note_id: null, skipped_reason: "No email — cannot upsert contact" };
     }
-    // Reject obviously-broken emails before hitting HubSpot — bulk backfill
-    // surfaced rows like "contracts.786-477-0477hello@govconedu.comlearngovcon"
-    // (scraped concatenation of phone + email + page text). HubSpot rejects
-    // anyway, this just spares the wasted POST + the 400-log noise.
+    // Reject obviously-broken emails before hitting HubSpot via the shared
+    // validator (also enforces phone-embedded + TLD-glued garbage we've
+    // seen from scrapes like "contracts.786-477-0477hello@govconedu.comlearngovcon").
     const cleanEmail = input.email.trim().toLowerCase();
-    const emailOk = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(cleanEmail)
-        && cleanEmail.length <= 100
-        && (cleanEmail.match(/@/g) || []).length === 1
-        && !/[^\w.+\-@]/.test(cleanEmail.replace(/[@.]/g, ""));
-    if (!emailOk) {
-        return { contact_id: null, note_id: null, skipped_reason: `Invalid email: ${input.email}` };
+    const emailErr = checkEmailShape(cleanEmail);
+    if (emailErr) {
+        return { contact_id: null, note_id: null, skipped_reason: `Invalid email: ${emailErr}` };
     }
     input = { ...input, email: cleanEmail };
 
@@ -424,6 +465,16 @@ export async function pushQuickCheckerBriefToHubSpot(input: QuickCheckerBriefInp
     const revenueDollars = (input.firmographics as { revenue?: { value?: number | null } } | undefined)?.revenue?.value || undefined;
     const inferredIndustry = (input.firmographics as { industries?: { value?: string[] | null } } | undefined)?.industries?.value?.[0] || undefined;
 
+    const { quality, markUnqualified } = classifyLeadQuality({
+        email: cleanEmail,
+        firstName: firstname,
+        lastName: lastname,
+        company: input.companyName,
+        readinessScore: input.readinessScore,
+        certCount: allCertKeys.length,
+        hasWebsite: !!input.website,
+    });
+
     const contactId = await upsertHubSpotContact({
         email: input.email,
         firstname,
@@ -439,7 +490,8 @@ export async function pushQuickCheckerBriefToHubSpot(input: QuickCheckerBriefInp
             // like "electrical/electronic manufacturing" don't match, so
             // we route those to the company via hs_keywords. Use
             // lead_source_cp custom prop to mark Quick Checker origin.
-            hs_lead_status: "NEW",
+            hs_lead_status: markUnqualified ? "UNQUALIFIED" : "NEW",
+            cp_lead_quality: quality,
             annualrevenue: revenueDollars,
             jobtitle: input.contactJobTitle || undefined,
             state: input.reconciled?.state.value || undefined,
@@ -482,7 +534,8 @@ export async function pushQuickCheckerBriefToHubSpot(input: QuickCheckerBriefInp
         // Same with hs_analytics_source* — read-only on contact, writable
         // on company per HubSpot's docs.
         companyProps.lifecyclestage = "lead";
-        companyProps.hs_lead_status = "NEW";
+        companyProps.hs_lead_status = markUnqualified ? "UNQUALIFIED" : "NEW";
+        companyProps.cp_lead_quality = quality;
         if (empCount)                      companyProps.numberofemployees = String(empCount);
         if (revenueDollars)                companyProps.annualrevenue = String(revenueDollars);
         const foundedYear = (input.firmographics as { founded_year?: { value?: number | null } } | undefined)?.founded_year?.value;

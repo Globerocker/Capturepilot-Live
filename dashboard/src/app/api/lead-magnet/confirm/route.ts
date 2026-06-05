@@ -4,6 +4,7 @@ import { scoreOpportunityLeadMagnet, type ProfileForScoring, type OpportunityFor
 import { generateCertRecommendations } from "@/lib/cert-recommendations";
 import { sendQuickCheckerResultsEmail } from "@/lib/email";
 import { onQuickCheckerComplete } from "@/lib/hubspot";
+import { rejectFakeSubmission } from "@/lib/lead-validation";
 
 /**
  * POST /api/lead-magnet/confirm
@@ -53,6 +54,22 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: "analysis_id is required" }, { status: 400 });
         }
         // Email is optional at the API level (sales reps may not have it) — UI enforces it.
+        // But when an email IS supplied, hard-reject submissions that are clearly
+        // spam / scraped / bot fills — bad emails, gibberish names, throwaway
+        // tokens. Free-email domains (gmail/yahoo) are intentionally NOT
+        // rejected — those are real people, just lower intent. They'll get
+        // cp_lead_quality=FREE_EMAIL_ONLY in HubSpot so sales can filter.
+        if (email || first_name || last_name) {
+            const rejectReason = rejectFakeSubmission({
+                email: email || null,
+                firstName: first_name || null,
+                lastName: last_name || null,
+                company: company_name || null,
+            });
+            if (rejectReason) {
+                return NextResponse.json({ error: rejectReason, kind: "VALIDATION" }, { status: 400 });
+            }
+        }
 
         const sb = createClient(
             process.env.NEXT_PUBLIC_SUPABASE_URL!,
