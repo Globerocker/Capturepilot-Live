@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { scoreOpportunityLeadMagnet, type ProfileForScoring, type OpportunityForScoring } from "@/lib/match-scoring";
 import { generateCertRecommendations } from "@/lib/cert-recommendations";
-import { sendQuickCheckerResultsEmail } from "@/lib/email";
+import { sendQuickCheckerResultsEmail, enqueueDripSequence } from "@/lib/email";
 import { onQuickCheckerComplete } from "@/lib/hubspot";
-import { rejectFakeSubmission } from "@/lib/lead-validation";
+import { rejectFakeSubmission, looksGibberishName } from "@/lib/lead-validation";
 
 /**
  * POST /api/lead-magnet/confirm
@@ -340,6 +340,19 @@ export async function POST(request: NextRequest) {
                 })),
                 totalMatches: scored.length,
             }).catch(err => console.error("Quick checker email send failed:", err));
+
+            // Enroll in the 90-day Quick-Checker nurture (qc_nurture). Same
+            // cadence as fb_nurture but with the Quick-Checker-specific Day-0
+            // welcome (nurture_01_qc_welcome) instead of the Field Manual one.
+            // Skip if the name looks like spam-bot fill — keeps Resend's
+            // domain reputation clean.
+            if (!looksGibberishName(first_name, last_name, company_name)) {
+                enqueueDripSequence({
+                    sequenceKey: "qc_nurture",
+                    email,
+                    contactName: [first_name, last_name].filter(Boolean).join(" ").trim() || (contact_name || undefined),
+                }).catch(err => console.warn("[qc-confirm] enqueue qc_nurture failed (non-fatal):", err));
+            }
         }
 
         return NextResponse.json({

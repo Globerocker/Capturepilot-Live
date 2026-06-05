@@ -303,6 +303,43 @@ export interface NurtureTemplate {
 
 export const NURTURE_TEMPLATES: Record<string, NurtureTemplate> = {
 
+    // ─────────── 1-QC. Welcome (Day 0, Quick Checker variant) ───────────
+    // Triggered from /api/lead-magnet/confirm when the Quick Checker form is
+    // submitted. References their scan + readiness score (passed via merge
+    // tags) instead of the Field Manual PDF the fb_nurture welcome assumes.
+    nurture_01_qc_welcome: {
+        subject: "Your Quick Check is in — here's what most folks miss next",
+        html: wrap({
+            preheader: "You ran the scan. Here's how to turn the result into an actual win.",
+            heroSvg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 180" width="100%" style="display:block;max-width:600px;">
+              <defs><linearGradient id="qcg" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#0c0a09"/><stop offset="1" stop-color="#047857"/></linearGradient></defs>
+              <rect width="600" height="180" fill="url(#qcg)"/>
+              <g fill="#059669" opacity="0.18"><circle cx="100" cy="50" r="55"/><circle cx="500" cy="135" r="75"/></g>
+              <text x="300" y="78" text-anchor="middle" fill="#fff" font-family="-apple-system,sans-serif" font-size="30" font-weight="800" letter-spacing="-0.02em">Scan complete.</text>
+              <text x="300" y="108" text-anchor="middle" fill="#a8a29e" font-family="-apple-system,sans-serif" font-size="14" font-weight="500">Now the part most people skip.</text>
+              <g stroke="#059669" stroke-width="2.5" fill="none"><path d="M260 142 L290 160 L340 122"/></g>
+            </svg>`,
+            body: `
+                <h1 style="margin:0 0 14px;font-size:24px;font-weight:800;color:${COLORS.ink};letter-spacing:-0.02em;">Hey {{first_name}} — André here.</h1>
+                <p style="margin:0 0 14px;">Thanks for running the <strong>Quick Checker</strong>. Whatever your readiness score came back as — high, low, or "huh, didn't expect that" — here's the part the form can't tell you:</p>
+                <p style="margin:0 0 16px;background:#fafaf9;border-left:3px solid ${COLORS.accent};padding:12px 14px;font-size:14px;"><strong>The score is the easy part. What you do in the next 7 days is what actually moves the needle.</strong></p>
+                <p style="margin:0 0 14px;">Three concrete things I'd do today, in order of impact:</p>
+                <ol style="margin:0 0 16px 18px;padding:0;">
+                  <li style="margin-bottom:10px;"><strong>Save your top 3 matches</strong> — the ones the scanner flagged HOT. Pull them up in <a href="${DASHBOARD_URL}" style="color:${COLORS.accent};">your dashboard</a>, read the description end-to-end, and ask: <em>could I do this work tomorrow if I had to?</em> If yes, that's your beachhead.</li>
+                  <li style="margin-bottom:10px;"><strong>Check for Sources Sought versions of the same NAICS.</strong> 60% of the contracts your competitors win started as a Sources Sought 6-18 months earlier. You missed the warning shot. Fix that for the NEXT round.</li>
+                  <li><strong>Look at the certifications the scanner suggested.</strong> If 8(a) / WOSB / HUBZone / SDVOSB came up — that's not a "nice to have", that's a 10-100x increase in addressable spend. Pick ONE and start the paperwork this week.</li>
+                </ol>
+                <p style="margin:0 0 14px;">One ask — and ignore if you're slammed:</p>
+                <p style="margin:0 0 14px;background:#fafaf9;border-left:3px solid ${COLORS.accent};padding:12px 14px;font-size:14px;">After you saw your Quick Check result, what's the <em>one thing</em> that's still confusing about federal contracting?</p>
+                <p style="margin:0 0 14px;">Reply with one sentence. I read every reply and the answer shapes what I send you next.</p>
+                <p style="margin:0;font-size:14px;color:${COLORS.muted};">— André<br><span style="color:${COLORS.muted};font-size:12px;">P.S. The next email lands in 3 days — a 90-second walkthrough of how to read a SAM.gov opportunity without getting lost. Most folks skim it and miss the only 5 fields that matter.</span></p>
+            `,
+            ctaText: "Open Your Quick Check Dashboard",
+            ctaUrl: DASHBOARD_URL,
+            isMarketing: true,
+        }),
+    },
+
     // ─────────── 1. Welcome (Day 0) ───────────
     nurture_01_welcome: {
         subject: "Your Federal Field Manual + a question",
@@ -634,8 +671,18 @@ export const NURTURE_TEMPLATES: Record<string, NurtureTemplate> = {
  * template based on the lead's day-from-signup. Kept here so it lives next to
  * the template definitions for easy auditing.
  */
+/**
+ * Two parallel 12-email sequences that share emails 2-12 but differ at day 0:
+ *   - fb_nurture (default NURTURE_SEQUENCE)   → starts with nurture_01_welcome
+ *                                                ("you downloaded the Field Manual")
+ *   - qc_nurture (NURTURE_SEQUENCE_QC below)  → starts with nurture_01_qc_welcome
+ *                                                ("you ran the Quick Checker")
+ * Same cadence + same downstream content. The split exists because referencing
+ * a "PDF download" in the first email to a Quick-Checker user is broken
+ * context — they did something completely different to land in the funnel.
+ */
 export const NURTURE_SEQUENCE: Array<{ key: string; day_offset: number; type: "welcome" | "value" | "conversion" | "hybrid" | "sunset"; label: string }> = [
-    { key: "nurture_01_welcome",         day_offset:  0, type: "welcome",    label: "Day 0 · Welcome" },
+    { key: "nurture_01_welcome",         day_offset:  0, type: "welcome",    label: "Day 0 · Welcome (FB download)" },
     { key: "nurture_02_opp_anatomy",     day_offset:  3, type: "value",      label: "Day 3 · Opportunity anatomy" },
     { key: "nurture_03_naics_misses",    day_offset:  8, type: "value",      label: "Day 8 · NAICS picks" },
     { key: "nurture_04_past_perf_bootstrap", day_offset: 15, type: "value",  label: "Day 15 · Past performance bootstrap" },
@@ -647,4 +694,14 @@ export const NURTURE_SEQUENCE: Array<{ key: string; day_offset: number; type: "w
     { key: "nurture_10_why_bids_lose",   day_offset: 65, type: "value",      label: "Day 65 · Why bids lose" },
     { key: "nurture_11_pilot",           day_offset: 75, type: "conversion", label: "Day 75 · Pilot Program" },
     { key: "nurture_12_goodbye",         day_offset: 90, type: "sunset",     label: "Day 90 · Three doors" },
+];
+
+/**
+ * Quick-Checker variant — replaces nurture_01_welcome (which references the
+ * Field Manual PDF) with nurture_01_qc_welcome (which references their scan
+ * + readiness score). Days 3-90 are identical to NURTURE_SEQUENCE above.
+ */
+export const NURTURE_SEQUENCE_QC: Array<{ key: string; day_offset: number; type: "welcome" | "value" | "conversion" | "hybrid" | "sunset"; label: string }> = [
+    { key: "nurture_01_qc_welcome",      day_offset:  0, type: "welcome",    label: "Day 0 · Welcome (Quick Checker)" },
+    ...NURTURE_SEQUENCE.slice(1),
 ];

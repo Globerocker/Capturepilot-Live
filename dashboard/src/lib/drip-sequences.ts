@@ -6,7 +6,7 @@
  * cron picks up due rows and sends them.
  */
 
-import { NURTURE_SEQUENCE } from "./email-nurture-templates";
+import { NURTURE_SEQUENCE, NURTURE_SEQUENCE_QC } from "./email-nurture-templates";
 
 export interface DripStep {
     /** Days after enrollment to send this email */
@@ -54,6 +54,19 @@ export const DRIP_SEQUENCES: Record<string, DripSequence> = {
         name: "Facebook Lead 90-Day Nurture",
         description: "12-email warm-up sequence for Meta lead-ad submissions.",
         steps: NURTURE_SEQUENCE.map(s => ({ dayOffset: s.day_offset, templateKey: s.key })),
+    },
+    /**
+     * Quick-Checker variant of fb_nurture — same 12-email cadence, but the
+     * day-0 welcome references the user's Quick Check scan instead of the
+     * Field Manual PDF (which they never downloaded). Enrolled from
+     * /api/lead-magnet/confirm right after the score is computed and the
+     * report email goes out.
+     */
+    qc_nurture: {
+        key: "qc_nurture",
+        name: "Quick Checker 90-Day Nurture",
+        description: "12-email nurture for Quick Checker submissions (shares days 3-90 with fb_nurture).",
+        steps: NURTURE_SEQUENCE_QC.map(s => ({ dayOffset: s.day_offset, templateKey: s.key })),
     },
 };
 
