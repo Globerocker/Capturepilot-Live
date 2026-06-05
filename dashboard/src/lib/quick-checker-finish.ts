@@ -911,12 +911,27 @@ export async function runPostConfirmationPipeline(analysisId: string): Promise<v
                     notes: ["User-confirmed certs only — not SAM-verified"],
                 } : null);
 
+                // Phase 22: pass firmographics + contactJobTitle so HubSpot
+                // gets industry/employees/revenue/founded_year + jobtitle
+                // mapped to STANDARD properties (no custom cp_* needed for
+                // those — see lib/hubspot-brief.ts Phase 22 audit).
+                const { data: anaWithFirmo } = await sb
+                    .from("company_analyses")
+                    .select("firmographics, inferred_profile")
+                    .eq("id", analysisId)
+                    .maybeSingle();
+                const firmoBlob = (anaWithFirmo?.firmographics as Parameters<typeof pushQuickCheckerBriefToHubSpot>[0]["firmographics"]) || null;
+                const inferredFresh = (anaWithFirmo?.inferred_profile || {}) as Record<string, unknown>;
+                const jobTitle = (inferredFresh.contact_person as { title?: string } | null)?.title
+                    || (inferredFresh.job_title as string | null) || null;
+
                 await pushQuickCheckerBriefToHubSpot({
                     email: leadEmail,
                     companyName,
-                    contactName: (inferredProfile.contact_name as string | null)
+                    contactName: (inferredFresh.contact_name as string | null)
                         || (analysis.lead_name as string | null) || null,
-                    contactPhone: (inferredProfile.contact_phone as string | null) || null,
+                    contactPhone: (inferredFresh.contact_phone as string | null) || null,
+                    contactJobTitle: jobTitle,
                     website: (analysis.website as string | null) || null,
                     quickCheckerUrl: `${baseUrl}/check/${analysisId}`,
                     readinessScore,
@@ -929,6 +944,7 @@ export async function runPostConfirmationPipeline(analysisId: string): Promise<v
                     federalAgenciesServed: (crawlData.federal_agencies_served as string[]) || [],
                     reconciled: reconciledForHub,
                     naicsCodes: tempProfile.naics_codes,
+                    firmographics: firmoBlob,
                 });
             }
         } catch (err) {

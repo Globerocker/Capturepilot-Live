@@ -65,6 +65,15 @@ export interface QuickCheckerBriefInput {
     reconciled?: ReconciledProfile | null;
     /** Optional industry / NAICS shortlist for the contact card. */
     naicsCodes?: string[];
+    /** Phase 22 — firmographic cascade output (Apollo employees/revenue/etc). */
+    firmographics?: {
+        employee_count?: { value: number | null; source: string };
+        revenue?: { value: number | null; source: string };
+        founded_year?: { value: number | null; source: string };
+        industries?: { value: string[] | null; source: string };
+    } | null;
+    /** Contact job title (e.g. "CEO", "Founder"). */
+    contactJobTitle?: string | null;
 }
 
 /**
@@ -392,6 +401,16 @@ export async function pushQuickCheckerBriefToHubSpot(input: QuickCheckerBriefInp
     const allCertKeys   = Array.from(new Set([...verifiedCerts, ...claimedCerts]));
     const certProvenance = verifiedCerts.length > 0 ? "SAM" : (claimedCerts.length > 0 ? "CRAWL" : "MANUAL");
 
+    // Phase 22 — write HubSpot STANDARD properties so sales reps don't have
+    // to dig through custom fields. industry, numberofemployees,
+    // annualrevenue, jobtitle, hs_analytics_source_data_1 ("Quick Checker"
+    // — appears in the Last Traffic Source Drill-Down column), hs_lead_status
+    // ("NEW"), state — all map to HubSpot defaults that ship with every
+    // contact view. Customs (cp_*) only used when no standard equivalent exists.
+    const empCount = (input.firmographics as { employee_count?: { value?: number | null } } | undefined)?.employee_count?.value || undefined;
+    const revenueDollars = (input.firmographics as { revenue?: { value?: number | null } } | undefined)?.revenue?.value || undefined;
+    const inferredIndustry = (input.firmographics as { industries?: { value?: string[] | null } } | undefined)?.industries?.value?.[0] || undefined;
+
     const contactId = await upsertHubSpotContact({
         email: input.email,
         firstname,
@@ -400,17 +419,26 @@ export async function pushQuickCheckerBriefToHubSpot(input: QuickCheckerBriefInp
         company: input.companyName,
         lifecyclestage: "lead",
         extra: {
+            // ── Standard HubSpot properties (Phase 22 audit) ──
+            hs_analytics_source: "OTHER_CAMPAIGNS",
+            hs_analytics_source_data_1: "Quick Checker",
+            hs_analytics_source_data_2: input.quickCheckerUrl || undefined,
+            hs_lead_status: "NEW",
+            industry: inferredIndustry,
+            numberofemployees: empCount,
+            annualrevenue: revenueDollars,
+            jobtitle: input.contactJobTitle || undefined,
+            state: input.reconciled?.state.value || undefined,
+            website: input.website || undefined,
+            // ── Custom CP properties (no standard equivalent) ──
             quick_checker_url: input.quickCheckerUrl || undefined,
             readiness_score: typeof input.readinessScore === "number" ? input.readinessScore : undefined,
             naics_codes: (input.naicsCodes || []).slice(0, 5).join(", ") || undefined,
             uei: input.reconciled?.uei.value || undefined,
             business_state: input.reconciled?.state.value || undefined,
             sam_registered: input.reconciled?.sam_active,
-            // Phase 21: new multi-select replaces the bool veteran_owned.
-            // HubSpot expects checkbox values as semicolon-joined string.
             cp_set_aside_certifications: allCertKeys.length > 0 ? allCertKeys.join(";") : undefined,
             cp_set_asides_verified_by: allCertKeys.length > 0 ? certProvenance : undefined,
-            // Legacy bool — kept in sync for backwards-compat dashboards.
             veteran_owned: (input.reconciled?.verified_certifications || []).some(c =>
                 c.toUpperCase() === "VOSB" || c.toUpperCase() === "SDVOSB",
             ),
@@ -430,6 +458,32 @@ export async function pushQuickCheckerBriefToHubSpot(input: QuickCheckerBriefInp
     const domain = extractDomain(input.website) || extractDomain(input.email);
     if (domain) {
         const companyProps: Record<string, string> = {};
+
+        // ── HubSpot STANDARD company fields (Phase 22) ──
+        // These show up in the default company view and feed every HubSpot
+        // report. Always write them when we have data so reps don't need
+        // to switch between standard + custom tabs to see the basics.
+        companyProps.lifecyclestage = "lead";
+        companyProps.hs_lead_status = "NEW";
+        companyProps.hs_analytics_source = "OTHER_CAMPAIGNS";
+        companyProps.hs_analytics_source_data_1 = "Quick Checker";
+        if (input.quickCheckerUrl)         companyProps.hs_analytics_source_data_2 = input.quickCheckerUrl;
+        if (inferredIndustry)              companyProps.industry = inferredIndustry;
+        if (empCount)                      companyProps.numberofemployees = String(empCount);
+        if (revenueDollars)                companyProps.annualrevenue = String(revenueDollars);
+        const foundedYear = (input.firmographics as { founded_year?: { value?: number | null } } | undefined)?.founded_year?.value;
+        if (foundedYear)                   companyProps.founded_year = String(foundedYear);
+        if (input.reconciled?.state.value) companyProps.state = input.reconciled.state.value;
+        if (input.website)                 companyProps.website = input.website;
+        if ((input.naicsCodes || []).length) companyProps.hs_keywords = input.naicsCodes!.slice(0, 5).join(", ");
+        // Description: short strategic brief — leads with strengths so the
+        // rep sees the pitch angle the moment they open the company.
+        if (input.strengths && input.strengths.length > 0) {
+            const strengthSummary = input.strengths.slice(0, 3).map(s => `• ${s}`).join("\n");
+            companyProps.description = `Federal-contracting profile (CapturePilot):\n${strengthSummary}\n\nFull brief: ${input.quickCheckerUrl || "see contact notes"}`;
+        }
+
+        // ── Custom CP company props (no standard equivalent) ──
         if (allCertKeys.length > 0) {
             companyProps.cp_set_aside_certifications = allCertKeys.join(";");
             companyProps.cp_set_asides_verified_by   = certProvenance;
@@ -439,9 +493,6 @@ export async function pushQuickCheckerBriefToHubSpot(input: QuickCheckerBriefInp
         if (typeof input.readinessScore === "number") companyProps.cp_readiness_score = String(input.readinessScore);
         if (input.reconciled?.sam_active !== undefined) companyProps.cp_sam_registered = String(!!input.reconciled.sam_active);
         if (input.quickCheckerUrl)             companyProps.cp_quick_checker_url = input.quickCheckerUrl;
-        // Standard HubSpot company properties — populate when we have them.
-        if (input.reconciled?.state.value)     companyProps.state = input.reconciled.state.value;
-        if (input.website)                     companyProps.website = input.website;
 
         await syncCompanyForContact({
             contactId,
