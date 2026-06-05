@@ -7,6 +7,7 @@ import { CookieConsent } from "@/components/CookieConsent";
 import MetaPixel from "@/components/MetaPixel";
 import FbclidCapture from "@/components/FbclidCapture";
 import PixelInstrumentation from "@/components/PixelInstrumentation";
+import ClarityScript from "@/components/ClarityScript";
 import "./globals.css";
 
 const inter = Inter({
@@ -50,6 +51,7 @@ export default function RootLayout({
         </Suspense>
         <SpeedInsights />
         <Analytics />
+        <ClarityScript />
         {/* HubSpot Tracking Code — Portal 245197783 */}
         <script
           type="text/javascript"
