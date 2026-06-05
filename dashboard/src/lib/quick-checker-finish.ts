@@ -244,6 +244,29 @@ function computeEasyWins(
 export async function runPostConfirmationPipeline(analysisId: string): Promise<void> {
     const sb = makeDb();
 
+    // Watchdog: if the pipeline doesn't reach status=complete within 2.5 min,
+    // a deferred timer force-flips the row to complete so the /check UI can't
+    // sit stuck at "Writing your personalized report ~6s" indefinitely. Fires
+    // even if a downstream call (recompete USAspending, geo expansion, etc.)
+    // hangs without throwing. Clears itself on normal completion.
+    const watchdog = setTimeout(async () => {
+        try {
+            const { data: row } = await sb
+                .from("company_analyses")
+                .select("status, ai_match_summaries")
+                .eq("id", analysisId)
+                .maybeSingle();
+            if (row && row.status !== "complete" && row.ai_match_summaries) {
+                console.warn(`[quick-checker-finish] watchdog fired for ${analysisId} — force-completing stuck pipeline`);
+                await sb.from("company_analyses")
+                    .update({ status: "complete", updated_at: new Date().toISOString() })
+                    .eq("id", analysisId);
+            }
+        } catch (err) {
+            console.error("[quick-checker-finish] watchdog failed:", err);
+        }
+    }, 150_000);  // 2.5 min — typical pipeline runs in 30-60s
+
     try {
         const { data: analysis, error } = await sb
             .from("company_analyses")
@@ -884,5 +907,10 @@ export async function runPostConfirmationPipeline(analysisId: string): Promise<v
             status: "error",
             error_message: (error as Error).message || "Pipeline failed after confirmation",
         }).eq("id", analysisId);
+    } finally {
+        // Cancel the watchdog — pipeline ran to completion (success or
+        // handled error) so we don't want the timer flipping a row that
+        // already finished.
+        clearTimeout(watchdog);
     }
 }
