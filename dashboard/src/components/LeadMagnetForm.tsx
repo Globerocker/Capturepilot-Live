@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { Mail, MapPin, CheckCircle2, Loader2, Pencil, Search, Plus, Phone, Users, DollarSign, Calendar, Sparkles } from "lucide-react";
+import { Mail, MapPin, CheckCircle2, Loader2, Pencil, Search, Plus, Phone, Users, DollarSign, Calendar, Sparkles, User } from "lucide-react";
 import clsx from "clsx";
 import { NAICS_CODES } from "@/lib/naics-codes";
 
@@ -63,6 +63,10 @@ export function LeadMagnetForm({ analysisId, inferredProfile, inferredNaics, cra
         || (inferredProfile.phone as string)
         || "";
     const initialName = (contactPerson.name as string) || "";
+    // Split inferred name into first/last for the gated contact block.
+    const nameParts = initialName.trim().split(/\s+/).filter(Boolean);
+    const initialFirstName = nameParts.length > 0 ? nameParts[0] : "";
+    const initialLastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : "";
     const initialEmployees = (inferredProfile.employee_count as number) || null;
     const initialYears = (inferredProfile.years_in_business as number) || null;
 
@@ -76,7 +80,8 @@ export function LeadMagnetForm({ analysisId, inferredProfile, inferredNaics, cra
         (contactPerson.email as string) || (inferredProfile.email as string) || ""
     );
     const [phone, setPhone] = useState(initialPhone);
-    const [contactName, setContactName] = useState(initialName);
+    const [firstName, setFirstName] = useState(initialFirstName);
+    const [lastName, setLastName] = useState(initialLastName);
     const [employeeCount, setEmployeeCount] = useState<string>(initialEmployees ? String(initialEmployees) : "");
     const [yearsInBusiness, setYearsInBusiness] = useState<string>(initialYears ? String(initialYears) : "");
     const [revenueBand, setRevenueBand] = useState<string>("");
@@ -125,9 +130,16 @@ export function LeadMagnetForm({ analysisId, inferredProfile, inferredNaics, cra
         if (selectedNaics.length === 0) return "Select at least one NAICS code";
         if (!companyName.trim()) return "Enter your company name";
         if (requireContact) {
+            if (!firstName.trim()) return "Enter your first name";
+            if (!lastName.trim()) return "Enter your last name";
             if (!email.trim()) return "Enter your email — we'll send your full report there";
-            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return "That email doesn't look right";
+            const cleanEmail = email.trim();
+            if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(cleanEmail)) return "That email doesn't look right";
+            if (cleanEmail.length > 100) return "That email is too long — please double-check";
+            if ((cleanEmail.match(/@/g) || []).length !== 1) return "That email doesn't look right";
             if (!phone.trim()) return "Enter a phone number so we can verify your report";
+            const cleanPhone = phone.replace(/\D/g, "");
+            if (cleanPhone.length < 7) return "That phone number looks too short — include area code";
         }
         return null;
     }
@@ -149,7 +161,9 @@ export function LeadMagnetForm({ analysisId, inferredProfile, inferredNaics, cra
                     analysis_id: analysisId,
                     email: email.trim() || undefined,
                     phone: phone.trim() || undefined,
-                    contact_name: contactName.trim() || undefined,
+                    first_name: firstName.trim() || undefined,
+                    last_name: lastName.trim() || undefined,
+                    contact_name: [firstName.trim(), lastName.trim()].filter(Boolean).join(" ") || undefined,
                     company_name: companyName.trim(),
                     state,
                     naics_codes: selectedNaics,
@@ -487,28 +501,60 @@ export function LeadMagnetForm({ analysisId, inferredProfile, inferredNaics, cra
                 {/* Contact block — required when requireContact */}
                 <div className="bg-stone-50 border border-stone-200 rounded-2xl p-4 sm:p-5 space-y-3">
                     <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">
-                        {requireContact ? "Send my report to" : "Contact details (optional)"}
+                        {requireContact ? "Last step — who should we send the report to?" : "Contact details (optional)"}
                     </p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                             <label className="block text-xs font-bold text-stone-500 mb-1.5">
-                                <Mail className="w-3 h-3 inline mr-1" /> Email{requireContact && <span className="text-emerald-600 ml-1">*</span>}
+                                <User className="w-3 h-3 inline mr-1" /> First name{requireContact && <span className="text-emerald-600 ml-1">*</span>}
                             </label>
                             <input
-                                type="email"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
+                                type="text"
+                                autoComplete="given-name"
+                                value={firstName}
+                                onChange={(e) => setFirstName(e.target.value)}
                                 required={requireContact}
                                 className="w-full px-4 py-2.5 rounded-xl border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400"
-                                placeholder="you@company.com"
+                                placeholder="Jane"
                             />
                         </div>
                         <div>
                             <label className="block text-xs font-bold text-stone-500 mb-1.5">
-                                <Phone className="w-3 h-3 inline mr-1" /> Phone{requireContact && <span className="text-emerald-600 ml-1">*</span>}
+                                <User className="w-3 h-3 inline mr-1" /> Last name{requireContact && <span className="text-emerald-600 ml-1">*</span>}
+                            </label>
+                            <input
+                                type="text"
+                                autoComplete="family-name"
+                                value={lastName}
+                                onChange={(e) => setLastName(e.target.value)}
+                                required={requireContact}
+                                className="w-full px-4 py-2.5 rounded-xl border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400"
+                                placeholder="Doe"
+                            />
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label className="block text-xs font-bold text-stone-500 mb-1.5">
+                                <Mail className="w-3 h-3 inline mr-1" /> Work email{requireContact && <span className="text-emerald-600 ml-1">*</span>}
+                            </label>
+                            <input
+                                type="email"
+                                autoComplete="email"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                required={requireContact}
+                                className="w-full px-4 py-2.5 rounded-xl border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400"
+                                placeholder="jane@company.com"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-stone-500 mb-1.5">
+                                <Phone className="w-3 h-3 inline mr-1" /> Direct phone{requireContact && <span className="text-emerald-600 ml-1">*</span>}
                             </label>
                             <input
                                 type="tel"
+                                autoComplete="tel"
                                 value={phone}
                                 onChange={(e) => setPhone(e.target.value)}
                                 required={requireContact}
@@ -516,18 +562,6 @@ export function LeadMagnetForm({ analysisId, inferredProfile, inferredNaics, cra
                                 placeholder="+1 (555) 555-5555"
                             />
                         </div>
-                    </div>
-                    <div>
-                        <label className="block text-xs font-bold text-stone-500 mb-1.5">
-                            Your name <span className="text-stone-400 font-normal normal-case">(optional)</span>
-                        </label>
-                        <input
-                            type="text"
-                            value={contactName}
-                            onChange={(e) => setContactName(e.target.value)}
-                            className="w-full px-4 py-2.5 rounded-xl border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400"
-                            placeholder="Jane Doe"
-                        />
                     </div>
                 </div>
 

@@ -922,15 +922,25 @@ export async function runPostConfirmationPipeline(analysisId: string): Promise<v
                     .maybeSingle();
                 const firmoBlob = (anaWithFirmo?.firmographics as Parameters<typeof pushQuickCheckerBriefToHubSpot>[0]["firmographics"]) || null;
                 const inferredFresh = (anaWithFirmo?.inferred_profile || {}) as Record<string, unknown>;
-                const jobTitle = (inferredFresh.contact_person as { title?: string } | null)?.title
+                const contactPerson = (inferredFresh.contact_person || {}) as {
+                    title?: string; name?: string; first_name?: string; last_name?: string; phone?: string;
+                };
+                const jobTitle = contactPerson.title
                     || (inferredFresh.job_title as string | null) || null;
+                // Prefer the user-confirmed first/last from the /check form
+                // (written into contact_person by /api/lead-magnet/confirm),
+                // then fall back to the older single contact_name field.
+                const confirmedFullName = [contactPerson.first_name, contactPerson.last_name].filter(Boolean).join(" ").trim()
+                    || contactPerson.name
+                    || (inferredFresh.contact_name as string | null)
+                    || (analysis.lead_name as string | null)
+                    || null;
 
                 await pushQuickCheckerBriefToHubSpot({
                     email: leadEmail,
                     companyName,
-                    contactName: (inferredFresh.contact_name as string | null)
-                        || (analysis.lead_name as string | null) || null,
-                    contactPhone: (inferredFresh.contact_phone as string | null) || null,
+                    contactName: confirmedFullName,
+                    contactPhone: contactPerson.phone || (inferredFresh.contact_phone as string | null) || null,
                     contactJobTitle: jobTitle,
                     website: (analysis.website as string | null) || null,
                     quickCheckerUrl: `${baseUrl}/check/${analysisId}`,

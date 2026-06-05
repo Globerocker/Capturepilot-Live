@@ -18,6 +18,8 @@ export async function POST(request: NextRequest) {
             email,
             phone,
             contact_name,
+            first_name,
+            last_name,
             company_name,
             state,
             naics_codes,
@@ -30,6 +32,8 @@ export async function POST(request: NextRequest) {
             email?: string;
             phone?: string;
             contact_name?: string;
+            first_name?: string;
+            last_name?: string;
             company_name?: string;
             state?: string;
             naics_codes?: string[];
@@ -38,6 +42,12 @@ export async function POST(request: NextRequest) {
             years_in_business?: number;
             annual_revenue_band?: string;
         };
+        // Compute the merged "full name" from either form path:
+        // - new UI sends first_name + last_name (required on /check)
+        // - any older caller may still send the combined contact_name
+        const mergedName = [first_name?.trim(), last_name?.trim()].filter(Boolean).join(" ").trim()
+            || contact_name?.trim()
+            || "";
 
         if (!analysis_id) {
             return NextResponse.json({ error: "analysis_id is required" }, { status: 400 });
@@ -197,10 +207,12 @@ export async function POST(request: NextRequest) {
         // Update corrected profile in inferred_profile — merge nested contact_person carefully
         const existingProfile = (analysis.inferred_profile as Record<string, unknown>) || {};
         const existingContact = (existingProfile.contact_person as Record<string, unknown> | null) || null;
-        const mergedContact = (contact_name || phone || email)
+        const mergedContact = (mergedName || phone || email)
             ? {
                 ...(existingContact || {}),
-                ...(contact_name ? { name: contact_name } : {}),
+                ...(mergedName ? { name: mergedName } : {}),
+                ...(first_name?.trim() ? { first_name: first_name.trim() } : {}),
+                ...(last_name?.trim() ? { last_name: last_name.trim() } : {}),
                 ...(email ? { email } : {}),
                 ...(phone ? { phone, mobile_phone: phone } : {}),
                 source: existingContact?.source || "user_confirmed",
@@ -247,7 +259,7 @@ export async function POST(request: NextRequest) {
                 // Auto-Enrich via Apollo before pushing to HubSpot
                 const { data: latestAnalysis } = await sb.from("company_analyses").select("website, inferred_profile").eq("id", analysis_id).single();
                 const domain = latestAnalysis?.website ? String(latestAnalysis.website).replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0] : "";
-                const apolloContactName = contact_name || String((latestAnalysis?.inferred_profile as any)?.contact_person?.name || "");
+                const apolloContactName = mergedName || String((latestAnalysis?.inferred_profile as any)?.contact_person?.name || "");
                 if (!finalPhone) {
                     finalPhone = String((latestAnalysis?.inferred_profile as any)?.contact_person?.phone || "");
                 }
