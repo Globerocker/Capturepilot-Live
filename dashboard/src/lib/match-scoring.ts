@@ -575,6 +575,26 @@ export function scoreOpportunityLeadMagnet(
         total *= 0.7;
     }
 
+    // ── Phase 9 — JACKPOT bonus when NAICS + keywords both hit ──
+    // The founder's spec: "If we have NAICS code AND keyword matching,
+    // that's a jackpot." Trigger when:
+    //   - naics ≥ 0.6 (exact 6-digit OR 4-digit industry-group match), AND
+    //   - at least 2 distinct keyword matches in title/description
+    // Boost is +0.15 (linear in kw count up to 5 hits). With our 0.65 HOT
+    // threshold this reliably pushes a strong-NAICS + 2-kw opp into HOT,
+    // even when geo/cert are zero. Single-keyword matches get a smaller
+    // +0.05 nudge so they still benefit but don't carry the day alone.
+    let jackpotBonus = 0;
+    if (hasKeywords && naics >= 0.6 && kwMatched.length >= 1) {
+        const hitCount = Math.min(5, kwMatched.length);
+        if (hitCount >= 2) {
+            jackpotBonus = 0.15 * Math.min(1, hitCount / 3); // 0.10 at 2 hits, 0.15 at 3+ hits
+        } else {
+            jackpotBonus = 0.05;
+        }
+        total = Math.min(1.0, total + jackpotBonus);
+    }
+
     // Deadline-aware reranking unchanged from prior version.
     let deadlineBoost = 0;
     if (total >= 0.55 && opp.response_deadline) {
@@ -607,6 +627,9 @@ export function scoreOpportunityLeadMagnet(
     }
     if (deadlineBoost > 0) {
         breakdown.deadline_boost = Math.round(deadlineBoost * 100) / 100;
+    }
+    if (jackpotBonus > 0) {
+        breakdown.jackpot_bonus = Math.round(jackpotBonus * 100) / 100;
     }
 
     return {

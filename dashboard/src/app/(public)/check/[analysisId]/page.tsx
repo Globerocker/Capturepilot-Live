@@ -659,6 +659,25 @@ function MatchCard({ match, rank, hero, userNaicsLabels }: { match: MatchData; r
                                             Too large for SB
                                         </span>
                                     )}
+                                    {/* Phase 9: keyword JACKPOT badge — when ≥2 keywords matched,
+                                        this is the founder's "NAICS + keywords = jackpot" signal.
+                                        Yellow flame visually screams "high-confidence match". */}
+                                    {match.matched_keywords && match.matched_keywords.length >= 2 && (
+                                        <span
+                                            className="text-[9px] font-bold bg-yellow-100 text-yellow-900 border border-yellow-400 px-2 py-0.5 rounded inline-flex items-center gap-1"
+                                            title={`Keywords matched: ${match.matched_keywords.join(", ")}`}
+                                        >
+                                            🔥 {match.matched_keywords.length} kw matches
+                                        </span>
+                                    )}
+                                    {match.matched_keywords && match.matched_keywords.length === 1 && (
+                                        <span
+                                            className="text-[9px] font-bold bg-yellow-50 text-yellow-800 border border-yellow-200 px-2 py-0.5 rounded"
+                                            title={`Keyword matched: ${match.matched_keywords[0]}`}
+                                        >
+                                            1 kw match
+                                        </span>
+                                    )}
                                 </div>
                                 <p className="text-[11px] text-stone-500">{cleanAgency(match.agency) || "Agency name pending"}</p>
                             </div>
@@ -698,6 +717,23 @@ function MatchCard({ match, rank, hero, userNaicsLabels }: { match: MatchData; r
                         <p className="text-sm text-stone-700 leading-relaxed">
                             <HighlightedSnippet text={String(match.description_url)} terms={highlightTerms} maxLen={280} />
                         </p>
+                    )}
+
+                    {/* Phase 9: explicit matched-keywords chip row so the user
+                        can SEE which of their nail-down keywords hit, not just
+                        a count. Most useful for the "is this match real?" gut
+                        check — if the matched keyword is super-specific
+                        ("fleet maintenance for class-8 trucks"), trust is high. */}
+                    {match.matched_keywords && match.matched_keywords.length > 0 && (
+                        <div className="flex items-center gap-1.5 flex-wrap text-[10px]">
+                            <span className="text-stone-500 font-semibold uppercase tracking-widest">Matched keywords:</span>
+                            {match.matched_keywords.slice(0, 6).map(k => (
+                                <span
+                                    key={k}
+                                    className="bg-yellow-50 text-yellow-900 border border-yellow-200 px-2 py-0.5 rounded font-medium"
+                                >{k}</span>
+                            ))}
+                        </div>
                     )}
 
                     {/* AI fit summary */}

@@ -27,6 +27,7 @@ import { findCompetitors, computeReadinessScore } from "@/lib/quick-checker-help
 import { resolveDescriptions } from "@/lib/fetch-sam-description";
 import { reconcileProfile, type ReconciledProfile } from "@/lib/quick-checker/reconcile";
 import { pushQuickCheckerBriefToHubSpot } from "@/lib/hubspot-brief";
+import { enrichFirmographics } from "@/lib/quick-checker/firmographics";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY!;
@@ -221,12 +222,21 @@ export async function runPostConfirmationPipeline(analysisId: string): Promise<v
         const certifications = (crawlData.certifications as { type: string; confidence: number }[]) || [];
         const detectedStates = (crawlData.detected_states as string[]) || [];
 
-        // Hydrate keyword aliases from the gov_keywords library so the scorer
-        // can match variant phrasings (e.g. "AI" -> ["artificial intelligence",
-        // "machine learning"]). The user-supplied keyword arrays only carry
-        // canonical terms; aliases live in the library.
-        const rawPrimary = (inferredProfile.primary_keywords as Array<{ keyword: string; aliases?: string[] }> | undefined) || [];
+        // ── Phase 9 — auto-promote nail_down_keywords to primary_keywords ──
+        // When the user didn't curate their own keywords, fall back to the
+        // 3-5 nail-down phrases the deep-extract pipeline produced. These
+        // are HYPER-SPECIFIC by design ("fleet maintenance for Class-8 trucks"
+        // not "trucks") so they make the matcher pop on the right opps
+        // instead of carpet-bombing every 541xxx code.
+        let rawPrimary = (inferredProfile.primary_keywords as Array<{ keyword: string; aliases?: string[] }> | undefined) || [];
         const rawSecondary = (inferredProfile.secondary_keywords as Array<{ keyword: string; aliases?: string[] }> | undefined) || [];
+        if (rawPrimary.length === 0) {
+            const nailDown = (crawlData.nail_down_keywords as string[]) || [];
+            if (nailDown.length > 0) {
+                rawPrimary = nailDown.slice(0, 5).map(k => ({ keyword: String(k).toLowerCase().trim() }));
+                console.log("[quick-checker-finish] auto-filled primary_keywords from nail_down_keywords:", rawPrimary.map(k => k.keyword).join(", "));
+            }
+        }
         const allKeywordTerms = [...rawPrimary, ...rawSecondary].map(k => k.keyword).filter(Boolean);
         const aliasLookup = new Map<string, string[]>();
         if (allKeywordTerms.length > 0) {
@@ -566,6 +576,53 @@ export async function runPostConfirmationPipeline(analysisId: string): Promise<v
             ],
             usaspendingAwardCount: usaspendingData?.award_count || 0,
         });
+
+        // ── Phase 8: firmographic 4-layer cascade (Apollo → SAM → OpenCorp → Wayback) ──
+        // Fill gaps in employees / revenue / founded_year / industries that
+        // the crawl couldn't extract. Fire-and-forget safe — failures are
+        // silently swallowed and the existing crawl values stand.
+        try {
+            let domain = "";
+            try { domain = new URL((analysis.website as string) || "").hostname.replace(/^www\./, ""); } catch { /* ignore */ }
+            const knownUei = (samData?.uei as string | null | undefined) || null;
+            const firmo = await enrichFirmographics({
+                domain,
+                companyName,
+                uei: knownUei,
+                existing: {
+                    employee_count: tempProfile.employee_count,
+                    founded_year: (inferredProfile.years_in_business as number | null)
+                        ? new Date().getFullYear() - (inferredProfile.years_in_business as number)
+                        : null,
+                    industries: (crawlData.industries_served as string[]) || [],
+                },
+            });
+            // Persist enriched values back to inferred_profile + crawl_data so
+            // the UI + HubSpot push see them. Only OVERWRITE when the new value
+            // has a real (non-missing) source — never clobber a confirmed crawl
+            // value with a missing API result.
+            const updates: Record<string, unknown> = {};
+            const profileUpdates: Record<string, unknown> = { ...inferredProfile };
+            if (firmo.employee_count.value !== null && firmo.employee_count.source !== "missing") {
+                profileUpdates.employee_count = firmo.employee_count.value;
+                // Update tempProfile in-memory so the rest of the pipeline sees it.
+                tempProfile.employee_count = firmo.employee_count.value;
+            }
+            if (firmo.revenue_band.value && firmo.revenue_band.source !== "missing") {
+                profileUpdates.annual_revenue_band = firmo.revenue_band.value;
+            }
+            if (firmo.years_in_business.value !== null && firmo.years_in_business.source !== "missing") {
+                profileUpdates.years_in_business = firmo.years_in_business.value;
+            }
+            if (firmo.industries.value && firmo.industries.value.length > 0) {
+                profileUpdates.industries = firmo.industries.value;
+            }
+            updates.inferred_profile = profileUpdates;
+            updates.firmographics = firmo;
+            await sb.from("company_analyses").update(updates).eq("id", analysisId);
+        } catch (err) {
+            console.error("[quick-checker-finish] firmographics enrich failed:", err);
+        }
 
         // ── Phase 3: reconcile crawl claims with SAM + USAspending ──────────
         // Best-effort — failure never blocks the rest of the pipeline. The
