@@ -385,6 +385,8 @@ const PRICING_URL = "https://www.capturepilot.com/pricing";
 const BLOG_URL = "https://www.capturepilot.com/blog";
 const AUDIT_URL = "https://meetings-na2.hubspot.com/americurial/intro-call";
 const DASHBOARD_URL = "https://app.capturepilot.com/signup";
+const QC_URL = "https://app.capturepilot.com/check";
+const CAPSTMT_AUDIT_URL = "https://www.capturepilot.com/resources/capability-statement-website-audit";
 
 export interface NurtureTemplate {
     subject: string;
@@ -832,6 +834,103 @@ export const NURTURE_TEMPLATES: Record<string, NurtureTemplate> = {
                 </ul>
                 <p style="margin:0;font-size:14px;color:${COLORS.muted};">Either way, thanks for the 90 days.<br>— André</p>
             `,
+            isMarketing: true,
+        }),
+    },
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Re-engagement one-off templates (NOT part of either drip sequence).
+    // Sent manually via scripts/reengage-*.ts to specific cohorts who never
+    // got the nurture wired (the backlog of pre-cron leads).
+    //
+    //   reengage_biz_fb     — past FB lead-ad downloaders with biz email
+    //   reengage_freemail_fb — past FB lead-ad downloaders with gmail/yahoo
+    //   reengage_qc         — past Quick Checker submissions
+    //
+    // All three reference the new /resources/capability-statement-website-audit
+    // landing page as the value anchor. After a recipient engages (replies /
+    // clicks / signs up) we enroll them in the appropriate drip sequence
+    // starting from Day 3 (skip the Day-0 welcome that assumes a fresh action).
+    // ─────────────────────────────────────────────────────────────────────────
+
+    reengage_biz_fb: {
+        subject: "The #1 gap from our calls (free fix inside)",
+        html: wrap({
+            preheader: "You grabbed the Field Manual a while back. Here's a new free asset based on what we've been seeing in calls.",
+            topAction: {
+                label: "Read the free 10-point audit",
+                url: CAPSTMT_AUDIT_URL,
+                note: "Capability Statement + Website — the single thing that decides whether the contracting officer reads your bid.",
+            },
+            body: `
+                <h1 style="margin:0 0 14px;font-size:24px;font-weight:800;color:${COLORS.ink};letter-spacing:-0.02em;">Hey {{first_name}} — quick update.</h1>
+                <p style="margin:0 0 14px;">You grabbed the <strong>Federal Field Manual</strong> from us a while back. I owe you a real update.</p>
+                <p style="margin:0 0 14px;">Since then, I've done ~50 capture calls with small businesses chasing federal work. One pattern keeps showing up — bigger than pricing, bigger than past performance, bigger than NAICS picks:</p>
+                <p style="margin:0 0 16px;background:#fffbeb;border-left:3px solid #f59e0b;padding:12px 14px;font-size:15px;color:${COLORS.ink};font-weight:600;">The capability statement reads like a commercial brochure and the website looks like it hasn't been touched in two years.</p>
+                <p style="margin:0 0 14px;">Contracting officers skim capability statements in 8 seconds. If yours doesn't pass the skim test, your technical proposal never gets read — your bid is binned before evaluation. Same with the website: COs check it before shortlisting and dock credibility quietly.</p>
+                <p style="margin:0 0 14px;">I just wrote up everything we learned: <a href="${CAPSTMT_AUDIT_URL}" style="color:${COLORS.accentDark};font-weight:700;">the 10-point Capability Statement + Website audit</a>. Free, no signup. Pull yours up, mark each row, and you'll have a punch-list of fixes by tonight.</p>
+                <p style="margin:0 0 14px;background:#ecfdf5;border-left:3px solid ${COLORS.accent};padding:12px 14px;font-size:14px;color:${COLORS.ink};"><strong>Honest offer:</strong> reply to this email with your current capability statement (PDF attachment). I'll send back a 5-line teardown — what's working, what to cut, what to add. Free, takes me 10 minutes, no follow-up sales pitch unless you ask.</p>
+                <p style="margin:0 0 12px;font-size:14px;color:${COLORS.muted};">P.S. If the Field Manual got lost in your inbox three months ago, reply "resend" and I'll send a fresh copy.</p>
+            `,
+            ctaText: "Read the free 10-point audit",
+            ctaUrl: CAPSTMT_AUDIT_URL,
+            ctaSecondary: "Or send your capability statement for a free teardown",
+            ctaSecondaryUrl: "mailto:hello@capturepilot.com?subject=Capability%20Statement%20Teardown",
+            isMarketing: true,
+        }),
+    },
+
+    reengage_freemail_fb: {
+        subject: "Quick favor about the email you used",
+        html: wrap({
+            preheader: "Future free assets go to work email only. Easy fix — three options below.",
+            topAction: {
+                label: "Run the Quick Checker (60 sec, auto-validates)",
+                url: QC_URL,
+                note: "The simplest path: scan your business website. We auto-link the result to your real biz email and you're set.",
+            },
+            body: `
+                <h1 style="margin:0 0 14px;font-size:24px;font-weight:800;color:${COLORS.ink};letter-spacing:-0.02em;">Hey {{first_name}} — quick favor.</h1>
+                <p style="margin:0 0 14px;">You downloaded our <strong>Federal Field Manual</strong> a while back using <strong>{{email_used}}</strong>. Thanks for that.</p>
+                <p style="margin:0 0 14px;">Heads up — future free assets are going to <strong>work-email-only</strong>. Two reasons: (1) it lets me actually verify you're a real business (not a bot or someone collecting freebies), and (2) my Resend deliverability tanks when I blast personal Gmail addresses, which hurts the people who DO want this.</p>
+                <p style="margin:0 0 14px;"><strong>Three doors</strong> — all equally fine:</p>
+                <ol style="margin:0 0 16px 18px;padding:0;font-size:15px;">
+                  <li style="margin-bottom:10px;"><strong>Run the 60-second Quick Checker</strong> on your business website. We pick up your real work email automatically, and you walk away with NAICS, SAM status, certification fit, and your top 5 matching federal opportunities. <a href="${QC_URL}" style="color:${COLORS.accentDark};font-weight:700;">Start here →</a></li>
+                  <li style="margin-bottom:10px;"><strong>Reply with your work email.</strong> One sentence — "use this one: <em>jane@acme.com</em>" — and you're back on the list.</li>
+                  <li><strong>Personal email is fine.</strong> If you genuinely want federal content at your Gmail address (some folks do — small operations, side hustles, just exploring), reply with "personal is fine" and I'll keep you on a once-a-month low-volume list.</li>
+                </ol>
+                <p style="margin:0 0 14px;">If none of those land — no hard feelings. This'll be the last one and we're square.</p>
+                <p style="margin:0 0 12px;font-size:14px;color:${COLORS.muted};">P.S. The capability-statement + website audit I just published is the #1 gap we see in our calls. <a href="${CAPSTMT_AUDIT_URL}" style="color:${COLORS.muted};text-decoration:underline;">Worth a read either way.</a></p>
+            `,
+            ctaText: "Run the 60-second Quick Checker",
+            ctaUrl: QC_URL,
+            ctaSecondary: "Or reply with your work email",
+            ctaSecondaryUrl: "mailto:hello@capturepilot.com?subject=Use%20this%20email%20instead",
+            isMarketing: true,
+        }),
+    },
+
+    reengage_qc: {
+        subject: "Your scan + the #1 thing missing from most small-biz bids",
+        html: wrap({
+            preheader: "You ran the Quick Checker. Here's the next asset — the capability statement audit we just published.",
+            topAction: {
+                label: "Read the 10-point capability statement audit",
+                url: CAPSTMT_AUDIT_URL,
+                note: "The single biggest gap we see in calls — bigger than pricing, past performance, or NAICS choice. Free audit.",
+            },
+            body: `
+                <h1 style="margin:0 0 14px;font-size:24px;font-weight:800;color:${COLORS.ink};letter-spacing:-0.02em;">Hey {{first_name}} — André here.</h1>
+                <p style="margin:0 0 14px;">You ran the <strong>Quick Checker</strong> on your business a while back. Whatever score came back, the part the form can't tell you is what's actually blocking most small businesses from winning federal contracts. It's not pricing. It's not past performance. It's not NAICS picks.</p>
+                <p style="margin:0 0 16px;background:#fffbeb;border-left:3px solid #f59e0b;padding:12px 14px;font-size:15px;color:${COLORS.ink};font-weight:600;">It's the capability statement and the website. Contracting officers skim them in 8 seconds. If yours doesn't pass the skim test, the bid is binned before evaluation.</p>
+                <p style="margin:0 0 14px;">I just published <a href="${CAPSTMT_AUDIT_URL}" style="color:${COLORS.accentDark};font-weight:700;">the 10-point Capability Statement + Website audit</a> based on patterns from ~50 capture calls. Free, no signup. Pull yours up, mark each row, and you'll have a punch-list of fixes by tonight.</p>
+                <p style="margin:0 0 14px;background:#ecfdf5;border-left:3px solid ${COLORS.accent};padding:12px 14px;font-size:14px;color:${COLORS.ink};"><strong>Free teardown offer:</strong> reply with your current capability statement (PDF attachment). I'll send back a 5-line teardown — what's working, what to cut, what to add. Takes me 10 minutes. No follow-up sales pitch unless you ask.</p>
+                <p style="margin:0 0 12px;font-size:14px;color:${COLORS.muted};">P.S. If you want fresh matches against your business, the dashboard is free with 50 daily federal opportunity matches — <a href="${DASHBOARD_URL}" style="color:${COLORS.muted};text-decoration:underline;">claim it here</a>. No card.</p>
+            `,
+            ctaText: "Read the free capability statement audit",
+            ctaUrl: CAPSTMT_AUDIT_URL,
+            ctaSecondary: "Or send yours for a free teardown",
+            ctaSecondaryUrl: "mailto:hello@capturepilot.com?subject=Capability%20Statement%20Teardown",
             isMarketing: true,
         }),
     },
