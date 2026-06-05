@@ -2,8 +2,14 @@
  * dark-panel.mjs — Section divider (dark, solid forest green + grid).
  *
  * UNIFIED PIPELINE: renders inline as <section class="doc-section
- * doc-section--dark">. Chromium @page handles footer + page numbering.
- * NO local .page wrapper. NO local footer.
+ * doc-section--dark">. Chromium @page handles BOTH the per-page header
+ * (CP logo + document label) and footer (CAPTUREPILOT · TITLE  N / N)
+ * for every printed page automatically — see render.mjs
+ * `displayHeaderFooter: true` + headerTemplate + footerTemplate.
+ *
+ * DO NOT render an inline .doc-hdr / .hdr / .ftr inside this section —
+ * doing so produces visible duplicate strips on top of Chromium's
+ * running chrome. Section templates ONLY render page-body content.
  */
 
 function escapeHtml(s = "") {
@@ -26,8 +32,13 @@ export function renderDarkPanel({
   headline = "",
   accentWord = "",
   paragraphs = [],
+  // headerLabel / logoDark / logoLight accepted for back-compat but
+  // unused — Chromium's @page header renders the brand + label globally.
+  // eslint-disable-next-line no-unused-vars
   headerLabel = "SECTION",
+  // eslint-disable-next-line no-unused-vars
   logoDark = "https://www.capturepilot.com/cp-icon-black.png",
+  // eslint-disable-next-line no-unused-vars
   logoLight = "https://www.capturepilot.com/cp-icon-white.png",
 } = {}) {
   const paragraphsHtml = (paragraphs || []).map(
@@ -36,15 +47,6 @@ export function renderDarkPanel({
 
   return `
 <section class="doc-section doc-section--dark">
-  <div class="doc-hdr">
-    <div class="doc-hdr__brand">
-      <img class="doc-hdr__logo doc-hdr__logo--dark"  src="${escapeHtml(logoDark)}"  alt="CapturePilot" width="32" height="32">
-      <img class="doc-hdr__logo doc-hdr__logo--light" src="${escapeHtml(logoLight)}" alt="CapturePilot" width="32" height="32">
-      <span class="doc-hdr__wordmark">CapturePilot</span>
-    </div>
-    <span class="doc-hdr__label">${escapeHtml(headerLabel)}</span>
-  </div>
-
   <div class="dark-panel">
     <div class="dark-panel__partlabel">${escapeHtml(partLabel)}</div>
     <h1 class="dark-panel__headline">${renderHeadline(headline, accentWord)}</h1>

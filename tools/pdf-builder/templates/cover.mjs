@@ -2,8 +2,18 @@
  * cover.mjs — Cover page (dark, big headline with one green-accent word).
  *
  * UNIFIED PIPELINE: renders inline as <section class="doc-section
- * doc-section--cover">. The Chromium @page system handles page breaks +
- * footer + page numbering. NO local .page wrapper. NO local footer.
+ * doc-section--cover">. The Chromium @page system handles page breaks
+ * AND the per-page running header (CP logo + document label) + footer
+ * (CAPTUREPILOT · TITLE  N / N) — see render.mjs
+ * `displayHeaderFooter: true` + headerTemplate + footerTemplate.
+ *
+ * DO NOT render an inline .doc-hdr / .hdr / .ftr inside this section —
+ * doing so produces visible duplicate strips on top of Chromium's
+ * running chrome.
+ *
+ * NOTE: `.cover__top` (big wordmark + "N PAGES" badge) is part of the
+ * cover BODY — it is the hero brand/pages callout, NOT a running
+ * header — so it stays. Same for the toolstrip + checklist below.
  */
 
 const CHECK_SVG = `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M5 12.5L10 17.5L19 7.5" stroke="white" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;

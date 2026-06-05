@@ -2,7 +2,14 @@
  * founder.mjs — Founder note page (light, two-column with photo + bio chips).
  *
  * UNIFIED PIPELINE: renders inline as <section class="doc-section
- * doc-section--founder">. Chromium @page handles footer + page numbering.
+ * doc-section--founder">. Chromium @page handles BOTH the per-page
+ * header (CP logo + document label) and footer (CAPTUREPILOT · TITLE
+ * N / N) for every printed page automatically — see render.mjs
+ * `displayHeaderFooter: true` + headerTemplate + footerTemplate.
+ *
+ * DO NOT render an inline .doc-hdr / .hdr / .ftr inside this section —
+ * doing so produces visible duplicate strips on top of Chromium's
+ * running chrome. Section templates ONLY render page-body content.
  *
  * SIGNATURE: the SVG asset is fetched ONCE at render startup and
  * base64-inlined as `data:image/svg+xml;base64,...` so the print iframe
@@ -74,15 +81,6 @@ export function renderFounder({
 
   return `
 <section class="doc-section doc-section--founder">
-  <div class="doc-hdr">
-    <div class="doc-hdr__brand">
-      <img class="doc-hdr__logo doc-hdr__logo--dark"  src="${escapeHtml(logoDark)}"  alt="CapturePilot" width="32" height="32">
-      <img class="doc-hdr__logo doc-hdr__logo--light" src="${escapeHtml(logoLight)}" alt="CapturePilot" width="32" height="32">
-      <span class="doc-hdr__wordmark">CapturePilot</span>
-    </div>
-    <span class="doc-hdr__label">FOUNDER'S NOTE</span>
-  </div>
-
   <div class="founder">
     <div>
       <div class="founder__photo">

@@ -2,8 +2,14 @@
  * toc.mjs — Table of Contents (light, dot-grid bg).
  *
  * UNIFIED PIPELINE: renders inline as <section class="doc-section
- * doc-section--toc">. Chromium @page handles footer + page numbering.
- * NO local .page wrapper. NO local footer.
+ * doc-section--toc">. Chromium @page handles BOTH the per-page header
+ * (CP logo + document label) and footer (CAPTUREPILOT · TITLE  N / N)
+ * for every printed page automatically — see render.mjs
+ * `displayHeaderFooter: true` + headerTemplate + footerTemplate.
+ *
+ * DO NOT render an inline .doc-hdr / .hdr / .ftr inside this section —
+ * doing so produces visible duplicate strips on top of Chromium's running
+ * chrome. Section templates ONLY render page-body content.
  */
 
 function escapeHtml(s = "") {
@@ -16,7 +22,11 @@ function escapeHtml(s = "") {
 export function renderToc({
   title = "Inside this guide.",
   parts = [],
+  // logoDark / logoLight intentionally accepted but unused — Chromium's
+  // @page header renders the brand mark globally.
+  // eslint-disable-next-line no-unused-vars
   logoDark = "https://www.capturepilot.com/cp-icon-black.png",
+  // eslint-disable-next-line no-unused-vars
   logoLight = "https://www.capturepilot.com/cp-icon-white.png",
 } = {}) {
   const titleHtml = title.includes("<strong>")
@@ -49,15 +59,6 @@ export function renderToc({
 
   return `
 <section class="doc-section doc-section--toc">
-  <div class="doc-hdr">
-    <div class="doc-hdr__brand">
-      <img class="doc-hdr__logo doc-hdr__logo--dark"  src="${escapeHtml(logoDark)}"  alt="CapturePilot" width="32" height="32">
-      <img class="doc-hdr__logo doc-hdr__logo--light" src="${escapeHtml(logoLight)}" alt="CapturePilot" width="32" height="32">
-      <span class="doc-hdr__wordmark">CapturePilot</span>
-    </div>
-    <span class="doc-hdr__label">TABLE OF CONTENTS</span>
-  </div>
-
   <div class="eyebrow" style="font-family:var(--mono); font-size:8pt; font-weight:500; letter-spacing:0.2em; text-transform:uppercase; color:var(--emerald-dark); margin:0 0 1.5mm 0;">/ INSIDE THIS GUIDE</div>
   <h1 class="toc__title headline headline--md">${titleHtml}</h1>
   <div class="${tocBlockClass}">${partsHtml}</div>
