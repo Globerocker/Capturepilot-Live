@@ -14,11 +14,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { guardCron } from "@/lib/cron-auth";
+import { withCronTelemetry } from "@/lib/cron-telemetry";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-export async function GET(req: NextRequest) {
+async function GET_handler(req: NextRequest) {
     const denied = guardCron(req);
     if (denied) return denied;
 
@@ -138,3 +139,5 @@ export async function GET(req: NextRequest) {
         errored,
     });
 }
+
+export const GET = withCronTelemetry("/api/cron/recalc_contractor_rankings", GET_handler);

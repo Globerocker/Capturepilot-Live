@@ -19,6 +19,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { extractContacts } from "@/lib/extract-contacts";
 import { extractRichFields } from "@/lib/extract-rich-fields";
+import { withCronTelemetry } from "@/lib/cron-telemetry";
 
 export const maxDuration = 300;
 
@@ -131,7 +132,7 @@ function deriveStatus(deadlineIso: string | null): string {
     } catch { return "DISCOVERED"; }
 }
 
-export async function GET(req: NextRequest) {
+async function GET_handler(req: NextRequest) {
     const authHeader = req.headers.get("authorization");
     const serviceKey = process.env.SUPABASE_SERVICE_KEY;
     const expectedCron = process.env.CRON_SECRET ? `Bearer ${process.env.CRON_SECRET}` : null;
@@ -300,3 +301,5 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: (error as Error).message || "Ingest failed" }, { status: 500 });
     }
 }
+
+export const GET = withCronTelemetry("/api/cron/ingest_rss", GET_handler);

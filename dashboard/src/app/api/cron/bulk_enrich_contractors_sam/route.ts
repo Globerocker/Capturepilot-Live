@@ -29,6 +29,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { guardCron } from "@/lib/cron-auth";
 import { SAM_CONTRACTOR_KEY } from "@/lib/sam-keys";
+import { withCronTelemetry } from "@/lib/cron-telemetry";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -124,7 +125,7 @@ async function fetchEntity(uei: string, apiKey: string): Promise<SamEntity | nul
     return data.entityData?.[0] ?? null;
 }
 
-export async function GET(req: NextRequest) {
+async function GET_handler(req: NextRequest) {
     const denied = guardCron(req);
     if (denied) return denied;
 
@@ -223,3 +224,5 @@ export async function GET(req: NextRequest) {
         ...stats,
     });
 }
+
+export const GET = withCronTelemetry("/api/cron/bulk_enrich_contractors_sam", GET_handler);

@@ -33,6 +33,7 @@ import {
     generateAiSummary,
 } from "@/lib/contractor-profile";
 import { getTopRecipientsByNaics } from "@/lib/usaspending";
+import { withCronTelemetry } from "@/lib/cron-telemetry";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -64,7 +65,7 @@ const SEED_NAICS: Array<{ code: string; label: string }> = [
     { code: "541512", label: "Computer Systems Design (dup for emphasis)" },
 ];
 
-export async function GET(req: NextRequest) {
+async function GET_handler(req: NextRequest) {
     const denied = guardCron(req);
     if (denied) return denied;
 
@@ -225,3 +226,5 @@ export async function GET(req: NextRequest) {
         results: perNaicsResults,
     });
 }
+
+export const GET = withCronTelemetry("/api/cron/discover_top_by_naics", GET_handler);

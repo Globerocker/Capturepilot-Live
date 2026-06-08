@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { guardCron } from "@/lib/cron-auth";
+import { withCronTelemetry } from "@/lib/cron-telemetry";
 
 export const maxDuration = 300;
 
@@ -74,7 +75,7 @@ function applyFilters(query: any, filters: Record<string, unknown>): any {
     return q;
 }
 
-export async function GET(req: NextRequest) {
+async function GET_handler(req: NextRequest) {
     const denied = guardCron(req);
     if (denied) return denied;
 
@@ -170,3 +171,5 @@ export async function GET(req: NextRequest) {
         elapsed_ms: Date.now() - startTime,
     });
 }
+
+export const GET = withCronTelemetry("/api/cron/saved_search_alerts", GET_handler);

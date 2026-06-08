@@ -19,6 +19,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { guardCron } from "@/lib/cron-auth";
 import { extractAiKeywords } from "@/lib/extract-ai-keywords";
+import { withCronTelemetry } from "@/lib/cron-telemetry";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -34,7 +35,7 @@ function db() {
     );
 }
 
-export async function GET(req: NextRequest) {
+async function GET_handler(req: NextRequest) {
     const denied = guardCron(req);
     if (denied) return denied;
 
@@ -122,3 +123,5 @@ export async function GET(req: NextRequest) {
         elapsed_ms: Date.now() - startedAt,
     });
 }
+
+export const GET = withCronTelemetry("/api/cron/extract_keywords_batch", GET_handler);

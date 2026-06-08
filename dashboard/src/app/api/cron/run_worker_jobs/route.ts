@@ -547,6 +547,17 @@ async function handleAnalyzeAttachments(sb: SbAny, job: Job) {
     // the worker queue can process the 11K pending backlog at one-per-job
     // granularity. Hard 50s budget per call so we always finish inside the
     // 60s Vercel function ceiling.
+    //
+    // Storage side-effect (2026-06-08 fix): we ALSO upload the raw bytes to
+    // the `opportunity-attachments` Supabase Storage bucket so the audit
+    // trail and admin /admin/storage browser stay populated. Historical
+    // uploader was deep_enrich, which stopped writing on 2026-04-06 when
+    // Mistral OCR became the primary extractor (OCR path skips the
+    // bytes-buffer block entirely). Until 2026-06-08 the queue path here
+    // wrote text to opportunity_attachments TABLE but never to the bucket,
+    // so the bucket was effectively dead. Best-effort upload — a storage
+    // failure does NOT fail the job because the bucket has no functional
+    // readers (audit-only). See investigation notes in commit message.
     const oppId = job.payload.opp_id as string;
     if (!oppId) return { error: "missing opp_id" };
 
@@ -554,9 +565,9 @@ async function handleAnalyzeAttachments(sb: SbAny, job: Job) {
     const { callLLMJson } = await import("@/lib/llm/deepseek");
 
     const { data: opp } = await sb.from("opportunities")
-        .select("id, title, description, resource_links, structured_requirements")
+        .select("id, notice_id, title, description, resource_links, structured_requirements")
         .eq("id", oppId)
-        .maybeSingle() as { data: { id: string; title: string | null; description: string | null; resource_links: string[] | null; structured_requirements: Record<string, unknown> | null } | null };
+        .maybeSingle() as { data: { id: string; notice_id: string | null; title: string | null; description: string | null; resource_links: string[] | null; structured_requirements: Record<string, unknown> | null } | null };
     if (!opp) return { error: "opp not found" };
     const links = (opp.resource_links || []).filter(Boolean);
     if (links.length === 0) return { result: { skipped: "no_resource_links" } };
@@ -565,6 +576,8 @@ async function handleAnalyzeAttachments(sb: SbAny, job: Job) {
     const MAX_BYTES = 4 * 1024 * 1024;
     const start = Date.now();
     const docTexts: Array<{ filename: string; text: string; kind: string }> = [];
+    let bucketUploads = 0;
+    let bucketSkips = 0;
     for (const url of links.slice(0, 2)) {
         if (Date.now() - start > 30_000) break;
         try {
@@ -580,6 +593,49 @@ async function handleAnalyzeAttachments(sb: SbAny, job: Job) {
                 extracted_text: ext.text.slice(0, 100_000),
                 downloaded_at: new Date().toISOString(),
             }, { onConflict: "opportunity_id,filename", ignoreDuplicates: false });
+
+            // Fix (2026-06-08): mirror bytes into the storage bucket so the
+            // 2-month upload drought ends. fetchAndExtract doesn't return
+            // bytes (only text), so we do a second fetch — small extra cost
+            // gated by the same 30s budget. SAM URLs only; SLED portal URLs
+            // are skipped (the Playwright worker handles those separately).
+            // Best-effort: any failure here is logged + counted but does not
+            // bubble up — the LLM analysis below is the load-bearing step.
+            if (opp.notice_id && /sam\.gov/i.test(url) && Date.now() - start < 28_000) {
+                try {
+                    const headers: Record<string, string> = SAM_API_KEY ? { "X-Api-Key": SAM_API_KEY } : {};
+                    const r = await fetch(url, {
+                        headers,
+                        signal: AbortSignal.timeout(15_000),
+                        redirect: "follow",
+                    });
+                    if (r.ok) {
+                        const bytes = new Uint8Array(await r.arrayBuffer());
+                        if (bytes.byteLength > 0 && bytes.byteLength <= MAX_BYTES) {
+                            const safeName = ext.filename.replace(/[^\w\-. ]+/g, "_").slice(0, 200) || `${Date.now()}.${ext.kind}`;
+                            const path = `${opp.notice_id}/${safeName}`;
+                            const contentType = r.headers.get("content-type")
+                                || (ext.kind === "pdf" ? "application/pdf" : "application/octet-stream");
+                            const { error: upErr } = await sb.storage
+                                .from("opportunity-attachments")
+                                .upload(path, bytes, { contentType, upsert: true });
+                            if (upErr) {
+                                bucketSkips++;
+                                console.warn(`[analyze_attachments] storage upload failed for ${path}: ${upErr.message}`);
+                            } else {
+                                bucketUploads++;
+                            }
+                        } else {
+                            bucketSkips++;
+                        }
+                    } else {
+                        bucketSkips++;
+                    }
+                } catch (storErr) {
+                    bucketSkips++;
+                    console.warn(`[analyze_attachments] storage fetch/upload error for ${url}:`, storErr instanceof Error ? storErr.message : storErr);
+                }
+            }
         } catch (e) {
             console.warn(`[analyze_attachments] doc fail ${url}:`, e instanceof Error ? e.message : e);
         }
@@ -621,7 +677,7 @@ async function handleAnalyzeAttachments(sb: SbAny, job: Job) {
             },
             last_crawled_at: new Date().toISOString(),
         }).eq("id", opp.id);
-        return { result: { extracted: docTexts.length, analyzed: true } };
+        return { result: { extracted: docTexts.length, analyzed: true, bucket_uploads: bucketUploads, bucket_skips: bucketSkips } };
     } catch (e) {
         return { error: `LLM analyze failed: ${e instanceof Error ? e.message : "unknown"}` };
     }

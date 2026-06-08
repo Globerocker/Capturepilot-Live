@@ -79,33 +79,53 @@ export async function GET(req: NextRequest) {
         : DEFAULT_LIMIT;
 
     if (!bucket) {
-        return NextResponse.json({ error: "Missing required query param: bucket" }, { status: 400 });
+        return NextResponse.json({ ok: false, error: "Missing required query param: bucket" }, { status: 400 });
+    }
+
+    // Static input validation BEFORE we round-trip to Supabase.
+    if (!BUCKET_NAME_REGEX.test(bucket)) {
+        return NextResponse.json({ ok: false, error: "Invalid bucket name" }, { status: 400 });
+    }
+    if (!BUCKET_ALLOWLIST.has(bucket)) {
+        return NextResponse.json({ ok: false, error: `Bucket not allowed: ${bucket}` }, { status: 403 });
+    }
+    // Defense-in-depth: prefix should look like a normal storage path
+    // segment chain (no leading slashes already stripped, no traversal).
+    if (prefix.includes("..") || prefix.startsWith("/")) {
+        return NextResponse.json({ ok: false, error: "Invalid prefix" }, { status: 400 });
     }
 
     const sb = svc();
 
-    // Validate bucket against the real list — stops `?bucket=../something`
-    // shenanigans, gives us the public/private flag in one go.
+    // Validate bucket against the real list — confirms it exists in this
+    // Supabase project + gives us the public/private flag in one go.
     const { data: buckets, error: bErr } = await sb.storage.listBuckets();
     if (bErr) {
-        return NextResponse.json({ error: bErr.message }, { status: 500 });
+        console.error("[admin/storage/list] listBuckets failed:", bErr.message);
+        return NextResponse.json({ ok: false, error: bErr.message }, { status: 500 });
     }
     const target = (buckets || []).find(b => b.name === bucket);
     if (!target) {
-        return NextResponse.json({ error: `Bucket not found: ${bucket}` }, { status: 404 });
+        return NextResponse.json({ ok: false, error: `Bucket not found: ${bucket}` }, { status: 404 });
     }
 
-    const { data, error } = await sb.storage
-        .from(bucket)
-        .list(prefix, {
-            limit,
-            sortBy: { column: "updated_at", order: "desc" },
-        });
-    if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+    let data: StorageEntry[] | null = null;
+    try {
+        const res = await sb.storage
+            .from(bucket)
+            .list(prefix, {
+                limit,
+                sortBy: { column: "updated_at", order: "desc" },
+            });
+        if (res.error) throw res.error;
+        data = (res.data || []) as StorageEntry[];
+    } catch (e) {
+        const msg = (e as Error).message;
+        console.error("[admin/storage/list] list failed:", msg, { bucket, prefix, limit });
+        return NextResponse.json({ ok: false, error: msg }, { status: 500 });
     }
 
-    const entries = (data || []) as StorageEntry[];
+    const entries = data as StorageEntry[];
 
     // Build access URLs in a single round-trip when private (createSignedUrls
     // batches), or per-row when public (getPublicUrl is synchronous).
@@ -139,17 +159,18 @@ export async function GET(req: NextRequest) {
         };
     });
 
-    if (target.public) {
-        for (const f of out) {
-            if (f.kind !== "file") continue;
-            const { data: pub } = sb.storage.from(bucket).getPublicUrl(f.path);
-            f.access_url = pub.publicUrl || null;
-        }
-    } else if (fullPaths.length > 0) {
-        const { data: signed, error: signErr } = await sb.storage
-            .from(bucket)
-            .createSignedUrls(fullPaths, SIGNED_TTL_SECONDS);
-        if (!signErr) {
+    try {
+        if (target.public) {
+            for (const f of out) {
+                if (f.kind !== "file") continue;
+                const { data: pub } = sb.storage.from(bucket).getPublicUrl(f.path);
+                f.access_url = pub.publicUrl || null;
+            }
+        } else if (fullPaths.length > 0) {
+            const { data: signed, error: signErr } = await sb.storage
+                .from(bucket)
+                .createSignedUrls(fullPaths, SIGNED_TTL_SECONDS);
+            if (signErr) throw signErr;
             const expiresAt = new Date(Date.now() + SIGNED_TTL_SECONDS * 1000).toISOString();
             const byPath = new Map((signed || []).map(s => [s.path, s.signedUrl]));
             for (const f of out) {
@@ -161,9 +182,37 @@ export async function GET(req: NextRequest) {
                 }
             }
         }
+    } catch (e) {
+        // Signed-URL failure is non-fatal — we still return the listing,
+        // just without click-through URLs. Log so admins notice.
+        console.error("[admin/storage/list] signed URL build failed:", (e as Error).message, { bucket, prefix });
+    }
+
+    // Best-effort audit log — failure here must not break the response.
+    // Re-resolves the caller (assertAdmin earlier didn't return user id) so
+    // the row reflects the actual admin who browsed the bucket.
+    try {
+        const who = await assertAdminWithUser();
+        if (who.ok) {
+            await sb.from("client_activity_log").insert({
+                actor_id: who.userId,
+                action: "storage_list",
+                description: `Listed ${out.length} object(s) in bucket "${bucket}"${prefix ? ` under prefix "${prefix}"` : ""}`,
+                metadata: {
+                    bucket,
+                    prefix: prefix || null,
+                    limit,
+                    public: !!target.public,
+                    object_count: out.length,
+                },
+            });
+        }
+    } catch (e) {
+        console.error("[admin/storage/list] audit log insert failed:", (e as Error).message);
     }
 
     return NextResponse.json({
+        ok: true,
         generated_at: new Date().toISOString(),
         bucket: {
             name: target.name,

@@ -83,7 +83,7 @@ function extractPsc(v: HigherGovOpp["psc_code"]): string | null {
     return v.psc_code || null;
 }
 
-export async function GET(req: NextRequest) {
+async function GET_handler(req: NextRequest) {
     const authHeader = req.headers.get("authorization");
     const serviceKey = process.env.SUPABASE_SERVICE_KEY;
     const expectedCron = process.env.CRON_SECRET ? `Bearer ${process.env.CRON_SECRET}` : null;
@@ -268,3 +268,5 @@ export async function GET(req: NextRequest) {
         }, { status: 500 });
     }
 }
+
+export const GET = withCronTelemetry("/api/cron/ingest_highergov_sled", GET_handler);

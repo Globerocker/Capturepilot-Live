@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authorizeCron } from "@/lib/backlinks/admin-client";
+import { withCronTelemetry } from "@/lib/cron-telemetry";
 
 export const maxDuration = 300;
 
@@ -35,7 +36,7 @@ const SCHEDULE: Record<number, AgentName[]> = {
   6: [],                                                                  // Sat
 };
 
-export async function GET(req: NextRequest) {
+async function GET_handler(req: NextRequest) {
   if (!authorizeCron(req.headers.get("authorization"))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -62,3 +63,5 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({ ok: true, day_utc: new Date().getUTCDay(), agents_run: agents, results });
 }
+
+export const GET = withCronTelemetry("/api/cron/backlinks_orchestrator", GET_handler);

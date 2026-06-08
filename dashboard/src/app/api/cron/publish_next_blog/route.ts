@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { guardCron } from "@/lib/cron-auth";
 import { HUMAN_VOICE_RULES } from "@/lib/llm/humanizer";
+import { withCronTelemetry } from "@/lib/cron-telemetry";
 
 export const maxDuration = 300;
 
@@ -377,7 +378,7 @@ function sleep(ms: number) {
   return new Promise<void>(r => setTimeout(r, ms));
 }
 
-export async function GET(req: NextRequest) {
+async function GET_handler(req: NextRequest) {
   const denied = guardCron(req);
   if (denied) return denied;
 
@@ -468,3 +469,5 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }
 }
+
+export const GET = withCronTelemetry("/api/cron/publish_next_blog", GET_handler);

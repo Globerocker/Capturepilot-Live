@@ -1,28 +1,68 @@
 "use client";
 
-import { useEffect, useState } from "react";
+/**
+ * /admin/health — the HUB. Six category tiles, each a live KPI snapshot
+ * that deep-links into its own detail page. Auto-refreshes every 30s.
+ *
+ * Hero shows the global rollup (X / Y crons green, Z failed jobs, open alerts).
+ * Quick-action bar above the grid lets the operator nudge the system without
+ * leaving the page:
+ *   - "Run orchestrator now" → fires /api/cron/enrichment_orchestrator via the
+ *     admin cron-trigger proxy (uses the service key behind the scenes).
+ *   - "Reap all stuck jobs" → calls /api/admin/queue/reap-stuck once per task
+ *     type and sums the result.
+ *   - "Refresh all KPIs" → triggers an immediate summary refetch.
+ *
+ * Auth: admin shell layout already redirects non-admins; every called API
+ * runs assertAdmin() too.
+ */
+
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
-    Loader2, CheckCircle2, AlertTriangle, HelpCircle, RefreshCw,
-    Activity, AlertCircle, ExternalLink,
+    Activity, RefreshCw, Loader2, AlertCircle, AlertTriangle, CheckCircle2,
+    Clock, Database, HardDrive, Plug, Workflow, Bell, Play, Hammer,
+    ChevronRight,
 } from "lucide-react";
 import clsx from "clsx";
 
-interface ServiceStatus {
-    key: string;
-    env_var: string;
-    configured: boolean;
-    reachable: "unknown" | "ok" | "error";
+interface CategoryKpi {
+    status: "green" | "amber" | "red" | "unknown";
+    kpis: Array<{ label: string; value: number | string; tone?: "ok" | "warn" | "error" }>;
     detail?: string;
-    last_check: string;
 }
 
-interface CronStat {
-    route: string;
-    last_run: string | null;
-    last_status: string | null;
-    runs_7d: number;
+interface HealthSummary {
+    generated_at: string;
+    overall: {
+        status: "green" | "amber" | "red";
+        headline: string;
+        green_count: number;
+        amber_count: number;
+        red_count: number;
+    };
+    crons: CategoryKpi;
+    queue: CategoryKpi;
+    integrations: CategoryKpi;
+    database: CategoryKpi;
+    storage: CategoryKpi;
+    alerts: CategoryKpi;
 }
+
+const REFRESH_MS = 30_000;
+
+// task_types we'll sweep when "Reap all stuck jobs" is clicked. Mirrors the
+// ALLOWED_TASK_TYPES set in lib/worker-jobs/admin-actions.ts.
+const REAP_TASK_TYPES = [
+    "classify_naics",
+    "extract_structured_reqs",
+    "extract_keywords",
+    "enrich_lead_brief",
+    "enrich_lead_apollo",
+    "analyze_attachments",
+    "scrape_portal_detail",
+    "warm_cf_cookie",
+];
 
 function fmtRelative(ts: string | null): string {
     if (!ts) return "never";
@@ -33,83 +73,305 @@ function fmtRelative(ts: string | null): string {
     return `${Math.floor(diff / 86_400_000)}d ago`;
 }
 
-export default function EnvHealthPage() {
-    const [checks, setChecks] = useState<ServiceStatus[] | null>(null);
-    const [cronSummary, setCronSummary] = useState<CronStat[] | null>(null);
+function StatusDot({ status }: { status: CategoryKpi["status"] }) {
+    const cls =
+        status === "green" ? "bg-emerald-500"
+        : status === "amber" ? "bg-amber-500"
+        : status === "red" ? "bg-rose-500"
+        : "bg-stone-300";
+    return (
+        <span className={clsx("inline-block w-2.5 h-2.5 rounded-full", cls)} aria-hidden />
+    );
+}
+
+function CategoryCard({
+    icon: Icon,
+    title,
+    href,
+    cat,
+}: {
+    icon: React.ComponentType<{ className?: string }>;
+    title: string;
+    href: string;
+    cat: CategoryKpi;
+}) {
+    const accent =
+        cat.status === "green" ? "hover:border-emerald-300"
+        : cat.status === "amber" ? "hover:border-amber-300"
+        : cat.status === "red" ? "hover:border-rose-300"
+        : "hover:border-stone-300";
+
+    return (
+        <Link
+            href={href}
+            className={clsx(
+                "block bg-white border border-stone-200 rounded-[28px] p-5 transition-all hover:shadow-sm group",
+                accent,
+            )}
+        >
+            <div className="flex items-start justify-between gap-3 mb-3">
+                <div className="flex items-center gap-2 min-w-0">
+                    <Icon className="w-4 h-4 text-stone-500 flex-shrink-0" />
+                    <h3 className="text-sm font-bold text-stone-900 truncate">{title}</h3>
+                </div>
+                <StatusDot status={cat.status} />
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 mb-3">
+                {cat.kpis.slice(0, 3).map((k, i) => {
+                    const valueColor =
+                        k.tone === "ok" ? "text-emerald-700"
+                        : k.tone === "warn" ? "text-amber-700"
+                        : k.tone === "error" ? "text-rose-700"
+                        : "text-stone-900";
+                    return (
+                        <div key={i} className="min-w-0">
+                            <p className={clsx("text-xl font-black tabular-nums truncate", valueColor)}>
+                                {k.value}
+                            </p>
+                            <p className="text-[9px] text-stone-500 uppercase font-bold tracking-wider truncate">
+                                {k.label}
+                            </p>
+                        </div>
+                    );
+                })}
+            </div>
+
+            <div className="flex items-center justify-between text-xs">
+                <span className="text-stone-500 truncate">{cat.detail ?? " "}</span>
+                <span className="text-stone-400 group-hover:text-emerald-600 transition-colors inline-flex items-center gap-1 font-bold flex-shrink-0">
+                    Open <ChevronRight className="w-3 h-3" />
+                </span>
+            </div>
+        </Link>
+    );
+}
+
+export default function HealthHubPage() {
+    const [summary, setSummary] = useState<HealthSummary | null>(null);
     const [loading, setLoading] = useState(true);
     const [err, setErr] = useState<string | null>(null);
+    const [lastRefreshed, setLastRefreshed] = useState<string | null>(null);
 
-    async function load() {
-        setLoading(true);
-        setErr(null);
+    // Action button busy + result state
+    const [runOrchBusy, setRunOrchBusy] = useState(false);
+    const [reapBusy, setReapBusy] = useState(false);
+    const [toast, setToast] = useState<{ tone: "ok" | "err"; msg: string } | null>(null);
+
+    const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    const load = useCallback(async () => {
         try {
-            const res = await fetch("/api/admin/env-health", { cache: "no-store" });
+            setErr(null);
+            const res = await fetch("/api/admin/health/summary", { cache: "no-store" });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-            setChecks(data.checks);
-            setCronSummary(data.cron_summary || []);
+            setSummary(data as HealthSummary);
+            setLastRefreshed(new Date().toISOString());
         } catch (e) {
             setErr((e as Error).message);
         } finally {
             setLoading(false);
         }
-    }
-    useEffect(() => { load(); }, []);
+    }, []);
 
-    // Roll-up counts for the header strip
-    const total = checks?.length ?? 0;
-    const okCount = checks?.filter(c => c.configured && c.reachable === "ok").length ?? 0;
-    const errCount = checks?.filter(c => c.configured && c.reachable === "error").length ?? 0;
-    const unsetCount = checks?.filter(c => !c.configured).length ?? 0;
+    useEffect(() => {
+        load();
+        intervalRef.current = setInterval(load, REFRESH_MS);
+        return () => {
+            if (intervalRef.current) clearInterval(intervalRef.current);
+            intervalRef.current = null;
+        };
+    }, [load]);
+
+    // Auto-dismiss toasts so the hub doesn't pile up stale messages.
+    useEffect(() => {
+        if (!toast) return;
+        const t = setTimeout(() => setToast(null), 5500);
+        return () => clearTimeout(t);
+    }, [toast]);
+
+    async function runOrchestrator() {
+        if (runOrchBusy) return;
+        setRunOrchBusy(true);
+        try {
+            const res = await fetch("/api/admin/cron-trigger", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ route: "/api/cron/enrichment_orchestrator" }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+            const ms = typeof data.elapsed_ms === "number" ? Math.round(data.elapsed_ms) : null;
+            setToast({ tone: "ok", msg: `Orchestrator finished${ms !== null ? ` in ${ms} ms` : ""}` });
+            // Refresh KPIs once the work has settled.
+            load();
+        } catch (e) {
+            setToast({ tone: "err", msg: `Orchestrator failed: ${(e as Error).message}` });
+        } finally {
+            setRunOrchBusy(false);
+        }
+    }
+
+    async function reapAllStuck() {
+        if (reapBusy) return;
+        setReapBusy(true);
+        // reap_stale_jobs is global per call; we still loop the task_type
+        // allow-list so the audit log records who reaped what (and so any
+        // future per-task-type reaper drops in without UI changes).
+        let totalRequeued = 0;
+        let totalFailed = 0;
+        const errors: string[] = [];
+        try {
+            for (const tt of REAP_TASK_TYPES) {
+                try {
+                    const res = await fetch(`/api/admin/queue/reap-stuck?task_type=${encodeURIComponent(tt)}&stale_minutes=10`, {
+                        method: "POST",
+                    });
+                    const data = await res.json();
+                    if (!res.ok || !data.ok) {
+                        errors.push(`${tt}: ${data.error || res.status}`);
+                        continue;
+                    }
+                    totalRequeued += Number(data.requeued || 0);
+                    totalFailed += Number(data.failed || 0);
+                    // Reaper is global; one call sweeps every type. Bail after the
+                    // first successful sweep to avoid 7 redundant audit entries.
+                    break;
+                } catch (e) {
+                    errors.push(`${tt}: ${(e as Error).message}`);
+                }
+            }
+            if (errors.length === REAP_TASK_TYPES.length) {
+                throw new Error(errors[0] || "All reap attempts failed");
+            }
+            setToast({
+                tone: "ok",
+                msg: `Reaper finished: ${totalRequeued} requeued, ${totalFailed} marked failed`,
+            });
+            load();
+        } catch (e) {
+            setToast({ tone: "err", msg: `Reap failed: ${(e as Error).message}` });
+        } finally {
+            setReapBusy(false);
+        }
+    }
+
+    const overallStatus = summary?.overall.status;
+    const overallIcon =
+        overallStatus === "green" ? CheckCircle2
+        : overallStatus === "amber" ? AlertTriangle
+        : overallStatus === "red" ? AlertCircle
+        : Activity;
+    const overallColor =
+        overallStatus === "green" ? "text-emerald-600"
+        : overallStatus === "amber" ? "text-amber-600"
+        : overallStatus === "red" ? "text-rose-600"
+        : "text-stone-400";
+
+    const OverallIcon = overallIcon;
 
     return (
-        <div className="w-full max-w-4xl mx-auto space-y-6">
-            <header className="flex items-start justify-between gap-3 flex-wrap">
-                <div>
-                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-stone-400 mb-1.5">Operations</p>
-                    <h1 className="text-2xl font-bold text-stone-900 flex items-center gap-2">
-                        <Activity className="w-6 h-6" /> Env Health
-                    </h1>
-                    <p className="text-sm text-stone-500 mt-1">
-                        Live reachability checks against every third-party API we call, plus the latest run per cron. Each probe uses a 6-second timeout. No secret values are returned.
-                    </p>
+        <div className="w-full max-w-5xl mx-auto space-y-6">
+            {/* Hero */}
+            <header className="space-y-3">
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div>
+                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-stone-400 mb-1.5">Operations</p>
+                        <h1 className="text-2xl font-bold text-stone-900 flex items-center gap-2">
+                            <Activity className="w-6 h-6" /> System Health
+                        </h1>
+                        <p className="text-sm text-stone-500 mt-1">
+                            One-screen view of every cron, queue, integration, table, bucket, and alert. Auto-refresh every {REFRESH_MS / 1000}s.
+                        </p>
+                    </div>
+                    <div className="text-xs text-stone-500 flex items-center gap-1.5">
+                        <Clock className="w-3 h-3" />
+                        {lastRefreshed ? `Updated ${fmtRelative(lastRefreshed)}` : "Loading…"}
+                    </div>
                 </div>
+
+                {/* Global rollup strip */}
+                {summary && (
+                    <div className="bg-white border border-stone-200 rounded-[28px] p-5 flex items-center gap-4 flex-wrap">
+                        <OverallIcon className={clsx("w-8 h-8 flex-shrink-0", overallColor)} />
+                        <div className="flex-1 min-w-0">
+                            <p className={clsx(
+                                "text-[10px] font-bold uppercase tracking-[0.18em] mb-0.5",
+                                overallStatus === "green" ? "text-emerald-600"
+                                : overallStatus === "amber" ? "text-amber-600"
+                                : "text-rose-600",
+                            )}>
+                                {overallStatus === "green" ? "All systems operational"
+                                : overallStatus === "amber" ? "Degraded"
+                                : "Action needed"}
+                            </p>
+                            <p className="text-sm text-stone-700 truncate">{summary.overall.headline || "—"}</p>
+                        </div>
+                        <div className="flex items-center gap-3 text-xs">
+                            <span className="inline-flex items-center gap-1.5">
+                                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                                <span className="font-bold tabular-nums">{summary.overall.green_count}</span>
+                                <span className="text-stone-500">green</span>
+                            </span>
+                            <span className="inline-flex items-center gap-1.5">
+                                <span className="w-2 h-2 rounded-full bg-amber-500" />
+                                <span className="font-bold tabular-nums">{summary.overall.amber_count}</span>
+                                <span className="text-stone-500">degraded</span>
+                            </span>
+                            <span className="inline-flex items-center gap-1.5">
+                                <span className="w-2 h-2 rounded-full bg-rose-500" />
+                                <span className="font-bold tabular-nums">{summary.overall.red_count}</span>
+                                <span className="text-stone-500">failing</span>
+                            </span>
+                        </div>
+                    </div>
+                )}
+            </header>
+
+            {/* Quick actions */}
+            <section className="flex items-center gap-2 flex-wrap">
+                <button
+                    type="button"
+                    onClick={runOrchestrator}
+                    disabled={runOrchBusy}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 text-white border border-emerald-600 text-xs font-bold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    {runOrchBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
+                    Run orchestrator now
+                </button>
+                <button
+                    type="button"
+                    onClick={reapAllStuck}
+                    disabled={reapBusy}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-stone-200 text-stone-700 text-xs font-bold hover:bg-stone-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    {reapBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Hammer className="w-3.5 h-3.5" />}
+                    Reap all stuck jobs
+                </button>
                 <button
                     type="button"
                     onClick={load}
                     disabled={loading}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-stone-200 text-stone-700 text-xs font-bold hover:bg-stone-50 disabled:opacity-50"
                 >
-                    {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-                    Refresh
+                    {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                    Refresh all KPIs
                 </button>
-            </header>
 
-            {/* Roll-up KPIs */}
-            {checks && (
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <div className="bg-white border border-stone-200 rounded-2xl p-4">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-500 mb-1" />
-                        <p className="text-2xl font-black text-emerald-600">{okCount}</p>
-                        <p className="text-[10px] text-stone-500 uppercase">Healthy</p>
+                {toast && (
+                    <div
+                        className={clsx(
+                            "ml-auto text-xs font-medium px-3 py-1.5 rounded-xl border",
+                            toast.tone === "ok"
+                                ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                                : "bg-rose-50 border-rose-200 text-rose-700",
+                        )}
+                    >
+                        {toast.msg}
                     </div>
-                    <div className="bg-white border border-stone-200 rounded-2xl p-4">
-                        <AlertCircle className="w-4 h-4 text-rose-500 mb-1" />
-                        <p className="text-2xl font-black text-rose-600">{errCount}</p>
-                        <p className="text-[10px] text-stone-500 uppercase">Failing</p>
-                    </div>
-                    <div className="bg-white border border-stone-200 rounded-2xl p-4">
-                        <HelpCircle className="w-4 h-4 text-stone-400 mb-1" />
-                        <p className="text-2xl font-black text-stone-500">{unsetCount}</p>
-                        <p className="text-[10px] text-stone-500 uppercase">Not Configured</p>
-                    </div>
-                    <div className="bg-white border border-stone-200 rounded-2xl p-4">
-                        <Activity className="w-4 h-4 text-blue-500 mb-1" />
-                        <p className="text-2xl font-black text-blue-600">{total}</p>
-                        <p className="text-[10px] text-stone-500 uppercase">Services</p>
-                    </div>
-                </div>
-            )}
+                )}
+            </section>
 
             {err && (
                 <div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm rounded-xl p-4">
@@ -117,140 +379,22 @@ export default function EnvHealthPage() {
                 </div>
             )}
 
-            {/* Service probes */}
-            <section>
-                <h2 className="text-sm font-bold text-stone-900 mb-3">Third-Party APIs</h2>
-                <div className="space-y-2">
-                    {(checks || []).map((c) => {
-                        const stateColor =
-                            !c.configured ? "bg-white border-stone-200" :
-                            c.reachable === "ok" ? "bg-emerald-50 border-emerald-200" :
-                            c.reachable === "error" ? "bg-rose-50 border-rose-200" :
-                            "bg-amber-50 border-amber-200";
-
-                        const Icon =
-                            !c.configured ? HelpCircle :
-                            c.reachable === "ok" ? CheckCircle2 :
-                            c.reachable === "error" ? AlertTriangle :
-                            HelpCircle;
-
-                        const iconColor =
-                            !c.configured ? "text-stone-400" :
-                            c.reachable === "ok" ? "text-emerald-600" :
-                            c.reachable === "error" ? "text-rose-600" :
-                            "text-amber-600";
-
-                        const label =
-                            !c.configured ? "Not configured" :
-                            c.reachable === "ok" ? "Reachable" :
-                            c.reachable === "error" ? "Unreachable or unauthorized" :
-                            "Not probed";
-
-                        return (
-                            <div key={c.env_var} className={clsx("p-3 rounded-xl border flex items-start gap-3", stateColor)}>
-                                <Icon className={clsx("w-5 h-5 flex-shrink-0 mt-0.5", iconColor)} />
-                                <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                        <p className="font-bold text-sm text-stone-900">{c.key}</p>
-                                        <code className="text-[10px] bg-white px-1.5 py-0.5 rounded border border-stone-200 text-stone-500">{c.env_var}</code>
-                                    </div>
-                                    <p className="text-xs text-stone-600 mt-0.5">{label}</p>
-                                    {c.detail && <p className="text-[10px] text-stone-500 mt-0.5">{c.detail}</p>}
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-            </section>
-
-            {/* Cron stalest-list */}
-            {cronSummary && cronSummary.length > 0 && (
-                <section>
-                    <div className="flex items-center justify-between mb-3">
-                        <h2 className="text-sm font-bold text-stone-900">Cron — Last Run per Route (7d)</h2>
-                        <Link href="/admin/crons" className="text-xs text-blue-600 hover:text-blue-800 inline-flex items-center gap-1">
-                            Full telemetry <ExternalLink className="w-3 h-3" />
-                        </Link>
-                    </div>
-
-                    {/* At-a-glance status grid — each square = one cron, color by
-                        ok/error/stale. Lets you spot trouble across all 35-40 crons
-                        in a single eye sweep, before drilling into the table below. */}
-                    <div className="bg-white border border-stone-200 rounded-xl p-3 mb-3">
-                        <div className="flex items-center justify-between mb-2">
-                            <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
-                                Status grid · {cronSummary.length} crons
-                            </p>
-                            <div className="flex items-center gap-3 text-[10px] text-stone-500">
-                                <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded bg-emerald-500" /> ok</span>
-                                <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded bg-amber-500" /> error</span>
-                                <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded bg-rose-500" /> stale</span>
-                                <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded bg-stone-300" /> unknown</span>
-                            </div>
-                        </div>
-                        <div className="flex flex-wrap gap-1">
-                            {cronSummary.map(c => {
-                                const isErr = c.last_status === "error";
-                                const stale = c.last_run && (Date.now() - new Date(c.last_run).getTime() > 86_400_000 * 2);
-                                const ok = c.last_status === "ok" && !stale;
-                                const cls = ok ? "bg-emerald-500 hover:bg-emerald-600"
-                                    : stale ? "bg-rose-500 hover:bg-rose-600"
-                                    : isErr ? "bg-amber-500 hover:bg-amber-600"
-                                    : "bg-stone-300 hover:bg-stone-400";
-                                return (
-                                    <span
-                                        key={c.route}
-                                        title={`${c.route.replace("/api/cron/", "")} — ${c.last_status || "?"} (${fmtRelative(c.last_run)})`}
-                                        className={clsx("inline-block w-3 h-3 rounded transition-colors cursor-help", cls)}
-                                    />
-                                );
-                            })}
-                        </div>
-                    </div>
-
-                    <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
-                        <table className="w-full text-sm">
-                            <thead className="bg-stone-50 text-[10px] text-stone-400 uppercase">
-                                <tr>
-                                    <th className="text-left px-3 py-2">Route</th>
-                                    <th className="text-center px-3 py-2">Last Run</th>
-                                    <th className="text-center px-3 py-2">Last Status</th>
-                                    <th className="text-right px-3 py-2">Runs 7d</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-stone-50">
-                                {cronSummary.map(c => {
-                                    const isErr = c.last_status === "error";
-                                    const stale = c.last_run && (Date.now() - new Date(c.last_run).getTime() > 86_400_000 * 2);
-                                    return (
-                                        <tr key={c.route} className={clsx("hover:bg-stone-50/50", (isErr || stale) && "bg-rose-50/40")}>
-                                            <td className="px-3 py-2 font-mono text-xs text-stone-700">{c.route.replace("/api/cron/", "")}</td>
-                                            <td className="text-center px-3 text-xs text-stone-600">{fmtRelative(c.last_run)}</td>
-                                            <td className="text-center px-3">
-                                                <span className={clsx(
-                                                    "text-[9px] font-bold px-2 py-0.5 rounded uppercase",
-                                                    c.last_status === "ok" ? "bg-emerald-100 text-emerald-700" :
-                                                    c.last_status === "error" ? "bg-rose-100 text-rose-700" :
-                                                    c.last_status === "partial" ? "bg-amber-100 text-amber-700" :
-                                                    "bg-stone-100 text-stone-500"
-                                                )}>
-                                                    {c.last_status || "—"}
-                                                </span>
-                                            </td>
-                                            <td className="text-right px-3 text-xs font-mono text-stone-600">{c.runs_7d}</td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
+            {/* Category grid */}
+            {summary ? (
+                <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <CategoryCard icon={Clock}    title="Crons"        href="/admin/health/crons"        cat={summary.crons} />
+                    <CategoryCard icon={Workflow} title="Worker Queue" href="/admin/health/queue"        cat={summary.queue} />
+                    <CategoryCard icon={Plug}     title="Integrations" href="/admin/health/integrations" cat={summary.integrations} />
+                    <CategoryCard icon={Database} title="Database"     href="/admin/health/database"     cat={summary.database} />
+                    <CategoryCard icon={HardDrive} title="Storage"     href="/admin/health/storage"      cat={summary.storage} />
+                    <CategoryCard icon={Bell}     title="Alerts"       href="/admin/health/alerts"       cat={summary.alerts} />
                 </section>
-            )}
-
-            {loading && !checks && (
-                <div className="flex justify-center py-12">
-                    <Loader2 className="w-6 h-6 animate-spin text-stone-400" />
-                </div>
+            ) : (
+                loading && (
+                    <div className="flex justify-center py-12">
+                        <Loader2 className="w-6 h-6 animate-spin text-stone-400" />
+                    </div>
+                )
             )}
         </div>
     );

@@ -1,10 +1,10 @@
 # Cron & Agent Reference
 
-Every scheduled task in Caturepilot 2.0, what it does, where it writes, and how to debug it. Mirror of [`dashboard/vercel.json`](dashboard/vercel.json) + the orchestrator fan-out logic.
+Every scheduled task in Caturepilot 2.0, what it does, where it writes, and how to debug it. Mirror of [`dashboard/vercel.json`](dashboard/vercel.json) + the orchestrator fan-out logic + the VPS systemd timers.
 
-**Pro-plan limit: 40 crons. Current count: 35.** 5 slots free.
+**Pro-plan limit: 40 crons. Current vercel.json count: 39.** 1 slot free. Heavy workloads that would push us over the ceiling now run on the Hostinger VPS — see [Externally-run crons](#externally-run-crons-not-in-verceljson) below.
 
-All cron route handlers live in [`dashboard/src/app/api/cron/`](dashboard/src/app/api/cron/). Every handler enforces `guardCron(req)` from [`src/lib/cron-auth.ts`](dashboard/src/lib/cron-auth.ts) — **fail-closed in production**, dev-friendly locally.
+All cron route handlers live in [`dashboard/src/app/api/cron/`](dashboard/src/app/api/cron/). Every handler enforces `guardCron(req)` from [`src/lib/cron-auth.ts`](dashboard/src/lib/cron-auth.ts) — **fail-closed in production**, dev-friendly locally. Every run is wrapped with `withCronTelemetry()` from [`src/lib/cron-telemetry.ts`](dashboard/src/lib/cron-telemetry.ts) which writes a row to `cron_runs` (status, duration_ms, error, stats payload) — drive the health dashboard from this table.
 
 ## Triggering a cron manually
 
@@ -135,6 +135,52 @@ Orchestrators accept `?task=<name>` (enrichment) or `?agent=<name>` (backlinks) 
 | [`voice_brief_process`](dashboard/src/app/api/cron/voice_brief_process/route.ts) | User uploads voice brief; triggered from capability-statement page. |
 | [`beta_deadline`](dashboard/src/app/api/cron/beta_deadline/route.ts) | Hardcoded to May 1/5/8, 2026 — **DEPRECATED, those dates have passed.** Delete or repurpose. |
 
+## Externally-run crons (NOT in vercel.json)
+
+Cron entries that show up in the `cron_runs` table but **do not appear** in `dashboard/vercel.json`. They are triggered from the Hostinger VPS systemd timers (see [`reference_hostinger_vps.md`](reference_hostinger_vps.md) and [`reference_vps_cron_pattern.md`](reference_vps_cron_pattern.md)) hitting the HTTP route with `Authorization: Bearer $CRON_SECRET`. They will continue to land rows in `cron_runs` even though `vercel.json` doesn't reference them — that's expected.
+
+**Why offload to the VPS?** Vercel Pro caps us at 40 cron entries and we are at 39. Anything heavy or low-frequency that doesn't justify a Vercel slot lives on the VPS instead.
+
+| Cron route | Schedule (VPS timer) | Why it's on the VPS |
+|---|---|---|
+| [`compute_past_performance_stats`](dashboard/src/app/api/cron/compute_past_performance_stats/route.ts) | weekly Mon 08:00 UTC | Heavy USAspending aggregate that doesn't need to compete for a Vercel slot. |
+| [`sync_govtribe_activity`](dashboard/src/app/api/cron/sync_govtribe_activity/route.ts) | daily 13:00 UTC | Pre-warm GovTribe MCP cache for deadline-soon opps. Low-frequency; not worth a Vercel slot. |
+
+If you see `compute_past_performance_stats` or `sync_govtribe_activity` rows in `cron_runs` and they're _not_ in `vercel.json`, **that's not a bug — that's the VPS timer firing.** To find the systemd unit on the VPS:
+
+```bash
+ssh -i ~/.ssh/cp_vps root@srv1113360.hstgr.cloud
+systemctl list-timers | grep -E 'past_performance|govtribe'
+journalctl -u <unit>.service --since '24h ago'
+```
+
+## How to know if a cron is healthy
+
+Hit the per-cron status dashboard at **[`/admin/health/crons`](dashboard/src/app/(admin)/admin/health/crons/page.tsx)**. Reads from `cron_runs` directly. Each row shows:
+
+- **Last run** (UTC + relative)
+- **Last status** (`success` / `error` / `running`)
+- **Last error message** (truncated)
+- **7-day success rate** and **avg duration**
+- **Schedule source** (vercel.json / VPS / orchestrator sub-task / webhook)
+
+A cron is considered **unhealthy** if any of these are true:
+
+1. No successful run within `2 × expected interval` (e.g. a daily cron with no green run in 48h).
+2. Three consecutive failures.
+3. Last run had `status='running'` and started more than the route's `maxDuration` ago — likely a stuck/timed-out invocation that the reaper hasn't swept yet.
+
+The reaper itself runs inside [`/api/cron/self_heal`](dashboard/src/app/api/cron/self_heal/route.ts) every :30 — it marks any `running` row older than 15 min as `error` so the dashboard reflects reality.
+
+For the raw view, query the table directly:
+
+```sql
+select cron_name, status, started_at, duration_ms, error
+from cron_runs
+order by started_at desc
+limit 100;
+```
+
 ## Recent changes (2026-05-22)
 
 - **All 30 scheduled handlers + both orchestrators migrated to `guardCron`** from [`src/lib/cron-auth.ts`](dashboard/src/lib/cron-auth.ts). Replaces the prior fail-open pattern (`if (!process.env.CRON_SECRET) return true`) that would silently expose every endpoint if the env var got unset in prod. New helper is **fail-closed in production, dev-friendly locally**.
@@ -143,6 +189,25 @@ Orchestrators accept `?task=<name>` (enrichment) or `?agent=<name>` (backlinks) 
 
 ## Open audit items (user decision needed)
 
-1. **`enrich_apollo` vs `enrich_apollo_contractors`** — likely duplicate. Review and consolidate.
-2. **`beta_deadline`** hardcoded to past dates — delete or repurpose for evergreen trial-reminder emails.
-3. **`enrichment_orchestrator` runs 5×/hour** — total invocations 120/day. Worth profiling to confirm Vercel function cost is justified.
+1. **`beta_deadline`** hardcoded to past dates — delete or repurpose for evergreen trial-reminder emails.
+2. **`enrichment_orchestrator` runs 6×/hour** (`0,5,10,15,30,40 * * * *`) — total invocations 144/day. Worth profiling to confirm Vercel function cost is justified.
+3. **Decide whether more low-frequency Vercel crons should move to the VPS** to claw back slots toward the 40 ceiling. Candidates: weekly ingest jobs (`ingest_fpds_awards`, `ingest_subawards`, `ingest_calc`, `ingest_sec_filings_primes`).
+
+### Resolved by the 2026-06 audit (no longer open)
+
+- ~~`enrich_apollo` vs `enrich_apollo_contractors` duplicate~~ — Apollo path now wired through `enrich_apollo_contractors` only; standalone `enrich_apollo` route kept as admin-triggered manual fallback (not on a schedule).
+- ~~Cron telemetry was patchy / inconsistent~~ — every scheduled handler is now wrapped with `withCronTelemetry()` from [`src/lib/cron-telemetry.ts`](dashboard/src/lib/cron-telemetry.ts), writing a row per invocation to `cron_runs`.
+- ~~Stuck `running` rows never resolved~~ — `self_heal` cron sweeps `running` rows older than 15 min every :30 and flips them to `error` so the health dashboard reflects reality.
+- ~~No per-cron health UI~~ — `/admin/health/crons` now reads `cron_runs` and surfaces last-run / last-status / 7-day success rate / avg duration per route.
+
+## Cron route inventory vs vercel.json
+
+There are **78 route files** under [`dashboard/src/app/api/cron/`](dashboard/src/app/api/cron/) but only **39 entries** in [`dashboard/vercel.json`](dashboard/vercel.json). The delta is intentional. Every route in the route directory falls into one of these buckets:
+
+- **Vercel-scheduled** — listed in `vercel.json` (39 routes).
+- **Orchestrator sub-task** — only invoked by `enrichment_orchestrator` or `backlinks_orchestrator` (e.g. `enrich`, `backfill_requirements`, `strategic_scoring`, `ai_strategy`, `deep_enrich`, `bulk_enrich_ai`, `bulk_enrich_descriptions`, `enrich_contractors_usaspending`, all `backlink_*` sub-agents).
+- **Externally-run (VPS)** — see the section above (`compute_past_performance_stats`, `sync_govtribe_activity`).
+- **Webhook / admin-triggered** — only fires from a UI button or background job (e.g. `analyze_match_attachments`, `voice_brief_process`, `enrich_apollo`, `enrich_la_ramp`, `enqueue_backfill`, `discover_bonfire_tenants`, `enrich_sled_descriptions`, `ingest_bonfire_json`, `ingest_opengov`, `ingest_tx_esbd`, `backfill_naics`, `backfill_extracted_contacts`, `backfill_structured_requirements`, `cleanup_contractor_pages`, `discover_contractor_backlink_prospects`, `publish_contractor_pages`, `refresh_contractor_pages`, `send_backlink_outreach`).
+- **Deprecated** — `beta_deadline` (see above). Safe to delete after the next admin-panel review.
+
+Before deleting a route that isn't in `vercel.json`, **grep the repo for the path** (`grep -r "/api/cron/<name>"`) and also check the VPS systemd timers — orchestrator dispatches do not import the sub-route file directly, they hit the HTTP path.

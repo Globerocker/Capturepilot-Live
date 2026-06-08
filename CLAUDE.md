@@ -52,7 +52,7 @@ git push captiorpilot main && git push live main && git push globerocker main
 ## Cron Schedule
 **Full reference: [CRON.md](CRON.md)** — every scheduled task with what it does, what it writes, where the handler lives.
 
-35 scheduled crons (Pro limit 40, 5 slots free). High-level groups:
+40 scheduled crons (Pro limit 40, 0 slots free — at ceiling). High-level groups:
 - **Ingest** (8) — SAM.gov, Grants.gov, RSS, HigherGov, monthly awards
 - **Scoring** (3) — score_matches, naics_stats_backfill, past_performance_stats
 - **Enrichment orchestrator** (1 cron drives 8 sub-tasks every 5-10 min)

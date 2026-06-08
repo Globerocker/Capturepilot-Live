@@ -4,6 +4,10 @@ import { isAuthorizedCron } from "@/lib/cron-auth";
 // detector and daily digest can see this route. Previously only 5 of 35 crons
 // were logging to cron_runs.
 import { withCronTelemetry } from "@/lib/cron-telemetry";
+// Fix: per-task escalation — orchestrator fan-out hides sub-task failures
+// behind a single cron_runs row. Each non-2xx or thrown sub-task now spawns
+// a health_alerts row so /admin/health/alerts surfaces it for resolution.
+import { raiseAlert } from "@/lib/health-alerts";
 
 export const maxDuration = 300;
 
@@ -239,6 +243,7 @@ async function GET_handler(req: NextRequest): Promise<NextResponse> {
   // Parallel fan-out. allSettled so one slow/failed task doesn't block siblings.
   const settled = await Promise.allSettled(
     tasks.map(async task => {
+      const childUrl = `${base}/api/cron/${TASKS[task]}`;
       const started = Date.now();
       try {
         const loader = inProcessHandlers[task];
@@ -248,7 +253,7 @@ async function GET_handler(req: NextRequest): Promise<NextResponse> {
           const handler = await loader();
           res = await handler(buildChildRequest(task));
         } else {
-          res = await fetch(`${base}/api/cron/${TASKS[task]}`, { headers, cache: "no-store" });
+          res = await fetch(childUrl, { headers, cache: "no-store" });
         }
         const text = await res.text();
         const ms = Date.now() - started;
@@ -256,12 +261,42 @@ async function GET_handler(req: NextRequest): Promise<NextResponse> {
           console.error(
             `[enrichment_orchestrator] task=${task} failed status=${res.status} ms=${ms} body=${text.slice(0, 500)}`,
           );
+          // Fire-and-forget escalation row so /admin/health/alerts shows
+          // each downstream failure (not just the orchestrator's own
+          // cron_runs row, which would say "ok" because the orchestrator
+          // itself didn't throw).
+          await raiseAlert({
+            source: `orchestrator:${task}`,
+            severity: "error",
+            message: `Sub-task ${task} returned HTTP ${res.status} after ${ms}ms`,
+            payload: {
+              task,
+              url: childUrl,
+              status: res.status,
+              duration_ms: ms,
+              body_excerpt: text.slice(0, 500),
+            },
+          });
         }
         return { task, ok: res.ok, status: res.status, ms, body: text.slice(0, 500) };
       } catch (err) {
         const ms = Date.now() - started;
         const message = err instanceof Error ? err.message : String(err);
         console.error(`[enrichment_orchestrator] task=${task} threw after ${ms}ms: ${message}`);
+        // Same escalation path for thrown errors (timeout, abort, DNS, etc).
+        // We swallow the raiseAlert promise's own failures inside the helper
+        // so this can never double-throw and hide the original error.
+        await raiseAlert({
+          source: `orchestrator:${task}`,
+          severity: "error",
+          message: `Sub-task ${task} threw after ${ms}ms: ${message}`,
+          payload: {
+            task,
+            url: childUrl,
+            duration_ms: ms,
+            error: message,
+          },
+        });
         throw err;
       }
     }),

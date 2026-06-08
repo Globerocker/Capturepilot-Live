@@ -20,6 +20,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { withCronTelemetry } from "@/lib/cron-telemetry";
 
 export const maxDuration = 300;
 
@@ -113,7 +114,7 @@ function computeQuality(person: NonNullable<ApolloPersonMatch["person"]>): numbe
     return Math.min(100, score);
 }
 
-export async function GET(req: NextRequest) {
+async function GET_handler(req: NextRequest) {
     const authHeader = req.headers.get("authorization");
     const serviceKey = process.env.SUPABASE_SERVICE_KEY;
     const expectedCron = process.env.CRON_SECRET ? `Bearer ${process.env.CRON_SECRET}` : null;
@@ -242,3 +243,5 @@ export async function GET(req: NextRequest) {
         }, { status: 500 });
     }
 }
+
+export const GET = withCronTelemetry("/api/cron/enrich_gov_contacts_apollo", GET_handler);

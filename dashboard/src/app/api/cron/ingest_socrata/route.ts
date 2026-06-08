@@ -17,6 +17,7 @@ import { guardCron } from "@/lib/cron-auth";
 import { extractContacts } from "@/lib/extract-contacts";
 import { extractRichFields } from "@/lib/extract-rich-fields";
 import { fetchSocrataRows, readField, type SocrataSource, type FieldMap } from "@/lib/socrata";
+import { withCronTelemetry } from "@/lib/cron-telemetry";
 import crypto from "node:crypto";
 
 export const runtime = "nodejs";
@@ -43,7 +44,7 @@ function toIso(value: string | null): string | null {
     return new Date(t).toISOString();
 }
 
-export async function GET(req: NextRequest) {
+async function GET_handler(req: NextRequest) {
     const denied = guardCron(req);
     if (denied) return denied;
 
@@ -221,3 +222,5 @@ export async function GET(req: NextRequest) {
         per_source: perSourceResults,
     });
 }
+
+export const GET = withCronTelemetry("/api/cron/ingest_socrata", GET_handler);

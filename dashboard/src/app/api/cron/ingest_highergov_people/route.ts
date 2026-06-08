@@ -14,6 +14,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { withCronTelemetry } from "@/lib/cron-telemetry";
 
 export const maxDuration = 300;
 
@@ -59,7 +60,7 @@ function extractDomain(email: string | null | undefined): string | null {
     return email.slice(at + 1).toLowerCase().trim() || null;
 }
 
-export async function GET(req: NextRequest) {
+async function GET_handler(req: NextRequest) {
     const authHeader = req.headers.get("authorization");
     const serviceKey = process.env.SUPABASE_SERVICE_KEY;
     const expectedCron = process.env.CRON_SECRET ? `Bearer ${process.env.CRON_SECRET}` : null;
@@ -210,3 +211,5 @@ export async function GET(req: NextRequest) {
         }, { status: 500 });
     }
 }
+
+export const GET = withCronTelemetry("/api/cron/ingest_highergov_people", GET_handler);
