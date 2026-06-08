@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { guardCron } from "@/lib/cron-auth";
+import { withCronTelemetry } from "@/lib/cron-telemetry";
 
 export const maxDuration = 300;
 
@@ -39,8 +40,7 @@ interface CalcRow {
     worksite?: string;
 }
 
-export async function GET(req: NextRequest) {
-    const authHeader = req.headers.get("authorization");
+async function GET_handler(req: NextRequest) {
     const denied = guardCron(req);
     if (denied) return denied;
 
@@ -90,3 +90,5 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ success: false, error: msg, rows_inserted: inserted }, { status: 500 });
     }
 }
+
+export const GET = withCronTelemetry("/api/cron/ingest_calc", GET_handler);

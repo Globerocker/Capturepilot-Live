@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { analyzeCompany } from "@/lib/crawler";
 import { guardCron } from "@/lib/cron-auth";
+import { withCronTelemetry } from "@/lib/cron-telemetry";
 
 export const maxDuration = 300;
 
@@ -17,7 +18,7 @@ export const maxDuration = 300;
  * gate email scraping before we do it — a polite default that avoids
  * burning the crawler on prospects we won't contact.
  */
-export async function GET(req: NextRequest) {
+async function GET_handler(req: NextRequest) {
     const denied = guardCron(req);
     if (denied) return denied;
 
@@ -101,3 +102,5 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ ...stats, batch: rows.length });
 }
+
+export const GET = withCronTelemetry("/api/cron/enrich_prospects", GET_handler);

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { isPdlConfigured, pdlPersonByCompany } from "@/lib/enrichment/pdl";
+import { withCronTelemetry } from "@/lib/cron-telemetry";
 
 export const maxDuration = 300;
 
@@ -139,7 +140,7 @@ function splitName(full: string): { first: string; last: string } | null {
     return { first: parts[0], last: parts[parts.length - 1] };
 }
 
-export async function GET(req: NextRequest) {
+async function GET_handler(req: NextRequest) {
     const auth = req.headers.get("authorization");
     const serviceKey = process.env.SUPABASE_SERVICE_KEY;
     const expectedCron = process.env.CRON_SECRET ? `Bearer ${process.env.CRON_SECRET}` : null;
@@ -319,3 +320,5 @@ export async function GET(req: NextRequest) {
         batch_attempted: targets.length,
     });
 }
+
+export const GET = withCronTelemetry("/api/cron/enrich_apollo_contractors", GET_handler);

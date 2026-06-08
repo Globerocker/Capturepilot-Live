@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { sendOutreachEmail } from "@/lib/email";
 import { guardCron } from "@/lib/cron-auth";
+import { withCronTelemetry } from "@/lib/cron-telemetry";
 
 export const maxDuration = 300;
 
@@ -23,7 +24,7 @@ export const maxDuration = 300;
  *      flip the prospect status and cancel remaining steps.
  *   6. Skip send if the prospect already replied or bounced.
  */
-export async function GET(req: NextRequest) {
+async function GET_handler(req: NextRequest) {
     const denied = guardCron(req);
     if (denied) return denied;
 
@@ -177,6 +178,8 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(stats);
 }
+
+export const GET = withCronTelemetry("/api/cron/outreach_send", GET_handler);
 
 // Intentionally typed as `any` for the supabase client — the generic types
 // from @supabase/supabase-js vary by version and don't add safety here.

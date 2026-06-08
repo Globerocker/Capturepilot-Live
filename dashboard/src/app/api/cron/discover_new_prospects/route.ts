@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { guardCron } from "@/lib/cron-auth";
 import { SAM_CONTRACTOR_KEY } from "@/lib/sam-keys";
+import { withCronTelemetry } from "@/lib/cron-telemetry";
 
 export const maxDuration = 300;
 
@@ -26,7 +27,7 @@ export const maxDuration = 300;
  *   days=14 (default)
  *   date=MM/DD/YYYY (run for one specific day, overrides `days`)
  */
-export async function GET(req: NextRequest) {
+async function GET_handler(req: NextRequest) {
     const denied = guardCron(req);
     if (denied) return denied;
 
@@ -159,3 +160,5 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ success: true, ...stats });
 }
+
+export const GET = withCronTelemetry("/api/cron/discover_new_prospects", GET_handler);

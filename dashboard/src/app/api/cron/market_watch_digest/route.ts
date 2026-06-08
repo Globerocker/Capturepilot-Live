@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { sendOpportunityAlert } from "@/lib/email";
 import { guardCron } from "@/lib/cron-auth";
+import { withCronTelemetry } from "@/lib/cron-telemetry";
 
 export const maxDuration = 300;
 
@@ -43,7 +44,7 @@ interface ProfileRow {
     company_name: string | null;
 }
 
-export async function GET(req: NextRequest) {
+async function GET_handler(req: NextRequest) {
     const denied = guardCron(req);
     if (denied) return denied;
 
@@ -143,3 +144,5 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ success: false, error: msg }, { status: 500 });
     }
 }
+
+export const GET = withCronTelemetry("/api/cron/market_watch_digest", GET_handler);

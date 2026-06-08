@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { guardCron } from "@/lib/cron-auth";
+import { withCronTelemetry } from "@/lib/cron-telemetry";
 
 export const maxDuration = 300;
 
@@ -26,7 +27,7 @@ export const maxDuration = 300;
  * Schedule: daily 11:00 UTC. Budget: trivially under SAM's 1000 calls/hour
  * quota (no SAM calls at all — pure DB shuffle).
  */
-export async function GET(req: NextRequest) {
+async function GET_handler(req: NextRequest) {
     const denied = guardCron(req);
     if (denied) return denied;
 
@@ -89,3 +90,5 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ ...stats, batch: rows.length });
 }
+
+export const GET = withCronTelemetry("/api/cron/download_attachments", GET_handler);

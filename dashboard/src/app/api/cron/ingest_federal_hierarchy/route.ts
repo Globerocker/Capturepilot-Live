@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { guardCron } from "@/lib/cron-auth";
+import { withCronTelemetry } from "@/lib/cron-telemetry";
 
 export const maxDuration = 300;
 
@@ -32,7 +33,7 @@ interface FhOrg {
     address?: { state?: string };
 }
 
-export async function GET(req: NextRequest) {
+async function GET_handler(req: NextRequest) {
     const denied = guardCron(req);
     if (denied) return denied;
     const samKey = process.env.SAM_API_KEY;
@@ -89,3 +90,5 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ success: false, error: msg, rows_upserted: upserted }, { status: 500 });
     }
 }
+
+export const GET = withCronTelemetry("/api/cron/ingest_federal_hierarchy", GET_handler);

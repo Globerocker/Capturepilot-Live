@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { sendTrialExpiringEmail } from "@/lib/email";
 import { guardCron } from "@/lib/cron-auth";
+import { withCronTelemetry } from "@/lib/cron-telemetry";
 
 export const maxDuration = 60;
 
@@ -17,7 +18,7 @@ function getDb() {
  * Checks for users whose trial_ends_at is within the next 3 days.
  * Sends emails at 3-day and 1-day marks (deduplicated via client_activity_log).
  */
-export async function GET(req: NextRequest) {
+async function GET_handler(req: NextRequest) {
     const denied = guardCron(req);
     if (denied) return denied;
 
@@ -84,3 +85,5 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: (e as Error).message }, { status: 500 });
     }
 }
+
+export const GET = withCronTelemetry("/api/cron/trial_reminders", GET_handler);

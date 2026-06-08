@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { sendOpportunityAlert } from "@/lib/email";
 import { guardCron } from "@/lib/cron-auth";
+import { withCronTelemetry } from "@/lib/cron-telemetry";
 
 export const maxDuration = 120;
 
@@ -17,7 +18,7 @@ function getDb() {
  * Checks which users have new WARM/HOT matches since last notification.
  * Only sends to users who haven't been notified in the last 24 hours.
  */
-export async function GET(req: NextRequest) {
+async function GET_handler(req: NextRequest) {
     const denied = guardCron(req);
     if (denied) return denied;
 
@@ -98,3 +99,5 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: (e as Error).message }, { status: 500 });
     }
 }
+
+export const GET = withCronTelemetry("/api/cron/notify_matches", GET_handler);

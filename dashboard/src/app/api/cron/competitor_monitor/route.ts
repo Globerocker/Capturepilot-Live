@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { analyzeCompany } from "@/lib/crawler";
 import { guardCron } from "@/lib/cron-auth";
+import { withCronTelemetry } from "@/lib/cron-telemetry";
 
 export const maxDuration = 300;
 
@@ -21,7 +22,7 @@ function getAdmin() {
  *
  * Schedule: Weekly Sunday 7am UTC
  */
-export async function GET(req: NextRequest) {
+async function GET_handler(req: NextRequest) {
     const denied = guardCron(req);
     if (denied) return denied;
 
@@ -131,3 +132,5 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: (e as Error).message }, { status: 500 });
     }
 }
+
+export const GET = withCronTelemetry("/api/cron/competitor_monitor", GET_handler);

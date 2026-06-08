@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { dispatchScheduledEmail } from "@/lib/email";
 import { guardCron } from "@/lib/cron-auth";
+import { withCronTelemetry } from "@/lib/cron-telemetry";
 
 export const maxDuration = 120;
 
@@ -17,7 +18,7 @@ function getDb() {
  * Picks up to 50 due rows, dispatches via dispatchScheduledEmail, marks sent_at.
  * Respects email-settings toggles (the send() wrapper checks isEmailEnabled).
  */
-export async function GET(req: NextRequest) {
+async function GET_handler(req: NextRequest) {
     const denied = guardCron(req);
     if (denied) return denied;
 
@@ -71,3 +72,5 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: (e as Error).message }, { status: 500 });
     }
 }
+
+export const GET = withCronTelemetry("/api/cron/process_scheduled_emails", GET_handler);
