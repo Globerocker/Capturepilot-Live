@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAuthorizedCron } from "@/lib/cron-auth";
+// Fix: cron_runs telemetry coverage — wrap handler so /admin/health stale-cron
+// detector and daily digest can see this route. Previously only 5 of 35 crons
+// were logging to cron_runs.
+import { withCronTelemetry } from "@/lib/cron-telemetry";
 
 export const maxDuration = 300;
 
@@ -40,7 +44,12 @@ const TASKS = {
   enrich_contractors_usaspending:  "enrich_contractors_usaspending",
   enrich_sled_descriptions:        "enrich_sled_descriptions",
   discover_bonfire_tenants:        "discover_bonfire_tenants",
-  analyze_match_attachments:       "analyze_match_attachments",
+  // Fix: removed `analyze_match_attachments` batched cron — its task name
+  // collided with the per-opp `analyze_attachments` worker_jobs handler in
+  // /api/cron/run_worker_jobs. The queue handler now owns the work end-to-end
+  // (fan-out trigger on opportunities insert enqueues `analyze_attachments`
+  // jobs, which run_worker_jobs claims). See `handleAnalyzeAttachments` in
+  // /api/cron/run_worker_jobs/route.ts.
   run_worker_jobs:                 "run_worker_jobs",
   enqueue_backfill:                "enqueue_backfill",
   // SLED ingestion paths that existed in code but were never wired to a
@@ -68,6 +77,14 @@ const TASKS = {
   // Auto-sender for the backlink outreach pipeline — 100/day cap
   // enforced in the route. Fires every 2h, ~9 per tick.
   send_backlink_outreach:          "send_backlink_outreach",
+  // Fix: orphan-handler audit (2026-06) — these three routes had no Vercel
+  // cron entry and no orchestrator dispatch, so they never ran in production
+  // despite being referenced by /admin/db-stats (db_cleanup, monthly_awards)
+  // and the /forecasts page (forecast_change_detection). Routed through the
+  // orchestrator instead of consuming Vercel cron slots (we're at 39/40 Pro).
+  db_cleanup:                      "db_cleanup",
+  forecast_change_detection:       "forecast_change_detection",
+  monthly_awards:                  "monthly_awards",
 } as const;
 
 type TaskName = keyof typeof TASKS;
@@ -149,11 +166,11 @@ function tasksDueAt(d: Date): TaskName[] {
   // 13:00 UTC = 9 AM ET / 6 AM PT, 23:00 UTC = 7 PM ET / 4 PM PT.
   if (m === 10 && h >= 13 && h <= 23 && h % 2 === 1) due.push("send_backlink_outreach");
 
-  // SAM attachment text → structured_requirements. Runs at :15 every
-  // hour. analyze_match_attachments downloads PDFs/DOCX from saved opps,
-  // extracts text, and re-runs the LLM to fill bonding/insurance/clearance/
-  // performance-period fields that were null from description-only extraction.
-  if (m === 15) due.push("analyze_match_attachments");
+  // Fix: removed :15 hourly `analyze_match_attachments` dispatch — the batched
+  // route was deleted because its task name shadowed the per-opp
+  // `analyze_attachments` worker_jobs handler. SAM attachment OCR now runs
+  // exclusively through the queue (fan-out trigger enqueues one job per new
+  // SAM opp, run_worker_jobs claims them at every orchestrator tick).
 
   // worker_jobs queue consumer (Vercel side — HTTP-only task types).
   // Runs every orchestrator tick — picks up jobs enqueued by the
@@ -165,10 +182,19 @@ function tasksDueAt(d: Date): TaskName[] {
   // queue. Runs hourly at :30. Idempotent via worker_jobs.dedup_key.
   if (m === 30) due.push("enqueue_backfill");
 
+  // Fix: orphan-handler audit (2026-06) — wire the three previously-unscheduled
+  // crons to their documented cadences.
+  //   db_cleanup        — Sunday 04:00 UTC (weekly lifecycle sweep)
+  //   forecast_change_detection — daily 06:30 UTC (agency forecast differ)
+  //   monthly_awards    — 1st of month, 03:00 UTC (SAM Award/Forecast pull)
+  if (h === 4 && m === 0 && d.getUTCDay() === 0) due.push("db_cleanup");
+  if (h === 6 && m === 30) due.push("forecast_change_detection");
+  if (h === 3 && m === 0 && d.getUTCDate() === 1) due.push("monthly_awards");
+
   return due;
 }
 
-export async function GET(req: NextRequest) {
+async function GET_handler(req: NextRequest): Promise<NextResponse> {
   if (!isAuthorizedCron(req.headers.get("authorization"))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -187,13 +213,57 @@ export async function GET(req: NextRequest) {
   const headers: Record<string, string> = {};
   if (process.env.CRON_SECRET) headers.authorization = `Bearer ${process.env.CRON_SECRET}`;
 
+  // Fix: orchestrator → child cron handoff was failing silently when the
+  // same-origin fetch hit DNS/cold-start/auth timeouts (e.g. run_worker_jobs
+  // never fired because the fan-out fetch hung past maxDuration). Resolution:
+  // (1) import the child route's GET handler directly when possible and call
+  // it in-process with a synthesized NextRequest carrying the CRON_SECRET —
+  // eliminates network, DNS, and edge auth as failure modes; (2) keep a fetch
+  // fallback for any task we haven't pre-imported; (3) console.error on every
+  // non-ok so Vercel logs surface regressions instead of swallowing them.
+  // Note: the originally-proposed vercel.json backstop ("schedule run_worker_jobs
+  // directly at */5") was NOT added — vercel.json is already at the 40-cron Pro
+  // ceiling (naics_stats_backfill consumed the last free slot), so adding a
+  // 41st entry would fail deploy. The in-process fix below is enough.
+  type Handler = (req: NextRequest) => Promise<Response>;
+  const inProcessHandlers: Partial<Record<TaskName, () => Promise<Handler>>> = {
+    run_worker_jobs: async () => (await import("../run_worker_jobs/route")).GET as Handler,
+    enqueue_backfill: async () => (await import("../enqueue_backfill/route")).GET as Handler,
+  };
+
+  function buildChildRequest(task: TaskName): NextRequest {
+    const childUrl = `${base}/api/cron/${TASKS[task]}`;
+    return new NextRequest(childUrl, { headers, cache: "no-store" });
+  }
+
   // Parallel fan-out. allSettled so one slow/failed task doesn't block siblings.
   const settled = await Promise.allSettled(
     tasks.map(async task => {
       const started = Date.now();
-      const res = await fetch(`${base}/api/cron/${TASKS[task]}`, { headers, cache: "no-store" });
-      const text = await res.text();
-      return { task, ok: res.ok, status: res.status, ms: Date.now() - started, body: text.slice(0, 500) };
+      try {
+        const loader = inProcessHandlers[task];
+        let res: Response;
+        if (loader) {
+          // In-process invoke — no DNS, no cold-start, no edge auth roundtrip.
+          const handler = await loader();
+          res = await handler(buildChildRequest(task));
+        } else {
+          res = await fetch(`${base}/api/cron/${TASKS[task]}`, { headers, cache: "no-store" });
+        }
+        const text = await res.text();
+        const ms = Date.now() - started;
+        if (!res.ok) {
+          console.error(
+            `[enrichment_orchestrator] task=${task} failed status=${res.status} ms=${ms} body=${text.slice(0, 500)}`,
+          );
+        }
+        return { task, ok: res.ok, status: res.status, ms, body: text.slice(0, 500) };
+      } catch (err) {
+        const ms = Date.now() - started;
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(`[enrichment_orchestrator] task=${task} threw after ${ms}ms: ${message}`);
+        throw err;
+      }
     }),
   );
 
@@ -209,3 +279,5 @@ export async function GET(req: NextRequest) {
     results,
   });
 }
+
+export const GET = withCronTelemetry("/api/cron/enrichment_orchestrator", GET_handler);

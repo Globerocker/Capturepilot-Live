@@ -21,6 +21,10 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { Resend } from "resend";
 import { guardCron } from "@/lib/cron-auth";
 import { emailTemplate, contentCard, paragraph, sectionLabel, APP_URL, COLORS } from "@/lib/email-template";
+// Fix: cron_runs telemetry coverage — wrap handler so /admin/health stale-cron
+// detector and daily digest can see this route. Previously only 5 of 35 crons
+// were logging to cron_runs.
+import { withCronTelemetry } from "@/lib/cron-telemetry";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -82,7 +86,7 @@ function row(label: string, value: string | number, tone: "ok" | "info" | "warn"
     `;
 }
 
-export async function GET(req: NextRequest) {
+async function GET_handler(req: NextRequest): Promise<NextResponse> {
     const denied = guardCron(req);
     if (denied) return denied;
 
@@ -158,10 +162,31 @@ export async function GET(req: NextRequest) {
         return true;
     });
 
-    // ─── Smart skip ────────────────────────────────────────────────────────
-    // Quiet day: no new opps, no contractors, no enrichment, no escalations.
-    // Skip the email entirely to save Resend budget (1k/mo cap).
+    // ─── Smart skip + quiet-day floor ──────────────────────────────────────
+    // Fix: silent-platform blind spot — original smart-skip swallowed days where
+    // ingestion was 0 but that IS the news (SAM down, all crons stalled, etc).
+    // Three force-send overrides ensure we hear about quiet failures:
+    //   1. staleCount > 5            → many crons haven't logged in 24h
+    //   2. lastByRoute.size < HALF   → more than half of expected routes silent
+    //   3. platformPulse === 0       → zero opportunities inserted in 24h
+    // When any override fires, we still send (a "silent platform" digest) so
+    // the operator sees the staleCount table inlined and knows to investigate.
+    //
+    // EXPECTED_ROUTES is the rough count of scheduled cron routes from
+    // vercel.json (35 in CRON.md). Halved → 17. Using a hard number avoids
+    // a second DB roundtrip; if we drift far from 35 the override still
+    // catches the egregious case (e.g. only 5 routes logged in 24h).
+    const EXPECTED_ROUTES = 35;
+    const tooManyStale = staleCount > 5;
+    const tooFewRoutesLogged = lastByRoute.size < Math.floor(EXPECTED_ROUTES / 2);
+    // Platform pulse: opportunities-inserted-in-24h is the canonical
+    // "is anything happening" signal (covers all ingestion sources).
+    const platformPulse = oppsToday;
+    const silentPlatform = platformPulse === 0;
+    const forceSend = tooManyStale || tooFewRoutesLogged || silentPlatform;
+
     const isQuietDay =
+        !forceSend &&
         oppsToday === 0 && contractorsToday === 0 && pagesToday === 0 &&
         wjDone === 0 && wjFailed === 0 &&
         uniqueEscalations.length === 0 && staleCount === 0 &&
@@ -174,12 +199,42 @@ export async function GET(req: NextRequest) {
         });
     }
 
-    const subject = uniqueEscalations.length > 0
+    // Build a stale-route detail block we inline when the silent-platform
+    // overrides fire — gives the operator the names of the missing routes,
+    // not just a count.
+    const staleRoutes = [...lastByRoute.entries()]
+        .filter(([, dt]) => Date.now() - dt.getTime() > 26 * 60 * 60 * 1000)
+        .map(([route, dt]) => ({ route, hoursAgo: Math.round((Date.now() - dt.getTime()) / 3_600_000) }))
+        .sort((a, b) => b.hoursAgo - a.hoursAgo)
+        .slice(0, 20);
+
+    // Subject prioritization: silent-platform alarm > escalations > normal.
+    // The silent-platform subject is intentionally loud — a 0-opps day with
+    // half the crons missing is the kind of thing that should jump the inbox.
+    const subject = silentPlatform || tooManyStale || tooFewRoutesLogged
+        ? `[Silent platform] CapturePilot digest — 0 opps in 24h${tooManyStale ? `, ${staleCount} stale crons` : ""}${tooFewRoutesLogged ? `, only ${lastByRoute.size}/${EXPECTED_ROUTES} routes logged` : ""}`
+        : uniqueEscalations.length > 0
         ? `[Action needed] CapturePilot digest — ${uniqueEscalations.length} item${uniqueEscalations.length === 1 ? "" : "s"} for you · +${oppsToday} opps`
         : `CapturePilot daily digest — +${oppsToday} opps, +${contractorsToday} contractors`;
 
     const body = `
         ${paragraph(`Last 24h on the platform. Open <a href="${APP_URL}/admin/db-health" style="color:${COLORS.emerald600};">/admin/db-health</a> for the full live view.`)}
+        ${!forceSend ? "" : contentCard(`
+            ${sectionLabel("Silent-platform alarm")}
+            <div style="margin-top:8px;padding:10px 12px;background:#fef2f2;border-left:3px solid #dc2626;border-radius:4px;font-size:13px;color:#7f1d1d;line-height:1.5;">
+                ${silentPlatform ? "<div><strong>Zero opportunities</strong> inserted in the last 24h — ingestion is silent.</div>" : ""}
+                ${tooManyStale ? `<div><strong>${staleCount} stale crons</strong> (no run in &gt;26h).</div>` : ""}
+                ${tooFewRoutesLogged ? `<div>Only <strong>${lastByRoute.size}/${EXPECTED_ROUTES}</strong> cron routes logged a run in the last 24h.</div>` : ""}
+            </div>
+            ${staleRoutes.length === 0 ? "" : `
+                <div style="margin-top:10px;font-size:12px;color:${COLORS.stone600};">Stalest routes:</div>
+                <table role="presentation" style="width:100%;border-collapse:collapse;margin-top:4px;">
+                    <tbody>
+                        ${staleRoutes.map(r => row(escapeHtml(r.route), `${r.hoursAgo}h ago`, "warn")).join("")}
+                    </tbody>
+                </table>
+            `}
+        `)}
         ${contentCard(`
             ${sectionLabel("Ingestion (last 24h)")}
             <table role="presentation" style="width:100%;border-collapse:collapse;margin-top:6px;">
@@ -270,9 +325,14 @@ export async function GET(req: NextRequest) {
     });
     if (error) return NextResponse.json({ ok: false, error: String(error) }, { status: 500 });
 
-    // Slack mirror — same payload as health-digest fires (sendSlackDigest)
+    // Slack mirror — same payload as health-digest fires (sendSlackDigest).
+    // Prepends a :rotating_light: line when the silent-platform alarm fires
+    // so Slack pings match the email subject's urgency.
     if (process.env.SLACK_WEBHOOK_URL) {
-        const text = `:bar_chart: *CapturePilot daily digest*\n`
+        const alarmLine = forceSend
+            ? `:rotating_light: *Silent platform* — ${[silentPlatform ? "0 opps/24h" : null, tooManyStale ? `${staleCount} stale crons` : null, tooFewRoutesLogged ? `only ${lastByRoute.size}/${EXPECTED_ROUTES} routes logged` : null].filter(Boolean).join(" · ")}\n`
+            : "";
+        const text = `${alarmLine}:bar_chart: *CapturePilot daily digest*\n`
             + `• Opps +${oppsToday} · Contractors +${contractorsToday} · Pages +${pagesToday}\n`
             + `• Queue 24h: ${wjDone} done · ${wjFailed} failed (${failurePct}%)\n`
             + `• Alerts: ${alertsToday} · Stale crons: ${staleCount}\n`
@@ -288,6 +348,14 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
         ok: true,
         sent_to: to,
+        force_send: forceSend,
+        silent_platform: silentPlatform,
+        too_many_stale: tooManyStale,
+        too_few_routes_logged: tooFewRoutesLogged,
+        routes_logged: lastByRoute.size,
+        expected_routes: EXPECTED_ROUTES,
         snapshot: { oppsToday, contractorsToday, pagesToday, attachmentsToday, wjDone, wjFailed, failurePct, alertsToday, staleCount },
     });
 }
+
+export const GET = withCronTelemetry("/api/cron/send_daily_digest", GET_handler);

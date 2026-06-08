@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createHash } from "node:crypto";
 import { guardCron } from "@/lib/cron-auth";
+// Fix: orphan-handler audit (2026-06) — route had no Vercel cron entry AND no
+// orchestrator dispatch, so the /forecasts page (consumes agency_forecast_changes)
+// was reading stale data. Now invoked by enrichment_orchestrator at 06:30 UTC daily.
+// Telemetry wrapper added so /admin/health shows when the differ actually ran.
+import { withCronTelemetry } from "@/lib/cron-telemetry";
 
 export const maxDuration = 300;
 
@@ -66,7 +71,7 @@ async function fetchLatestContent(url: string, selector: string | null): Promise
     }
 }
 
-export async function GET(req: NextRequest) {
+async function GET_handler(req: NextRequest) {
     const denied = guardCron(req);
     if (denied) return denied;
 
@@ -133,3 +138,5 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ success: true, sources_checked: checked, changes_detected: changes });
 }
+
+export const GET = withCronTelemetry("/api/cron/forecast_change_detection", GET_handler);

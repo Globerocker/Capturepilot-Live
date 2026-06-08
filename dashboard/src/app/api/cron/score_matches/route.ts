@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { scoreOpportunity, type ProfileForScoring, type OpportunityForScoring, type ScoredMatch } from "@/lib/match-scoring";
+// Fix: cron_runs telemetry coverage — wrap handler so /admin/health stale-cron
+// detector and daily digest can see this route. Previously only 5 of 35 crons
+// were logging to cron_runs.
+import { withCronTelemetry } from "@/lib/cron-telemetry";
 
 export const maxDuration = 300;
 
@@ -36,7 +40,7 @@ async function loadKeywordEntries(
     return canonical.map((kw) => ({ keyword: kw, aliases: byKw.get(kw) || [] }));
 }
 
-export async function GET(req: NextRequest) {
+async function GET_handler(req: NextRequest): Promise<NextResponse> {
     // Dual auth: Vercel cron OR Supabase pg_cron service-key bearer
     const authHeader = req.headers.get("authorization");
     const serviceKey = process.env.SUPABASE_SERVICE_KEY;
@@ -208,3 +212,5 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: msg, code, details, hint, ...stats }, { status: 500 });
     }
 }
+
+export const GET = withCronTelemetry("/api/cron/score_matches", GET_handler);

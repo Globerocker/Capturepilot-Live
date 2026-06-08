@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+// Fix: cron_runs telemetry coverage — wrap handler so /admin/health stale-cron
+// detector and daily digest can see this route. Previously only 5 of 35 crons
+// were logging to cron_runs.
+import { withCronTelemetry } from "@/lib/cron-telemetry";
 
 export const maxDuration = 300;
 
@@ -62,7 +66,7 @@ const PTYPE_LABELS: Record<string, string> = {
     k: "Combined Synopsis",
 };
 
-export async function GET(req: NextRequest) {
+async function GET_handler(req: NextRequest): Promise<NextResponse> {
     // Dual auth: Vercel cron OR Supabase pg_cron service-key bearer
     // (Vercel's scheduler has silently stopped firing this — pg_cron now backs it up)
     const authHeader = req.headers.get("authorization");
@@ -282,3 +286,5 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: msg }, { status: 500 });
     }
 }
+
+export const GET = withCronTelemetry("/api/cron/ingest_sam", GET_handler);

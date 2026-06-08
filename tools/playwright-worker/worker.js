@@ -88,12 +88,21 @@ async function savePortalCookies(host, cookies, userAgent) {
         .map(c => c.expires)
         .filter(e => typeof e === "number" && e > 0)
         .sort((a, b) => a - b)[0];
+    // Fix: portal_cookies.expires_at was never set when CF cookies came back as
+    // session-only (expires=-1 or 0), so every row looked "expired" to the
+    // refresh window in run_worker_jobs and warm jobs burned constantly.
+    // CF cf_clearance lifetime is ~30 min — default to 25 min so we re-warm
+    // before it actually dies.
+    const DEFAULT_TTL_MS = 25 * 60 * 1000;
+    const expiresAtIso = earliestExpiry
+        ? new Date(earliestExpiry * 1000).toISOString()
+        : new Date(Date.now() + DEFAULT_TTL_MS).toISOString();
     await sb.from("portal_cookies").upsert({
         host,
         cookies,
         user_agent: userAgent,
         fetched_at: new Date().toISOString(),
-        expires_at: earliestExpiry ? new Date(earliestExpiry * 1000).toISOString() : null,
+        expires_at: expiresAtIso,
         last_blocked_at: null,
     }, { onConflict: "host" });
 }
@@ -501,8 +510,44 @@ async function tick() {
     console.log(`[worker] tick done: ${total} jobs processed`);
 }
 
+// Fix: FlareSolverr config check — without this, a missing FLARESOLVERR_URL in
+// Railway env silently routed every Bonfire job through the Playwright path,
+// which guarantees a cf_blocked / no_clearance_cookie failure. The 95-failed
+// pattern in worker logs all traced back to this one missing env var. Logging
+// the config at boot + pinging the endpoint once turns a silent failure into a
+// loud one.
+async function logFlaresolverrConfig() {
+    if (!FLARESOLVERR_URL) {
+        console.warn("[worker] WARNING: FLARESOLVERR_URL is NOT set");
+        console.warn("[worker] WARNING: Bonfire (.bonfirehub.com) and Salesforce Community hosts will FAIL because");
+        console.warn("[worker] WARNING: Playwright+stealth from datacenter IPs can't pass their Turnstile/SPA gates.");
+        console.warn("[worker] WARNING: Set FLARESOLVERR_URL (+ FLARESOLVERR_AUTH_TOKEN) in Railway env to fix.");
+        return;
+    }
+    console.log(`[worker] FLARESOLVERR_URL=${FLARESOLVERR_URL} auth=${FLARESOLVERR_AUTH_TOKEN ? "yes" : "no"}`);
+    try {
+        const headers = {};
+        if (FLARESOLVERR_AUTH_TOKEN) headers["Authorization"] = `Bearer ${FLARESOLVERR_AUTH_TOKEN}`;
+        const res = await fetch(`${FLARESOLVERR_URL}/`, {
+            method: "GET",
+            headers,
+            signal: AbortSignal.timeout(10_000),
+        });
+        if (res.ok) {
+            const body = await res.text().catch(() => "");
+            const version = body.match(/"version":"([^"]+)"/)?.[1] || "unknown";
+            console.log(`[worker] FlareSolverr reachable (version=${version})`);
+        } else {
+            console.warn(`[worker] WARNING: FlareSolverr ping returned http ${res.status} — Bonfire jobs may fail`);
+        }
+    } catch (e) {
+        console.warn(`[worker] WARNING: FlareSolverr ping failed: ${(e && e.message) || e} — Bonfire jobs may fail`);
+    }
+}
+
 async function main() {
     console.log(`[worker] starting (handlers=${MY_TASKS.join(",")}, batch=${BATCH_SIZE}, poll=${POLL_MS}ms)`);
+    await logFlaresolverrConfig();
     let stopping = false;
     process.on("SIGTERM", () => { console.log("[worker] SIGTERM"); stopping = true; });
     process.on("uncaughtException", (e) => console.error(`[worker] uncaughtException: ${e?.message || e}`));

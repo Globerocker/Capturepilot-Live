@@ -14,6 +14,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { guardCron } from "@/lib/cron-auth";
+// Fix: cron_runs telemetry coverage — wrap handler so /admin/health stale-cron
+// detector and daily digest can see this route. Previously only 5 of 35 crons
+// were logging to cron_runs.
+import { withCronTelemetry } from "@/lib/cron-telemetry";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -63,7 +67,7 @@ async function n(sb: SbAny, table: string, filt: Record<string, string> = {}): P
     return 0;
 }
 
-export async function GET(req: NextRequest) {
+async function GET_handler(req: NextRequest): Promise<NextResponse> {
     const denied = guardCron(req);
     if (denied) return denied;
 
@@ -117,3 +121,5 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ ok: true, payload });
 }
+
+export const GET = withCronTelemetry("/api/cron/compute_public_stats", GET_handler);

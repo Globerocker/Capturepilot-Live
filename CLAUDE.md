@@ -115,7 +115,7 @@ Turned the codebase into a job-queue system. Before this, enrichment work was a 
 - `enqueue_backfill` — :30 hourly.
 - `discover_bonfire_tenants` — 04:00 UTC daily (probes 220+ slug seed list).
 - `enrich_sled_descriptions` — :10 and :40 hourly.
-- `analyze_match_attachments` — :15 hourly (downloads PDFs/DOCX → OCR → structured_requirements).
+- SAM attachment OCR runs via the `worker_jobs` queue (`analyze_attachments` task type, fan-out trigger on new SAM opps → claimed by `run_worker_jobs`). The standalone `/api/cron/analyze_match_attachments` route was deleted on 2026-06-08 because the task-type name collided with the per-opp queue handler.
 
 **Bonfire CF defeat path** (commit `754d7a7f` + `3e9de51b`):
 1. `warm_cf_cookie` task opens portal homepage in stealth Chromium, sits through JS challenge, harvests `cf_clearance` + `__cf_bm` cookies.

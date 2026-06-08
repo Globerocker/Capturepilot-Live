@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+// Fix: orphan-handler audit (2026-06) — route had no Vercel cron entry AND no
+// orchestrator dispatch, so weekly lifecycle cleanup never ran in production.
+// Now invoked by enrichment_orchestrator at Sun 04:00 UTC (one slot in vercel.json
+// would have pushed us to 41/40 on Pro plan). Telemetry wrapper added so
+// /admin/health and cron_runs reflect actual execution.
+import { withCronTelemetry } from "@/lib/cron-telemetry";
 
 export const maxDuration = 300;
 
@@ -122,7 +128,7 @@ async function purgeAttachmentStorage(
     return removed;
 }
 
-export async function GET(req: NextRequest) {
+async function GET_handler(req: NextRequest) {
     // Dual auth: Vercel cron OR Supabase pg_cron service key
     const authHeader = req.headers.get("authorization");
     const serviceKey = process.env.SUPABASE_SERVICE_KEY;
@@ -323,3 +329,5 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: msg }, { status: 500 });
     }
 }
+
+export const GET = withCronTelemetry("/api/cron/db_cleanup", GET_handler);

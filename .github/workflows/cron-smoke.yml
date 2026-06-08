@@ -1,0 +1,94 @@
+name: Cron Smoke Test
+
+# Fix: audit-gap closing — fans out an authenticated GET to every cron
+# route in dashboard/vercel.json and asserts 2xx. Catches dead/renamed/
+# broken cron handlers faster than waiting for cron_runs telemetry to
+# stay quiet for hours.
+#
+# Companion to .github/workflows/admin-smoke.yml:
+#   - admin-smoke catches missing assertAdmin() (auth regression).
+#   - cron-smoke catches missing/broken cron handlers (route regression).
+#
+# Configuration (repo secrets):
+#   - CRON_SECRET  (REQUIRED): same value Vercel uses to invoke crons.
+#   - PROD_URL     (optional): override target. Defaults to
+#     https://app.capturepilot.com.
+#
+# Schedule: weekly (Mon 14:00 UTC), plus manual dispatch.
+
+on:
+  schedule:
+    # Weekly on Mondays at 14:00 UTC — well after the daily ingest crons
+    # (02:00–10:00 UTC) so we're not racing real workloads.
+    - cron: "0 14 * * 1"
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "Override the base URL to probe"
+        required: false
+        type: string
+      skip:
+        description: "Comma-separated cron basenames to skip (e.g. ingest_sam,ingest_grants)"
+        required: false
+        type: string
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    # Skip on forks — only runs against your own deploy with your secret.
+    if: github.repository_owner == 'Globerocker'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Resolve base URL
+        id: resolve
+        env:
+          INPUT_URL: ${{ inputs.base_url }}
+          SECRET_URL: ${{ secrets.PROD_URL }}
+        run: |
+          if [ -n "$INPUT_URL" ]; then
+            URL="$INPUT_URL"
+          elif [ -n "$SECRET_URL" ]; then
+            URL="$SECRET_URL"
+          else
+            URL="https://app.capturepilot.com"
+          fi
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "Resolved base URL: $URL"
+
+      - name: Build skip flags
+        id: skip
+        env:
+          INPUT_SKIP: ${{ inputs.skip }}
+        run: |
+          # Default skip list — heavy crons that legitimately take >60s and
+          # would slow the smoke pass without adding signal. Override via
+          # workflow dispatch input if needed.
+          DEFAULT_SKIP="ingest_sam,ingest_grants,ingest_highergov_sled,ingest_highergov_people,bulk_enrich_contractors_sam,download_attachments"
+          LIST="${INPUT_SKIP:-$DEFAULT_SKIP}"
+          FLAGS=""
+          IFS=',' read -ra ITEMS <<< "$LIST"
+          for item in "${ITEMS[@]}"; do
+            trimmed="$(echo "$item" | xargs)"
+            if [ -n "$trimmed" ]; then
+              FLAGS="$FLAGS --skip $trimmed"
+            fi
+          done
+          echo "flags=$FLAGS" >> "$GITHUB_OUTPUT"
+          echo "Skip flags: $FLAGS"
+
+      - name: Run cron smoke test
+        env:
+          BASE_URL: ${{ steps.resolve.outputs.url }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "::error::CRON_SECRET repo secret is not set — cannot probe authenticated cron routes."
+            exit 1
+          fi
+          node tools/31_smoke_crons.mjs --base "$BASE_URL" ${{ steps.skip.outputs.flags }}

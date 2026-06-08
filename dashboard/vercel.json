@@ -154,11 +154,11 @@
         {
             "path": "/api/cron/send_daily_digest",
             "schedule": "0 8 * * *"
+        },
+        {
+            "path": "/api/cron/naics_stats_backfill",
+            "schedule": "0 4 * * 0"
         }
     ],
-    "functions": {
-        "src/app/api/cron/analyze_match_attachments/route.ts": {
-            "memory": 3008
-        }
-    }
+    "functions": {}
 }

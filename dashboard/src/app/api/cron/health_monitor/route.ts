@@ -4,6 +4,10 @@ import { guardCron } from "@/lib/cron-auth";
 import { probes, daysUntilExpiry, EXPIRY_WARN_DAYS, type ProbeResult } from "@/lib/connectors";
 import { sendHealthDigest } from "@/lib/health-digest";
 import { shouldSuppressImmediateEmail, type HealthAlertRow } from "@/lib/health-autoheal";
+// Fix: cron_runs telemetry coverage — wrap handler so /admin/health stale-cron
+// detector and daily digest can see this route. Previously only 5 of 35 crons
+// were logging to cron_runs.
+import { withCronTelemetry } from "@/lib/cron-telemetry";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -54,7 +58,7 @@ function db() {
     );
 }
 
-export async function GET(req: NextRequest) {
+async function GET_handler(req: NextRequest): Promise<NextResponse> {
     const denied = guardCron(req);
     if (denied) return denied;
 
@@ -344,3 +348,5 @@ export async function GET(req: NextRequest) {
         duration_ms: Date.now() - startedAt.getTime(),
     });
 }
+
+export const GET = withCronTelemetry("/api/cron/health_monitor", GET_handler);

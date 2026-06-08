@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { guardCron } from "@/lib/cron-auth";
+// Fix: orphan-handler audit (2026-06) — route had no Vercel cron entry AND no
+// orchestrator dispatch, so monthly Award Notice + Forecast ingest never fired.
+// Now invoked by enrichment_orchestrator on the 1st of each month at 03:00 UTC.
+// Telemetry wrapper added so /admin/health reflects the once-monthly cadence.
+import { withCronTelemetry } from "@/lib/cron-telemetry";
 
 export const maxDuration = 300;
 
@@ -17,7 +22,7 @@ function getSupabase() {
  * - Forecast notices: early pipeline signals (SEARCH_SEED status)
  * Runs once per month to conserve API budget.
  */
-export async function GET(req: NextRequest) {
+async function GET_handler(req: NextRequest) {
     const denied = guardCron(req);
     if (denied) return denied;
 
@@ -141,3 +146,5 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: msg }, { status: 500 });
     }
 }
+
+export const GET = withCronTelemetry("/api/cron/monthly_awards", GET_handler);

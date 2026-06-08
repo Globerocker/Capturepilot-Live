@@ -15,11 +15,13 @@ export const maxDuration = 300;
  *
  * The actual heavy lifting — PDF download, OCR/text extraction, LLM analysis,
  * writing `structured_requirements` / `ai_win_strategy` — lives in:
- *   /api/cron/analyze_match_attachments  (per-opp, 2 docs/run, 20-min cadence)
+ *   worker_jobs `analyze_attachments` handler in /api/cron/run_worker_jobs
+ *     (per-opp, claimed off the queue; replaced the batched
+ *     /api/cron/analyze_match_attachments route on 2026-06-08).
  *   /api/cron/deep_enrich                (description text re-fetch)
  *
- * If you're looking for "where do PDFs actually get processed?" — it's
- * analyze_match_attachments, NOT this file.
+ * If you're looking for "where do PDFs actually get processed?" — it's the
+ * `analyze_attachments` queue task in run_worker_jobs, NOT this file.
  *
  * Schedule: daily 11:00 UTC. Budget: trivially under SAM's 1000 calls/hour
  * quota (no SAM calls at all — pure DB shuffle).

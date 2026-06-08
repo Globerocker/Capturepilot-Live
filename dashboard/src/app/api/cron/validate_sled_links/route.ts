@@ -23,6 +23,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { guardCron } from "@/lib/cron-auth";
+// Fix: orphan-handler audit (2026-06) — route is scheduled in vercel.json
+// (0 3 * * *) but never wrote to cron_runs, so /admin/health couldn't
+// confirm whether the daily SLED link sweep actually fired. Telemetry wrapper
+// added so we can detect silent failures (rows.length === 0, fetch timeouts).
+import { withCronTelemetry } from "@/lib/cron-telemetry";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -69,7 +74,7 @@ async function checkOne(url: string): Promise<{ ok: boolean; broken: boolean; st
     }
 }
 
-export async function GET(req: NextRequest) {
+async function GET_handler(req: NextRequest) {
     const denied = guardCron(req);
     if (denied) return denied;
 
@@ -125,3 +130,5 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ ok: true, stats });
 }
+
+export const GET = withCronTelemetry("/api/cron/validate_sled_links", GET_handler);
