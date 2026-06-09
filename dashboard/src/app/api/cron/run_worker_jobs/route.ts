@@ -47,6 +47,14 @@ export const maxDuration = 60;
 
 // Task types this Vercel consumer handles. Browser-based ones (scrape_portal_detail,
 // warm_cf_cookie) stay claimed by the Railway worker.
+//
+// 2026-06-09: analyze_attachments REMOVED from this list. It's now exclusively
+// claimed by /api/cron/run_worker_jobs_attachments (dedicated drain route
+// running every 3 min). Reason: priority 8 attachments were starving the
+// priority-6 struct-reqs lanes in this main worker — claim_jobs orders by
+// priority DESC, so with 10k+ pending attachments the main worker never
+// reached the struct-reqs lane within the 60s budget. Splitting lanes lets
+// both drain in parallel.
 const HTTP_TASK_TYPES = [
     "classify_naics",
     "extract_structured_reqs",
@@ -57,7 +65,6 @@ const HTTP_TASK_TYPES = [
     "extract_keywords",
     "enrich_lead_brief",
     "enrich_lead_apollo",
-    "analyze_attachments",
 ];
 
 type Job = {
