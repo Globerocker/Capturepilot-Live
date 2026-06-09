@@ -79,12 +79,16 @@ async function GET_handler(req: NextRequest): Promise<NextResponse> {
 
     try {
         const supabase = getSupabase();
-        // Primary key + optional backup. If the primary returns 401/403 mid-run
-        // (revoked / quota exhausted), we swap to the secondary and keep going
+        // Primary keys + optional backups. If a key returns 401/403 mid-run
+        // (revoked / quota exhausted), we swap to the next and keep going
         // — silently losing a whole day of opps because one key flipped is the
         // exact failure mode that put us 9 days behind on 2026-05-13.
-        const SAM_KEYS = [process.env.SAM_API_KEY, process.env.SAM_API_KEY_2]
-            .filter((k): k is string => !!k && k.length > 10);
+        // 2026-06-08: SAM_API_KEY_3 added → 3 keys in rotation = ~3× quota.
+        const SAM_KEYS = [
+            process.env.SAM_API_KEY,
+            process.env.SAM_API_KEY_3,
+            process.env.SAM_API_KEY_2,
+        ].filter((k): k is string => !!k && k.length > 10);
         if (SAM_KEYS.length === 0) {
             return NextResponse.json({ error: "No SAM_API_KEY configured" }, { status: 500 });
         }
