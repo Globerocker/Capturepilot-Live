@@ -163,6 +163,5 @@
             "path": "/api/cron/run_worker_jobs_attachments",
             "schedule": "*/3 * * * *"
         }
-    ],
-    "functions": {}
+    ]
 }
