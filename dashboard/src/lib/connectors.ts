@@ -117,6 +117,24 @@ export const probes: Record<string, () => Promise<ProbeResult>> = {
         return probeApiKeyHeader("https://api.sam.gov/entity-information/v3/entities?registrationStatus=A&size=1", "X-Api-Key", k);
     },
 
+    // SAM.gov KEY 3 (opportunity ingest #2) — added 2026-06-08 to round-robin
+    // with SAM_API_KEY in the opportunity-ingest pool. Probes the same
+    // endpoint as sam-gov so the alert pattern matches; the key just gets
+    // alternated by sam-keys.ts getOpportunityKey().
+    "sam-gov-ingest-key3": async () => {
+        const k = process.env.SAM_API_KEY_3;
+        if (!k) return { status: "disabled", detail: "SAM_API_KEY_3 unset" };
+        const today = new Date();
+        const mm = String(today.getMonth() + 1).padStart(2, "0");
+        const dd = String(today.getDate()).padStart(2, "0");
+        const date = `${mm}/${dd}/${today.getFullYear()}`;
+        return probeApiKeyHeader(
+            `https://api.sam.gov/opportunities/v2/search?postedFrom=${date}&postedTo=${date}&limit=1`,
+            "X-Api-Key",
+            k,
+        );
+    },
+
     // Hostinger-VPS hosted services. Each is reached through Traefik with a
     // bearer token; the URL constants and tokens live in *_URL / *_AUTH_TOKEN
     // env vars. If the URL is unset the connector reports disabled (which is

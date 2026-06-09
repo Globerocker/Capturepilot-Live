@@ -92,13 +92,16 @@ export async function GET(req: NextRequest) {
     // is enough for a human user exploring; bulk-scrapers get 429.
     const blocked = await protectCrawl(req, { route: "partners-search", maxPerMin: 20 });
     if (blocked) return blocked;
-    // Try both SAM keys. Key 1 is shared with ingest_sam (1000/day quota);
-    // when it hits the daily ceiling the partner search would 502 with
+    // Try all SAM keys. Key 1 + Key 3 are the opportunity-ingest pool (added
+    // 2026-06-08); Key 2 is the entity/contractor-scope key. All three share
+    // partner-search since /entity-information is what powers the lookup.
+    // When ingest hammers its primary quota the search would 502 with
     // "Message throttled out" — exactly what users saw at 2026-05-29.
-    // Key 2 is the contractor-scope key with its own quota — falls back
-    // for partner search until midnight UTC reset.
-    const SAM_KEYS = [process.env.SAM_API_KEY, process.env.SAM_API_KEY_2]
-        .filter((k): k is string => !!k && k.length > 10);
+    const SAM_KEYS = [
+        process.env.SAM_API_KEY,
+        process.env.SAM_API_KEY_3,
+        process.env.SAM_API_KEY_2,
+    ].filter((k): k is string => !!k && k.length > 10);
     if (SAM_KEYS.length === 0) {
         return NextResponse.json(
             { error: "SAM API key not configured", partners: [], total: 0 },
