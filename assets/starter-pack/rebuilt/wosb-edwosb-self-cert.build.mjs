@@ -32,7 +32,60 @@ const GREEN = 'FF16A34A';
 const GREEN_TINT = 'FFDCFCE7';
 const WHITE = 'FFFFFFFF';
 
+// ───────────────────────────────────────────────────────────────
+// buildListsSheet
+// ───────────────────────────────────────────────────────────────
+/**
+ * buildListsSheet
+ * ---------------
+ * Call once per workbook, right after `new ExcelJS.Workbook()`.
+ * Returns a map { listName -> formulaString } to pass into dataValidation.formulae.
+ *
+ * @param {import('exceljs').Workbook} wb
+ * @param {Array<{name: string, title: string, items: string[]}>} lists
+ * @returns {Record<string, string>}
+ */
+function buildListsSheet(wb, lists) {
+  let wsLists = wb.getWorksheet('Lists');
+  if (!wsLists) {
+    wsLists = wb.addWorksheet('Lists', { views: [{ showGridLines: false }] });
+  }
+
+  wsLists.columns = lists.map(() => ({ width: 28 }));
+
+  const formulaMap = {};
+
+  lists.forEach((list, colIdx) => {
+    const colLetter = String.fromCharCode(65 + colIdx); // A, B, C …
+    const titleCell = wsLists.getCell(`${colLetter}1`);
+    titleCell.value = list.title;
+    titleCell.font = { name: 'Calibri', size: 10, bold: true };
+    titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+    titleCell.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+    list.items.forEach((item, itemIdx) => {
+      const cell = wsLists.getCell(`${colLetter}${2 + itemIdx}`);
+      cell.value = item;
+      cell.font = { name: 'Calibri', size: 10 };
+      cell.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+    });
+    const lastRow = 1 + list.items.length;
+    wb.definedNames.add(`Lists!$${colLetter}$2:$${colLetter}$${lastRow}`, list.name);
+    formulaMap[list.name] = list.name;
+  });
+
+  wsLists.state = 'veryHidden';
+  return formulaMap;
+}
+
 const wb = new ExcelJS.Workbook();
+
+// Build Lists sheet first (must be first worksheet)
+const lists = buildListsSheet(wb, [
+  { name: 'CitizenStatus', title: 'Citizen Status',  items: ['Yes', 'No', 'Naturalized', 'Dual citizen'] },
+  { name: 'YesNoMaybe',   title: 'Y / N / ?',        items: ['Y', 'N', '?'] },
+  { name: 'DocStatus',    title: 'Document Status',  items: ['Have', 'Need', 'N/A'] },
+]);
+
 wb.creator = 'CapturePilot';
 wb.company = 'CapturePilot Federal Lead Kit';
 wb.title = 'WOSB / EDWOSB Self-Certification Pack';
@@ -234,7 +287,7 @@ function brandHeader(ws, title, subtitle) {
   ws.getCell('C18').dataValidation = {
     type: 'list',
     allowBlank: true,
-    formulae: ['"Yes,No,Naturalized,Dual citizen"'],
+    formulae: [lists.CitizenStatus],
     showErrorMessage: true,
     errorTitle: 'Choose one',
     error: 'Pick from the dropdown',
@@ -358,7 +411,7 @@ function brandHeader(ws, title, subtitle) {
     row.getCell(4).dataValidation = {
       type: 'list',
       allowBlank: true,
-      formulae: ['"Y,N,?"'],
+      formulae: [lists.YesNoMaybe],
       showErrorMessage: true,
       errorTitle: 'Choose Y, N, or ?',
       error: 'Pick Y (met), N (not met), or ? (unsure)',
@@ -923,7 +976,7 @@ function brandHeader(ws, title, subtitle) {
     row.getCell(6).dataValidation = {
       type: 'list',
       allowBlank: true,
-      formulae: ['"Have,Need,N/A"'],
+      formulae: [lists.DocStatus],
       showErrorMessage: true,
       errorTitle: 'Choose status',
       error: 'Pick Have, Need, or N/A',

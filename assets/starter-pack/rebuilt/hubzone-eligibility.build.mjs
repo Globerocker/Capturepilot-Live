@@ -29,6 +29,77 @@ wb.lastModifiedBy = 'CapturePilot';
 wb.created = new Date();
 wb.modified = new Date();
 
+// ───────────────────────────────────────────────────────────────
+// buildListsSheet
+// ───────────────────────────────────────────────────────────────
+/**
+ * buildListsSheet
+ * ---------------
+ * Call once per workbook, right after `new ExcelJS.Workbook()`.
+ * Returns a map { listName -> formulaString } to pass into dataValidation.formulae.
+ *
+ * @param {import('exceljs').Workbook} wb
+ * @param {Array<{name: string, title: string, items: string[]}>} lists
+ * @returns {Record<string, string>}
+ */
+function buildListsSheet(wb, lists) {
+  let wsLists = wb.getWorksheet('Lists');
+  if (!wsLists) {
+    wsLists = wb.addWorksheet('Lists', { views: [{ showGridLines: false }] });
+  }
+
+  wsLists.columns = lists.map(() => ({ width: 28 }));
+
+  const formulaMap = {};
+
+  lists.forEach((list, colIdx) => {
+    const colLetter = String.fromCharCode(65 + colIdx); // A, B, C …
+    const titleCell = wsLists.getCell(`${colLetter}1`);
+    titleCell.value = list.title;
+    titleCell.font = { name: 'Calibri', size: 10, bold: true };
+    titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+    titleCell.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+    list.items.forEach((item, itemIdx) => {
+      const cell = wsLists.getCell(`${colLetter}${2 + itemIdx}`);
+      cell.value = item;
+      cell.font = { name: 'Calibri', size: 10 };
+      cell.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+    });
+    const lastRow = 1 + list.items.length;
+    wb.definedNames.add(`Lists!$${colLetter}$2:$${colLetter}$${lastRow}`, list.name);
+    formulaMap[list.name] = list.name;
+  });
+
+  wsLists.state = 'veryHidden';
+  return formulaMap;
+}
+
+const lists = buildListsSheet(wb, [
+  { name: 'YNMaybe',   title: 'Y / N / ?',           items: ['Y', 'N', '?'] },
+  { name: 'YN',        title: 'Y / N',                items: ['Y', 'N'] },
+  { name: 'HubType',   title: 'HUBZone Designation',  items: [
+      'Qualified Census Tract',
+      'Qualified Non-Metro County',
+      'Indian Reservation',
+      'Redesignated Area',
+      'Qualified Disaster Area',
+      'Base Closure Area',
+      'Governor-Designated Covered Area',
+      'Not in HUBZone',
+    ]
+  },
+  { name: 'OwnerType', title: 'Ownership Type',       items: [
+      'U.S. Citizens (individuals)',
+      'Community Development Corp',
+      'Agricultural Cooperative',
+      'Alaska Native Corporation',
+      'Indian Tribe',
+      'Native Hawaiian Organization',
+      'Other',
+    ]
+  },
+]);
+
 // Shared helpers
 function setCol(ws, widths) {
   ws.columns = widths.map((w) => ({ width: w }));
@@ -229,14 +300,14 @@ officeRows.forEach((row) => {
   inputCell(wsIn.getCell(`C${ir}`), { format: row.format });
   if (row.validation === 'YN') {
     wsIn.getCell(`C${ir}`).dataValidation = {
-      type: 'list', allowBlank: true, formulae: ['"Y,N,?"'], showErrorMessage: true,
+      type: 'list', allowBlank: true, formulae: [lists.YNMaybe], showErrorMessage: true,
       errorTitle: 'Pick one', error: 'Y for yes, N for no, ? for unsure.',
     };
   }
   if (row.validation === 'HubType') {
     wsIn.getCell(`C${ir}`).dataValidation = {
       type: 'list', allowBlank: true,
-      formulae: ['"Qualified Census Tract,Qualified Non-Metro County,Indian Reservation,Redesignated Area,Qualified Disaster Area,Base Closure Area,Governor-Designated Covered Area,Not in HUBZone"'],
+      formulae: [lists.HubType],
       showErrorMessage: true,
       errorTitle: 'Pick a type', error: 'Choose the HUBZone designation that covers your principal office.',
     };
@@ -268,13 +339,13 @@ ownerRows.forEach((row) => {
   inputCell(wsIn.getCell(`C${ir}`), { format: row.format });
   if (row.validation === 'YN') {
     wsIn.getCell(`C${ir}`).dataValidation = {
-      type: 'list', allowBlank: true, formulae: ['"Y,N,?"'], showErrorMessage: true,
+      type: 'list', allowBlank: true, formulae: [lists.YNMaybe], showErrorMessage: true,
     };
   }
   if (row.validation === 'OwnType') {
     wsIn.getCell(`C${ir}`).dataValidation = {
       type: 'list', allowBlank: true,
-      formulae: ['"U.S. Citizens (individuals),Community Development Corp,Agricultural Cooperative,Alaska Native Corporation,Indian Tribe,Native Hawaiian Organization,Other"'],
+      formulae: [lists.OwnerType],
       showErrorMessage: true,
     };
   }
@@ -389,12 +460,12 @@ for (let i = FIRST_EMP_ROW; i <= LAST_EMP_ROW; i++) {
   // HUBZone (G)
   inputCell(wsEmp.getCell(i, 7), { align: 'center' });
   wsEmp.getCell(i, 7).dataValidation = {
-    type: 'list', allowBlank: true, formulae: ['"Y,N,?"'], showErrorMessage: true,
+    type: 'list', allowBlank: true, formulae: [lists.YNMaybe], showErrorMessage: true,
   };
   // Verified (H)
   inputCell(wsEmp.getCell(i, 8), { align: 'center' });
   wsEmp.getCell(i, 8).dataValidation = {
-    type: 'list', allowBlank: true, formulae: ['"Y,N"'], showErrorMessage: true,
+    type: 'list', allowBlank: true, formulae: [lists.YN], showErrorMessage: true,
   };
   // Verification date (I)
   inputCell(wsEmp.getCell(i, 9), { align: 'center', format: 'yyyy-mm-dd' });
@@ -506,7 +577,7 @@ sections.forEach((sec) => {
     wsChk.getCell(`D${cr}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: WHITE } };
     wsChk.getCell(`D${cr}`).border = thinBorder();
     wsChk.getCell(`D${cr}`).dataValidation = {
-      type: 'list', allowBlank: true, formulae: ['"Y,N,?"'], showErrorMessage: true,
+      type: 'list', allowBlank: true, formulae: [lists.YNMaybe], showErrorMessage: true,
       errorTitle: 'Pick one', error: 'Y, N, or ? please.',
     };
     // Risk

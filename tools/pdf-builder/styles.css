@@ -81,7 +81,8 @@ html, body {
   width: 100%;
   /* Keep the visual background extending across the full printable
      area even if the section content is short. */
-  min-height: calc(11in - 1.7in); /* 0.85in top + 0.85in bottom = 1.7in */
+  min-height: calc(11in - 1.2in); /* 0.6in top + 0.6in bottom = 1.2in (tightened 2026-06-09) */
+  position: relative;
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
 }
@@ -90,19 +91,57 @@ html, body {
   break-before: auto;
 }
 
-/* Light variant: cream bg + subtle emerald dot grid. We extend the bg
-   into the Chromium header/footer band via large outset using box-shadow
-   so the page LOOKS full-bleed even though our content is inside the
-   margin reservation. */
+/* Light variant: cream bg + emerald dot grid + faint thin-line architectural
+   grid for more visual structure (2026-06-09: bumped dot opacity 0.22→0.28
+   and added the 28mm faint grid lines for "blueprint" feel without becoming
+   noisy). The bg images stack so the dots sit on top of the grid lines. */
 .doc-section--light,
 .doc-section--toc,
 .doc-section--founder,
 .doc-section--content {
   background-color: var(--cream-bg);
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='22' height='22'><circle cx='2' cy='2' r='0.55' fill='%2310b981' fill-opacity='0.22'/></svg>");
-  background-repeat: repeat;
-  background-position: 0 0;
+  background-image:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='22' height='22'><circle cx='2' cy='2' r='0.55' fill='%2310b981' fill-opacity='0.28'/></svg>"),
+    linear-gradient(to right,  rgba(16,185,129,0.045) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(16,185,129,0.045) 1px, transparent 1px);
+  background-size: 22px 22px, 28mm 28mm, 28mm 28mm;
+  background-repeat: repeat, repeat, repeat;
+  background-position: 0 0, 0 0, 0 0;
   color: var(--ink);
+}
+
+/* Top-left + bottom-right corner brand marks on light body pages — gives
+   each page a quiet "architectural drawing" anchor without competing with
+   the content. ~4mm corner tick + 2mm CP wordmark snippet. */
+.doc-section--light::before,
+.doc-section--toc::before,
+.doc-section--founder::before,
+.doc-section--content::before {
+  content: "";
+  position: absolute;
+  top: 4mm;
+  left: 4mm;
+  width: 6mm;
+  height: 6mm;
+  border-top: 1px solid var(--emerald);
+  border-left: 1px solid var(--emerald);
+  opacity: 0.42;
+  pointer-events: none;
+}
+.doc-section--light::after,
+.doc-section--toc::after,
+.doc-section--founder::after,
+.doc-section--content::after {
+  content: "";
+  position: absolute;
+  bottom: 4mm;
+  right: 4mm;
+  width: 6mm;
+  height: 6mm;
+  border-bottom: 1px solid var(--emerald);
+  border-right: 1px solid var(--emerald);
+  opacity: 0.42;
+  pointer-events: none;
 }
 
 /* Dark variant: forest green + grid lines (no dots) */

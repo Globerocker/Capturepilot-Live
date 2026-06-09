@@ -9,6 +9,63 @@ import ExcelJS from '/Users/andreschuler/Caturepilot 2.0/dashboard/node_modules/
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+/**
+ * buildListsSheet
+ * ---------------
+ * Call once per workbook, right after `new ExcelJS.Workbook()`.
+ * Returns a map { listName -> formulaString } to pass into dataValidation.formulae.
+ *
+ * @param {import('exceljs').Workbook} wb
+ * @param {Array<{name: string, title: string, items: string[]}>} lists
+ *   name  – the Excel defined-name (CamelCase, no spaces, e.g. "YesNoUnknown")
+ *   title – human-readable header written to row 1 of the Lists sheet
+ *   items – the dropdown values in display order
+ * @returns {Record<string, string>}  e.g. { YesNoUnknown: 'YesNoUnknown' }
+ */
+export function buildListsSheet(wb, lists) {
+  // Create (or reuse) the Lists worksheet
+  let wsLists = wb.getWorksheet('Lists');
+  if (!wsLists) {
+    wsLists = wb.addWorksheet('Lists', { views: [{ showGridLines: false }] });
+  }
+
+  // Set column widths
+  wsLists.columns = lists.map(() => ({ width: 28 }));
+
+  const formulaMap = {};
+
+  lists.forEach((list, colIdx) => {
+    const colLetter = String.fromCharCode(65 + colIdx); // A, B, C …
+
+    // Row 1: human-readable title
+    const titleCell = wsLists.getCell(`${colLetter}1`);
+    titleCell.value = list.title;
+    titleCell.font = { name: 'Calibri', size: 10, bold: true };
+    titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+    titleCell.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+
+    // Rows 2+: option values
+    list.items.forEach((item, itemIdx) => {
+      const cell = wsLists.getCell(`${colLetter}${2 + itemIdx}`);
+      cell.value = item;
+      cell.font = { name: 'Calibri', size: 10 };
+      cell.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+    });
+
+    // Register workbook-scoped defined name
+    const lastRow = 1 + list.items.length;
+    wb.definedNames.add(`Lists!$${colLetter}$2:$${colLetter}$${lastRow}`, list.name);
+
+    // The formula callers put in dataValidation.formulae is just the name itself
+    formulaMap[list.name] = list.name;
+  });
+
+  // Hide the sheet so it doesn't clutter the tab bar
+  wsLists.state = 'veryHidden';
+
+  return formulaMap;
+}
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const OUT = path.join(__dirname, 'FLK_09_Compliance_Matrix_Template.xlsx');
 
@@ -35,6 +92,17 @@ const FONT = 'Calibri';
 const MONO = 'Consolas';
 
 const wb = new ExcelJS.Workbook();
+
+// ---------- named-range dropdown lists ----------
+const DV = buildListsSheet(wb, [
+  { name: 'ProposalVolume',    title: 'Proposal Volume',      items: ['Technical', 'Management', 'Past Performance', 'Price', 'Admin', 'Other'] },
+  { name: 'YesNo',             title: 'Y / N',                items: ['Y', 'N'] },
+  { name: 'SectionLStatus',    title: 'Section L Status',     items: ['Not Started', 'In Draft', 'Complete', 'Reviewed', 'Missing'] },
+  { name: 'PriorityLevel',     title: 'Priority Level',       items: ['Critical', 'High', 'Medium', 'Low'] },
+  { name: 'RelativeImportance',title: 'Relative Importance',  items: ['Most Important', 'Important', 'Less Important', 'N/A — Evaluated separately'] },
+  { name: 'PassFailNA',        title: 'Pass / Fail / N/A',    items: ['Pass', 'Fail', 'N/A'] },
+]);
+
 wb.creator = 'CapturePilot';
 wb.lastModifiedBy = 'CapturePilot';
 wb.created = new Date();
@@ -531,22 +599,22 @@ while (lr <= 100) {
 wsL.dataValidations.add('C12:C200', {
   type: 'list',
   allowBlank: true,
-  formulae: [`"${volumeDropdown.join(',')}"`],
+  formulae: [DV.ProposalVolume],
 });
 wsL.dataValidations.add('F12:F200', {
   type: 'list',
   allowBlank: true,
-  formulae: [`"${yesNo.join(',')}"`],
+  formulae: [DV.YesNo],
 });
 wsL.dataValidations.add('H12:H200', {
   type: 'list',
   allowBlank: true,
-  formulae: [`"${statusDropdown.join(',')}"`],
+  formulae: [DV.SectionLStatus],
 });
 wsL.dataValidations.add('I12:I200', {
   type: 'list',
   allowBlank: true,
-  formulae: [`"${priorityDropdown.join(',')}"`],
+  formulae: [DV.PriorityLevel],
 });
 
 // Conditional formatting — Status column (H)
@@ -814,7 +882,7 @@ while (mr <= 50) {
 wsM.dataValidations.add('B6:B50', {
   type: 'list',
   allowBlank: true,
-  formulae: [`"${importanceDropdown.join(',')}"`],
+  formulae: [DV.RelativeImportance],
 });
 wsM.dataValidations.add('F6:F50', {
   type: 'whole',
@@ -1054,7 +1122,7 @@ while (sr <= 60) {
 wsSub.dataValidations.add('C6:C60', {
   type: 'list',
   allowBlank: true,
-  formulae: [`"${subStatus.join(',')}"`],
+  formulae: [DV.PassFailNA],
 });
 
 // Conditional formatting on status column

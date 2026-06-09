@@ -29,6 +29,54 @@ const WHITE = 'FFFFFFFF';
 const FONT = 'Calibri';
 const MONO = 'Consolas';
 
+// ---------- buildListsSheet helper ----------
+/**
+ * buildListsSheet
+ * ---------------
+ * Call once per workbook, right after `new ExcelJS.Workbook()`.
+ * Returns a map { listName -> formulaString } to pass into dataValidation.formulae.
+ *
+ * @param {import('exceljs').Workbook} wb
+ * @param {Array<{name: string, title: string, items: string[]}>} lists
+ * @returns {Record<string, string>}
+ */
+function buildListsSheet(wb, lists) {
+  let wsLists = wb.getWorksheet('Lists');
+  if (!wsLists) {
+    wsLists = wb.addWorksheet('Lists', { views: [{ showGridLines: false }] });
+  }
+
+  wsLists.columns = lists.map(() => ({ width: 28 }));
+
+  const formulaMap = {};
+
+  lists.forEach((list, colIdx) => {
+    const colLetter = String.fromCharCode(65 + colIdx);
+
+    const titleCell = wsLists.getCell(`${colLetter}1`);
+    titleCell.value = list.title;
+    titleCell.font = { name: 'Calibri', size: 10, bold: true };
+    titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+    titleCell.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+
+    list.items.forEach((item, itemIdx) => {
+      const cell = wsLists.getCell(`${colLetter}${2 + itemIdx}`);
+      cell.value = item;
+      cell.font = { name: 'Calibri', size: 10 };
+      cell.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+    });
+
+    const lastRow = 1 + list.items.length;
+    wb.definedNames.add(`Lists!$${colLetter}$2:$${colLetter}$${lastRow}`, list.name);
+
+    formulaMap[list.name] = list.name;
+  });
+
+  wsLists.state = 'veryHidden';
+
+  return formulaMap;
+}
+
 const wb = new ExcelJS.Workbook();
 wb.creator = 'CapturePilot';
 wb.lastModifiedBy = 'CapturePilot';
@@ -37,6 +85,19 @@ wb.modified = new Date();
 wb.company = 'CapturePilot';
 wb.title = 'Competitive Bid Analysis Worksheet';
 wb.subject = 'Federal Lead Kit — 04 Bid/No-Bid Decision Toolkit';
+
+// ---------- Lists sheet + named-range dropdown map ----------
+const DV = buildListsSheet(wb, [
+  { name: 'SetAsideOptions',    title: 'Set-Aside Type',            items: ['Full and Open', 'Small Business', '8(a)', 'HUBZone', 'SDVOSB', 'WOSB', 'EDWOSB', 'Total Small Business', 'Other'] },
+  { name: 'ContractType',       title: 'Contract Type',             items: ['FFP — Firm Fixed Price', 'T&M — Time & Materials', 'CPFF — Cost Plus Fixed Fee', 'CPIF — Cost Plus Incentive', 'IDIQ — Indefinite Delivery', 'BPA — Blanket Purchase', 'Other'] },
+  { name: 'SourceSelection',    title: 'Source Selection Method',   items: ['LPTA — Lowest Price Technically Acceptable', 'Best Value Tradeoff', 'Highest Technically Rated, Fair & Reasonable', 'Other'] },
+  { name: 'BusinessSize',       title: 'Business Size',             items: ['Large', 'Small', 'Small — 8(a)', 'Small — HUBZone', 'Small — SDVOSB', 'Small — WOSB', 'Small — EDWOSB', 'Unknown'] },
+  { name: 'YesNoUnknown',       title: 'Yes / No / Unknown',        items: ['Yes', 'No', 'Unknown'] },
+  { name: 'RelationshipStrength', title: 'Relationship Strength',   items: ['Strong', 'Some history', 'Cold', 'Unknown'] },
+  { name: 'PricingApproach',    title: 'Pricing Approach',          items: ['Aggressive — undercut', 'Market', 'Premium', 'LPTA play', 'Unknown'] },
+  { name: 'WillTheyBid',        title: 'Will They Bid?',            items: ['Yes', 'Probably', 'Unlikely', 'No', 'Unknown'] },
+  { name: 'ThreatLevel',        title: 'Threat Level',              items: ['HIGH', 'MEDIUM', 'LOW'] },
+]);
 
 // ---------- shared styles ----------
 const fill = (color) => ({ type: 'pattern', pattern: 'solid', fgColor: { argb: color } });
@@ -226,9 +287,9 @@ const setupRows = [
   { label: 'Estimated Contract Value (USD)', cell: 'C10', name: 'OppValue', placeholder: 'e.g. 4500000', numFmt: '"$"#,##0' },
   { label: 'Your Company Name', cell: 'C11', name: 'YourCo', placeholder: 'e.g. Acme Federal Services LLC' },
   { label: 'Your Bid Price (USD)', cell: 'C12', name: 'YourPrice', placeholder: 'e.g. 4200000', numFmt: '"$"#,##0' },
-  { label: 'Set-Aside Type', cell: 'C13', name: 'SetAside', dropdown: ['Full and Open', 'Small Business', '8(a)', 'HUBZone', 'SDVOSB', 'WOSB', 'EDWOSB', 'Total Small Business', 'Other'] },
-  { label: 'Contract Type', cell: 'C14', name: 'ContractType', dropdown: ['FFP — Firm Fixed Price', 'T&M — Time & Materials', 'CPFF — Cost Plus Fixed Fee', 'CPIF — Cost Plus Incentive', 'IDIQ — Indefinite Delivery', 'BPA — Blanket Purchase', 'Other'] },
-  { label: 'Source Selection Method', cell: 'C15', name: 'Selection', dropdown: ['LPTA — Lowest Price Technically Acceptable', 'Best Value Tradeoff', 'Highest Technically Rated, Fair & Reasonable', 'Other'] },
+  { label: 'Set-Aside Type', cell: 'C13', name: 'SetAside', dvKey: 'SetAsideOptions' },
+  { label: 'Contract Type', cell: 'C14', name: 'ContractType', dvKey: 'ContractType' },
+  { label: 'Source Selection Method', cell: 'C15', name: 'Selection', dvKey: 'SourceSelection' },
   { label: 'Incumbent on This Contract', cell: 'C16', name: 'Incumbent', placeholder: 'e.g. ServPro Federal Group' },
 ];
 
@@ -241,11 +302,11 @@ setupRows.forEach((row, i) => {
   const c = ws.getCell(3);
   c.value = null;
   c.style = row.numFmt ? { ...inputStyle, numFmt: row.numFmt } : inputStyle;
-  if (row.dropdown) {
+  if (row.dvKey) {
     c.dataValidation = {
       type: 'list',
       allowBlank: true,
-      formulae: [`"${row.dropdown.join(',')}"`],
+      formulae: [DV[row.dvKey]],
       showErrorMessage: true,
       errorTitle: 'Pick a value',
       error: 'Use the dropdown — keeps the rest of the workbook consistent.',
@@ -317,23 +378,23 @@ wsProf.getRow(6).getCell(2).value = { formula: 'IF(YourCo="","(see Setup tab)",Y
 const profileFields = [
   { label: 'Company Name', startRow: 6 },
   { label: 'UEI / CAGE Code', hint: 'SAM.gov UEI' },
-  { label: 'Business Size', dropdown: ['Large', 'Small', 'Small — 8(a)', 'Small — HUBZone', 'Small — SDVOSB', 'Small — WOSB', 'Small — EDWOSB', 'Unknown'] },
+  { label: 'Business Size', dvKey: 'BusinessSize' },
   { label: 'Revenue (annual est.)', numFmt: '"$"#,##0' },
   { label: 'Employee Count (est.)', numFmt: '#,##0' },
   { label: 'Primary NAICS Code', mono: true },
   { label: 'Set-Aside Certifications' },
   { label: 'Active GSA Schedules / IDIQs' },
-  { label: 'Incumbent on This Contract?', dropdown: ['Yes', 'No', 'Unknown'] },
-  { label: 'Relationship with KO / PM', dropdown: ['Strong', 'Some history', 'Cold', 'Unknown'] },
+  { label: 'Incumbent on This Contract?', dvKey: 'YesNoUnknown' },
+  { label: 'Relationship with KO / PM', dvKey: 'RelationshipStrength' },
   { label: 'Recent Agency Awards (LTM)' },
   { label: 'USASpending LTM ($)', numFmt: '"$"#,##0' },
   { label: 'Key Personnel / Clearances' },
   { label: 'Likely Teaming Partners' },
   { label: 'Technical Strengths' },
   { label: 'Known Weaknesses / Past Protests' },
-  { label: 'Likely Pricing Approach', dropdown: ['Aggressive — undercut', 'Market', 'Premium', 'LPTA play', 'Unknown'] },
-  { label: 'Will They Bid?', dropdown: ['Yes', 'Probably', 'Unlikely', 'No', 'Unknown'] },
-  { label: 'Threat Level', dropdown: ['HIGH', 'MEDIUM', 'LOW'] },
+  { label: 'Likely Pricing Approach', dvKey: 'PricingApproach' },
+  { label: 'Will They Bid?', dvKey: 'WillTheyBid' },
+  { label: 'Threat Level', dvKey: 'ThreatLevel' },
   { label: 'Your Edge vs This Competitor' },
 ];
 
@@ -353,11 +414,11 @@ profileFields.forEach((field) => {
     if (field.numFmt) s = { ...inputStyle, numFmt: field.numFmt, alignment: { ...inputStyle.alignment, horizontal: 'right' } };
     if (field.mono) s = monoStyle;
     c.style = s;
-    if (field.dropdown) {
+    if (field.dvKey) {
       c.dataValidation = {
         type: 'list',
         allowBlank: true,
-        formulae: [`"${field.dropdown.join(',')}"`],
+        formulae: [DV[field.dvKey]],
       };
     }
   }

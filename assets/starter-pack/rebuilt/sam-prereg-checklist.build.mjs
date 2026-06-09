@@ -26,12 +26,63 @@ const C = {
   paper:   'FFFAFAF9',
 };
 
+// ───────────────────────────────────────────────────────────────
+// buildListsSheet
+// ───────────────────────────────────────────────────────────────
+/**
+ * buildListsSheet
+ * ---------------
+ * Call once per workbook, right after `new ExcelJS.Workbook()`.
+ * Returns a map { listName -> formulaString } to pass into dataValidation.formulae.
+ *
+ * @param {import('exceljs').Workbook} wb
+ * @param {Array<{name: string, title: string, items: string[]}>} lists
+ * @returns {Record<string, string>}
+ */
+function buildListsSheet(wb, lists) {
+  let wsLists = wb.getWorksheet('Lists');
+  if (!wsLists) {
+    wsLists = wb.addWorksheet('Lists', { views: [{ showGridLines: false }] });
+  }
+
+  wsLists.columns = lists.map(() => ({ width: 28 }));
+
+  const formulaMap = {};
+
+  lists.forEach((list, colIdx) => {
+    const colLetter = String.fromCharCode(65 + colIdx); // A, B, C …
+    const titleCell = wsLists.getCell(`${colLetter}1`);
+    titleCell.value = list.title;
+    titleCell.font = { name: 'Calibri', size: 10, bold: true };
+    titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+    titleCell.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+    list.items.forEach((item, itemIdx) => {
+      const cell = wsLists.getCell(`${colLetter}${2 + itemIdx}`);
+      cell.value = item;
+      cell.font = { name: 'Calibri', size: 10 };
+      cell.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+    });
+    const lastRow = 1 + list.items.length;
+    wb.definedNames.add(`Lists!$${colLetter}$2:$${colLetter}$${lastRow}`, list.name);
+    formulaMap[list.name] = list.name;
+  });
+
+  wsLists.state = 'veryHidden';
+  return formulaMap;
+}
+
 const wb = new ExcelJS.Workbook();
 wb.creator = 'CapturePilot';
 wb.company = 'CapturePilot';
 wb.created = new Date();
 wb.title = 'SAM.gov Pre-Registration Checklist';
 wb.subject = 'Federal Launch Kit Doc 01-B';
+
+// Build the hidden Lists sheet and get defined-name references
+const lists = buildListsSheet(wb, [
+  { name: 'StatusOptions',   title: 'My Status',   items: ['Done', 'Need to get', 'N/A'] },
+  { name: 'RequiredOptions', title: 'Required?',   items: ['Required', 'Recommended', 'If applicable', 'Optional'] },
+]);
 
 // ---------- helpers ----------
 const thinBorder = {
@@ -416,7 +467,7 @@ ws.getRow(row + 1).height = 26;
 ws.dataValidations.add(`E6:E45`, {
   type: 'list',
   allowBlank: true,
-  formulae: ['"Done,Need to get,N/A"'],
+  formulae: [lists.StatusOptions],
   showErrorMessage: true,
   errorStyle: 'warning',
   errorTitle: 'Pick from the list',
@@ -427,7 +478,7 @@ ws.dataValidations.add(`E6:E45`, {
 ws.dataValidations.add(`D6:D45`, {
   type: 'list',
   allowBlank: true,
-  formulae: ['"Required,Recommended,If applicable,Optional"'],
+  formulae: [lists.RequiredOptions],
 });
 
 // Conditional formatting on Status column (E)

@@ -10,11 +10,65 @@ import path from 'node:path';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const OUT = path.join(__dirname, 'FLK_08_Price_to_Win_Worksheet.xlsx');
 
+// ───────────────────────────────────────────────────────────────
+// buildListsSheet
+// ───────────────────────────────────────────────────────────────
+/**
+ * buildListsSheet
+ * ---------------
+ * Call once per workbook, right after `new ExcelJS.Workbook()`.
+ * Returns a map { listName -> formulaString } to pass into dataValidation.formulae.
+ *
+ * @param {import('exceljs').Workbook} wb
+ * @param {Array<{name: string, title: string, items: string[]}>} lists
+ * @returns {Record<string, string>}
+ */
+function buildListsSheet(wb, lists) {
+  let wsLists = wb.getWorksheet('Lists');
+  if (!wsLists) {
+    wsLists = wb.addWorksheet('Lists', { views: [{ showGridLines: false }] });
+  }
+
+  wsLists.columns = lists.map(() => ({ width: 28 }));
+
+  const formulaMap = {};
+
+  lists.forEach((list, colIdx) => {
+    const colLetter = String.fromCharCode(65 + colIdx); // A, B, C …
+    const titleCell = wsLists.getCell(`${colLetter}1`);
+    titleCell.value = list.title;
+    titleCell.font = { name: 'Calibri', size: 10, bold: true };
+    titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+    titleCell.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+    list.items.forEach((item, itemIdx) => {
+      const cell = wsLists.getCell(`${colLetter}${2 + itemIdx}`);
+      cell.value = item;
+      cell.font = { name: 'Calibri', size: 10 };
+      cell.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+    });
+    const lastRow = 1 + list.items.length;
+    wb.definedNames.add(`Lists!$${colLetter}$2:$${colLetter}$${lastRow}`, list.name);
+    formulaMap[list.name] = list.name;
+  });
+
+  wsLists.state = 'veryHidden';
+  return formulaMap;
+}
+
 const wb = new ExcelJS.Workbook();
 wb.creator = 'CapturePilot — Federal Lead Kit';
 wb.created = new Date();
 wb.title = 'Price-to-Win Worksheet';
 wb.company = 'CapturePilot';
+
+const lists = buildListsSheet(wb, [
+  { name: 'YesNo',        title: 'Yes / No',                items: ['Yes', 'No'] },
+  { name: 'OdcCategory',  title: 'ODC Category',            items: ['Materials', 'Travel', 'Sub', 'Equipment', 'Software', 'Other'] },
+  { name: 'ClearanceLevel', title: 'Clearance Level',       items: ['None', 'Public Trust', 'Secret', 'Top Secret', 'TS/SCI', 'TS/SCI w/ Poly'] },
+  { name: 'CompanySize',  title: 'Company Size',            items: ['Large', 'Small', 'Mid-Size', 'Unknown'] },
+  { name: 'SetAside',     title: 'Set-Aside Type',          items: ['Full & Open', 'Small Business', '8(a)', 'HUBZone', 'WOSB', 'EDWOSB', 'SDVOSB', 'VOSB'] },
+  { name: 'EvalType',     title: 'Evaluation Type',         items: ['LPTA', 'Best Value', 'Tradeoff'] },
+]);
 
 // ----- shared styles ------------------------------------------------------
 const EMERALD = 'FF10B981';
@@ -540,13 +594,13 @@ odcSeed.forEach((row, i) => {
 
   // data validation for G&A applied
   w2.getCell(rn, 6).dataValidation = {
-    type: 'list', allowBlank: true, formulae: ['"Yes,No"'],
+    type: 'list', allowBlank: true, formulae: [lists.YesNo],
     showErrorMessage: true, errorStyle: 'warning',
     error: 'Use Yes or No', errorTitle: 'G&A flag',
   };
   // data validation for ODC category
   w2.getCell(rn, 2).dataValidation = {
-    type: 'list', allowBlank: true, formulae: ['"Materials,Travel,Sub,Equipment,Software,Other"'],
+    type: 'list', allowBlank: true, formulae: [lists.OdcCategory],
     showErrorMessage: true, errorStyle: 'warning',
     error: 'Pick a category', errorTitle: 'ODC category',
   };
@@ -594,7 +648,7 @@ wb.definedNames.add(`'Cost Buildup'!$E$${grandRow + 3}`, 'YourTotalCost');
 // Data validation for clearance column (DL rows)
 for (let rn = DL_START; rn <= DL_END; rn++) {
   w2.getCell(rn, 2).dataValidation = {
-    type: 'list', allowBlank: true, formulae: ['"None,Public Trust,Secret,Top Secret,TS/SCI,TS/SCI w/ Poly"'],
+    type: 'list', allowBlank: true, formulae: [lists.ClearanceLevel],
     showErrorMessage: true, errorStyle: 'warning',
     error: 'Use one of the standard clearance levels', errorTitle: 'Clearance',
   };
@@ -693,11 +747,11 @@ compSeed.forEach((row, i) => {
   w4.getCell(rn, 11).value = row[10]; w4.getCell(rn, 11).style = { ...inputTextStyle, font: { ...inputTextStyle.font, italic: true } };
 
   w4.getCell(rn, 2).dataValidation = {
-    type: 'list', allowBlank: true, formulae: ['"Large,Small,Mid-Size,Unknown"'],
+    type: 'list', allowBlank: true, formulae: [lists.CompanySize],
     showErrorMessage: true, errorStyle: 'warning',
   };
   w4.getCell(rn, 3).dataValidation = {
-    type: 'list', allowBlank: true, formulae: ['"Full & Open,Small Business,8(a),HUBZone,WOSB,EDWOSB,SDVOSB,VOSB"'],
+    type: 'list', allowBlank: true, formulae: [lists.SetAside],
     showErrorMessage: true, errorStyle: 'warning',
   };
   w4.getCell(rn, 10).dataValidation = {
@@ -795,7 +849,7 @@ scInputs.forEach((row, i) => {
 });
 
 w5.getCell('C5').dataValidation = {
-  type: 'list', allowBlank: false, formulae: ['"LPTA,Best Value,Tradeoff"'],
+  type: 'list', allowBlank: false, formulae: [lists.EvalType],
   showErrorMessage: true,
 };
 

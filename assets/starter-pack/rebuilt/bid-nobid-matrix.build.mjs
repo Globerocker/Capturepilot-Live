@@ -32,6 +32,60 @@ const WB_TITLE = "Bid / No-Bid Decision Matrix";
 const FOOTER = "CapturePilot Federal Lead Kit  -  capturepilot.com  -  04 Bid/No-Bid Decision Matrix";
 
 // ───────────────────────────────────────────────────────────────
+// buildListsSheet
+// ───────────────────────────────────────────────────────────────
+/**
+ * buildListsSheet
+ * ---------------
+ * Call once per workbook, right after `new ExcelJS.Workbook()`.
+ * Returns a map { listName -> formulaString } to pass into dataValidation.formulae.
+ *
+ * @param {import('exceljs').Workbook} wb
+ * @param {Array<{name: string, title: string, items: string[]}>} lists
+ * @returns {Record<string, string>}
+ */
+function buildListsSheet(wb, lists) {
+  let wsLists = wb.getWorksheet('Lists');
+  if (!wsLists) {
+    wsLists = wb.addWorksheet('Lists', { views: [{ showGridLines: false }] });
+  }
+
+  wsLists.columns = lists.map(() => ({ width: 28 }));
+
+  const formulaMap = {};
+
+  lists.forEach((list, colIdx) => {
+    const colLetter = String.fromCharCode(65 + colIdx); // A, B, C …
+
+    // Row 1: human-readable title
+    const titleCell = wsLists.getCell(`${colLetter}1`);
+    titleCell.value = list.title;
+    titleCell.font = { name: 'Calibri', size: 10, bold: true };
+    titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+    titleCell.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+
+    // Rows 2+: option values
+    list.items.forEach((item, itemIdx) => {
+      const cell = wsLists.getCell(`${colLetter}${2 + itemIdx}`);
+      cell.value = item;
+      cell.font = { name: 'Calibri', size: 10 };
+      cell.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+    });
+
+    // Register workbook-scoped defined name
+    const lastRow = 1 + list.items.length;
+    wb.definedNames.add(`Lists!$${colLetter}$2:$${colLetter}$${lastRow}`, list.name);
+
+    formulaMap[list.name] = list.name;
+  });
+
+  // Hide the sheet so it doesn't clutter the tab bar
+  wsLists.state = 'veryHidden';
+
+  return formulaMap;
+}
+
+// ───────────────────────────────────────────────────────────────
 // Criteria definition — single source of truth
 // ───────────────────────────────────────────────────────────────
 const CATEGORIES = [
@@ -102,6 +156,15 @@ const MAX_POSSIBLE = CATEGORIES.reduce(
 // Build workbook
 // ───────────────────────────────────────────────────────────────
 const wb = new ExcelJS.Workbook();
+
+// Lists sheet must be created before any sheet that references its named ranges
+const DV = buildListsSheet(wb, [
+  { name: 'YesNoUnknown',    title: 'Yes / No / Unknown', items: ['Yes', 'No', 'Unknown'] },
+  { name: 'SetAsideOptions', title: 'Set-Aside Type',     items: ['Unrestricted', 'Small Business', '8(a) Sole Source', '8(a) Competitive', 'HUBZone', 'SDVOSB', 'WOSB', 'EDWOSB', 'Total SB'] },
+  { name: 'ContractType',    title: 'Contract Type',      items: ['FFP', 'FFP-LOE', 'T&M', 'CPFF', 'CPIF', 'CPAF', 'IDIQ', 'BPA', 'GSA Schedule', 'Other'] },
+  { name: 'ScoreZeroToFive', title: 'Score (0-5)',        items: ['0', '1', '2', '3', '4', '5'] },
+]);
+
 wb.creator = "CapturePilot";
 wb.lastModifiedBy = "CapturePilot";
 wb.created = new Date();
@@ -205,7 +268,7 @@ metaPairs.forEach(({ row, leftLabel, leftKey, rightLabel, rightKey, isCurrency, 
     sMatrix.dataValidations.add(`F${row}`, {
       type: "list",
       allowBlank: true,
-      formulae: ['"Yes,No,Unknown"'],
+      formulae: [DV.YesNoUnknown],
       showErrorMessage: true,
       errorTitle: "Pick one",
       error: "Choose Yes, No, or Unknown",
@@ -222,13 +285,13 @@ sMatrix.getRow(11).height = 8;
 sMatrix.dataValidations.add("F6", {
   type: "list",
   allowBlank: true,
-  formulae: ['"Unrestricted,Small Business,8(a) Sole Source,8(a) Competitive,HUBZone,SDVOSB,WOSB,EDWOSB,Total SB"'],
+  formulae: [DV.SetAsideOptions],
   showErrorMessage: false,
 });
 sMatrix.dataValidations.add("F7", {
   type: "list",
   allowBlank: true,
-  formulae: ['"FFP,FFP-LOE,T&M,CPFF,CPIF,CPAF,IDIQ,BPA,GSA Schedule,Other"'],
+  formulae: [DV.ContractType],
   showErrorMessage: false,
 });
 
@@ -316,7 +379,7 @@ CATEGORIES.forEach((cat) => {
     sMatrix.dataValidations.add(`D${r}`, {
       type: "list",
       allowBlank: true,
-      formulae: ['"0,1,2,3,4,5"'],
+      formulae: [DV.ScoreZeroToFive],
       showErrorMessage: true,
       errorTitle: "Score 0-5",
       error: "Pick 0 (N/A) through 5 (strong). Leave blank if you have not scored yet.",

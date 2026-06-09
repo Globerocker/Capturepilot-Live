@@ -21,6 +21,57 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const OUT = join(__dirname, "FLK_09_Capture_Maturity_Self_Audit.xlsx");
 
+// ---------- buildListsSheet helper ----------
+/**
+ * buildListsSheet
+ * ---------------
+ * Call once per workbook, right after `new ExcelJS.Workbook()`.
+ * Returns a map { listName -> formulaString } to pass into dataValidation.formulae.
+ *
+ * @param {import('exceljs').Workbook} wb
+ * @param {Array<{name: string, title: string, items: string[]}>} lists
+ * @returns {Record<string, string>}
+ */
+function buildListsSheet(wb, lists) {
+  let wsLists = wb.getWorksheet('Lists');
+  if (!wsLists) {
+    wsLists = wb.addWorksheet('Lists', { views: [{ showGridLines: false }] });
+  }
+
+  wsLists.columns = lists.map(() => ({ width: 28 }));
+
+  const formulaMap = {};
+
+  lists.forEach((list, colIdx) => {
+    const colLetter = String.fromCharCode(65 + colIdx); // A, B, C …
+
+    // Row 1: human-readable title
+    const titleCell = wsLists.getCell(`${colLetter}1`);
+    titleCell.value = list.title;
+    titleCell.font = { name: 'Calibri', size: 10, bold: true };
+    titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+    titleCell.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+
+    // Rows 2+: option values
+    list.items.forEach((item, itemIdx) => {
+      const cell = wsLists.getCell(`${colLetter}${2 + itemIdx}`);
+      cell.value = item;
+      cell.font = { name: 'Calibri', size: 10 };
+      cell.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+    });
+
+    // Register workbook-scoped defined name
+    const lastRow = 1 + list.items.length;
+    wb.definedNames.add(`Lists!$${colLetter}$2:$${colLetter}$${lastRow}`, list.name);
+
+    formulaMap[list.name] = list.name;
+  });
+
+  wsLists.state = 'veryHidden';
+
+  return formulaMap;
+}
+
 const BRAND = {
   emerald: "FF10B981",
   emeraldDark: "FF047857",
@@ -42,6 +93,14 @@ wb.modified = new Date();
 wb.title = "Capture Maturity Self-Audit";
 wb.subject = "Federal Lead Kit — diagnostic for small federal contractors";
 wb.company = "CapturePilot";
+
+// Build the hidden Lists sheet and get named-range keys for dropdowns
+const DV = buildListsSheet(wb, [
+  { name: 'MaturityScore', title: 'Maturity Score (0-4)', items: ['0', '1', '2', '3', '4'] },
+  { name: 'ActionWindow',  title: 'Action Window',        items: ['30 days', '60 days', '90 days'] },
+  { name: 'PriorityLevel', title: 'Priority Level',       items: ['Critical', 'High', 'Medium', 'Low'] },
+  { name: 'TaskStatus',    title: 'Task Status',           items: ['Not Started', 'In Progress', 'Blocked', 'Complete'] },
+]);
 
 // ---------- shared style helpers ----------
 const thin = { style: "thin", color: { argb: BRAND.border } };
@@ -313,7 +372,7 @@ for (const d of domains) {
     wsAudit.getCell(`C${row}`).dataValidation = {
       type: "list",
       allowBlank: false,
-      formulae: ['"0,1,2,3,4"'],
+      formulae: [DV.MaturityScore],
       showErrorMessage: true,
       errorTitle: "Score must be 0-4",
       error: "Pick a value between 0 and 4 from the dropdown.",
@@ -588,13 +647,13 @@ for (const [item, domain, win, prio] of actions) {
 
   // Validations
   wsPlan.getCell(`D${pr}`).dataValidation = {
-    type: "list", allowBlank: false, formulae: ['"30 days,60 days,90 days"'],
+    type: "list", allowBlank: false, formulae: [DV.ActionWindow],
   };
   wsPlan.getCell(`G${pr}`).dataValidation = {
-    type: "list", allowBlank: false, formulae: ['"Critical,High,Medium,Low"'],
+    type: "list", allowBlank: false, formulae: [DV.PriorityLevel],
   };
   wsPlan.getCell(`H${pr}`).dataValidation = {
-    type: "list", allowBlank: false, formulae: ['"Not Started,In Progress,Blocked,Complete"'],
+    type: "list", allowBlank: false, formulae: [DV.TaskStatus],
   };
 
   // Conditional formatting on status

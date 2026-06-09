@@ -16,7 +16,58 @@ const RED = 'FFDC2626';
 const BLUE = 'FF2563EB';
 const WHITE = 'FFFFFFFF';
 
+// ───────────────────────────────────────────────────────────────
+// buildListsSheet
+// ───────────────────────────────────────────────────────────────
+/**
+ * buildListsSheet
+ * ---------------
+ * Call once per workbook, right after `new ExcelJS.Workbook()`.
+ * Returns a map { listName -> formulaString } to pass into dataValidation.formulae.
+ *
+ * @param {import('exceljs').Workbook} wb
+ * @param {Array<{name: string, title: string, items: string[]}>} lists
+ * @returns {Record<string, string>}
+ */
+function buildListsSheet(wb, lists) {
+  let wsLists = wb.getWorksheet('Lists');
+  if (!wsLists) {
+    wsLists = wb.addWorksheet('Lists', { views: [{ showGridLines: false }] });
+  }
+
+  wsLists.columns = lists.map(() => ({ width: 28 }));
+
+  const formulaMap = {};
+
+  lists.forEach((list, colIdx) => {
+    const colLetter = String.fromCharCode(65 + colIdx); // A, B, C …
+    const titleCell = wsLists.getCell(`${colLetter}1`);
+    titleCell.value = list.title;
+    titleCell.font = { name: 'Calibri', size: 10, bold: true };
+    titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+    titleCell.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+    list.items.forEach((item, itemIdx) => {
+      const cell = wsLists.getCell(`${colLetter}${2 + itemIdx}`);
+      cell.value = item;
+      cell.font = { name: 'Calibri', size: 10 };
+      cell.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+    });
+    const lastRow = 1 + list.items.length;
+    wb.definedNames.add(`Lists!$${colLetter}$2:$${colLetter}$${lastRow}`, list.name);
+    formulaMap[list.name] = list.name;
+  });
+
+  wsLists.state = 'veryHidden';
+  return formulaMap;
+}
+
 const wb = new ExcelJS.Workbook();
+
+const lists = buildListsSheet(wb, [
+  { name: 'ClearanceLevel', title: 'Clearance Level', items: ['None', 'Public Trust', 'Secret', 'TS', 'TS/SCI'] },
+  { name: 'DirectIndirect',  title: 'Direct or Indirect', items: ['Direct', 'Indirect'] },
+]);
+
 wb.creator = 'CapturePilot — Federal Lead Kit';
 wb.lastModifiedBy = 'CapturePilot';
 wb.created = new Date();
@@ -290,11 +341,11 @@ directEmployees.forEach((emp, i) => {
   // Data validation
   wsDL.getCell(`B${row}`).dataValidation = {
     type: 'list', allowBlank: true,
-    formulae: ['"None,Public Trust,Secret,TS,TS/SCI"'],
+    formulae: [lists.ClearanceLevel],
   };
   wsDL.getCell(`C${row}`).dataValidation = {
     type: 'list', allowBlank: false,
-    formulae: ['"Direct,Indirect"'],
+    formulae: [lists.DirectIndirect],
   };
 });
 
@@ -368,11 +419,11 @@ indirectEmployees.forEach((emp, i) => {
   setBorder(wsDL.getCell(`I${row}`));
   wsDL.getCell(`B${row}`).dataValidation = {
     type: 'list', allowBlank: true,
-    formulae: ['"None,Public Trust,Secret,TS,TS/SCI"'],
+    formulae: [lists.ClearanceLevel],
   };
   wsDL.getCell(`C${row}`).dataValidation = {
     type: 'list', allowBlank: false,
-    formulae: ['"Direct,Indirect"'],
+    formulae: [lists.DirectIndirect],
   };
 });
 

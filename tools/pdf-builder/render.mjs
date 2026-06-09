@@ -167,11 +167,17 @@ async function loadAssets() {
    ───────────────────────────────────────────────────────────────────── */
 
 function chromiumHeaderTemplate({ documentLabel, logoSrc }) {
+  // CRITICAL: Chromium PDF header/footer runs in an isolated iframe with
+  // NO @font-face support. Web fonts (Inter, IBM Plex Mono) silently fall
+  // back to whatever system serif the renderer ships with — that's what
+  // produced the awkward header typography pre-2026-06-09. Use system
+  // font stacks that resolve to native vector glyphs on macOS/Windows/
+  // Linux without round-tripping through a font load.
   return `
 <div style="
   width: 100%;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  font-size: 9pt;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 8pt;
   padding: 0 14mm;
   display: flex;
   align-items: center;
@@ -180,21 +186,21 @@ function chromiumHeaderTemplate({ documentLabel, logoSrc }) {
   color: #57534e;
   -webkit-print-color-adjust: exact;
 ">
-  <div style="display:flex; align-items:center; gap:2.5mm;">
+  <div style="display:flex; align-items:center; gap:2mm;">
     <img src="${logoSrc}"
          alt="CapturePilot"
-         width="22" height="22"
-         style="display:block; width:5mm; height:5mm; border:0;">
+         width="16" height="16"
+         style="display:block; width:3.6mm; height:3.6mm; border:0;">
     <span style="
-      font-weight: 700;
-      font-size: 9pt;
+      font-weight: 600;
+      font-size: 8pt;
       letter-spacing: -0.01em;
-      color: #57534e;
+      color: #44403c;
     ">CapturePilot</span>
   </div>
   <span style="
-    font-family: 'IBM Plex Mono', 'JetBrains Mono', monospace;
-    font-size: 7.5pt;
+    font-family: ui-monospace, 'SF Mono', Menlo, Monaco, Consolas, monospace;
+    font-size: 6.5pt;
     font-weight: 500;
     letter-spacing: 0.18em;
     text-transform: uppercase;
@@ -206,12 +212,14 @@ function chromiumHeaderTemplate({ documentLabel, logoSrc }) {
 
 function chromiumFooterTemplate({ footerLabel }) {
   // Chromium auto-substitutes <span class="pageNumber"> + <span
-  // class="totalPages"> per print. ONE format for every page.
+  // class="totalPages"> per print. ONE format for every page. Same font
+  // story as the header — only system monospace stacks render cleanly
+  // in the sandboxed footer iframe.
   return `
 <div style="
   width: 100%;
-  font-family: 'IBM Plex Mono', 'JetBrains Mono', monospace;
-  font-size: 7.5pt;
+  font-family: ui-monospace, 'SF Mono', Menlo, Monaco, Consolas, monospace;
+  font-size: 6.5pt;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: #78716c;
@@ -325,59 +333,214 @@ ${sectionHtml}
     return null;
   }
 
-  async function renderOnce(html) {
+  // Cover + back-cover + dark-panel all render with NO Chromium header/footer
+  // (chapter dividers + hero pages don't need page chrome — it disrupts the
+  // visual rhythm). The CSS override during the dedicated render pass keeps
+  // the original 14mm side padding (avoiding the "content hugs the edges"
+  // look) while extending the section to 11in min-height so the dark grid
+  // bg extends edge-to-edge vertically. Vertical padding matches the new
+  // tighter body margin (0.6in).
+  const NO_CHROME_SECTION_TYPES = ["cover", "back-cover", "back", "dark", "dark-panel"];
+  const COVER_FULL_BLEED_CSS = `<style>
+body.cp-cover-only{margin:0}
+body.cp-cover-only .doc-section--cover,
+body.cp-cover-only .doc-section--back-cover,
+body.cp-cover-only .doc-section--dark{
+  min-height:11in;
+  padding:0.6in 14mm;
+}
+</style>`;
+  const NO_CHROME_MARGIN = { top: "0", right: "0", bottom: "0", left: "0" };
+
+  async function renderOnce(html, opts = {}) {
+    const {
+      withChrome = true,        // false → suppress Chromium header/footer
+      pageRanges = "",          // "" = all pages; "1" = first only; "2-" = body
+      coverFullBleed = false,   // inject cover-only fullbleed CSS + body class
+      // Tightened from 0.85in → 0.6in on 2026-06-09: header/footer
+      // typography is smaller now (8pt instead of 9pt label, 6.5pt instead
+      // of 7.5pt mono caps) so the reserved band can shrink ~30%.
+      margin = { top: "0.6in", right: "0", bottom: "0.6in", left: "0" },
+    } = opts;
+
     const ctxBrowser = await browser.newContext({
       viewport: { width: 816, height: 1056 }, // Letter @ 96dpi
     });
     const page = await ctxBrowser.newPage();
-    await page.setContent(html, { waitUntil: "networkidle" });
+
+    let finalHtml = html;
+    if (coverFullBleed) {
+      finalHtml = finalHtml
+        .replace("</head>", `${COVER_FULL_BLEED_CSS}</head>`)
+        .replace("<body>", `<body class="cp-cover-only">`);
+    }
+
+    await page.setContent(finalHtml, { waitUntil: "networkidle" });
     await page.evaluate(() => document.fonts && document.fonts.ready);
     await page.emulateMedia({ media: "print" });
 
-    return page.pdf({
+    const pdfOpts = {
       format: "Letter",
       printBackground: true,
-      // Reserve room for the Chromium-managed header (top) + footer
-      // (bottom). 0.85in matches the 8pt mono footer typography with
-      // generous breathing room.
-      margin: {
-        top:    "0.85in",
-        right:  "0",
-        bottom: "0.85in",
-        left:   "0",
-      },
+      margin,
       preferCSSPageSize: false,
-      displayHeaderFooter: true,
-      headerTemplate: chromiumHeaderTemplate({
+      displayHeaderFooter: withChrome,
+    };
+    if (withChrome) {
+      pdfOpts.headerTemplate = chromiumHeaderTemplate({
         documentLabel,
         logoSrc: assets.logoDark,
-      }),
-      footerTemplate: chromiumFooterTemplate({ footerLabel }),
+      });
+      pdfOpts.footerTemplate = chromiumFooterTemplate({ footerLabel });
+    }
+    if (pageRanges) pdfOpts.pageRanges = pageRanges;
+
+    return page.pdf(pdfOpts);
+  }
+
+  async function mergePdfs(...byteArrays) {
+    // Lazy-load pdf-lib from dashboard/node_modules so we don't duplicate
+    // the install (matches the existing pattern in build-pdf.mjs).
+    const { PDFDocument } = await import(
+      resolve(REPO_ROOT, "dashboard/node_modules/pdf-lib/cjs/index.js")
+    );
+    const out = await PDFDocument.create();
+    for (const bytes of byteArrays) {
+      if (!bytes) continue;
+      const doc = await PDFDocument.load(bytes);
+      const pages = await out.copyPages(doc, doc.getPageIndices());
+      pages.forEach((p) => out.addPage(p));
+    }
+    return Buffer.from(await out.save());
+  }
+
+  const parts = Array.isArray(config.parts) ? config.parts : [];
+  const sectionHtmls = parts.map((part) => renderPart(part, md, assets));
+  const hasNoChromeSection = parts.some((p) => NO_CHROME_SECTION_TYPES.includes(p.type));
+
+  // Render an individual section in isolation — used to measure how many
+  // pages each section produces so we can build the chrome vs. no-chrome
+  // page-range plan. CSS is identical to the full doc so page-break
+  // behavior matches what the section produces in the real render.
+  async function measureSectionPages(html) {
+    const miniHtml = `<!doctype html><html><head><meta charset="utf-8"><style>${css}</style></head><body>${html}</body></html>`;
+    const bytes = await renderOnce(miniHtml, { withChrome: false, margin: NO_CHROME_MARGIN });
+    return countPdfPages(bytes) || 1;
+  }
+
+  // Helper declared up front so it's available to both branches below.
+  // Takes a Set<number> of page numbers that should have no chrome, builds
+  // contiguous chrome / no-chrome ranges, renders each range from the FULL
+  // tokenized HTML (so Chromium's natural pageNumber matches the merged-doc
+  // position — keeping footer "x / N" correct), then merges in order.
+  let pdfBytes;
+  let pageCount = config.parts.length;
+  let tokenizedHtml = fullHtml;
+
+  // Render ONE section in isolation as a mini-HTML document — used to
+  // produce a no-chrome / full-bleed replacement for a page in the full
+  // chrome PDF. Reliable because it doesn't depend on Chromium's
+  // pageRanges feature against a re-paginated full doc.
+  async function renderSectionAlone(sectionIdx) {
+    let html = sectionHtmls[sectionIdx];
+    if (html.includes(TOTAL_PAGES_TOKEN)) {
+      html = html.split(TOTAL_PAGES_TOKEN).join(String(pageCount));
+    }
+    const mini = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>section</title><style>${css}</style></head><body>${html}</body></html>`;
+    return renderOnce(mini, {
+      withChrome: false,
+      coverFullBleed: true,
+      margin: NO_CHROME_MARGIN,
     });
   }
 
+  // Replace specific page indices in a base PDF with the contents of
+  // other PDFs (each replacement may be 1+ pages — they all insert at
+  // that index, replacing the original 1 page). Non-replaced pages
+  // copy through. Preserves chrome PDF's page numbering for non-swapped
+  // pages.
+  async function replacePagesInPdf(basePdfBytes, replacements) {
+    const { PDFDocument } = await import(
+      resolve(REPO_ROOT, "dashboard/node_modules/pdf-lib/cjs/index.js")
+    );
+    const base = await PDFDocument.load(basePdfBytes);
+    const result = await PDFDocument.create();
+    const baseCount = base.getPageCount();
+    for (let i = 0; i < baseCount; i++) {
+      if (replacements.has(i)) {
+        const replDoc = await PDFDocument.load(replacements.get(i));
+        const replPages = await result.copyPages(replDoc, replDoc.getPageIndices());
+        replPages.forEach((p) => result.addPage(p));
+      } else {
+        const [p] = await result.copyPages(base, [i]);
+        result.addPage(p);
+      }
+    }
+    return Buffer.from(await result.save());
+  }
+
   const browser = await chromium.launch();
-  let pdfBytes;
-  let pageCount = config.parts.length;
   try {
-    // Pass 1 — render with the placeholder still in place so we can
-    // count the actual produced page count.
-    const firstPassBytes = await renderOnce(fullHtml);
+    // Pass 1 — render full doc with chrome ON to count total pages (the
+    // cover's "N PAGES" label + footer "x / N" both need this).
+    const firstPassBytes = await renderOnce(fullHtml, { withChrome: true });
     const counted = countPdfPages(firstPassBytes);
     if (counted != null) pageCount = counted;
 
-    // Pass 2 — re-render with the placeholder replaced by the real total
-    // so the cover "N PAGES" label matches the footer "x / N" counter.
-    // Skip the second pass if the document doesn't contain the token
-    // (e.g. configs that don't include a cover section).
-    if (fullHtml.includes(TOTAL_PAGES_TOKEN)) {
-      const finalHtml = fullHtml.split(TOTAL_PAGES_TOKEN).join(String(pageCount));
-      pdfBytes = await renderOnce(finalHtml);
-      const recounted = countPdfPages(pdfBytes);
-      if (recounted != null) pageCount = recounted;
+    // Substitute the real page count once for the rest of the work.
+    tokenizedHtml = fullHtml.includes(TOTAL_PAGES_TOKEN)
+      ? fullHtml.split(TOTAL_PAGES_TOKEN).join(String(pageCount))
+      : fullHtml;
+
+    if (hasNoChromeSection && pageCount > 1) {
+      // Measure each section's page count in isolation so we can compute
+      // each section's page index in the chrome PDF. Parallel for speed.
+      const sectionPageCounts = await Promise.all(sectionHtmls.map(measureSectionPages));
+      const measuredTotal = sectionPageCounts.reduce((a, b) => a + b, 0);
+
+      // Walk parts, build a list of {sectionIdx, firstPageIdx0} for every
+      // no-chrome section we want to swap out.
+      const swaps = [];
+      let cursor0 = 0; // 0-based page index into chrome PDF
+      for (let i = 0; i < parts.length; i++) {
+        if (NO_CHROME_SECTION_TYPES.includes(parts[i].type)) {
+          // Always swap cover (i=0) and back-cover (i=last) — their
+          // positions are fixed (page 0 and page P-1). For middle dark
+          // sections, only swap if no measurement drift (otherwise we
+          // can't trust the cursor position).
+          const isCover = (i === 0);
+          const isBack = (i === parts.length - 1);
+          if (isCover || isBack || measuredTotal === pageCount) {
+            const pageIdx0 = isBack ? pageCount - 1 : cursor0;
+            swaps.push({ sectionIdx: i, pageIdx0 });
+          }
+        }
+        cursor0 += sectionPageCounts[i];
+      }
+
+      if (measuredTotal !== pageCount) {
+        console.warn(`[pdf-builder] page-count drift (measured ${measuredTotal}, rendered ${pageCount}) — dark-panel chrome suppression skipped (cover + back-cover still suppressed).`);
+      }
+
+      // Render each no-chrome section alone (parallel) → mini-PDFs.
+      const swapBytes = await Promise.all(
+        swaps.map(async (s) => ({ ...s, bytes: await renderSectionAlone(s.sectionIdx) })),
+      );
+
+      // Build the replacement map: pageIdx0 → bytes.
+      const replacementMap = new Map(swapBytes.map((s) => [s.pageIdx0, s.bytes]));
+
+      // Replace those pages in pass 1's chrome PDF.
+      pdfBytes = await replacePagesInPdf(firstPassBytes, replacementMap);
+    } else if (fullHtml.includes(TOTAL_PAGES_TOKEN)) {
+      // Single-page doc — substitute + render once.
+      pdfBytes = await renderOnce(tokenizedHtml, { withChrome: true });
     } else {
       pdfBytes = firstPassBytes;
     }
+
+    const recounted = countPdfPages(pdfBytes);
+    if (recounted != null) pageCount = recounted;
   } finally {
     await browser.close();
   }
