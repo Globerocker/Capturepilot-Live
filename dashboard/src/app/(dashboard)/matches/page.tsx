@@ -17,7 +17,7 @@ import { BulkExportDialog } from "@/components/matches/BulkExportDialog";
 import SavedViews from "@/components/SavedViews";
 import { SavedSearchesMenu } from "@/components/matches/SavedSearchesMenu";
 import SourceLevelSwitcher, { SOURCE_LEVEL_VALUES, type SourceLevel } from "@/components/SourceLevelSwitcher";
-import { SET_ASIDE_OPTIONS, matchSetAside, setAsideBadgeTone } from "@/lib/set-aside-filters";
+import { SET_ASIDE_OPTIONS, setAsideBadgeTone } from "@/lib/set-aside-filters";
 
 const supabase = createSupabaseClient();
 
@@ -27,6 +27,12 @@ const formatCurrency = (val: number | null | undefined) => {
     if (val >= 1_000) return `$${(val / 1_000).toFixed(0)}K`;
     return `$${val.toLocaleString()}`;
 };
+
+// PostgREST .or() syntax uses commas to separate conditions and parens to group them.
+// Strip anything that would break the parser before interpolating user input.
+function sanitizeForOrSearch(s: string): string {
+    return s.replace(/[,()'\\]/g, " ").trim();
+}
 
 const MAX_SELECTION = 20;
 
@@ -184,6 +190,17 @@ export default function MyMatchesPage() {
         loadProfile();
     }, [router]);
 
+    // Debounce search input → activeSearch (250ms) so the fetch isn't fired on every
+    // keystroke. Reset to page 1 whenever the active search actually changes.
+    useEffect(() => {
+        if (searchInput === activeSearch) return;
+        const t = setTimeout(() => {
+            setActiveSearch(searchInput);
+            setPage(1);
+        }, 250);
+        return () => clearTimeout(t);
+    }, [searchInput, activeSearch]);
+
     const fetchMatches = useCallback(async () => {
         if (!profileId) { setLoading(false); return; }
         setLoading(true);
@@ -222,70 +239,72 @@ export default function MyMatchesPage() {
             query = query.gte("score", filterMinScore);
         }
 
-        query = query.order("score", { ascending: false });
+        // Push joined-table filters into the query BEFORE .range() so pagination + count
+        // reflect the true filtered result set (audit #10). Without this, client-side
+        // filtering of a single 25-row page often returned 0-3 matches even when thousands
+        // matched in the DB.
+        if (filterNoticeType) {
+            query = query.eq("opportunities.notice_type", filterNoticeType);
+        }
+        if (filterSetAside) {
+            // set_aside_code is a code string; partial match preserves prior UX where a
+            // short token (e.g. "SBA") could match longer set-aside codes.
+            query = query.ilike("opportunities.set_aside_code", `%${filterSetAside}%`);
+        }
+        if (filterState) {
+            query = query.eq("opportunities.place_of_performance_state", filterState);
+        }
+        if (filterNaics) {
+            query = query.like("opportunities.naics_code", `${filterNaics}%`);
+        }
+        if (filterMaxDeadlineDays != null) {
+            const nowIso = new Date().toISOString();
+            const cutoffIso = new Date(Date.now() + filterMaxDeadlineDays * 86400000).toISOString();
+            query = query
+                .gte("opportunities.response_deadline", nowIso)
+                .lte("opportunities.response_deadline", cutoffIso);
+        }
+        if (activeSearch) {
+            const safe = sanitizeForOrSearch(activeSearch);
+            if (safe) {
+                // .or() against a foreign table searches title OR agency on opportunities.
+                // Sanitized above to strip commas/parens/quotes that break PostgREST syntax.
+                query = query.or(
+                    `title.ilike.%${safe}%,agency.ilike.%${safe}%`,
+                    { foreignTable: "opportunities" }
+                );
+            }
+        }
+
+        // Move sort into the query so the soonest deadline / first-alphabetical agency
+        // surfaces on page 1, not just within the current 25-row window.
+        if (sortBy === "score") {
+            query = query.order("score", { ascending: sortDirection === "asc" });
+        } else if (sortBy === "deadline") {
+            query = query.order("response_deadline", {
+                ascending: sortDirection === "asc",
+                foreignTable: "opportunities",
+                nullsFirst: false,
+            });
+        } else if (sortBy === "agency") {
+            query = query.order("agency", {
+                ascending: sortDirection === "asc",
+                foreignTable: "opportunities",
+            });
+        } else if (sortBy === "notice_type") {
+            query = query.order("notice_type", {
+                ascending: sortDirection === "asc",
+                foreignTable: "opportunities",
+            });
+        }
 
         const from = (page - 1) * pageSize;
         const to = from + pageSize - 1;
         const { data, count } = await query.range(from, to);
 
-        // Filter by search client-side (Supabase can't search joined fields easily)
-        let filtered = (data || []) as unknown as UserMatch[];
-        if (activeSearch) {
-            const s = activeSearch.toLowerCase();
-            filtered = filtered.filter(m =>
-                m.opportunities?.title?.toLowerCase().includes(s) ||
-                m.opportunities?.agency?.toLowerCase().includes(s)
-            );
-        }
-
-        // Advanced filters (client-side on joined fields)
-        if (filterNoticeType) {
-            filtered = filtered.filter(m => m.opportunities?.notice_type === filterNoticeType);
-        }
-        if (filterSetAside) {
-            filtered = filtered.filter(m => matchSetAside(m.opportunities?.set_aside_code, filterSetAside));
-        }
-        if (filterState) {
-            filtered = filtered.filter(m => m.opportunities?.place_of_performance_state === filterState);
-        }
-        if (filterNaics) {
-            filtered = filtered.filter(m => m.opportunities?.naics_code?.startsWith(filterNaics));
-        }
-        if (filterMaxDeadlineDays != null) {
-            const cutoff = Date.now() + filterMaxDeadlineDays * 24 * 60 * 60 * 1000;
-            filtered = filtered.filter(m => {
-                const d = m.opportunities?.response_deadline;
-                if (!d) return false;
-                const t = new Date(d).getTime();
-                return t >= Date.now() && t <= cutoff;
-            });
-        }
-
-        // Client-side sorting
-        if (sortBy !== "score") {
-            filtered.sort((a, b) => {
-                let aVal = "";
-                let bVal = "";
-                if (sortBy === "deadline") {
-                    aVal = a.opportunities?.response_deadline || "9999";
-                    bVal = b.opportunities?.response_deadline || "9999";
-                } else if (sortBy === "agency") {
-                    aVal = a.opportunities?.agency || "";
-                    bVal = b.opportunities?.agency || "";
-                } else if (sortBy === "notice_type") {
-                    aVal = a.opportunities?.notice_type || "";
-                    bVal = b.opportunities?.notice_type || "";
-                }
-                const cmp = aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
-                return sortDirection === "asc" ? cmp : -cmp;
-            });
-        } else if (sortDirection === "asc") {
-            filtered.reverse();
-        }
-
-        setMatches(filtered);
-        const anyClientFilter = Boolean(activeSearch || filterNoticeType || filterSetAside || filterState || filterNaics || filterMaxDeadlineDays != null);
-        setTotalCount(anyClientFilter ? filtered.length : (count || 0));
+        const rows = (data || []) as unknown as UserMatch[];
+        setMatches(rows);
+        setTotalCount(count || 0);
         setLoading(false);
     }, [profileId, page, activeSearch, filter, sortBy, sortDirection, filterNoticeType, filterSetAside, filterState, filterNaics, filterMinScore, filterMaxDeadlineDays, sourceLevel]);
 
