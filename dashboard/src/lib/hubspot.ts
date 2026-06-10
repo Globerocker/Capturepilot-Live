@@ -94,6 +94,10 @@ export interface ContactProperties {
   annualrevenue_range?: string;
   capturepilot_years_in_business?: number;
   capturepilot_has_fed_experience?: boolean;
+  // Email deliverability — mirrored from Resend bounce/complaint webhooks
+  // so sales reps see the same state HubSpot uses for native suppression.
+  hs_email_hard_bounced?: string; // 'true' | 'false'
+  unsubscribed_from_all_email?: string; // 'true' | 'false'
 }
 
 /**

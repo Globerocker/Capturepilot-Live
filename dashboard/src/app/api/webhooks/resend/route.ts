@@ -25,6 +25,18 @@ export const maxDuration = 10;
 
 const TOLERANCE_SECONDS = 300; // 5min, matches Svix default
 
+// Loud boot-time warning when RESEND_WEBHOOK_SECRET is missing in prod —
+// audit 2026-06-10 #5 confirmed zero email_events were arriving, root cause
+// was a silent misconfig. Surface it in Vercel logs the moment a cold start
+// hits this route module.
+if (process.env.NODE_ENV === "production" && !process.env.RESEND_WEBHOOK_SECRET) {
+    console.warn(
+        `[resend-webhook] WARNING ${new Date().toISOString()} — RESEND_WEBHOOK_SECRET is NOT set in production. ` +
+        `All incoming Resend webhook events will be rejected with 500. ` +
+        `Set the env var in Vercel and register the webhook URL in resend.com/webhooks.`,
+    );
+}
+
 // Maps Resend event names ("email.delivered", "email.opened", ...) to the
 // short slugs we store in email_events.event_type. Anything not in this map
 // gets persisted under "failed" so we don't drop visibility on new event types.
@@ -86,28 +98,38 @@ function verifySvixSignature(args: {
 
 export async function POST(req: NextRequest) {
     const secret = process.env.RESEND_WEBHOOK_SECRET;
+    const isProd = process.env.NODE_ENV === "production";
+
+    // Fail-closed in prod, fail-open with a warning in dev/preview so engineers
+    // can iterate without configuring Svix locally. Audit 2026-06-10 #5.
     if (!secret) {
-        console.error("[resend-webhook] RESEND_WEBHOOK_SECRET not set — refusing request");
-        return new NextResponse("Server misconfigured", { status: 500 });
+        if (isProd) {
+            console.error("[resend-webhook] RESEND_WEBHOOK_SECRET not set in production — refusing request");
+            return new NextResponse("Server misconfigured", { status: 500 });
+        }
+        console.warn("[resend-webhook] RESEND_WEBHOOK_SECRET not set — skipping signature check (dev only)");
     }
 
     const svixId = req.headers.get("svix-id");
     const svixTimestamp = req.headers.get("svix-timestamp");
     const svixSignature = req.headers.get("svix-signature");
-    if (!svixId || !svixTimestamp || !svixSignature) {
+    if (secret && (!svixId || !svixTimestamp || !svixSignature)) {
         return new NextResponse("Missing svix headers", { status: 400 });
     }
 
     const rawBody = await req.text();
-    const ok = verifySvixSignature({
-        secret,
-        id: svixId,
-        timestamp: svixTimestamp,
-        body: rawBody,
-        signatureHeader: svixSignature,
-    });
-    if (!ok) {
-        return new NextResponse("Invalid signature", { status: 401 });
+
+    if (secret) {
+        const ok = verifySvixSignature({
+            secret,
+            id: svixId!,
+            timestamp: svixTimestamp!,
+            body: rawBody,
+            signatureHeader: svixSignature!,
+        });
+        if (!ok) {
+            return new NextResponse("Invalid signature", { status: 401 });
+        }
     }
 
     let payload: unknown;
@@ -141,6 +163,10 @@ export async function POST(req: NextRequest) {
     const recipient = Array.isArray(evt.data?.to) ? evt.data!.to[0] : (evt.data?.to as string | undefined);
     const click = evt.data?.click;
     const open = evt.data?.open;
+
+    // Audit 2026-06-10 #5: confirm every accepted event is visible in Vercel logs,
+    // so we can tell at a glance whether webhooks are reaching us at all.
+    console.log(`[resend-webhook] accepted ${evt.type || "?"} (${eventType}) for ${recipient || "?"} id=${resendEmailId}`);
 
     const sb = createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -189,6 +215,42 @@ export async function POST(req: NextRequest) {
     } catch {
         // Non-fatal — the email_events insert above succeeded so we
         // still have the raw event. Backlink mirror is a convenience.
+    }
+
+    // ---- Suppression list + HubSpot mirror (audit 2026-06-10 #6 + #21).
+    //      Without these, the next outreach campaign or nurture drip will
+    //      re-email a bounced/complained address — guaranteed reputation
+    //      damage. Sales reps also keep mailing dead addresses because
+    //      HubSpot still shows them as deliverable.
+    if ((eventType === "bounced" || eventType === "complained") && recipient) {
+        const recipientLower = recipient.toLowerCase();
+        try {
+            await sb
+                .from("outreach_optouts")
+                .upsert(
+                    {
+                        email: recipientLower,
+                        reason: `resend:${eventType}`,
+                        source: "resend_webhook",
+                    },
+                    { onConflict: "email" },
+                );
+        } catch (e) {
+            console.error("[resend-webhook] outreach_optouts upsert failed", e);
+        }
+
+        try {
+            const { updateContactByEmail } = await import("@/lib/hubspot");
+            if (eventType === "bounced") {
+                await updateContactByEmail(recipient, { hs_email_hard_bounced: "true" })
+                    .catch(e => console.error("[resend-webhook] hubspot bounce mirror failed", e));
+            } else {
+                await updateContactByEmail(recipient, { unsubscribed_from_all_email: "true" })
+                    .catch(e => console.error("[resend-webhook] hubspot complaint mirror failed", e));
+            }
+        } catch (e) {
+            console.error("[resend-webhook] hubspot import failed", e);
+        }
     }
 
     return NextResponse.json({ ok: true, type: eventType });
