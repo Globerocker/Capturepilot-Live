@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
@@ -15,7 +15,8 @@ export default function LoginPage() {
   const [resetSent, setResetSent] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
   const router = useRouter();
-  const supabase = createSupabaseClient();
+  // Memoize so the supabase browser client isn't reinstantiated on every render.
+  const supabase = useMemo(() => createSupabaseClient(), []);
 
   const AUTH_ERROR_MAP: Record<string, string> = {
     "Anonymous sign-ins are disabled": "Please enter your email and password to create an account.",
@@ -85,7 +86,15 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="flex items-center justify-center space-x-3 mb-10">
-          <Image src="/logo.png" alt="CapturePilot" width={40} height={40} className="rounded-xl shadow-lg" />
+          <Image
+            src="/logo.png"
+            alt="CapturePilot"
+            width={40}
+            height={40}
+            sizes="40px"
+            priority
+            className="rounded-xl shadow-lg"
+          />
           <h1 className="text-2xl font-bold">CapturePilot</h1>
         </div>
 
