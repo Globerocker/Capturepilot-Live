@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
-import { randomBytes, createHash } from "node:crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
 export const maxDuration = 30;
 
@@ -33,9 +33,33 @@ export const maxDuration = 30;
 const COOKIE_NAME = "cp_admin_impersonate";
 const COOKIE_TTL_SECS = 60 * 30;
 
+// NOTE: set IMPERSONATION_SECRET (preferred) or CRON_SECRET in Vercel before deploy.
+// In production with neither set, sign()/verify() will throw — fail-closed by design.
+function getImpersonationSecret(): string {
+    const secret = process.env.IMPERSONATION_SECRET || process.env.CRON_SECRET;
+    if (!secret) {
+        if (process.env.NODE_ENV === "production") {
+            throw new Error("IMPERSONATION_SECRET or CRON_SECRET must be set in production");
+        }
+        return "dev-only-fallback-do-not-use-in-prod";
+    }
+    return secret;
+}
+
 function sign(payload: string): string {
-    const secret = process.env.CRON_SECRET || process.env.SUPABASE_SERVICE_KEY || "dev-secret";
-    return createHash("sha256").update(`${secret}|${payload}`).digest("hex").slice(0, 32);
+    return createHmac("sha256", getImpersonationSecret()).update(payload).digest("hex");
+}
+
+function verify(payload: string, sig: string): boolean {
+    const expected = Buffer.from(sign(payload), "hex");
+    let provided: Buffer;
+    try {
+        provided = Buffer.from(sig, "hex");
+    } catch {
+        return false;
+    }
+    if (expected.length !== provided.length) return false;
+    return timingSafeEqual(expected, provided);
 }
 
 function encodeToken(adminAuthUserId: string, targetUserProfileId: string): string {
@@ -53,7 +77,7 @@ export function decodeToken(token: string | null | undefined): { adminAuthUserId
     if (!token) return null;
     const [payload, sig] = token.split(".");
     if (!payload || !sig) return null;
-    if (sign(payload) !== sig) return null;
+    if (!verify(payload, sig)) return null;
     try {
         const body = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
         const age = Date.now() / 1000 - Number(body.i);
