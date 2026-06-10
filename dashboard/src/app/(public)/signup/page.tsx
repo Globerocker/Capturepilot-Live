@@ -339,6 +339,7 @@ function SignupPageContent() {
             "Completely free during beta — no limits",
             "Win probability scoring on every match",
             "AI-powered email drafts & win strategies",
+            "Team plans available — up to 5 seats, white-label",
             "Beta users save 25% when paid plans launch",
           ].map((b) => (
             <div

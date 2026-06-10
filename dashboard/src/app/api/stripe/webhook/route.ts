@@ -120,12 +120,17 @@ export async function POST(request: Request) {
                     ? new Date(subscription.trial_end * 1000).toISOString()
                     : null;
 
+                // Tier is stamped on the subscription metadata at checkout time.
+                // Fall back to "pro" for legacy subscriptions created before the Team tier shipped.
+                const subTier = (subscription.metadata?.tier as string) || "pro";
+
                 await admin
                     .from("user_profiles")
                     .update({
                         subscription_status: "active",
                         stripe_subscription_id: session.subscription as string,
                         plan_tier: "pro",
+                        tier: subTier,
                         trial_ends_at: trialEnd,
                         account_type: "self_service",
                     })
