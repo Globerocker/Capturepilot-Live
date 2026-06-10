@@ -239,5 +239,72 @@ export async function GET(_req: NextRequest) {
         // Soft-fail — the env checks above are the primary signal.
     }
 
-    return NextResponse.json({ checks, cron_summary: cronStats });
+    // Data-quality KPIs surfaced from audit fixes #8 + #9 (2026-06-10):
+    //   - ai_win_strategy was null on 81.3% of opportunities (backfill never
+    //     finished in April); operator needs a live counter so it can't
+    //     regress silently again.
+    //   - opportunity_score was null on 100% (78,007/78,007); now produced by
+    //     backfill_opportunity_score cron — track the burndown until it hits 0.
+    // Both queries cap at is_archived=false so the percentage reflects only
+    // the rows we actually surface in the UI.
+    type DataQualityKpi = {
+        key: string;
+        null_pct: number | null;
+        null_count: number | null;
+        total: number | null;
+        detail?: string;
+        last_check: string;
+    };
+    const dataQuality: DataQualityKpi[] = [];
+    try {
+        const { count: totalCount } = await admin
+            .from("opportunities")
+            .select("notice_id", { count: "exact", head: true })
+            .eq("is_archived", false);
+        const total = totalCount ?? null;
+
+        const { count: nullAiWin } = await admin
+            .from("opportunities")
+            .select("notice_id", { count: "exact", head: true })
+            .eq("is_archived", false)
+            .is("ai_win_strategy", null);
+
+        // Match the cron's "null OR 0" gap (schema DEFAULT 0; prod shows NULL).
+        const { count: nullScore } = await admin
+            .from("opportunities")
+            .select("notice_id", { count: "exact", head: true })
+            .eq("is_archived", false)
+            .or("opportunity_score.is.null,opportunity_score.eq.0");
+
+        const pct = (n: number | null) =>
+            total && n != null ? Math.round((n / total) * 1000) / 10 : null;
+
+        dataQuality.push({
+            key: "null_ai_win_strategy_pct",
+            null_pct: pct(nullAiWin ?? null),
+            null_count: nullAiWin ?? null,
+            total,
+            detail: "Audit fix #8 — Apr 16 backfill never finished. Drain via /api/admin/backfill-enrichment.",
+            last_check: now,
+        });
+        dataQuality.push({
+            key: "null_opportunity_score_pct",
+            null_pct: pct(nullScore ?? null),
+            null_count: nullScore ?? null,
+            total,
+            detail: "Audit fix #9 — backfill_opportunity_score cron drains 5000/run twice daily.",
+            last_check: now,
+        });
+    } catch (e) {
+        dataQuality.push({
+            key: "data_quality_probe_failed",
+            null_pct: null,
+            null_count: null,
+            total: null,
+            detail: (e as Error).message,
+            last_check: now,
+        });
+    }
+
+    return NextResponse.json({ checks, cron_summary: cronStats, data_quality: dataQuality });
 }
