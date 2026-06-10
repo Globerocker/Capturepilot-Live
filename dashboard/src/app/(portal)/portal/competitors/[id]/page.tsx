@@ -315,6 +315,7 @@ export default function CompetitorDetail() {
     // Re-analyze
     function handleReanalyze() {
         if (!comp || !comp.website) return;
+        const compWebsite = comp.website;
         setReanalyzing(true);
         setReanalyzeError("");
         setReanalyzeStep(0);
@@ -323,7 +324,7 @@ export default function CompetitorDetail() {
         (async () => {
             let captcha_response = "";
             try {
-                const tokRes = await fetch(`/api/analyze-company/token?website=${encodeURIComponent(comp.website)}`);
+                const tokRes = await fetch(`/api/analyze-company/token?website=${encodeURIComponent(compWebsite)}`);
                 if (tokRes.ok) {
                     const tokData = await tokRes.json();
                     captcha_response = String(tokData.captcha_response || "");
