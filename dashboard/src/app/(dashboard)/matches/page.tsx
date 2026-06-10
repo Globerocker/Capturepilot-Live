@@ -6,6 +6,7 @@ import { createSupabaseClient } from "@/lib/supabase/client";
 import { Loader2, Sparkles, Search, X, ChevronLeft, ChevronRight, Trophy, Shield, Target, ArrowRight, Bookmark, EyeOff, Flame, ChevronUp, ChevronDown, Filter, CheckCircle2, Download, AlertTriangle, List, Table as TableIcon, Columns3, GripVertical, MapPin } from "lucide-react";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { createPursuit } from "@/lib/pursue-utils";
+import { captureMatchEvent } from "@/lib/learning-capture";
 import { Skeleton, SkeletonMatchCard } from "@/components/ui/Skeleton";
 import clsx from "clsx";
 import Link from "next/link";
@@ -329,22 +330,25 @@ export default function MyMatchesPage() {
     const toggleSave = async (matchId: string, currentlySaved: boolean) => {
         await supabase.from("user_matches").update({ is_saved: !currentlySaved }).eq("id", matchId);
         setMatches(prev => prev.map(m => m.id === matchId ? { ...m, is_saved: !currentlySaved } : m));
+        if (!currentlySaved) captureMatchEvent(matchId, "saved");
     };
 
     const dismissMatch = async (matchId: string) => {
         await supabase.from("user_matches").update({ is_dismissed: true }).eq("id", matchId);
+        captureMatchEvent(matchId, "dismissed");
         setMatches(prev => prev.filter(m => m.id !== matchId));
         setSelectedIds(prev => { const n = new Set(prev); n.delete(matchId); return n; });
         setTotalCount(prev => prev - 1);
     };
 
-    const handlePursue = async (oppId: string, noticeType: string) => {
+    const handlePursue = async (oppId: string, noticeType: string, matchId?: string) => {
         if (!profileId || pursuingIds.has(oppId) || pursuedIds.has(oppId)) return;
         setPursuingIds(prev => new Set(prev).add(oppId));
         const result = await createPursuit(oppId, noticeType, profileId);
         setPursuingIds(prev => { const n = new Set(prev); n.delete(oppId); return n; });
         if (result.success) {
             setPursuedIds(prev => new Set(prev).add(oppId));
+            if (matchId) captureMatchEvent(matchId, "pursued");
         }
     };
 
@@ -417,6 +421,10 @@ export default function MyMatchesPage() {
             showToast(msg, "error");
         }
     }, [fetchMatches, stopRescorePolling]);
+
+    const handleMatchClick = (matchId: string) => {
+        captureMatchEvent(matchId, "clicked");
+    };
 
     const handleGenerateMatches = async () => {
         if (rescoreJob || generatingMatches) return;
@@ -1114,7 +1122,7 @@ export default function MyMatchesPage() {
                                     </div>
 
                                     {/* Content */}
-                                    <Link href={`/opportunities/${opp.id}`} className="flex-1 min-w-0">
+                                    <Link href={`/opportunities/${opp.id}`} onClick={() => handleMatchClick(match.id)} className="flex-1 min-w-0">
                                         <div className="flex items-center gap-1.5 mb-1 flex-wrap">
                                             <span className={clsx(
                                                 "text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-widest border",
@@ -1175,7 +1183,7 @@ export default function MyMatchesPage() {
                                                 </span>
                                             ) : (
                                                 <button type="button" title="Start Pursuing"
-                                                    onClick={(e) => { e.preventDefault(); handlePursue(opp.id, opp.notice_type); }}
+                                                    onClick={(e) => { e.preventDefault(); handlePursue(opp.id, opp.notice_type, match.id); }}
                                                     disabled={pursuingIds.has(opp.id)}
                                                     className="p-1.5 rounded-lg text-stone-400 hover:text-black hover:bg-stone-100 transition-colors disabled:opacity-50">
                                                     {pursuingIds.has(opp.id) ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
@@ -1259,7 +1267,10 @@ export default function MyMatchesPage() {
                         </button>
                         <button
                             type="button"
-                            onClick={() => setExportOpen(true)}
+                            onClick={() => {
+                                setExportOpen(true);
+                                selectedIds.forEach(id => captureMatchEvent(id, "exported"));
+                            }}
                             className="bg-emerald-500 hover:bg-emerald-600 text-white rounded-full px-4 py-2 text-xs font-bold flex items-center gap-1.5 transition-colors"
                         >
                             <Download className="w-3.5 h-3.5" />
