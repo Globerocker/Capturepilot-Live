@@ -13,17 +13,24 @@
  *
  * This route:
  *   - Claims ONLY task_type IN ('extract_keywords', 'classify_naics')
- *   - batch_size=50 so the 30K backlog drains fast (each job is ~1-2s,
- *     description-only LLM call with no fetch)
+ *   - batch_size=150 so the 31K backlog drains fast (each job is ~1-2s,
+ *     description-only LLM call with no fetch). Phase-A bump (2026-06-10):
+ *     was 50, now 150 to clear the 17.9K extract_keywords + 13.2K
+ *     classify_naics queue in under a day.
+ *   - maxDuration=300 (Vercel Pro ceiling) so a single run can chew through
+ *     ~150-300 jobs depending on LLM latency.
  *   - Reuses the per-task handlers from run_worker_jobs/route.ts by
  *     duplicating the logic inline (self-contained handlers, no shared
  *     module yet — same pattern as run_worker_jobs_attachments).
  *
- * Scheduled every 5 min in vercel.json. Drain math:
- *   ~50 jobs/run × 12 runs/hour × 24h ≈ 14,400/day.
- *   30K backlog ÷ 14,400 ≈ ~2 days to drain.
+ * Scheduled every 5 min in vercel.json. Drain math (post-bump):
+ *   ~150 jobs/run × 12 runs/hour × 24h ≈ 43,200/day.
+ *   31K backlog ÷ 43,200 ≈ <1 day to drain.
  *   Once backlog clears, new fan-out enqueues 3-5 jobs per opp insert —
  *   easily handled at this cadence.
+ *
+ * Emergency drain: POST /api/admin/drain_keywords_now nukes a one-shot
+ * batch inline (admin-only) when the queue grows again unexpectedly.
  *
  * Notes:
  *   - Stale-running reap is handled by the shared consumer (run_worker_jobs)
@@ -44,7 +51,8 @@ import { withCronTelemetry } from "@/lib/cron-telemetry";
 type SbAny = SupabaseClient<any, any, any>;
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+// 300s = Vercel Pro plan ceiling. batch_size=150 × ~2s/job = ~300s worst case.
+export const maxDuration = 300;
 
 type Job = {
     id: string;
@@ -112,10 +120,11 @@ async function GET_handler(req: NextRequest): Promise<NextResponse> {
     if (denied) return denied;
 
     const url = new URL(req.url);
-    const totalBudget = Math.min(Math.max(Number(url.searchParams.get("budget") || 55_000), 5_000), 290_000);
+    const totalBudget = Math.min(Math.max(Number(url.searchParams.get("budget") || 290_000), 5_000), 290_000);
     // Big batch to drain the 30K backlog fast. Each job is ~1-2s (one LLM
-    // call, no fetch). batch_size=50 fits comfortably inside the 55s budget.
-    const batchSize = Math.min(Math.max(Number(url.searchParams.get("batch_size") || 50), 1), 100);
+    // call, no fetch). batch_size=150 fits inside the 300s maxDuration budget.
+    const batchSize = Math.min(Math.max(Number(url.searchParams.get("batch_size") || 150), 1), 300);
+    console.log("[keywords-drain] starting batch_size=" + batchSize);
 
     const sb = createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
