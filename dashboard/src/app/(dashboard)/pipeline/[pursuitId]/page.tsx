@@ -18,6 +18,8 @@ import {
     Loader2,
     Save,
     Target,
+    Trophy,
+    X as XIcon,
 } from "lucide-react";
 import { createSupabaseClient } from "@/lib/supabase/client";
 import {
@@ -27,6 +29,7 @@ import {
     parseStagesFromNotes,
 } from "@/lib/pipeline-stages";
 import { logPipelineActivity } from "@/lib/pipeline-activity";
+import { capturePursuitOutcome } from "@/lib/learning-capture";
 import ActivityTimeline, { type ActivityRow } from "@/components/pipeline/ActivityTimeline";
 
 const supabase = createSupabaseClient();
@@ -87,6 +90,16 @@ export default function DealDetailPage({ params }: { params: Promise<{ pursuitId
     const [savingNotes, setSavingNotes] = useState(false);
     const [savingStage, setSavingStage] = useState(false);
     const [savingPriority, setSavingPriority] = useState(false);
+
+    // Outcome capture (learning loop)
+    const [outcomeOpen, setOutcomeOpen] = useState(false);
+    const [outcomeChoice, setOutcomeChoice] = useState<"won" | "lost" | "no_bid" | "withdrawn">("won");
+    const [outcomeAmount, setOutcomeAmount] = useState("");
+    const [outcomeDate, setOutcomeDate] = useState("");
+    const [outcomeLessons, setOutcomeLessons] = useState("");
+    const [outcomeSaving, setOutcomeSaving] = useState(false);
+    const [outcomeSaved, setOutcomeSaved] = useState(false);
+    const [outcomeError, setOutcomeError] = useState<string | null>(null);
 
     const stages: PipelineStage[] = useMemo(
         () => parseStagesFromNotes(profileNotes),
@@ -265,6 +278,34 @@ export default function DealDetailPage({ params }: { params: Promise<{ pursuitId
         }
     };
 
+    const submitOutcome = async () => {
+        if (!pursuit || outcomeSaving) return;
+        setOutcomeSaving(true);
+        setOutcomeError(null);
+        try {
+            const amount = outcomeAmount.trim().length > 0 ? Number(outcomeAmount) : null;
+            const res = await capturePursuitOutcome({
+                pursuitId: pursuit.id,
+                outcome: outcomeChoice,
+                amountAwarded: amount !== null && Number.isFinite(amount) ? amount : null,
+                decisionDate: outcomeDate || null,
+                lessonsLearned: outcomeLessons.trim().length > 0 ? outcomeLessons.trim() : null,
+            });
+            if (!res.ok) {
+                const body = await res.json().catch(() => ({ error: "Save failed" }));
+                throw new Error(body.error || "Save failed");
+            }
+            setOutcomeSaved(true);
+            setTimeout(() => {
+                setOutcomeOpen(false);
+                setOutcomeSaved(false);
+            }, 1200);
+        } catch (e) {
+            setOutcomeError((e as Error).message);
+        }
+        setOutcomeSaving(false);
+    };
+
     if (loading) {
         return (
             <div className="flex justify-center items-center min-h-[400px]">
@@ -340,15 +381,29 @@ export default function DealDetailPage({ params }: { params: Promise<{ pursuitId
                             </p>
                         )}
                     </div>
-                    {opp && (
-                        <Link
-                            href={`/opportunities/${opp.id}`}
-                            className="inline-flex items-center bg-white border border-stone-200 text-stone-700 font-bold px-3 py-2 rounded-full hover:bg-stone-50 transition-all text-xs"
-                        >
-                            <Target className="w-3.5 h-3.5 mr-1.5" /> View Opportunity
-                            <ExternalLink className="w-3 h-3 ml-1.5 text-stone-400" />
-                        </Link>
-                    )}
+                    <div className="flex items-center gap-2 flex-wrap">
+                        {(pursuit.stage === "submitted" || pursuit.stage === "awarded" || pursuit.stage === "lost") && (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setOutcomeChoice(pursuit.stage === "awarded" ? "won" : pursuit.stage === "lost" ? "lost" : "won");
+                                    setOutcomeOpen(true);
+                                }}
+                                className="inline-flex items-center bg-emerald-600 text-white font-bold px-3 py-2 rounded-full hover:bg-emerald-700 transition-all text-xs"
+                            >
+                                <Trophy className="w-3.5 h-3.5 mr-1.5" /> Mark outcome
+                            </button>
+                        )}
+                        {opp && (
+                            <Link
+                                href={`/opportunities/${opp.id}`}
+                                className="inline-flex items-center bg-white border border-stone-200 text-stone-700 font-bold px-3 py-2 rounded-full hover:bg-stone-50 transition-all text-xs"
+                            >
+                                <Target className="w-3.5 h-3.5 mr-1.5" /> View Opportunity
+                                <ExternalLink className="w-3 h-3 ml-1.5 text-stone-400" />
+                            </Link>
+                        )}
+                    </div>
                 </div>
 
                 {/* Meta row */}
@@ -522,6 +577,128 @@ export default function DealDetailPage({ params }: { params: Promise<{ pursuitId
                     <ActivityTimeline activity={activity} resolveStageLabel={resolveStageLabel} />
                 </aside>
             </div>
+
+            {/* Mark-outcome modal (learning loop capture) */}
+            {outcomeOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => !outcomeSaving && setOutcomeOpen(false)}>
+                    <div
+                        className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-5 border border-stone-200"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-base font-bold flex items-center gap-2">
+                                <Trophy className="w-4 h-4 text-emerald-600" />
+                                Log the outcome
+                            </h3>
+                            <button
+                                type="button"
+                                onClick={() => !outcomeSaving && setOutcomeOpen(false)}
+                                className="p-1 rounded-lg text-stone-400 hover:text-stone-700 hover:bg-stone-100"
+                                aria-label="Close"
+                            >
+                                <XIcon className="w-4 h-4" />
+                            </button>
+                        </div>
+
+                        <p className="text-xs text-stone-500 mb-4">
+                            What happened with this pursuit? Your answer trains better matches.
+                        </p>
+
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-[11px] font-bold uppercase tracking-widest text-stone-400 mb-2">Result</label>
+                                <div className="grid grid-cols-4 gap-1.5">
+                                    {([
+                                        { key: "won", label: "Won" },
+                                        { key: "lost", label: "Lost" },
+                                        { key: "no_bid", label: "No bid" },
+                                        { key: "withdrawn", label: "Withdrew" },
+                                    ] as const).map(opt => (
+                                        <button
+                                            type="button"
+                                            key={opt.key}
+                                            onClick={() => setOutcomeChoice(opt.key)}
+                                            disabled={outcomeSaving}
+                                            className={clsx(
+                                                "text-xs font-bold px-2 py-2 rounded-lg border transition-all",
+                                                outcomeChoice === opt.key
+                                                    ? "bg-black text-white border-black"
+                                                    : "bg-white text-stone-600 border-stone-200 hover:bg-stone-50",
+                                            )}
+                                        >
+                                            {opt.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {outcomeChoice === "won" && (
+                                <div>
+                                    <label className="block text-[11px] font-bold uppercase tracking-widest text-stone-400 mb-1.5">Award amount (USD)</label>
+                                    <input
+                                        type="number"
+                                        inputMode="decimal"
+                                        value={outcomeAmount}
+                                        onChange={(e) => setOutcomeAmount(e.target.value)}
+                                        disabled={outcomeSaving}
+                                        placeholder="e.g. 250000"
+                                        className="w-full px-3 py-2 border border-stone-200 rounded-xl text-sm focus:ring-2 focus:ring-black focus:border-transparent outline-none"
+                                    />
+                                </div>
+                            )}
+
+                            <div>
+                                <label className="block text-[11px] font-bold uppercase tracking-widest text-stone-400 mb-1.5">Decision date</label>
+                                <input
+                                    type="date"
+                                    value={outcomeDate}
+                                    onChange={(e) => setOutcomeDate(e.target.value)}
+                                    disabled={outcomeSaving}
+                                    aria-label="Decision date"
+                                    title="Decision date"
+                                    className="w-full px-3 py-2 border border-stone-200 rounded-xl text-sm focus:ring-2 focus:ring-black focus:border-transparent outline-none"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-[11px] font-bold uppercase tracking-widest text-stone-400 mb-1.5">Lessons learned (optional)</label>
+                                <textarea
+                                    value={outcomeLessons}
+                                    onChange={(e) => setOutcomeLessons(e.target.value)}
+                                    disabled={outcomeSaving}
+                                    rows={3}
+                                    placeholder="What worked, what you'd change next time..."
+                                    className="w-full px-3 py-2 border border-stone-200 rounded-xl text-sm focus:ring-2 focus:ring-black focus:border-transparent outline-none resize-y"
+                                />
+                            </div>
+
+                            {outcomeError && (
+                                <p className="text-xs text-red-600">{outcomeError}</p>
+                            )}
+
+                            <div className="flex items-center justify-end gap-2 pt-1">
+                                <button
+                                    type="button"
+                                    onClick={() => setOutcomeOpen(false)}
+                                    disabled={outcomeSaving}
+                                    className="px-4 py-2 text-xs font-bold text-stone-600 hover:bg-stone-100 rounded-full disabled:opacity-50"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={submitOutcome}
+                                    disabled={outcomeSaving || outcomeSaved}
+                                    className="inline-flex items-center gap-1 bg-emerald-600 text-white px-4 py-2 rounded-full text-xs font-bold hover:bg-emerald-700 disabled:opacity-50"
+                                >
+                                    {outcomeSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : outcomeSaved ? <CheckCircle className="w-3 h-3" /> : <Save className="w-3 h-3" />}
+                                    {outcomeSaved ? "Saved" : "Save outcome"}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
