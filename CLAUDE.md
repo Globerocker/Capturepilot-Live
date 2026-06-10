@@ -28,10 +28,13 @@ git push captiorpilot main && git push live main && git push globerocker main
 - SAM API key via `X-Api-Key` header (NOT URL params — `?api_key=` is deprecated and can cause rejections)
 - Apollo: use `mixed_companies/search` (free tier), NOT `mixed_people/search`
 - Never commit `.env`, `.env.local`, `.mcp.json`
-- When creating migrations, pick the next free number under `supabase/migrations/` (current latest: **070**)
+- When creating migrations, pick the next free number under `supabase/migrations/` (current latest: **141**)
 - **Cron handlers must use `guardCron(req)` from `@/lib/cron-auth`** — fail-closed in production. See [CRON.md](CRON.md) for the complete cron + agent reference.
 - **Any AI-writing prompt for user-facing copy must prepend `HUMAN_VOICE_RULES` from `@/lib/llm/humanizer`** so output matches the CapturePilot voice. Full style guide in [HUMANIZER.md](HUMANIZER.md). Invoke `/humanizer` to review or rewrite copy.
 - **Admin handlers must call `assertAdmin()` from `@/lib/auth-admin`** at the top of every exported `GET`/`POST`/`PATCH`/`DELETE`. Returns `NextResponse` on reject; caller does `if (unauth) return unauth`. Re-run `node tools/30_smoke_admin.mjs --base <url>` after touching `/api/admin/**` to verify the gate is still there.
+- **Public POST routes must call `protectCrawl(req, { route, maxPerMin })` from `@/lib/protect-crawl`** before any work — IP-bucketed rate limiter that killed the `/api/brand` enrichment-billing abuse pattern (2026-06-10 audit #15-18).
+- **Storage reads from `client-docs` must use `signedDocUrl(sb, path, ttlSec)` from `@/lib/signed-doc-url`** — the bucket is private since migration 135. Never call `getPublicUrl()` on this bucket; it returns `null` and silently breaks the UI.
+- **`POST /api/matches/refresh` is async** — it enqueues a `rescore_user_matches` worker job claimed by `/api/cron/run_worker_jobs_rescore`. The scoring runs inside `rescoreUserMatches()` from `@/lib/rescore-user-matches`. A Postgres AFTER UPDATE trigger on `user_profiles` (migration 137) auto-enqueues the same job whenever a scoring column changes — UI no longer needs to call refresh after every settings save.
 
 ## Architecture
 - `/dashboard/src/app/(public)/` — Public pages (login, signup, check, admin)
@@ -41,8 +44,9 @@ git push captiorpilot main && git push live main && git push globerocker main
 - `/dashboard/src/app/api/` — API routes (cron, admin, analyze, email, sam, sbir, partners, brand, ai)
 - `/dashboard/src/lib/` — Shared libs (crawler, scoring, email, supabase, naics-codes, psc-codes)
 - `/dashboard/src/components/` — Shared UI components
-- `/tools/` — Python + Node enrichment scripts (numbered 1-21)
-- `/dashboard/supabase/migrations/` — DB migrations (001-032)
+- `/tools/` — Python + Node enrichment scripts (numbered 1-21) + smoke/bulk harnesses (30+)
+- `/dashboard/supabase/migrations/` — DB migrations (001-141)
+- `/docs/platform-audit-2026-06-10/` — 137-finding audit deliverables (8 reports + raw JSON)
 
 ## User Types
 - `self_service` — SaaS users (full dashboard, self-onboarding)
@@ -52,16 +56,20 @@ git push captiorpilot main && git push live main && git push globerocker main
 ## Cron Schedule
 **Full reference: [CRON.md](CRON.md)** — every scheduled task with what it does, what it writes, where the handler lives.
 
-40 scheduled crons (Pro limit 40, 0 slots free — at ceiling). High-level groups:
+38 scheduled Vercel crons (Pro limit 40, 2 slots free after 2026-06-10 VPS migration). High-level groups:
 - **Ingest** (8) — SAM.gov, Grants.gov, RSS, HigherGov, monthly awards
 - **Scoring** (3) — score_matches, naics_stats_backfill, past_performance_stats
+- **Worker queue lanes** (4) — `run_worker_jobs` (general HTTP), `run_worker_jobs_keywords` (extract_keywords drain, batch=150, maxDuration=300), `run_worker_jobs_attachments` (analyze_attachments, isolated from struct-reqs to kill priority inversion), `run_worker_jobs_rescore` (claims `rescore_user_matches` jobs — see "Async rescore" below)
 - **Enrichment orchestrator** (1 cron drives 8 sub-tasks every 5-10 min)
 - **Backlinks orchestrator** (1 cron drives 5 sub-agents daily by day-of-week)
 - **Apollo/USAspending enrichment** (3)
 - **Email + notifications** (5) — notify_matches, trial_reminders, scheduled_emails, market_watch_digest, outreach_send
 - **Prospect pipeline** (2) — discover_new_prospects, enrich_prospects
-- **Intelligence + tracking** (8) — FPDS, subawards, GSA schedule, eLibrary, CALC, DoL wage, SEC filings, forecast change detection
+- **Data quality** (1) — `backfill_opportunity_score` (computes `opportunities.opportunity_score` via `computeOpportunityScore()` — column was 78k/78k NULL pre-audit)
 - **Other** (5) — db_cleanup, competitor_monitor, recompete_scan, sync_govtribe_activity, **publish_next_blog** (auto-publishes from `website/blog-topics.json`)
+
+**VPS systemd timers** (6 low-frequency crons migrated off Vercel on 2026-06-10 to free ceiling slots, see `tools/vps-cron/` + `reference_vps_cron_pattern.md`):
+- `ingest_fpds_awards`, `ingest_subawards`, `ingest_gsa_schedule`, `ingest_gsa_elibrary`, `ingest_calc`, `ingest_dol_wage_determinations`, `ingest_sec_filings_primes`, `forecast_change_detection` (daily / weekly cadences). Each timer hits the matching Vercel route over HTTPS with the `CRON_SECRET` bearer — same `guardCron()` gate, just driven from outside Vercel.
 
 ## Database (Supabase)
 - `opportunities` — 37K+ federal opportunities with lifecycle status (ACTIVE/EXPIRING_SOON/MARKET_RESEARCH/DISCOVERED/EXPIRED/AWARDED)
@@ -76,8 +84,88 @@ git push captiorpilot main && git push live main && git push globerocker main
 - `contractors` — 80K SAM.gov registered entities
 - `contacts` — 91K SAM.gov opportunity contacts
 - `naics_codes` / `psc_codes` — validation whitelists for ingestion
-- `worker_jobs` — job queue (migration 086); fan-out trigger on opportunities insert
+- `worker_jobs` — job queue (migration 086); fan-out trigger on opportunities insert. `dedup_key` extended in migration 137 to include `payload->>'user_profile_id'` so per-user rescore jobs no longer collide. Migration 119 added a 5-min zombie reaper (`worker_jobs_reaper`) that finalizes any `running` job past its lease.
 - `portal_cookies` — CF clearance / session cookies per portal host, used by Playwright worker
+- `pursuit_outcomes` — final disposition of a `user_pursuits` row (`won`/`lost`/`no_bid`/`withdrawn`, amount_awarded, lessons_learned). Captured by `POST /api/learning/pursuit-outcome` (migration 141).
+- `proposal_edit_events` — diff between AI-generated proposal section and what the user shipped. Captured by `POST /api/learning/proposal-edit` (migration 141). Future training data for the proposal model.
+- `match_engagement_events` — every click/dismiss/save/pursue/export action on a match card, posted from the UI to `POST /api/learning/match-event` (migration 141). Feeds the learning loop with implicit relevance signals.
+- `outreach_optouts` — suppression list (email → reason → source). Populated by `/api/webhooks/resend` on bounce/complaint and by the HubSpot inbound webhook on unsubscribe (migration 134 added the `source` column). The shared `send()` helper in `@/lib/email.ts` checks this table before every send.
+- `client_documents.storage_path` — added in migration 135 so app code persists the storage key alongside the (now-stale) public URL. Reads go through `signedDocUrl()`.
+- `opportunities.opportunity_score` — deterministic 0-100 intrinsic value score independent of any user profile; populated by `/api/cron/backfill_opportunity_score` via `computeOpportunityScore()`. Pre-audit this column existed but no cron wrote to it (78k/78k NULL).
+
+## Recent major changes (2026-06-10 — platform audit + weeks 1-4 roadmap)
+
+End-to-end audit and the first four weeks of the post-audit roadmap shipped in a single session. 137 verified findings landed in [`docs/platform-audit-2026-06-10/`](docs/platform-audit-2026-06-10/) (8 synthesis docs + `99-raw-findings.json`). Every critical + high severity issue from `02-critical-issues.md` was closed; weeks 1-4 of `03-optimization-roadmap.md` shipped on top.
+
+**Security hardening** (audit critical + high block):
+
+- Migration 132 + 136 — `REVOKE EXECUTE … FROM anon, authenticated, PUBLIC` on 6 `SECURITY DEFINER` RPCs (`trigger_cron_route`, `purge_old_activity_log`, `enqueue_marketing_lead_apollo`, `enqueue_marketing_leads_apollo_backfill`, `compute_naics_market_stats`, `rls_auto_enable`). Pre-fix any anonymous client could fire any cron handler, wipe `client_activity_log`, or burn Apollo credits.
+- Migration 138 — `ALTER FUNCTION … SET search_path = pg_catalog, public` on 16 `SECURITY DEFINER` + trigger functions, locking out search-path hijack attacks.
+- Migration 139 — RLS read policies on 33 audit-flagged tables (audit logs, cron telemetry, queue tables) so the anon REST surface stops leaking.
+- Migration 140 — `company_analyses` public-insert path now rate-limited + validated; previously any anonymous POST could bloat the table.
+- `/api/admin/impersonate` token is now HMAC-signed via `@/lib/impersonate.ts` (`sign(payload)` returns first 32 hex chars of `sha256(secret|payload)`); every read re-verifies the signature. Cookie-tampering can no longer escalate to a target profile.
+- `/api/brand` route — SSRF host allowlist + IDOR profile-id check + `protectCrawl()` rate limit. The pre-fix shape let an attacker enrich arbitrary domains against your OpenAI key.
+- `/api/engine` + `/api/enrich` deleted — both were unauth ML-call shells that double-billed OpenAI usage with no user mapping.
+- 6 AI routes (`/api/ai/write-proposal`, `/api/ai/capability-statement`, `/api/ai/improve-section`, `/api/ai/match-summary`, `/api/ai/email-draft`, `/api/ai/draft-rfp-response`) now require `requireUser()` from `@/lib/auth-server` — previously anonymous, abuse-prone.
+- `/api/leads`, `/api/lead-magnet/deliver`, `/api/beta-invites` — auth gates restored + dedup-by-email so the same address can't trigger N sends. `/api/leads` also calls `protectCrawl()`.
+- 8 cron routes that still relied on the old inline `CRON_SECRET` check migrated to `guardCron(req)` (`/api/cron/strategic_scoring`, `/api/cron/health_monitor`, `/api/cron/backfill_naics`, `/api/cron/recalc_contractor_rankings`, others). Fail-closed in production.
+- HubSpot webhook (`/api/hubspot/webhook`) now fail-closed: missing signing secret returns 500 instead of accepting the payload, contact lookups require email, unauth signature mismatch returns 401.
+
+**Async rescore + auto-rescore trigger** (R2 backend-async-rematch):
+
+- `/api/matches/refresh` was synchronous — loaded 78k opportunities + scored + delete/upsert in one Vercel function. Hit 300s ceiling for any user with a wide profile; UI hung.
+- Refactor: route enqueues a `rescore_user_matches` worker job with the profile id, returns immediately. New `/api/cron/run_worker_jobs_rescore` lane claims it and runs `rescoreUserMatches()` from `@/lib/rescore-user-matches.ts`. The `match.hot` webhook now fires AFTER the rescore actually finishes (was misleading before).
+- Migration 137 — AFTER UPDATE trigger on `user_profiles` for any change to scoring columns (naics_codes, target_states, set_aside, capability_keywords, …) enqueues the same `rescore_user_matches` job. The existing dedup-key index coalesces rapid edits into one job. Settings autosave just works.
+- UI now polls `/api/matches/refresh/status` and shows "Refreshing your matches…" with a spinner instead of hanging on a 5-min request.
+
+**Queue platform improvements**:
+
+- Migration 119 — `worker_jobs_reaper` scheduled function finalizes any `running` job past its lease (5-min default). Killed the burn-loop where a crashed handler left `dedup_key` blocked forever.
+- Migration 133 — bulk DELETE for zombie `worker_jobs` rows older than 24h with status `running` — one-time cleanup after the reaper landed.
+- `run_worker_jobs_keywords` — dedicated drain lane for `extract_keywords` with `batch_size=150` and `maxDuration=300` so the long tail of the 30k+ pending backlog drains in days, not weeks. New admin endpoint `/api/admin/drain_keywords_now` triggers it on demand.
+- `run_worker_jobs_attachments` — isolated lane for `analyze_attachments` so OCR + LLM extraction can't starve `extract_structured_reqs` (priority inversion killed both at once before).
+
+**Email — Resend webhook + suppression**:
+
+- `/api/webhooks/resend` verified live (signature + replay protection). Bounces, complaints, and spam reports insert into `outreach_optouts` (migration 134 added the `source` column to record `resend:hard_bounce`, `resend:complaint`, `hubspot:unsubscribed`, etc.).
+- HubSpot inbound webhook mirrors `hs_email_hard_bounced` / `hs_unsubscribed_from_all_email` into the same `outreach_optouts` table — single source of truth.
+- `@/lib/email.ts` `send()` helper now checks `outreach_optouts` before every send. Log line `[email] {to} opted out ({reason}), skipping {key}` makes drops auditable. Suppression-list failure is non-blocking (logged but allows the send) so a transient Supabase blip doesn't black-hole transactional traffic.
+- `sendRoleChangedEmail()` added so `/api/admin/clients` PATCH fires a notice when an admin flips an account_type.
+
+**Storage hardening**:
+
+- Migration 135 — `client-docs` bucket flipped to `public = false` + storage RLS keyed off `(storage.foldername(name))[2]` resolving to the caller's `user_profiles.id`. Three pages were calling `getPublicUrl()` and shipping forever-valid links.
+- `client_documents.storage_path` column added so app code persists the storage key. New helper `signedDocUrl(sb, path, ttlSec)` from `@/lib/signed-doc-url.ts` mints short-lived URLs (default 300s). Every doc-render path migrated.
+
+**Data quality**:
+
+- `@/lib/opportunity-score.ts` + `/api/cron/backfill_opportunity_score` — populates `opportunities.opportunity_score` (0-100). Sources Sought / RFI = highest, set-asides boost, past-due deadline = heavy penalty.
+- `/api/admin/env-health` extended with data-quality KPIs (`null_ai_win_strategy_pct`, `null_opportunity_score_pct`, queue depth, stale-cron count). `/admin/health` surfaces these as tiles.
+
+**Onboarding/UX polish** (R2 settings-ux-tabs + matches-ui-polling):
+
+- `/settings` Advanced Settings defaults open and is split into 4 internal tabs (Capacity / Industry / Codes / Targeting) instead of one 1200-line scroll.
+- `/admin/users` row-action menu — role change (fires `sendRoleChangedEmail`), suspend, reset password, delete. Was previously read-only.
+- `/matches` filters now run inside the Supabase query (was client-side filter on 500-row cap → divergent counts).
+
+**Performance pass** (R2 perf streams):
+
+- `/signup` + `/login` slimmed for sub-2.5s LCP: dynamic imports for non-critical UI, removed framer-motion from auth shell, server-rendered above-the-fold copy.
+- `/terms` + `/privacy` set `export const dynamic = "force-static"` + minimal layout — they were re-rendering through the full dashboard chrome on every hit.
+- 12 read-only public routes switched to `export const runtime = "edge"` (`/api/public/stats`, `/api/sbir/search`, `/api/sam/entity`, others).
+- `/dashboard` parallelizes its 7 Supabase queries through `Promise.all` + Suspense boundaries; before it was 7 sequential awaits at ~1.8s p95 → now ~640ms p95.
+
+**Learning loop foundation** (R2 W3-4.2):
+
+- Migration 141 + `@/lib/learning-capture.ts` — three RLS-scoped tables (`pursuit_outcomes`, `proposal_edit_events`, `match_engagement_events`) plus capture endpoints `/api/learning/pursuit-outcome`, `/api/learning/proposal-edit`, `/api/learning/match-event`. Foundation only — training pipeline lands later.
+
+**Lead-magnet → trial nurture** (R2 W3-4.3):
+
+- 7-day drip + 3-feature trial prompt modal wired into the lead-magnet path. Drip respects `outreach_optouts`. Conversion event posts to `match_engagement_events` so we can measure pull-through.
+
+**VPS cron migration** (R2 W3-4.1):
+
+- 6 low-frequency Vercel crons moved to systemd timers on the Hostinger VPS (FPDS / subawards / GSA schedule / eLibrary / CALC / DoL wage / SEC filings / forecast change detection). Each timer hits the matching Vercel route over HTTPS with `Authorization: Bearer CRON_SECRET` so the same `guardCron()` gate enforces auth. Pattern documented in `reference_vps_cron_pattern.md`. Frees Vercel cron slots for higher-frequency jobs without giving up the route handler logic.
 
 ## Recent major changes (2026-05-26 — worker_jobs queue platform)
 
@@ -286,6 +374,8 @@ Four-phase rework of `/admin/*` after a security + dead-code audit. Detailed aud
 | `exceljs` | Bulk XLSX export of selected matches | `/api/matches/export/route.ts` |
 | `lucide-react` | **Only allowed icon library** | everywhere |
 | `clsx` + `tailwind-merge` | Conditional class composition | everywhere |
+| `@vercel/speed-insights` + `@vercel/analytics` | RUM + page-view telemetry wired into root layout | `dashboard/src/app/layout.tsx` |
+| Microsoft Clarity | Session replay + heatmaps (added 2026-06 for lead-magnet funnel debugging) | root layout |
 
 ### Offline / Script-Only Tools (not in Vercel bundle)
 | Tool | Purpose | Run via |
@@ -298,7 +388,7 @@ Four-phase rework of `/admin/*` after a security + dead-code audit. Detailed aud
 - `GET /api/sam/attachments?noticeId=...` — list attachments (fixes deprecated api_key URL param)
 - `GET /api/sam/attachment-download?url=...&name=...` — proxy download (SSRF-safe, sam.gov host allowlist, strips api_key, streams with proper Content-Disposition)
 - `GET /api/sam/entity`, `POST /api/sam/description`
-- `POST /api/matches/refresh` — re-score matches for current user
+- `POST /api/matches/refresh` — enqueues `rescore_user_matches` worker job and returns immediately. Poll `GET /api/matches/refresh/status` for completion. Pre-2026-06-10 this ran inline and hung past 300s.
 
 ### AI
 - `POST /api/ai/write-proposal` — generates proposal sections; **requires capability_statement** (412 `CAPABILITY_STATEMENT_REQUIRED`)
@@ -320,9 +410,21 @@ Four-phase rework of `/admin/*` after a security + dead-code audit. Detailed aud
 - `POST /api/stripe/webhook`
 
 ### Admin
-- `POST /api/admin/clients` — create consulting client (with temp password)
+- `POST /api/admin/clients` — create consulting client (with temp password); PATCH for role change fires `sendRoleChangedEmail`
 - `POST /api/admin/enrich-profile` — run full Quick Checker pipeline for a user profile
 - `POST /api/admin/crawl-opportunities`
+- `POST /api/admin/impersonate` — sets HMAC-signed cookie (see `@/lib/impersonate.ts`); every read re-verifies signature
+- `POST /api/admin/drain_keywords_now` — manually fire the keywords drain lane (long backlog tool)
+- `POST /api/admin/users` — row-action endpoints: role change, suspend, reset password, delete (admin shell row menu)
+
+### Learning loop (2026-06-10)
+- `POST /api/learning/pursuit-outcome` — capture final disposition of a `user_pursuits` row
+- `POST /api/learning/proposal-edit` — capture diff between AI section and shipped section
+- `POST /api/learning/match-event` — fire from match cards for click/dismiss/save/pursue/export
+
+### Webhooks
+- `POST /api/webhooks/resend` — signature-verified Resend events → `outreach_optouts` (hard_bounce, complaint, spam)
+- `POST /api/hubspot/webhook` — fail-closed signature gate; mirrors HubSpot suppression into `outreach_optouts`
 
 ## /tools Scripts
 
@@ -361,11 +463,19 @@ Node scripts:
 ### Known bugs (unresolved)
 
 - **PSC/email display bug** (reported 2026-04-14 Americurial test): user saw email address rendered under "Product and Service Code" field during onboarding/settings. Code inspection found no mismapping — all UI bindings to `opp.psc_code` are correct, ingest validates against `psc_codes` whitelist. **Cannot reproduce without screenshot or live repro.**
-- **ESLint v9 migration**: `eslint` expects `eslint.config.js` but repo has legacy `.eslintrc`. `npm run lint` fails — non-blocking for builds.
+- **ESLint v9 migration**: still open as of 2026-06-10. `dashboard/` has no `eslint.config.mjs` or `.eslintrc` — `npm run lint` fails fast. Non-blocking for builds (Next.js skips lint during prod build). Round-2 roadmap to add a minimal flat-config + re-enable in CI.
 
 ### Open backlog (deferred across sessions)
 
-Items already shipped — see "Recent major changes" sections (2026-04-16, 2026-04-17, 2026-05-22) — are not repeated here. Anything below is still open.
+Items already shipped — see "Recent major changes" sections (2026-04-16, 2026-04-17, 2026-05-22, 2026-05-26, 2026-06-10) — are not repeated here. Anything below is still open.
+
+#### 2026-06-10 audit deferrals
+
+- **Learning loop training pipeline** — capture endpoints + tables exist (migration 141) but the actual training job that consumes `pursuit_outcomes` + `proposal_edit_events` + `match_engagement_events` is not yet wired. Lands in a future round.
+- **Past-performance graph + auto-pursuit recommendations + Enterprise tier** — market-leadership plays from `08-market-leadership-opportunities.md`, queued for Round 2.
+- **Sentry coverage** — `@sentry/nextjs` is installed but DSN coverage on cron + admin routes is uneven. Round-2 to instrument every route + add a Sentry breadcrumb on every `guardCron` reject.
+- **`tools/30_smoke_admin.mjs --admin-cookie` happy-path mode** — still open from 2026-05-22 Phase-5.
+- **CLAUDE.md doc rotation** — this file is now ~470 lines; consider splitting the change-log sections into a dated `CHANGELOG.md` so the top stays terse.
 
 #### Opportunity list & search
 
