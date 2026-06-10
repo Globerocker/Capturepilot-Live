@@ -124,10 +124,6 @@
             "schedule": "15 3 * * *"
         },
         {
-            "path": "/api/cron/extract_keywords_batch",
-            "schedule": "30 * * * *"
-        },
-        {
             "path": "/api/cron/recalc_contractor_rankings",
             "schedule": "30 4 * * *"
         },
@@ -162,6 +158,10 @@
         {
             "path": "/api/cron/run_worker_jobs_attachments",
             "schedule": "*/3 * * * *"
+        },
+        {
+            "path": "/api/cron/run_worker_jobs_keywords",
+            "schedule": "*/5 * * * *"
         }
     ]
 }
