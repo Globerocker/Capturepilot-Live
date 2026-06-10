@@ -18,6 +18,17 @@ import SavedViews from "@/components/SavedViews";
 import { SavedSearchesMenu } from "@/components/matches/SavedSearchesMenu";
 import SourceLevelSwitcher, { SOURCE_LEVEL_VALUES, type SourceLevel } from "@/components/SourceLevelSwitcher";
 import { SET_ASIDE_OPTIONS, setAsideBadgeTone } from "@/lib/set-aside-filters";
+import { showToast } from "@/components/GlobalToast";
+
+const RESCORE_POLL_INTERVAL_MS = 3000;
+const RESCORE_POLL_MAX_ATTEMPTS = 30;
+
+type RescoreStatus = "pending" | "running" | "done" | "failed";
+
+interface RescoreJob {
+    id: string;
+    status: RescoreStatus;
+}
 
 const supabase = createSupabaseClient();
 
@@ -81,6 +92,9 @@ export default function MyMatchesPage() {
     const [pursuingIds, setPursuingIds] = useState<Set<string>>(new Set());
     const [pursuedIds, setPursuedIds] = useState<Set<string>>(new Set());
     const [generatingMatches, setGeneratingMatches] = useState(false);
+    const [rescoreJob, setRescoreJob] = useState<RescoreJob | null>(null);
+    const rescorePollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const rescorePollAttemptsRef = useRef(0);
 
     // View mode + columns
     const [viewMode, setViewMode] = useState<ViewMode>("card");
@@ -334,14 +348,135 @@ export default function MyMatchesPage() {
         }
     };
 
+    const stopRescorePolling = useCallback(() => {
+        if (rescorePollTimerRef.current) {
+            clearTimeout(rescorePollTimerRef.current);
+            rescorePollTimerRef.current = null;
+        }
+        rescorePollAttemptsRef.current = 0;
+    }, []);
+
+    const pollRescoreStatus = useCallback(async (jobId: string) => {
+        rescorePollAttemptsRef.current += 1;
+        try {
+            const res = await fetch(`/api/matches/refresh/status/${jobId}`);
+            if (!res.ok) {
+                throw new Error(`Status check failed (${res.status})`);
+            }
+            const body = await res.json() as {
+                status?: RescoreStatus;
+                error?: string;
+                result?: { hot?: number; warm?: number; cold?: number; total_scored?: number };
+            };
+            const status = body.status;
+
+            if (status === "done") {
+                stopRescorePolling();
+                setRescoreJob(null);
+                setGeneratingMatches(false);
+                const r = body.result || {};
+                const hot = r.hot ?? 0;
+                const warm = r.warm ?? 0;
+                const cold = r.cold ?? 0;
+                showToast(`${hot} HOT, ${warm} WARM, ${cold} COLD matches found`, "success");
+                setPage(1);
+                await fetchMatches();
+                return;
+            }
+
+            if (status === "failed") {
+                stopRescorePolling();
+                setRescoreJob(null);
+                setGeneratingMatches(false);
+                showToast(body.error || "Rescore failed. Please try again.", "error");
+                return;
+            }
+
+            // status === "pending" | "running" — keep polling unless we've hit the cap
+            if (rescorePollAttemptsRef.current >= RESCORE_POLL_MAX_ATTEMPTS) {
+                stopRescorePolling();
+                setRescoreJob(null);
+                setGeneratingMatches(false);
+                showToast(
+                    "Rescore is still running. Refresh the page in a minute to see updates.",
+                    "info"
+                );
+                return;
+            }
+
+            setRescoreJob({ id: jobId, status: status || "running" });
+            rescorePollTimerRef.current = setTimeout(
+                () => { pollRescoreStatus(jobId); },
+                RESCORE_POLL_INTERVAL_MS
+            );
+        } catch (err) {
+            stopRescorePolling();
+            setRescoreJob(null);
+            setGeneratingMatches(false);
+            const msg = err instanceof Error ? err.message : "Could not check rescore status.";
+            showToast(msg, "error");
+        }
+    }, [fetchMatches, stopRescorePolling]);
+
     const handleGenerateMatches = async () => {
+        if (rescoreJob || generatingMatches) return;
         setGeneratingMatches(true);
         try {
-            await fetch("/api/matches/refresh", { method: "POST" });
-            await fetchMatches();
-        } catch { /* ignore */ }
-        setGeneratingMatches(false);
+            const res = await fetch("/api/matches/refresh", { method: "POST" });
+            if (!res.ok) {
+                const body = await res.json().catch(() => ({} as { error?: string }));
+                throw new Error(body.error || `Could not queue rescore (${res.status})`);
+            }
+            const body = await res.json() as { job_id?: string; queued?: boolean; error?: string };
+            if (!body.job_id) {
+                throw new Error(body.error || "Rescore did not return a job id.");
+            }
+            setRescoreJob({ id: body.job_id, status: "pending" });
+            rescorePollAttemptsRef.current = 0;
+            rescorePollTimerRef.current = setTimeout(
+                () => { pollRescoreStatus(body.job_id as string); },
+                RESCORE_POLL_INTERVAL_MS
+            );
+        } catch (err) {
+            setGeneratingMatches(false);
+            setRescoreJob(null);
+            const msg = err instanceof Error ? err.message : "Could not start rescore.";
+            showToast(msg, "error");
+        }
     };
+
+    // Stop polling on unmount
+    useEffect(() => {
+        return () => { stopRescorePolling(); };
+    }, [stopRescorePolling]);
+
+    // Resume polling if a rescore job is already queued/running for this profile
+    // (e.g. another tab triggered it). Fail-soft if the backend doesn't yet
+    // expose a list-mode endpoint — the button just stays ready.
+    useEffect(() => {
+        if (!profileId || rescoreJob) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const res = await fetch(
+                    `/api/matches/refresh/status/active?user_profile_id=${encodeURIComponent(profileId)}`
+                );
+                if (!res.ok || cancelled) return;
+                const body = await res.json() as { job_id?: string; status?: RescoreStatus };
+                if (!body.job_id || cancelled) return;
+                if (body.status === "pending" || body.status === "running") {
+                    setRescoreJob({ id: body.job_id, status: body.status });
+                    setGeneratingMatches(true);
+                    rescorePollAttemptsRef.current = 0;
+                    rescorePollTimerRef.current = setTimeout(
+                        () => { pollRescoreStatus(body.job_id as string); },
+                        RESCORE_POLL_INTERVAL_MS
+                    );
+                }
+            } catch { /* fail-soft: button just shows ready */ }
+        })();
+        return () => { cancelled = true; };
+    }, [profileId, rescoreJob, pollRescoreStatus]);
 
     // Selection handlers
     const toggleSelect = (id: string) => {
@@ -467,20 +602,35 @@ export default function MyMatchesPage() {
                         Opportunities scored against your profile. Browse every opportunity in <Link href="/opportunities" className="underline font-bold hover:text-black">Opportunities</Link>.
                         <InfoTooltip text="Scores combine NAICS match, keywords, certifications, geography, past performance, contract value fit, and more. HOT = 70%+ alignment. WARM = 50-69%. COLD = 30-49%." />
                     </p>
-                    <button
-                        type="button"
-                        onClick={handleGenerateMatches}
-                        disabled={generatingMatches}
-                        className="bg-black text-white px-4 py-2 rounded-full text-xs font-bold inline-flex items-center disabled:opacity-60 flex-shrink-0 ml-4"
-                    >
-                        {generatingMatches ? (
-                            <><Loader2 className="w-3 h-3 mr-1.5 animate-spin" /> Scoring...</>
-                        ) : (
-                            <><Sparkles className="w-3 h-3 mr-1.5" /> Refresh Matches</>
-                        )}
-                    </button>
+                    <div className="flex flex-col items-end ml-4">
+                        <button
+                            type="button"
+                            onClick={handleGenerateMatches}
+                            disabled={generatingMatches || rescoreJob !== null}
+                            className="bg-black text-white px-4 py-2 rounded-full text-xs font-bold inline-flex items-center disabled:opacity-60 flex-shrink-0"
+                        >
+                            {generatingMatches || rescoreJob ? (
+                                <><Loader2 className="w-3 h-3 mr-1.5 animate-spin" /> Scoring...</>
+                            ) : (
+                                <><Sparkles className="w-3 h-3 mr-1.5" /> Refresh Matches</>
+                            )}
+                        </button>
+                        <p className="text-[10px] text-stone-400 mt-1">
+                            Updates automatically when you change your profile
+                        </p>
+                    </div>
                 </div>
             </header>
+
+            {/* Rescore banner */}
+            {rescoreJob && (
+                <div className="mb-4 flex items-center gap-3 bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl px-4 py-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                    <Loader2 className="w-4 h-4 animate-spin flex-shrink-0" />
+                    <p className="text-sm font-medium flex-1">
+                        Rescoring matches… (this takes 30-60s)
+                    </p>
+                </div>
+            )}
 
             {/* AI Filter Bar */}
             <AIFilterBar onApply={applyAIFilters} activePrompt={aiPrompt} onClear={clearAIFilter} />
@@ -882,10 +1032,10 @@ export default function MyMatchesPage() {
                                     <button
                                         type="button"
                                         onClick={handleGenerateMatches}
-                                        disabled={generatingMatches}
+                                        disabled={generatingMatches || rescoreJob !== null}
                                         className="bg-black text-white px-6 py-2.5 rounded-full text-sm font-bold inline-flex items-center disabled:opacity-60"
                                     >
-                                        {generatingMatches ? (
+                                        {generatingMatches || rescoreJob ? (
                                             <>
                                                 <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" />
                                                 Calculating matches...
