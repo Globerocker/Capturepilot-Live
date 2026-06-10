@@ -100,6 +100,12 @@ const TASKS = {
   // routed here. Drains 5000 NULLs per fire; twice-daily cadence catches
   // both the overnight SAM ingest and the midday SLED waves.
   backfill_opportunity_score:      "backfill_opportunity_score",
+  // 2026-06-10 — async rescore lane. /api/matches/refresh used to score 78k
+  // opps inline and time out the Vercel function. Now it enqueues a
+  // rescore_user_matches worker job which this drain claims (batch_size=3,
+  // ~30s/job) every orchestrator tick. vercel.json is at the 40/40 Pro
+  // ceiling so we ferry it here rather than adding a 41st entry.
+  run_worker_jobs_rescore:         "run_worker_jobs_rescore",
 } as const;
 
 type TaskName = keyof typeof TASKS;
@@ -217,6 +223,12 @@ function tasksDueAt(d: Date): TaskName[] {
   // into incremental maintenance behind new ingest.
   if (m === 40 && (h === 2 || h === 14)) due.push("backfill_opportunity_score");
 
+  // Rescore drain — fires every orchestrator tick. Each invocation claims up
+  // to 3 rescore_user_matches jobs (~30s each) so a manual "Refresh Matches"
+  // click is picked up within ~3 minutes. Idempotent and rate-bounded by the
+  // batch_size + 150s budget inside the route.
+  due.push("run_worker_jobs_rescore");
+
   return due;
 }
 
@@ -263,6 +275,7 @@ async function GET_handler(req: NextRequest): Promise<NextResponse> {
   const inProcessHandlers: Partial<Record<TaskName, () => Promise<Handler>>> = {
     run_worker_jobs: async () => (await import("../run_worker_jobs/route")).GET as Handler,
     enqueue_backfill: async () => (await import("../enqueue_backfill/route")).GET as Handler,
+    run_worker_jobs_rescore: async () => (await import("../run_worker_jobs_rescore/route")).GET as Handler,
   };
 
   function buildChildRequest(task: TaskName): NextRequest {
