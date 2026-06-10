@@ -226,6 +226,7 @@ function disclaimerBox(text) {
   return new Table({
     rows: [new TableRow({ children: [cellEl], cantSplit: true })],
     width: { size: CONTENT_W, type: WidthType.DXA },
+    columnWidths: [CONTENT_W],
     borders: thinBorders(),
   });
 }
@@ -320,6 +321,7 @@ const coverChildren = [
       }),
     ],
     width: { size: CONTENT_W, type: WidthType.DXA },
+    columnWidths: [CONTENT_W],
   }),
   spacer(240),
 
@@ -403,6 +405,7 @@ function buildClauseTable() {
   return new Table({
     rows,
     width: { size: CONTENT_W, type: WidthType.DXA },
+    columnWidths: [2200, 3380, 3780],
     borders: thinBorders(),
   });
 }
@@ -446,6 +449,7 @@ function fillBox(promptText, height = 1) {
   return new Table({
     rows: [new TableRow({ children: [cellEl], cantSplit: true })],
     width: { size: CONTENT_W, type: WidthType.DXA },
+    columnWidths: [CONTENT_W],
   });
 }
 
@@ -482,6 +486,7 @@ const agreementChildren = [
       }),
     ],
     width: { size: CONTENT_W, type: WidthType.DXA },
+    columnWidths: [4680, 4680],
     borders: thinBorders(),
   }),
   spacer(200),
@@ -523,6 +528,7 @@ const agreementChildren = [
         }),
       ],
       width: { size: CONTENT_W, type: WidthType.DXA },
+      columnWidths: [2400, 6960],
       borders: thinBorders(),
     }),
   ]),
@@ -560,6 +566,7 @@ const agreementChildren = [
         }),
       ],
       width: { size: CONTENT_W, type: WidthType.DXA },
+      columnWidths: [4680, 4680],
       borders: thinBorders(),
     }),
   ]),
@@ -652,6 +659,7 @@ const agreementChildren = [
         }),
       ],
       width: { size: CONTENT_W, type: WidthType.DXA },
+      columnWidths: [2200, 3580, 3580],
       borders: thinBorders(),
     }),
   ]),
@@ -699,6 +707,7 @@ function signatureTable() {
       }),
     ],
     width: { size: CONTENT_W, type: WidthType.DXA },
+    columnWidths: [4680, 4680],
     borders: thinBorders(),
   });
 }

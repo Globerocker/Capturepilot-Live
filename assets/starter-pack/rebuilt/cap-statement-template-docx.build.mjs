@@ -34,7 +34,7 @@ import { dirname, join } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const OUTPUT = join(__dirname, 'FLK_02_Capability_Statement_Template.docx');
-const DEPLOY = '/Users/andreschuler/Caturepilot 2.0/dashboard/public/starter-pack/FLK_02_Capability_Statement_Template.docx';
+const DEPLOY = '/Users/andreschuler/Caturepilot 2.0/dashboard/public/starter-pack/02_Capability_Statement_Kit/FLK_02_Capability_Statement_Template.docx';
 
 // --- Brand ----------------------------------------------------------------
 const EMERALD = '10b981';
@@ -210,6 +210,7 @@ function pastPerformanceTable() {
 
   return new Table({
     width: { size: cols.reduce((a, b) => a + b, 0), type: WidthType.DXA },
+    columnWidths: cols,
     borders: hairlineBorders,
     rows: [headerRow, ...rows],
   });
@@ -223,6 +224,7 @@ function buildPage() {
   // ---- Title strip (full width) -----------------------------------------
   children.push(new Table({
     width: { size: USABLE_TWIPS, type: WidthType.DXA },
+    columnWidths: [USABLE_TWIPS],
     borders: noBorders,
     rows: [
       new TableRow({
@@ -259,6 +261,7 @@ function buildPage() {
   // ---- Row 1: Logo + Identifier strip (full width, 3 cells) -------------
   children.push(new Table({
     width: { size: USABLE_TWIPS, type: WidthType.DXA },
+    columnWidths: [3600, 3600, 3600],
     borders: hairlineBorders,
     rows: [
       new TableRow({
@@ -313,6 +316,7 @@ function buildPage() {
   // ---- Row 2: NAICS / PSC | Set-Asides (2-column) -----------------------
   children.push(new Table({
     width: { size: USABLE_TWIPS, type: WidthType.DXA },
+    columnWidths: [COL_LEFT, COL_RIGHT],
     borders: hairlineBorders,
     rows: [
       new TableRow({
@@ -338,6 +342,7 @@ function buildPage() {
               // Use two columns of chips inside this cell via a borderless table
               new Table({
                 width: { size: COL_RIGHT - 280, type: WidthType.DXA },
+                columnWidths: [(COL_RIGHT - 280) / 2, (COL_RIGHT - 280) / 2],
                 borders: noBorders,
                 rows: [
                   new TableRow({
@@ -384,6 +389,7 @@ function buildPage() {
   // ---- Row 3: Core Competencies | Differentiators (2-column) ------------
   children.push(new Table({
     width: { size: USABLE_TWIPS, type: WidthType.DXA },
+    columnWidths: [COL_LEFT, COL_RIGHT],
     borders: hairlineBorders,
     rows: [
       new TableRow({
@@ -424,6 +430,7 @@ function buildPage() {
   // ---- Row 4: Past Performance (full width, contains inner table) -------
   children.push(new Table({
     width: { size: USABLE_TWIPS, type: WidthType.DXA },
+    columnWidths: [USABLE_TWIPS],
     borders: hairlineBorders,
     rows: [
       new TableRow({
@@ -450,6 +457,7 @@ function buildPage() {
   // ---- Row 5: POC block (full width) ------------------------------------
   children.push(new Table({
     width: { size: USABLE_TWIPS, type: WidthType.DXA },
+    columnWidths: [USABLE_TWIPS],
     borders: hairlineBorders,
     rows: [
       new TableRow({
@@ -493,7 +501,7 @@ function buildPage() {
 
 const doc = new Document({
   creator: 'CapturePilot',
-  title: 'Capability Statement — Editable Template',
+  title: 'CapturePilot Capability Statement',
   description: 'Federal Lead Kit · Capability Statement editable Word template (one-page)',
   styles: {
     default: {
