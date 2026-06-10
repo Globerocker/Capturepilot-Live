@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
 import clsx from "clsx";
 import {
     Loader2, Check, X, Search, RefreshCw, Globe, MapPin, Hash,
     Calendar, CheckSquare, Square, AlertTriangle, Sparkles, PlayCircle,
+    Mail, MessageSquare, Pause, Play, Archive, Pencil, Plus,
 } from "lucide-react";
+import CampaignBuilderModal from "@/components/outreach/CampaignBuilderModal";
 
 interface Prospect {
     id: string;
@@ -29,7 +30,27 @@ interface Prospect {
     notes: string | null;
 }
 
-const STATUS_TABS: Array<{ key: string; label: string }> = [
+interface Campaign {
+    id: string;
+    name: string;
+    description: string | null;
+    channels: string[];
+    status: string;
+    contacts_count: number;
+    sent_count: number;
+    open_count: number;
+    click_count: number;
+    reply_count: number;
+    bounce_count: number;
+    reply_rate: number;
+    started_at: string | null;
+    completed_at: string | null;
+    created_at: string;
+    sender_email: string | null;
+    sender_name: string | null;
+}
+
+const PROSPECT_TABS: Array<{ key: string; label: string }> = [
     { key: "pending_review", label: "Pending Review" },
     { key: "approved", label: "Approved" },
     { key: "rejected", label: "Rejected" },
@@ -39,7 +60,58 @@ const STATUS_TABS: Array<{ key: string; label: string }> = [
     { key: "all", label: "All" },
 ];
 
+const CAMPAIGN_FILTERS: Array<{ key: string; label: string }> = [
+    { key: "all", label: "All" },
+    { key: "draft", label: "Draft" },
+    { key: "active", label: "Active" },
+    { key: "paused", label: "Paused" },
+    { key: "completed", label: "Completed" },
+    { key: "archived", label: "Archived" },
+];
+
 export default function OutreachAdminPage() {
+    const [tab, setTab] = useState<"prospects" | "campaigns">("prospects");
+
+    return (
+        <div className="max-w-[1600px] mx-auto p-6 space-y-6">
+            <div>
+                <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+                    <Sparkles className="w-6 h-6 text-emerald-600" /> Outreach
+                </h1>
+                <p className="text-sm text-stone-500 mt-1">
+                    Cold-outreach prospect queue and multi-step campaigns. Admin-only.
+                </p>
+            </div>
+
+            {/* Top-level tabs */}
+            <div className="flex items-center gap-2 border-b border-stone-200">
+                <button
+                    type="button"
+                    onClick={() => setTab("prospects")}
+                    className={clsx(
+                        "text-sm font-bold px-4 py-2 border-b-2 -mb-px",
+                        tab === "prospects" ? "border-black text-black" : "border-transparent text-stone-500 hover:text-stone-700",
+                    )}
+                >Prospects</button>
+                <button
+                    type="button"
+                    onClick={() => setTab("campaigns")}
+                    className={clsx(
+                        "text-sm font-bold px-4 py-2 border-b-2 -mb-px",
+                        tab === "campaigns" ? "border-black text-black" : "border-transparent text-stone-500 hover:text-stone-700",
+                    )}
+                >Campaigns</button>
+            </div>
+
+            {tab === "prospects" ? <ProspectsView /> : <CampaignsView />}
+        </div>
+    );
+}
+
+// ============================================================
+// Prospects view — unchanged from prior page (kept tight).
+// ============================================================
+function ProspectsView() {
     const [prospects, setProspects] = useState<Prospect[]>([]);
     const [total, setTotal] = useState(0);
     const [loading, setLoading] = useState(true);
@@ -80,9 +152,7 @@ export default function OutreachAdminPage() {
             } else {
                 setMsg({ type: "error", text: "Discovery failed. Check CRON_SECRET header." });
             }
-        } catch (e) {
-            setMsg({ type: "error", text: (e as Error).message });
-        }
+        } catch (e) { setMsg({ type: "error", text: (e as Error).message }); }
         setRunning(false);
     };
 
@@ -108,48 +178,34 @@ export default function OutreachAdminPage() {
     };
 
     const toggleSelect = (id: string) => {
-        setSelectedIds(prev => {
-            const next = new Set(prev);
-            if (next.has(id)) next.delete(id); else next.add(id);
-            return next;
-        });
+        setSelectedIds(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
     };
-
     const toggleSelectAll = () => {
         if (selectedIds.size === prospects.length) setSelectedIds(new Set());
         else setSelectedIds(new Set(prospects.map(p => p.id)));
     };
 
     return (
-        <div className="max-w-[1600px] mx-auto p-6 space-y-6">
-            <div className="flex items-center justify-between gap-4 flex-wrap">
-                <div>
-                    <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-                        <Sparkles className="w-6 h-6 text-emerald-600" /> Outreach Prospects
-                    </h1>
-                    <p className="text-sm text-stone-500 mt-1">
-                        Newly-SAM-registered companies queued for cold outreach. Admin-only.
-                    </p>
-                </div>
-                <div className="flex items-center gap-2">
-                    <button
-                        type="button"
-                        onClick={runDiscovery}
-                        disabled={running}
-                        className="bg-black text-white text-xs font-bold px-4 py-2 rounded-xl inline-flex items-center gap-2 disabled:opacity-50"
-                        title="Pull the last 14 days from SAM.gov now"
-                    >
-                        {running ? <Loader2 className="w-4 h-4 animate-spin" /> : <PlayCircle className="w-4 h-4" />}
-                        {running ? "Running…" : "Run Discovery (14 days)"}
-                    </button>
-                    <button
-                        type="button"
-                        onClick={load}
-                        className="text-xs font-bold text-stone-600 bg-white border border-stone-200 px-3 py-2 rounded-xl inline-flex items-center gap-1.5 hover:bg-stone-50"
-                    >
-                        <RefreshCw className="w-3.5 h-3.5" /> Refresh
-                    </button>
-                </div>
+        <div className="space-y-4">
+            <div className="flex items-center gap-2 flex-wrap">
+                <button
+                    type="button"
+                    onClick={runDiscovery}
+                    disabled={running}
+                    className="bg-black text-white text-xs font-bold px-4 py-2 rounded-xl inline-flex items-center gap-2 disabled:opacity-50"
+                    title="Pull the last 14 days from SAM.gov now"
+                >
+                    {running ? <Loader2 className="w-4 h-4 animate-spin" /> : <PlayCircle className="w-4 h-4" />}
+                    {running ? "Running…" : "Run Discovery (14 days)"}
+                </button>
+                <button
+                    type="button"
+                    onClick={load}
+                    className="text-xs font-bold text-stone-600 bg-white border border-stone-200 px-3 py-2 rounded-xl inline-flex items-center gap-1.5 hover:bg-stone-50"
+                >
+                    <RefreshCw className="w-3.5 h-3.5" /> Refresh
+                </button>
+                <span className="ml-auto text-xs text-stone-500">{total.toLocaleString()} prospects</span>
             </div>
 
             {msg && (
@@ -162,26 +218,20 @@ export default function OutreachAdminPage() {
                 </div>
             )}
 
-            {/* Status tabs */}
             <div className="flex items-center gap-2 flex-wrap">
-                {STATUS_TABS.map(t => (
+                {PROSPECT_TABS.map(t => (
                     <button
                         key={t.key}
                         type="button"
                         onClick={() => setStatus(t.key)}
                         className={clsx(
                             "text-xs font-bold uppercase tracking-widest px-3 py-1.5 rounded-full border transition-colors",
-                            status === t.key
-                                ? "bg-black text-white border-black"
-                                : "bg-white text-stone-600 border-stone-200 hover:bg-stone-50",
+                            status === t.key ? "bg-black text-white border-black" : "bg-white text-stone-600 border-stone-200 hover:bg-stone-50",
                         )}
-                    >
-                        {t.label}
-                    </button>
+                    >{t.label}</button>
                 ))}
             </div>
 
-            {/* Filter bar */}
             <div className="flex items-center gap-2 flex-wrap">
                 <div className="relative flex-1 min-w-[260px]">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-stone-400" />
@@ -208,10 +258,8 @@ export default function OutreachAdminPage() {
                     <option value="EDWOSB">EDWOSB</option>
                     <option value="VOSB">VOSB</option>
                 </select>
-                <span className="ml-auto text-xs text-stone-500">{total.toLocaleString()} prospects</span>
             </div>
 
-            {/* Bulk action bar — shows when rows are selected */}
             {selectedIds.size > 0 && (
                 <div className="sticky top-0 z-10 bg-black text-white rounded-xl px-4 py-2 flex items-center gap-3">
                     <span className="text-xs font-bold">{selectedIds.size} selected</span>
@@ -224,12 +272,10 @@ export default function OutreachAdminPage() {
                         className="text-xs font-bold bg-rose-500 hover:bg-rose-600 text-white px-3 py-1.5 rounded-lg inline-flex items-center gap-1">
                         <X className="w-3 h-3" /> Reject {selectedIds.size}
                     </button>
-                    <button type="button" onClick={() => setSelectedIds(new Set())}
-                        className="text-xs text-white/70 hover:text-white">Clear</button>
+                    <button type="button" onClick={() => setSelectedIds(new Set())} className="text-xs text-white/70 hover:text-white">Clear</button>
                 </div>
             )}
 
-            {/* Table */}
             <div className="bg-white border border-stone-200 rounded-2xl overflow-hidden">
                 {loading ? (
                     <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-stone-400" /></div>
@@ -262,9 +308,7 @@ export default function OutreachAdminPage() {
                                 <tr key={p.id} className="border-b border-stone-100 hover:bg-stone-50">
                                     <td className="px-3 py-2">
                                         <button type="button" onClick={() => toggleSelect(p.id)} title={`Select ${p.company_name}`}>
-                                            {selectedIds.has(p.id)
-                                                ? <CheckSquare className="w-4 h-4 text-emerald-600" />
-                                                : <Square className="w-4 h-4 text-stone-400" />}
+                                            {selectedIds.has(p.id) ? <CheckSquare className="w-4 h-4 text-emerald-600" /> : <Square className="w-4 h-4 text-stone-400" />}
                                         </button>
                                     </td>
                                     <td className="px-3 py-2 align-top">
@@ -344,6 +388,196 @@ export default function OutreachAdminPage() {
                     </table>
                 )}
             </div>
+        </div>
+    );
+}
+
+// ============================================================
+// Campaigns view
+// ============================================================
+function CampaignsView() {
+    const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [filter, setFilter] = useState("all");
+    const [modalOpen, setModalOpen] = useState(false);
+    const [editingId, setEditingId] = useState<string | undefined>();
+
+    const load = useCallback(async () => {
+        setLoading(true);
+        try {
+            const url = `/api/admin/outreach/campaigns?status=${filter}`;
+            const res = await fetch(url);
+            if (!res.ok) { setLoading(false); return; }
+            const body = await res.json() as { campaigns: Campaign[] };
+            setCampaigns(body.campaigns || []);
+        } catch { /* non-fatal */ }
+        setLoading(false);
+    }, [filter]);
+
+    useEffect(() => { load(); }, [load]);
+
+    const transition = async (id: string, status: string) => {
+        const res = await fetch(`/api/admin/outreach/campaigns/${id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status }),
+        });
+        if (res.ok) load();
+    };
+
+    const archive = async (id: string) => {
+        if (!confirm("Archive this campaign? It stops sending and disappears from the default view.")) return;
+        const res = await fetch(`/api/admin/outreach/campaigns/${id}`, { method: "DELETE" });
+        if (res.ok) load();
+    };
+
+    return (
+        <div className="space-y-4">
+            <div className="flex items-center gap-2 flex-wrap">
+                <button
+                    type="button"
+                    onClick={() => { setEditingId(undefined); setModalOpen(true); }}
+                    className="bg-black text-white text-xs font-bold px-4 py-2 rounded-xl inline-flex items-center gap-2"
+                >
+                    <Plus className="w-4 h-4" /> Create campaign
+                </button>
+                <button
+                    type="button"
+                    onClick={load}
+                    className="text-xs font-bold text-stone-600 bg-white border border-stone-200 px-3 py-2 rounded-xl inline-flex items-center gap-1.5 hover:bg-stone-50"
+                >
+                    <RefreshCw className="w-3.5 h-3.5" /> Refresh
+                </button>
+                <div className="ml-auto flex items-center gap-1">
+                    {CAMPAIGN_FILTERS.map(f => (
+                        <button
+                            key={f.key}
+                            type="button"
+                            onClick={() => setFilter(f.key)}
+                            className={clsx(
+                                "text-xs font-bold uppercase tracking-widest px-3 py-1.5 rounded-full border",
+                                filter === f.key ? "bg-black text-white border-black" : "bg-white text-stone-600 border-stone-200 hover:bg-stone-50",
+                            )}
+                        >{f.label}</button>
+                    ))}
+                </div>
+            </div>
+
+            <div className="bg-white border border-stone-200 rounded-2xl overflow-hidden">
+                {loading ? (
+                    <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-stone-400" /></div>
+                ) : campaigns.length === 0 ? (
+                    <div className="py-12 text-center text-sm text-stone-500">
+                        No campaigns yet. Hit <strong>Create campaign</strong> to start.
+                    </div>
+                ) : (
+                    <table className="w-full text-sm">
+                        <thead className="bg-stone-50 border-b border-stone-200">
+                            <tr className="text-left text-[10px] font-bold uppercase tracking-widest text-stone-500">
+                                <th className="px-3 py-2">Name</th>
+                                <th className="px-3 py-2">Channels</th>
+                                <th className="px-3 py-2">Status</th>
+                                <th className="px-3 py-2 text-right">Contacts</th>
+                                <th className="px-3 py-2 text-right">Sent</th>
+                                <th className="px-3 py-2 text-right">Reply rate</th>
+                                <th className="px-3 py-2">Started</th>
+                                <th className="px-3 py-2 text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {campaigns.map(c => (
+                                <tr key={c.id} className="border-b border-stone-100 hover:bg-stone-50">
+                                    <td className="px-3 py-2">
+                                        <p className="font-bold text-black">{c.name}</p>
+                                        {c.description && <p className="text-[10px] text-stone-500 truncate max-w-md">{c.description}</p>}
+                                    </td>
+                                    <td className="px-3 py-2">
+                                        <div className="flex items-center gap-1">
+                                            {c.channels.includes("email") && (
+                                                <span className="inline-flex items-center gap-0.5 text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded">
+                                                    <Mail className="w-2.5 h-2.5" /> Email
+                                                </span>
+                                            )}
+                                            {c.channels.includes("sms") && (
+                                                <span className="inline-flex items-center gap-0.5 text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200 px-1.5 py-0.5 rounded">
+                                                    <MessageSquare className="w-2.5 h-2.5" /> SMS
+                                                </span>
+                                            )}
+                                        </div>
+                                    </td>
+                                    <td className="px-3 py-2">
+                                        <span className={clsx(
+                                            "text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded border",
+                                            c.status === "active" ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                                : c.status === "paused" ? "bg-amber-50 text-amber-700 border-amber-200"
+                                                : c.status === "completed" ? "bg-blue-50 text-blue-700 border-blue-200"
+                                                : c.status === "archived" ? "bg-stone-100 text-stone-500 border-stone-200"
+                                                : "bg-white text-stone-600 border-stone-200",
+                                        )}>{c.status}</span>
+                                    </td>
+                                    <td className="px-3 py-2 text-right text-xs text-stone-700">{c.contacts_count.toLocaleString()}</td>
+                                    <td className="px-3 py-2 text-right text-xs text-stone-700">{c.sent_count.toLocaleString()}</td>
+                                    <td className="px-3 py-2 text-right text-xs text-stone-700">
+                                        {c.sent_count > 0 ? `${c.reply_rate.toFixed(1)}%` : "—"}
+                                    </td>
+                                    <td className="px-3 py-2 text-xs text-stone-600">
+                                        {c.started_at ? new Date(c.started_at).toLocaleDateString() : <span className="text-stone-300">—</span>}
+                                    </td>
+                                    <td className="px-3 py-2 text-right">
+                                        <div className="inline-flex items-center gap-1">
+                                            <button
+                                                type="button"
+                                                onClick={() => { setEditingId(c.id); setModalOpen(true); }}
+                                                className="p-1.5 rounded text-stone-600 hover:bg-stone-100"
+                                                title="Edit"
+                                            >
+                                                <Pencil className="w-3.5 h-3.5" />
+                                            </button>
+                                            {c.status === "active" && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => transition(c.id, "paused")}
+                                                    className="p-1.5 rounded text-amber-700 hover:bg-amber-50"
+                                                    title="Pause"
+                                                >
+                                                    <Pause className="w-3.5 h-3.5" />
+                                                </button>
+                                            )}
+                                            {(c.status === "paused" || c.status === "draft") && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => transition(c.id, "active")}
+                                                    className="p-1.5 rounded text-emerald-700 hover:bg-emerald-50"
+                                                    title="Activate"
+                                                >
+                                                    <Play className="w-3.5 h-3.5" />
+                                                </button>
+                                            )}
+                                            {c.status !== "archived" && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => archive(c.id)}
+                                                    className="p-1.5 rounded text-rose-600 hover:bg-rose-50"
+                                                    title="Archive"
+                                                >
+                                                    <Archive className="w-3.5 h-3.5" />
+                                                </button>
+                                            )}
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                )}
+            </div>
+
+            <CampaignBuilderModal
+                open={modalOpen}
+                onClose={() => setModalOpen(false)}
+                onSaved={load}
+                editingId={editingId}
+            />
         </div>
     );
 }
