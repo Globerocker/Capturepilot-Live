@@ -7,9 +7,10 @@ import { createBrowserClient } from "@supabase/ssr";
 import Image from "next/image";
 import {
     LayoutDashboard, Users, Briefcase, Target,
-    Wrench, Settings, LogOut, Loader2, Search, ChevronRight,
+    Wrench, Settings, LogOut, Loader2, Search, ChevronRight, ChevronDown,
     Menu, X, MessageSquare, Mail, Gift, Sparkles, Activity,
-    GraduationCap, ExternalLink, ShieldCheck, Globe, Eye,
+    GraduationCap, ShieldCheck, Globe, Eye, Database, FileText,
+    Send, ListChecks, Plug, Megaphone, Newspaper, Layers,
 } from "lucide-react";
 import clsx from "clsx";
 
@@ -27,63 +28,97 @@ type NavItem = {
 
 type NavSection = {
     label: string;
+    key: string;
     items: NavItem[];
+    /** Whether the section is collapsed by default. */
+    defaultCollapsed?: boolean;
 };
 
-// Section-grouped nav. Consolidated Apr 2026: Users was folded into People,
-// Lead Check into Leads, and Push Opportunity into Opportunities. The old
-// routes still resolve (we redirect /admin/users) so bookmarks don't break.
+// R3-M4.1 sidebar reorg. Groups are logical not alphabetical. Health surfaces
+// db-health which had no nav entry. Legacy routes still resolve so deep links
+// don't 404 — they're just tucked under the "Legacy" collapsed group at the
+// bottom and visually de-emphasized.
 const NAV: NavSection[] = [
     {
         label: "Overview",
+        key: "overview",
         items: [
             { href: "/admin/overview", icon: LayoutDashboard, label: "Dashboard" },
+            { href: "/admin/health", icon: Activity, label: "Env Health" },
+            { href: "/admin/db-health", icon: Database, label: "DB Health" },
+            { href: "/admin/changelog", icon: Newspaper, label: "Changelog" },
         ],
     },
     {
-        label: "Customers",
+        label: "People",
+        key: "people",
         items: [
-            { href: "/admin/clients", icon: Users, label: "People" },
-            { href: "/admin/leads", icon: Search, label: "Leads" },
-            { href: "/admin/beta-invites", icon: Gift, label: "Beta Invites" },
+            { href: "/admin/clients", icon: Users, label: "Clients" },
+            { href: "/admin/leads", icon: FileText, label: "Leads" },
+            { href: "/admin/prospects", icon: Search, label: "Prospects" },
+        ],
+    },
+    {
+        label: "Opportunities",
+        key: "opportunities",
+        items: [
+            { href: "/admin/opportunities", icon: Briefcase, label: "Opportunities" },
+            { href: "/admin/matches", icon: Layers, label: "Matches" },
+            { href: "/admin/push-opportunity", icon: Send, label: "Push Opportunity" },
         ],
     },
     {
         label: "Pipeline",
+        key: "pipeline",
         items: [
-            { href: "/admin/opportunities", icon: Briefcase, label: "Opportunities" },
             { href: "/admin/pipeline", icon: Target, label: "Sales Pipeline" },
         ],
     },
     {
-        label: "Content",
+        label: "Outreach",
+        key: "outreach",
         items: [
-            { href: "/admin/academy", icon: GraduationCap, label: "Academy" },
-            { href: "/admin/emails", icon: Mail, label: "Emails" },
-            { href: "/admin/email-tracking", icon: Eye, label: "Email Tracking" },
-            { href: "/admin/messages", icon: MessageSquare, label: "Messages", badge: "unreadMessages" },
-        ],
-    },
-    {
-        label: "Growth",
-        items: [
-            { href: "/admin/backlinks", icon: Globe, label: "Backlinks" },
+            { href: "/admin/outreach", icon: Megaphone, label: "Campaigns" },
         ],
     },
     {
         label: "Operations",
+        key: "operations",
         items: [
-            { href: "/admin/enrich", icon: Sparkles, label: "Bulk Enrich" },
-            { href: "/admin/health", icon: Activity, label: "Env Health" },
-            { href: "/admin/crons", icon: Activity, label: "Cron Telemetry" },
-            { href: "/admin/jobs", icon: Activity, label: "Jobs" },
+            { href: "/admin/jobs", icon: ListChecks, label: "Jobs" },
+            { href: "/admin/queue", icon: Sparkles, label: "Queue" },
+            { href: "/admin/crons", icon: Activity, label: "Crons" },
             { href: "/admin/tools", icon: Wrench, label: "Tools" },
         ],
     },
     {
-        label: "System",
+        label: "Content",
+        key: "content",
         items: [
+            { href: "/admin/academy", icon: GraduationCap, label: "Academy" },
+            { href: "/admin/messages", icon: MessageSquare, label: "Messages", badge: "unreadMessages" },
+            { href: "/admin/emails", icon: Mail, label: "Emails" },
+        ],
+    },
+    {
+        label: "Settings",
+        key: "settings",
+        items: [
+            { href: "/admin/connectors", icon: Plug, label: "Connectors" },
             { href: "/admin/settings", icon: Settings, label: "Settings" },
+        ],
+    },
+    {
+        label: "Legacy",
+        key: "legacy",
+        defaultCollapsed: true,
+        items: [
+            { href: "/admin/users", icon: Users, label: "Users (redirect)" },
+            { href: "/admin/lead-check", icon: Search, label: "Lead Check (redirect)" },
+            { href: "/admin/beta-invites", icon: Gift, label: "Beta Invites" },
+            { href: "/admin/email-tracking", icon: Eye, label: "Email Tracking" },
+            { href: "/admin/backlinks", icon: Globe, label: "Backlinks" },
+            { href: "/admin/enrich", icon: Sparkles, label: "Bulk Enrich" },
         ],
     },
 ];
@@ -94,12 +129,57 @@ const LABELS: Record<string, string> = NAV.flatMap(s => s.items).reduce(
     {} as Record<string, string>
 );
 
+const STORAGE_KEY = "cp_admin_nav_collapsed_v1";
+
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
     const [loading, setLoading] = useState(true);
     const [mobileOpen, setMobileOpen] = useState(false);
     const [unreadMessages, setUnreadMessages] = useState(0);
     const [adminEmail, setAdminEmail] = useState<string | null>(null);
+    const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => {
+        const initial: Record<string, boolean> = {};
+        for (const s of NAV) if (s.defaultCollapsed) initial[s.key] = true;
+        return initial;
+    });
+
+    // Auto-open the group containing the active route so the user always sees
+    // where they are. Honors the user's manual collapse choices too.
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+        try {
+            const raw = localStorage.getItem(STORAGE_KEY);
+            if (raw) {
+                const parsed = JSON.parse(raw) as Record<string, boolean>;
+                setCollapsed(prev => ({ ...prev, ...parsed }));
+            }
+        } catch {
+            // ignore corrupt localStorage
+        }
+    }, []);
+
+    useEffect(() => {
+        if (!pathname) return;
+        const section = NAV.find(s =>
+            s.items.some(i => pathname === i.href || pathname.startsWith(i.href + "/"))
+        );
+        if (section && collapsed[section.key]) {
+            setCollapsed(prev => ({ ...prev, [section.key]: false }));
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [pathname]);
+
+    const toggleSection = (key: string) => {
+        setCollapsed(prev => {
+            const next = { ...prev, [key]: !prev[key] };
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+            } catch {
+                // ignore quota errors
+            }
+            return next;
+        });
+    };
 
     const fetchUnread = async () => {
         const { count } = await supabase
@@ -114,21 +194,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         (async () => {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) { window.location.href = "/login"; return; }
-
-            // Gate the entire admin shell on account_type === "admin". The API
-            // routes also enforce this, but checking here avoids rendering the
-            // admin chrome to a non-admin user (which would just 403 every
-            // request anyway).
-            const { data: profile } = await supabase
-                .from("user_profiles")
-                .select("account_type")
-                .eq("auth_user_id", user.id)
-                .maybeSingle();
-            if (profile?.account_type !== "admin") {
-                window.location.href = "/dashboard";
-                return;
-            }
-
             setAdminEmail(user.email || null);
             await fetchUnread();
             setLoading(false);
@@ -150,94 +215,97 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             const label = LABELS[acc] || p.charAt(0).toUpperCase() + p.slice(1).replace(/-/g, " ");
             trail.push({ href: acc, label });
         }
-        // Drop the leading "/admin" crumb — it's implied by the Admin Console label.
         return trail.slice(1);
     }, [pathname]);
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-stone-950 flex items-center justify-center">
-                <Loader2 className="w-8 h-8 animate-spin text-stone-500" />
+            <div className="min-h-screen bg-stone-50 flex items-center justify-center">
+                <Loader2 className="w-8 h-8 animate-spin text-stone-400" />
             </div>
         );
     }
 
     const sidebarContent = (
         <>
-            {/* Emerald gradient accent line — matches SaaS dashboard */}
-            <div className="h-0.5 bg-gradient-to-r from-emerald-500 via-emerald-400 to-transparent" />
-
-            {/* Logo + admin pill */}
-            <div className="px-6 lg:px-7 pt-5 mb-6 flex items-center justify-between">
-                <Link href="/admin/overview" className="flex items-center gap-3 group" onClick={() => setMobileOpen(false)}>
-                    <Image src="/logo.png" alt="CapturePilot" width={34} height={34} className="rounded-xl" />
-                    <div className="flex flex-col">
-                        <span className="text-base font-semibold tracking-tight text-stone-200 leading-none">CapturePilot</span>
-                        <span className="text-[9px] font-bold uppercase tracking-[0.18em] text-emerald-400/80 leading-none mt-1.5 flex items-center gap-1">
-                            <ShieldCheck className="w-2.5 h-2.5" /> Admin Console
-                        </span>
-                    </div>
+            <div className="p-4 border-b border-stone-800">
+                <Link href="/admin/overview" className="flex items-center gap-2" onClick={() => setMobileOpen(false)}>
+                    <Image src="/logo.png" alt="CapturePilot" width={20} height={20} className="rounded" />
+                    <span className="font-bold text-sm">CapturePilot</span>
                 </Link>
-                <button
-                    type="button"
-                    title="Close menu"
-                    onClick={() => setMobileOpen(false)}
-                    className="lg:hidden p-2 -mr-2 text-stone-500 hover:text-stone-300"
-                >
-                    <X className="h-5 w-5" />
-                </button>
+                <p className="text-[10px] text-stone-500 mt-0.5 uppercase tracking-widest flex items-center gap-1">
+                    <ShieldCheck className="w-2.5 h-2.5" /> Admin Console
+                </p>
             </div>
 
-            {/* Nav sections */}
-            <nav className="flex-1 px-3 lg:px-4 overflow-y-auto scrollbar-thin scrollbar-thumb-stone-800 scrollbar-track-transparent pb-4">
-                {NAV.map((section, idx) => (
-                    <div key={section.label} className={clsx(idx > 0 && "mt-5")}>
-                        <p className="px-3 mb-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-stone-600">
-                            {section.label}
-                        </p>
-                        <div className="space-y-0.5">
-                            {section.items.map((item) => {
-                                const isActive = pathname === item.href
-                                    || (item.href !== "/admin/overview" && pathname?.startsWith(item.href + "/"));
-                                const Icon = item.icon;
-                                return (
-                                    <Link
-                                        key={item.href}
-                                        href={item.href}
-                                        onClick={() => setMobileOpen(false)}
-                                        className={clsx(
-                                            "flex items-center gap-3 px-3 py-2.5 rounded-2xl text-sm font-medium transition-all duration-200 border-l-2",
-                                            isActive
-                                                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500"
-                                                : "text-stone-400 hover:bg-stone-800/50 hover:text-stone-200 border-transparent"
-                                        )}
-                                    >
-                                        <Icon className={clsx("w-4 h-4 flex-shrink-0", isActive ? "text-emerald-400" : "text-stone-500")} />
-                                        <span className="flex-1">{item.label}</span>
-                                        {item.badge === "unreadMessages" && unreadMessages > 0 && (
-                                            <span className="bg-emerald-500 text-white text-[10px] font-bold min-w-[18px] h-[18px] rounded-full flex items-center justify-center px-1.5">
-                                                {unreadMessages}
-                                            </span>
-                                        )}
-                                    </Link>
-                                );
-                            })}
+            <nav className="flex-1 p-2 overflow-y-auto">
+                {NAV.map((section, idx) => {
+                    const isCollapsed = !!collapsed[section.key];
+                    const hasActive = section.items.some(
+                        i => pathname === i.href || (i.href !== "/admin/overview" && pathname?.startsWith(i.href + "/"))
+                    );
+                    const isLegacy = section.key === "legacy";
+                    return (
+                        <div key={section.key} className={clsx(idx > 0 && "mt-3")}>
+                            <button
+                                type="button"
+                                onClick={() => toggleSection(section.key)}
+                                className={clsx(
+                                    "flex items-center gap-1 w-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] transition-colors",
+                                    hasActive ? "text-stone-300" : "text-stone-500 hover:text-stone-300",
+                                    isLegacy && "opacity-60"
+                                )}
+                                aria-expanded={isCollapsed ? "false" : "true"}
+                            >
+                                <ChevronDown
+                                    className={clsx(
+                                        "w-3 h-3 transition-transform",
+                                        isCollapsed && "-rotate-90"
+                                    )}
+                                />
+                                <span>{section.label}</span>
+                            </button>
+                            {!isCollapsed && (
+                                <div className="mt-0.5 space-y-0.5">
+                                    {section.items.map((item) => {
+                                        const isActive = pathname === item.href
+                                            || (item.href !== "/admin/overview" && pathname?.startsWith(item.href + "/"));
+                                        const Icon = item.icon;
+                                        return (
+                                            <Link
+                                                key={item.href}
+                                                href={item.href}
+                                                onClick={() => setMobileOpen(false)}
+                                                className={clsx(
+                                                    "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                                                    isActive
+                                                        ? "bg-white/10 text-white"
+                                                        : "text-stone-400 hover:bg-white/5 hover:text-stone-200",
+                                                    isLegacy && !isActive && "text-stone-500"
+                                                )}
+                                            >
+                                                <Icon className="w-4 h-4 flex-shrink-0" />
+                                                <span className="flex-1">{item.label}</span>
+                                                {item.badge === "unreadMessages" && unreadMessages > 0 && (
+                                                    <span className="bg-emerald-500 text-white text-[10px] font-bold min-w-[18px] h-[18px] rounded-full flex items-center justify-center px-1">
+                                                        {unreadMessages}
+                                                    </span>
+                                                )}
+                                            </Link>
+                                        );
+                                    })}
+                                </div>
+                            )}
                         </div>
-                    </div>
-                ))}
+                    );
+                })}
             </nav>
 
-            {/* Bottom chip + sign out */}
-            <div className="mt-auto px-3 lg:px-4 pt-3 pb-2 border-t border-stone-800/60">
+            <div className="p-2 border-t border-stone-800">
                 {adminEmail && (
-                    <div className="flex items-center gap-2.5 px-3 py-2 mb-1 rounded-2xl bg-stone-900/60">
-                        <div className="w-7 h-7 rounded-full bg-emerald-500/15 text-emerald-400 text-xs font-bold flex items-center justify-center">
-                            {adminEmail.charAt(0).toUpperCase()}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                            <p className="text-[11px] text-stone-500 leading-none">Signed in as</p>
-                            <p className="text-xs text-stone-300 truncate mt-0.5 font-medium">{adminEmail}</p>
-                        </div>
+                    <div className="flex items-center gap-2 px-3 py-1.5 mb-1 text-[11px] text-stone-500 truncate">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0" />
+                        <span className="truncate">{adminEmail}</span>
                     </div>
                 )}
                 <button
@@ -251,7 +319,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                         });
                         window.location.replace("/login");
                     }}
-                    className="flex items-center gap-3 px-3 py-2.5 rounded-2xl text-sm text-stone-500 hover:bg-stone-800/60 hover:text-red-400 w-full transition-colors border-l-2 border-transparent"
+                    className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-stone-500 hover:bg-white/5 hover:text-red-400 w-full transition-colors"
                 >
                     <LogOut className="w-4 h-4" /> Sign Out
                 </button>
@@ -260,55 +328,32 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     );
 
     return (
-        <div className="flex bg-stone-50 min-h-screen lg:h-screen lg:overflow-hidden text-stone-900 selection:bg-emerald-500 selection:text-white">
-            {/* Mobile sticky header */}
-            <div className="lg:hidden fixed top-0 left-0 right-0 z-40 bg-stone-950/95 backdrop-blur-md border-b border-stone-800 px-4 h-14 flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                    <Image src="/logo.png" alt="CapturePilot" width={30} height={30} className="rounded-lg" />
-                    <div>
-                        <p className="text-sm font-semibold text-stone-200 leading-none">CapturePilot</p>
-                        <p className="text-[9px] font-bold uppercase tracking-widest text-emerald-400/80 leading-none mt-0.5">Admin</p>
-                    </div>
-                </div>
-                <button
-                    type="button"
-                    title="Open menu"
-                    onClick={() => setMobileOpen(true)}
-                    className="p-2 -mr-1 text-stone-400 hover:text-stone-200"
-                >
-                    <Menu className="h-5 w-5" />
-                </button>
-            </div>
-
-            {/* Mobile overlay */}
-            {mobileOpen && (
-                <div
-                    className="lg:hidden fixed inset-0 z-50 bg-black/40 backdrop-blur-sm"
-                    onClick={() => setMobileOpen(false)}
-                />
-            )}
-
-            {/* Mobile slide-out sidebar */}
-            <aside
-                className={clsx(
-                    "lg:hidden fixed top-0 left-0 bottom-0 z-50 w-72 bg-stone-950 flex flex-col pb-6 shadow-2xl transition-transform duration-300 ease-in-out",
-                    mobileOpen ? "translate-x-0" : "-translate-x-full"
-                )}
+        <div className="min-h-screen bg-stone-50 flex">
+            {/* Mobile toggle */}
+            <button
+                type="button"
+                onClick={() => setMobileOpen(!mobileOpen)}
+                className="lg:hidden fixed top-4 left-4 z-50 bg-white border border-stone-200 rounded-xl p-2 shadow-sm"
             >
-                {sidebarContent}
-            </aside>
+                {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </button>
+            {mobileOpen && <div className="lg:hidden fixed inset-0 bg-black/20 z-30" onClick={() => setMobileOpen(false)} />}
 
-            {/* Desktop sidebar */}
-            <aside className="hidden lg:flex w-64 flex-shrink-0 bg-stone-950 h-screen sticky top-0 flex-col pb-4">
+            {/* Sidebar */}
+            <aside className={clsx(
+                "w-60 bg-stone-900 text-white flex flex-col z-40",
+                "fixed lg:static inset-y-0 left-0 transition-transform duration-200",
+                mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+            )}>
                 {sidebarContent}
             </aside>
 
             {/* Main */}
-            <main className="flex-1 flex flex-col overflow-hidden lg:pl-2 pt-14 lg:pt-0">
-                {/* Top bar: breadcrumbs + return-to-app link */}
-                <div className="hidden lg:flex items-center justify-between px-6 h-12 flex-shrink-0 bg-stone-50 border-b border-stone-200/70">
-                    <nav className="flex items-center gap-1.5 text-xs">
-                        <span className="font-bold uppercase tracking-[0.18em] text-stone-400">Admin</span>
+            <main className="flex-1 min-h-screen overflow-auto">
+                {/* Breadcrumb strip — only on lg+, low chrome */}
+                {breadcrumbs.length > 0 && (
+                    <div className="hidden lg:flex items-center gap-1.5 px-6 h-10 border-b border-stone-200 bg-white/60 text-xs">
+                        <span className="font-bold uppercase tracking-[0.16em] text-stone-400">Admin</span>
                         {breadcrumbs.map((c, i) => (
                             <span key={c.href} className="flex items-center gap-1.5">
                                 <ChevronRight className="w-3 h-3 text-stone-300" />
@@ -319,34 +364,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                                 )}
                             </span>
                         ))}
-                    </nav>
-                    {/* "View as customer" — drops the admin into their own
-                        /dashboard so they can see what a SaaS user sees with
-                        their own profile. To impersonate a SPECIFIC client,
-                        open that client and click "View as user" — handled
-                        per-row in /admin/clients. */}
-                    <div className="flex items-center gap-3">
-                        <Link
-                            href="/portal"
-                            className="inline-flex items-center gap-1.5 text-xs font-medium text-stone-500 hover:text-emerald-600 transition-colors"
-                            title="Open the consulting-portal view (admin's own portal)"
-                        >
-                            <Eye className="w-3.5 h-3.5" />
-                            View as portal
-                        </Link>
-                        <Link
-                            href="/dashboard"
-                            className="inline-flex items-center gap-1.5 text-xs font-medium text-stone-500 hover:text-emerald-600 transition-colors"
-                            title="Open your customer-facing dashboard (admin's own SaaS view)"
-                        >
-                            <Eye className="w-3.5 h-3.5" />
-                            View as customer
-                        </Link>
                     </div>
-                </div>
-
-                {/* Inner rounded panel — matches SaaS dashboard "rounded-l-[40px]" look */}
-                <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 lg:rounded-l-[40px] bg-gradient-to-br from-stone-100 via-stone-50 to-stone-100 lg:my-2 lg:mr-2 lg:border lg:border-stone-200/80 lg:shadow-inner dot-grid-bg">
+                )}
+                <div className="p-4 sm:p-6 lg:p-8">
                     {children}
                 </div>
             </main>
