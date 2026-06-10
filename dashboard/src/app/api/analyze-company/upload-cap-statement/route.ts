@@ -90,10 +90,18 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: "Upload failed: " + uploadErr.message }, { status: 500 });
         }
 
-        // Get a public-ish URL (signed, 1-year TTL) for later reference
+        // `client-docs` is a private bucket (see migration 135). We persist
+        // only the storage path; callers mint short-lived signed URLs on
+        // demand through `/api/documents/signed-url`. Long-lived signed
+        // URLs (1y) are effectively forever-valid links and defeat the
+        // point of locking the bucket down — don't reintroduce them here.
+
+        // Mint a short-lived URL so the caller can preview the upload
+        // immediately. 5 minutes is plenty for the success toast +
+        // "view what you uploaded" link. After that, the dashboard re-signs.
         const { data: signed } = await sb.storage
             .from("client-docs")
-            .createSignedUrl(storagePath, 60 * 60 * 24 * 365);
+            .createSignedUrl(storagePath, 300);
 
         // Extract text — best-effort; failure just means we'll skip the AI context boost
         let extractedText = "";
@@ -104,15 +112,19 @@ export async function POST(request: NextRequest) {
             console.warn("[upload-cap-statement] text extraction failed:", e);
         }
 
-        // Patch the analysis row — merge into inferred_profile, also save text at top level for easy reuse
+        // Patch the analysis row — merge into inferred_profile. We persist
+        // ONLY the storage path + extracted text + display name. No long-
+        // lived URL is written to the row.
         const existingProfile = (analysis.inferred_profile || {}) as Record<string, unknown>;
         await sb.from("company_analyses").update({
             inferred_profile: {
                 ...existingProfile,
                 cap_statement_file_name: file.name,
-                cap_statement_file_url: signed?.signedUrl || null,
                 cap_statement_storage_path: storagePath,
                 cap_statement_text: extractedText || null,
+                // Explicitly clear any legacy long-lived URL that pre-existed
+                // on this row from a prior upload.
+                cap_statement_file_url: null,
             },
         }).eq("id", analysisId);
 
@@ -121,7 +133,9 @@ export async function POST(request: NextRequest) {
             filename: file.name,
             bytes: file.size,
             extracted_chars: extractedText.length,
+            // 5-min preview URL — caller should re-sign via /api/documents/signed-url for anything longer.
             url: signed?.signedUrl || null,
+            storage_path: storagePath,
         });
     } catch (e) {
         console.error("[upload-cap-statement] error:", e);
