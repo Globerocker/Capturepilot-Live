@@ -25,7 +25,12 @@ import { renderPdf } from "../../../tools/pdf-builder/render.mjs";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, "../../..");
 const CONFIGS_DIR = __dirname;
-const OUT_BASE = resolve(REPO_ROOT, "dashboard/public/starter-pack");
+// 2026-06-09: files moved out of dashboard/public/ into dashboard/protected/
+// to close the static-URL leak (anyone could download from
+// app.capturepilot.com/starter-pack/... before this). The download endpoints
+// (/api/startup-pack/file/[token]/[id] + /api/startup-pack/zip/[token]) read
+// from the protected dir via fs.readFile (not bundled as static assets).
+const OUT_BASE = resolve(REPO_ROOT, "dashboard/protected/starter-pack");
 
 // Locked mapping (slug → relative output path under dashboard/public/starter-pack/).
 // Verified 2026-06-09 against the 24 PDFs shipped in commit b2a578af.

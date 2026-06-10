@@ -14,7 +14,7 @@ import { STARTUP_PACK_ASSETS } from "@/lib/startup-pack-assets";
  *      /api/startup-pack/access/[token]). Reject if missing or refunded.
  *   2. Look up the asset by `id` in STARTUP_PACK_ASSETS. The asset must
  *      have a `localPath` starting with "/starter-pack/" so we can resolve
- *      it to a file under dashboard/public/starter-pack/.
+ *      it to a file under dashboard/protected/starter-pack/.
  *   3. Stream the file with correct Content-Type + Content-Disposition.
  *
  * Why this exists: the alternative — serving files directly from
@@ -22,16 +22,14 @@ import { STARTUP_PACK_ASSETS } from "@/lib/startup-pack-assets";
  * without paying. This route enforces "must hold a non-refunded access
  * token" before the bytes leave the server.
  *
- * NB: we still ship the files via /public, because Vercel serves them
- * fast + cache-friendly that way and the token route adds <100ms.
- * The only public exposure is the *path* — never linked from the
- * download page — so a casual user can't find it. A determined pirate
- * who knows the filename can still wget the public URL; preventing that
- * would require moving files out of /public into Supabase Storage with
- * signed URLs, which is a v2 problem.
+ * Files live under dashboard/protected/starter-pack/ (NOT /public/), so
+ * Vercel never serves them as static assets — they can only be accessed
+ * through this handler, which re-validates the token on every request.
+ * next.config.ts opts the directory into outputFileTracingIncludes so
+ * Vercel bundles it alongside the serverless functions.
  */
 
-const PUBLIC_DIR = resolve(process.cwd(), "public");
+const PROTECTED_DIR = resolve(process.cwd(), "protected");
 
 const MIME_BY_EXT: Record<string, string> = {
     pdf: "application/pdf",
@@ -85,13 +83,13 @@ export async function GET(
     }
 
     // localPath is "/starter-pack/<filename>". Strip the leading slash, then
-    // resolve under /public. Anti-traversal: reject anything that escapes.
+    // resolve under /protected. Anti-traversal: reject anything that escapes.
     const rel = asset.localPath.replace(/^\/+/, "");
     if (rel.includes("..") || !rel.startsWith("starter-pack/")) {
         return NextResponse.json({ error: "Invalid asset path" }, { status: 400 });
     }
-    const absPath = resolve(PUBLIC_DIR, rel);
-    if (!absPath.startsWith(PUBLIC_DIR + "/")) {
+    const absPath = resolve(PROTECTED_DIR, rel);
+    if (!absPath.startsWith(PROTECTED_DIR + "/")) {
         return NextResponse.json({ error: "Path traversal denied" }, { status: 400 });
     }
 
@@ -100,7 +98,7 @@ export async function GET(
     try {
         buf = await readFile(absPath);
     } catch {
-        return NextResponse.json({ error: "File missing on disk" }, { status: 404 });
+        return NextResponse.json({ error: "File not found" }, { status: 404 });
     }
 
     const filename = absPath.split("/").pop() || "asset";

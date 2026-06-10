@@ -1,14 +1,16 @@
 /**
  * Single source of truth for the $70 Federal Launch Kit — list of digital goods.
  *
- * Each asset points either at a local file under `/public/starter-pack/<file>`
- * (the canonical delivery path after the 2026-06 rebuild) or at a Google Drive
+ * Each asset points either at a local file under `dashboard/protected/starter-pack/<file>`
+ * (the canonical delivery path — NOT under /public/) or at a Google Drive
  * share URL (legacy / Canva mocks / Calendly).
  *
  * HOW TO UPDATE THE LINKS
- * 1. Drop the file into `dashboard/public/starter-pack/` (commit it — under ~1 MB).
+ * 1. Drop the file into `dashboard/protected/starter-pack/` (commit it).
+ *    These files are NOT publicly accessible via CDN — they only go out through
+ *    the token-gated /api/startup-pack/file/<token>/<id> route.
  * 2. Set `localPath: "/starter-pack/<filename>"`. The UI auto-fills download
- *    + preview URLs from the local path.
+ *    + preview URLs from the local path when a valid access token is provided.
  * 3. For Drive/Canva/Calendly only assets, leave `localPath` undefined and set
  *    `gdriveUrl` to the share URL.
  *
@@ -53,9 +55,11 @@ export interface StartupPackAsset {
     /** Optional: single-file Drive ID for a direct download button. */
     gdriveFileId?: string;
     /**
-     * Optional: local file under `/public/starter-pack/<filename>`. When set,
-     * the UI serves the file directly from Next's static handler — no Drive
-     * round-trip, no rate limits, no token gymnastics.
+     * Optional: local file under `dashboard/protected/starter-pack/<filename>`.
+     * When set, the UI serves the file through the token-gated
+     * /api/startup-pack/file/<token>/<id> route — no Drive round-trip, no rate
+     * limits. Files are NOT publicly accessible via static CDN; they require a
+     * valid non-refunded access token.
      */
     localPath?: string;
     /** Optional: page count / sheet count / duration — for the chip. */
@@ -140,7 +144,7 @@ export const STARTUP_PACK_SECTIONS: AssetSection[] = [
 // ──────────────────────────────────────────────────────────────────────────────
 // ASSET LIST
 //
-// `localPath` wins when present — file is served from /public/starter-pack/.
+// `localPath` wins when present — file is served from protected/starter-pack/ (NOT /public/).
 // Empty `gdriveUrl: ""` + no `localPath` renders a "Coming soon" disabled card.
 // ──────────────────────────────────────────────────────────────────────────────
 export const STARTUP_PACK_ASSETS: StartupPackAsset[] = [
@@ -544,28 +548,29 @@ export const STARTUP_PACK_OFFER_DAYS = 7;          // countdown from analysis cr
  * Resolution order:
  *   1. `localPath` + `token` → both URLs go through /api/startup-pack/file/<token>/<id>
  *      (token-gated streaming, rejects anyone without a valid non-refunded purchase)
- *   1b. `localPath` without `token` → admin/staff preview: raw /starter-pack/<file>
+ *   1b. `localPath` without `token` → no URLs returned (files are in /protected/, not
+ *      /public/, so there is no raw static URL to fall back to).
  *   2. `gdriveUrl` non-Drive (Calendly, etc) → previewUrl pass-through
  *   3. `gdriveUrl` Drive → previewUrl + optional downloadUrl from gdriveFileId
  *
  * Why the optional token: the buyer download page passes the access_token so
  * every file URL becomes token-scoped — the request runs through the route
- * handler that re-validates the token before streaming. Without it, file URLs
- * fall back to the raw /public path, which is only safe for staff previews
- * since anyone who guesses a filename could wget it.
+ * handler that re-validates the token before streaming. Without a token, local
+ * files are inaccessible (by design) because they live under /protected/ not
+ * /public/. Admin previews should use a valid buyer token or a direct DB lookup.
  */
 export function resolveDriveLinks(
     asset: StartupPackAsset,
     token?: string,
 ): { previewUrl?: string; downloadUrl?: string } {
     if (asset.localPath && asset.localPath.trim()) {
-        const path = asset.localPath.trim();
         if (token) {
             const gated = `/api/startup-pack/file/${encodeURIComponent(token)}/${encodeURIComponent(asset.id)}`;
             return { previewUrl: gated, downloadUrl: `${gated}?dl=1` };
         }
-        // No token = unauthed preview mode (admin/staff); fall back to raw path.
-        return { previewUrl: path, downloadUrl: path };
+        // No token — files are in /protected/ (not /public/) so no raw static URL exists.
+        // Return empty to avoid broken links. Admin previews need a valid buyer token.
+        return {};
     }
 
     const url = asset.gdriveUrl?.trim();

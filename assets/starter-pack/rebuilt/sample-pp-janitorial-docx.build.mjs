@@ -298,7 +298,7 @@ function buildDoc() {
         tableHeader: true,
         cantSplit: true,
         children: [
-          ['Schedule', 'Deliverable / Task', 'Performance Standard', 'FAR / VA Reference'].map(
+          ...['Schedule', 'Deliverable / Task', 'Performance Standard', 'FAR / VA Reference'].map(
             (h, i) => cell({
               width: delCols[i],
               shading: EMERALD_DARK,

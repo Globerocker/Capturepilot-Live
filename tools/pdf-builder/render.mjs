@@ -420,11 +420,19 @@ body.cp-cover-only .doc-section--dark{
 
   // Render an individual section in isolation — used to measure how many
   // pages each section produces so we can build the chrome vs. no-chrome
-  // page-range plan. CSS is identical to the full doc so page-break
-  // behavior matches what the section produces in the real render.
+  // page-range plan.
+  //
+  // CRITICAL: must use the SAME top/bottom margins as the full chrome render
+  // (0.6in each) so per-section page counts match the chrome PDF's page
+  // layout. Previously we used NO_CHROME_MARGIN (all zeros) which gave
+  // content sections more vertical space per page and caused systematic
+  // under-counting (measured < actual), producing cursor drift for all
+  // subsequent section swaps. Using chrome margins here keeps measuredTotal
+  // === pageCount and makes cursor-based page-index lookups exact.
+  const CHROME_MARGIN = { top: "0.6in", right: "0", bottom: "0.6in", left: "0" };
   async function measureSectionPages(html) {
     const miniHtml = `<!doctype html><html><head><meta charset="utf-8"><style>${css}</style></head><body>${html}</body></html>`;
-    const bytes = await renderOnce(miniHtml, { withChrome: false, margin: NO_CHROME_MARGIN });
+    const bytes = await renderOnce(miniHtml, { withChrome: false, margin: CHROME_MARGIN });
     return countPdfPages(bytes) || 1;
   }
 
@@ -500,26 +508,43 @@ body.cp-cover-only .doc-section--dark{
 
       // Walk parts, build a list of {sectionIdx, firstPageIdx0} for every
       // no-chrome section we want to swap out.
+      //
+      // Drift strategy: measurement drift (measuredTotal !== pageCount) is
+      // caused by long multi-page content sections rendering differently in
+      // isolation (no top/bottom margins) vs. in the full chrome doc (0.6in
+      // top + 0.6in bottom margins). Single-page sections like dark dividers,
+      // cover, and back-cover are immune — they always produce exactly 1 page
+      // regardless of margin context, so we can always trust `cursor0` for
+      // them even when total drift exists from the longer content sections.
+      //
+      // Rule: swap any no-chrome section whose isolated measurement is 1 page.
+      // Only skip a middle no-chrome section if it measured multi-page AND
+      // there is overall drift (cursor position may be wrong in that case).
       const swaps = [];
       let cursor0 = 0; // 0-based page index into chrome PDF
       for (let i = 0; i < parts.length; i++) {
         if (NO_CHROME_SECTION_TYPES.includes(parts[i].type)) {
-          // Always swap cover (i=0) and back-cover (i=last) — their
-          // positions are fixed (page 0 and page P-1). For middle dark
-          // sections, only swap if no measurement drift (otherwise we
-          // can't trust the cursor position).
           const isCover = (i === 0);
-          const isBack = (i === parts.length - 1);
-          if (isCover || isBack || measuredTotal === pageCount) {
+          const isBack  = (i === parts.length - 1);
+          const isSinglePageSection = sectionPageCounts[i] === 1;
+          // Always swap: cover (fixed at page 0), back-cover (fixed at last),
+          // any single-page no-chrome section (cursor position is reliable
+          // because a 1-page section measured without margins is always 1 page
+          // in the full doc too — dark panels never wrap), or any section when
+          // there is no drift at all.
+          const shouldSwap = isCover || isBack || isSinglePageSection || measuredTotal === pageCount;
+          if (shouldSwap) {
             const pageIdx0 = isBack ? pageCount - 1 : cursor0;
             swaps.push({ sectionIdx: i, pageIdx0 });
+          } else {
+            console.warn(`[pdf-builder] skipping chrome-swap for section ${i} (${parts[i].type}) — measured ${sectionPageCounts[i]} pages with drift, cursor position unreliable.`);
           }
         }
         cursor0 += sectionPageCounts[i];
       }
 
       if (measuredTotal !== pageCount) {
-        console.warn(`[pdf-builder] page-count drift (measured ${measuredTotal}, rendered ${pageCount}) — dark-panel chrome suppression skipped (cover + back-cover still suppressed).`);
+        console.warn(`[pdf-builder] page-count drift (measured ${measuredTotal}, rendered ${pageCount}) — single-page dark/cover sections still suppressed via per-section measurement.`);
       }
 
       // Render each no-chrome section alone (parallel) → mini-PDFs.

@@ -144,8 +144,18 @@ html, body {
   pointer-events: none;
 }
 
-/* Dark variant: forest green + grid lines (no dots) */
-.doc-section--dark,
+/* Dark chapter dividers — SOLID forest green only. No pattern. They
+   exist to break up the document visually between stages; a busy
+   pattern competes with the chapter title typography. Cover +
+   back-cover keep their grid (it's the hero treatment). */
+.doc-section--dark {
+  background-color: var(--dark-bg);
+  background-image: none;
+  color: #f5f5f4;
+}
+
+/* Cover + back-cover: dark with subtle architectural grid (the hero
+   look — buyer's first + last impression). */
 .doc-section--cover,
 .doc-section--back-cover {
   background-color: var(--dark-bg);

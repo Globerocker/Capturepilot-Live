@@ -9,7 +9,7 @@ import JSZip from "jszip";
  * GET /api/startup-pack/zip/[token]
  *
  * Token-gated "download everything" endpoint that streams a single ZIP
- * containing every local file in dashboard/public/starter-pack/.
+ * containing every local file in dashboard/protected/starter-pack/.
  *
  * Pipeline:
  *   1. Validate the access_token against startup_pack_purchases (same logic
@@ -21,10 +21,13 @@ import JSZip from "jszip";
  * Note: the bundle is roughly 30-80 MB uncompressed. JSZip uses DEFLATE
  * by default (compression: "DEFLATE"), which typically halves PDF size.
  * Vercel's 300-second timeout is more than enough for this volume.
+ *
+ * Files live under dashboard/protected/starter-pack/ (NOT /public/), so
+ * Vercel never exposes them as static assets.
  */
 
-const PUBLIC_DIR = resolve(process.cwd(), "public");
-const PACK_DIR   = resolve(PUBLIC_DIR, "starter-pack");
+const PROTECTED_DIR = resolve(process.cwd(), "protected");
+const PACK_DIR      = resolve(PROTECTED_DIR, "starter-pack");
 
 /** Recursively collect every file path under a directory. */
 async function collectFiles(dir: string): Promise<string[]> {
@@ -73,7 +76,7 @@ export async function GET(
 
     // ── 2. Ensure the pack directory exists ──────────────────────────────────
     if (!existsSync(PACK_DIR)) {
-        console.error("[zip] starter-pack directory not found at", PACK_DIR);
+        console.error("[zip] starter-pack directory not found at", PACK_DIR, "(expected under protected/, not public/)");
         return new NextResponse("Pack files not found", { status: 500 });
     }
 
