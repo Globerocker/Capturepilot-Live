@@ -38,7 +38,7 @@ export async function GET() {
         return NextResponse.json({ profile: null }, { status: 200 });
     }
 
-    const profileId = (profileData as { id: string }).id;
+    const profileId = (profileData as unknown as { id: string }).id;
     const today = new Date().toISOString().split("T")[0];
     const sevenDays = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
