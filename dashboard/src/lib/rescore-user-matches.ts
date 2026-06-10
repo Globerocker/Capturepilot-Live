@@ -200,6 +200,22 @@ export async function rescoreUserMatches(args: {
         });
     }
 
+    // R3-M5.1: link top matches to outreach_contacts so the matches UI can
+    // surface composite_lead_score next to the opportunity. Restrict to HOT +
+    // WARM (≤500 rows typical) — COLD doesn't get the inline POC chip so
+    // skipping it keeps the lookup fast. Failure is non-fatal; the column is
+    // nullable and the cron will catch up later.
+    try {
+        const link = await linkMatchesToContacts(sb, userProfileId,
+            top.filter((m) => m.classification !== "COLD").slice(0, 500).map((m) => m.opportunity_id),
+        );
+        if (link.linked > 0) {
+            console.log(`[rescore] linked ${link.linked} matches → outreach_contacts for ${userProfileId}`);
+        }
+    } catch (e) {
+        console.warn("[rescore] outreach contact link failed (non-fatal):", e instanceof Error ? e.message : e);
+    }
+
     return {
         user_profile_id: userProfileId,
         total_scored: scored.length,
@@ -208,4 +224,73 @@ export async function rescoreUserMatches(args: {
         warm,
         cold,
     };
+}
+
+/**
+ * Best-effort linkage from user_matches → outreach_contacts (R3-M5.1).
+ *
+ * Walks the supplied opportunity_ids, pulls their POC emails (`extracted_emails`
+ * + `primary_poc_email` if present), looks up `outreach_contacts` by lower(email),
+ * and writes `user_matches.outreach_contact_id` for the (user_profile_id,
+ * opportunity_id) pairs that resolve.
+ *
+ * Failure modes (column missing, outreach_contacts missing, no matches) are
+ * all soft — the function returns a `linked: 0` result so callers don't have to
+ * branch on which schema slice is live.
+ */
+async function linkMatchesToContacts(
+    sb: SbAny,
+    userProfileId: string,
+    opportunityIds: string[],
+): Promise<{ linked: number }> {
+    if (opportunityIds.length === 0) return { linked: 0 };
+
+    // Step 1: pull POC emails for these opportunities. `extracted_emails`
+    // (migration 076) is the canonical multi-email field — populated by the
+    // regex extractor for SLED rows and by the SAM POC pass for federal rows.
+    const { data: oppRows, error: oppErr } = await sb
+        .from("opportunities")
+        .select("id, extracted_emails")
+        .in("id", opportunityIds);
+    if (oppErr) return { linked: 0 };
+
+    const emailToOppIds = new Map<string, string[]>();
+    for (const row of (oppRows || []) as {
+        id: string;
+        extracted_emails: string[] | null;
+    }[]) {
+        for (const e of row.extracted_emails || []) {
+            if (!e) continue;
+            const key = e.toLowerCase().trim();
+            const list = emailToOppIds.get(key) || [];
+            list.push(row.id);
+            emailToOppIds.set(key, list);
+        }
+    }
+    if (emailToOppIds.size === 0) return { linked: 0 };
+
+    // Step 2: look up outreach_contacts by email. Lowercase comparison via
+    // the `uq_outreach_contacts_email` unique index.
+    const emails = [...emailToOppIds.keys()];
+    const { data: contactRows, error: contactErr } = await sb
+        .from("outreach_contacts")
+        .select("id, email")
+        .in("email", emails);
+    if (contactErr) return { linked: 0 };
+
+    // Step 3: update user_matches with the contact id. Group by contact for
+    // efficient batched writes — one UPDATE per (contact, opp-list).
+    let linked = 0;
+    for (const contact of (contactRows || []) as { id: string; email: string | null }[]) {
+        if (!contact.email) continue;
+        const oppIds = emailToOppIds.get(contact.email.toLowerCase());
+        if (!oppIds || oppIds.length === 0) continue;
+        const { error: updErr, count } = await sb
+            .from("user_matches")
+            .update({ outreach_contact_id: contact.id }, { count: "exact" })
+            .eq("user_profile_id", userProfileId)
+            .in("opportunity_id", oppIds);
+        if (!updErr) linked += count || 0;
+    }
+    return { linked };
 }

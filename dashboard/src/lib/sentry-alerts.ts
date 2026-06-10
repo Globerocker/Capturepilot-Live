@@ -240,5 +240,58 @@ export function captureOpenAIFailure(params: {
     });
 }
 
+/**
+ * Outreach contact engagement crossed the high-intent threshold (R3-M5.1).
+ *
+ * Fires when `engagement_score` transitions from below 80 to ≥80 inside the
+ * lead-score recompute path. Sales follow-up signal — Sentry rule fans this
+ * out to Slack so the AE picks it up before the contact cools.
+ */
+export function captureOutreachHighIntent(params: {
+    contactId: string;
+    email?: string | null;
+    score: number;
+    previousScore?: number | null;
+    campaignId?: string | null;
+    route?: string;
+    extra?: Record<string, unknown>;
+}) {
+    const { contactId, email, score, previousScore, campaignId, route, extra } = params;
+    try {
+        Sentry.captureMessage("outreach_high_intent", {
+            level: "info",
+            tags: baseTags({
+                contact_id: contactId,
+                score,
+                route: route || "lead-score-cron",
+            }),
+            extra: {
+                contact_id: contactId,
+                email,
+                score,
+                previous_score: previousScore,
+                campaign_id: campaignId,
+                threshold: 80,
+                ...(extra || {}),
+            },
+        });
+    } catch {
+        /* swallow */
+    }
+    mirrorToSupabase({
+        recipe: "outreach_high_intent",
+        severity: "info",
+        route: route || "/api/cron/recompute_lead_scores",
+        details: {
+            contact_id: contactId,
+            email,
+            score,
+            previous_score: previousScore,
+            campaign_id: campaignId,
+            ...(extra || {}),
+        },
+    });
+}
+
 /** Tags exported so callers can attach the same context to ad-hoc captures. */
 export const sentryBaseTags = baseTags;

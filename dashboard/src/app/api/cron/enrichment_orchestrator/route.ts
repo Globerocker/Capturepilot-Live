@@ -106,6 +106,10 @@ const TASKS = {
   // ~30s/job) every orchestrator tick. vercel.json is at the 40/40 Pro
   // ceiling so we ferry it here rather than adding a 41st entry.
   run_worker_jobs_rescore:         "run_worker_jobs_rescore",
+  // R3-M5.1 — hourly outreach engagement/fit/composite lead-score recompute.
+  // Cheap (only touches contacts with events in the last hour) and idempotent,
+  // so ferrying through the orchestrator keeps us under the 40-cron ceiling.
+  recompute_lead_scores:           "recompute_lead_scores",
 } as const;
 
 type TaskName = keyof typeof TASKS;
@@ -229,6 +233,13 @@ function tasksDueAt(d: Date): TaskName[] {
   // batch_size + 150s budget inside the route.
   due.push("run_worker_jobs_rescore");
 
+  // R3-M5.1 — outreach lead-score recompute. Hourly cadence at :05 is enough
+  // because the contact set is small (only those with events in the last 60
+  // minutes) and the cron itself is a no-op when no events landed. Aligned to
+  // an orchestrator slot already used by ingest_bonfire_json (no clash — those
+  // are independent pipelines).
+  if (m === 5) due.push("recompute_lead_scores");
+
   return due;
 }
 
@@ -276,6 +287,7 @@ async function GET_handler(req: NextRequest): Promise<NextResponse> {
     run_worker_jobs: async () => (await import("../run_worker_jobs/route")).GET as Handler,
     enqueue_backfill: async () => (await import("../enqueue_backfill/route")).GET as Handler,
     run_worker_jobs_rescore: async () => (await import("../run_worker_jobs_rescore/route")).GET as Handler,
+    recompute_lead_scores: async () => (await import("../recompute_lead_scores/route")).GET as Handler,
   };
 
   function buildChildRequest(task: TaskName): NextRequest {
