@@ -47,16 +47,26 @@ export async function GET() {
 
 /**
  * PATCH /api/admin/users — Update user email or password
- * Body: { auth_id, email?, password? }
+ * Body: { auth_id | user_profile_id, email?, password? }
+ * If user_profile_id is given instead of auth_id, the server resolves it.
  */
 export async function PATCH(req: NextRequest) {
     const unauth = await assertAdmin();
     if (unauth) return unauth;
     try {
-        const { auth_id, email, password } = await req.json();
-        if (!auth_id) return NextResponse.json({ error: "auth_id required" }, { status: 400 });
-
+        const { auth_id: bodyAuthId, user_profile_id, email, password } = await req.json();
         const admin = getAdmin();
+        let auth_id: string | null = bodyAuthId ?? null;
+        if (!auth_id && user_profile_id) {
+            const { data } = await admin
+                .from("user_profiles")
+                .select("auth_user_id")
+                .eq("id", user_profile_id)
+                .single();
+            auth_id = (data as { auth_user_id: string } | null)?.auth_user_id ?? null;
+        }
+        if (!auth_id) return NextResponse.json({ error: "auth_id or user_profile_id required" }, { status: 400 });
+
         const update: Record<string, string> = {};
         if (email) update.email = email;
         if (password) update.password = password;
@@ -96,18 +106,59 @@ export async function PATCH(req: NextRequest) {
 
 /**
  * DELETE /api/admin/users — Delete user (auth + profile)
- * Body: { auth_id }
+ * Body: { auth_id | user_profile_id }
+ * Caller can pass either; the server resolves user_profile_id → auth_user_id.
+ * The auth.admin.deleteUser cascade should remove the profile row if FK
+ * has ON DELETE CASCADE; if not, we also delete it explicitly.
  */
 export async function DELETE(req: NextRequest) {
     const unauth = await assertAdmin();
     if (unauth) return unauth;
     try {
-        const { auth_id } = await req.json();
-        if (!auth_id) return NextResponse.json({ error: "auth_id required" }, { status: 400 });
-
+        const { auth_id: bodyAuthId, user_profile_id } = await req.json();
         const admin = getAdmin();
+        let auth_id: string | null = bodyAuthId ?? null;
+        let profileId: string | null = user_profile_id ?? null;
+        let companyName: string | null = null;
+
+        // Resolve auth_id from profile if needed, and grab profile id + company
+        // for the activity log + the post-delete profile cleanup.
+        if (!auth_id && profileId) {
+            const { data } = await admin
+                .from("user_profiles")
+                .select("auth_user_id, company_name")
+                .eq("id", profileId)
+                .single();
+            const row = data as { auth_user_id: string; company_name: string | null } | null;
+            auth_id = row?.auth_user_id ?? null;
+            companyName = row?.company_name ?? null;
+        } else if (auth_id && !profileId) {
+            const { data } = await admin
+                .from("user_profiles")
+                .select("id, company_name")
+                .eq("auth_user_id", auth_id)
+                .maybeSingle();
+            const row = data as { id: string; company_name: string | null } | null;
+            profileId = row?.id ?? null;
+            companyName = row?.company_name ?? null;
+        }
+        if (!auth_id) return NextResponse.json({ error: "auth_id or user_profile_id required" }, { status: 400 });
+
         const { error } = await admin.auth.admin.deleteUser(auth_id);
         if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+        // Explicit profile cleanup in case the auth FK isn't ON DELETE CASCADE.
+        if (profileId) {
+            await admin.from("user_profiles").delete().eq("id", profileId);
+            // Best-effort audit log on a synthetic row (the FK target is gone,
+            // so the insert may fail — swallow the error).
+            await admin.from("client_activity_log").insert({
+                user_profile_id: profileId,
+                action: "user_deleted",
+                description: `Admin deleted account for ${companyName || auth_id}`,
+                metadata: { deleted_auth_id: auth_id, company_name: companyName },
+            }).then(() => null, () => null);
+        }
 
         return NextResponse.json({ success: true });
     } catch (e) {

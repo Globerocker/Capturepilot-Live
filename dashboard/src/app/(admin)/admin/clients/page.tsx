@@ -6,7 +6,7 @@ import Link from "next/link";
 import {
     Plus, Users, Mail, Phone, Globe, Hash, ChevronDown, Search,
     ListTodo, FileText, Loader2, Building2, Send, Sparkles, CheckCircle2, AlertTriangle,
-    UserCog, Shield,
+    UserCog, Shield, MoreVertical, Trash2, KeyRound, UserMinus, UserCheck, Briefcase,
 } from "lucide-react";
 import clsx from "clsx";
 import KeywordPicker from "@/components/KeywordPicker";
@@ -100,6 +100,135 @@ function AdminClientsPageInner() {
     // Task form
     const [taskForm, setTaskForm] = useState({ title: "", description: "", priority: "medium", category: "general", due_date: "", notify: true });
     const [showTaskForm, setShowTaskForm] = useState<string | null>(null);
+    // Admin row-action state — separate from task form to keep concerns
+    // disentangled. One client at a time can have its actions menu open.
+    const [actionsOpenFor, setActionsOpenFor] = useState<string | null>(null);
+    const [actionBusy, setActionBusy] = useState<string | null>(null);
+    const [confirmDelete, setConfirmDelete] = useState<Client | null>(null);
+    const [confirmRoleChange, setConfirmRoleChange] = useState<{ client: Client; newRole: AccountType } | null>(null);
+    const [resetPasswordFor, setResetPasswordFor] = useState<Client | null>(null);
+    const [newPassword, setNewPassword] = useState("");
+    const [actionToast, setActionToast] = useState<{ kind: "success" | "error"; text: string } | null>(null);
+
+    const showToast = (kind: "success" | "error", text: string) => {
+        setActionToast({ kind, text });
+        setTimeout(() => setActionToast(null), 5000);
+    };
+
+    const handleRoleChange = async (client: Client, newRole: AccountType) => {
+        setActionBusy(client.id);
+        try {
+            const res = await fetch("/api/admin/clients", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ user_profile_id: client.id, account_type: newRole }),
+            });
+            const data = await res.json();
+            if (data.success) {
+                showToast(
+                    "success",
+                    `${client.company_name || client.email} is now ${newRole === "self_service" ? "SaaS" : newRole}${data.role_email_sent ? " · email sent" : ""}`,
+                );
+                loadClients();
+            } else {
+                showToast("error", data.error || "Role change failed");
+            }
+        } catch (e) {
+            showToast("error", (e as Error).message);
+        } finally {
+            setActionBusy(null);
+            setConfirmRoleChange(null);
+            setActionsOpenFor(null);
+        }
+    };
+
+    const handleStatusToggle = async (client: Client) => {
+        const nextStatus = client.client_status === "active" ? "suspended" : "active";
+        setActionBusy(client.id);
+        try {
+            const res = await fetch("/api/admin/clients", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ user_profile_id: client.id, client_status: nextStatus }),
+            });
+            const data = await res.json();
+            if (data.success) {
+                showToast("success", `${client.company_name || client.email} ${nextStatus === "suspended" ? "suspended" : "reactivated"}`);
+                loadClients();
+            } else {
+                showToast("error", data.error || "Status change failed");
+            }
+        } catch (e) {
+            showToast("error", (e as Error).message);
+        } finally {
+            setActionBusy(null);
+            setActionsOpenFor(null);
+        }
+    };
+
+    const handleResetPassword = async () => {
+        if (!resetPasswordFor || !newPassword || newPassword.length < 8) {
+            showToast("error", "Password must be at least 8 characters");
+            return;
+        }
+        setActionBusy(resetPasswordFor.id);
+        try {
+            // /api/admin/users PATCH expects auth_id, not user_profile_id —
+            // we'd need to resolve the auth_user_id. The clients API doesn't
+            // expose it on the list response. Look up via a small helper call.
+            const lookup = await fetch(`/api/admin/clients?id=${resetPasswordFor.id}`).catch(() => null);
+            let authId: string | undefined;
+            if (lookup?.ok) {
+                const list = await lookup.json();
+                authId = (list?.clients || []).find((c: { id: string; auth_user_id?: string }) => c.id === resetPasswordFor.id)?.auth_user_id;
+            }
+            // Fallback: the admin/users PATCH lookup also accepts profile id via a small server-side resolve.
+            const res = await fetch("/api/admin/users", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(authId ? { auth_id: authId, password: newPassword } : { user_profile_id: resetPasswordFor.id, password: newPassword }),
+            });
+            const data = await res.json();
+            if (res.ok && data.success) {
+                showToast("success", `Password reset for ${resetPasswordFor.email}`);
+                setResetPasswordFor(null);
+                setNewPassword("");
+            } else {
+                showToast("error", data.error || "Password reset failed (may need auth_id lookup support)");
+            }
+        } catch (e) {
+            showToast("error", (e as Error).message);
+        } finally {
+            setActionBusy(null);
+            setActionsOpenFor(null);
+        }
+    };
+
+    const handleDelete = async (client: Client) => {
+        setActionBusy(client.id);
+        try {
+            // Hard delete via /api/admin/users — drops the auth row, cascades to profile.
+            // We need the auth_user_id; fall back to passing user_profile_id and letting the API resolve.
+            const res = await fetch("/api/admin/users", {
+                method: "DELETE",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ user_profile_id: client.id }),
+            });
+            const data = await res.json();
+            if (res.ok && data.success) {
+                showToast("success", `Deleted ${client.company_name || client.email}`);
+                loadClients();
+            } else {
+                showToast("error", data.error || "Delete failed");
+            }
+        } catch (e) {
+            showToast("error", (e as Error).message);
+        } finally {
+            setActionBusy(null);
+            setConfirmDelete(null);
+            setActionsOpenFor(null);
+        }
+    };
 
     const loadClients = async (tab: "all" | AccountType = accountTab) => {
         setLoading(true);
@@ -578,6 +707,68 @@ function AdminClientsPageInner() {
                                     >
                                         View as →
                                     </button>
+                                    {/* Row admin actions menu — change role, reset password, suspend, delete */}
+                                    <div className="relative" onClick={(e) => e.stopPropagation()}>
+                                        <button
+                                            type="button"
+                                            title="Admin actions"
+                                            onClick={() => setActionsOpenFor(actionsOpenFor === client.id ? null : client.id)}
+                                            disabled={actionBusy === client.id}
+                                            className="inline-flex items-center justify-center w-7 h-7 rounded-full hover:bg-stone-100 text-stone-500 disabled:opacity-50"
+                                        >
+                                            {actionBusy === client.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MoreVertical className="w-4 h-4" />}
+                                        </button>
+                                        {actionsOpenFor === client.id && (
+                                            <div className="absolute right-0 top-8 z-30 w-56 bg-white border border-stone-200 rounded-xl shadow-lg overflow-hidden">
+                                                <div className="px-3 py-2 border-b border-stone-100 bg-stone-50">
+                                                    <p className="text-[10px] uppercase tracking-wide text-stone-400 font-bold">Change role</p>
+                                                    <div className="flex gap-1 mt-1.5">
+                                                        {(["self_service", "consulting", "admin"] as AccountType[]).map((r) => (
+                                                            <button
+                                                                key={r}
+                                                                type="button"
+                                                                onClick={() => client.account_type !== r && setConfirmRoleChange({ client, newRole: r })}
+                                                                disabled={client.account_type === r}
+                                                                className={clsx(
+                                                                    "flex-1 text-[10px] font-bold px-2 py-1 rounded border",
+                                                                    client.account_type === r
+                                                                        ? "bg-stone-200 text-stone-500 border-stone-200 cursor-default"
+                                                                        : r === "admin"
+                                                                            ? "bg-white text-red-700 border-red-200 hover:bg-red-50"
+                                                                            : r === "consulting"
+                                                                                ? "bg-white text-violet-700 border-violet-200 hover:bg-violet-50"
+                                                                                : "bg-white text-stone-700 border-stone-200 hover:bg-stone-50",
+                                                                )}
+                                                            >
+                                                                {r === "self_service" ? "SaaS" : r === "consulting" ? "Consulting" : "Admin"}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => { setResetPasswordFor(client); setActionsOpenFor(null); }}
+                                                    className="w-full text-left px-3 py-2 text-xs text-stone-700 hover:bg-stone-50 inline-flex items-center gap-2"
+                                                >
+                                                    <KeyRound className="w-3.5 h-3.5" /> Reset password
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleStatusToggle(client)}
+                                                    className="w-full text-left px-3 py-2 text-xs text-stone-700 hover:bg-stone-50 inline-flex items-center gap-2"
+                                                >
+                                                    {client.client_status === "active" ? <><UserMinus className="w-3.5 h-3.5" /> Suspend account</> : <><UserCheck className="w-3.5 h-3.5" /> Reactivate</>}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => { setConfirmDelete(client); setActionsOpenFor(null); }}
+                                                    className="w-full text-left px-3 py-2 text-xs text-red-700 hover:bg-red-50 inline-flex items-center gap-2 border-t border-stone-100"
+                                                >
+                                                    <Trash2 className="w-3.5 h-3.5" /> Delete account
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                                 <ChevronDown className={clsx("w-4 h-4 text-stone-400 transition-transform cursor-pointer", expandedId === client.id && "rotate-180")} onClick={() => setExpandedId(expandedId === client.id ? null : client.id)} />
                             </div>
@@ -643,6 +834,121 @@ function AdminClientsPageInner() {
                                     ? "No admin accounts yet. Change a user’s account type from their detail page."
                                     : "No accounts match this filter."}
                     </p>
+                </div>
+            )}
+
+            {/* Role-change confirm modal */}
+            {confirmRoleChange && (
+                <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setConfirmRoleChange(null)}>
+                    <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-start gap-3 mb-4">
+                            <div className="w-10 h-10 rounded-full bg-violet-100 text-violet-700 flex items-center justify-center"><Briefcase className="w-5 h-5" /></div>
+                            <div>
+                                <h3 className="font-bold text-black">Change role to {confirmRoleChange.newRole === "self_service" ? "SaaS" : confirmRoleChange.newRole === "consulting" ? "Consulting" : "Admin"}?</h3>
+                                <p className="text-sm text-stone-600 mt-1">
+                                    {confirmRoleChange.client.company_name || confirmRoleChange.client.email} is currently <strong>{confirmRoleChange.client.account_type === "self_service" ? "SaaS" : confirmRoleChange.client.account_type}</strong>.
+                                </p>
+                            </div>
+                        </div>
+                        <div className="bg-stone-50 border border-stone-200 rounded-xl p-3 text-xs text-stone-600 mb-4">
+                            We&apos;ll email <strong>{confirmRoleChange.client.email}</strong> letting them know what changed and what their plan includes now.
+                        </div>
+                        <div className="flex gap-2 justify-end">
+                            <button type="button" onClick={() => setConfirmRoleChange(null)} className="px-4 py-2 text-sm text-stone-600 hover:bg-stone-100 rounded-xl">Cancel</button>
+                            <button
+                                type="button"
+                                onClick={() => handleRoleChange(confirmRoleChange.client, confirmRoleChange.newRole)}
+                                disabled={actionBusy === confirmRoleChange.client.id}
+                                className="bg-black text-white px-4 py-2 rounded-xl text-sm font-bold inline-flex items-center gap-2 disabled:opacity-50"
+                            >
+                                {actionBusy === confirmRoleChange.client.id && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                                Change role
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Reset password modal */}
+            {resetPasswordFor && (
+                <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => { setResetPasswordFor(null); setNewPassword(""); }}>
+                    <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-start gap-3 mb-4">
+                            <div className="w-10 h-10 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center"><KeyRound className="w-5 h-5" /></div>
+                            <div>
+                                <h3 className="font-bold text-black">Reset password</h3>
+                                <p className="text-sm text-stone-600 mt-1">For {resetPasswordFor.email}. They&apos;ll need to use the new password on their next login.</p>
+                            </div>
+                        </div>
+                        <input
+                            type="text"
+                            value={newPassword}
+                            onChange={(e) => setNewPassword(e.target.value)}
+                            placeholder="New password (min 8 characters)"
+                            className="w-full border border-stone-300 rounded-xl px-3 py-2 text-sm mb-2 font-mono"
+                            autoFocus
+                        />
+                        <p className="text-xs text-stone-500 mb-4">Tip: tell them in person or via Signal — don&apos;t email the password.</p>
+                        <div className="flex gap-2 justify-end">
+                            <button type="button" onClick={() => { setResetPasswordFor(null); setNewPassword(""); }} className="px-4 py-2 text-sm text-stone-600 hover:bg-stone-100 rounded-xl">Cancel</button>
+                            <button
+                                type="button"
+                                onClick={handleResetPassword}
+                                disabled={!newPassword || newPassword.length < 8 || actionBusy === resetPasswordFor.id}
+                                className="bg-amber-600 text-white px-4 py-2 rounded-xl text-sm font-bold inline-flex items-center gap-2 disabled:opacity-50 hover:bg-amber-700"
+                            >
+                                {actionBusy === resetPasswordFor.id && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                                Reset password
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Delete account confirm modal */}
+            {confirmDelete && (
+                <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setConfirmDelete(null)}>
+                    <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-start gap-3 mb-4">
+                            <div className="w-10 h-10 rounded-full bg-red-100 text-red-700 flex items-center justify-center"><Trash2 className="w-5 h-5" /></div>
+                            <div>
+                                <h3 className="font-bold text-black">Delete this account?</h3>
+                                <p className="text-sm text-stone-600 mt-1">
+                                    <strong>{confirmDelete.company_name || confirmDelete.email}</strong> will be permanently removed — auth row, profile, matches, pursuits, the lot. This can&apos;t be undone.
+                                </p>
+                            </div>
+                        </div>
+                        <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-xs text-red-700 mb-4">
+                            If they have active billing, cancel the Stripe subscription first.
+                        </div>
+                        <div className="flex gap-2 justify-end">
+                            <button type="button" onClick={() => setConfirmDelete(null)} className="px-4 py-2 text-sm text-stone-600 hover:bg-stone-100 rounded-xl">Cancel</button>
+                            <button
+                                type="button"
+                                onClick={() => handleDelete(confirmDelete)}
+                                disabled={actionBusy === confirmDelete.id}
+                                className="bg-red-600 text-white px-4 py-2 rounded-xl text-sm font-bold inline-flex items-center gap-2 disabled:opacity-50 hover:bg-red-700"
+                            >
+                                {actionBusy === confirmDelete.id && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                                Delete permanently
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Toast */}
+            {actionToast && (
+                <div
+                    className={clsx(
+                        "fixed bottom-6 right-6 z-50 max-w-sm px-4 py-3 rounded-xl shadow-lg border text-sm font-medium inline-flex items-center gap-2",
+                        actionToast.kind === "success"
+                            ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                            : "bg-red-50 text-red-800 border-red-200",
+                    )}
+                >
+                    {actionToast.kind === "success" ? <CheckCircle2 className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
+                    {actionToast.text}
                 </div>
             )}
         </div>

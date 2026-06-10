@@ -401,6 +401,25 @@ export async function PATCH(req: NextRequest) {
             return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
         }
 
+        // If account_type is changing, capture the old value so we can
+        // send a role-changed notification email after the update lands.
+        let previousAccountType: string | null = null;
+        let recipientEmail: string | null = null;
+        let recipientContactName: string | null = null;
+        let recipientCompanyName: string | null = null;
+        if (typeof safeUpdates.account_type === "string") {
+            const { data: prev } = await admin
+                .from("user_profiles")
+                .select("account_type, email, contact_name, company_name")
+                .eq("id", user_profile_id)
+                .single();
+            const prevRow = prev as { account_type: string | null; email: string | null; contact_name: string | null; company_name: string | null } | null;
+            previousAccountType = prevRow?.account_type ?? null;
+            recipientEmail = prevRow?.email ?? null;
+            recipientContactName = prevRow?.contact_name ?? null;
+            recipientCompanyName = prevRow?.company_name ?? null;
+        }
+
         const { error } = await admin.from("user_profiles").update(safeUpdates).eq("id", user_profile_id);
         if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
@@ -411,7 +430,32 @@ export async function PATCH(req: NextRequest) {
             metadata: { fields: Object.keys(safeUpdates) },
         });
 
-        return NextResponse.json({ success: true, updated: Object.keys(safeUpdates) });
+        // Role change → send the welcome-to-new-role email (fire-and-forget,
+        // failures logged but don't block the PATCH response).
+        let roleEmailFired = false;
+        if (
+            typeof safeUpdates.account_type === "string"
+            && safeUpdates.account_type !== previousAccountType
+            && recipientEmail
+        ) {
+            const newRole = safeUpdates.account_type as "self_service" | "consulting" | "admin";
+            const { sendRoleChangedEmail } = await import("@/lib/email");
+            sendRoleChangedEmail(
+                recipientEmail,
+                recipientContactName || "",
+                recipientCompanyName || recipientEmail,
+                newRole,
+            ).catch((e) => console.error("[admin/clients] sendRoleChangedEmail failed:", e));
+            roleEmailFired = true;
+            await admin.from("client_activity_log").insert({
+                user_profile_id,
+                action: "role_changed",
+                description: `Role changed from ${previousAccountType ?? "(unset)"} to ${newRole}`,
+                metadata: { previous: previousAccountType, current: newRole, email_sent: true },
+            });
+        }
+
+        return NextResponse.json({ success: true, updated: Object.keys(safeUpdates), role_email_sent: roleEmailFired });
     } catch (e) {
         return NextResponse.json({ error: (e as Error).message }, { status: 500 });
     }

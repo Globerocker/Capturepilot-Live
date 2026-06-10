@@ -288,6 +288,98 @@ export async function sendConsultingWelcomeEmail(
     });
 }
 
+// ─── Role Changed (Admin updated a user's account_type) ────
+export async function sendRoleChangedEmail(
+    to: string,
+    contactName: string,
+    companyName: string,
+    newRole: "self_service" | "consulting" | "admin",
+) {
+    // Each role gets a tailored "what you can do now" block.
+    // Copy follows HUMANIZER.md — contractions, specifics, no buzzwords.
+    let eyebrow: string;
+    let heading: string;
+    let intro: string;
+    let featuresHtml: string;
+    let ctaLabel: string;
+    let ctaUrl: string;
+    let subject: string;
+
+    if (newRole === "consulting") {
+        eyebrow = "You're now on the Consulting Plan";
+        heading = `Hi ${contactName || "there"},`;
+        intro = `We've moved <strong>${companyName}</strong> to our Consulting tier. From here on, our team works your pipeline alongside you — you don't have to source matches or chase the data yourself.`;
+        featuresHtml = `
+            ${sectionLabel("What you get now")}
+            <ul style="color:#065f46;font-size:14px;line-height:1.9;padding-left:20px;margin:0;">
+                <li>A managed portal showing the opportunities we're pursuing for you</li>
+                <li>Assigned tasks with deadlines you can mark complete</li>
+                <li>Cap statement storage + past performance library</li>
+                <li>Competitor tracking on the firms you bid against</li>
+                <li>Direct line to our team — reply to any email and it lands with us</li>
+            </ul>
+        `;
+        ctaLabel = "Open Your Portal";
+        ctaUrl = `${APP_URL}/portal`;
+        subject = `${companyName} — you're now on the Consulting Plan`;
+    } else if (newRole === "admin") {
+        eyebrow = "Admin Access Granted";
+        heading = `Hi ${contactName || "there"},`;
+        intro = `Your CapturePilot account at <strong>${companyName}</strong> now has admin access. You can see and manage the full platform, not just your own profile.`;
+        featuresHtml = `
+            ${sectionLabel("What admin access unlocks")}
+            <ul style="color:${COLORS.stone700};font-size:14px;line-height:1.9;padding-left:20px;margin:0;">
+                <li>The admin shell at <code>/admin/overview</code> — clients, leads, opportunities, queue</li>
+                <li>User management — change roles, send pushes, reset accounts</li>
+                <li>Cron + queue health, env health, deploy diagnostics</li>
+                <li>Bulk operations — push opportunities to clients, bulk email, bulk enrich</li>
+            </ul>
+            <p style="color:${COLORS.stone500};font-size:13px;margin:14px 0 0;">If this wasn't expected, reply to this email so we can roll it back.</p>
+        `;
+        ctaLabel = "Go to Admin";
+        ctaUrl = `${APP_URL}/admin/overview`;
+        subject = "You now have admin access to CapturePilot";
+    } else {
+        // self_service
+        eyebrow = "You're on the Self-Service Plan";
+        heading = `Hi ${contactName || "there"},`;
+        intro = `<strong>${companyName}</strong> is now on the Self-Service plan. You drive the platform yourself — your dashboard, your matches, your pipeline.`;
+        featuresHtml = `
+            ${sectionLabel("What's available")}
+            <ul style="color:${COLORS.stone700};font-size:14px;line-height:1.9;padding-left:20px;margin:0;">
+                <li>Real-time match scoring against 30,000+ federal opportunities</li>
+                <li>Capability statement editor + PDF export</li>
+                <li>AI proposal drafting per opportunity</li>
+                <li>Pipeline kanban — track every bid from sources-sought to award</li>
+                <li>Competitor + partner search across SAM.gov</li>
+            </ul>
+        `;
+        ctaLabel = "Go to Dashboard";
+        ctaUrl = `${APP_URL}/dashboard`;
+        subject = `${companyName} — your CapturePilot plan changed`;
+    }
+
+    const html = emailTemplate({
+        category: await getEmailCategory("role_changed"),
+        preheader: `Your CapturePilot plan changed. Here's what's available now.`,
+        eyebrow,
+        heading,
+        body: `
+            ${paragraph(intro)}
+            ${contentCard(featuresHtml)}
+        `,
+        cta: { label: ctaLabel, url: ctaUrl },
+        footerNote: "Questions about your new plan? Just reply.",
+    });
+
+    return send("role_changed", to, subject, html, {
+        contactName: contactName || "",
+        companyName,
+        newRole,
+        ctaUrl,
+    });
+}
+
 // ─── Beta Invite (Manual from Admin) ───────────────────────
 
 export interface BetaInviteOverrides {
