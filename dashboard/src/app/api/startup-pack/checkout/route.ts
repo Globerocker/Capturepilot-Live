@@ -123,7 +123,11 @@ export async function POST(request: NextRequest) {
             cancel_url: analysis_id
                 ? `${baseUrl}/check/${analysis_id}?canceled=startup_pack`
                 : `${baseUrl}/startup-pack?canceled=true`,
-            allow_promotion_codes: false,
+            // Enabled so the founder can run end-to-end buyer tests with a
+            // 100%-off promo code (FLKTEST1) without burning $70. Buyers
+            // entering invalid codes just get "code not valid" — safe to
+            // leave on in production.
+            allow_promotion_codes: true,
         });
 
         return NextResponse.json({
