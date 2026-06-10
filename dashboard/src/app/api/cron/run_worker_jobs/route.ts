@@ -31,6 +31,7 @@ import { extractCityRequirements } from "@/lib/structured-requirements/city";
 import { extractAiKeywords } from "@/lib/extract-ai-keywords";
 import { generateLeadBrief } from "@/lib/lead-brief";
 import { enrichPersonViaApollo } from "@/lib/lead-enrichment";
+import { classifyOutreachReply } from "@/lib/classify-outreach-reply";
 // Fix: cron_runs telemetry coverage — wrap handler so /admin/health stale-cron
 // detector and daily digest can see this route. Previously only 5 of 35 crons
 // were logging to cron_runs.
@@ -65,6 +66,7 @@ const HTTP_TASK_TYPES = [
     "extract_keywords",
     "enrich_lead_brief",
     "enrich_lead_apollo",
+    "classify_outreach_reply",
 ];
 
 type Job = {
@@ -545,6 +547,19 @@ async function handleEnrichLeadBrief(sb: SbAny, job: Job) {
     }
 }
 
+// Classify an inbound outreach reply with gpt-4o-mini in JSON mode (R3-M2.2).
+// The /api/webhooks/email-reply route enqueues this with payload {reply_id}.
+// We delegate the LLM call + DB write to classifyOutreachReply() so the unit
+// test surface stays tight. Marks the row as classified_at on success so the
+// reaper-on-retry path stays idempotent.
+async function handleClassifyOutreachReply(sb: SbAny, job: Job) {
+    const replyId = job.payload.reply_id as string;
+    if (!replyId) return { error: "missing reply_id" };
+    const res = await classifyOutreachReply(sb, replyId);
+    if (!res.ok) return { error: res.error };
+    return { result: res.classification };
+}
+
 async function handleAnalyzeAttachments(sb: SbAny, job: Job) {
     // Per-opportunity attachment analysis. The job payload only carries the
     // opp_id — we look up the row, pull its resource_links, fetch+extract
@@ -706,6 +721,7 @@ const HANDLERS: Record<string, (sb: SbAny, job: Job) => Promise<{ result?: unkno
     extract_keywords: handleExtractKeywords,
     enrich_lead_brief: handleEnrichLeadBrief,
     enrich_lead_apollo: handleEnrichLeadApollo,
+    classify_outreach_reply: handleClassifyOutreachReply,
     analyze_attachments: handleAnalyzeAttachments,
 };
 
