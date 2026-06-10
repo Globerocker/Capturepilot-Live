@@ -339,8 +339,23 @@ async function warmCfCookie(job, browser) {
     // cookie pool to warm. Mark the job done immediately so the queue clears
     // and enqueue_backfill doesn't keep re-enqueueing it. Other portals fall
     // through to the Playwright warming path unchanged.
-    if (FLARESOLVERR_URL && host.endsWith(".bonfirehub.com")) {
-        return { result: { skipped: "flaresolverr_handles_cf", host } };
+    //
+    // Extended 2026-06-10: opengov.com added after 22 daily failures on
+    // procurement.opengov.com. Same strict-CF pattern, same fix path. When
+    // FLARESOLVERR_URL isn't set we now markHostBlocked() so backfill stops
+    // re-enqueueing — honest "won't work until FlareSolverr is configured"
+    // signal instead of silent 60-failures-a-day.
+    const isStrictCfHost =
+        host.endsWith(".bonfirehub.com") ||
+        host === "procurement.opengov.com" ||
+        host.endsWith(".opengov.com");
+
+    if (isStrictCfHost) {
+        if (FLARESOLVERR_URL) {
+            return { result: { skipped: "flaresolverr_handles_cf", host } };
+        }
+        await markHostBlocked(host);
+        return { error: "strict CF tenant + FLARESOLVERR_URL not configured", host };
     }
 
     const context = await browser.newContext({
