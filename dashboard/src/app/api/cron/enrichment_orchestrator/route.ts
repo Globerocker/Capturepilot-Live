@@ -89,6 +89,12 @@ const TASKS = {
   db_cleanup:                      "db_cleanup",
   forecast_change_detection:       "forecast_change_detection",
   monthly_awards:                  "monthly_awards",
+  // GovTribe cache pre-warmer — was missing from vercel.json (at Pro ceiling
+  // of 40 crons) and had no orchestrator entry, so it never ran. Routed here
+  // at 08:30 UTC daily: after SAM ingest (00:30) + scoring (03:00) + the
+  // overnight enrichment wave, so the opportunity set is fresh when we warm.
+  // The handler is a no-op when GOVTRIBE_API_KEY is unset.
+  sync_govtribe_activity:          "sync_govtribe_activity",
 } as const;
 
 type TaskName = keyof typeof TASKS;
@@ -194,6 +200,11 @@ function tasksDueAt(d: Date): TaskName[] {
   if (h === 4 && m === 0 && d.getUTCDay() === 0) due.push("db_cleanup");
   if (h === 6 && m === 30) due.push("forecast_change_detection");
   if (h === 3 && m === 0 && d.getUTCDate() === 1) due.push("monthly_awards");
+
+  // GovTribe cache pre-warmer — daily 08:30 UTC. Fires after overnight
+  // ingest + scoring so the opportunity set is up to date. No-op when
+  // GOVTRIBE_API_KEY is unset (safe to run unconditionally).
+  if (h === 8 && m === 30) due.push("sync_govtribe_activity");
 
   return due;
 }
