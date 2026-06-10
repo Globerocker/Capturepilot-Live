@@ -110,6 +110,12 @@ const TASKS = {
   // Cheap (only touches contacts with events in the last hour) and idempotent,
   // so ferrying through the orchestrator keeps us under the 40-cron ceiling.
   recompute_lead_scores:           "recompute_lead_scores",
+  // R3-M2.1 — outreach cadence runner. Advances outreach_campaign_contacts
+  // through their steps and fires the next email/SMS. Vercel is at the
+  // 40/40 Pro cron ceiling so this rides the orchestrator at every 5-min
+  // tick. The route itself is budgeted at 270s and processes up to 100
+  // contacts per fire — well inside the orchestrator's parallel fan-out.
+  run_outreach_cadence:            "run_outreach_cadence",
 } as const;
 
 type TaskName = keyof typeof TASKS;
@@ -240,6 +246,11 @@ function tasksDueAt(d: Date): TaskName[] {
   // are independent pipelines).
   if (m === 5) due.push("recompute_lead_scores");
 
+  // R3-M2.1 — outreach cadence runner. Fires every orchestrator tick (every
+  // 5-min). Internal budget caps at 270s + 100 contacts per fire so it
+  // doesn't starve siblings in the parallel fan-out.
+  due.push("run_outreach_cadence");
+
   return due;
 }
 
@@ -288,6 +299,7 @@ async function GET_handler(req: NextRequest): Promise<NextResponse> {
     enqueue_backfill: async () => (await import("../enqueue_backfill/route")).GET as Handler,
     run_worker_jobs_rescore: async () => (await import("../run_worker_jobs_rescore/route")).GET as Handler,
     recompute_lead_scores: async () => (await import("../recompute_lead_scores/route")).GET as Handler,
+    run_outreach_cadence: async () => (await import("../run_outreach_cadence/route")).GET as Handler,
   };
 
   function buildChildRequest(task: TaskName): NextRequest {
