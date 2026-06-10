@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
+// Edge runtime — Supabase read + OpenAI fetch; both work over standard fetch.
+export const runtime = "edge";
 export const maxDuration = 30;
 
 /**

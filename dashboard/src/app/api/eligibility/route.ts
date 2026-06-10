@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth-server";
 
+// Edge runtime — two Supabase reads plus pure rule logic. No Node-only APIs.
+export const runtime = "edge";
+
 /**
  * POST /api/eligibility
  * Check if a company profile is eligible for an opportunity's set-aside.
