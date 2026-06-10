@@ -6,6 +6,7 @@ import clsx from "clsx";
 import {
     Loader2, Check, X, Search, RefreshCw, Globe, MapPin, Hash,
     Calendar, CheckSquare, Square, AlertTriangle, Sparkles, PlayCircle,
+    Settings as SettingsIcon, Pause, Play, Thermometer,
 } from "lucide-react";
 
 interface Prospect {
@@ -39,7 +40,10 @@ const STATUS_TABS: Array<{ key: string; label: string }> = [
     { key: "all", label: "All" },
 ];
 
+type TopTab = "prospects" | "settings";
+
 export default function OutreachAdminPage() {
+    const [topTab, setTopTab] = useState<TopTab>("prospects");
     const [prospects, setProspects] = useState<Prospect[]>([]);
     const [total, setTotal] = useState(0);
     const [loading, setLoading] = useState(true);
@@ -125,32 +129,64 @@ export default function OutreachAdminPage() {
             <div className="flex items-center justify-between gap-4 flex-wrap">
                 <div>
                     <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-                        <Sparkles className="w-6 h-6 text-emerald-600" /> Outreach Prospects
+                        <Sparkles className="w-6 h-6 text-emerald-600" /> Outreach
                     </h1>
                     <p className="text-sm text-stone-500 mt-1">
                         Newly-SAM-registered companies queued for cold outreach. Admin-only.
                     </p>
                 </div>
-                <div className="flex items-center gap-2">
-                    <button
-                        type="button"
-                        onClick={runDiscovery}
-                        disabled={running}
-                        className="bg-black text-white text-xs font-bold px-4 py-2 rounded-xl inline-flex items-center gap-2 disabled:opacity-50"
-                        title="Pull the last 14 days from SAM.gov now"
-                    >
-                        {running ? <Loader2 className="w-4 h-4 animate-spin" /> : <PlayCircle className="w-4 h-4" />}
-                        {running ? "Running…" : "Run Discovery (14 days)"}
-                    </button>
-                    <button
-                        type="button"
-                        onClick={load}
-                        className="text-xs font-bold text-stone-600 bg-white border border-stone-200 px-3 py-2 rounded-xl inline-flex items-center gap-1.5 hover:bg-stone-50"
-                    >
-                        <RefreshCw className="w-3.5 h-3.5" /> Refresh
-                    </button>
-                </div>
+                {topTab === "prospects" && (
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={runDiscovery}
+                            disabled={running}
+                            className="bg-black text-white text-xs font-bold px-4 py-2 rounded-xl inline-flex items-center gap-2 disabled:opacity-50"
+                            title="Pull the last 14 days from SAM.gov now"
+                        >
+                            {running ? <Loader2 className="w-4 h-4 animate-spin" /> : <PlayCircle className="w-4 h-4" />}
+                            {running ? "Running…" : "Run Discovery (14 days)"}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={load}
+                            className="text-xs font-bold text-stone-600 bg-white border border-stone-200 px-3 py-2 rounded-xl inline-flex items-center gap-1.5 hover:bg-stone-50"
+                        >
+                            <RefreshCw className="w-3.5 h-3.5" /> Refresh
+                        </button>
+                    </div>
+                )}
             </div>
+
+            {/* Top tabs: Prospects | Settings */}
+            <div className="flex items-center gap-2 border-b border-stone-200">
+                <button
+                    type="button"
+                    onClick={() => setTopTab("prospects")}
+                    className={clsx(
+                        "text-xs font-bold uppercase tracking-widest px-4 py-2.5 border-b-2 -mb-px inline-flex items-center gap-2 transition-colors",
+                        topTab === "prospects"
+                            ? "border-black text-black"
+                            : "border-transparent text-stone-500 hover:text-stone-800",
+                    )}
+                >
+                    <Sparkles className="w-3.5 h-3.5" /> Prospects
+                </button>
+                <button
+                    type="button"
+                    onClick={() => setTopTab("settings")}
+                    className={clsx(
+                        "text-xs font-bold uppercase tracking-widest px-4 py-2.5 border-b-2 -mb-px inline-flex items-center gap-2 transition-colors",
+                        topTab === "settings"
+                            ? "border-black text-black"
+                            : "border-transparent text-stone-500 hover:text-stone-800",
+                    )}
+                >
+                    <SettingsIcon className="w-3.5 h-3.5" /> Settings
+                </button>
+            </div>
+
+            {topTab === "settings" ? <SettingsPanel /> : <>
 
             {msg && (
                 <div className={clsx(
@@ -344,6 +380,252 @@ export default function OutreachAdminPage() {
                     </table>
                 )}
             </div>
+            </>}
+        </div>
+    );
+}
+
+// ─── Settings tab ───────────────────────────────────────────
+// Today shows the email-warmup status block (R3-M5.2). Future settings
+// (sender domain rotation, peer list management, sequence delays) slot
+// underneath this block.
+
+interface WarmupHistoryPoint {
+    date: string;
+    target: number;
+    actual: number;
+    paused: boolean;
+}
+
+interface WarmupStatus {
+    today: { date: string; target: number; actual: number; paused: boolean } | null;
+    history: WarmupHistoryPoint[];
+    paused: boolean;
+    peer_count: number;
+    peer_env_var: string;
+}
+
+function SettingsPanel() {
+    const [data, setData] = useState<WarmupStatus | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [err, setErr] = useState<string | null>(null);
+
+    const load = useCallback(async () => {
+        setLoading(true);
+        setErr(null);
+        try {
+            const res = await fetch("/api/admin/outreach/warmup");
+            if (!res.ok) {
+                setErr(`Failed to load warmup status (${res.status})`);
+                setData(null);
+            } else {
+                const body = await res.json() as WarmupStatus;
+                setData(body);
+            }
+        } catch (e) {
+            setErr((e as Error).message);
+        }
+        setLoading(false);
+    }, []);
+
+    useEffect(() => { load(); }, [load]);
+
+    const togglePause = async () => {
+        if (!data) return;
+        setSaving(true);
+        try {
+            const res = await fetch("/api/admin/outreach/warmup", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ paused: !data.paused }),
+            });
+            if (res.ok) await load();
+        } catch (e) {
+            setErr((e as Error).message);
+        }
+        setSaving(false);
+    };
+
+    if (loading) {
+        return (
+            <div className="bg-white border border-stone-200 rounded-2xl p-12 flex justify-center">
+                <Loader2 className="w-6 h-6 animate-spin text-stone-400" />
+            </div>
+        );
+    }
+
+    if (err || !data) {
+        return (
+            <div className="bg-rose-50 border border-rose-200 text-rose-800 rounded-2xl p-6 text-sm">
+                {err || "Couldn't load warmup data."}
+            </div>
+        );
+    }
+
+    const today = data.today;
+    const pct = today && today.target > 0
+        ? Math.min(100, Math.round((today.actual / today.target) * 100))
+        : 0;
+    const maxBar = Math.max(1, ...data.history.map(h => Math.max(h.target, h.actual)));
+
+    return (
+        <div className="space-y-6">
+            {/* Warmup status block */}
+            <section className="bg-white border border-stone-200 rounded-2xl p-6">
+                <div className="flex items-center justify-between gap-4 flex-wrap mb-4">
+                    <div className="flex items-center gap-2">
+                        <Thermometer className="w-5 h-5 text-emerald-600" />
+                        <h2 className="text-lg font-bold tracking-tight">Email Warmup</h2>
+                        {data.paused && (
+                            <span className="text-[10px] font-bold uppercase tracking-widest bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded">
+                                Paused
+                            </span>
+                        )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={togglePause}
+                            disabled={saving}
+                            className={clsx(
+                                "text-xs font-bold px-3 py-1.5 rounded-xl inline-flex items-center gap-1.5 border transition-colors disabled:opacity-50",
+                                data.paused
+                                    ? "bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700"
+                                    : "bg-white text-stone-700 border-stone-200 hover:bg-stone-50",
+                            )}
+                            title={data.paused ? "Resume warmup" : "Pause warmup"}
+                        >
+                            {saving
+                                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                : data.paused
+                                    ? <Play className="w-3.5 h-3.5" />
+                                    : <Pause className="w-3.5 h-3.5" />}
+                            {data.paused ? "Resume warmup" : "Pause warmup"}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={load}
+                            title="Refresh warmup status"
+                            aria-label="Refresh warmup status"
+                            className="text-xs font-bold text-stone-600 bg-white border border-stone-200 px-3 py-1.5 rounded-xl inline-flex items-center gap-1.5 hover:bg-stone-50"
+                        >
+                            <RefreshCw className="w-3.5 h-3.5" />
+                        </button>
+                    </div>
+                </div>
+
+                <p className="text-xs text-stone-500 mb-5 leading-relaxed">
+                    Warmup ramps daily send volume on a 30-day curve so mailbox providers
+                    build trust with our sending domain. The cron at
+                    {" "}<code className="bg-stone-100 px-1 py-0.5 rounded text-[11px]">/api/cron/email_warmup_send</code>{" "}
+                    runs every 30 min during business hours and tops up under the day's target.
+                </p>
+
+                {/* Today's KPIs */}
+                {today ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
+                        <div className="bg-stone-50 border border-stone-100 rounded-xl p-4">
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500 mb-1">Today's target</p>
+                            <p className="text-2xl font-black text-black">{today.target.toLocaleString()}</p>
+                            <p className="text-[11px] text-stone-500 mt-1">{today.date}</p>
+                        </div>
+                        <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4">
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-700 mb-1">Sent so far</p>
+                            <p className="text-2xl font-black text-emerald-800">{today.actual.toLocaleString()}</p>
+                            <p className="text-[11px] text-emerald-700 mt-1">{pct}% of target</p>
+                        </div>
+                        <div className="bg-stone-50 border border-stone-100 rounded-xl p-4">
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500 mb-1">Peer addresses</p>
+                            <p className="text-2xl font-black text-black">{data.peer_count}</p>
+                            <p className="text-[11px] text-stone-500 mt-1">
+                                via <code className="bg-stone-100 px-1 rounded">{data.peer_env_var}</code>
+                            </p>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-4 mb-5 text-sm flex items-start gap-2">
+                        <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                        <div>
+                            No schedule row for today. Run migration 148 or extend the schedule curve.
+                        </div>
+                    </div>
+                )}
+
+                {/* Today's progress bar */}
+                {today && today.target > 0 && (
+                    <div className="mb-6">
+                        <div className="h-3 bg-stone-100 rounded-full overflow-hidden">
+                            <div
+                                className="h-full bg-emerald-500 transition-all"
+                                style={{ width: `${pct}%` }}
+                            />
+                        </div>
+                    </div>
+                )}
+
+                {/* 30-day chart */}
+                <div>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500 mb-3">
+                        30-day ramp (target vs actual)
+                    </p>
+                    {data.history.length === 0 ? (
+                        <p className="text-xs text-stone-500">No history yet.</p>
+                    ) : (
+                        <div className="flex items-end gap-1 h-32 border-b border-stone-200 pb-1">
+                            {data.history.map(h => {
+                                const targetH = Math.round((h.target / maxBar) * 100);
+                                const actualH = Math.round((h.actual / maxBar) * 100);
+                                const isToday = today && h.date === today.date;
+                                return (
+                                    <div key={h.date} className="flex-1 flex flex-col items-center justify-end" title={`${h.date}: target ${h.target} · sent ${h.actual}`}>
+                                        <div className="w-full relative" style={{ height: "100%" }}>
+                                            <div
+                                                className={clsx(
+                                                    "absolute bottom-0 left-0 right-0 rounded-t transition-all",
+                                                    isToday ? "bg-stone-400" : "bg-stone-200",
+                                                )}
+                                                style={{ height: `${targetH}%` }}
+                                            />
+                                            <div
+                                                className={clsx(
+                                                    "absolute bottom-0 left-0 right-0 rounded-t transition-all opacity-90",
+                                                    h.paused ? "bg-amber-400" : "bg-emerald-500",
+                                                )}
+                                                style={{ height: `${actualH}%` }}
+                                            />
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                    <div className="flex items-center gap-4 mt-3 text-[11px] text-stone-500">
+                        <span className="inline-flex items-center gap-1.5">
+                            <span className="w-2.5 h-2.5 rounded bg-stone-200 inline-block" /> Target
+                        </span>
+                        <span className="inline-flex items-center gap-1.5">
+                            <span className="w-2.5 h-2.5 rounded bg-emerald-500 inline-block" /> Sent
+                        </span>
+                        <span className="inline-flex items-center gap-1.5">
+                            <span className="w-2.5 h-2.5 rounded bg-amber-400 inline-block" /> Paused day
+                        </span>
+                    </div>
+                </div>
+
+                {data.peer_count === 0 && (
+                    <div className="mt-5 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-4 text-xs flex items-start gap-2">
+                        <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                        <div>
+                            <strong>No peer addresses configured.</strong> Set the
+                            {" "}<code className="bg-amber-100 px-1 rounded">WARMUP_PEER_ADDRESSES</code>{" "}
+                            env var to a comma-separated list of friendly inboxes
+                            (e.g. internal addresses you control). The cron will no-op
+                            until this is set.
+                        </div>
+                    </div>
+                )}
+            </section>
         </div>
     );
 }
