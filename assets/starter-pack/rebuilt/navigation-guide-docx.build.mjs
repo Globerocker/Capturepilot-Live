@@ -134,16 +134,16 @@ children.push(para([run('LAUNCH KIT', { size: SIZE_HERO, bold: true, color: INK,
 children.push(para([run('Navigation & Start-Here Guide', { size: SIZE_H2, italic: true, color: SLATE })],
   { before: 0, after: 100, alignment: AlignmentType.CENTER, line: 300 }));
 children.push(para([
-  mono('CapturePilot · 38 files · 10 categories', { color: SLATE_LIGHT, size: 18 }),
+  mono('CapturePilot · 58 files · 11 categories', { color: SLATE_LIGHT, size: 18 }),
 ], { before: 0, after: 600, alignment: AlignmentType.CENTER, line: 300 }));
 
 // What this is
 children.push(h1('What this kit is'));
 children.push(para([run(
-  'Everything you need to register, qualify, find, and win your first federal contract. Built by federal-contracting practitioners for small business owners who don\'t want to spend $10k on a consultant to learn the basics.',
+  'Everything you need to register, qualify, find, win, and keep your first federal contract. Built by federal-contracting practitioners for small business owners who don\'t want to spend $10k on a consultant to learn the basics.',
   { size: SIZE_LEAD })], { after: 120, line: 300 }));
 children.push(para([run(
-  'Every file works in the tool you already have — Microsoft Word/Excel, Apple Pages/Numbers, or Google Docs/Sheets. No subscriptions, no logins, no upgrades. Open it, fill it in, use it.',
+  '58 files across 11 categories — covering the full lifecycle from SAM registration through post-award compliance. Every file works in the tool you already have — Microsoft Word/Excel, Apple Pages/Numbers, or Google Docs/Sheets. No subscriptions, no logins, no upgrades. Open it, fill it in, use it.',
   { size: SIZE_LEAD })], { after: 200, line: 300 }));
 
 // How to use this kit
@@ -151,6 +151,11 @@ children.push(h1('How to use this kit'));
 children.push(para([
   run('Read this guide first (you\'re doing it). Then work the folders in numbered order — they\'re ordered the way a real capture cycle runs:',
     { size: SIZE_LEAD })], { after: 120 }));
+
+children.push(para([
+  run('Start here: open FLK_Field_Manual.pdf', { size: SIZE_LEAD, bold: true }),
+  run(' — the 40+ page playbook that ties everything together.', { size: SIZE_LEAD }),
+], { after: 120 }));
 
 children.push(bullet('Folder 01 → get registered on sam.gov'));
 children.push(bullet('Folder 02 → build your capability statement'));
@@ -162,6 +167,7 @@ children.push(bullet('Folder 07 → start outreach to contracting officers'));
 children.push(bullet('Folder 08 → set a winning price'));
 children.push(bullet('Folder 09 → run reviews + manage compliance'));
 children.push(bullet('Folder 10 → book your founder onboarding call when ready'));
+children.push(bullet('Folder 11 → stay compliant and protect the contract after you win'));
 
 children.push(para([], { after: 200 }));
 
@@ -197,13 +203,15 @@ folder('02 · Capability Statement Kit',
 ]);
 
 folder('03 · Solicitation Playbooks',
-  'Six playbooks — one per notice type you\'ll see on sam.gov.', [
+  'Six playbooks — one per notice type you\'ll see on sam.gov. Plus two tools for reading RFPs and sharpening your message.', [
   ['FLK_03_Sources_Sought_RFI_Playbook.pdf', 'How to respond to Sources Sought + RFI notices.'],
   ['FLK_03_Pre_Solicitation_Playbook.pdf', 'What to do during the pre-solicitation window.'],
   ['FLK_03_RFP_Response_Playbook.pdf', 'Full RFP response strategy + checklist.'],
   ['FLK_03_RFQ_Playbook.pdf', 'Quoting under the SAP threshold ($250k).'],
   ['FLK_03_IDIQ_GWAC_Task_Order_Playbook.pdf', 'Multi-award vehicle bids + task order chasing.'],
   ['FLK_03_Market_Research_Playbook.pdf', 'How to do market research a contracting officer would respect.'],
+  ['FLK_03_How_to_Read_Section_L_M.pdf', 'Decode Section L (instructions) and Section M (evaluation) before you write a word.'],
+  ['FLK_03_Win_Themes_Workbook.xlsx', 'Build and score discriminating win themes for every proposal section.'],
 ]);
 
 folder('04 · Bid/No-Bid Decision Toolkit',
@@ -211,6 +219,7 @@ folder('04 · Bid/No-Bid Decision Toolkit',
   ['FLK_04_Bid_No_Bid_Decision_Matrix.xlsx', 'Decision matrix with weighted criteria.'],
   ['FLK_04_PWin_Calculator.xlsx', 'Probability-of-win across 12 factors.'],
   ['FLK_04_Competitive_Bid_Analysis.xlsx', 'Head-to-head against incumbents + known competitors.'],
+  ['FLK_04_Bid_Decision_Memo_Template.docx', 'One-page memo format to document and sign off on every go/no-go decision.'],
 ]);
 
 folder('05 · Certification Eligibility Worksheets',
@@ -219,6 +228,7 @@ folder('05 · Certification Eligibility Worksheets',
   ['FLK_05_8a_Certification_Self_Assessment.xlsx', 'Am I eligible? Am I ready?'],
   ['FLK_05_WOSB_EDWOSB_Self_Cert.xlsx', 'DIY self-certification walkthrough.'],
   ['FLK_05_HUBZone_Eligibility_Worksheet.xlsx', 'Address + employee + revenue tests.'],
+  ['FLK_05_SDB_Self_Assessment.xlsx', 'SBA Small Disadvantaged Business self-assessment — social disadvantage, economic disadvantage, and ownership tests.'],
 ]);
 
 folder('06 · Past Performance Reference Templates',
@@ -226,6 +236,9 @@ folder('06 · Past Performance Reference Templates',
   ['FLK_06_Past_Performance_Reference_Template.docx', 'Word template — one contract per page.'],
   ['FLK_06_Past_Performance_Reference_Template.pdf', 'Printable reference.'],
   ['FLK_06_Commercial_to_Federal_Past_Performance.pdf', 'Translating commercial work into the language proposals want.'],
+  ['FLK_06_Sample_Past_Performance_Janitorial.docx', 'Filled-in example for a janitorial SDVOSB on a VA medical center custodial contract.'],
+  ['FLK_06_Sample_Past_Performance_IT_Services.docx', 'Filled-in example for an IT services firm on a 4-year DoD enterprise modernization contract.'],
+  ['FLK_06_Past_Performance_Reference_Request_Letter.docx', 'Letter to send past clients asking them to serve as a reference — with the right framing so they say yes.'],
 ]);
 
 folder('07 · Contracting Officer Outreach Library',
@@ -234,6 +247,8 @@ folder('07 · Contracting Officer Outreach Library',
   ['FLK_07_LinkedIn_Outreach_Scripts.pdf', '8 ways to start a useful LinkedIn conversation.'],
   ['FLK_07_Industry_Day_Playbook.pdf', 'How to actually get value out of an industry day.'],
   ['FLK_07_COR_PM_Conversation_Scripts.pdf', 'Once you win, how to keep building.'],
+  ['FLK_07_Federal_Events_Calendar_FY2026.pdf', 'Key federal contracting events, industry days, and budget milestones for FY2026.'],
+  ['FLK_07_LinkedIn_Profile_Audit.pdf', '20-point audit to make your LinkedIn profile credible to a contracting officer.'],
 ]);
 
 folder('08 · Price-to-Win Toolkit',
@@ -241,6 +256,9 @@ folder('08 · Price-to-Win Toolkit',
   ['FLK_08_Federal_Labor_Rate_Benchmarks_FY2026.pdf', 'Government-published comparable rates.'],
   ['FLK_08_Price_to_Win_Worksheet.xlsx', 'Work backwards from the agency budget.'],
   ['FLK_08_Indirect_Rate_Calculator.xlsx', 'Calculate your true loaded cost.'],
+  ['FLK_08_Federal_Labor_Categories_Matrix.xlsx', '40+ labor categories with SCA, OPM, and GSA Schedule rate comparisons.'],
+  ['FLK_08_Sample_Cost_Proposal.xlsx', 'Worked example — $750K FFP professional services contract, 24-month base + 2 option years.'],
+  ['FLK_08_Indirect_Rate_Audit_Checklist.pdf', 'Pre-audit checklist so your indirect rates survive a DCAA review.'],
 ]);
 
 folder('09 · Internal Best-Practice Library',
@@ -251,11 +269,21 @@ folder('09 · Internal Best-Practice Library',
   ['FLK_09_Teaming_Agreement_Template.pdf', 'Printable reference.'],
   ['FLK_09_Capture_Maturity_Self_Audit.xlsx', 'Score your capture process maturity.'],
   ['FLK_09_Compliance_Matrix_Template.xlsx', 'Section-by-section RFP compliance tracking.'],
+  ['FLK_09_NDA_Template.docx', 'Non-disclosure agreement for teaming conversations and proposal-prep partner discussions.'],
 ]);
 
 folder('10 · Bonus · Founder Onboarding Call',
   'Stuck somewhere? Book a 30-minute call.', [
   ['FLK_10_Founder_Onboarding_Call.pdf', 'How to book + what to bring + what we\'ll cover.'],
+]);
+
+folder('11 · Post-Award Compliance',
+  'Most small businesses lose their second contract because they bombed CPARS on the first. These 5 tools cover what happens AFTER you win.', [
+  ['FLK_11_CPARS_Past_Performance_Guide.pdf', 'How CPARS ratings work, what evaluators look for, and how to manage your record.'],
+  ['FLK_11_DCAA_Accounting_Basics.pdf', 'What DCAA auditors actually check and how to keep your accounting system audit-ready.'],
+  ['FLK_11_Quality_Assurance_Plan_Template.docx', 'Editable Quality Assurance Surveillance Plan (QASP) covering standards, indicators, corrective action, and inspection checklists.'],
+  ['FLK_11_Subcontracting_Plan_Template.docx', 'FAR 19.704-compliant subcontracting plan with goals table, SB outreach, and recordkeeping section.'],
+  ['FLK_11_Contract_Mod_Request_Template.docx', 'Template for requesting a contract modification — scope change, period of performance extension, or funding action.'],
 ]);
 
 // Tools-that-pair-well section

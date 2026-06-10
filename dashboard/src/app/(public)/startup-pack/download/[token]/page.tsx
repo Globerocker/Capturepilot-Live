@@ -7,7 +7,7 @@ import Image from "next/image";
 import {
     Loader2, FileText, Search, Scale, Award, Trophy, Mail, DollarSign, Video,
     ExternalLink, Download, CheckCircle2, ArrowRight, AlertCircle, Sparkles,
-    ClipboardCheck, BookOpen, Building2, ChevronDown,
+    ClipboardCheck, BookOpen, Building2, ChevronDown, Package,
 } from "lucide-react";
 import clsx from "clsx";
 import {
@@ -98,6 +98,7 @@ export default function StartupPackDownloadPage() {
     }
 
     const totalAssets = STARTUP_PACK_ASSETS.filter(a => a.localPath || a.gdriveUrl).length;
+    const localAssets = STARTUP_PACK_ASSETS.filter(a => !!a.localPath).length;
     const comingSoonCount = STARTUP_PACK_ASSETS.length - totalAssets;
     const buyer = access.company_name?.trim() || access.email?.split("@")[0] || "there";
 
@@ -137,6 +138,9 @@ export default function StartupPackDownloadPage() {
                         <span className="bg-amber-300 text-amber-900 px-3 py-1.5 rounded-lg font-bold">7-day refund · No questions</span>
                     </div>
                 </section>
+
+                {/* ZIP download banner — one-click to grab everything */}
+                <ZipDownloadBanner token={token} assetCount={localAssets} />
 
                 {/* Sticky category nav — 10 pills, jump to any kit. */}
                 <CategoryNav />
@@ -188,6 +192,111 @@ export default function StartupPackDownloadPage() {
                 </section>
             </main>
         </div>
+    );
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// ZipDownloadBanner — prominent "download everything as one ZIP" panel that
+// lives at the top of the page, just below the hero section.
+//
+// State machine:
+//   idle → downloading (click) → done | error
+//
+// We use a plain <a href> approach with a programmatic click so the browser
+// handles the file-save dialog natively. The download can take 5-30 seconds
+// for large bundles; we show a spinner + "Preparing your ZIP…" label while
+// the request is in-flight. We detect completion via the blob URL being ready.
+// ──────────────────────────────────────────────────────────────────────────────
+function ZipDownloadBanner({ token, assetCount }: { token: string; assetCount: number }) {
+    const [status, setStatus] = useState<"idle" | "downloading" | "done" | "error">("idle");
+    const [errorMsg, setErrorMsg] = useState("");
+
+    async function handleDownload() {
+        if (status === "downloading") return;
+        setStatus("downloading");
+        setErrorMsg("");
+        try {
+            const res = await fetch(`/api/startup-pack/zip/${token}`);
+            if (!res.ok) {
+                const text = await res.text();
+                throw new Error(text || `Server returned ${res.status}`);
+            }
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "Federal_Launch_Kit.zip";
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(url), 60_000);
+            setStatus("done");
+        } catch (err) {
+            console.error("[zip-download]", err);
+            setErrorMsg(err instanceof Error ? err.message : "Download failed");
+            setStatus("error");
+        }
+    }
+
+    return (
+        <section className="bg-white border-2 border-emerald-200 rounded-[28px] p-5 sm:p-7 shadow-sm">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-100 flex items-center justify-center flex-shrink-0">
+                    <Package className="w-6 h-6 text-emerald-700" />
+                </div>
+                <div className="flex-1 min-w-0">
+                    <h2 className="font-bold text-base text-stone-900">
+                        Download Everything as One ZIP
+                    </h2>
+                    <p className="text-sm text-stone-500 leading-snug mt-0.5">
+                        Get all {assetCount} files in a single download — PDFs, XLSX, DOCX, Navigation Guide, and Field Manual.
+                        No clicking 39 individual links.
+                    </p>
+                    {status === "error" && (
+                        <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
+                            <AlertCircle className="w-3.5 h-3.5" />
+                            {errorMsg || "Something went wrong. Try again."}
+                        </p>
+                    )}
+                    {status === "done" && (
+                        <p className="text-xs text-emerald-700 mt-1 flex items-center gap-1">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            ZIP saved — check your downloads folder.
+                        </p>
+                    )}
+                </div>
+                <button
+                    type="button"
+                    onClick={handleDownload}
+                    disabled={status === "downloading"}
+                    className={clsx(
+                        "flex-shrink-0 inline-flex items-center gap-2 px-5 py-3 rounded-2xl font-bold text-sm transition-all",
+                        status === "downloading"
+                            ? "bg-stone-100 text-stone-500 cursor-not-allowed"
+                            : status === "done"
+                                ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+                                : "bg-emerald-600 text-white hover:bg-emerald-700 shadow-md hover:shadow-lg hover:-translate-y-0.5",
+                    )}
+                >
+                    {status === "downloading" ? (
+                        <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Preparing ZIP…
+                        </>
+                    ) : status === "done" ? (
+                        <>
+                            <CheckCircle2 className="w-4 h-4" />
+                            Download again
+                        </>
+                    ) : (
+                        <>
+                            <Download className="w-4 h-4" />
+                            Download All ({assetCount} files)
+                        </>
+                    )}
+                </button>
+            </div>
+        </section>
     );
 }
 
