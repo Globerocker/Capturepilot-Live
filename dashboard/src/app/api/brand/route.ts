@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import { analyzeCompany } from "@/lib/crawler";
 import * as cheerio from "cheerio";
+import { requireUser } from "@/lib/auth-server";
+import { protectCrawl } from "@/lib/protect-crawl";
+import { assertSafePublicUrl } from "@/lib/ssrf-guard";
 
 export const maxDuration = 90;
 
@@ -234,11 +236,28 @@ async function extractColorsFromHtmlAndCss(html: string, baseUrl: string): Promi
 
 // ─── Main handler ────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
+    // Audit fix #2: require auth, rate-limit, ignore body-supplied user_profile_id,
+    // SSRF-guard the user-supplied URL, drop the SERVICE_KEY write.
+    const auth = await requireUser();
+    if (auth instanceof NextResponse) return auth;
+
+    const limited = protectCrawl(req, { route: "brand", maxPerMin: 5 });
+    if (limited) return limited;
+
+    const { sb, profile } = auth;
+
     try {
-        const { website, user_profile_id } = await req.json();
+        const { website } = await req.json();
         if (!website) return NextResponse.json({ error: "website required" }, { status: 400 });
 
         const url = normalizeUrl(website);
+
+        // SSRF guard — refuse private/loopback/link-local resolved IPs + non-http(s) schemes.
+        try {
+            await assertSafePublicUrl(url);
+        } catch (err) {
+            return NextResponse.json({ error: (err as Error).message }, { status: 400 });
+        }
 
         // 1) Fetch homepage HTML for brand asset extraction
         let homepageHtml = "";
@@ -306,20 +325,20 @@ export async function POST(req: NextRequest) {
             pages_crawled: crawlData?.pages_crawled || [],
         };
 
-        // 4) Persist on user profile if requested
-        if (user_profile_id) {
+        // 4) Persist on the caller's own profile only (no body-supplied UUID).
+        //    Uses the user-scoped server client so RLS enforces ownership.
+        if (profile?.id) {
             try {
-                const db = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_KEY!);
-                const { data: existing } = await db
+                const { data: existing } = await sb
                     .from("user_profiles")
                     .select("notes")
-                    .eq("id", user_profile_id)
+                    .eq("id", profile.id)
                     .single();
                 const prev = (existing?.notes && typeof existing.notes === "object") ? existing.notes : {};
-                await db
+                await sb
                     .from("user_profiles")
                     .update({ notes: { ...prev, brand_kit: brandKit } })
-                    .eq("id", user_profile_id);
+                    .eq("id", profile.id);
             } catch { /* non-fatal */ }
         }
 

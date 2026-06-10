@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { requireUser } from "@/lib/auth-server";
 
 export const maxDuration = 60;
 
@@ -20,6 +21,16 @@ export const maxDuration = 60;
  * Returns: { subject: string, body: string, tone: string }
  */
 export async function POST(req: NextRequest) {
+    // Audit fix #3: require auth; resolve caller's own profile.
+    // Body-supplied user_profile_id is ignored — was an outbound-spam vector
+    // (any unauth caller could draft outreach copy for any chosen POC).
+    const auth = await requireUser();
+    if (auth instanceof NextResponse) return auth;
+    const user_profile_id = auth.profile?.id;
+    if (!user_profile_id) {
+        return NextResponse.json({ error: "Profile not found for current user" }, { status: 404 });
+    }
+
     const OPENAI_KEY = process.env.OPENAI_API_KEY;
     if (!OPENAI_KEY) {
         console.error("[draft-email] OPENAI_API_KEY not set");
@@ -30,14 +41,12 @@ export async function POST(req: NextRequest) {
     try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
 
     const {
-        notice_id, opportunity_id, user_profile_id,
+        notice_id, opportunity_id,
         poc_name, poc_title, tone = "cold-intro", custom_context,
     } = body as {
-        notice_id?: string; opportunity_id?: string; user_profile_id?: string;
+        notice_id?: string; opportunity_id?: string;
         poc_name?: string; poc_title?: string; tone?: string; custom_context?: string;
     };
-
-    if (!user_profile_id) return NextResponse.json({ error: "user_profile_id required" }, { status: 400 });
 
     const validTones = ["cold-intro", "follow-up", "post-sources-sought", "pre-bid-question"];
     if (!validTones.includes(tone)) return NextResponse.json({ error: `invalid tone; use one of ${validTones.join(", ")}` }, { status: 400 });
