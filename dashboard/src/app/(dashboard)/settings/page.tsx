@@ -5,7 +5,7 @@ import {
     Settings, User, Bell, Building, MapPin, Shield, Loader2, CheckCircle2,
     Phone, Calendar, UserCheck, Search, AlertCircle, Briefcase, Truck,
     ShieldCheck, CreditCard, Receipt, ExternalLink, Download, Eye,
-    Lock, AlertTriangle, Trash2, X, ChevronDown, ChevronUp,
+    Lock, AlertTriangle, Trash2, X, ChevronDown, ChevronUp, Target,
 } from "lucide-react";
 import ServiceCTA from "@/components/ui/ServiceCTA";
 import FeatureRequestForm from "@/components/FeatureRequestForm";
@@ -209,7 +209,8 @@ export default function SettingsPage() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
-    const [showAdvanced, setShowAdvanced] = useState(false);
+    const [showAdvanced, setShowAdvanced] = useState(true);
+    const [activeAdvancedTab, setActiveAdvancedTab] = useState<"capacity" | "industry" | "codes" | "targeting">("capacity");
     const [userEmail, setUserEmail] = useState("");
     const [profile, setProfile] = useState<Profile | null>(null);
     const [naicsSearch, setNaicsSearch] = useState("");
@@ -323,6 +324,13 @@ export default function SettingsPage() {
         if (loading || !profile) return;
         const hash = window.location.hash?.replace("#", "");
         if (!hash) return;
+        // Hashes that map to advanced tabs activate the tab instead of scrolling
+        const tabHashes = ["capacity", "industry", "codes", "targeting"] as const;
+        if ((tabHashes as readonly string[]).includes(hash)) {
+            setShowAdvanced(true);
+            setActiveAdvancedTab(hash as typeof tabHashes[number]);
+            return;
+        }
         const timeout = setTimeout(() => {
             const el = document.getElementById(hash);
             if (el) {
@@ -333,6 +341,20 @@ export default function SettingsPage() {
         }, 300);
         return () => clearTimeout(timeout);
     }, [loading, profile]);
+
+    /* ---- Persist active advanced tab in URL hash ---- */
+    useEffect(() => {
+        if (!showAdvanced) return;
+        if (typeof window === "undefined") return;
+        const currentHash = window.location.hash.replace("#", "");
+        const tabHashes = ["capacity", "industry", "codes", "targeting"];
+        // Only overwrite the hash if it's already a tab hash (or empty);
+        // don't stomp on hashes like "password" or "danger-zone".
+        if (currentHash === activeAdvancedTab) return;
+        if (currentHash === "" || tabHashes.includes(currentHash)) {
+            history.replaceState(null, "", `#${activeAdvancedTab}`);
+        }
+    }, [activeAdvancedTab, showAdvanced]);
 
     /* ---- Profile helpers ---- */
     const updateProfile = (key: string, value: unknown) => {
@@ -804,18 +826,61 @@ export default function SettingsPage() {
 
             <button type="button" onClick={() => setShowAdvanced(!showAdvanced)}
                 className="w-full bg-stone-50 border border-stone-200 rounded-2xl p-4 text-left hover:bg-stone-100 transition-colors flex items-center justify-between">
-                <span className="text-sm font-bold text-stone-600">
-                    {showAdvanced ? "Hide Advanced Settings" : "Show Advanced Settings"}
+                <span className="text-sm font-bold text-stone-600 flex items-center gap-2">
+                    {showAdvanced
+                        ? <><ChevronUp className="w-4 h-4" /> Hide Advanced Settings</>
+                        : <><ChevronDown className="w-4 h-4" /> Show Advanced Settings</>}
                 </span>
                 <span className="text-xs text-stone-400">
                     Capacity, PSC Codes, Clearances, Agency Preferences
                 </span>
             </button>
 
-            
+
                     {showAdvanced && (<>
+                        {/* ---- Advanced sub-section tabs ---- */}
+                        <div className="sticky top-20 z-20 -mx-1 px-1 bg-stone-50/80 backdrop-blur-md rounded-2xl">
+                            <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-3">
+                                <div className="flex flex-wrap gap-1.5">
+                                    {[
+                                        { id: "capacity", label: "Capacity", icon: Briefcase },
+                                        { id: "industry", label: "Industry", icon: Shield },
+                                        { id: "codes", label: "Codes & Clearances", icon: ShieldCheck },
+                                        { id: "targeting", label: "Targeting", icon: Target },
+                                    ].map(tab => {
+                                        const Icon = tab.icon;
+                                        const isActive = activeAdvancedTab === tab.id;
+                                        return (
+                                            <button
+                                                key={tab.id}
+                                                type="button"
+                                                onClick={() => setActiveAdvancedTab(tab.id as typeof activeAdvancedTab)}
+                                                className={clsx(
+                                                    "flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all",
+                                                    isActive
+                                                        ? "bg-black text-white"
+                                                        : "bg-white text-stone-600 border border-stone-200 hover:border-stone-400 hover:bg-stone-50"
+                                                )}
+                                            >
+                                                <Icon className="w-3.5 h-3.5" />
+                                                {tab.label}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                                <p className="text-[11px] text-stone-400 mt-2 px-1">
+                                    Changes auto-trigger a rematch when you save.
+                                </p>
+                            </div>
+                        </div>
+
                         {/* Capacity & Experience */}
-                        <CollapsibleSection title="Capacity & Experience" icon={Briefcase} storageKey="capacity" defaultOpen>
+                        {activeAdvancedTab === "capacity" && (
+                        <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
+
+                <h3 className="font-bold text-base sm:text-lg flex items-center mb-4">
+                    <Briefcase className="w-5 h-5 mr-2 text-stone-400" /> Capacity & Experience
+                </h3>
                 <div className="space-y-4">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
@@ -899,11 +964,16 @@ export default function SettingsPage() {
                         </div>
                     </div>
                 </div>
-            </CollapsibleSection>
-
+            </section>
+                        )}
 
                         {/* Industry */}
-                        <CollapsibleSection title="Industry & Certifications" icon={Shield} storageKey="industry" defaultOpen>
+                        {activeAdvancedTab === "industry" && (
+                        <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
+
+                <h3 className="font-bold text-base sm:text-lg flex items-center mb-4">
+                    <Shield className="w-5 h-5 mr-2 text-stone-400" /> Industry & Certifications
+                </h3>
                 <div className="space-y-4">
                     <div>
                         <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">NAICS Codes <InfoTooltip text="North American Industry Classification System -- codes that describe your industry. The government uses these to categorize opportunities by service/product type." /></label>
@@ -978,11 +1048,16 @@ export default function SettingsPage() {
                         />
                     </div>
                 </div>
-            </CollapsibleSection>
-
+            </section>
+                        )}
 
                         {/* PSC Codes & Clearances */}
-                        <CollapsibleSection title="Service Codes & Clearances" icon={Shield} storageKey="psc-clearances">
+                        {activeAdvancedTab === "codes" && (
+                        <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
+
+                <h3 className="font-bold text-base sm:text-lg flex items-center mb-4">
+                    <Shield className="w-5 h-5 mr-2 text-stone-400" /> Service Codes & Clearances
+                </h3>
                 <div className="space-y-4">
                     <div>
                         <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">Product/Service Codes (PSC) <InfoTooltip text="PSC codes describe the specific products or services you provide to the government. These help match you to opportunities beyond NAICS." /></label>
@@ -1041,11 +1116,16 @@ export default function SettingsPage() {
                         </div>
                     </div>
                 </div>
-            </CollapsibleSection>
-
+            </section>
+                        )}
 
                         {/* Preferred Agencies & Contract Preferences */}
-                        <CollapsibleSection title="Targeting Preferences" icon={Building} storageKey="targeting">
+                        {activeAdvancedTab === "targeting" && (
+                        <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7">
+
+                <h3 className="font-bold text-base sm:text-lg flex items-center mb-4">
+                    <Building className="w-5 h-5 mr-2 text-stone-400" /> Targeting Preferences
+                </h3>
                 <div className="space-y-4">
                     <div>
                         <label className="text-xs text-stone-500 uppercase tracking-widest block mb-2">Preferred Agencies</label>
@@ -1112,7 +1192,8 @@ export default function SettingsPage() {
                         </div>
                     </div>
                 </div>
-            </CollapsibleSection>
+            </section>
+                        )}
 
                     </>)}
 
