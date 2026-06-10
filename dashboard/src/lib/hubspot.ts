@@ -277,6 +277,30 @@ export async function updateContactById(
 }
 
 /**
+ * Get HubSpot contact properties by contact ID. Returns null on lookup
+ * failure — callers should log and continue rather than 500. Pass a
+ * `properties` list to narrow the response payload (defaults to `email`,
+ * the only field every inbound webhook handler needs).
+ */
+export async function getContactById(
+  contactId: string,
+  properties: string[] = ['email'],
+): Promise<Record<string, string> | null> {
+  if (!contactId) return null;
+  try {
+    const qs = properties.length
+      ? `?properties=${properties.map(encodeURIComponent).join(',')}`
+      : '';
+    const result = await hsApi('GET', `/crm/v3/objects/contacts/${contactId}${qs}`);
+    const props = (result.properties as Record<string, string>) || null;
+    return props;
+  } catch (err) {
+    console.error('[HubSpot] getContactById failed:', (err as Error).message);
+    return null;
+  }
+}
+
+/**
  * Get HubSpot contact ID by email address.
  */
 export async function getContactByEmail(email: string): Promise<string | null> {

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import {
     Mail, Eye, MousePointerClick, AlertTriangle, CheckCircle2,
     Loader2, RefreshCw, ExternalLink, Sparkles, Building2,
-    Facebook, Globe, Filter,
+    Facebook, Globe, Filter, ShieldX,
 } from "lucide-react";
 import clsx from "clsx";
 
@@ -32,6 +32,13 @@ interface LeadRow {
     brief_sent_at: string | null;
     magnet: Engagement;
     brief: Engagement;
+}
+
+interface SuppressedRow {
+    email: string;
+    reason: string | null;
+    source: string | null;
+    opted_out_at: string;
 }
 
 interface Totals {
@@ -120,6 +127,7 @@ function EngagementChip({ label, e }: { label: string; e: Engagement }) {
 
 export default function EmailTrackingPage() {
     const [rows, setRows] = useState<LeadRow[]>([]);
+    const [suppressed, setSuppressed] = useState<SuppressedRow[]>([]);
     const [totals, setTotals] = useState<Totals | null>(null);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -136,6 +144,7 @@ export default function EmailTrackingPage() {
             }
             const json = await res.json();
             setRows(json.rows || []);
+            setSuppressed(json.suppressed || []);
             setTotals(json.totals || null);
             setError(null);
         } catch (e) {
@@ -336,6 +345,62 @@ export default function EmailTrackingPage() {
                             )}
                         </tbody>
                     </table>
+                </div>
+            )}
+
+            {!loading && !error && (
+                <div className="mt-8">
+                    <div className="mb-3 flex items-center gap-2">
+                        <ShieldX className="h-4 w-4 text-red-600" />
+                        <h2 className="text-lg font-semibold text-stone-900">Suppressed addresses</h2>
+                        <span className="text-xs text-stone-500">({suppressed.length} most recent)</span>
+                    </div>
+                    <p className="mb-3 text-xs text-stone-500">
+                        From <code className="rounded bg-stone-100 px-1">outreach_optouts</code>. Populated by Resend bounce/complaint webhooks,
+                        the public unsubscribe link, and HubSpot reps flagging contacts as bounced or unsubscribed.
+                    </p>
+                    <div className="overflow-hidden rounded-xl border border-stone-200 bg-white">
+                        <table className="min-w-full divide-y divide-stone-200">
+                            <thead className="bg-stone-50">
+                                <tr>
+                                    <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-stone-600">Email</th>
+                                    <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-stone-600">Source</th>
+                                    <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-stone-600">Reason</th>
+                                    <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-stone-600">Added</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-stone-100">
+                                {suppressed.map(s => (
+                                    <tr key={s.email} className="hover:bg-stone-50">
+                                        <td className="px-4 py-2 text-sm text-stone-900 tabular-nums">{s.email}</td>
+                                        <td className="px-4 py-2">
+                                            <span className={clsx(
+                                                "inline-block rounded px-1.5 py-0.5 text-[10px] font-medium",
+                                                s.source === "hubspot_webhook"
+                                                    ? "bg-orange-100 text-orange-800"
+                                                    : s.source === "resend_webhook"
+                                                        ? "bg-red-100 text-red-800"
+                                                        : s.source === "unsubscribe_link"
+                                                            ? "bg-blue-100 text-blue-800"
+                                                            : "bg-stone-100 text-stone-700",
+                                            )}>
+                                                {s.source || "unknown"}
+                                            </span>
+                                        </td>
+                                        <td className="px-4 py-2 text-xs text-stone-600">{s.reason || "—"}</td>
+                                        <td className="px-4 py-2 text-xs text-stone-600">{fmtAgo(s.opted_out_at)}</td>
+                                    </tr>
+                                ))}
+                                {suppressed.length === 0 && (
+                                    <tr>
+                                        <td colSpan={4} className="px-4 py-8 text-center text-sm text-stone-500">
+                                            No suppressed addresses on file.
+                                        </td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             )}
         </div>
