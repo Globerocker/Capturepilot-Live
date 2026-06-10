@@ -1,0 +1,11 @@
+[Unit]
+Description=Run cp-db-cleanup every Sunday at 04:00 UTC
+
+[Timer]
+# Mirrors old vercel.json "0 4 * * 0"
+OnCalendar=Sun *-*-* 04:00:00 UTC
+Persistent=true
+Unit=cp-db-cleanup.service
+
+[Install]
+WantedBy=timers.target

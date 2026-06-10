@@ -1,0 +1,11 @@
+[Unit]
+Description=Run cp-ingest-grants daily at 02:30 UTC
+
+[Timer]
+# Mirrors old vercel.json "30 2 * * *"
+OnCalendar=*-*-* 02:30:00 UTC
+Persistent=true
+Unit=cp-ingest-grants.service
+
+[Install]
+WantedBy=timers.target

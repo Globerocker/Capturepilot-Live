@@ -1,0 +1,11 @@
+[Unit]
+Description=Run cp-competitor-monitor every Sunday at 07:00 UTC
+
+[Timer]
+# Mirrors old vercel.json "0 7 * * 0"
+OnCalendar=Sun *-*-* 07:00:00 UTC
+Persistent=true
+Unit=cp-competitor-monitor.service
+
+[Install]
+WantedBy=timers.target

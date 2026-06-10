@@ -1,0 +1,11 @@
+[Unit]
+Description=Run cp-backfill-requirements daily at 06:00 UTC
+
+[Timer]
+# Mirrors old vercel.json "0 6 * * *"
+OnCalendar=*-*-* 06:00:00 UTC
+Persistent=true
+Unit=cp-backfill-requirements.service
+
+[Install]
+WantedBy=timers.target
