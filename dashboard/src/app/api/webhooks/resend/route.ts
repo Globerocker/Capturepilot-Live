@@ -217,6 +217,76 @@ export async function POST(req: NextRequest) {
         // still have the raw event. Backlink mirror is a convenience.
     }
 
+    // ---- Mirror to outreach_campaign_step_runs (R3-M2.2).
+    //      The new R3 campaign engine writes outbound sends with the Resend
+    //      message_id stored in outreach_campaign_step_runs.provider_message_id.
+    //      Update the matching row so the campaign KPI rollups reflect the
+    //      delivery + engagement lifecycle. Idempotent: opened/clicked rows
+    //      only set the timestamp once (uses is null guard).
+    try {
+        const stepRunPatch: Record<string, unknown> = {};
+        if (eventType === "delivered") {
+            stepRunPatch.status = "delivered";
+            stepRunPatch.delivered_at = now;
+        } else if (eventType === "opened") {
+            stepRunPatch.status = "opened";
+            stepRunPatch.opened_at = now;
+        } else if (eventType === "clicked") {
+            stepRunPatch.status = "clicked";
+            stepRunPatch.last_click_at = now;
+        } else if (eventType === "bounced") {
+            stepRunPatch.status = "bounced";
+            stepRunPatch.bounced_at = now;
+            stepRunPatch.error_message = (evt.data?.bounce?.message as string | undefined) || null;
+        } else if (eventType === "complained") {
+            stepRunPatch.status = "complained";
+            stepRunPatch.complained_at = now;
+        } else if (eventType === "failed") {
+            stepRunPatch.status = "failed";
+            stepRunPatch.error_message = (evt.data?.bounce?.message as string | undefined)
+                || `resend:${evt.type || "failed"}`;
+        }
+
+        if (Object.keys(stepRunPatch).length > 0) {
+            await sb.from("outreach_campaign_step_runs")
+                .update(stepRunPatch)
+                .eq("provider_message_id", resendEmailId);
+        }
+
+        // For opened, set first_click_at semantics are handled separately —
+        // we use last_click_at above. Also set first_click_at if it's still
+        // null on the first click event.
+        if (eventType === "clicked") {
+            await sb.from("outreach_campaign_step_runs")
+                .update({ first_click_at: now })
+                .eq("provider_message_id", resendEmailId)
+                .is("first_click_at", null);
+        }
+
+        // On bounce/complaint, also flip the parent outreach_campaign_contacts
+        // row so the scheduler stops sending to this contact.
+        if ((eventType === "bounced" || eventType === "complained") && recipient) {
+            const { data: stepRuns } = await sb.from("outreach_campaign_step_runs")
+                .select("campaign_contact_id")
+                .eq("provider_message_id", resendEmailId)
+                .limit(1) as { data: { campaign_contact_id: string }[] | null };
+            const ccId = stepRuns?.[0]?.campaign_contact_id;
+            if (ccId) {
+                await sb.from("outreach_campaign_contacts")
+                    .update({
+                        status: eventType === "bounced" ? "bounced" : "unsubscribed",
+                        finished_at: now,
+                    })
+                    .eq("id", ccId);
+            }
+        }
+    } catch (e) {
+        // Non-fatal — email_events insert above already succeeded. Webhook
+        // retries are safe (the partial unique index dedups). Surface the
+        // error in logs so we can diagnose if KPIs look off.
+        console.error("[resend-webhook] outreach_campaign_step_runs mirror failed", e);
+    }
+
     // ---- Suppression list + HubSpot mirror (audit 2026-06-10 #6 + #21).
     //      Without these, the next outreach campaign or nurture drip will
     //      re-email a bounced/complained address — guaranteed reputation
