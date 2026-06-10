@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { guardCron } from "@/lib/cron-auth";
 
 export const maxDuration = 300;
 
@@ -159,13 +160,9 @@ async function fetchUsaspendingAwards(naics: string, page: number): Promise<Pars
 }
 
 export async function GET(req: NextRequest) {
-    // Dual auth — Vercel cron OR pg_cron backstop (service-key bearer)
-    const auth = req.headers.get("authorization");
-    const expectedCron = process.env.CRON_SECRET ? `Bearer ${process.env.CRON_SECRET}` : null;
-    const expectedSvc = process.env.SUPABASE_SERVICE_KEY ? `Bearer ${process.env.SUPABASE_SERVICE_KEY}` : null;
-    if ((expectedCron || expectedSvc) && auth !== expectedCron && auth !== expectedSvc) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    // Fail-closed cron auth (CRON_SECRET or SUPABASE_SERVICE_KEY bearer).
+    const denied = guardCron(req);
+    if (denied) return denied;
 
     const db = createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,

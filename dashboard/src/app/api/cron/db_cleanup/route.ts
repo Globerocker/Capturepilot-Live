@@ -6,6 +6,7 @@ import { createClient } from "@supabase/supabase-js";
 // would have pushed us to 41/40 on Pro plan). Telemetry wrapper added so
 // /admin/health and cron_runs reflect actual execution.
 import { withCronTelemetry } from "@/lib/cron-telemetry";
+import { guardCron } from "@/lib/cron-auth";
 
 export const maxDuration = 300;
 
@@ -129,14 +130,9 @@ async function purgeAttachmentStorage(
 }
 
 async function GET_handler(req: NextRequest) {
-    // Dual auth: Vercel cron OR Supabase pg_cron service key
-    const authHeader = req.headers.get("authorization");
-    const serviceKey = process.env.SUPABASE_SERVICE_KEY;
-    const expectedCron = process.env.CRON_SECRET ? `Bearer ${process.env.CRON_SECRET}` : null;
-    const expectedSvc = serviceKey ? `Bearer ${serviceKey}` : null;
-    if ((expectedCron || expectedSvc) && authHeader !== expectedCron && authHeader !== expectedSvc) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    // Fail-closed cron auth (CRON_SECRET or SUPABASE_SERVICE_KEY bearer).
+    const denied = guardCron(req);
+    if (denied) return denied;
 
     const supabase = getSupabase();
     const startTime = Date.now();

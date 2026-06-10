@@ -24,10 +24,22 @@ function getDb() {
   );
 }
 
-/** Verify HubSpot webhook signature (v3) */
+/** Verify HubSpot webhook signature (v3).
+ *
+ * Fail-closed in production: when `HUBSPOT_WEBHOOK_SECRET` is unset we hard-fail
+ * (returns false → 401) so a missing env var can't silently turn the webhook
+ * into an open ingest endpoint. In dev (NODE_ENV !== 'production') an unset
+ * secret is allowed so local curl tests don't need the production HMAC.
+ *
+ * Buffer length-guard before `timingSafeEqual` — Node throws if the two
+ * buffers differ in length, which would convert a benign signature mismatch
+ * into an unhandled 500. */
 function verifyHubSpotSignature(req: NextRequest, rawBody: string): boolean {
   const secret = process.env.HUBSPOT_WEBHOOK_SECRET;
-  if (!secret) return true; // Skip verification in dev if no secret configured
+  if (!secret) {
+    // Dev-only bypass — never trust an unset secret in prod.
+    return process.env.NODE_ENV !== 'production';
+  }
 
   const signature = req.headers.get('x-hubspot-signature-v3') ||
                     req.headers.get('x-hubspot-signature');
@@ -44,20 +56,19 @@ function verifyHubSpotSignature(req: NextRequest, rawBody: string): boolean {
     .update(toSign)
     .digest('base64');
 
-  return crypto.timingSafeEqual(
-    Buffer.from(signature),
-    Buffer.from(expected),
-  );
+  const rawSigBuf = Buffer.from(signature);
+  const expectedSigBuf = Buffer.from(expected);
+  // timingSafeEqual throws on length mismatch — treat that as "no match".
+  if (rawSigBuf.length !== expectedSigBuf.length) return false;
+  return crypto.timingSafeEqual(rawSigBuf, expectedSigBuf);
 }
 
 export async function POST(req: NextRequest) {
   const rawBody = await req.text();
 
-  // Signature verification (skip in dev)
-  if (process.env.NODE_ENV === 'production') {
-    if (!verifyHubSpotSignature(req, rawBody)) {
-      return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
-    }
+  // Signature verification — fail-closed in prod (handled inside helper).
+  if (!verifyHubSpotSignature(req, rawBody)) {
+    return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
   }
 
   let events: Array<Record<string, unknown>>;

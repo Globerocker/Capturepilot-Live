@@ -4,6 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 // detector and daily digest can see this route. Previously only 5 of 35 crons
 // were logging to cron_runs.
 import { withCronTelemetry } from "@/lib/cron-telemetry";
+import { guardCron } from "@/lib/cron-auth";
 
 export const maxDuration = 300;
 
@@ -67,15 +68,9 @@ const PTYPE_LABELS: Record<string, string> = {
 };
 
 async function GET_handler(req: NextRequest): Promise<NextResponse> {
-    // Dual auth: Vercel cron OR Supabase pg_cron service-key bearer
-    // (Vercel's scheduler has silently stopped firing this — pg_cron now backs it up)
-    const authHeader = req.headers.get("authorization");
-    const serviceKey = process.env.SUPABASE_SERVICE_KEY;
-    const expectedCron = process.env.CRON_SECRET ? `Bearer ${process.env.CRON_SECRET}` : null;
-    const expectedSvc = serviceKey ? `Bearer ${serviceKey}` : null;
-    if ((expectedCron || expectedSvc) && authHeader !== expectedCron && authHeader !== expectedSvc) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    // Fail-closed cron auth (CRON_SECRET or SUPABASE_SERVICE_KEY bearer).
+    const denied = guardCron(req);
+    if (denied) return denied;
 
     try {
         const supabase = getSupabase();
