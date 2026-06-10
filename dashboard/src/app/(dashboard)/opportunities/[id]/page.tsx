@@ -25,6 +25,7 @@ import { PastAwardsPanel } from "@/components/PastAwardsPanel";
 import GovTribeAwardsCard from "@/components/opportunity/GovTribeAwardsCard";
 import GovTribeSubAwardsCard from "@/components/opportunity/GovTribeSubAwardsCard";
 import GovTribeForecastCard from "@/components/opportunity/GovTribeForecastCard";
+import RecompeteRiskCard from "@/components/RecompeteRiskCard";
 import { estimateContractValue } from "@/utils/estimateValue";
 import { originalListing, sourceBadgeLabel } from "@/lib/opportunity-source";
 
@@ -788,6 +789,9 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                             </div>
                         </div>
                     )}
+
+                    {/* Recompete Risk — past-performance graph signal (renders null when no incumbent or cold graph) */}
+                    <RecompeteRiskCard oppId={opp.id} />
 
                     {/* Attachments - fetched live from SAM.gov */}
                     <div id="attachments" className="scroll-mt-20">
