@@ -199,14 +199,27 @@ export default function PortalCompetitors() {
         setAnalysisStep(0);
         setAnalysisName(getDomain(url));
 
-        fetch("/api/analyze-company", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                website: url,
-                uei: addUei.trim().toUpperCase() || undefined,
-            }),
-        })
+        // Fetch the day-bucketed verification token first.
+        (async () => {
+            let captcha_response = "";
+            try {
+                const tokRes = await fetch(`/api/analyze-company/token?website=${encodeURIComponent(url)}`);
+                if (tokRes.ok) {
+                    const tokData = await tokRes.json();
+                    captcha_response = String(tokData.captcha_response || "");
+                }
+            } catch {/* fall through */}
+            return fetch("/api/analyze-company", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    website: url,
+                    uei: addUei.trim().toUpperCase() || undefined,
+                    captcha_response,
+                    hp_field: "",
+                }),
+            });
+        })()
             .then(async (res) => {
                 if (!res.ok) {
                     const d = await res.json().catch(() => ({}));

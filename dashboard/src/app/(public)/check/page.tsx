@@ -90,7 +90,7 @@ function CheckContent() {
         } catch { return url; }
     }
 
-    function runAnalysis(site: string, ueiVal: string) {
+    async function runAnalysis(site: string, ueiVal: string) {
         let url = site.trim();
         if (!/^https?:\/\//i.test(url)) url = "https://" + url;
 
@@ -99,6 +99,17 @@ function CheckContent() {
         setStep(0);
         setDisplayName(getDomain(url));
 
+        // Fetch the day-bucketed verification token first — the analyze
+        // endpoint rejects requests that don't echo it back.
+        let captcha_response = "";
+        try {
+            const tokRes = await fetch(`/api/analyze-company/token?website=${encodeURIComponent(url)}`);
+            if (tokRes.ok) {
+                const tokData = await tokRes.json();
+                captcha_response = String(tokData.captcha_response || "");
+            }
+        } catch {/* fall through — server will 400 */}
+
         // POST to API — returns analysis_id immediately, processes in background
         fetch("/api/analyze-company", {
             method: "POST",
@@ -106,6 +117,8 @@ function CheckContent() {
             body: JSON.stringify({
                 website: url,
                 uei: ueiVal || undefined,
+                captcha_response,
+                hp_field: "",
             }),
         })
             .then(async (res) => {

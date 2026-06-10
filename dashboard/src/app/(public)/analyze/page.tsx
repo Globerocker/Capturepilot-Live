@@ -76,16 +76,32 @@ function AnalyzeContent() {
         startedRef.current = true;
         setDisplayName(companyName || (website ? getDomain(website) : "") || uei);
 
-        // POST to API — returns analysis_id immediately, processes in background
-        fetch("/api/analyze-company", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                company_name: companyName || undefined,
-                website: website || undefined,
-                uei: uei || undefined,
-            }),
-        })
+        // Fetch the day-bucketed verification token first — the analyze
+        // endpoint rejects requests that don't echo it back.
+        (async () => {
+            let captcha_response = "";
+            if (website) {
+                try {
+                    const tokRes = await fetch(`/api/analyze-company/token?website=${encodeURIComponent(website)}`);
+                    if (tokRes.ok) {
+                        const tokData = await tokRes.json();
+                        captcha_response = String(tokData.captcha_response || "");
+                    }
+                } catch {/* fall through — server will 400 */}
+            }
+            // POST to API — returns analysis_id immediately, processes in background
+            return fetch("/api/analyze-company", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    company_name: companyName || undefined,
+                    website: website || undefined,
+                    uei: uei || undefined,
+                    captcha_response,
+                    hp_field: "",
+                }),
+            });
+        })()
             .then(async (res) => {
                 if (!res.ok) {
                     const data = await res.json().catch(() => ({}));

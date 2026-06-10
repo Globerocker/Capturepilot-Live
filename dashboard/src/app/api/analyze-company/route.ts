@@ -6,6 +6,7 @@ import { scoreOpportunityLeadMagnet, type ProfileForScoring, type OpportunityFor
 import { generateCertRecommendations } from "@/lib/cert-recommendations";
 import { analyzeCompany } from "@/lib/crawler";
 import { findCompetitors, computeReadinessScore } from "@/lib/quick-checker-helpers";
+import { protectCrawl, validateCrawlUrl } from "@/lib/crawl-guard";
 
 export const maxDuration = 120;
 
@@ -23,21 +24,9 @@ function sanitizeCompanyName(name: string): string {
     return name.replace(/<[^>]*>/g, "").trim().substring(0, 200);
 }
 
-function isValidUrl(url: string): boolean {
-    try {
-        const parsed = new URL(url.startsWith("http") ? url : `https://${url}`);
-        return ["http:", "https:"].includes(parsed.protocol);
-    } catch {
-        return false;
-    }
-}
-
-function normalizeUrl(url: string): string {
-    if (!url.startsWith("http://") && !url.startsWith("https://")) {
-        url = "https://" + url;
-    }
-    return url.replace(/\/+$/, "");
-}
+// URL validation + normalization is now handled by `validateCrawlUrl` in
+// `@/lib/crawl-guard` so the same rules apply everywhere a public crawl is
+// triggered.
 
 function makeDb() {
     return createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
@@ -1040,12 +1029,23 @@ export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
         let companyName = sanitizeCompanyName(body.company_name || "");
-        const website = normalizeUrl(body.website || "");
+        const rawWebsite = (body.website || "").trim();
+
+        // Validate URL shape + reject obvious spam (IPs, short domains, bad TLDs).
+        const urlCheck = validateCrawlUrl(rawWebsite);
+        if (urlCheck instanceof NextResponse) return urlCheck;
+        const website = urlCheck.url;
         const uei = (body.uei || "").trim().toUpperCase();
 
-        if (!isValidUrl(website)) {
-            return NextResponse.json({ error: "Valid website URL is required" }, { status: 400 });
-        }
+        // Captcha-response + honeypot + per-IP rate limit. Fails closed on
+        // anything that smells like a script. The DB policy in migration 035
+        // is the durable backstop.
+        const rejection = await protectCrawl(
+            request,
+            { website, captcha_response: body.captcha_response, hp_field: body.hp_field },
+            { route: "analyze-company", maxPerMin: 3 },
+        );
+        if (rejection) return rejection;
 
         const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
 
