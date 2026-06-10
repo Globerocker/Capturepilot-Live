@@ -11,22 +11,31 @@
  * cadence).
  *
  * This route:
- *   - Claims ONLY task_type='analyze_attachments' (batch_size=10)
- *   - Runs to a 270s budget so it can sit inside Vercel's 300s maxDuration
+ *   - Claims ONLY task_type='analyze_attachments' (batch_size=3)
+ *   - Runs to a 150s budget so consecutive 3-min cron invocations CANNOT
+ *     overlap (150s < 180s interval). Previous 270s budget caused concurrent
+ *     invocations to stack, collectively claiming thousands of jobs per
+ *     minute; only a handful finished before Vercel killed the container at
+ *     300s, leaving the rest stuck "running" until reap_stale_jobs fired at
+ *     10 min, burning attempts and producing 98% of last-24h failures.
  *   - Reuses the analyze_attachments handler from run_worker_jobs/route.ts
  *     by importing the per-task logic locally (duplicated below — the
  *     handler is self-contained so duplication is cheaper than carving
  *     a shared module mid-flight).
  *
  * Scheduled every 3 min in vercel.json. Drain math:
- *   ~10 jobs/run × 20 runs/hour × 24h ≈ 4,800/day.
- *   12,723 backlog ÷ 4,800 ≈ ~2.6 days to drain (vs ~30 days shared).
+ *   ~3 jobs/run × 20 runs/hour × 24h ≈ 1,440/day.
+ *   12,723 backlog ÷ 1,440 ≈ ~9 days to drain (safe — queue is finite).
+ *   Trade-off: slower drain rate vs. guaranteed no-overlap and no-reap burn.
  *
  * Notes:
  *   - Stale-running reap is handled by the shared consumer; no need to
  *     duplicate the RPC here (it would just race on the same rows).
  *   - Cookie warmer top-up is also shared-consumer territory — this route
  *     never claims warm_cf_cookie / scrape_portal_detail.
+ *   - Watermark check: handler skips opps where _analyzed_attachments_at is
+ *     already set, so reaped+requeued jobs that land on an already-processed
+ *     opp complete instantly without burning another LLM call.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -63,7 +72,17 @@ async function handleAnalyzeAttachments(sb: SbAny, job: Job) {
         .select("id, notice_id, title, description, resource_links, structured_requirements")
         .eq("id", oppId)
         .maybeSingle() as { data: { id: string; notice_id: string | null; title: string | null; description: string | null; resource_links: string[] | null; structured_requirements: Record<string, unknown> | null } | null };
+
     if (!opp) return { error: "opp not found" };
+
+    // Watermark check: if a previous invocation (or a reaped+requeued run)
+    // already wrote _analyzed_attachments_at, skip the LLM work entirely.
+    // This prevents reaped jobs from burning another attempt on an opp that
+    // was successfully analyzed by an overlapping container before it timed
+    // out — the reap increments attempts but the work is already done.
+    if ((opp.structured_requirements as Record<string, unknown> | null)?._analyzed_attachments_at) {
+        return { result: { skipped: "already_analyzed" } };
+    }
     const links = (opp.resource_links || []).filter(Boolean);
     if (links.length === 0) return { result: { skipped: "no_resource_links" } };
 
@@ -175,10 +194,14 @@ async function GET_handler(req: NextRequest): Promise<NextResponse> {
     if (denied) return denied;
 
     const url = new URL(req.url);
-    // Default 270s — keeps a safety margin inside the 300s maxDuration so
-    // the in-flight job + finish_job RPC have time to complete cleanly.
-    const totalBudget = Math.min(Math.max(Number(url.searchParams.get("budget") || 270_000), 5_000), 290_000);
-    const batchSize = Math.min(Math.max(Number(url.searchParams.get("batch_size") || 10), 1), 25);
+    // Default 150s — MUST stay below the 180s cron interval so consecutive
+    // Vercel invocations cannot overlap. The previous 270s default caused
+    // t=0 and t=3min invocations to run concurrently for 90s, collectively
+    // claiming thousands of jobs that mostly timed out and were reaped.
+    const totalBudget = Math.min(Math.max(Number(url.searchParams.get("budget") || 150_000), 5_000), 170_000);
+    // 3 jobs × ~40s each = 120s max — fits inside the 150s budget.
+    // Do NOT raise this without also raising totalBudget (and the cron interval).
+    const batchSize = Math.min(Math.max(Number(url.searchParams.get("batch_size") || 3), 1), 10);
 
     const sb = createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -191,7 +214,14 @@ async function GET_handler(req: NextRequest): Promise<NextResponse> {
     let done = 0;
     let failed = 0;
 
-    while (Date.now() - startedAt < totalBudget) {
+    // Per-job budget: each analyze_attachments job can take up to 40s
+    // (1-2 doc downloads + OCR + LLM). We stop claiming new batches when
+    // fewer than 45s remain so the last job always has headroom to finish
+    // and call finish_job before the function exits. The budget check is
+    // placed BEFORE claim_jobs so we never leave jobs stuck in 'running'
+    // because the container exited before processing them.
+    const JOB_BUDGET_GUARD = 45_000;
+    while (Date.now() - startedAt < totalBudget - JOB_BUDGET_GUARD) {
         const { data: jobs, error } = await sb.rpc("claim_jobs", {
             p_task_types: ["analyze_attachments"],
             p_batch_size: batchSize,
@@ -202,9 +232,23 @@ async function GET_handler(req: NextRequest): Promise<NextResponse> {
         if (!jobs || jobs.length === 0) break;
 
         for (const j of jobs as Job[]) {
-            // Hard stop if we're close to the budget — don't start a new
-            // 30-40s job if we have <40s left. Leaves it for the next tick.
-            if (Date.now() - startedAt > totalBudget - 40_000) break;
+            // Inner guard: after processing each job, re-check before
+            // starting the next one. Needed because a batch can contain
+            // multiple jobs (batchSize=3) and the first might have been slow.
+            // Unlike the old pattern, we DO NOT skip without calling
+            // finish_job — instead we drop back to pending so the next tick
+            // picks it up cleanly without burning an attempt.
+            if (Date.now() - startedAt > totalBudget - JOB_BUDGET_GUARD) {
+                // Re-release this job back to pending without incrementing
+                // the fail counter — we claimed it but chose not to run it.
+                await sb.rpc("finish_job", {
+                    p_job_id: j.id,
+                    p_status: "pending",
+                    p_result: null,
+                    p_error: "budget_exceeded_before_start",
+                });
+                continue;
+            }
             processed++;
             try {
                 const res = await handleAnalyzeAttachments(sb, j);

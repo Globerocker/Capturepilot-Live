@@ -216,6 +216,52 @@ const RECIPES: Recipe[] = [
             };
         },
     },
+
+    // ─── Cron route failed ───────────────────────────────────────────────────
+    // Matches alert_type="cron_failed" with connector_slug like "cron:/api/cron/<route>".
+    // We escalate with a direct link to the cron's log view in /admin/health.
+    {
+        slug: "cron_failed",
+        matches: (a) =>
+            a.alert_type === "cron_failed" ||
+            (a.connector_slug || "").toLowerCase().startsWith("cron:/api/cron/"),
+        async run(alert) {
+            const raw = alert.connector_slug || "";
+            // Strip leading "cron:" prefix if present so we get the bare /api/cron/... path.
+            const route = raw.startsWith("cron:") ? raw.slice("cron:".length) : raw;
+            const adminPath = `/admin/health/crons${route}`;
+            return {
+                status: "escalated",
+                recipe_slug: this.slug,
+                action_taken:
+                    `Cron route ${route || "(unknown)"} failed. ` +
+                    `Check ${adminPath} for recent logs.`,
+                payload: { route, admin_path: adminPath },
+            };
+        },
+    },
+
+    // ─── Worker queue spike ──────────────────────────────────────────────────
+    // Matches alert_type="worker_spike" connector_slug="worker_jobs".
+    // Reports the failed-job count from the alert payload and links to /admin/health/queue.
+    {
+        slug: "worker_spike",
+        matches: (a) =>
+            a.alert_type === "worker_spike" ||
+            (a.connector_slug || "").toLowerCase() === "worker_jobs",
+        async run(alert) {
+            const failed = (alert.payload as { failed_count?: number } | null)?.failed_count;
+            const countStr = failed != null ? String(failed) : "multiple";
+            return {
+                status: "escalated",
+                recipe_slug: this.slug,
+                action_taken:
+                    `Worker queue spike — ${countStr} jobs failed in the last hour. ` +
+                    `Check /admin/health/queue for details.`,
+                payload: { failed_count: failed },
+            };
+        },
+    },
 ];
 
 /**
@@ -240,7 +286,7 @@ export async function autoHealAlert(alert: HealthAlertRow, sb: SbAny): Promise<A
         result = {
             status: "no_recipe",
             recipe_slug: "none",
-            action_taken: `No recipe for alert_type=${alert.alert_type} slug=${alert.connector_slug || "n/a"}.`,
+            action_taken: `Investigate at /admin/health (alert_type=${alert.alert_type}, slug=${alert.connector_slug || "n/a"}).`,
         };
     } else {
         try {

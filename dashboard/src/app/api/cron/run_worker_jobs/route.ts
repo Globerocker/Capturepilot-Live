@@ -576,6 +576,12 @@ async function handleAnalyzeAttachments(sb: SbAny, job: Job) {
         .eq("id", oppId)
         .maybeSingle() as { data: { id: string; notice_id: string | null; title: string | null; description: string | null; resource_links: string[] | null; structured_requirements: Record<string, unknown> | null } | null };
     if (!opp) return { error: "opp not found" };
+
+    // Watermark check: skip opps already analyzed. Prevents reaped+requeued
+    // jobs from burning another LLM call on work that's already done.
+    if ((opp.structured_requirements as Record<string, unknown> | null)?._analyzed_attachments_at) {
+        return { result: { skipped: "already_analyzed" } };
+    }
     const links = (opp.resource_links || []).filter(Boolean);
     if (links.length === 0) return { result: { skipped: "no_resource_links" } };
 
