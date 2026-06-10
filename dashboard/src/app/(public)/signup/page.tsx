@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, Suspense, useEffect } from "react";
+import { useState, Suspense, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
@@ -27,7 +27,8 @@ function SignupPageContent() {
   const searchParams = useSearchParams();
   const analysisId = searchParams.get("analysis_id");
   const inviteToken = searchParams.get("invite");
-  const supabase = createSupabaseClient();
+  // Memoize so the supabase browser client isn't reinstantiated on every render.
+  const supabase = useMemo(() => createSupabaseClient(), []);
 
   // Load invite details if a token is present
   useEffect(() => {
@@ -175,7 +176,15 @@ function SignupPageContent() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="flex items-center justify-center space-x-3 mb-10">
-          <Image src="/logo.png" alt="CapturePilot" width={40} height={40} className="rounded-xl shadow-lg" />
+          <Image
+            src="/logo.png"
+            alt="CapturePilot"
+            width={40}
+            height={40}
+            sizes="40px"
+            priority
+            className="rounded-xl shadow-lg"
+          />
           <h1 className="text-2xl font-bold">CapturePilot</h1>
         </div>
 
