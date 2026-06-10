@@ -7,6 +7,7 @@ import { enrichPersonViaApollo, domainFromEmail } from "@/lib/lead-enrichment";
 import { upsertHubSpotContact } from "@/lib/hubspot";
 import { enqueueLeadBrief } from "@/lib/lead-brief";
 import { protectCrawl } from "@/lib/protect-crawl";
+import { enqueueDripSequence } from "@/lib/email";
 
 export const runtime = "nodejs";
 // Pipeline (insert → Apollo enrich → HubSpot sync → Resend) typically runs
@@ -329,6 +330,19 @@ export async function POST(req: NextRequest) {
     } catch (e) {
       // Non-fatal — the lead was already saved + the user already got the PDF.
       console.warn("[leads] failed to enqueue lead-brief job (non-fatal):", (e as Error).message);
+    }
+
+    // 7. Enroll in the 7-day lead-magnet nurture (Day 1/3/5/7 follow-ups).
+    //    Skipped on duplicate sends so the same downloader doesn't get the
+    //    sequence twice. The send() wrapper in lib/email.ts respects
+    //    outreach_optouts, so suppression carries through automatically.
+    //    Failure is non-fatal — the PDF is already in the inbox.
+    if (!isDuplicate) {
+      enqueueDripSequence({
+        sequenceKey: "lead_magnet_nurture",
+        email,
+        contactName: [firstName, lastName].filter(Boolean).join(" ").trim() || undefined,
+      }).catch((err) => console.warn("[leads] enqueue lead_magnet_nurture failed (non-fatal):", err));
     }
 
     return NextResponse.json({

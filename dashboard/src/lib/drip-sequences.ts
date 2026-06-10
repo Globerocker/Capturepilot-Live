@@ -6,7 +6,7 @@
  * cron picks up due rows and sends them.
  */
 
-import { NURTURE_SEQUENCE, NURTURE_SEQUENCE_QC } from "./email-nurture-templates";
+import { NURTURE_SEQUENCE, NURTURE_SEQUENCE_QC, LEAD_MAGNET_NURTURE_SEQUENCE } from "./email-nurture-templates";
 
 export interface DripStep {
     /** Days after enrollment to send this email */
@@ -67,6 +67,20 @@ export const DRIP_SEQUENCES: Record<string, DripSequence> = {
         name: "Quick Checker 90-Day Nurture",
         description: "12-email nurture for Quick Checker submissions (shares days 3-90 with fb_nurture).",
         steps: NURTURE_SEQUENCE_QC.map(s => ({ dayOffset: s.day_offset, templateKey: s.key })),
+    },
+    /**
+     * Short 7-day drip that fires when a downloadable lead magnet (Field
+     * Manual etc.) is delivered. Four emails — Day 1/3/5/7 — designed to
+     * convert downloaders to a free signup or 14-day Pro trial. Sits
+     * alongside the longer fb_nurture, which continues as a 12-email
+     * follow-on after Day 7. Enrolled from /api/leads and
+     * /api/lead-magnet/deliver immediately after PDF send.
+     */
+    lead_magnet_nurture: {
+        key: "lead_magnet_nurture",
+        name: "Lead Magnet 7-Day Nurture",
+        description: "4-email follow-up (Day 1/3/5/7) for PDF downloaders — drives free signup or Pro trial.",
+        steps: LEAD_MAGNET_NURTURE_SEQUENCE.map(s => ({ dayOffset: s.day_offset, templateKey: s.key })),
     },
 };
 

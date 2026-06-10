@@ -8,6 +8,7 @@ import GlobalJobsIndicator from "@/components/jobs/GlobalJobsIndicator";
 import ImpersonationBanner from "@/components/ImpersonationBanner";
 import ConsultingCTA from "@/components/ConsultingCTA";
 import HubSpotChat from "@/components/HubSpotChat";
+import TrialPromptModal from "@/components/TrialPromptModal";
 // import { ReviewPrompt } from "@/components/ReviewPrompt"; // Disabled until Google Business Profile is set up
 
 export default function DashboardLayout({
@@ -42,6 +43,10 @@ export default function DashboardLayout({
           FeedbackWidget (HubSpot uses z-index < 50). Provides live chat
           escalation when the in-app feedback isn't enough. */}
       <HubSpotChat />
+      {/* W3-4.3: lead-magnet → trial conversion prompt. Renders only when
+          the user has touched 3 features (Quick Checker / cap statement /
+          saved match / pursuit) and hasn't already dismissed or trialed. */}
+      <TrialPromptModal />
       {/* <ReviewPrompt /> — disabled until Google Business Profile is set up */}
     </div>
   );
