@@ -1,0 +1,1148 @@
+[
+  {
+    "title": "Matches page paginates DB rows BEFORE applying client-side filters, producing incorrect counts and near-empty pages",
+    "severity": "high",
+    "category": "bug",
+    "evidence": "dashboard/src/app/(dashboard)/matches/page.tsx:227-289 — `.range(from, to)` runs first (`pageSize=25`), then JS filters out by `activeSearch`, `filterNoticeType`, `filterSetAside`, `filterState`, `filterNaics`, `filterMaxDeadlineDays`. The reported total is set to the filtered-page length (line 288: `setTotalCount(anyClientFilter ? filtered.length : (count || 0))`).",
+    "impact": "When a user types a search term or picks a notice type/state/NAICS filter, the page often shows 0–3 rows even when thousands of matches exist. The 'Sort by deadline/agency/notice_type' buttons also only re-sort the current 25-row page, never the full set — so 'sort by deadline' will never surface the soonest deadline unless it happens to be on page 1.",
+    "recommendation": "Push notice_type / set_aside / state / NAICS filters into the Supabase query as `.eq()` / `.like()` on `opportunities.<col>` (already using `!inner`, so this is one-line each). Move search to an RPC or use `.or()` against `opportunities.title.ilike` / `opportunities.agency.ilike`. Sort by deadline/agency/notice_type must go through `.order('opportunities(...)', ...)`. Only then `.range()`.",
+    "effort": "0.5-2d",
+    "domain": "CapturePilot 2.0 — Frontend (Next.js app router)",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "Pipeline weighted-value forecast reads only `award_amount`; ignores `estimated_value`, showing $0 for every Sources-Sought / forecast deal",
+    "severity": "high",
+    "category": "bug",
+    "evidence": "dashboard/src/app/(dashboard)/pipeline/page.tsx:131 selects `opportunities(..., award_amount, strategic_scoring)` but NOT `estimated_value`. The weighted-pipeline math at lines 291-300 (`sum + (opp?.award_amount || 0) * prob`) treats every deal without a finalized award as $0. The portal sibling at dashboard/src/app/(portal)/portal/pipeline/page.tsx:134 already selects `estimated_value` — they have drifted.",
+    "impact": "Every pre-award deal (Sources Sought, RFI, presolicitation, custom deal entered by user) contributes $0 to the dashboard pipeline forecast. Total-pipeline KPI on the pipeline page systematically under-reports, hiding 6-figure deals from the founder's view.",
+    "recommendation": "Add `estimated_value` to the SELECT at line 131 and 221, then change the sum to `(opp?.award_amount || opp?.estimated_value || estimateContractValue(opp))`. The `estimateContractValue` helper is already used on the opportunity detail page.",
+    "effort": "<1h",
+    "domain": "CapturePilot 2.0 — Frontend (Next.js app router)",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "Opportunity detail page uses SUPABASE_SERVICE_KEY for every render — bypasses RLS for `opportunities`, `contacts`, `bid_protests`",
+    "severity": "medium",
+    "category": "security",
+    "evidence": "dashboard/src/app/(dashboard)/opportunities/[id]/page.tsx:44-48 — `const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY; … createClient(supabaseUrl, supabaseKey)`. Then queries `opportunities`, `contacts`, `bid_protests` with this key. `academy/[slug]/page.tsx:121` does the same.",
+    "impact": "These tables already have public-read RLS today, so nothing leaks _now_. But the page silently bypasses every future RLS policy you add (paywall enforcement, tier-based hide, per-user opp blocklist, GDPR delete). Any future change to lock down contact emails or bid_protests will be invisibly bypassed here.",
+    "recommendation": "Replace with `createSupabaseServerClient()` (already used in dashboard/page.tsx and elsewhere) and drop the `SUPABASE_SERVICE_KEY` fallback. If a specific cross-user read is genuinely needed, scope a server-only helper that explicitly comments why it's bypassing RLS.",
+    "effort": "1-4h",
+    "domain": "CapturePilot 2.0 — Frontend (Next.js app router)",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "Document/cap-statement uploads use `getPublicUrl()` — any URL holder can download the file forever",
+    "severity": "high",
+    "category": "security",
+    "evidence": "dashboard/src/app/(dashboard)/documents/page.tsx:103 — `const { data: urlData } = supabase.storage.from(\"client-docs\").getPublicUrl(path); … file_url: urlData.publicUrl`. Same pattern at dashboard/src/app/(portal)/portal/documents/page.tsx:99 and dashboard/src/app/(portal)/portal/messages/page.tsx:144. Path is predictable: `user-documents/{profileId}/{timestamp}-{filename}`.",
+    "impact": "Capability statements, proposals, certifications, internal reference letters are accessible to anyone with the URL (which sits in the DB, gets emailed, shows in logs, may be shared via support). UEI guessing + timestamp brute force is feasible for targeted exfiltration. Violates the data-handling promise on the privacy page.",
+    "recommendation": "Make the `client-docs` bucket private, store the `storage_path` only (no URL), and serve via a signed-URL endpoint (`createSignedUrl(path, 300)`) when the user clicks download. Migrate existing rows by stripping the public URL on read and re-signing.",
+    "effort": "0.5-2d",
+    "domain": "CapturePilot 2.0 — Frontend (Next.js app router)",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "Unauthenticated /api/engine/[action] runs `child_process.exec` on arbitrary action keys",
+    "severity": "high",
+    "category": "security",
+    "evidence": "dashboard/src/app/api/engine/[action]/route.ts:8-44 — POST handler with NO auth, maps `action` param to a static script list and runs `execAsync(\\`python3 \"${scriptPath}\"\\`)`. No `assertAdmin()` or `guardCron()` anywhere in the file.",
+    "impact": "Any anonymous caller can POST /api/engine/score (or any other key) and trigger heavy Python jobs. On Vercel `exec` won't fire (CLAUDE.md notes this), but the route still attempts shell exec, returns a 500 with `error.message` (information leak), and is dead attack surface. If ever deployed somewhere with Python on PATH, it's RCE on arbitrary mapped scripts.",
+    "recommendation": "Delete the file entirely — CLAUDE.md says the equivalent `cron/enrich` already had `exec(\"python ...\")` ripped out for the same reason. Same applies to `dashboard/src/app/api/enrich/[opportunityId]/route.ts` (also unauthenticated exec, line 1-40).",
+    "effort": "<1h",
+    "domain": "CapturePilot 2.0 — Backend API Audit",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "8 cron routes silently lose auth when env vars unset (anti-pattern CLAUDE.md called out)",
+    "severity": "high",
+    "category": "security",
+    "evidence": "dashboard/src/app/api/cron/ingest_sam/route.ts:76, score_matches/route.ts:49, bulk_enrich_ai/route.ts:36, bulk_enrich_descriptions/route.ts:44, enrich_apollo_contractors/route.ts:148, ingest_fpds_awards/route.ts:166, naics_stats_backfill/route.ts:37, db_cleanup/route.ts:137 — all use `if ((expectedCron || expectedSvc) && auth !== expectedCron && auth !== expectedSvc)`. When BOTH env vars are missing the guard short-circuits to false and every request is accepted. CLAUDE.md explicitly calls this out: \"the duplicated inline pattern silently bypassed every cron when the env var was unset\".",
+    "impact": "Any deploy where `CRON_SECRET` and `SUPABASE_SERVICE_KEY` are both absent (preview branches, migration windows, accidental rotation) exposes these crons to the public internet — they reach SAM.gov with paid keys, mass-write to opportunities, run `db_cleanup` (destructive!), and burn OpenAI tokens. Today both vars are set, but the pattern is exactly the one Phase-2 hardening was supposed to retire.",
+    "recommendation": "Replace each handler's inline auth with the shared helper: `const denied = guardCron(req); if (denied) return denied;` from `@/lib/cron-auth`. That helper is fail-closed in prod (`NODE_ENV === \"production\"` && no `CRON_SECRET` returns 401). Same migration the rest of the cron routes already did.",
+    "effort": "1-4h",
+    "domain": "CapturePilot 2.0 — Backend API Audit",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "POST /api/email/welcome lets anyone spam welcome emails to any address",
+    "severity": "high",
+    "category": "security",
+    "evidence": "dashboard/src/app/api/email/welcome/route.ts:4-23 — accepts `{ email, company_name, user_profile_id }` from anonymous POST body, calls `sendWelcomeEmail` + `enqueueDripSequence` with caller-supplied email. Empty `catch {}` returns 500 with no details. No auth, no rate-limit, no captcha.",
+    "impact": "Reputation attack: attacker triggers 10k welcome emails to victim addresses on your Resend domain, Resend bounces / spam complaints poison your sender reputation. Also enrolls victim into 90-day drip via `enqueueDripSequence`. Cost: paid Resend sends + drip queue spam.",
+    "recommendation": "Either delete the route (this should be called inline from signup, not as a public API) or gate it: require auth, then look up the caller's actual email from session — never accept email from body. If kept as a callback, require a signed Stripe/Supabase webhook signature.",
+    "effort": "<1h",
+    "domain": "CapturePilot 2.0 — Backend API Audit",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "POST /api/lead-magnet/deliver trusts client-supplied email + LinkedIn metadata with no session verification",
+    "severity": "high",
+    "category": "security",
+    "evidence": "dashboard/src/app/api/lead-magnet/deliver/route.ts:105-185 — comment says \"called by /auth/callback after a successful linkedin_oidc exchange\" but the handler never calls `sb.auth.getUser()` or verifies the Supabase session. It just trusts `body.email` and `body.user_metadata`, inserts to `marketing_leads`, pushes to HubSpot, enqueues lead-brief job, fires Meta CAPI.",
+    "impact": "Anyone can craft a POST that injects arbitrary email + arbitrary `linkedin_verified=true`/`linkedin_email_verified=true` payloads into your CRM and lead-brief pipeline. Skews scoring, poisons `lead_quality`, sends Resend mail to victim addresses, and burns Apollo+OpenAI quota on bogus leads. Also lets attackers impersonate \"verified\" prospects to sales.",
+    "recommendation": "At the top of POST: read the Supabase session via `createServerClient` + `sb.auth.getUser()`, then enforce `email === user.email` and `user.app_metadata.provider === 'linkedin_oidc'`. Reject otherwise. The `/auth/callback` page is server-rendered so it can forward cookies — keep them.",
+    "effort": "<1h",
+    "domain": "CapturePilot 2.0 — Backend API Audit",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "POST /api/analyze-company/upload-cap-statement: anonymous 10MB uploads to Supabase Storage",
+    "severity": "high",
+    "category": "security",
+    "evidence": "dashboard/src/app/api/analyze-company/upload-cap-statement/route.ts:25-114 — handler accepts multipart/form-data with no auth check. Only gate is `analysis_id` existing in `company_analyses` (which is publicly enumerable since analysis IDs are exposed in the /check/[analysisId] URL). Uploads up to 10MB to `client-docs` bucket per request.",
+    "impact": "Cost-spam attack: attacker grabs any analysis_id from a Quick Checker share link, fires unlimited 10MB uploads. Each lands in your Supabase Storage bucket forever, scoped under a path you have no policy to clean up. Also writes attacker-controlled content into `inferred_profile.cap_statement_text` (used downstream in OpenAI prompts → prompt-injection risk).",
+    "recommendation": "Require auth, OR require a short-lived signed token issued by the /api/lead-magnet/confirm flow that bound the upload right to a single analysis_id + 5-min TTL. Also rate-limit per analysis_id (e.g. max 1 cap statement). Add a Supabase Storage policy that enforces the same path prefix.",
+    "effort": "1-4h",
+    "domain": "CapturePilot 2.0 — Backend API Audit",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "POST /api/leads has no rate limit; each call hits Apollo + HubSpot + Resend + OpenAI (paid)",
+    "severity": "high",
+    "category": "performance",
+    "evidence": "dashboard/src/app/api/leads/route.ts:48-308 — public CORS-allowed endpoint. Per-request pipeline: insert row, Apollo `people/match` call (line 158), HubSpot `upsertHubSpotContact` (line 192), Resend send (line 237), Meta CAPI fire (line 264), and `enqueueLeadBrief` (line 293) which queues a downstream OpenAI run. No IP throttle, no captcha, no honeypot beyond `rejectFakeSubmission`.",
+    "impact": "$$ burn: 1000 spam POSTs = 1000 Apollo lookups (~$$$), 1000 HubSpot contacts (counts toward HubSpot CRM seat caps), 1000 Resend sends (deliverability damage), 1000 lead-brief OpenAI jobs (~$$). All without ever putting a real lead in front of you. Marketing leads table grows unbounded.",
+    "recommendation": "Add `protectCrawl` (already exists at `@/lib/crawl-protection`, used by `public/contractors`) with `maxPerMin: 5` keyed on IP. Also rate-limit per email — same `email + magnet` should be a no-op after first hit (`isDuplicate` already detects but still runs full pipeline). Cache the Apollo result for 7 days keyed on `email+company`.",
+    "effort": "1-4h",
+    "domain": "CapturePilot 2.0 — Backend API Audit",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "POST /api/beta-invites/[token] accepts unverified auth_user_id from body",
+    "severity": "high",
+    "category": "security",
+    "evidence": "dashboard/src/app/api/beta-invites/[token]/route.ts:50-72 — POST does `await req.json()` to read `auth_user_id`, then writes it directly to `beta_invites.claimed_by`. Never verifies that the caller's actual session matches `auth_user_id`.",
+    "impact": "Attacker who knows a beta token can spoof `claimed_by` to be any user UUID. Lets them frame another user as the claimer (audit-log tampering) or steal a beta invite by claiming it under their own ID while keeping the token visible to the legitimate recipient. Worst case: re-claim every public invite token under a single attacker account.",
+    "recommendation": "Read the auth_user_id from `sb.auth.getUser()` in this route — never trust the body. If the route is meant to be callable pre-signup (when no session exists), only allow `claimed_by = null` and have a separate authenticated endpoint that later patches `claimed_by` to the session user.",
+    "effort": "<1h",
+    "domain": "CapturePilot 2.0 — Backend API Audit",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "32 tables have RLS enabled but ZERO policies → service-role-only; PostgREST returns empty on all reads",
+    "severity": "medium",
+    "category": "security",
+    "evidence": "Supabase advisor `rls_enabled_no_policy` flags 32 tables: agencies, alert_autofixes, api_connectors, archive_types, attachment_analysis_jobs, backlink_agents/contacts/monitor/outreach/prospects/todos, beta_invites, cancellation_feedback, capture_outcomes, cron_runs, dod_contracts, email_events, gao_protests, government_contacts, health_alerts, internal_config, opportunity_types, past_performance_stats, pdf_extract_cache, reengage_sends, rss_sources, sec_prime_filings, socrata_sources, wage_determinations, _backfill_targets_federal_2026_06_08. Several of these are user-facing (government_contacts is 5,882 rows of decision-makers; agencies 2,939; beta_invites; cron_runs is queried by /admin/health). With RLS on + no policy, only service_role bypass works — every authenticated/anon SELECT silently returns 0 rows.",
+    "impact": "Two failure modes coexist: (a) admin/portal pages that query through anon-key SDK get empty results and either render blank or fall back to service_role with the key shipped in code — a real data-leak path; (b) anything that DOES read via service_role becomes invisible to RLS and ships the entire table to anyone who can reach the endpoint. Either way: the security model is incoherent.",
+    "recommendation": "For each table, decide intent: reference data (agencies, archive_types, opportunity_types, naics/psc_codes, rss_sources, socrata_sources, far_clauses_cache, federal_hierarchy, past_performance_stats, wage_determinations, federal_hierarchy) → add `CREATE POLICY <t>_read ON <t> FOR SELECT TO authenticated USING (true)`. Server-only (cron_runs, alert_autofixes, health_alerts, worker telemetry, beta_invites, backlink_*, pdf_extract_cache, internal_config, attachment_analysis_jobs, api_connectors) → `REVOKE ALL FROM anon, authenticated` and leave service-only. User-scoped (government_contacts when surfaced per-user) needs a real predicate. Add an automated check in `tools/30_smoke_admin.mjs` that fails CI on `rls_enabled_no_policy`.",
+    "effort": "0.5-2d",
+    "domain": "database-schema",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "Public anon role can execute 6 SECURITY DEFINER RPCs including trigger_cron_route and purge_old_activity_log",
+    "severity": "critical",
+    "category": "security",
+    "evidence": "Advisor `anon_security_definer_function_executable`: `compute_naics_market_stats(int)`, `enqueue_marketing_lead_apollo()`, `enqueue_marketing_leads_apollo_backfill(int)`, `purge_old_activity_log()`, `rls_auto_enable()`, `trigger_cron_route(text)` — all SECURITY DEFINER, all callable as anon via /rest/v1/rpc/. Migration 090_security_hardening.sql DID revoke EXECUTE from `trigger_cron_route`, `rls_auto_enable`, `purge_old_activity_log` (lines 25-27), but advisor still lists them — either a recreate after the revoke or the revoke never landed. The marketing-lead enqueue functions were never covered.",
+    "impact": "Anonymous attacker can: (a) trigger any cron route by POSTing /rest/v1/rpc/trigger_cron_route with `{\"route_path\":\"/api/cron/whatever\"}` — bypasses CRON_SECRET; (b) wipe client_activity_log via purge_old_activity_log; (c) flood marketing_leads enrichment queue with backfill calls (compute cost). 090 was the intended fix but the lint is still firing — revoke is missing or got recreated.",
+    "recommendation": "Run `REVOKE EXECUTE ON FUNCTION public.trigger_cron_route(text), public.rls_auto_enable(), public.purge_old_activity_log(), public.compute_naics_market_stats(integer), public.enqueue_marketing_lead_apollo(), public.enqueue_marketing_leads_apollo_backfill(integer) FROM anon, authenticated;` in a new migration. Better: switch to SECURITY INVOKER and require service-role JWT. Verify by re-running get_advisors after deploy.",
+    "effort": "<1h",
+    "domain": "database-schema",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "company_analyses INSERT policy is `WITH CHECK (true)` — anonymous can spam analyses + harvest emails",
+    "severity": "high",
+    "category": "security",
+    "evidence": "Advisor `rls_policy_always_true`: policy `Allow anonymous insert on company_analyses` for INSERT to anon+authenticated has `with_check = true`. The table has 460 rows with jsonb columns `firmographics`, `inferred_profile`, `competitors`, `crawl_data`, `sam_data`, plus lead_captured_at + startup_pack_unlocked_at. No row-ownership constraint means the same anon can insert millions of bogus rows.",
+    "impact": "(1) cost-DOS: every analysis fires the Quick Checker pipeline (OpenAI, SAM, Apollo). (2) data quality: lead funnel becomes unusable. (3) PII: anon-inserted rows mixed with real captured leads make exports leak.",
+    "recommendation": "Replace policy with a per-IP rate-limited Edge Function or a JWT-bound `with_check (auth.uid() IS NOT NULL)` + an unauthenticated /api/leads/start endpoint that uses service role + Cloudflare turnstile. Minimum: add a `created_ip` column + `rate_limit_buckets` join in the policy.",
+    "effort": "1-4h",
+    "domain": "database-schema",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "worker_jobs queue is hopelessly backlogged — 44,049 pending + 14,036 failed, no archival",
+    "severity": "high",
+    "category": "scalability",
+    "evidence": "`SELECT status, count(*) FROM worker_jobs`: pending=44,049, done=17,585, failed=14,036, running=3. Oldest pending dates back 2026-05-26 (15 days). Per-task breakdown: `extract_keywords` 17,638 pending (never claimed?), `extract_structured_reqs_federal` 11,630 pending, `classify_naics` 12,971 pending, `analyze_attachments` 13,733 FAILED (88% of attempts). Table is 35 MB but growing every opportunity INSERT via fan-out trigger; never purged. No DELETE policy for `status IN ('done','failed') AND finished_at < now() - interval '7 days'`.",
+    "impact": "(a) Backfill is dead — extract_keywords / classify_naics workers are not draining their queues; the priority cron `run_worker_jobs` likely doesn't pick them up. (b) analyze_attachments 88% failure rate means something fundamental is broken (likely PDF download or OCR call). (c) Table will hit 1M rows fast since new opps trigger 3-5 jobs each — at 80K opps + growth, you'll see queue table multiply 10x.",
+    "recommendation": "Three fixes: (1) Add a `worker_jobs_cleanup` cron that DELETEs `status IN ('done') AND finished_at < now() - interval '7 days'` and archives failed to `worker_jobs_archive`. (2) Investigate why `extract_keywords` + `classify_naics` aren't being claimed — check `/api/cron/run_worker_jobs` task-type filter array. (3) Open the analyze_attachments error_message column (`SELECT error_message, count(*) FROM worker_jobs WHERE task_type='analyze_attachments' AND status='failed' GROUP BY 1 ORDER BY 2 DESC LIMIT 5`) and fix root cause.",
+    "effort": "0.5-2d",
+    "domain": "database-schema",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "0 ON DELETE policy on 15 foreign keys — broken cascades on user deletion",
+    "severity": "high",
+    "category": "data-quality",
+    "evidence": "15 FKs use default NO ACTION: `user_profiles.managed_by → user_profiles(id)`, `client_tasks.assigned_by`, `client_documents.uploaded_by`, `client_activity_log.actor_id`, `client_messages.user_profile_id` + `.opportunity_id`, `user_feedback.user_profile_id`, `email_templates.updated_by → auth.users(id)`, `gov_keywords.added_by_user_id → auth.users(id)`, `profile_members.invited_by → auth.users(id)`, `profile_invitations.invited_by → auth.users(id)`, `admin_opportunity_pushes.pushed_by_user_id → auth.users(id)`, `outreach_prospects.reviewed_by → auth.users(id)`, plus `opportunities.naics_code/psc_code → naics_codes/psc_codes(code)`.",
+    "impact": "Deleting an auth user errors with FK violation (can't actually delete users — see `account_deletion_requests` table that's never been processed). Deleting a managed-client profile leaves orphaned tasks/documents. The naics/psc FK on opportunities NO ACTION means you can never deprecate a NAICS code without touching 78K rows.",
+    "recommendation": "For audit columns (assigned_by, uploaded_by, actor_id, invited_by, updated_by, pushed_by_user_id, reviewed_by, added_by_user_id) → `ON DELETE SET NULL`. For ownership (managed_by, user_profile_id, opportunity_id) → `ON DELETE CASCADE` if soft-delete not used, else SET NULL + filter. For reference codes (naics_code, psc_code) → drop the FK or `ON DELETE SET NULL`. Migration: `ALTER TABLE x DROP CONSTRAINT y; ALTER TABLE x ADD CONSTRAINT y FOREIGN KEY (...) REFERENCES ... ON DELETE SET NULL;`",
+    "effort": "1-4h",
+    "domain": "database-schema",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "Duplicate migration numbers (4 collisions) — apply order is undefined",
+    "severity": "medium",
+    "category": "tech-debt",
+    "evidence": "`ls supabase/migrations/`: `019_quick_checker_competitors` + `019_quick_checker_enhancements`, `039_beta_invites` + `039_contractors_usaspending`, `060_academy_videos` + `060_opportunities_attachable_view`, `062_govtribe_cache` + `062_quick_checker_lead_capture_and_startup_pack`. Supabase MCP `schema_migrations` shows real timestamps (e.g. 060_academy_videos = 20260424212352) so the remote ran them in timestamp order, but the local filesystem-ordered CLI would apply them lexically by filename — different order on fresh provision.",
+    "impact": "A fresh local Supabase or staging env reproduces the schema in a different order than prod. If two 019s touch the same table (e.g. quick_checker_competitors + quick_checker_enhancements both touch `client_competitors`), the result diverges. CLAUDE.md says \"current latest: 070\" but real latest is 096 — devs are guessing the next number.",
+    "recommendation": "Rename one of each collision pair to next free slot (one-time fix), e.g. `019_quick_checker_enhancements.sql` → `019b_…` is fine since timestamps in supabase_migrations control. Then add `tools/check-migrations.sh`: `ls supabase/migrations | cut -d_ -f1 | sort | uniq -d` must exit empty. Update CLAUDE.md to say \"next free under supabase/migrations — current latest 096\".",
+    "effort": "1-4h",
+    "domain": "database-schema",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "Mixed user-identity columns: 36 tables use user_profile_id, 4 use auth_user_id, 2 use profile_id — CLAUDE.md flagged this caused a security bug",
+    "severity": "medium",
+    "category": "tech-debt",
+    "evidence": "Information_schema: `auth_user_id` (uuid) appears in user_profiles, profile_members, team_members, account_deletion_requests. `user_profile_id` (uuid) appears in 36 tables. `profile_id` in profile_invitations, profile_members. CLAUDE.md \"Phase 1 security hotfix\" notes: \"`cron-trigger` + `cron-runs` queried `user_profiles.user_id` (column doesn't exist) → \\\"Run now\\\" buttons in /admin/crons always 403'd\" — this is the same family of bug. `slack_installations` has both `user_id text` AND `user_profile_id uuid`.",
+    "impact": "Every new RLS policy or admin handler has to remember which column to use. Mistakes silently fail closed (deny everything) or open (the cron_runs bug). With 36 tables on user_profile_id and 4 on auth_user_id, joins between them require `user_profiles` as a bridge — a perf cost and a footgun.",
+    "recommendation": "Document the rule explicitly in CLAUDE.md: \"auth_user_id = uuid REFERENCES auth.users(id) — used ONLY by user_profiles + team membership. user_profile_id = uuid REFERENCES user_profiles(id) — used by EVERYTHING ELSE.\" Add a CI lint that fails on new tables with `user_id` (no prefix) or that introduce `auth_user_id` outside the membership tables. Rename `slack_installations.user_id` → `external_user_id text`.",
+    "effort": "0.5-2d",
+    "domain": "database-schema",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "analyze_attachments task type has 88% failure rate (13,733 failed / 15,540 attempted) — silent enrichment hole",
+    "severity": "medium",
+    "category": "observability",
+    "evidence": "worker_jobs status by task: `analyze_attachments` done=1,807, failed=13,733. That's 88% failure with no alerting hookup; health_alerts has 415 rows but none for this. CLAUDE.md (2026-04-16 section) says \"`structured_requirements` empty on 94.7%\" was the previous problem this was supposed to fix — it's still broken via a different vector. opportunity_attachments table has 6,196 rows but `requirements_extracted jsonb` is presumably mostly null.",
+    "impact": "AI Proposal generation (which CLAUDE.md says requires capability_statement and uses structured_requirements for context) gets garbage input. Customers see hollow proposals. The investment in the OCR/attachment pipeline is yielding ~12% of expected value.",
+    "recommendation": "Run `SELECT error_message, count(*) FROM worker_jobs WHERE task_type='analyze_attachments' AND status='failed' GROUP BY 1 ORDER BY 2 DESC LIMIT 10` to bucket failure modes. Likely culprits: (a) sam.gov API key throttled (mig 128_sam_api_key_3 exists — third rotation?), (b) PDF download timeout (Vercel 300s), (c) gpt-4o-mini JSON-mode rejection on large attachments. Add a health_alert when daily failure rate > 50% for this task.",
+    "effort": "0.5-2d",
+    "domain": "database-schema",
+    "verified": true,
+    "verification": {
+      "real_votes": 2,
+      "total_votes": 3,
+      "refutations": [
+        "The 13,733 failed rows are largely a stale historical residue from a known, already-fixed root cause — not an ongoing silent enrichment hole. The team has actively addressed this exact failure mode in the last ~10 days: (1) Commit f8cf0206 \"split attachment + struct-reqs lanes — kill priority inversion\" created a dedicated drain route at /api/cron/run_worker_jobs_attachments that ONLY claims analyze_attachments at batch_size=3. (2) Commit 9e929569 \"eliminate analyze_attachments overlap + reap-burn loop\" tightened the per-invocation budget to 150s (<180s cron interval) so concurrent invocations cannot stack — the route's own header comment explicitly attributes \"98% of last-24h failures\" to that stacking+reap-burn loop and says it's now fixed. (3) Migration 130 (commit 9c993d20, June) bumped analyze_attachments priority from 4→8 and backfilled the 12,723-row pending backlog so it actually gets claimed, while preserving the source-tuned routing from migs 121-124. (4) Migration 119 added reap_stale_jobs() which automatically requeues or fails stuck \"running\" rows (the very mechanism the finding's failure count came from). The finding also misattributes downstream impact: structured_requirements is now populated through the source-tuned extract_structured_reqs_federal lane (priority 6), which runs independently of attachments — so even with attachment failures, federal opps still get structured reqs. The recommendation to add a health_alert on >50% daily failure rate IS reasonable (no such alert exists today), but that's an observability nit, not the \"high severity, hollow proposals\" framing the finding presents. The 88% number is a lifetime aggregate dominated by the pre-fix reap-burn window, not a current rate."
+      ]
+    }
+  },
+  {
+    "title": "contractors hot path: 188M sequential-tuple-reads despite extensive index set — query patterns bypass them",
+    "severity": "medium",
+    "category": "performance",
+    "evidence": "pg_stat_user_tables.contractors: seq_scan=3,781 / seq_tup_read=188,694,857 (every seq_scan touches all 83K rows; ~50× table-scan-equivalent worth of reads) AND idx_scan=889,371 — so most queries are indexed but a meaningful tail is doing full scans. Likely candidates: (a) the Partners search route's keyword/state combo when keyword leads, (b) Apollo enrichment cron looking for un-enriched rows without a partial idx on `WHERE apollo_enriched = false`.",
+    "impact": "Every full scan reads ~41 MB from disk + 9.1 MB index lookup waste. With 3,781 scans in the recent window, that's 155 GB of unnecessary IO. Page-load on /partners + /competitors is the visible symptom.",
+    "recommendation": "Enable `pg_stat_statements`, identify top-N scanning queries, and add targeted partial indexes: e.g. `CREATE INDEX idx_contractors_unenriched ON contractors (last_enriched_at NULLS FIRST) WHERE apollo_enriched = false;`. Convert `ILIKE '%foo%'` searches to use the existing `contractors_fts_idx` (which has 0 scans currently — see other finding).",
+    "effort": "0.5-2d",
+    "domain": "database-schema",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "warm_cf_cookie bug: error message originates in Railway/VPS worker, NOT Vercel — premise of the bug report is wrong",
+    "severity": "high",
+    "category": "bug",
+    "evidence": "The literal string 'strict CF tenant + FLARESOLVERR_URL not configured' exists in exactly ONE file: tools/playwright-worker/worker.js:358. It does NOT appear anywhere in dashboard/src/app/api/cron/run_worker_jobs/route.ts. Database query of failed warm_cf_cookie jobs over last 24h shows 93 occurrences of that exact message. Duration analysis: 68 of the 165 failures completed in <1s (consistent with the early-return path at worker.js:353-359 that fires BEFORE Chromium launches), and 72 took >30s (Playwright path). All originate in the worker.js process — Vercel does not have this code path. HTTP_TASK_TYPES in run_worker_jobs/route.ts:58-68 does not include warm_cf_cookie or scrape_portal_detail — Vercel never claims these jobs.",
+    "impact": "The 'fix' the user is hunting for in Vercel env doesn't exist there. The real problem: the worker.js process (Railway or Hostinger VPS) DOES claim warm_cf_cookie jobs (proven by the error string), but its FLARESOLVERR_URL env var is empty at runtime even though the user believes they set it. Either (a) the worker was never restarted after the env change, (b) there are TWO worker processes and only one has the env, or (c) the user's claim that 'the VPS log only shows scrape_portal_detail' is from a filtered/wrong log view. Result is 93 burned attempts/day on Bonfire+OpenGov hosts that mark themselves blocked for 6h, killing all bid scraping on those tenants.",
+    "recommendation": "1) SSH into the worker host and run `printenv | grep -i flare` to verify FLARESOLVERR_URL is actually exported in the process env (separate from .env file). 2) Check logFlaresolverrConfig() output in worker boot log — worker.js:534-561 already prints config at startup. If you see 'WARNING: FLARESOLVERR_URL is NOT set', the env never reached the process. 3) Restart the worker after any env change (Railway requires redeploy; VPS systemd requires `systemctl restart`). 4) MEMORY.md mentions migration to Hostinger VPS — confirm which host runs worker.js today (CLAUDE.md still says Railway). Env vars need to be set in the systemd unit file or .env file on the VPS, not Railway. 5) Once FLARESOLVERR_URL is truly visible to the process, the early-return at worker.js:353-359 changes to `return { result: { skipped: 'flaresolverr_handles_cf', host } }` (success) and scrapePortalDetail will route Bonfire URLs through the proxy (worker.js:210-229).",
+    "effort": "<1h",
+    "domain": "cron-and-worker-queue-audit",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "CATASTROPHIC: 42,000+ enrichment jobs starved for 14 days — extract_keywords + classify_naics had 0 consumed in 24h",
+    "severity": "high",
+    "category": "broken-workflow",
+    "evidence": "Postgres pending counts: extract_keywords=17,638 (oldest 351h = 14.6 days old), classify_naics=12,971 (354h), extract_structured_reqs_federal=11,630 (291h). Throughput for last 24h: extract_keywords consumed=0, classify_naics consumed=0, federal struct_reqs consumed=2,885. Root cause: claim_jobs() RPC orders by `priority DESC, created_at ASC`. Fan-out trigger in migration 086 enqueues classify_naics at priority 7, struct_reqs/keywords at priority 6 (lines 82-84). But a LATER trigger change set extract_structured_reqs_federal to priority 8: query confirms 11,630 pending federal rows at priority 8 vs 12,132 classify_naics at priority 7 vs 17,638 keywords at priority 6. With 11,630 always-available priority-8 jobs and run_worker_jobs draining ~120/hr, the consumer NEVER reaches priority 7 (classify_naics) or priority 6 (keywords). All 1,675 new keyword + naics jobs enqueued in the last 24h sit untouched.",
+    "impact": "Every new opportunity ingested in the last 2 weeks has missing AI keywords + NAICS classification. Matching algorithm relies on ai_keywords for HOT/WARM scoring (per CLAUDE.md). User-facing: matches list degraded, NAICS-based partner search misses 30k+ recent opps, market-watch digest references opps that haven't been keyword-enriched. The starvation also blocks lead-related work: enrich_lead_brief (59 pending up to 220h old) and enrich_lead_apollo (121 pending up to 49h old) — the entire Quick Checker→HubSpot lead path is dead since the keywords lane is starved.",
+    "recommendation": "Three options, pick one: (A) FAIREST: change claim_jobs() to use weighted round-robin per task_type instead of pure priority — claim e.g. 2 federal + 2 classify + 1 keywords per batch_size=5 call so no lane can starve another. (B) FASTEST: split run_worker_jobs by lane like attachments already is: add /api/cron/run_worker_jobs_keywords (claims ONLY extract_keywords + classify_naics) at */5 schedule. Costs 1 cron slot — see finding on 40-cron ceiling. (C) HACK: lower extract_structured_reqs_federal priority from 8 back to 6 in the trigger so it doesn't dominate. Whichever path, drain the existing 42k backlog with a manual one-shot route or by temporarily flipping batch_size to 50.",
+    "effort": "1-4h",
+    "domain": "cron-and-worker-queue-audit",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "analyze_attachments 82% failure rate over 7d (5,937 of 7,242) — all 'reaped after stuck running > 00:10:00'",
+    "severity": "high",
+    "category": "bug",
+    "evidence": "Postgres: task_type='analyze_attachments' last 7d → 1,305 done / 5,937 failed = 82% failure rate. Last 24h: 907 done / 653 failed = 41.9%. Duration analysis of failed jobs: min=1,504s, avg=1,510s, max=1,628s — every single failure has duration ~25 minutes (timeout-then-reaped). Error message: 'reaped after stuck running > 00:10:00' (653 occurrences in 24h, the #1 error in the system). run_worker_jobs_attachments/route.ts sets maxDuration=300 and totalBudget=150_000 (line 50, 201), but successful jobs already average 38s with p95=1,512s — individual jobs exceed the 150s budget.",
+    "impact": "Burning $$$ on Mistral OCR + LLM calls that never get attributed because the parent function dies at 300s, leaving the job 'running' until the reaper at 10min. The reaper increments attempts, the job re-enters the queue, gets re-claimed, and the whole cycle repeats. Multi-attachment opps may consume 5+ attempts × ~$0.05 LLM cost = ~$0.25/opp on jobs that produce no output. Federal opp pipeline degraded — opportunities show stale structured_requirements because the LLM enrichment pass is failing.",
+    "recommendation": "1) The per-link timeout in handleAnalyzeAttachments (run_worker_jobs/route.ts:595, run_worker_jobs_attachments/route.ts:96) is `if (Date.now() - start > 30_000) break` — but the LLM call after that has no timeout. Wrap callLLMJson in AbortSignal.timeout(60_000). 2) Add per-job hard limit: if Date.now() - jobStart > 100_000, finish_job(status='failed', error='per_job_timeout') BEFORE the next operation so the reaper never sees it. 3) Investigate the 1,628s max duration — that's 27min, which means the Vercel function ran way over its 300s maxDuration. Likely a hung fetch on a SAM.gov attachment that never aborts. Add AbortSignal.timeout(20_000) to the fetch at line 620 (currently only the second fetch has it). 4) Run a one-time UPDATE to mark all 5,937 failed-via-reap jobs as `status='failed', attempts=max_attempts` so they don't get retried again on the next reap cycle.",
+    "effort": "1-4h",
+    "domain": "cron-and-worker-queue-audit",
+    "verified": true,
+    "verification": {
+      "real_votes": 2,
+      "total_votes": 3,
+      "refutations": [
+        "Finding is STALE — already fixed in commit 9e929569 (\"fix(worker-queue): eliminate analyze_attachments overlap + reap-burn loop\") deployed 2026-06-10 06:46 local (~12:46 UTC), several hours before this review. The commit message even cites the exact same data points the finding cites (653 failed / 576 done = 53% in 24h, 270s budget vs 180s cron overlap as root cause). Verified live in Supabase: since the fix deployed, analyze_attachments has 368 done / 0 failed. Last 1 hour: 103 done / 0 failed / 1 pending. The route now has budget=150s (< 180s cron interval, so no overlap), batch_size=3, JOB_BUDGET_GUARD=45s that re-releases unstarted jobs to 'pending' without burning attempts, and a watermark check (_analyzed_attachments_at in structured_requirements) that makes reaped+requeued jobs no-op when work was already done by an overlapping container. Both run_worker_jobs and run_worker_jobs_attachments handlers got the watermark check. The 7d aggregate the finding cites includes pre-fix data and is no longer representative of current behavior. Additionally, the finding's recommendation #1 (AbortSignal.timeout on callLLMJson) and #3 (AbortSignal.timeout on first fetch) were NOT the actual root cause — the root cause was Vercel cron invocation overlap, which the fix addressed at the orchestration layer, not the per-call layer. Recommendation #4 (bulk UPDATE stuck jobs to terminally failed) was not applied but is moot — the watermark check prevents wasted LLM calls on reaped+requeued opps."
+      ]
+    }
+  },
+  {
+    "title": "portal_cookies table is EMPTY (0 rows) — every Bonfire scrape currently has no cookie pool to draw from",
+    "severity": "medium",
+    "category": "broken-workflow",
+    "evidence": "Postgres query `SELECT * FROM portal_cookies LIMIT 20` returned []. Combined with the previous finding (warm_cf_cookie jobs failing at 25-27% rate with 'no cf_clearance issued'), this means the warm_cf_cookie task has not successfully saved a single cookie row that's still in the table. The savePortalCookies UPSERT (worker.js:100) writes to this table, so either (a) no warm has succeeded long enough that all rows expired and got purged, (b) a manual TRUNCATE happened, or (c) the warm jobs that ARE succeeding (483 done in 24h) immediately hit the early-return at worker.js:354 'skipped: flaresolverr_handles_cf' without ever calling savePortalCookies (likely — isStrictCfHost matches all bonfire + opengov).",
+    "impact": "scrape_portal_detail for Bonfire hosts NOT routed through FlareSolverr (or when FLARESOLVERR_URL is unset, finding #1) hits loadPortalCookies(host) returning null, then immediately re-enqueues a warm job (worker.js:237-240), which itself fails because FlareSolverr isn't reachable. Infinite loop. The run_worker_jobs Vercel cookie-refresh block (lines 755-775) queries `portal_cookies` for expiring-soon rows, but the table is empty so it never queues warms for known-good hosts.",
+    "recommendation": "1) Investigate why no successful warm produced a saved row: instrument worker.js:354 to log how many jobs hit the early-return vs full path. If 100% are early-returning, that's working as designed and portal_cookies is intentionally empty when FlareSolverr handles everything. 2) Once FlareSolverr is actually working (per finding #1), portal_cookies will permanently stay empty — the cookie-refresh logic in run_worker_jobs/route.ts:755-775 becomes dead code and the warm_cf_cookie task should be removed from the worker entirely. 3) If FlareSolverr will NEVER be configured, seed portal_cookies with 220+ Bonfire hosts so the expiry-refresh logic has rows to iterate.",
+    "effort": "1-4h",
+    "domain": "cron-and-worker-queue-audit",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "12 cron routes missing guardCron / isAuthorizedCron — anyone with the URL can trigger expensive jobs",
+    "severity": "medium",
+    "category": "security",
+    "evidence": "grep -L 'guardCron|isAuthorizedCron|authorizeCron' on dashboard/src/app/api/cron/*/route.ts returned 12 files: bulk_enrich_ai, bulk_enrich_descriptions, db_cleanup, enrich_gov_contacts_apollo, enrich_apollo_contractors, ingest_fpds_awards, ingest_highergov_people, ingest_highergov_sled, ingest_sam, naics_stats_backfill, ingest_rss, score_matches. Per CLAUDE.md: 'Cron handlers must use guardCron(req) from @/lib/cron-auth — fail-closed in production.' Phase 2 hardening was supposed to cover all 31 cron routes, but these 12 either pre-date the migration or were added after.",
+    "impact": "Any anonymous request to https://app.capturepilot.com/api/cron/ingest_sam triggers a full SAM.gov ingestion (paid API + DB writes). enrich_gov_contacts_apollo + enrich_apollo_contractors burn paid Apollo credits. score_matches re-scores every match in the system. ingest_highergov_sled hits the HigherGov paid API. db_cleanup deletes rows. None of these require any authentication today.",
+    "recommendation": "Add `const denied = guardCron(req); if (denied) return denied;` as the first line of each GET handler. Routes: bulk_enrich_ai, bulk_enrich_descriptions, db_cleanup, enrich_gov_contacts_apollo, enrich_apollo_contractors, ingest_fpds_awards, ingest_highergov_people, ingest_highergov_sled, ingest_sam, naics_stats_backfill, ingest_rss, score_matches. Re-run `node tools/30_smoke_admin.mjs --base https://captiorpilot-v3.vercel.app` after — but note that script tests /admin/* not /api/cron/*. Extend it to also probe cron routes for 401.",
+    "effort": "1-4h",
+    "domain": "cron-and-worker-queue-audit",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "playwright-worker leaking 230 zombie Chrome processes",
+    "severity": "high",
+    "category": "bug",
+    "evidence": "docker exec playwright-worker-worker-1 ps aux | grep -c defunct = 230 (zombies start at PID 55 from 14:20, accumulate every browser launch, 233 total processes in container). Container PID 1 is `node --enable-source-maps worker.js` — Node is not reaping child processes. tools/playwright-worker/worker.js launches `chromium.launch()` per batch but never wraps PID 1 in `tini` / `--init`.",
+    "impact": "Zombies hold PID slots; container will hit kernel PID limit (~32k default) → new Chromium launches fail with EAGAIN, worker stalls. Already 230 in <3.5h uptime → projects to ~1600/day if cookie warmers stay enabled. Forces a daily restart just to clear them.",
+    "recommendation": "Edit tools/playwright-worker/Dockerfile (or compose file) to add `init: true` (compose) or `--init` (`docker run`) so Docker's tini becomes PID 1 and reaps zombies. Or call `process.on('SIGCHLD', () => { while (waitpid(-1, 0, WNOHANG) > 0) {} })` in worker.js. Verified: zero zombies after applying `init:true` is the standard fix for headless-chrome-in-node containers.",
+    "effort": "<1h",
+    "domain": "vps-audit:srv1113360.hstgr.cloud",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "Watchtower only watching 1 of 11 containers — every other image is stale",
+    "severity": "high",
+    "category": "tech-debt",
+    "evidence": "Watchtower env shows `WATCHTOWER_LABEL_ENABLE=true` — only containers with `com.centurylinklabs.watchtower.enable=true` label are scanned. Label scan: only `playwright-worker-worker-1` has the label set. Watchtower logs confirm `Scanned=1` every 5min. Image ages: containrrr/watchtower 2 years old, louislam/uptime-kuma 7 months, n8n/ollama/traefik/openclaw 3 months, crawl4ai/tika 2 months, flaresolverr/searxng 2 weeks.",
+    "impact": "10 containers running stale images, missing CVE patches and bug fixes. Traefik 3-month-old image especially risky (edge-facing TLS terminator). Ollama OOM kills (6 in dmesg) may already be fixed in newer release. User believes watchtower is keeping the box current — false security.",
+    "recommendation": "Either (a) set `WATCHTOWER_LABEL_ENABLE=false` so watchtower scans everything by default + add exclusion labels for containers you want pinned, or (b) add `labels: ['com.centurylinklabs.watchtower.enable=true']` to every compose file under /root/projects (n8n, ollama, traefik, etc). Pick option (a) — simpler and matches the typical home-lab intent. Also bump watchtower image itself: `docker pull containrrr/watchtower:latest && docker compose up -d`.",
+    "effort": "<1h",
+    "domain": "vps-audit:srv1113360.hstgr.cloud",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "Claude credit balance exhausted — every health-check task fails silently",
+    "severity": "high",
+    "category": "broken-workflow",
+    "evidence": "/var/log/cp-tasks.log shows every auto-health-* task FAILED since 10:05 UTC (15+ consecutive failures up to 17:05). Latest /root/projects/tasks/done/*.out contains the literal string `Credit balance is too low`. tasks-runner.sh uses `claude --print` via /root/.claude-env credentials. 377 files in tasks/failed/, growing every 30 min.",
+    "impact": "The autonomous self-healing loop documented in MEMORY.md (`VPS Claude Code + Aider + autonomous loops`) is dead — every cron-dropped task is rejected by Anthropic billing. Plus the health-check itself is broken (see next finding), so the system is dropping tasks Claude couldn't action even if billing worked.",
+    "recommendation": "Top up the Anthropic API account tied to /root/.claude-env (check `cat /root/.claude-env | grep ANTHROPIC`). Add a credit-balance probe to /root/projects/scripts/health-check.sh and skip task-drop when balance < $5. Long-term: cap the loop with `WATCHDOG_MAX_TASKS_PER_DAY=20` so a runaway health alarm can't burn $100/day.",
+    "effort": "<1h",
+    "domain": "vps-audit:srv1113360.hstgr.cloud",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "Health-check probes /api/admin/health unauthenticated — gets HTML login page back, triggers task drop every 30 min",
+    "severity": "high",
+    "category": "broken-workflow",
+    "evidence": "/root/projects/scripts/health-check.sh sends `authorization: Bearer 4c61084f...` to https://app.capturepilot.com/api/admin/health. Every response in /var/log/cp-health.log is `<!DOCTYPE html><!--k5K7ND1...><html lang=\"en\">...` — i.e. the Next.js login page (admin route uses cookie-based assertAdmin(), not bearer auth). The script grep matches `error` inside that HTML (Next.js error chunks) and drops a task EVERY single run. 377 false alarms in /root/projects/tasks/failed/.",
+    "impact": "Self-healing loop is a false-positive generator. Even if Claude credits were topped up, every 30 min it would spin up an investigation task on a phantom problem. Pollutes tasks/failed/ at 48 files/day. Real anomalies would be lost in noise.",
+    "recommendation": "Two fixes in dashboard/src/app/api/admin/health/route.ts: (1) accept the `Bearer ${HEALTH_CHECK_SECRET}` header as an alternative to admin cookie auth — gate the secret env var so it's a separate token from session auth, (2) make the route return JSON with explicit `status: 'healthy'|'degraded'|'failing'`. Then update health-check.sh grep to look for `\"status\":\"failing\"` instead of substring `error`. Until fixed, comment out the `*/30 * * * * health-check.sh` cron line to stop the noise.",
+    "effort": "1-4h",
+    "domain": "vps-audit:srv1113360.hstgr.cloud",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "ai_strategy cron parses JSON without response_format json_object → silent failures",
+    "severity": "high",
+    "category": "bug",
+    "evidence": "dashboard/src/app/api/cron/ai_strategy/route.ts:124-145 — openai.chat.completions.create({ model: 'gpt-4o-mini', messages, temperature: 0.3, max_tokens: 1000 }) with NO response_format. Then JSON.parse(text) after manually stripping ```fences```. If the model returns prose or partial markdown, parse throws, the per-opp try/catch increments `failed++` and the row is left null until the next cron pass — wasting budget on every retry.",
+    "impact": "ai_win_strategy stays null on opps the model returned non-JSON for (often when descriptions are short/odd). Failures are swallowed at i<5 console.error only; no DB record of failure → infinite retry loop burns gpt-4o-mini tokens every 4h.",
+    "recommendation": "Add `response_format: { type: 'json_object' }` to the create() call, drop the markdown-fence stripping code, and on JSON.parse failure write a sentinel ai_win_strategy ({ _failed: 'invalid_json', _at: ISO }) so the candidate query (`ai_win_strategy.is.null,ai_win_strategy.eq.{}`) stops returning it. Same pattern bulk_enrich_ai already uses.",
+    "effort": "<1h",
+    "domain": "AI workflows / prompt audit (CapturePilot 2.0)",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "generate-proposal route parses JSON without response_format json_object",
+    "severity": "medium",
+    "category": "bug",
+    "evidence": "dashboard/src/app/api/ai/generate-proposal/route.ts:108-164 — POST body has model 'gpt-4o-mini', messages, max_tokens 3000, temperature 0.3, but NO response_format. Then `if (content.startsWith('```')) { content = content.split('\\n').slice(1).join('\\n').replace(/```$/, '').trim(); } const proposal = JSON.parse(content);`. The fence-stripping is a workaround for the missing JSON-mode guarantee.",
+    "impact": "When the model returns prose / partial code fences / explanatory preamble the parse throws into the outer catch → 500 with no useful detail. Caller (proposals UI) shows generic 'Generation failed'.",
+    "recommendation": "Add `response_format: { type: 'json_object' }` to the request body, remove the fence-stripping block, and on parse failure return 502 with a sample of the raw content (truncated) so the UI can show 'AI returned unparseable JSON — retry'.",
+    "effort": "<1h",
+    "domain": "AI workflows / prompt audit (CapturePilot 2.0)",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "capability-statement SSE swallows OpenAI failures into empty section_done content",
+    "severity": "high",
+    "category": "bug",
+    "evidence": "dashboard/src/app/api/ai/capability-statement/route.ts:208-218 — `if (res.ok) { const data = await res.json(); content = (data.choices?.[0]?.message?.content || '').trim(); }`. There is NO else branch. When OpenAI returns 4xx/5xx the variable `content` stays the empty string from line 186 (`let content = '';`). The function then sends `section_done` with content:'' and word_count 0. This is exactly the 'silent empty proposals' pattern CLAUDE.md flagged.",
+    "impact": "User watches the SSE progress bar tick through 6 sections, gets a PDF with several empty sections, no error surfaced. Quietly destroys the capability-statement UX every time OpenAI rate-limits or 429s.",
+    "recommendation": "After `if (res.ok)` add `else { const err = await res.text(); send('error', { section: section.key, message: \\`OpenAI \\${res.status}: \\${err.slice(0,200)}\\` }); continue; }` so the client knows the section failed. Bonus: keep going for the remaining sections but mark this one with status:'failed' instead of content:''.",
+    "effort": "<1h",
+    "domain": "AI workflows / prompt audit (CapturePilot 2.0)",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "bulk_enrich_ai cron bypasses guardCron helper",
+    "severity": "medium",
+    "category": "security",
+    "evidence": "dashboard/src/app/api/cron/bulk_enrich_ai/route.ts:28-37 — handwritten auth using `req.headers.get('authorization')` against CRON_SECRET and SUPABASE_SERVICE_KEY. Doesn't call guardCron(req) from @/lib/cron-auth. CLAUDE.md rule: 'Cron handlers must use guardCron(req) from @/lib/cron-auth — fail-closed in production.' This cron also lacks withCronTelemetry wrapping (publish_next_blog has it, this one doesn't).",
+    "impact": "If neither CRON_SECRET nor SUPABASE_SERVICE_KEY are set in prod (or both env-cleared), the `if ((expectedCron || expectedSvc) && ...)` gate becomes false and the cron is publicly callable — same fail-open class CLAUDE.md flagged as the original Phase-2 bug. Also no telemetry → no last_run / last_status reporting in /admin/health.",
+    "recommendation": "Replace lines 28-37 with `const denied = guardCron(req); if (denied) return denied;` and wrap the export with withCronTelemetry('/api/cron/bulk_enrich_ai', handler) like publish_next_blog does.",
+    "effort": "<1h",
+    "domain": "AI workflows / prompt audit (CapturePilot 2.0)",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "summarize-document writes ai_win_strategy with WRONG schema, corrupts later consumers",
+    "severity": "high",
+    "category": "bug",
+    "evidence": "dashboard/src/app/api/ai/summarize-document/route.ts:159-170 — `await db.from('opportunities').update({ ai_win_strategy: analysis, ... }).eq('notice_id', notice_id);` where `analysis` has keys executive_summary / key_requirements / evaluation_criteria / risks_and_flags / recommended_actions / competition_level / ideal_contractor_profile. Meanwhile ai_strategy cron writes summary / sales_angle / recommended_profile / key_risks / win_probability_factors / next_steps / competitive_positioning. Whichever runs LAST wins.",
+    "impact": "An admin clicking 'Analyze document' on /admin/opportunities silently overwrites the structured win-strategy that the dashboard UI expects. /opportunities/[id] consumers reading ai_win_strategy.summary suddenly see undefined. Hard to reproduce because it depends on cron ordering.",
+    "recommendation": "Stop sharing the column. Either rename summarize-document's write target to `ai_document_summary` (new jsonb column, new migration) or namespace via `ai_win_strategy: { ...existing, document_summary: analysis }`. Don't replace the whole field.",
+    "effort": "1-4h",
+    "domain": "AI workflows / prompt audit (CapturePilot 2.0)",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "Resend bounce/complaint events are never propagated to HubSpot — root cause of user-reported issue",
+    "severity": "high",
+    "category": "broken-workflow",
+    "evidence": "/Users/andreschuler/Caturepilot 2.0/dashboard/src/app/api/webhooks/resend/route.ts:151-192 inserts bounce/complaint events into the `email_events` table and updates `backlink_outreach.status='bounced'`, but never calls HubSpot. The HubSpot client (`/Users/andreschuler/Caturepilot 2.0/dashboard/src/lib/hubspot.ts`) exposes `updateContactByEmail()` and standard properties like `hs_email_hard_bounced`, `hs_email_invalid`, `unsubscribed_from_all_email`, but no code path in the repo writes them.",
+    "impact": "User-reported: bounced emails do not auto-update HubSpot contact properties. Sales reps keep mailing dead addresses because HubSpot still shows them as valid. Compounding deliverability damage with Gmail/Yahoo's new sender requirements.",
+    "recommendation": "In the resend webhook handler, after persisting the bounce/complaint to `email_events`, look up the recipient email and call `updateContactByEmail(recipient, { hs_email_hard_bounced: 'true' })` for `bounced`, and `{ unsubscribed_from_all_email: 'true' }` for `complained`. Add a `bounced_emails` Supabase table (or use `email_events` indexed on recipient+event_type) to short-circuit future `send()` calls for that address.",
+    "effort": "1-4h",
+    "domain": "integrations",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "SMS delivery is inconsistent because `send()` and `sendSmsPartnerAlert()` have zero retry on transient Twilio 429/5xx",
+    "severity": "medium",
+    "category": "broken-workflow",
+    "evidence": "/Users/andreschuler/Caturepilot 2.0/dashboard/src/lib/sms.ts:62-88 fires one POST per recipient with no retry. There's no handling of HTTP 429 (`Retry-After`), no exponential backoff, no Twilio error-code 20429 (rate limit), and no per-recipient queue. Toll-free `+18338661386` notes in code say throughput is capped at ~10 msg/min until TFN Verified Sender registration completes. /Users/andreschuler/Caturepilot 2.0/dashboard/src/lib/lead-brief.ts:604 calls `sendSmsPartnerAlert(smsText)` in a single best-effort attempt and only logs on failure.",
+    "impact": "Sergio receives Facebook lead SMS inconsistently. Spikes (multiple leads in 1 minute) blow past the unverified TFN throughput limit; transient Twilio 5xx and carrier filtering are not retried; partial-recipient failures are logged but never re-queued.",
+    "recommendation": "(1) On non-2xx, inspect Twilio `code` — if 20429 or HTTP 429, parse `Retry-After` header and retry once after the delay. (2) Persist SMS sends in a new `sms_jobs` table (status, attempts, last_error) and run a cron retry for failed sends within a 30-min window. (3) Complete the TFN Verified Sender registration (mentioned at sms.ts:34-37) to lift throttling. (4) Add a 1s sleep between recipients in the `for (const to of recipients)` loop at sms.ts:135 — current code fires both back-to-back, common cause of carrier filtering.",
+    "effort": "0.5-2d",
+    "domain": "integrations",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "Stripe webhook has no idempotency tracking — duplicate events double-fire side effects",
+    "severity": "medium",
+    "category": "bug",
+    "evidence": "/Users/andreschuler/Caturepilot 2.0/dashboard/src/app/api/stripe/webhook/route.ts:42-254 dispatches on `event.type` but never checks/persists `event.id`. Stripe routinely re-delivers webhooks on transient 5xx (and on signing rotations). `checkout.session.completed` for a `startup_pack` insert at line 60 would create duplicate `startup_pack_purchases` rows and re-send the delivery email; `subscription.deleted` would fire a second cancellation email via Resend.",
+    "impact": "Duplicate startup-pack purchase rows, duplicate delivery emails, duplicate Meta CAPI Purchase events (which inflates ad-platform conversion counts and ROAS reporting), duplicate HubSpot deal-stage transitions.",
+    "recommendation": "Create a `processed_stripe_events` table (id text primary key, processed_at timestamptz default now()). At the top of POST, `insert ... on conflict (id) do nothing returning id`. If no row was returned, return 200 `{received: true, deduped: true}` without dispatching. Wrap the existing `switch` block in that guard.",
+    "effort": "1-4h",
+    "domain": "integrations",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "HubSpot webhook accepts requests when secret is unset — dev backdoor reachable in production",
+    "severity": "medium",
+    "category": "security",
+    "evidence": "/Users/andreschuler/Caturepilot 2.0/dashboard/src/app/api/hubspot/webhook/route.ts:30 `if (!secret) return true; // Skip verification in dev if no secret configured` — combined with line 57 `if (process.env.NODE_ENV === 'production')` wrapping the call, this means in non-production environments anyone can POST arbitrary `client_activity_log` inserts. The Resend webhook (resend/route.ts:89) does the right thing: refuses on missing secret.",
+    "impact": "Preview/staging deployments can be abused to flood `client_activity_log` and exercise downstream DB writes. If `NODE_ENV` is ever accidentally unset in prod (common on Vercel preview branches), authentication disappears entirely.",
+    "recommendation": "Mirror Resend: if `HUBSPOT_WEBHOOK_SECRET` is unset return 500 `Server misconfigured`. Remove the `NODE_ENV === 'production'` guard and verify on every request.",
+    "effort": "<1h",
+    "domain": "integrations",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "Resend webhook deployed but receiving ZERO events — engagement + bounce tracking is dark",
+    "severity": "critical",
+    "category": "broken-workflow",
+    "evidence": "Supabase query against email_events shows 0 rows total across all time, despite 34 sent scheduled_emails (last sent 2026-06-10 14:01) and N=121 marketing_leads with magnet_resend_id/brief_resend_id columns populated. The webhook handler at dashboard/src/app/api/webhooks/resend/route.ts:87 requires RESEND_WEBHOOK_SECRET and returns 500 if unset (line 89-92) — so either the env var is missing, the webhook is not registered in the Resend dashboard, or the public route is not reachable. No 4xx/5xx telemetry exists because there are no events of any kind in email_events.",
+    "impact": "We have no idea which emails are landing, opening, clicking, bouncing, or being marked spam. /admin/email-tracking renders empty for every lead. Bounce-driven suppression (see next finding) and lead-engagement scoring are non-functional. Reputation will silently rot — first signal of trouble will be a Resend domain suspension.",
+    "recommendation": "1) Confirm RESEND_WEBHOOK_SECRET is set in Vercel env for production. 2) In Resend dashboard, register webhook URL https://app.capturepilot.com/api/webhooks/resend with events email.sent, email.delivered, email.opened, email.clicked, email.bounced, email.complained, email.failed. 3) Send a test event from the Resend dashboard and confirm one row lands in email_events. 4) Add a /admin/health check that flags 'no email_events in last 24h despite >0 sends'.",
+    "effort": "<1h",
+    "domain": "email-sms-delivery-infrastructure",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "Bounce/complaint webhook updates backlink_outreach only — never adds bounced address to global suppression list",
+    "severity": "critical",
+    "category": "bug",
+    "evidence": "dashboard/src/app/api/webhooks/resend/route.ts:184-188 — on bounced/complained event, only updates backlink_outreach.bounced_at WHERE resend_message_id matches. There is no INSERT into outreach_optouts, and no flag is flipped on marketing_leads, user_profiles, or contacts. Confirmed at SQL level: outreach_optouts has 0 rows. Meanwhile dashboard/src/app/api/cron/outreach_send/route.ts:127 is the ONLY caller that checks outreach_optouts before sending — every other send path (dashboard/src/lib/email.ts:163 send(), lead-magnets.ts:228, lead-brief.ts:856, health-digest.ts:106, send_daily_digest:322, send_backlink_outreach:129, send-update:77) ignores it.",
+    "impact": "When an address bounces or marks spam on a lead-magnet email, the next outreach_send campaign or daily digest re-emails that exact address. Repeated sends to bounced addresses are the #1 cause of Resend domain suspensions and Gmail/Outlook spam-folder relegation. Deliverability will collapse over time and we won't see it coming because finding #1 means we don't see the bounces either.",
+    "recommendation": "In dashboard/src/app/api/webhooks/resend/route.ts add: after eventType === 'bounced' || 'complained', INSERT INTO outreach_optouts (email, reason) VALUES (lower(recipient), 'resend:'||eventType) ON CONFLICT (email) DO NOTHING. Then in dashboard/src/lib/email.ts send() add a pre-send check: SELECT 1 FROM outreach_optouts WHERE email=lower(to) — return false if found. Same check in lead-magnets.ts:sendLeadMagnetEmail, send_daily_digest, notify_matches.",
+    "effort": "1-4h",
+    "domain": "email-sms-delivery-infrastructure",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "email.ts send() wrapper has NO suppression check — every transactional/marketing path can email opted-out addresses",
+    "severity": "critical",
+    "category": "broken-workflow",
+    "evidence": "dashboard/src/lib/email.ts:163-196 send() checks isEmailEnabled(key) (a global category toggle) then calls r.emails.send() directly. There is no SELECT against outreach_optouts, no SELECT against any per-user suppression, no check against contacts.unsubscribed. This wrapper is the gate for: welcome, consulting_welcome, beta_invite, team_invite, outreach_intro/followup/final, task_notification, agency_pipeline_push, opportunity_alert, quick_checker, trial_expiring_*, payment_failed, subscription_canceled, beta_deadline_*, edu_*. All 18+ user-facing emails bypass the only suppression list we have.",
+    "impact": "An admin who clicks 'send beta invite' to a previously-opted-out address sends it. The drip sequence cron (process_scheduled_emails — 286 pending rows in queue) will dispatch nurture emails to addresses that already opted out via the outreach footer. This is a CAN-SPAM violation and an FTC-actionable behavior at scale.",
+    "recommendation": "Add at start of send() in dashboard/src/lib/email.ts:163: `const { data: optout } = await sb.from('outreach_optouts').select('email').eq('email', to.toLowerCase()).maybeSingle(); if (optout) { console.log('[email] ' + to + ' opted out, skipping ' + key); return false; }`. Same check inside dispatchScheduledEmail (line 109) and sendLeadMagnetEmail (lead-magnets.ts:218).",
+    "effort": "1-4h",
+    "domain": "email-sms-delivery-infrastructure",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "process_scheduled_emails backlog: 286 pending rows, only 4 past-due — cron working but capability_statement template silently fails",
+    "severity": "medium",
+    "category": "bug",
+    "evidence": "Supabase SELECT FROM scheduled_emails GROUP BY status: pending=286, sent=34, failed=1. The single failed row: template_key='edu_capability_statement', failure_reason='Dispatch returned false (template disabled or send error)'. Last sent_at = 2026-06-10 14:01 (today). Only 4 of 286 pending are past-due, so the queue itself is healthy, but the failure_reason is too generic to debug: process_scheduled_emails/route.ts:62-64 writes the same string for 'template disabled' AND 'Resend API error' AND 'recipient bounced' AND 'unknown template_key'.",
+    "impact": "We can't tell whether 'failed' rows are admin-disabled templates (no action needed) vs Resend rejections vs invalid recipients. As volume grows, debugging deliverability issues will require pulling Vercel logs and correlating timestamps. The capability_statement failure may indicate the toggle in email_settings is off — or the template is broken — and we have no way to tell.",
+    "recommendation": "In dashboard/src/lib/email.ts dispatchScheduledEmail (line 109), change return type to `Promise<{ ok: boolean; reason?: string }>` and bubble up the actual reason ('template_disabled', 'resend_error:<msg>', 'no_handler', 'opted_out'). Persist in scheduled_emails.failure_reason via process_scheduled_emails/route.ts:63. Add an /admin/health card 'Scheduled email failures (7d) grouped by reason'.",
+    "effort": "1-4h",
+    "domain": "email-sms-delivery-infrastructure",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "Lead-magnet + lead-brief sends bypass email-settings toggle AND any suppression check",
+    "severity": "high",
+    "category": "broken-workflow",
+    "evidence": "dashboard/src/lib/lead-magnets.ts:228 (sendLeadMagnetEmail) and dashboard/src/lib/lead-brief.ts:856 (sendBriefEmail) call resend.emails.send() directly — they do NOT use the send() wrapper from email.ts, so they skip isEmailEnabled(), they skip the (still-to-be-added) outreach_optouts check, they skip the loadCustomTemplate path, and they don't log to any table other than marketing_leads.{magnet_resend_id, brief_resend_id}.",
+    "impact": "An admin who flips a toggle in /admin/email-templates expecting to disable lead-magnet emails finds they keep going out. A lead who opts out of outreach then submits another lead-magnet form gets the magnet email anyway. Marketing leads is the highest-volume sending path (Facebook lead-gen) so this is the biggest contributor to deliverability risk.",
+    "recommendation": "Refactor sendLeadMagnetEmail and sendBriefEmail to route through a shared sendViaResend(args) helper that: (1) calls suppression check, (2) calls isEmailEnabled with a magnet-specific key, (3) does the actual r.emails.send(), (4) returns {sent, resendId, skipped_reason}. Keep the existing call sites — just swap the implementation.",
+    "effort": "1-4h",
+    "domain": "email-sms-delivery-infrastructure",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "SMS partner-alert failures only console.warn — no DB persistence, no /admin visibility, silent dataloss",
+    "severity": "high",
+    "category": "observability",
+    "evidence": "dashboard/src/lib/lead-brief.ts:604-613 — sendSmsPartnerAlert result is logged via console.warn on partial/full failure with text like '[lead-brief] SMS alert failed: ...'. No write to any sms_events / notification_log / lead row. dashboard/src/lib/sms.ts:62-87 sendSmsToOne catches errors and returns {sent:false, error} but never persists. Only dashboard/src/app/api/admin/sms/test/route.ts surfaces the error — and only synchronously for the admin-test endpoint.",
+    "impact": "If Twilio rate-limits, the API key expires, the trial-account verification falls off, or the recipient blocks our number, Sergio stops getting partner-alert SMS — but the Facebook-lead pipeline returns 200 and the admin dashboard shows green. The 30-minute call-window promise to leads silently dies. No backfill possible after the fact because we don't know which leads were SMS'd successfully.",
+    "recommendation": "Create a small sms_events table (id, occurred_at, recipient, status, sid, error_code, error_msg, payload jsonb, lead_id uuid nullable). In dashboard/src/lib/sms.ts sendSmsPartnerAlert, after the for-loop write one row per perRecipient entry. Add a /admin/health card showing 'SMS sent 24h / failed 24h / last error'. The same backlink_outreach mirror pattern already exists for email — copy it for SMS.",
+    "effort": "1-4h",
+    "domain": "email-sms-delivery-infrastructure",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "ai_win_strategy missing on 81.3% of opportunities — Apr 16 backfill never finished",
+    "severity": "critical",
+    "category": "data-quality",
+    "evidence": "SELECT COUNT(*) FILTER (WHERE ai_win_strategy IS NULL OR ai_win_strategy::text='{}')/COUNT(*) FROM opportunities → 63,455/78,007 (81.3%). structured_requirements: 57,583/78,007 (73.8% null). strategic_scoring: 36,360/78,007 (46.6% null). The 'parallel agent sweep' on 2026-04-16 documented in CLAUDE.md was supposed to backfill these — current rates show the cron has not kept up with new ingest, and the federal-only backfill_requirements pass never ran against SLED rows (98%+ of city/state/county opps still null).",
+    "impact": "AI Proposals, win-strategy panel, Opportunity Detail intelligence cards, and match scoring all degrade silently. Users see empty sections on 8 out of 10 opportunities. The product literally markets these AI features as core differentiators.",
+    "recommendation": "Run /api/admin/backfill-enrichment in repeat batches of 5000 with only=both until 0 nulls remain (already shipped per CLAUDE.md). Parallel: change /api/cron/ai_win_strategy to claim oldest-null first and raise batch size; add /admin/health KPI for null_strategic_scoring + null_ai_win pct so this can't regress silently.",
+    "effort": "0.5-2d",
+    "domain": "data-quality",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "opportunity_score is NULL on 100% of opportunities (78,007/78,007) — confidence-scoring pipeline never wrote a row",
+    "severity": "high",
+    "category": "broken-workflow",
+    "evidence": "SELECT COUNT(*) FILTER (WHERE opportunity_score IS NULL OR opportunity_score=0) FROM opportunities GROUP BY source → sam: 72,695/72,695 (100%); sled: 5,314/5,314 (100%). Column exists (integer) but no cron writes to it. Task prompt explicitly called out: 'Confidence-scoring opportunities — missing on most pipelines per the requirements'.",
+    "impact": "Downstream sorting/filtering by opportunity_score is dead; any UI relying on the integer score reads 0 and treats every opp as worst-case. Lost differentiation vs. raw SAM dump.",
+    "recommendation": "Either (a) drop the column and remove all UI references, or (b) ship a cron that computes a deterministic score 0-100 from set_aside, sources_sought_flag, deadline_days_out, agency size — write at ingest in 1_ingest_sam.py + at status change. Decide which today.",
+    "effort": "1-4h",
+    "domain": "data-quality",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "10.8% duplicate opportunities by (solicitation_number, agency) — one GSA MAS row repeats 459 times",
+    "severity": "medium",
+    "category": "data-quality",
+    "evidence": "3,664 duplicate groups covering 8,394 rows (10.8% of opportunities). Worst: solicitation_number=47QSMD20R0001 / GSA = 459 rows, each with a distinct notice_id, all titled 'Multiple Award Schedule', all status=AWARDED. Next worst: W912CH25RA007 / DoD = 19, 15B51326Q00000001 / DOJ = 17.",
+    "impact": "Match scoring fan-out: every user scored against the same GSA MAS 459 times wastes compute and balloons user_matches. Search results show the same notice over and over. AWARDED clutters the AWARDED tab.",
+    "recommendation": "Add a partial unique index on (solicitation_number, agency) WHERE status IN ('ACTIVE','EXPIRING_SOON','MARKET_RESEARCH') so live-pipeline dedup is enforced, and an ingest-time merge that points new SAM notice_ids at the existing canonical row for IDIQ vehicles. Backfill: keep newest notice_id per (sol_num, agency, title) group, soft-archive the rest with status='ARCHIVED' + retention_reason='DEDUP_MERGE'.",
+    "effort": "0.5-2d",
+    "domain": "data-quality",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "analyze_attachments task fails 88% of the time — 13,733 failed vs 1,807 done lifetime",
+    "severity": "medium",
+    "category": "broken-workflow",
+    "evidence": "SELECT status, COUNT(*) FROM worker_jobs WHERE task_type='analyze_attachments' GROUP BY status → done:1,807 / failed:13,733 (88.4% failure). 100% of recent failures are 'reaped after stuck running > 00:10:00' — the job exceeds the 10-min reaper timeout. Last 7 days: 5,937 failed vs 1,310 done (82% failure).",
+    "impact": "Attachment OCR is essentially broken — the structured_requirements that the task is supposed to populate stay null on most opps (74% network-wide). Money burned on OpenAI API calls for jobs that get reaped mid-run.",
+    "recommendation": "Diagnose the stuck path: (1) add per-stage timing logs (download / pdf parse / OpenAI call) in /api/cron/run_worker_jobs handler, (2) lower per-job timeout to 5 min with explicit check-and-bail at each stage, (3) skip attachments > 10 MB or split multi-PDF batches into one job per file, (4) raise reaper to 15 min only after #1-3.",
+    "effort": "0.5-2d",
+    "domain": "data-quality",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "worker_jobs queue has 44,037 pending jobs with oldest 14+ days old — fan-out trigger producing faster than workers drain",
+    "severity": "high",
+    "category": "scalability",
+    "evidence": "SELECT MIN(created_at), COUNT(*) FROM worker_jobs WHERE status='pending' GROUP BY task_type → extract_keywords: 17,662 pending, oldest 2026-05-27 (14d 15h); classify_naics: 12,995 pending, oldest 14d 18h; extract_structured_reqs_federal: 11,654 pending, oldest 12d. Only 6,052 jobs finished in last 24h vs 44,037 backlog → 7+ days at current rate to clear if nothing new arrives.",
+    "impact": "New opportunities sit unenriched for 2 weeks. Match scoring, AI win strategy, keyword filtering all run on missing data. Backfill cron pushed in fan-out trigger now fights live ingest for slots.",
+    "recommendation": "(1) Bump /api/cron/run_worker_jobs schedule from per-orchestrator-tick to every minute or raise batch_size from current N to 50, (2) move HTTP-only tasks (classify_naics, extract_keywords) to the Hostinger VPS systemd loop documented in MEMORY.md to offload Vercel, (3) add a /admin/queue alert when oldest pending > 1 hour.",
+    "effort": "0.5-2d",
+    "domain": "data-quality",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "Field collision in contacts: 2,559 rows have an email address stored in the fullname column (2.7%)",
+    "severity": "high",
+    "category": "bug",
+    "evidence": "SELECT COUNT(*) FILTER (WHERE fullname ~* '@') FROM contacts → 2,559/94,780 (2.7%). 19 rows also have email-in-title. Examples: id=e95f09d2... has email='candice.mazzetta@va.gov' but fullname='nicole.beall@va.gov'. Some rows have completely mismatched email/title/fullname (id=6b9fe846... → email='fritz.fabien@va.gov', title='Kevin.Armilloti@va.gov', fullname='David.Reich2@va.gov'). This is the same class of bug CLAUDE.md flagged ('PSC/email display bug … cannot reproduce').",
+    "impact": "Cap-statement personalization, email outreach, and any downstream LLM prompt that uses contact.fullname will address contractors by their email address (or by the wrong person entirely). Real-world cause of the once-reported 'PSC code in email field' UX bug.",
+    "recommendation": "Tighten the SAM POC parser in tools/1_ingest_sam.py: reject any fullname/title token containing '@' or matching email regex; route those tokens to the email field if email is empty, else discard. Backfill: UPDATE contacts SET fullname=NULL WHERE fullname ~* '@' AND fullname ~* '^[^ ]+@'. Add a CHECK constraint on contacts.fullname NOT LIKE '%@%'.",
+    "effort": "1-4h",
+    "domain": "data-quality",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "5,650 opportunities (7.2%) have null naics_code — matching engine cannot score them",
+    "severity": "medium",
+    "category": "data-quality",
+    "evidence": "SELECT COUNT(*) FILTER (WHERE naics_code IS NULL OR naics_code='') FROM opportunities → 5,650/78,007 (7.2%). Additionally 39,596 (50.8%) have null psc_code. The classify_naics worker_jobs queue has 12,995 pending tasks (oldest 14 days), so a backfill exists but isn't draining.",
+    "impact": "NAICS contributes 25% of the matching score (CLAUDE.md). A null NAICS opp will never score above ~0.5 even if it's a perfect fit, so it ends up COLD and hidden from users. Compounds with the 100% null opportunity_score finding.",
+    "recommendation": "Drain classify_naics queue (see scalability finding). Validate at write time: ingest_sam.py should set opp_class='UNCLASSIFIED' when SAM payload lacks naics so the row isn't treated as a normal match candidate. Surface a count on /admin/health.",
+    "effort": "0.5-2d",
+    "domain": "data-quality",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "40.3% of EXPIRING_SOON opportunities are past their deadline — status transition cron not running",
+    "severity": "high",
+    "category": "broken-workflow",
+    "evidence": "SELECT COUNT(*) FILTER (WHERE status='EXPIRING_SOON' AND response_deadline < NOW()) FROM opportunities → 2,621/6,500 (40.3%). Also 69 ACTIVE rows have response_deadline < NOW(). 62 DISCOVERED rows are >90d old. Lifecycle transitions (ACTIVE → EXPIRING_SOON → EXPIRED) clearly run but the second hop is missing.",
+    "impact": "Users see 'expiring soon' notices that have already closed — they waste hours preparing bids for unbiddable opportunities. Brand-damaging UX. Also inflates 'active opportunities' KPI by ~30%.",
+    "recommendation": "Audit the lifecycle cron (db_cleanup or its successor). Add a one-liner pass: UPDATE opportunities SET status='EXPIRED', status_changed_at=NOW() WHERE status IN ('ACTIVE','EXPIRING_SOON') AND response_deadline < NOW() AND NOT retention_protected. Run every hour. Add admin alert if past-deadline ACTIVE count > 100.",
+    "effort": "<1h",
+    "domain": "data-quality",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "/api/brand POST: no auth, no rate-limit, no hostname allowlist — full SSRF + cost-abuse vector",
+    "severity": "critical",
+    "category": "security",
+    "evidence": "dashboard/src/app/api/brand/route.ts:236-330: `POST` reads `website` from JSON body and pipes it directly into `fetch(url)` (line 246) AND `analyzeCompany(\"\", url)` (line 256). There is no `getUser()`, no `protectCrawl`, no captcha, and no host validation. Worse, when `user_profile_id` is supplied in the body, the handler instantiates a SERVICE_KEY client (line 312) and writes `notes.brand_kit` to that profile id with no ownership check — any unauthenticated caller can clobber any user's brand_kit by guessing/leaking the UUID.",
+    "impact": "(1) SSRF: attacker can probe internal IPs / metadata endpoints / private services via our egress IP. (2) Cost-abuse: each call fans out to Firecrawl + OpenAI + multiple HTTP requests with no throttle — a script can burn the OpenAI/Firecrawl budget in minutes. (3) IDOR write: any caller can overwrite any user_profile.notes.brand_kit (logo, colors, description) by guessing the UUID — corrupts client data.",
+    "recommendation": "(a) Require an authenticated session via `createSupabaseServerClient` + `getUser()` and look up the caller's own profile id (ignore the body-supplied `user_profile_id`). (b) Wrap with `protectCrawl(req, { route: 'brand', maxPerMin: 5 })` so unauth burst-fetches die. (c) Before `fetch(url)`, resolve hostname with `dns.lookup`, reject any RFC1918 / loopback / link-local IP, reject non-http(s) protocols, and cap response size. (d) Drop the SERVICE_KEY write entirely — let the client persist via the regular `user_profiles` RLS-gated path.",
+    "effort": "1-4h",
+    "domain": "security",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "/api/eligibility, /api/ai/write-proposal, /api/ai/draft-email, /api/ai/generate-proposal, /api/ai/draft-template, /api/ai/summarize-document — no auth, accept arbitrary user_profile_id (IDOR + OpenAI cost abuse)",
+    "severity": "critical",
+    "category": "security",
+    "evidence": "dashboard/src/app/api/eligibility/route.ts:17-35: POST accepts `user_profile_id` and `notice_id` from body, no `getUser()`, then `db.from('user_profiles').select(...).eq('id', user_profile_id).single()` returns the requested profile to the caller. Same pattern in dashboard/src/app/api/ai/write-proposal/route.ts:22-69 (loads profile by id, calls OpenAI for up to 10 pages of proposal text), dashboard/src/app/api/ai/draft-email/route.ts:23, dashboard/src/app/api/ai/generate-proposal/route.ts:27, dashboard/src/app/api/ai/draft-template/route.ts:22, dashboard/src/app/api/ai/summarize-document/route.ts:25.",
+    "impact": "(1) IDOR read: anyone who guesses or learns any user_profile UUID can read company_name, naics_codes, sba_certifications, state, employee_count, revenue, federal_awards_count via /api/eligibility — that is the entire onboarding payload for every paying customer. (2) OpenAI cost-abuse: an unauth POST loop against `/api/ai/write-proposal` mints ~5K tokens per call; a few thousand calls drain the monthly budget and DoS legitimate proposal generation. (3) Outbound spam: `/api/ai/draft-email` returns finished outreach copy for any chosen POC — attacker can mass-generate phishing-ready emails on our credit.",
+    "recommendation": "Add `const { data: { user } } = await createSupabaseServerClient().auth.getUser(); if (!user) return 401;` then resolve the caller's profile via `eq('auth_user_id', user.id)` and IGNORE any body-supplied `user_profile_id`. For routes that legitimately need to act on another id (admin-only), gate with `assertAdmin()`. Combine with per-user rate limit (e.g. 20 proposal generations / hour) backed by the existing `rl_bump` RPC.",
+    "effort": "0.5-2d",
+    "domain": "security",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "/api/analyze-company (Quick Checker entry) has no rate-limit / captcha — cost-abuse + scraping vector",
+    "severity": "high",
+    "category": "security",
+    "evidence": "dashboard/src/app/api/analyze-company/route.ts:1003-1080: anonymous POST takes a website URL, kicks off `crawler.analyzeCompany` (Firecrawl + multi-page crawl), SAM.gov entity lookup, Apollo enrichment, and an OpenAI run, then inserts into `company_analyses`. No `protectCrawl`, no captcha, no per-IP throttle. Logs only `x-forwarded-for`. The result is also returned in the response so it can be used as a free company-intel API.",
+    "impact": "A script can submit 1000 websites/hour and (a) drain Firecrawl/OpenAI/Apollo/SAM budgets, (b) populate `company_analyses` with garbage rows that pollute the lead dashboard, (c) use CapturePilot as a free competitor-intel oracle.",
+    "recommendation": "Wrap with `protectCrawl(req, { route: 'analyze-company', maxPerMin: 3 })`, add Cloudflare Turnstile/hCaptcha on the LP form, validate the `website` host (block RFC1918), and dedupe by `ip_hash + website` for 24h. Consider requiring an email-magnet token before the heavy crawl runs.",
+    "effort": "1-4h",
+    "domain": "security",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "/api/leads has no rate-limit or captcha — lead-magnet form is wide open to enrichment + email-bombing abuse",
+    "severity": "high",
+    "category": "security",
+    "evidence": "dashboard/src/app/api/leads/route.ts:48-280: POST accepts arbitrary email/name/company, runs Apollo enrichment (paid), upserts to HubSpot (CRM-pollution risk), and sends a Resend email containing the lead-magnet PDF — all unauthenticated. Only validation is `EMAIL_RE` regex + length caps. No HMAC/CSRF/captcha/per-IP throttle on the public surface.",
+    "impact": "(1) Email-bombing: attacker submits victim@example.com 1000 times → Resend ships 1000 PDFs from CapturePilot domain, getting our sender domain blocked and burning Resend credits. (2) Apollo cost-abuse: every submit triggers a billable Apollo person-match. (3) HubSpot CRM-pollution: scripted submits fill the sales pipeline with junk contacts (each marked `lead_source_cp=lead_magnet`) — sales team has to triage.",
+    "recommendation": "(a) Add `protectCrawl(req, { route: 'leads', maxPerMin: 2 })` keyed on IP hash. (b) Require Cloudflare Turnstile/hCaptcha token in the body, verified server-side before any work runs. (c) Dedupe by (email,magnet) within a 1-hour window — silently no-op repeats. (d) Move HubSpot+Apollo into a background job so a single submit can't fan-out paid calls before the throttle fires.",
+    "effort": "1-4h",
+    "domain": "security",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "Public can EXECUTE 6 SECURITY DEFINER RPCs without signing in — including `trigger_cron_route` and `rls_auto_enable`",
+    "severity": "critical",
+    "category": "security",
+    "evidence": "Supabase advisor `anon_security_definer_function_executable`: anon role can call /rest/v1/rpc/{compute_naics_market_stats, enqueue_marketing_lead_apollo, enqueue_marketing_leads_apollo_backfill, purge_old_activity_log, rls_auto_enable, trigger_cron_route}. `trigger_cron_route(route_path text)` lets the caller fire ANY cron route via the system; `rls_auto_enable()` likely toggles RLS state; `purge_old_activity_log()` can wipe the admin audit trail; `enqueue_marketing_lead_apollo` lets anyone burn Apollo credits.",
+    "impact": "`trigger_cron_route` alone is catastrophic — an unauthenticated attacker can force-run any cron, including SAM ingest, scoring, email blasts, billing webhooks. `purge_old_activity_log` removes audit trails AFTER an incident. `rls_auto_enable` could enable/disable RLS on tables. `enqueue_marketing_leads_apollo_backfill(p_limit integer)` can drain Apollo budget at attacker-chosen rate.",
+    "recommendation": "For each function: either `ALTER FUNCTION ... SECURITY INVOKER;` if RLS handles the gating, or `REVOKE EXECUTE ON FUNCTION ... FROM anon, authenticated;` and call only from server-side service-key clients. Add a migration that does both REVOKEs and re-grants only to the `service_role`. See https://supabase.com/docs/guides/database/database-linter?lint=0028_anon_security_definer_function_executable",
+    "effort": "1-4h",
+    "domain": "security",
+    "verified": true,
+    "verification": {
+      "real_votes": 2,
+      "total_votes": 3,
+      "refutations": [
+        "The finding is materially refuted by migration 090_security_hardening.sql, which already REVOKED execute on the three most dangerous functions called out: `trigger_cron_route(text)`, `rls_auto_enable()`, and `purge_old_activity_log()` — explicitly from both `anon` AND `authenticated`. Migration 090 was committed in 31af6469 (\"sprints B/C/D/E/F: cron-fix + supabase-hardening\"). The finding's headline impact (\"trigger_cron_route alone is catastrophic — unauthenticated attacker can force-run any cron\") is no longer accurate against the current codebase. Additionally: (a) `enqueue_marketing_lead_apollo` is a TRIGGER function (`returns trigger`) and PostgREST does NOT expose trigger functions via /rest/v1/rpc — it cannot be called by anon regardless of SECURITY DEFINER; (b) `compute_naics_market_stats(integer)` in migration 126 explicitly grants execute only to `service_role` (line 168), not anon. Only residual real exposure: `enqueue_marketing_leads_apollo_backfill(p_limit int)` was introduced in migration 118 (post-090) without REVOKE, so it inherits the public default grant. That function is rate-capped at p_limit (default 500) jobs and dedup-indexed, so an attacker can queue ≤500 Apollo enrichment jobs — minor budget burn, not catastrophic. The finding appears to be generated from a stale Supabase advisor snapshot taken BEFORE migration 090 was applied. As written (catastrophic, 3 fully-revoked functions cited, 1 trigger function falsely claimed as RPC-callable), the finding is not real in its current form."
+      ]
+    }
+  },
+  {
+    "title": "33 tables have RLS enabled but ZERO policies — silently locked or silently open depending on caller role",
+    "severity": "medium",
+    "category": "security",
+    "evidence": "Supabase advisor `rls_enabled_no_policy` reports 33 tables in this state including `agencies`, `alert_autofixes`, `api_connectors`, `backlink_*` (8 tables), `beta_invites`, `cancellation_feedback`, `capture_outcomes`, `cron_runs`, `dod_contracts`, `email_events`, `gao_protests`, `government_contacts`, `health_alerts`, `internal_config`, `past_performance_stats`, `pdf_extract_cache`, `reengage_sends`, `rss_sources`, `sec_prime_filings`, `socrata_sources`, `wage_determinations`, `_backfill_targets_federal_2026_06_08`. For anon/authenticated roles, queries return empty. For SERVICE_KEY callers (every cron + every admin route), they return everything — masking the absence of authz logic.",
+    "impact": "Anyone who escalates to the service key (via an SSRF on /api/brand or via a leaked env var) gets unfiltered access to `government_contacts` (PII of fed POCs), `backlink_contacts`, `cancellation_feedback` (customer churn quotes), and `internal_config`. Also: legitimate developers cannot see the table from the dashboard unless they switch to the service role, leading to confusion + accidental query against `auth.uid()` returning nothing in tests.",
+    "recommendation": "Per table, either (a) add an explicit `CREATE POLICY ... FOR SELECT USING (false)` to make the intent explicit (\"server-only\"), or (b) add the right per-role policy. New migration `099_rls_policies_for_orphaned_tables.sql` should batch them. Document a convention in CLAUDE.md: every new RLS-enabled table must ship with at least one policy in the same migration.",
+    "effort": "0.5-2d",
+    "domain": "security",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "HubSpot inbound webhook silently bypasses signature check when `HUBSPOT_WEBHOOK_SECRET` is unset",
+    "severity": "high",
+    "category": "security",
+    "evidence": "dashboard/src/app/api/hubspot/webhook/route.ts:28-31: `function verifyHubSpotSignature(req, rawBody): boolean { const secret = process.env.HUBSPOT_WEBHOOK_SECRET; if (!secret) return true; // Skip verification in dev if no secret configured ...}`. Same fail-open pattern that the 2026-05-22 cron-auth hardening was supposed to eliminate. If the env var ever drops in production (rotation, accidental unset, new Vercel env target), every webhook call is accepted and writes to `pipeline_activity` + `client_activity_log` + Supabase.",
+    "impact": "Attacker who knows the URL (it's discoverable) can forge `contact.creation`, `deal.propertyChange`, `meeting.created` events — pollute the CRM pipeline, fake deal-stage moves, plant fake meeting log entries the team relies on for follow-ups.",
+    "recommendation": "Mirror the `cron-auth.ts` pattern: `if (!secret) return process.env.NODE_ENV !== 'production'`. In production, hard-fail with 500 if the secret is missing, log loudly, and return 401 to the caller. Add an `env-health` probe so the missing secret surfaces in /admin/health.",
+    "effort": "<1h",
+    "domain": "security",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "`/api/admin/impersonate` HMAC secret falls back to `SUPABASE_SERVICE_KEY` then to literal string `\"dev-secret\"`",
+    "severity": "high",
+    "category": "security",
+    "evidence": "dashboard/src/app/api/admin/impersonate/route.ts:36-39: `function sign(payload): string { const secret = process.env.CRON_SECRET || process.env.SUPABASE_SERVICE_KEY || \"dev-secret\"; return createHash('sha256').update(secret+'|'+payload).digest('hex').slice(0,32); }`. (1) Truncating to 32 hex chars (128 bits) is on the floor for HMAC. (2) Plain SHA-256 of `secret|payload` is not HMAC and is vulnerable to length-extension. (3) The `dev-secret` fallback means anyone in dev/staging who knows the source can forge an impersonation cookie for any user_profile_id and access the dashboard as that user.",
+    "impact": "If `CRON_SECRET` and `SUPABASE_SERVICE_KEY` are both unset (or in any preview/dev deploy that uses `dev-secret`), an attacker can encode `{a:'<any-uuid>', t:'<target-profile-id>', i:<now>}` + the known signature and present it as the `cp_admin_impersonate` cookie → instant account takeover of any tenant. Even with the secret set, length-extension on SHA-256 makes signature forgery feasible given any one known (payload, sig) pair.",
+    "recommendation": "Switch to `crypto.createHmac('sha256', secret).update(payload).digest('hex')` and compare with `crypto.timingSafeEqual`. Drop the `dev-secret` fallback — fail-closed with `throw new Error('CRON_SECRET required')` in production. Add a startup assertion in the route module.",
+    "effort": "<1h",
+    "domain": "security",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "Signup says \"No credit card required\" but onboarding completion screen demands a card",
+    "severity": "high",
+    "category": "ux-friction",
+    "evidence": "dashboard/src/app/(public)/signup/page.tsx:210 — 'It\\'s completely free right now. No credit card required.' Then dashboard/src/app/(onboarding)/onboard/page.tsx:633-639 — 'Last step: pick a plan to start your 14-day trial / Card required to unlock full features'.",
+    "impact": "Classic bait-and-switch. A time-poor ops person who just spent 3-5 minutes typing in NAICS / firmographics hits a wall demanding their credit card. They'll either bounce (and feel deceived) or hit 'Just let me poke around first' — the tiny gray link at the bottom. Either way the funnel is leaking and trust is gone.",
+    "recommendation": "Pick one truth. Either keep beta truly free (the signup copy + benefits strip claim 'Completely free during beta — no limits') and remove the billing gate at the end of onboarding, or change signup to 'Start your 14-day trial — card required at the end'. Don't promise no card and then ask for one 60 seconds later.",
+    "effort": "<1h",
+    "domain": "CapturePilot 2.0 UX/UI audit — federal contractor perspective (onboarding, dashboard, portal, public/auth flows)",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "Onboarding revenue ranges don't match Settings revenue ranges — round-trip data loss",
+    "severity": "high",
+    "category": "bug",
+    "evidence": "dashboard/src/app/(onboarding)/onboard/page.tsx:41-47 uses ranges '<1M / 1-5M / 5-25M / 25-100M / 100M+' and stores midpoints via REVENUE_RANGE_TO_NUMERIC (3,000,000 for 1-5M). dashboard/src/app/(dashboard)/settings/page.tsx:838-846 uses different ranges 'Under $100K / $100K-$500K / $500K-$1M / $1M-$5M / $5M-$10M / $10M-$25M / $25M+' with values 100000/500000/1000000/5000000/etc. A user who picked 1-5M during onboarding (stored as 3,000,000) sees nothing selected when they later open Settings.",
+    "impact": "Returning user looks at Settings, revenue field reads as empty, they think the system lost their data. They re-pick a value, but now scoring re-runs with a different number. Same problem with employee_count — onboarding asks for raw number, Settings is a bucket select.",
+    "recommendation": "Unify the ranges. Pick one bucket set (the onboarding 5-bucket version is fine), expose it identically in both places, and store the canonical bucket string in annual_revenue_range alongside a single derived numeric column. Same for employee_count — use buckets in both UIs or free text in both.",
+    "effort": "1-4h",
+    "domain": "CapturePilot 2.0 UX/UI audit — federal contractor perspective (onboarding, dashboard, portal, public/auth flows)",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "Settings has no autosave despite CLAUDE.md documenting it as a shipped feature",
+    "severity": "high",
+    "category": "ux-friction",
+    "evidence": "CLAUDE.md claims '**Debounced autosave** (1.2s) on profile edits with status indicator'. Reality: dashboard/src/app/(dashboard)/settings/page.tsx has only a manual handleSave() at lines 362-422, triggered by 'Save Changes' button at line 563 and 'Save Profile' button at line 785. updateProfile() at line 338 only mutates local state and clears the saved flag; no debounce, no fetch.",
+    "impact": "A user toggles NAICS codes, switches certifications, edits target states, then closes the tab. Everything is lost. The doc lies to the dev team and to anyone reading the spec — and the form is the longest single screen in the app.",
+    "recommendation": "Either ship the autosave that CLAUDE.md promises (1.2s debounced PATCH on every updateProfile call, with the existing 'Saved' chip animating in) or correct CLAUDE.md and add a 'unsaved changes' warning banner + beforeunload guard. The autosave is the better fix.",
+    "effort": "1-4h",
+    "domain": "CapturePilot 2.0 UX/UI audit — federal contractor perspective (onboarding, dashboard, portal, public/auth flows)",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "Settings page uses native window.alert() for validation/error feedback",
+    "severity": "high",
+    "category": "ux-friction",
+    "evidence": "dashboard/src/app/(dashboard)/settings/page.tsx:410 alert(\"Failed to save: \" + error.message), :479 alert(\"Deletion scheduled...\"), :486-489. dashboard/src/app/(onboarding)/onboard/page.tsx:387 alert(`Required: ${missing.join(\", \")}`), :393, :462. dashboard/src/app/(dashboard)/ai-drafter/capability-statement/page.tsx:476 const text = prompt(\"Paste your transcript or notes here:\") — native prompt() for a transcript paste.",
+    "impact": "Native dialogs look like 1997 IE error popups, block the whole tab, can't be styled, can't show diff/error details, are accessibility-hostile. The cap statement prompt() is especially bad: federal contractors paste multi-paragraph transcripts and the native prompt is a single-line input.",
+    "recommendation": "There's already a Toast and GlobalToast component (components/Toast.tsx, components/GlobalToast.tsx). Route all alerts through those. For the cap statement prompt, replace with the existing modal pattern (e.g. a textarea inside a styled dialog).",
+    "effort": "1-4h",
+    "domain": "CapturePilot 2.0 UX/UI audit — federal contractor perspective (onboarding, dashboard, portal, public/auth flows)",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "Onboarding asks for the same firmographics that the Quick Checker already infers",
+    "severity": "high",
+    "category": "ux-friction",
+    "evidence": "dashboard/src/app/(onboarding)/onboard/page.tsx:211-230 — if user comes in with analysis_id, only company_name/website/uei/naics_codes/sba_certifications/target_states get prefilled. Yet the Quick Checker (per dashboard/src/app/(public)/check/[analysisId]/page.tsx) already extracts employee_signals.estimate, founding_year (→ years_in_business), services, federal_agencies_served (→ federal_experience), and revenue_signal. Step 3 asks the user to retype all of these.",
+    "impact": "Users who completed Quick Check are asked to retype company size, employee count, revenue range, years in business, has_federal_experience, federal_experience_notes — every single Step 3 field. Worst possible flow: 'we already analyzed your company and now please type the same answers'.",
+    "recommendation": "Extend the analysis-id prefill block to map crawl.employee_signals.estimate → employee_count + bucket, crawl.founding_year → years_in_business (current year - founded), crawl.federal_agencies_served.length > 0 → has_federal_experience=true with notes pre-populated, crawl.revenue_signal → annual_revenue_range. Mark each with the existing SourceBadge so users can edit. Make Step 3 a 30-second review instead of a 3-minute retype.",
+    "effort": "1-4h",
+    "domain": "CapturePilot 2.0 UX/UI audit — federal contractor perspective (onboarding, dashboard, portal, public/auth flows)",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "Sluggish dashboard load — KPI fetch is a single serial round-trip that can't render anything until /api/dashboard/kpis returns",
+    "severity": "medium",
+    "category": "performance",
+    "evidence": "dashboard/src/app/(dashboard)/dashboard/DashboardClient.tsx:105-120 — entire dashboard hangs on one fetch to /api/dashboard/kpis. EMPTY_STATS shows 0 for every counter while loading. CLAUDE.md backlog: 'Overall dashboard speed — page loads are sluggish, needs profiling (likely waterfall Supabase queries that should parallelize)'. Plus the dashboard also synchronously waits on LiveOpportunityCount, DashboardMarketCard (per-NAICS fetch), SpendRadarCard, PipelineForecastCard, GovTribeActivityCard — each its own fetch on mount.",
+    "impact": "User sees 'Welcome back, [company]' with all zeros, then a popcorn-storm of numbers settling 1-3 seconds later. Feels broken. On mobile/slow networks this is worse.",
+    "recommendation": "Three changes: (1) Split /api/dashboard/kpis into the cheap counts (matches/pipeline) and the expensive aggregates (newOpps7d, recentPipeline, pendingActions) and stream them progressively. (2) Render skeleton numbers (animated bars) instead of '0' so zeros aren't briefly displayed. (3) Parallelize the card components — they all do their own fetch but mount serially because they're below the main stats fetch.",
+    "effort": "0.5-2d",
+    "domain": "CapturePilot 2.0 UX/UI audit — federal contractor perspective (onboarding, dashboard, portal, public/auth flows)",
+    "verified": true,
+    "verification": {
+      "real_votes": 2,
+      "total_votes": 3,
+      "refutations": [
+        "The finding is largely stale and misinterprets the architecture. (1) The \"Overall dashboard speed — sluggish\" CLAUDE.md backlog item was explicitly addressed in commit 296a8355 (May 29, 2026): \"TTFB 10-20s → ~200ms by moving KPI queries off SSR critical path\". The 2-stage render with skeletons WAS the fix. (2) /api/dashboard/kpis is not a \"serial round-trip\" — it batches 12 Supabase queries via Promise.all server-side, all using count: 'estimated' (O(1) pg_class.reltuples) instead of count: 'exact' to avoid the JOIN-and-walk problem. The route comment explicitly says \"the page renders with skeletons immediately, KPIs stream in as this endpoint completes\". (3) The claim that card components (DashboardMarketCard, SpendRadarCard, etc.) \"mount serially because they're below the main stats fetch\" is factually wrong — React renders the tree in one pass and all useEffect hooks fire in parallel; they're independent fetches. (4) EMPTY_STATS showing 0 during load is a minor polish issue (skeleton numbers would be nicer), not a \"high severity performance\" bug. The only valid sub-point — skeleton states instead of 0 — is cosmetic. The \"high\" severity label is wrong and most of the technical evidence misreads the code."
+      ]
+    }
+  },
+  {
+    "title": "Portal capability-statement is a stripped-down half of the dashboard version — consulting clients pay more, get less",
+    "severity": "high",
+    "category": "ux-friction",
+    "evidence": "dashboard/src/app/(dashboard)/ai-drafter/capability-statement/page.tsx is 704 lines with TipTap rich-text editor, per-section streaming progress, PDF export with branded header, Google Drive save, color/font controls, bubble-menu AI editing. dashboard/src/app/(portal)/portal/capability-statement/page.tsx is 322 lines: a single textarea-style flow with one 'Generate Capability Statement' button and a basic result viewer. No editor, no streaming, no Drive save.",
+    "impact": "Consulting clients (the higher-tier account_type) get the lite version. Self-service users on the cheap plan get the premium cap-statement tool. The portal is supposed to feel like a white-glove experience.",
+    "recommendation": "Either route the portal page to the dashboard component (pass account_type to gate consulting-specific features) or, more simply, lift the dashboard implementation into a shared CapabilityStatementBuilder component and import it from both places. Avoids drift.",
+    "effort": "0.5-2d",
+    "domain": "CapturePilot 2.0 UX/UI audit — federal contractor perspective (onboarding, dashboard, portal, public/auth flows)",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "Portal settings save silently fails — no error handling on supabase.from().update()",
+    "severity": "high",
+    "category": "bug",
+    "evidence": "dashboard/src/app/(portal)/portal/settings/page.tsx:337-341 — `await supabase.from(\"user_profiles\").update(payload).eq(\"auth_user_id\", user.id); setSaving(false); setSaved(true); setTimeout(() => setSaved(false), 3000);`. No destructuring of error, no catch, no rejection handling. If RLS blocks or column is missing, the user sees 'Saved!' regardless.",
+    "impact": "Consulting client edits NAICS codes, sees 'Saved!', closes the tab. Update never persisted. Next time they log in, their changes are gone. Admin sees old data. Nobody knows why.",
+    "recommendation": "Destructure `const { error } = await supabase.from(...)`. On error: setPwError pattern is already there for password — reuse it. Show inline red error chip and don't flip to 'Saved!' state.",
+    "effort": "<1h",
+    "domain": "CapturePilot 2.0 UX/UI audit — federal contractor perspective (onboarding, dashboard, portal, public/auth flows)",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "Four pairs of duplicate-numbered migration files",
+    "severity": "medium",
+    "category": "tech-debt",
+    "evidence": "`ls supabase/migrations/` shows duplicate prefixes: 019_quick_checker_competitors.sql + 019_quick_checker_enhancements.sql; 039_beta_invites.sql + 039_contractors_usaspending.sql; 060_academy_videos.sql + 060_opportunities_attachable_view.sql; 062_govtribe_cache.sql + 062_quick_checker_lead_capture_and_startup_pack.sql. CLAUDE.md explicitly says 'pick the next free number'.",
+    "impact": "Supabase CLI applies migrations in lexical order — duplicates load in non-deterministic order on a fresh DB, leading to potential schema drift between environments. Future renumbering breaks `supabase db reset` reproducibility.",
+    "recommendation": "Rename the second of each pair to use the next free number with a `git mv` (e.g. 019_quick_checker_enhancements.sql → 020a_quick_checker_enhancements.sql with note, or shift everything above by one — risky on a deployed DB so prefer suffixing 019b/039b/060b/062b instead and update CLAUDE.md to record the convention). Re-run `npx supabase db diff` to confirm idempotency.",
+    "effort": "1-4h",
+    "domain": "Dead code, duplicate logic, and unused dependencies in dashboard/",
+    "verified": true,
+    "verification": {
+      "real_votes": 2,
+      "total_votes": 3,
+      "refutations": [
+        "The duplicate filenames physically exist, but the finding misrepresents both the impact and the recommended fix. dashboard/supabase/migrations/README.md explicitly documents all four pairs as \"Known historical conflicts\" that have shipped to prod, are frozen by design, and apply in deterministic alphabetical-by-suffix order. The recommendation to rename them (e.g. to 019b/039b/060b/062b) is exactly what the README warns against: Supabase tracks applied migrations by filename + content hash in supabase_migrations.schema_migrations, so renaming would either re-apply the SQL (breaking idempotency-unsafe statements) or hard-error with \"migration already applied but contents changed\", requiring manual DB intervention. The CLAUDE.md \"pick next free number\" rule already applies going forward — migrations 063-131 are all uniquely numbered, demonstrating the convention is being honored post-conflict. The impact claim of \"non-deterministic order on a fresh DB / schema drift between environments\" is wrong: alphabetical-by-suffix ordering is deterministic across Postgres tooling and the README confirms the current ordering works. The finding is essentially flagging a documented, accepted, intentionally-frozen historical artifact as if it were unaddressed tech debt."
+      ]
+    }
+  },
+  {
+    "title": "Two parallel `extractStructuredRequirements` implementations with the same export name",
+    "severity": "high",
+    "category": "duplicate-logic",
+    "evidence": "`src/lib/extract-requirements.ts` (140 lines, regex-only) and `src/lib/extract-structured-requirements.ts` (143 lines, AI-powered) both export `extractStructuredRequirements`. Six routes import the regex version (api/opportunities/[id]/enrich, api/admin/enrich-opportunity/[id], api/admin/backfill-enrichment, api/admin/bulk-enrich, api/cron/bulk_enrich_descriptions, api/cron/backfill_requirements); two routes import the AI version (api/cron/backfill_structured_requirements, api/cron/run_worker_jobs). They both write to opportunities.structured_requirements JSONB.",
+    "impact": "Same DB column written by two functions with different field shapes. The newer AI version (used by run_worker_jobs) emits min_workforce, years_experience, performance_period; the regex version emits scope_of_work, requirements, qualifications, deliverables. Whichever runs last wins — UI surfaces inconsistent fields depending on which cron touched the row last.",
+    "recommendation": "Pick one. Recommended: keep AI version (extract-structured-requirements.ts), make it return a superset that includes scope_of_work/requirements/qualifications/deliverables, then re-point the 6 legacy callers and delete extract-requirements.ts.",
+    "effort": "0.5-2d",
+    "domain": "Dead code, duplicate logic, and unused dependencies in dashboard/",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  },
+  {
+    "title": "match-scoring.ts has two scoring functions with inconsistent HOT thresholds",
+    "severity": "medium",
+    "category": "duplicate-logic",
+    "evidence": "src/lib/match-scoring.ts:686 `classification: total >= 0.65 ? \"HOT\" : total >= 0.50 ? \"WARM\" : \"COLD\"` inside `scoreOpportunityLeadMagnet` (used by analyze-company, lead-magnet/confirm, quick-checker-finish, lead-matches). src/lib/match-scoring.ts:802 `classification: total >= 0.70 ? \"HOT\" : total >= 0.50 ? \"WARM\" : \"COLD\"` inside `scoreOpportunity` (used by api/matches/refresh, api/cron/score_matches). Function bodies are 116 + 221 lines with ~60% overlapping field-by-field scoring code.",
+    "impact": "An opp scoring 0.67 is HOT in the Quick Checker funnel but WARM in the authenticated dashboard — same user, same opp, two different classifications. Confuses lead-to-customer conversion and inflates the funnel's HOT count.",
+    "recommendation": "Extract the shared NAICS/PSC/setAside/geo/value/deadline/keyword scoring into a `computeRawScore()` helper; have both functions call it then apply their own thresholds via a named constant. Align thresholds (recommend 0.70/0.50 to match the documented Sprint-3 doc in CLAUDE.md).",
+    "effort": "1-4h",
+    "domain": "Dead code, duplicate logic, and unused dependencies in dashboard/",
+    "verified": true,
+    "verification": {
+      "real_votes": 3,
+      "total_votes": 3,
+      "refutations": []
+    }
+  }
+]
