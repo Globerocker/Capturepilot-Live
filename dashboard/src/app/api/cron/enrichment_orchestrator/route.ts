@@ -95,6 +95,11 @@ const TASKS = {
   // overnight enrichment wave, so the opportunity set is fresh when we warm.
   // The handler is a no-op when GOVTRIBE_API_KEY is unset.
   sync_govtribe_activity:          "sync_govtribe_activity",
+  // Audit fix #9 (2026-06-10) — deterministic opportunity_score producer.
+  // Column was NULL on 100% of opportunities; no Vercel cron slot free, so
+  // routed here. Drains 5000 NULLs per fire; twice-daily cadence catches
+  // both the overnight SAM ingest and the midday SLED waves.
+  backfill_opportunity_score:      "backfill_opportunity_score",
 } as const;
 
 type TaskName = keyof typeof TASKS;
@@ -205,6 +210,12 @@ function tasksDueAt(d: Date): TaskName[] {
   // ingest + scoring so the opportunity set is up to date. No-op when
   // GOVTRIBE_API_KEY is unset (safe to run unconditionally).
   if (h === 8 && m === 30) due.push("sync_govtribe_activity");
+
+  // Opportunity-score backfill — twice daily at 02:40 + 14:40 UTC. Aligned to
+  // orchestrator firing slots (0,5,10,15,30,40). Drains 5000 NULL rows per
+  // run, so the 78k historical backlog clears in ~8 runs (4 days) then settles
+  // into incremental maintenance behind new ingest.
+  if (m === 40 && (h === 2 || h === 14)) due.push("backfill_opportunity_score");
 
   return due;
 }
