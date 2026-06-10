@@ -8,13 +8,17 @@ import crypto from 'crypto';
  *
  * Handles events pushed from HubSpot to CapturePilot:
  *  - contact.creation       → sync to Supabase if from Quick Checker
+ *  - contact.propertyChange → mirror suppression + lifecycle stage back to
+ *                             outreach_optouts + user_profiles.notes
  *  - deal.propertyChange    → update pipeline stage in our DB
  *  - meeting.created        → log in client_activity_log
  *
  * Setup in HubSpot:
  *   Settings → Integrations → Webhooks → Create subscription
  *   URL: https://app.capturepilot.com/api/hubspot/webhook
- *   Events: contact.creation, deal.propertyChange, meeting.created
+ *   Events: contact.creation, contact.propertyChange (hs_email_hard_bounced,
+ *           unsubscribed_from_all_email, lifecyclestage),
+ *           deal.propertyChange, meeting.created
  */
 
 function getDb() {
@@ -93,6 +97,10 @@ export async function POST(req: NextRequest) {
           results.push(await handleContactCreation(db, event));
           break;
 
+        case 'contact.propertyChange':
+          results.push(await handleContactPropertyChange(db, event));
+          break;
+
         case 'deal.propertyChange':
           results.push(await handleDealPropertyChange(db, event));
           break;
@@ -139,6 +147,130 @@ async function handleContactCreation(
   }
 
   return { event: 'contact.creation', contactId, status: 'processed' };
+}
+
+/**
+ * HubSpot contact.propertyChange — mirror three flag changes back into
+ * CapturePilot so outbound campaigns and per-lifecycle features stay in sync
+ * when a sales rep edits a contact directly in HubSpot:
+ *
+ *   - hs_email_hard_bounced=true       → outreach_optouts (hubspot:hard_bounce)
+ *   - unsubscribed_from_all_email=true → outreach_optouts (hubspot:unsubscribed)
+ *   - lifecyclestage=<stage>           → user_profiles.notes.lifecycle_stage
+ *
+ * Email lookup against HubSpot is best-effort. If the API call fails (token
+ * expired, contact archived, etc.) we log + return `skipped` rather than 500
+ * — losing one mirror beat is fine because the next bounce/unsubscribe webhook
+ * will retry.
+ */
+async function handleContactPropertyChange(
+  db: ReturnType<typeof getDb>,
+  event: Record<string, unknown>,
+) {
+  const contactId = event.objectId as string;
+  const propertyName = event.propertyName as string | undefined;
+  const propertyValue = event.propertyValue as string | undefined;
+
+  // Only three properties matter for now. Anything else returns ignored so
+  // HubSpot can keep firing the whole property-change subscription without us
+  // logging noise for every dealstage/firstname/lastname edit that flies past.
+  const HANDLED = new Set([
+    'hs_email_hard_bounced',
+    'unsubscribed_from_all_email',
+    'lifecyclestage',
+  ]);
+  if (!propertyName || !HANDLED.has(propertyName)) {
+    return { event: 'contact.propertyChange', contactId, property: propertyName, status: 'ignored' };
+  }
+
+  // Look up the contact's email — required for outreach_optouts (suppression
+  // is keyed by email) and useful for user_profiles match (we don't store
+  // hubspot_contact_id on user_profiles, only email).
+  let email: string | null = null;
+  try {
+    const { getContactById } = await import('@/lib/hubspot');
+    const props = await getContactById(contactId, ['email', 'lifecyclestage']);
+    email = (props?.email || '').trim().toLowerCase() || null;
+  } catch (err) {
+    console.error('[HubSpot Webhook] getContactById failed:', (err as Error).message);
+  }
+
+  if (!email) {
+    // No way to mirror without an email anchor — log and skip rather than 500.
+    return {
+      event: 'contact.propertyChange',
+      contactId,
+      property: propertyName,
+      status: 'skipped',
+      reason: 'no email on hubspot contact',
+    };
+  }
+
+  // Suppression mirrors — only fire when the property flipped to a truthy
+  // value (HubSpot sends `false`/empty when a rep un-checks the box).
+  const isTrue = propertyValue === 'true' || propertyValue === 'TRUE';
+
+  if (propertyName === 'hs_email_hard_bounced' && isTrue) {
+    const { error } = await db
+      .from('outreach_optouts')
+      .upsert(
+        { email, reason: 'hubspot:hard_bounce', source: 'hubspot_webhook' },
+        { onConflict: 'email' },
+      );
+    if (error) console.error('[HubSpot Webhook] optout upsert (bounce) failed:', error.message);
+    return { event: 'contact.propertyChange', contactId, property: propertyName, status: 'suppressed' };
+  }
+
+  if (propertyName === 'unsubscribed_from_all_email' && isTrue) {
+    const { error } = await db
+      .from('outreach_optouts')
+      .upsert(
+        { email, reason: 'hubspot:unsubscribed', source: 'hubspot_webhook' },
+        { onConflict: 'email' },
+      );
+    if (error) console.error('[HubSpot Webhook] optout upsert (unsub) failed:', error.message);
+    return { event: 'contact.propertyChange', contactId, property: propertyName, status: 'suppressed' };
+  }
+
+  if (propertyName === 'lifecyclestage' && propertyValue) {
+    // `notes` is TEXT in Postgres but used as a JSON envelope across the app
+    // (pipeline_stages, brand_tokens, quick_check, dashboard_layout, etc.).
+    // Parse → mutate the lifecycle_stage key → stringify so we don't trample
+    // any sibling keys that are already there.
+    const { data: existing, error: readErr } = await db
+      .from('user_profiles')
+      .select('id, notes')
+      .ilike('email', email)
+      .limit(1)
+      .maybeSingle();
+    if (readErr) {
+      console.error('[HubSpot Webhook] user_profiles lookup failed:', readErr.message);
+      return { event: 'contact.propertyChange', contactId, property: propertyName, status: 'skipped' };
+    }
+    if (!existing) {
+      return {
+        event: 'contact.propertyChange',
+        contactId,
+        property: propertyName,
+        status: 'skipped',
+        reason: 'no user_profile for email',
+      };
+    }
+    let notesObj: Record<string, unknown> = {};
+    const rawNotes = (existing.notes as string | null) || '';
+    if (rawNotes.trim().startsWith('{')) {
+      try { notesObj = JSON.parse(rawNotes); } catch { notesObj = {}; }
+    }
+    notesObj.lifecycle_stage = propertyValue;
+    const { error: updErr } = await db
+      .from('user_profiles')
+      .update({ notes: JSON.stringify(notesObj) })
+      .eq('id', existing.id);
+    if (updErr) console.error('[HubSpot Webhook] user_profiles update failed:', updErr.message);
+    return { event: 'contact.propertyChange', contactId, property: propertyName, status: 'lifecycle_synced' };
+  }
+
+  return { event: 'contact.propertyChange', contactId, property: propertyName, status: 'ignored' };
 }
 
 async function handleDealPropertyChange(

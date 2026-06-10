@@ -176,5 +176,22 @@ export async function GET(req: NextRequest) {
         };
     });
 
-    return NextResponse.json({ ok: true, totals, rows });
+    // Suppressed addresses: outreach_optouts populated by the Resend webhook
+    // (bounces/complaints), the public unsubscribe link, and the HubSpot
+    // inbound webhook (when a sales rep marks an address as bounced or
+    // unsubscribed inside HubSpot). Surface the most recent 100 here so the
+    // admin can see what's being blocked from outbound sends.
+    const { data: optoutsRaw } = await sb
+        .from("outreach_optouts")
+        .select("email, reason, source, opted_out_at")
+        .order("opted_out_at", { ascending: false })
+        .limit(100);
+    const suppressed = (optoutsRaw || []) as Array<{
+        email: string;
+        reason: string | null;
+        source: string | null;
+        opted_out_at: string;
+    }>;
+
+    return NextResponse.json({ ok: true, totals, rows, suppressed });
 }
