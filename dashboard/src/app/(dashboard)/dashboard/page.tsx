@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Activity, Target, Sparkles, ArrowRight, Loader2, Clock, Trophy, Search, Shield, BarChart3, Layers, CheckSquare, Phone, UserCheck, FileText, Mic, Mail, Pencil, ChevronDown, ChevronUp } from "lucide-react";
 import ServiceCTA from "@/components/ui/ServiceCTA";
+import PursueThisWeekCard from "@/components/PursueThisWeekCard";
 import { Skeleton, SkeletonKpiCard } from "@/components/ui/Skeleton";
 import clsx from "clsx";
 import Link from "next/link";
@@ -210,6 +211,8 @@ export default function UserDashboard() {
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start mt-6">
         {/* LEFT COLUMN */}
         <div className="xl:col-span-8 flex flex-col gap-6">
+          {/* Should pursue this week */}
+          <PursueThisWeekCard />
           {/* Quick Actions */}
       <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
         <Link href="/check" className="bg-gradient-to-br from-emerald-700 to-emerald-900 text-white rounded-[20px] sm:rounded-[24px] p-4 sm:p-5 hover:shadow-xl transition-all group">
