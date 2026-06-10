@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { extractStructuredRequirements } from "@/lib/extract-requirements";
+import { guardCron } from "@/lib/cron-auth";
 
 export const maxDuration = 300;
 
@@ -33,17 +34,9 @@ function admin() {
 }
 
 export async function GET(req: NextRequest) {
-    // Accept either Vercel's CRON_SECRET bearer OR the Supabase service key
-    // (so Supabase pg_cron can trigger this directly when Vercel's scheduler
-    // fails to register). Neither exposes user data — the route only mutates
-    // public SAM.gov opportunity rows.
-    const auth = req.headers.get("authorization");
-    const serviceKey = process.env.SUPABASE_SERVICE_KEY;
-    const expectedCron = process.env.CRON_SECRET ? `Bearer ${process.env.CRON_SECRET}` : null;
-    const expectedSvc = serviceKey ? `Bearer ${serviceKey}` : null;
-    if ((expectedCron || expectedSvc) && auth !== expectedCron && auth !== expectedSvc) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    // Fail-closed cron auth (CRON_SECRET or SUPABASE_SERVICE_KEY bearer).
+    const denied = guardCron(req);
+    if (denied) return denied;
     if (!SAM_API_KEY) {
         return NextResponse.json({ error: "SAM_API_KEY not configured" }, { status: 500 });
     }

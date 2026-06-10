@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import OpenAI from "openai";
+import { guardCron } from "@/lib/cron-auth";
 
 export const maxDuration = 300;
 
@@ -26,15 +27,9 @@ function admin() {
 }
 
 export async function GET(req: NextRequest) {
-    // Accept either Vercel's CRON_SECRET bearer OR the Supabase service key
-    // (so Supabase pg_cron can trigger this directly).
-    const auth = req.headers.get("authorization");
-    const serviceKey = process.env.SUPABASE_SERVICE_KEY;
-    const expectedCron = process.env.CRON_SECRET ? `Bearer ${process.env.CRON_SECRET}` : null;
-    const expectedSvc = serviceKey ? `Bearer ${serviceKey}` : null;
-    if ((expectedCron || expectedSvc) && auth !== expectedCron && auth !== expectedSvc) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    // Fail-closed cron auth (CRON_SECRET or SUPABASE_SERVICE_KEY bearer).
+    const denied = guardCron(req);
+    if (denied) return denied;
     const openaiKey = process.env.OPENAI_API_KEY;
     if (!openaiKey) return NextResponse.json({ error: "OPENAI_API_KEY not configured" }, { status: 500 });
 
