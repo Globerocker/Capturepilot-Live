@@ -172,6 +172,29 @@ async function send(
         return false;
     }
 
+    // Audit 2026-06-10 #7: every transactional/marketing send must respect
+    // the suppression list. Without this check, bounced/complained addresses
+    // (populated by /api/webhooks/resend) get re-emailed by drips, beta
+    // invites, welcome flows — guaranteed reputation damage + CAN-SPAM risk.
+    try {
+        const sb = getDbAdmin();
+        if (sb) {
+            const { data: optout } = await sb
+                .from("outreach_optouts")
+                .select("email, reason")
+                .eq("email", to.toLowerCase())
+                .maybeSingle();
+            if (optout) {
+                console.log(`[email] ${to} opted out (${optout.reason || "unknown"}), skipping ${key}`);
+                return false;
+            }
+        }
+    } catch (e) {
+        // Suppression-list lookup failure should NOT block a legitimate send.
+        // Log loudly so we notice if the table or RLS breaks.
+        console.error(`[email] suppression check failed for ${to} (${key}), allowing send:`, e);
+    }
+
     let finalHtml = html;
     let finalSubject = subject;
 
