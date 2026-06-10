@@ -2,73 +2,88 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 import Image from "next/image";
 import {
-    LayoutDashboard, Target, Layers, FileText, BarChart3, Mic, Users, Shield,
-    CreditCard, Settings, LogOut, Menu, X, FolderOpen, Mail, Search, Pencil,
-    Handshake, Clock, ChevronRight, Radar, Telescope, GraduationCap, Sparkles,
-    Award,
+    LayoutDashboard,
+    Target,
+    Layers,
+    FileText,
+    BarChart3,
+    Mic,
+    Users,
+    Shield,
+    CreditCard,
+    Settings,
+    LogOut,
+    Menu,
+    X,
+    FolderOpen,
+    Building2,
 } from "lucide-react";
 import clsx from "clsx";
 import { createSupabaseClient } from "@/lib/supabase/client";
+import QuickActions from "./QuickActions";
 
-interface NavItem {
+type NavItem = {
     name: string;
     href: string;
     icon: React.ComponentType<{ className?: string }>;
-    children?: NavChildItem[];
-}
-interface NavChildItem {
-    name: string;
-    href: string;
-    icon: React.ComponentType<{ className?: string }>;
-    // For children with query-string routing (e.g. /partners?status=active), we
-    // match on the full href; otherwise we prefix-match.
-    matchExact?: boolean;
+    /** Use exact-match instead of startsWith for active detection.
+     *  Needed when a parent route (/ai-drafter) is its own page but also
+     *  hosts children (/ai-drafter/proposals, /ai-drafter/capability-statement).
+     */
+    exact?: boolean;
+};
+
+type NavGroup = {
+    label: string;
+    items: NavItem[];
+};
+
+const NAV_GROUPS: NavGroup[] = [
+    {
+        label: "Daily",
+        items: [
+            { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+            { name: "Matches", href: "/matches", icon: Target },
+            { name: "Pipeline", href: "/pipeline", icon: Layers },
+        ],
+    },
+    {
+        label: "Sourcing",
+        items: [
+            { name: "Opportunities", href: "/opportunities", icon: Building2 },
+            { name: "Partners", href: "/partners", icon: Users },
+            { name: "Competitors", href: "/competitors", icon: Shield },
+            { name: "Market Intel", href: "/intelligence", icon: BarChart3 },
+        ],
+    },
+    {
+        label: "Build",
+        items: [
+            { name: "AI Proposals", href: "/ai-drafter/proposals", icon: FileText },
+            { name: "Cap Statement", href: "/ai-drafter/capability-statement", icon: Mic },
+            { name: "Emails & Templates", href: "/ai-drafter", icon: FileText, exact: true },
+            { name: "Documents", href: "/documents", icon: FolderOpen },
+        ],
+    },
+];
+
+const BOTTOM_LINKS: NavItem[] = [
+    { name: "Billing", href: "/billing", icon: CreditCard },
+    { name: "Settings", href: "/settings", icon: Settings },
+];
+
+function isActiveLink(pathname: string, item: NavItem): boolean {
+    if (item.exact) return pathname === item.href;
+    return pathname === item.href || pathname.startsWith(`${item.href}/`);
 }
 
 export default function Sidebar() {
     const [mobileOpen, setMobileOpen] = useState(false);
     const pathname = usePathname();
-    const searchParams = useSearchParams();
-    const currentStatus = searchParams?.get("status") || null;
     const supabase = createSupabaseClient();
-
-    const navLinks: NavItem[] = [
-        { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-        { name: "Matches", href: "/matches", icon: Target },
-        { name: "Opportunities", href: "/opportunities", icon: Search },
-        { name: "Pipeline", href: "/pipeline", icon: Layers },
-        {
-            name: "AI Drafter", href: "/ai-drafter/proposals", icon: Pencil,
-            children: [
-                { name: "AI Proposals", href: "/ai-drafter/proposals", icon: FileText },
-                { name: "Cap Statement", href: "/ai-drafter/capability-statement", icon: Mic },
-                { name: "Email Templates", href: "/ai-drafter", icon: Mail, matchExact: true },
-            ],
-        },
-        { name: "Documents", href: "/documents", icon: FolderOpen },
-        {
-            name: "Partners", href: "/partners", icon: Users,
-            children: [
-                { name: "All Partners", href: "/partners", icon: Users, matchExact: true },
-                { name: "Active", href: "/partners?status=active", icon: Handshake },
-                { name: "Potential", href: "/partners?status=potential", icon: Clock },
-                { name: "Suggested", href: "/partners?status=suggested", icon: Sparkles },
-            ],
-        },
-        { name: "Contract Winners", href: "/contract-winners", icon: Award },
-        { name: "Competitors", href: "/competitors", icon: Shield },
-        { name: "Recompetes", href: "/recompetes", icon: Radar },
-        { name: "Forecasts", href: "/forecasts", icon: Telescope },
-        { name: "Academy", href: "/academy", icon: GraduationCap },
-    ];
-
-    const bottomLinks = [
-        { name: "Billing", href: "/billing", icon: CreditCard },
-        { name: "Settings", href: "/settings", icon: Settings },
-    ];
 
     const handleSignOut = async () => {
         await supabase.auth.signOut({ scope: "global" });
@@ -80,111 +95,8 @@ export default function Sidebar() {
         window.location.replace("/login");
     };
 
-    const handleNavClick = () => { setMobileOpen(false); };
-
-    // Active matcher with query-param awareness. Three sub-items can point to
-    // /partners?status=active, /partners?status=potential, /partners (exact) —
-    // usePathname() strips the query, so we also compare the target href's
-    // ?status= against the live one; only the matching tab highlights.
-    const isLinkActive = (href: string, matchExact = false): boolean => {
-        const [hrefPath, hrefQuery] = href.split("?");
-        const hrefStatus = hrefQuery ? new URLSearchParams(hrefQuery).get("status") : null;
-
-        if (matchExact) {
-            // "Exact" means: same path AND no ?status= (the "All" sub-item).
-            return pathname === hrefPath && !currentStatus;
-        }
-
-        // /ai-drafter is the Email Templates leaf — exact path only.
-        if (hrefPath === "/ai-drafter") return pathname === "/ai-drafter";
-
-        // If this link carries a ?status= param, it only lights up when the
-        // current URL has that same param. Otherwise the 3 partner tabs all
-        // match /partners and highlight together.
-        if (hrefStatus) return pathname === hrefPath && currentStatus === hrefStatus;
-
-        // Plain path link: prefix match is fine (covers nested /pipeline/[id]).
-        return pathname === hrefPath || pathname.startsWith(hrefPath + "/");
-    };
-
-    // A parent with children is active if any child matches OR its own path matches.
-    const isParentActive = (item: NavItem): boolean => {
-        if (item.children && item.children.some(c => isLinkActive(c.href, c.matchExact))) return true;
-        return isLinkActive(item.href);
-    };
-
-    const renderNavItem = (item: NavItem) => {
-        const Icon = item.icon;
-        const hasChildren = !!item.children?.length;
-        const isActive = isParentActive(item);
-
-        if (!hasChildren) {
-            return (
-                <Link
-                    key={item.name}
-                    href={item.href}
-                    onClick={handleNavClick}
-                    className={clsx(
-                        "flex items-center space-x-3 px-4 py-3.5 lg:py-3 rounded-2xl transition-all duration-200 font-medium text-sm",
-                        isActive
-                            ? "bg-emerald-500/10 text-emerald-400 border-l-2 border-emerald-500"
-                            : "text-stone-500 hover:bg-stone-800/50 hover:text-stone-300 border-l-2 border-transparent",
-                    )}
-                >
-                    <Icon className={clsx("h-5 w-5", isActive ? "text-emerald-400" : "text-stone-500")} />
-                    <span className="font-medium">{item.name}</span>
-                </Link>
-            );
-        }
-
-        return (
-            <div key={item.name} className="relative group">
-                {/* Parent row — clicking goes to the default child. Hover reveals flyout on desktop. */}
-                <Link
-                    href={item.href}
-                    onClick={handleNavClick}
-                    className={clsx(
-                        "flex items-center space-x-3 px-4 py-3.5 lg:py-3 rounded-2xl transition-all duration-200 font-medium text-sm",
-                        isActive
-                            ? "bg-emerald-500/10 text-emerald-400 border-l-2 border-emerald-500"
-                            : "text-stone-500 hover:bg-stone-800/50 hover:text-stone-300 border-l-2 border-transparent",
-                    )}
-                >
-                    <Icon className={clsx("h-5 w-5", isActive ? "text-emerald-400" : "text-stone-500")} />
-                    <span className="font-medium flex-1">{item.name}</span>
-                    <ChevronRight className="h-3.5 w-3.5 opacity-40 group-hover:opacity-80 transition-opacity hidden lg:block" />
-                </Link>
-
-                {/* Expanded children when the parent is active — both mobile
-                    and desktop. Flyout-on-hover was confusing because it
-                    covered page content while the active route was loading;
-                    inline accordion is simpler and feels faster. */}
-                {isActive && (
-                    <div className="pl-8 mt-0.5 space-y-0.5">
-                        {item.children!.map(child => {
-                            const ChildIcon = child.icon;
-                            const childActive = isLinkActive(child.href, child.matchExact);
-                            return (
-                                <Link
-                                    key={child.name}
-                                    href={child.href}
-                                    onClick={handleNavClick}
-                                    className={clsx(
-                                        "flex items-center space-x-3 px-4 py-2 rounded-xl text-xs transition-colors",
-                                        childActive
-                                            ? "bg-emerald-500/10 text-emerald-400"
-                                            : "text-stone-500 hover:bg-stone-800/50 hover:text-stone-300",
-                                    )}
-                                >
-                                    <ChildIcon className="h-3.5 w-3.5" />
-                                    <span>{child.name}</span>
-                                </Link>
-                            );
-                        })}
-                    </div>
-                )}
-            </div>
-        );
+    const handleNavClick = () => {
+        setMobileOpen(false);
     };
 
     const sidebarContent = (
@@ -193,7 +105,7 @@ export default function Sidebar() {
             <div className="h-0.5 bg-gradient-to-r from-emerald-500 via-emerald-400 to-transparent" />
 
             {/* Logo */}
-            <div className="px-6 lg:px-8 mb-8 lg:mb-12 pt-5 flex items-center justify-between">
+            <div className="px-6 lg:px-8 mb-4 lg:mb-6 pt-5 flex items-center justify-between">
                 <div className="flex items-center space-x-3">
                     <Image src="/logo.png" alt="CapturePilot" width={36} height={36} className="rounded-xl" />
                     <h1 className="text-xl font-semibold tracking-tight text-stone-200">CapturePilot</h1>
@@ -208,44 +120,79 @@ export default function Sidebar() {
                 </button>
             </div>
 
-            {/* Navigation — scrollable so bottom links (Billing/Settings/Sign Out)
-                stay visible on 13" MacBook screens where the nav overflows. */}
-            <nav className="flex-1 px-3 lg:px-4 space-y-0.5 overflow-y-auto lg:pr-2 scrollbar-thin scrollbar-thumb-stone-800 scrollbar-track-transparent">
-                {navLinks.map(renderNavItem)}
+            {/* Quick Actions at the top — most-used flows, one click away */}
+            <QuickActions onNavigate={handleNavClick} />
+
+            {/* Grouped navigation */}
+            <nav className="flex-1 overflow-y-auto px-3 lg:px-4 mt-2 space-y-5">
+                {NAV_GROUPS.map((group) => (
+                    <div key={group.label}>
+                        <div className="px-2 mb-1.5">
+                            <span className="text-[10px] font-semibold uppercase tracking-wider text-stone-600">
+                                {group.label}
+                            </span>
+                        </div>
+                        <div className="space-y-0.5">
+                            {group.items.map((item) => {
+                                const Icon = item.icon;
+                                const active = isActiveLink(pathname, item);
+                                return (
+                                    <Link
+                                        key={item.name}
+                                        href={item.href}
+                                        onClick={handleNavClick}
+                                        className={clsx(
+                                            "flex items-center space-x-3 px-4 py-2.5 lg:py-2 rounded-2xl transition-all duration-200 font-medium text-sm",
+                                            active
+                                                ? "bg-emerald-500/10 text-emerald-400 border-l-2 border-emerald-500"
+                                                : "text-stone-500 hover:bg-stone-800/50 hover:text-stone-300 border-l-2 border-transparent"
+                                        )}
+                                    >
+                                        <Icon className={clsx("h-5 w-5", active ? "text-emerald-400" : "text-stone-500")} />
+                                        <span className="font-medium">{item.name}</span>
+                                    </Link>
+                                );
+                            })}
+                        </div>
+                    </div>
+                ))}
             </nav>
 
-            {/* Bottom-anchored section: Billing + Settings + Sign Out */}
-            <div className="mt-auto pt-2">
-                <div className="px-3 lg:px-4 space-y-0.5 border-t border-stone-800/60 pt-3">
-                    {bottomLinks.map((link) => {
-                        const Icon = link.icon;
-                        const isActive = pathname.startsWith(link.href);
-                        return (
-                            <Link
-                                key={link.name}
-                                href={link.href}
-                                onClick={handleNavClick}
-                                className={clsx(
-                                    "flex items-center space-x-3 px-4 py-3.5 lg:py-3 rounded-2xl transition-all duration-200 text-sm",
-                                    isActive
-                                        ? "bg-emerald-500/10 text-emerald-400 border-l-2 border-emerald-500"
-                                        : "text-stone-500 hover:bg-stone-800/50 hover:text-stone-300 border-l-2 border-transparent",
-                                )}
-                            >
-                                <Icon className={clsx("h-5 w-5", isActive ? "text-emerald-400" : "text-stone-500")} />
-                                <span className="font-medium">{link.name}</span>
-                            </Link>
-                        );
-                    })}
-                    <button
-                        type="button"
-                        onClick={handleSignOut}
-                        className="w-full flex items-center space-x-3 px-4 py-3.5 lg:py-3 rounded-2xl text-stone-500 hover:bg-stone-800/50 hover:text-red-400 transition-all duration-200 text-sm border-l-2 border-transparent"
-                    >
-                        <LogOut className="h-5 w-5" />
-                        <span className="font-medium">Sign Out</span>
-                    </button>
+            {/* Bottom-anchored: Account links + sign out */}
+            <div className="mt-auto px-3 lg:px-4 space-y-0.5 border-t border-stone-800/60 pt-3">
+                <div className="px-2 mb-1.5">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-stone-600">
+                        Account
+                    </span>
                 </div>
+                {BOTTOM_LINKS.map((item) => {
+                    const Icon = item.icon;
+                    const active = isActiveLink(pathname, item);
+                    return (
+                        <Link
+                            key={item.name}
+                            href={item.href}
+                            onClick={handleNavClick}
+                            className={clsx(
+                                "flex items-center space-x-3 px-4 py-2.5 lg:py-2 rounded-2xl transition-all duration-200 text-sm",
+                                active
+                                    ? "bg-emerald-500/10 text-emerald-400 border-l-2 border-emerald-500"
+                                    : "text-stone-500 hover:bg-stone-800/50 hover:text-stone-300 border-l-2 border-transparent"
+                            )}
+                        >
+                            <Icon className={clsx("h-5 w-5", active ? "text-emerald-400" : "text-stone-500")} />
+                            <span className="font-medium">{item.name}</span>
+                        </Link>
+                    );
+                })}
+                <button
+                    type="button"
+                    onClick={handleSignOut}
+                    className="w-full flex items-center space-x-3 px-4 py-2.5 lg:py-2 rounded-2xl text-stone-500 hover:bg-stone-800/50 hover:text-red-400 transition-all duration-200 text-sm border-l-2 border-transparent"
+                >
+                    <LogOut className="h-5 w-5" />
+                    <span className="font-medium">Sign Out</span>
+                </button>
             </div>
         </>
     );
@@ -276,11 +223,11 @@ export default function Sidebar() {
                 />
             )}
 
-            {/* Mobile slide-out sidebar */}
+            {/* Mobile slide-out sidebar (full menu) */}
             <div
                 className={clsx(
-                    "lg:hidden fixed top-0 left-0 bottom-0 z-50 w-72 bg-stone-950 flex flex-col pb-6 shadow-2xl transition-transform duration-300 ease-in-out",
-                    mobileOpen ? "translate-x-0" : "-translate-x-full",
+                    "lg:hidden fixed top-0 left-0 bottom-0 z-50 w-72 bg-stone-950 flex flex-col pb-24 shadow-2xl transition-transform duration-300 ease-in-out",
+                    mobileOpen ? "translate-x-0" : "-translate-x-full"
                 )}
             >
                 {sidebarContent}
