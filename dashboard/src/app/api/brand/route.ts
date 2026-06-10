@@ -241,7 +241,7 @@ export async function POST(req: NextRequest) {
     const auth = await requireUser();
     if (auth instanceof NextResponse) return auth;
 
-    const limited = protectCrawl(req, { route: "brand", maxPerMin: 5 });
+    const limited = await protectCrawl(req, { route: "brand", maxPerMin: 5 });
     if (limited) return limited;
 
     const { sb, profile } = auth;

@@ -32,7 +32,7 @@ import Link from "next/link";
 import {
     Activity, RefreshCw, Loader2, AlertCircle, AlertTriangle, CheckCircle2,
     Clock, Database, HardDrive, Plug, Workflow, Bell, Play, Hammer,
-    ChevronRight, Gauge, Layers, Siren,
+    ChevronRight, Gauge, Layers, Siren, ShieldAlert,
 } from "lucide-react";
 import clsx from "clsx";
 
@@ -75,9 +75,16 @@ interface CronStat {
     runs_7d: number;
 }
 
+interface RateLimitedKey {
+    route: string;
+    ip: string;
+    hit_count: number;
+}
+
 interface EnvHealthPayload {
     data_quality?: DataQualityKpi[];
     cron_summary?: CronStat[];
+    rate_limited_keys?: RateLimitedKey[];
 }
 
 interface TaskTypeStat {
@@ -677,6 +684,51 @@ export default function HealthHubPage() {
                                 </ul>
                             );
                         })()}
+                    </div>
+                </section>
+            )}
+
+            {/* Top rate-limited keys (last 60s). Reads from the
+                `top_rate_limited_60s` view (migration 142) so the operator can
+                spot an IP hammering a public endpoint without diving into
+                Vercel logs. Counts above the per-route maxPerMin show as red. */}
+            {envHealth?.rate_limited_keys && envHealth.rate_limited_keys.length > 0 && (
+                <section className="space-y-3">
+                    <div className="flex items-center gap-2">
+                        <ShieldAlert className="w-4 h-4 text-stone-500" />
+                        <h2 className="text-sm font-bold text-stone-900">Rate-limited keys</h2>
+                        <span className="text-xs text-stone-500">— top callers hitting <span className="font-mono">protectCrawl</span> in the last 60s</span>
+                    </div>
+                    <div className="bg-white border border-stone-200 rounded-[28px] overflow-hidden">
+                        <table className="w-full text-xs">
+                            <thead className="bg-stone-50 text-stone-500 uppercase tracking-wider">
+                                <tr>
+                                    <th className="text-left font-bold px-4 py-2">Route</th>
+                                    <th className="text-left font-bold px-4 py-2">IP</th>
+                                    <th className="text-right font-bold px-4 py-2">Hits (60s)</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-stone-100">
+                                {envHealth.rate_limited_keys.slice(0, 10).map((r, i) => {
+                                    // Anything above 5 in a 60s window is louder than
+                                    // any single user form-fill should be; flag in amber.
+                                    // Above 10 = almost certainly automated, flag red.
+                                    const tone =
+                                        r.hit_count > 10 ? "text-rose-700"
+                                        : r.hit_count > 5 ? "text-amber-700"
+                                        : "text-stone-700";
+                                    return (
+                                        <tr key={`${r.route}-${r.ip}-${i}`}>
+                                            <td className="px-4 py-2 font-mono font-bold text-stone-900 truncate max-w-xs">{r.route}</td>
+                                            <td className="px-4 py-2 font-mono text-stone-600 truncate max-w-xs">{r.ip}</td>
+                                            <td className={clsx("px-4 py-2 text-right font-black tabular-nums", tone)}>
+                                                {r.hit_count.toLocaleString()}
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
                     </div>
                 </section>
             )}

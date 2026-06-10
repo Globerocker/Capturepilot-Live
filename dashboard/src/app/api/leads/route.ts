@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
   // Resend + Meta CAPI + OpenAI. 5/min/IP keeps a single attacker from
   // exhausting any of those budgets while leaving plenty of headroom for a
   // legitimate marketing-site form fill.
-  const limited = protectCrawl(req, { route: "leads", maxPerMin: 5 });
+  const limited = await protectCrawl(req, { route: "leads", maxPerMin: 5 });
   if (limited) {
     // Forward the rate-limiter response but stamp our CORS headers on it so
     // the marketing-site fetch doesn't swallow the 429 as an opaque error.

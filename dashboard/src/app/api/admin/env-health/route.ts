@@ -306,5 +306,38 @@ export async function GET(_req: NextRequest) {
         });
     }
 
-    return NextResponse.json({ checks, cron_summary: cronStats, data_quality: dataQuality });
+    // Top rate-limited keys in the last 60s. Sourced from the
+    // `top_rate_limited_60s` view (migration 142) so the admin can see when
+    // protectCrawl() is firing and from which IP/route. Each row's `key` is
+    // the raw caller key (e.g. "brand:1.2.3.4"); the API splits it so the UI
+    // can render route + IP independently.
+    type RateLimitedKey = { route: string; ip: string; hit_count: number };
+    let rateLimited: RateLimitedKey[] = [];
+    try {
+        const { data: rl } = await admin
+            .from("top_rate_limited_60s")
+            .select("key, hit_count")
+            .order("hit_count", { ascending: false })
+            .limit(10);
+        rateLimited = (rl ?? [])
+            .map((r: { key: string; hit_count: number }) => {
+                // Keys we emit are "route:ip" — split on the first colon so
+                // an IPv6 colon-bearing address stays intact on the right.
+                const idx = r.key.indexOf(":");
+                return idx >= 0
+                    ? { route: r.key.slice(0, idx), ip: r.key.slice(idx + 1), hit_count: r.hit_count }
+                    : { route: r.key, ip: "—", hit_count: r.hit_count };
+            });
+    } catch {
+        // View may not exist yet on environments that haven't applied
+        // migration 142. Empty-array fallback keeps the UI happy.
+        rateLimited = [];
+    }
+
+    return NextResponse.json({
+        checks,
+        cron_summary: cronStats,
+        data_quality: dataQuality,
+        rate_limited_keys: rateLimited,
+    });
 }

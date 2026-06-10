@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
         const auth = await requireUser();
         if (auth instanceof NextResponse) return auth;
 
-        const limited = protectCrawl(request, {
+        const limited = await protectCrawl(request, {
             route: "upload-cap-statement",
             maxPerMin: 3,
             // 1-hour window, max 3 uploads per IP per hour
