@@ -1,0 +1,11 @@
+[Unit]
+Description=Run cp-monthly-awards on the 1st of every month at 00:00 UTC
+
+[Timer]
+# Mirrors old vercel.json "0 0 1 * *"
+OnCalendar=*-*-01 00:00:00 UTC
+Persistent=true
+Unit=cp-monthly-awards.service
+
+[Install]
+WantedBy=timers.target

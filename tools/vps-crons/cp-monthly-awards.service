@@ -1,0 +1,13 @@
+[Unit]
+Description=CapturePilot VPS cron - monthly_awards
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/capturepilot/cron.env
+WorkingDirectory=/opt/capturepilot/vps-crons
+ExecStart=/usr/bin/node /opt/capturepilot/vps-crons/monthly_awards.mjs
+StandardOutput=journal
+StandardError=journal
+TimeoutStartSec=10min

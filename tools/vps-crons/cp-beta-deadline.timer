@@ -1,0 +1,11 @@
+[Unit]
+Description=Run cp-beta-deadline daily at 12:00 UTC
+
+[Timer]
+# Mirrors old vercel.json "0 12 * * *"
+OnCalendar=*-*-* 12:00:00 UTC
+Persistent=true
+Unit=cp-beta-deadline.service
+
+[Install]
+WantedBy=timers.target

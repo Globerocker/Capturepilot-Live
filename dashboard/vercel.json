@@ -16,14 +16,6 @@
             "schedule": "0 10 * * *"
         },
         {
-            "path": "/api/cron/competitor_monitor",
-            "schedule": "0 7 * * 0"
-        },
-        {
-            "path": "/api/cron/ingest_grants",
-            "schedule": "30 2 * * *"
-        },
-        {
             "path": "/api/cron/trial_reminders",
             "schedule": "0 13 * * *"
         },
