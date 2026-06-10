@@ -139,6 +139,43 @@ export default function StartupPackDownloadPage() {
                     </div>
                 </section>
 
+                {/* HIGH-DOMINANCE BOOKING CTA — sits BEFORE the file download
+                    block. Goal: every buyer sees the founder-call invite the
+                    second they land here, before they get distracted poking at
+                    files. Capping the calls at ~6/wk so the scarcity line is
+                    honest, not theater. */}
+                <a
+                    href={process.env.NEXT_PUBLIC_HUBSPOT_MEETINGS_URL || "https://meetings.hubspot.com/andre-schuler"}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block bg-gradient-to-br from-amber-400 via-amber-500 to-orange-600 text-stone-900 rounded-[28px] p-6 sm:p-8 shadow-xl hover:shadow-2xl hover:scale-[1.01] transition-all border-2 border-amber-300"
+                >
+                    <div className="flex items-start justify-between gap-4 flex-wrap">
+                        <div className="flex-1 min-w-[260px]">
+                            <div className="flex items-center gap-2 mb-2">
+                                <span className="inline-flex items-center gap-1.5 bg-stone-900 text-amber-300 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-widest">
+                                    <span className="relative flex w-2 h-2">
+                                        <span className="animate-ping absolute inline-flex w-2 h-2 rounded-full bg-amber-400 opacity-75" />
+                                        <span className="relative inline-flex rounded-full w-2 h-2 bg-amber-300" />
+                                    </span>
+                                    Limited slots · High demand
+                                </span>
+                            </div>
+                            <h2 className="font-black text-2xl sm:text-3xl leading-tight text-stone-900">
+                                Skip the learning curve. Book your 30-min onboarding call.
+                            </h2>
+                            <p className="mt-2 text-stone-800 text-sm sm:text-base leading-relaxed max-w-2xl">
+                                Walk through your kit with the founder. We'll pick your first 3 opportunities to chase, set up your sam.gov saved searches, and answer anything the PDFs didn't. Free with your purchase. We cap these at ~6 a week to keep them useful — book before slots run out for the week.
+                            </p>
+                        </div>
+                        <div className="flex items-center gap-2 self-center">
+                            <span className="bg-stone-900 hover:bg-stone-800 text-amber-300 px-6 py-4 rounded-xl font-bold text-base inline-flex items-center gap-2 transition-colors whitespace-nowrap shadow-lg">
+                                Book my call <ArrowRight className="w-5 h-5" />
+                            </span>
+                        </div>
+                    </div>
+                </a>
+
                 {/* ZIP download banner — one-click to grab everything */}
                 <ZipDownloadBanner token={token} assetCount={localAssets} />
 
