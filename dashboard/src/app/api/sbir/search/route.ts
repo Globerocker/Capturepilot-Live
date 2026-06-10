@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
+// Edge runtime — pure SBIR.gov passthrough, no Node-only APIs.
+// Lifts non-US TTFB into the regional POP instead of US-only Vercel function region.
+export const runtime = "edge";
 export const maxDuration = 30;
 
 /**

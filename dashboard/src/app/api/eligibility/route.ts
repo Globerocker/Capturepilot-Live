@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
+// Edge runtime — two Supabase reads plus pure rule logic. No Node-only APIs.
+export const runtime = "edge";
+
 /**
  * POST /api/eligibility
  * Check if a company profile is eligible for an opportunity's set-aside.

@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
+// Edge runtime — read-only Supabase query polled every 2s by the /check progress UI.
+// Non-US visitors pay ~150ms TLS to US-only Node functions; Edge cuts that to the nearest POP.
+export const runtime = "edge";
+
 export async function GET(
     request: NextRequest,
     { params }: { params: Promise<{ analysisId: string }> }
