@@ -8,7 +8,7 @@ import Image from "next/image";
 import {
     LayoutDashboard, Users, Briefcase, Target, UserCog,
     Wrench, Settings, LogOut, Loader2, Search, ChevronDown,
-    Menu, X, FileText, Bell, MessageSquare, Mail,
+    Menu, X, FileText, Bell, MessageSquare, Mail, Inbox,
 } from "lucide-react";
 import clsx from "clsx";
 
@@ -27,6 +27,7 @@ const NAV = [
     { href: "/admin/users", icon: UserCog, label: "Users" },
     { href: "/admin/messages", icon: MessageSquare, label: "Messages" },
     { href: "/admin/emails", icon: Mail, label: "Emails" },
+    { href: "/admin/outreach", icon: Inbox, label: "Outreach" },
     { href: "/admin/tools", icon: Wrench, label: "Tools" },
     { href: "/admin/settings", icon: Settings, label: "Settings" },
 ];
@@ -36,6 +37,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     const [loading, setLoading] = useState(true);
     const [mobileOpen, setMobileOpen] = useState(false);
     const [unreadMessages, setUnreadMessages] = useState(0);
+    const [unhandledReplies, setUnhandledReplies] = useState(0);
 
     const fetchUnread = async () => {
         const { count } = await supabase
@@ -46,18 +48,35 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         setUnreadMessages(count || 0);
     };
 
+    const fetchUnhandledReplies = async () => {
+        try {
+            const res = await fetch("/api/admin/outreach/replies?count_only=true", {
+                cache: "no-store",
+            });
+            if (!res.ok) return;
+            const json = (await res.json()) as { unhandled: number };
+            setUnhandledReplies(json.unhandled || 0);
+        } catch {
+            // Endpoint might not be deployed yet — silently skip.
+        }
+    };
+
     useEffect(() => {
         (async () => {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) { window.location.href = "/login"; return; }
             await fetchUnread();
+            await fetchUnhandledReplies();
             setLoading(false);
         })();
     }, []);
 
     // Poll unread count every 30 seconds
     useEffect(() => {
-        const interval = setInterval(fetchUnread, 30000);
+        const interval = setInterval(() => {
+            fetchUnread();
+            fetchUnhandledReplies();
+        }, 30000);
         return () => clearInterval(interval);
     }, []);
 
@@ -106,6 +125,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                                 {item.label === "Messages" && unreadMessages > 0 && (
                                     <span className="ml-auto bg-emerald-500 text-white text-[10px] font-bold min-w-[18px] h-[18px] rounded-full flex items-center justify-center px-1">
                                         {unreadMessages}
+                                    </span>
+                                )}
+                                {item.label === "Outreach" && unhandledReplies > 0 && (
+                                    <span className="ml-auto bg-amber-500 text-white text-[10px] font-bold min-w-[18px] h-[18px] rounded-full flex items-center justify-center px-1">
+                                        {unhandledReplies > 99 ? "99+" : unhandledReplies}
                                     </span>
                                 )}
                             </Link>
