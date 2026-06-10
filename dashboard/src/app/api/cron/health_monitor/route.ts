@@ -1,352 +1,133 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { guardCron } from "@/lib/cron-auth";
-import { probes, daysUntilExpiry, EXPIRY_WARN_DAYS, type ProbeResult } from "@/lib/connectors";
-import { sendHealthDigest } from "@/lib/health-digest";
-import { shouldSuppressImmediateEmail, type HealthAlertRow } from "@/lib/health-autoheal";
-// Fix: cron_runs telemetry coverage — wrap handler so /admin/health stale-cron
-// detector and daily digest can see this route. Previously only 5 of 35 crons
-// were logging to cron_runs.
-import { withCronTelemetry } from "@/lib/cron-telemetry";
+import {
+    captureCronFailure,
+    captureWorkerQueueSpike,
+    alertBreadcrumb,
+} from "@/lib/sentry-alerts";
 
-export const runtime = "nodejs";
 export const maxDuration = 60;
 
 /**
- * Hourly health monitor.
+ * /api/cron/health_monitor
  *
- * For each `api_connectors` row:
- *   1. Run the matching probe in `lib/connectors.ts`.
- *   2. Compare status with the previous last_status. If it CHANGED (e.g.
- *      ok → error, or error → ok), write a row to `health_alerts`.
- *   3. Check expires_at — if inside EXPIRY_WARN_DAYS (14d) and we haven't
- *      already fired an expiry alert for this connector, fire one.
- *   4. Update the connector row with current last_status / last_check_at /
- *      consecutive_fails counter.
+ * Scheduled health sweep that runs every 10 minutes and fires Sentry
+ * alert recipes when CapturePilot's background systems are unhealthy:
  *
- * Separately, for cron freshness:
- *   - Read cron_runs to find any cron route whose last_run is older than
- *     2× its expected interval. Fire a `cron_stale` alert if no open one.
+ *   1. Cron failures: scans `health_alerts` for any `cron_failed`
+ *      firings in the last hour and re-surfaces a single rollup if any
+ *      route has failed 3+ times (avoids alert fatigue).
  *
- * Finally, if any NEW alerts were fired this run, batch them into a single
- * email digest to info@fillcart.de (configurable via HEALTH_ALERT_EMAIL).
+ *   2. Worker queue spike: if a `worker_jobs` table exists, checks each
+ *      task_type lane — fires `worker_queue_spike` when pending > 5000
+ *      and no `done` records in the last hour. (No-op if the table
+ *      isn't deployed, which is the case on older branches.)
  *
- * Idempotent: if no state changes, no alerts. Re-running is a no-op.
+ * Auth: CRON_SECRET bearer token, same pattern as every other cron.
  */
-
-const ALERT_EMAIL_TO = process.env.HEALTH_ALERT_EMAIL || "info@fillcart.de";
-
-type ConnectorRow = {
-    id: string;
-    slug: string;
-    label: string;
-    env_var_name: string;
-    enabled: boolean;
-    rotation_days: number | null;
-    expires_at: string | null;
-    docs_url: string | null;
-    rotate_url: string | null;
-    last_status: string | null;
-    consecutive_fails: number;
-};
-
-function db() {
-    return createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_KEY!,
-        { auth: { persistSession: false } },
-    );
-}
-
-async function GET_handler(req: NextRequest): Promise<NextResponse> {
-    const denied = guardCron(req);
-    if (denied) return denied;
-
-    const sb = db();
-    const startedAt = new Date();
-    const newAlerts: Array<{ slug: string; severity: string; title: string; detail?: string }> = [];
-
-    // ─── Connector probes ────────────────────────────────────────────────────
-    const { data: connectors, error: cErr } = await sb
-        .from("api_connectors")
-        .select("id, slug, label, env_var_name, enabled, rotation_days, expires_at, docs_url, rotate_url, last_status, consecutive_fails")
-        .eq("enabled", true);
-
-    if (cErr) {
-        console.error("[health_monitor] fetch connectors failed", cErr);
-        return NextResponse.json({ ok: false, error: cErr.message }, { status: 500 });
+export async function GET(req: NextRequest) {
+    const authHeader = req.headers.get("authorization");
+    if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    for (const c of (connectors as ConnectorRow[] | null) ?? []) {
-        let result: ProbeResult;
-
-        if (c.slug === "supabase") {
-            // Inline check using the existing client.
-            const { error } = await sb.from("opportunities").select("notice_id", { count: "exact", head: true }).limit(1);
-            result = error ? { status: "error", detail: error.message } : { status: "ok" };
-        } else {
-            const probeFn = probes[c.slug];
-            result = probeFn ? await probeFn() : { status: "unknown", detail: "no probe registered" };
-        }
-
-        // Status-change alert
-        const prev = c.last_status;
-        const cur = result.status;
-        const wasOk = prev === "ok";
-        const isOk = cur === "ok";
-        if (prev && prev !== cur && cur !== "unknown" && cur !== "disabled") {
-            if (wasOk && !isOk) {
-                newAlerts.push({
-                    slug: c.slug,
-                    severity: "critical",
-                    title: `${c.label} went from healthy → ${cur}`,
-                    detail: result.detail,
-                });
-                await sb.from("health_alerts").insert({
-                    connector_slug: c.slug,
-                    alert_type: "status_change",
-                    severity: "critical",
-                    title: `${c.label} is failing`,
-                    detail: result.detail || `Status transitioned ${prev} → ${cur}`,
-                    payload: { prev, cur, env_var: c.env_var_name },
-                });
-            } else if (!wasOk && isOk) {
-                // Recovery — informational, but still nice to email so the
-                // operator knows it self-healed.
-                newAlerts.push({
-                    slug: c.slug,
-                    severity: "info",
-                    title: `${c.label} recovered`,
-                });
-                // Resolve any open critical alerts for this connector.
-                await sb.from("health_alerts").update({ resolved_at: new Date().toISOString() })
-                    .eq("connector_slug", c.slug)
-                    .is("resolved_at", null);
-                await sb.from("health_alerts").insert({
-                    connector_slug: c.slug,
-                    alert_type: "recovery",
-                    severity: "info",
-                    title: `${c.label} recovered`,
-                    detail: `Now healthy`,
-                });
-            }
-        }
-
-        // Expiry warning
-        const daysLeft = daysUntilExpiry(c.expires_at);
-        if (daysLeft !== null && daysLeft <= EXPIRY_WARN_DAYS && c.enabled) {
-            const { count: existing } = await sb
-                .from("health_alerts")
-                .select("id", { count: "exact", head: true })
-                .eq("connector_slug", c.slug)
-                .eq("alert_type", "expiry_warning")
-                .is("resolved_at", null);
-            if (!existing) {
-                const sev = daysLeft <= 3 ? "critical" : "warning";
-                newAlerts.push({
-                    slug: c.slug,
-                    severity: sev,
-                    title: `${c.label} key expires in ${daysLeft} day${daysLeft === 1 ? "" : "s"}`,
-                    detail: c.rotate_url ? `Rotate at: ${c.rotate_url}` : undefined,
-                });
-                await sb.from("health_alerts").insert({
-                    connector_slug: c.slug,
-                    alert_type: "expiry_warning",
-                    severity: sev,
-                    title: `${c.label} expires in ${daysLeft} days`,
-                    detail: c.rotate_url || c.docs_url,
-                    payload: { days_left: daysLeft, env_var: c.env_var_name, rotate_url: c.rotate_url },
-                });
-            }
-        }
-
-        // Update connector row with latest probe outcome.
-        const fails = cur === "error" ? (c.consecutive_fails || 0) + 1 : 0;
-        await sb.from("api_connectors")
-            .update({
-                last_check_at: new Date().toISOString(),
-                last_status: cur,
-                last_detail: result.detail || null,
-                consecutive_fails: fails,
-                updated_at: new Date().toISOString(),
-            })
-            .eq("id", c.id);
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const key = process.env.SUPABASE_SERVICE_KEY;
+    if (!url || !key) {
+        return NextResponse.json({ error: "Supabase env missing" }, { status: 500 });
     }
+    const db = createClient(url, key);
 
-    // ─── Cron staleness ──────────────────────────────────────────────────────
-    // Schedule-aware threshold: daily/sub-daily crons must run within 24h,
-    // weekly within 8 days, monthly within 35 days. The previous fixed-24h
-    // threshold fired false-positive alerts for legitimately-weekly crons
-    // (ingest_sec_filings_primes, ingest_gsa_elibrary, etc) every morning.
-    //
-    // Source of truth is vercel.json; this map mirrors the weekly/monthly
-    // schedule entries. Keep in sync when adding new non-daily crons.
-    const STALE_THRESHOLDS_MS: Record<string, number> = {
-        // Weekly crons (run once a week — give 8 days before flagging stale)
-        "/api/cron/ingest_calc":                     8 * 24 * 3600_000,
-        "/api/cron/competitor_monitor":              8 * 24 * 3600_000,
-        "/api/cron/market_watch_digest":             8 * 24 * 3600_000,
-        "/api/cron/recompete_scan":                  8 * 24 * 3600_000,
-        "/api/cron/ingest_subawards":                8 * 24 * 3600_000,
-        "/api/cron/ingest_dol_wage_determinations":  8 * 24 * 3600_000,
-        "/api/cron/ingest_gsa_elibrary":             8 * 24 * 3600_000,
-        "/api/cron/ingest_sec_filings_primes":       8 * 24 * 3600_000,
-        "/api/cron/publish_next_blog":               8 * 24 * 3600_000,
-        "/api/cron/discover_top_by_naics":           8 * 24 * 3600_000,
-        // Monthly
-        "/api/cron/ingest_federal_hierarchy":        35 * 24 * 3600_000,
-    };
-    const DEFAULT_STALE_MS = 24 * 3600_000; // fall-through for daily+
+    const out: Record<string, unknown> = { ok: true };
 
     try {
-        // Pull a wider window so weekly crons' last run is still in the result set.
-        const since = new Date(Date.now() - 10 * 24 * 3600_000).toISOString();
-        const { data: recent } = await sb
-            .from("cron_runs")
-            .select("route, started_at, status")
-            .gte("started_at", since)
-            .order("started_at", { ascending: false })
-            .limit(2000);
-
-        // Last run + status per route
-        const latestPerRoute = new Map<string, { started_at: string; status: string | null }>();
-        for (const r of (recent ?? []) as Array<{ route: string; started_at: string; status: string | null }>) {
-            if (!latestPerRoute.has(r.route)) latestPerRoute.set(r.route, { started_at: r.started_at, status: r.status });
-        }
-
-        const nowMs = Date.now();
-        for (const [route, info] of latestPerRoute.entries()) {
-            const lastMs = new Date(info.started_at).getTime();
-            const threshold = STALE_THRESHOLDS_MS[route] ?? DEFAULT_STALE_MS;
-            const stale = (nowMs - lastMs) > threshold;
-            const failed = info.status && info.status !== "ok" && info.status !== "success";
-            if (!stale && !failed) continue;
-
-            // Open alert already?
-            const { count: existing } = await sb
-                .from("health_alerts")
-                .select("id", { count: "exact", head: true })
-                .eq("connector_slug", `cron:${route}`)
-                .in("alert_type", ["cron_stale", "cron_failed"])
-                .is("resolved_at", null);
-            if (existing) continue;
-
-            const thresholdHrs = Math.round(((STALE_THRESHOLDS_MS[route] ?? DEFAULT_STALE_MS) / 3600_000));
-            const title = stale
-                ? `Cron ${route} hasn't run in ${thresholdHrs}h+`
-                : `Cron ${route} last run failed (status=${info.status})`;
-            newAlerts.push({
-                slug: `cron:${route}`,
-                severity: failed ? "critical" : "warning",
-                title,
-            });
-            await sb.from("health_alerts").insert({
-                connector_slug: `cron:${route}`,
-                alert_type: stale ? "cron_stale" : "cron_failed",
-                severity: failed ? "critical" : "warning",
-                title,
-                detail: `Last seen: ${info.started_at}`,
-                payload: { route, last_run: info.started_at, last_status: info.status },
-            });
-        }
-    } catch (e) {
-        console.warn("[health_monitor] cron staleness check failed:", (e as Error).message);
-    }
-
-    // ─── Worker_jobs failure-rate spike ──────────────────────────────────────
-    // If the failure rate over the last hour crosses 20% (and there's at
-    // least 10 jobs to avoid false positives on small samples), fire a
-    // `worker_spike` alert. Catches silent regressions like a scraper
-    // breaking on every page or an enrichment endpoint going 500.
-    try {
+        // ─── 1) Cron failure rollup ─────────────────────────────────
         const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-        const { data: recent } = await sb
-            .from("worker_jobs")
-            .select("status")
-            .gte("finished_at", oneHourAgo);
-        const rows = (recent || []) as Array<{ status: string }>;
-        if (rows.length >= 10) {
-            const failed = rows.filter(r => r.status === "failed").length;
-            const failureRate = failed / rows.length;
-            if (failureRate >= 0.20) {
-                // Skip if we already fired this alert in the last 6h.
-                const { count: existing } = await sb
-                    .from("health_alerts")
-                    .select("id", { count: "exact", head: true })
-                    .eq("alert_type", "worker_spike")
-                    .gte("fired_at", new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString());
-                if (!existing) {
-                    const pct = Math.round(failureRate * 100);
-                    const sev = failureRate >= 0.5 ? "critical" : "warning";
-                    newAlerts.push({
-                        slug: "worker_jobs",
-                        severity: sev,
-                        title: `Worker queue failure rate spike: ${pct}%`,
-                        detail: `${failed} of ${rows.length} jobs failed in the last hour.`,
-                    });
-                    await sb.from("health_alerts").insert({
-                        connector_slug: "worker_jobs",
-                        alert_type: "worker_spike",
-                        severity: sev,
-                        title: `Worker failure rate ${pct}%`,
-                        detail: `${failed}/${rows.length} jobs failed in the last hour`,
-                        payload: { failed, total: rows.length, rate: failureRate },
+        const { data: recentCronFails, error: failErr } = await db
+            .from("health_alerts")
+            .select("route, fired_at")
+            .eq("recipe", "cron_failed")
+            .gte("fired_at", oneHourAgo);
+
+        if (failErr) {
+            alertBreadcrumb("health_monitor", "cron_fail_query_error", { error: failErr.message });
+        } else {
+            const counts = new Map<string, number>();
+            for (const row of recentCronFails || []) {
+                const route = (row as { route: string | null }).route || "unknown";
+                counts.set(route, (counts.get(route) || 0) + 1);
+            }
+            const rolling: Array<{ route: string; count: number }> = [];
+            for (const [route, count] of counts.entries()) {
+                if (count >= 3) {
+                    rolling.push({ route, count });
+                    captureCronFailure({
+                        route,
+                        status: 0,
+                        error: `health_monitor: ${count} cron_failed firings in last hour on ${route}`,
+                        extra: { rollup: true, window_min: 60 },
                     });
                 }
             }
+            out.cron_failure_rollups = rolling;
         }
-    } catch (e) {
-        console.warn("[health_monitor] worker-spike check failed:", (e as Error).message);
-    }
 
-    // ─── Email digest ────────────────────────────────────────────────────────
-    // Filter out alerts that have a recipe in lib/health-autoheal — those
-    // get handled by /api/cron/self_heal within 30min and rolled into the
-    // morning digest. Email only the urgent + unrecognized ones now.
-    //
-    // (Critical alerts where supabase/vercel/dns goes down still email
-    // immediately; see shouldSuppressImmediateEmail.)
-    const emailWorthy = newAlerts.filter(a => {
-        const asRow: HealthAlertRow = {
-            id: "", // synthetic — recipe matchers don't read id
-            connector_slug: a.slug,
-            alert_type: "status_change",
-            severity: a.severity,
-            title: a.title,
-            detail: a.detail || null,
-            payload: null,
-            fired_at: new Date().toISOString(),
-        };
-        return !shouldSuppressImmediateEmail(asRow);
-    });
+        // ─── 2) Worker queue spike (optional table) ─────────────────
+        // Try to read from worker_jobs; if the table doesn't exist on
+        // this branch we silently skip — no crash.
+        const { data: pendingRows, error: pendingErr } = await db
+            .from("worker_jobs")
+            .select("task_type")
+            .eq("status", "pending");
 
-    // Per-event email firing is OFF by default — the morning daily digest
-    // (cron send_daily_digest) already reports the 24-hour alert roll-up,
-    // and per-event emails were spamming the inbox + burning Resend budget.
-    // Set HEALTH_MONITOR_IMMEDIATE_EMAIL=1 to re-enable for critical-only
-    // notifications during an incident window.
-    if (emailWorthy.length > 0 && process.env.HEALTH_MONITOR_IMMEDIATE_EMAIL === "1") {
-        try {
-            await sendHealthDigest({ to: ALERT_EMAIL_TO, alerts: emailWorthy });
-        } catch (e) {
-            console.error("[health_monitor] email digest failed:", (e as Error).message);
+        if (pendingErr) {
+            // Table not yet deployed on this branch — treat as no-op
+            // and just record a breadcrumb so we don't spam errors.
+            alertBreadcrumb("health_monitor", "worker_jobs_table_missing", {
+                error: pendingErr.message,
+            });
+            out.worker_queue_spike_scan = "skipped";
+        } else {
+            const pendingByType = new Map<string, number>();
+            for (const r of (pendingRows || []) as { task_type: string }[]) {
+                pendingByType.set(r.task_type, (pendingByType.get(r.task_type) || 0) + 1);
+            }
+
+            const spikes: Array<{ task_type: string; pending: number; done_in_window: number }> = [];
+            for (const [taskType, pending] of pendingByType.entries()) {
+                if (pending <= 5000) continue;
+
+                // Has anything completed in this lane in the last hour?
+                const { count: doneCount } = await db
+                    .from("worker_jobs")
+                    .select("id", { count: "exact", head: true })
+                    .eq("task_type", taskType)
+                    .eq("status", "done")
+                    .gte("updated_at", oneHourAgo);
+
+                const doneInWindow = doneCount || 0;
+                if (doneInWindow === 0) {
+                    spikes.push({ task_type: taskType, pending, done_in_window: doneInWindow });
+                    captureWorkerQueueSpike({
+                        taskType,
+                        pending,
+                        runningWindowMin: 60,
+                        doneInWindow,
+                    });
+                }
+            }
+            out.worker_queue_spikes = spikes;
         }
-    }
-    if (newAlerts.length > 0) {
-        // Always mark emailed=true so health_monitor doesn't churn the same
-        // alert next hour; suppressed alerts will get a single mention in
-        // the morning digest via alert_autofixes.
-        await sb.from("health_alerts")
-            .update({ emailed: true })
-            .gte("fired_at", startedAt.toISOString());
-    }
 
-    return NextResponse.json({
-        ok: true,
-        checked_connectors: connectors?.length ?? 0,
-        new_alerts: newAlerts.length,
-        duration_ms: Date.now() - startedAt.getTime(),
-    });
+        return NextResponse.json(out);
+    } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : "health_monitor error";
+        console.error("[health_monitor] fatal:", e);
+        captureCronFailure({
+            route: "/api/cron/health_monitor",
+            status: 500,
+            error: e,
+        });
+        return NextResponse.json({ error: msg }, { status: 500 });
+    }
 }
-
-export const GET = withCronTelemetry("/api/cron/health_monitor", GET_handler);
