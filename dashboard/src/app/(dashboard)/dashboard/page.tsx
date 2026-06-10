@@ -4,13 +4,30 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Activity, Target, Sparkles, ArrowRight, Loader2, Clock, Trophy, Search, Shield, BarChart3, Layers, CheckSquare, Phone, UserCheck, FileText, Mic, Mail, Pencil } from "lucide-react";
 import ServiceCTA from "@/components/ui/ServiceCTA";
-import { MarketIntelligence } from "@/components/MarketIntelligence";
 import { Skeleton, SkeletonKpiCard } from "@/components/ui/Skeleton";
 import clsx from "clsx";
 import Link from "next/link";
-import { createSupabaseClient } from "@/lib/supabase/client";
+import dynamic from "next/dynamic";
 
-const supabase = createSupabaseClient();
+// Lazy-load the market intelligence widget. It fetches its own data and pulls
+// chart-style rendering code; deferring it keeps the dashboard shell light and
+// lets the above-the-fold KPIs render first.
+const MarketIntelligence = dynamic(
+  () => import("@/components/MarketIntelligence").then(m => m.MarketIntelligence),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="bg-white rounded-[24px] sm:rounded-[32px] p-5 sm:p-6 border border-stone-200 shadow-sm space-y-3">
+        <Skeleton className="h-5 w-40 rounded" />
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <Skeleton className="h-20 rounded-xl" />
+          <Skeleton className="h-20 rounded-xl" />
+          <Skeleton className="h-20 rounded-xl" />
+        </div>
+      </div>
+    ),
+  }
+);
 
 interface UserProfile {
   company_name: string;
@@ -77,128 +94,44 @@ export default function UserDashboard() {
   const [generatingMatches, setGeneratingMatches] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
     async function loadDashboard() {
-      // Get current user
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { router.push("/login"); return; }
+      // Single round-trip — the server fans every read out in parallel using
+      // one Supabase client. Replaces the prior two-batch waterfall that
+      // blocked pipeline/actions/competitors on the first batch finishing.
+      const res = await fetch("/api/dashboard/summary", { cache: "no-store" });
+      if (cancelled) return;
 
-      // Get user profile
-      const { data: profileData } = await supabase
-        .from("user_profiles")
-        .select("id, company_name, naics_codes, sba_certifications, state, target_states, uei, cage_code, website, phone, employee_count, years_in_business, federal_awards_count")
-        .eq("auth_user_id", user.id)
-        .single();
+      if (res.status === 401) { router.push("/login"); return; }
+      if (!res.ok) { setLoading(false); return; }
 
-      if (!profileData) {
+      const data = await res.json();
+      if (cancelled) return;
+
+      if (!data.profile) {
         router.push("/onboard");
         return;
       }
-      setProfile(profileData as UserProfile);
 
-      const today = new Date().toISOString().split("T")[0];
-      const profileId = (profileData as Record<string, unknown>).id as string;
-
-      const ACTIVE_STATUSES = ["ACTIVE", "EXPIRING_SOON", "MARKET_RESEARCH", "DISCOVERED"];
-
-      // Run all counts in parallel. Use !inner join + status/archive filters so counts
-      // match what the matches list actually displays (skipping orphaned/archived opps).
-      const [opsRes, hotRes, warmRes, urgentRes, topMatchRes] = await Promise.all([
-        // Total active opportunities
-        supabase.from("opportunities").select("*", { count: "exact", head: true }).eq("is_archived", false),
-        // HOT matches from user_matches
-        profileId
-          ? supabase.from("user_matches")
-            .select("id, opportunities!inner(id)", { count: "exact", head: true })
-            .eq("user_profile_id", profileId)
-            .eq("classification", "HOT")
-            .eq("is_dismissed", false)
-            .eq("opportunities.is_archived", false)
-            .in("opportunities.status", ACTIVE_STATUSES)
-          : Promise.resolve({ count: 0 }),
-        // WARM matches
-        profileId
-          ? supabase.from("user_matches")
-            .select("id, opportunities!inner(id)", { count: "exact", head: true })
-            .eq("user_profile_id", profileId)
-            .eq("classification", "WARM")
-            .eq("is_dismissed", false)
-            .eq("opportunities.is_archived", false)
-            .in("opportunities.status", ACTIVE_STATUSES)
-          : Promise.resolve({ count: 0 }),
-        // Urgent: deadlines in 7 days
-        supabase.from("opportunities").select("*", { count: "exact", head: true })
-          .eq("is_archived", false)
-          .lte("response_deadline", new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString())
-          .gte("response_deadline", today),
-        // Top matches from user_matches (joined with opportunities)
-        profileId
-          ? supabase.from("user_matches")
-            .select("score, classification, opportunities!inner(id, title, agency, naics_code, notice_type, response_deadline, set_aside_code, status, is_archived)")
-            .eq("user_profile_id", profileId)
-            .eq("is_dismissed", false)
-            .eq("opportunities.is_archived", false)
-            .in("opportunities.status", ACTIVE_STATUSES)
-            .order("score", { ascending: false })
-            .limit(8)
-          : Promise.resolve({ data: [] }),
-      ]);
-
-      setOpsCount(opsRes.count || 0);
-      const hot = (hotRes as { count: number | null }).count || 0;
-      const warm = (warmRes as { count: number | null }).count || 0;
-      setHotMatchCount(hot);
-      setWarmMatchCount(warm);
-      setTotalMatchCount(hot + warm);
-      setUrgentCount(urgentRes.count || 0);
-      // Extract opportunity data from joined matches
-      const topData = (topMatchRes.data || []) as unknown as Array<{ score: number; classification: string; opportunities: TopOpp }>;
-      setTopOpps(topData.map(m => m.opportunities).filter(Boolean));
-
-      // Fetch pipeline, action items, competitors in parallel
-      if (profileId) {
-        const [pursuitRes, actionsRes, competitorRes, recentPipelineRes, recentActionsRes] = await Promise.all([
-          supabase.from("user_pursuits").select("stage").eq("user_profile_id", profileId),
-          supabase.from("user_action_items").select("status, priority").eq("user_profile_id", profileId),
-          supabase.from("client_competitors")
-            .select("*", { count: "exact", head: true })
-            .eq("user_profile_id", profileId),
-          supabase.from("user_pursuits")
-            .select("id, stage, opportunity_id, opportunities(id, title)")
-            .eq("user_profile_id", profileId)
-            .order("stage_changed_at", { ascending: false })
-            .limit(5),
-          supabase.from("user_action_items")
-            .select("id, title, priority, opportunity_id")
-            .eq("user_profile_id", profileId)
-            .neq("status", "completed")
-            .order("priority", { ascending: false })
-            .limit(5),
-        ]);
-
-        const pursuits = (pursuitRes.data || []) as Array<{ stage: string }>;
-        setPipelineCount(pursuits.length);
-        const stages: Record<string, number> = {};
-        pursuits.forEach(p => { stages[p.stage] = (stages[p.stage] || 0) + 1; });
-        setPipelineStages(stages);
-
-        const actions = (actionsRes.data || []) as Array<{ status: string; priority: string }>;
-        setActionsPending(actions.filter(a => a.status !== "completed").length);
-        setActionsUrgent(actions.filter(a => a.priority === "high" && a.status !== "completed").length);
-
-        setCompetitorCount((competitorRes as { count: number | null }).count || 0);
-
-        type RecentPursuit = { id: string; stage: string; opportunity_id: string; opportunities: { id: string; title: string } | null };
-        const recents = (recentPipelineRes.data || []) as unknown as RecentPursuit[];
-        setRecentPipeline(recents.filter(r => r.opportunities).map(r => ({
-          id: r.id, stage: r.stage, title: r.opportunities!.title, opportunity_id: r.opportunity_id,
-        })));
-
-        setPendingActions((recentActionsRes.data || []) as Array<{ id: string; title: string; priority: string; opportunity_id: string }>);
-      }
+      setProfile(data.profile as UserProfile);
+      setOpsCount(data.opsCount ?? 0);
+      setHotMatchCount(data.hotMatchCount ?? 0);
+      setWarmMatchCount(data.warmMatchCount ?? 0);
+      setTotalMatchCount(data.totalMatchCount ?? 0);
+      setUrgentCount(data.urgentCount ?? 0);
+      setTopOpps((data.topOpps ?? []) as TopOpp[]);
+      setPipelineCount(data.pipelineCount ?? 0);
+      setPipelineStages(data.pipelineStages ?? {});
+      setActionsPending(data.actionsPending ?? 0);
+      setActionsUrgent(data.actionsUrgent ?? 0);
+      setCompetitorCount(data.competitorCount ?? 0);
+      setRecentPipeline(data.recentPipeline ?? []);
+      setPendingActions(data.pendingActions ?? []);
 
       setLoading(false);
     }
     loadDashboard();
+    return () => { cancelled = true; };
   }, [router]);
 
   if (loading) {
