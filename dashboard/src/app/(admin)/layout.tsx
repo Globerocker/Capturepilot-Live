@@ -76,6 +76,7 @@ const NAV: NavSection[] = [
             { href: "/admin/enrich", icon: Sparkles, label: "Bulk Enrich" },
             { href: "/admin/health", icon: Activity, label: "Env Health" },
             { href: "/admin/crons", icon: Activity, label: "Cron Telemetry" },
+            { href: "/admin/jobs", icon: Activity, label: "Jobs" },
             { href: "/admin/tools", icon: Wrench, label: "Tools" },
         ],
     },
