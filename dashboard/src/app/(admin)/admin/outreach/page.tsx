@@ -1,826 +1,583 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-    Megaphone, BarChart3, Mail, Users, Inbox, FileText, ShieldOff, Settings as SettingsIcon,
-    Loader2, ChevronDown, ArrowUpRight, ArrowDownRight, Minus, ShieldCheck, AlertTriangle,
-    MessageCircle, MousePointerClick, MailCheck, Send, UserMinus,
-} from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import clsx from "clsx";
+import {
+    Loader2, Check, X, Search, RefreshCw, Globe, MapPin, Hash,
+    Calendar, CheckSquare, Square, AlertTriangle, Sparkles, PlayCircle,
+    Mail, MessageSquare, Pause, Play, Archive, Pencil, Plus,
+} from "lucide-react";
+import CampaignBuilderModal from "@/components/outreach/CampaignBuilderModal";
 
-// ---------- constants ----------
-
-type TabId = "overview" | "campaigns" | "contacts" | "inbox" | "templates" | "suppression" | "settings";
-
-const TABS: { id: TabId; label: string; icon: typeof Megaphone }[] = [
-    { id: "overview", label: "Overview", icon: BarChart3 },
-    { id: "campaigns", label: "Campaigns", icon: Megaphone },
-    { id: "contacts", label: "Contacts", icon: Users },
-    { id: "inbox", label: "Inbox", icon: Inbox },
-    { id: "templates", label: "Templates", icon: FileText },
-    { id: "suppression", label: "Suppression", icon: ShieldOff },
-    { id: "settings", label: "Settings", icon: SettingsIcon },
-];
-
-// B2B cold outreach benchmarks (percentages).
-const BENCHMARKS = {
-    delivered_rate: 97,
-    open_rate: 35,
-    click_rate: 3,
-    reply_rate: 6,
-    bounce_rate: 2,
-    unsubscribe_rate: 1,
-};
-
-type Preset = "today" | "7d" | "30d" | "90d" | "qtd" | "ytd" | "custom";
-const PRESETS: { id: Preset; label: string }[] = [
-    { id: "today", label: "Today" },
-    { id: "7d", label: "7d" },
-    { id: "30d", label: "30d" },
-    { id: "90d", label: "90d" },
-    { id: "qtd", label: "QTD" },
-    { id: "ytd", label: "YTD" },
-    { id: "custom", label: "Custom" },
-];
-
-// ---------- types ----------
-
-interface KpiRow {
-    sent: number;
-    delivered: number;
-    opened: number;
-    clicked: number;
-    replied: number;
-    bounced: number;
-    unsubscribed: number;
-    complaint: number;
+interface Prospect {
+    id: string;
+    uei: string | null;
+    cage_code: string | null;
+    company_name: string;
+    website: string | null;
+    state: string | null;
+    city: string | null;
+    naics_codes: string[];
+    certifications: string[];
+    registration_date: string | null;
+    primary_email: string | null;
+    primary_name: string | null;
+    source: string;
+    status: string;
+    match_score: number;
+    discovered_at: string;
+    rejection_reason: string | null;
+    notes: string | null;
 }
 
-interface DailyRow {
-    day: string;
-    sent: number;
-    delivered: number;
-    opened: number;
-    clicked: number;
-    replied: number;
-}
-
-interface KpiPayload {
-    current: KpiRow;
-    previous: KpiRow | null;
-    deltas: Record<string, number | null> | null;
-    daily: DailyRow[];
-    range: { from: string; to: string; prevFrom: string; prevTo: string };
-}
-
-interface TopCampaign {
+interface Campaign {
     id: string;
     name: string;
+    description: string | null;
+    channels: string[];
     status: string;
-    sent: number;
+    contacts_count: number;
+    sent_count: number;
+    open_count: number;
+    click_count: number;
+    reply_count: number;
+    bounce_count: number;
     reply_rate: number;
+    started_at: string | null;
+    completed_at: string | null;
+    created_at: string;
+    sender_email: string | null;
+    sender_name: string | null;
 }
 
-interface DomainReputation {
-    domain: string;
-    spf: "pass" | "fail" | "unknown";
-    dkim: "pass" | "fail" | "unknown";
-    dmarc: "pass" | "fail" | "unknown";
-    last_checked: string | null;
-    bounce_rate: number;
-    complaint_rate: number;
-}
+const PROSPECT_TABS: Array<{ key: string; label: string }> = [
+    { key: "pending_review", label: "Pending Review" },
+    { key: "approved", label: "Approved" },
+    { key: "rejected", label: "Rejected" },
+    { key: "sent", label: "Sent" },
+    { key: "replied", label: "Replied" },
+    { key: "bounced", label: "Bounced" },
+    { key: "all", label: "All" },
+];
 
-// ---------- helpers ----------
+const CAMPAIGN_FILTERS: Array<{ key: string; label: string }> = [
+    { key: "all", label: "All" },
+    { key: "draft", label: "Draft" },
+    { key: "active", label: "Active" },
+    { key: "paused", label: "Paused" },
+    { key: "completed", label: "Completed" },
+    { key: "archived", label: "Archived" },
+];
 
-function rangeForPreset(preset: Preset): { from: Date; to: Date } | null {
-    const now = new Date();
-    const to = new Date(now);
-    if (preset === "today") {
-        const from = new Date(now);
-        from.setHours(0, 0, 0, 0);
-        return { from, to };
-    }
-    if (preset === "7d") return { from: new Date(now.getTime() - 7 * 86400000), to };
-    if (preset === "30d") return { from: new Date(now.getTime() - 30 * 86400000), to };
-    if (preset === "90d") return { from: new Date(now.getTime() - 90 * 86400000), to };
-    if (preset === "qtd") {
-        const q = Math.floor(now.getMonth() / 3);
-        return { from: new Date(now.getFullYear(), q * 3, 1), to };
-    }
-    if (preset === "ytd") return { from: new Date(now.getFullYear(), 0, 1), to };
-    return null;
-}
-
-function fmtIsoDate(d: Date) {
-    return d.toISOString().slice(0, 10);
-}
-
-function parseIsoDate(s: string | null): Date | null {
-    if (!s) return null;
-    const d = new Date(s);
-    return Number.isNaN(d.getTime()) ? null : d;
-}
-
-function fmtNumber(n: number) {
-    if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + "M";
-    if (n >= 10_000) return (n / 1000).toFixed(1) + "k";
-    return n.toLocaleString();
-}
-
-function rate(num: number, denom: number): number {
-    if (!denom) return 0;
-    return (num / denom) * 100;
-}
-
-function fmtRate(n: number) {
-    return `${n.toFixed(1)}%`;
-}
-
-function benchmarkBadge(rateValue: number, target: number) {
-    const ratio = rateValue / target;
-    if (ratio >= 1) return { tone: "emerald", label: "Above target" };
-    if (ratio >= 0.8) return { tone: "amber", label: "Near target" };
-    return { tone: "red", label: "Below target" };
-}
-
-// ---------- page ----------
-
-export default function AdminOutreachPage() {
-    // Tab nav (hash-persisted)
-    const [tab, setTab] = useState<TabId>("overview");
-    const [tabMenuOpen, setTabMenuOpen] = useState(false);
-
-    useEffect(() => {
-        const apply = () => {
-            const h = (window.location.hash || "#overview").replace("#", "");
-            if (TABS.some((t) => t.id === h)) setTab(h as TabId);
-        };
-        apply();
-        window.addEventListener("hashchange", apply);
-        return () => window.removeEventListener("hashchange", apply);
-    }, []);
-
-    const switchTab = useCallback((id: TabId) => {
-        setTab(id);
-        setTabMenuOpen(false);
-        if (typeof window !== "undefined") {
-            const next = `#${id}`;
-            if (window.location.hash !== next) {
-                history.replaceState(null, "", next);
-            }
-        }
-    }, []);
+export default function OutreachAdminPage() {
+    const [tab, setTab] = useState<"prospects" | "campaigns">("prospects");
 
     return (
-        <div className="space-y-6">
-            {/* Header */}
-            <div className="flex items-center justify-between gap-4 flex-wrap">
-                <div>
-                    <p className="text-stone-400 text-xs uppercase tracking-widest font-medium mb-2">Admin Console</p>
-                    <h1 className="text-2xl font-bold text-stone-900 flex items-center gap-2">
-                        <Megaphone className="w-6 h-6" /> Outreach
-                    </h1>
-                </div>
+        <div className="max-w-[1600px] mx-auto p-6 space-y-6">
+            <div>
+                <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+                    <Sparkles className="w-6 h-6 text-emerald-600" /> Outreach
+                </h1>
+                <p className="text-sm text-stone-500 mt-1">
+                    Cold-outreach prospect queue and multi-step campaigns. Admin-only.
+                </p>
             </div>
 
-            {/* Sticky tab bar */}
-            <div className="sticky top-0 z-20 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 bg-stone-50/95 backdrop-blur border-b border-stone-200">
-                {/* Desktop tabs */}
-                <nav className="hidden md:flex gap-1 overflow-x-auto" aria-label="Outreach tabs">
-                    {TABS.map((t) => {
-                        const Icon = t.icon;
-                        const active = tab === t.id;
-                        return (
-                            <button
-                                key={t.id}
-                                type="button"
-                                onClick={() => switchTab(t.id)}
-                                className={clsx(
-                                    "flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap",
-                                    active
-                                        ? "border-stone-900 text-stone-900"
-                                        : "border-transparent text-stone-500 hover:text-stone-800 hover:border-stone-300"
-                                )}
-                                aria-current={active ? "page" : undefined}
-                            >
-                                <Icon className="w-4 h-4" />
-                                {t.label}
-                            </button>
-                        );
-                    })}
-                </nav>
-
-                {/* Mobile dropdown */}
-                <div className="md:hidden py-2 relative">
-                    <button
-                        type="button"
-                        onClick={() => setTabMenuOpen((o) => !o)}
-                        className="w-full flex items-center justify-between bg-white border border-stone-200 rounded-xl px-4 py-2.5 text-sm font-medium"
-                    >
-                        <span className="flex items-center gap-2">
-                            {(() => {
-                                const Icon = TABS.find((t) => t.id === tab)!.icon;
-                                return <Icon className="w-4 h-4" />;
-                            })()}
-                            {TABS.find((t) => t.id === tab)!.label}
-                        </span>
-                        <ChevronDown className={clsx("w-4 h-4 transition-transform", tabMenuOpen && "rotate-180")} />
-                    </button>
-                    {tabMenuOpen && (
-                        <div className="absolute left-0 right-0 mt-1 bg-white border border-stone-200 rounded-xl shadow-lg overflow-hidden z-30">
-                            {TABS.map((t) => {
-                                const Icon = t.icon;
-                                return (
-                                    <button
-                                        key={t.id}
-                                        type="button"
-                                        onClick={() => switchTab(t.id)}
-                                        className={clsx(
-                                            "w-full flex items-center gap-2 px-4 py-2.5 text-sm text-left hover:bg-stone-50",
-                                            tab === t.id && "bg-stone-100 font-semibold"
-                                        )}
-                                    >
-                                        <Icon className="w-4 h-4" />
-                                        {t.label}
-                                    </button>
-                                );
-                            })}
-                        </div>
+            {/* Top-level tabs */}
+            <div className="flex items-center gap-2 border-b border-stone-200">
+                <button
+                    type="button"
+                    onClick={() => setTab("prospects")}
+                    className={clsx(
+                        "text-sm font-bold px-4 py-2 border-b-2 -mb-px",
+                        tab === "prospects" ? "border-black text-black" : "border-transparent text-stone-500 hover:text-stone-700",
                     )}
-                </div>
+                >Prospects</button>
+                <button
+                    type="button"
+                    onClick={() => setTab("campaigns")}
+                    className={clsx(
+                        "text-sm font-bold px-4 py-2 border-b-2 -mb-px",
+                        tab === "campaigns" ? "border-black text-black" : "border-transparent text-stone-500 hover:text-stone-700",
+                    )}
+                >Campaigns</button>
             </div>
 
-            {/* Tab content */}
-            {tab === "overview" && <OverviewTab />}
-            {tab !== "overview" && <PlaceholderTab id={tab} />}
+            {tab === "prospects" ? <ProspectsView /> : <CampaignsView />}
         </div>
     );
 }
 
-// ---------- Overview tab ----------
-
-function OverviewTab() {
-    const [preset, setPreset] = useState<Preset>("30d");
-    const [customFrom, setCustomFrom] = useState<string>("");
-    const [customTo, setCustomTo] = useState<string>("");
-    const [compare, setCompare] = useState<boolean>(true);
-
-    const [data, setData] = useState<KpiPayload | null>(null);
+// ============================================================
+// Prospects view — unchanged from prior page (kept tight).
+// ============================================================
+function ProspectsView() {
+    const [prospects, setProspects] = useState<Prospect[]>([]);
+    const [total, setTotal] = useState(0);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-
-    const [topCampaigns, setTopCampaigns] = useState<TopCampaign[]>([]);
-    const [reputation, setReputation] = useState<DomainReputation | null>(null);
-
-    // Hydrate from URL once
-    const hydratedRef = useRef(false);
-    useEffect(() => {
-        if (hydratedRef.current) return;
-        hydratedRef.current = true;
-        const sp = new URLSearchParams(window.location.search);
-        const presetParam = sp.get("preset") as Preset | null;
-        const fromParam = sp.get("from");
-        const toParam = sp.get("to");
-        const compareParam = sp.get("compare");
-        if (presetParam && PRESETS.some((p) => p.id === presetParam)) setPreset(presetParam);
-        if (fromParam) setCustomFrom(fromParam);
-        if (toParam) setCustomTo(toParam);
-        if (compareParam === "0") setCompare(false);
-    }, []);
-
-    // Resolve the active range
-    const { from, to } = useMemo(() => {
-        if (preset === "custom") {
-            const f = parseIsoDate(customFrom);
-            const t = parseIsoDate(customTo);
-            const fallback = rangeForPreset("30d")!;
-            return {
-                from: f || fallback.from,
-                to: t || fallback.to,
-            };
-        }
-        return rangeForPreset(preset) || rangeForPreset("30d")!;
-    }, [preset, customFrom, customTo]);
-
-    // Sync to URL
-    useEffect(() => {
-        const sp = new URLSearchParams(window.location.search);
-        sp.set("preset", preset);
-        if (preset === "custom") {
-            sp.set("from", fmtIsoDate(from));
-            sp.set("to", fmtIsoDate(to));
-        } else {
-            sp.delete("from");
-            sp.delete("to");
-        }
-        sp.set("compare", compare ? "1" : "0");
-        const next = `${window.location.pathname}?${sp.toString()}${window.location.hash || "#overview"}`;
-        history.replaceState(null, "", next);
-    }, [preset, from, to, compare]);
+    const [running, setRunning] = useState(false);
+    const [status, setStatus] = useState("pending_review");
+    const [search, setSearch] = useState("");
+    const [certFilter, setCertFilter] = useState("");
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [msg, setMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
     const load = useCallback(async () => {
         setLoading(true);
-        setError(null);
         try {
-            const params = new URLSearchParams({
-                from: from.toISOString(),
-                to: to.toISOString(),
-                compare: compare ? "1" : "0",
-            });
-            const res = await fetch(`/api/admin/outreach/overview-kpis?${params.toString()}`, { cache: "no-store" });
-            if (!res.ok) {
-                const body = await res.json().catch(() => ({}));
-                throw new Error(body.error || `Request failed (${res.status})`);
-            }
-            const json = (await res.json()) as KpiPayload;
-            setData(json);
-        } catch (e) {
-            setError((e as Error).message);
-            setData(null);
-        } finally {
-            setLoading(false);
-        }
-    }, [from, to, compare]);
+            const q = new URLSearchParams({ status, limit: "100" });
+            if (search.trim()) q.set("q", search.trim());
+            if (certFilter) q.set("cert", certFilter);
+            const res = await fetch(`/api/admin/outreach/prospects?${q.toString()}`);
+            if (!res.ok) { setLoading(false); return; }
+            const body = await res.json() as { prospects: Prospect[]; total: number };
+            setProspects(body.prospects || []);
+            setTotal(body.total || 0);
+        } catch { /* non-fatal */ }
+        setLoading(false);
+        setSelectedIds(new Set());
+    }, [status, search, certFilter]);
 
-    useEffect(() => { void load(); }, [load]);
+    useEffect(() => { load(); }, [load]);
 
-    // Best-effort load of top campaigns + domain reputation. These endpoints land in later M3.x streams;
-    // until then we render an empty-state instead of erroring out.
-    useEffect(() => {
-        let cancelled = false;
-        (async () => {
-            try {
-                const res = await fetch(`/api/admin/outreach/top-campaigns?from=${from.toISOString()}&to=${to.toISOString()}&limit=5`, { cache: "no-store" });
-                if (!res.ok) throw new Error();
-                const json = await res.json();
-                if (!cancelled) setTopCampaigns(json.campaigns || []);
-            } catch {
-                if (!cancelled) setTopCampaigns([]);
+    const runDiscovery = async () => {
+        setRunning(true);
+        setMsg(null);
+        try {
+            const res = await fetch("/api/cron/discover_new_prospects?days=14");
+            const body = await res.json() as { inserted?: number; skipped_existing?: number; upstream_rows?: number };
+            if (res.ok) {
+                setMsg({ type: "success", text: `Discovery complete: ${body.inserted ?? 0} new prospects (of ${body.upstream_rows ?? 0} rows, ${body.skipped_existing ?? 0} already known).` });
+                load();
+            } else {
+                setMsg({ type: "error", text: "Discovery failed. Check CRON_SECRET header." });
             }
-        })();
-        (async () => {
-            try {
-                const res = await fetch(`/api/admin/outreach/domain-reputation`, { cache: "no-store" });
-                if (!res.ok) throw new Error();
-                const json = await res.json();
-                if (!cancelled) setReputation(json.reputation || null);
-            } catch {
-                if (!cancelled) setReputation(null);
-            }
-        })();
-        return () => { cancelled = true; };
-    }, [from, to]);
+        } catch (e) { setMsg({ type: "error", text: (e as Error).message }); }
+        setRunning(false);
+    };
+
+    const updateStatus = async (id: string, newStatus: string, rejectionReason?: string) => {
+        await fetch(`/api/admin/outreach/prospects/${id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status: newStatus, rejection_reason: rejectionReason }),
+        });
+        load();
+    };
+
+    const bulkAction = async (action: "bulk_approve" | "bulk_reject") => {
+        if (selectedIds.size === 0) return;
+        const reason = action === "bulk_reject" ? prompt("Rejection reason?") : null;
+        if (action === "bulk_reject" && !reason) return;
+        await fetch("/api/admin/outreach/prospects/bulk", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action, ids: [...selectedIds], rejection_reason: reason || undefined }),
+        });
+        load();
+    };
+
+    const toggleSelect = (id: string) => {
+        setSelectedIds(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+    };
+    const toggleSelectAll = () => {
+        if (selectedIds.size === prospects.length) setSelectedIds(new Set());
+        else setSelectedIds(new Set(prospects.map(p => p.id)));
+    };
 
     return (
-        <div className="space-y-6">
-            <RangeBar
-                preset={preset}
-                setPreset={setPreset}
-                customFrom={customFrom || fmtIsoDate(from)}
-                customTo={customTo || fmtIsoDate(to)}
-                setCustomFrom={setCustomFrom}
-                setCustomTo={setCustomTo}
-                compare={compare}
-                setCompare={setCompare}
-            />
+        <div className="space-y-4">
+            <div className="flex items-center gap-2 flex-wrap">
+                <button
+                    type="button"
+                    onClick={runDiscovery}
+                    disabled={running}
+                    className="bg-black text-white text-xs font-bold px-4 py-2 rounded-xl inline-flex items-center gap-2 disabled:opacity-50"
+                    title="Pull the last 14 days from SAM.gov now"
+                >
+                    {running ? <Loader2 className="w-4 h-4 animate-spin" /> : <PlayCircle className="w-4 h-4" />}
+                    {running ? "Running…" : "Run Discovery (14 days)"}
+                </button>
+                <button
+                    type="button"
+                    onClick={load}
+                    className="text-xs font-bold text-stone-600 bg-white border border-stone-200 px-3 py-2 rounded-xl inline-flex items-center gap-1.5 hover:bg-stone-50"
+                >
+                    <RefreshCw className="w-3.5 h-3.5" /> Refresh
+                </button>
+                <span className="ml-auto text-xs text-stone-500">{total.toLocaleString()} prospects</span>
+            </div>
 
-            {error && (
-                <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700 flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4" /> {error}
+            {msg && (
+                <div className={clsx(
+                    "text-xs px-3 py-2 rounded-lg border flex items-center gap-2",
+                    msg.type === "success" ? "bg-emerald-50 text-emerald-800 border-emerald-200" : "bg-rose-50 text-rose-700 border-rose-200",
+                )}>
+                    {msg.type === "success" ? <Check className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
+                    {msg.text}
                 </div>
             )}
 
-            <KpiGrid data={data} loading={loading} />
-
-            <TimeSeries daily={data?.daily || []} loading={loading} />
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                <div className="lg:col-span-2">
-                    <TopCampaignsTable campaigns={topCampaigns} loading={loading} />
-                </div>
-                <div>
-                    <ReputationStrip reputation={reputation} current={data?.current} />
-                </div>
-            </div>
-        </div>
-    );
-}
-
-// ---------- Range bar ----------
-
-function RangeBar(props: {
-    preset: Preset;
-    setPreset: (p: Preset) => void;
-    customFrom: string;
-    customTo: string;
-    setCustomFrom: (s: string) => void;
-    setCustomTo: (s: string) => void;
-    compare: boolean;
-    setCompare: (b: boolean) => void;
-}) {
-    const { preset, setPreset, customFrom, customTo, setCustomFrom, setCustomTo, compare, setCompare } = props;
-    return (
-        <div className="bg-white border border-stone-200 rounded-2xl p-3 flex items-center gap-2 flex-wrap">
-            <div className="flex items-center gap-1 flex-wrap">
-                {PRESETS.map((p) => (
+            <div className="flex items-center gap-2 flex-wrap">
+                {PROSPECT_TABS.map(t => (
                     <button
-                        key={p.id}
+                        key={t.key}
                         type="button"
-                        onClick={() => setPreset(p.id)}
+                        onClick={() => setStatus(t.key)}
                         className={clsx(
-                            "px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors",
-                            preset === p.id
-                                ? "bg-stone-900 text-white"
-                                : "bg-stone-100 text-stone-600 hover:bg-stone-200"
+                            "text-xs font-bold uppercase tracking-widest px-3 py-1.5 rounded-full border transition-colors",
+                            status === t.key ? "bg-black text-white border-black" : "bg-white text-stone-600 border-stone-200 hover:bg-stone-50",
                         )}
-                    >
-                        {p.label}
+                    >{t.label}</button>
+                ))}
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+                <div className="relative flex-1 min-w-[260px]">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-stone-400" />
+                    <input
+                        type="text"
+                        placeholder="Company name, UEI, or website…"
+                        value={search}
+                        onChange={e => setSearch(e.target.value)}
+                        onKeyDown={e => { if (e.key === "Enter") load(); }}
+                        className="w-full pl-9 pr-3 py-2 border border-stone-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-black"
+                    />
+                </div>
+                <select
+                    value={certFilter}
+                    onChange={e => setCertFilter(e.target.value)}
+                    aria-label="Cert filter"
+                    className="text-sm px-3 py-2 border border-stone-200 rounded-xl bg-white outline-none focus:ring-2 focus:ring-black"
+                >
+                    <option value="">All certifications</option>
+                    <option value="8(a)">8(a)</option>
+                    <option value="HUBZone">HUBZone</option>
+                    <option value="SDVOSB">SDVOSB</option>
+                    <option value="WOSB">WOSB</option>
+                    <option value="EDWOSB">EDWOSB</option>
+                    <option value="VOSB">VOSB</option>
+                </select>
+            </div>
+
+            {selectedIds.size > 0 && (
+                <div className="sticky top-0 z-10 bg-black text-white rounded-xl px-4 py-2 flex items-center gap-3">
+                    <span className="text-xs font-bold">{selectedIds.size} selected</span>
+                    <div className="flex-1" />
+                    <button type="button" onClick={() => bulkAction("bulk_approve")}
+                        className="text-xs font-bold bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg inline-flex items-center gap-1">
+                        <Check className="w-3 h-3" /> Approve {selectedIds.size}
                     </button>
-                ))}
-            </div>
-
-            {preset === "custom" && (
-                <div className="flex items-center gap-2 ml-2">
-                    <input
-                        type="date"
-                        value={customFrom}
-                        onChange={(e) => setCustomFrom(e.target.value)}
-                        className="border border-stone-200 rounded-lg px-2 py-1 text-xs"
-                    />
-                    <span className="text-stone-400 text-xs">to</span>
-                    <input
-                        type="date"
-                        value={customTo}
-                        onChange={(e) => setCustomTo(e.target.value)}
-                        className="border border-stone-200 rounded-lg px-2 py-1 text-xs"
-                    />
+                    <button type="button" onClick={() => bulkAction("bulk_reject")}
+                        className="text-xs font-bold bg-rose-500 hover:bg-rose-600 text-white px-3 py-1.5 rounded-lg inline-flex items-center gap-1">
+                        <X className="w-3 h-3" /> Reject {selectedIds.size}
+                    </button>
+                    <button type="button" onClick={() => setSelectedIds(new Set())} className="text-xs text-white/70 hover:text-white">Clear</button>
                 </div>
             )}
 
-            <label className="ml-auto flex items-center gap-2 text-xs font-medium text-stone-700 cursor-pointer">
-                <input
-                    type="checkbox"
-                    checked={compare}
-                    onChange={(e) => setCompare(e.target.checked)}
-                    className="rounded border-stone-300"
-                />
-                Compare to previous period
-            </label>
-        </div>
-    );
-}
-
-// ---------- KPI grid ----------
-
-const KPI_DEFS = [
-    { key: "sent", label: "Sent", icon: Send, color: "text-blue-500", rateOf: null as keyof KpiRow | null, benchmark: null as keyof typeof BENCHMARKS | null },
-    { key: "delivered", label: "Delivered", icon: MailCheck, color: "text-emerald-500", rateOf: "sent" as keyof KpiRow, benchmark: "delivered_rate" as keyof typeof BENCHMARKS },
-    { key: "opened", label: "Opened", icon: Mail, color: "text-violet-500", rateOf: "delivered" as keyof KpiRow, benchmark: "open_rate" as keyof typeof BENCHMARKS },
-    { key: "clicked", label: "Clicked", icon: MousePointerClick, color: "text-amber-500", rateOf: "delivered" as keyof KpiRow, benchmark: "click_rate" as keyof typeof BENCHMARKS },
-    { key: "replied", label: "Replied", icon: MessageCircle, color: "text-cyan-500", rateOf: "delivered" as keyof KpiRow, benchmark: "reply_rate" as keyof typeof BENCHMARKS },
-    { key: "unsubscribed", label: "Unsubscribed", icon: UserMinus, color: "text-red-500", rateOf: "delivered" as keyof KpiRow, benchmark: "unsubscribe_rate" as keyof typeof BENCHMARKS },
-] as const;
-
-function KpiGrid({ data, loading }: { data: KpiPayload | null; loading: boolean }) {
-    if (loading && !data) {
-        return (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-                {KPI_DEFS.map((d) => (
-                    <div key={d.key} className="bg-white border border-stone-200 rounded-2xl p-4 h-32 flex items-center justify-center">
-                        <Loader2 className="w-4 h-4 animate-spin text-stone-300" />
+            <div className="bg-white border border-stone-200 rounded-2xl overflow-hidden">
+                {loading ? (
+                    <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-stone-400" /></div>
+                ) : prospects.length === 0 ? (
+                    <div className="py-12 text-center text-sm text-stone-500">
+                        No prospects. Click <strong>Run Discovery</strong> to fetch the last 14 days from SAM.gov.
                     </div>
-                ))}
-            </div>
-        );
-    }
-
-    const curr = data?.current;
-    const deltas = data?.deltas;
-
-    return (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            {KPI_DEFS.map((d) => {
-                const n = Number(curr?.[d.key as keyof KpiRow] || 0);
-                const rateValue = d.rateOf ? rate(n, Number(curr?.[d.rateOf] || 0)) : null;
-                const benchmark = d.benchmark ? BENCHMARKS[d.benchmark] : null;
-                const delta = deltas ? deltas[d.key] : null;
-                const Icon = d.icon;
-
-                return (
-                    <div key={d.key} className="bg-white border border-stone-200 rounded-2xl p-4">
-                        <div className="flex items-center justify-between mb-1">
-                            <Icon className={clsx("w-4 h-4", d.color)} />
-                            {delta != null && <DeltaBadge value={delta} />}
-                        </div>
-                        <p className="text-2xl font-black tabular-nums">{fmtNumber(n)}</p>
-                        <p className="text-[10px] text-stone-500 uppercase tracking-wide">{d.label}</p>
-                        {rateValue != null && (
-                            <div className="mt-2 flex items-center justify-between gap-2">
-                                <span className="text-xs font-semibold text-stone-700">{fmtRate(rateValue)}</span>
-                                {benchmark != null && <BenchmarkBadge rateValue={rateValue} target={benchmark} />}
-                            </div>
-                        )}
-                    </div>
-                );
-            })}
-        </div>
-    );
-}
-
-function DeltaBadge({ value }: { value: number | null }) {
-    if (value == null) return <span className="text-[10px] text-stone-400">—</span>;
-    if (value === 0) {
-        return (
-            <span className="text-[10px] inline-flex items-center gap-0.5 text-stone-500 font-semibold">
-                <Minus className="w-3 h-3" /> 0%
-            </span>
-        );
-    }
-    const up = value > 0;
-    return (
-        <span
-            className={clsx(
-                "text-[10px] inline-flex items-center gap-0.5 font-semibold",
-                up ? "text-emerald-600" : "text-red-600"
-            )}
-        >
-            {up ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-            {Math.abs(value).toFixed(0)}%
-        </span>
-    );
-}
-
-function BenchmarkBadge({ rateValue, target }: { rateValue: number; target: number }) {
-    const { tone, label } = benchmarkBadge(rateValue, target);
-    const tones: Record<string, string> = {
-        emerald: "bg-emerald-50 text-emerald-700 border-emerald-200",
-        amber: "bg-amber-50 text-amber-700 border-amber-200",
-        red: "bg-red-50 text-red-700 border-red-200",
-    };
-    return (
-        <span
-            title={`Benchmark ${target}% · ${label}`}
-            className={clsx("text-[9px] font-bold uppercase border rounded-full px-1.5 py-0.5", tones[tone])}
-        >
-            {target}%
-        </span>
-    );
-}
-
-// ---------- Time series chart (lightweight SVG) ----------
-
-function TimeSeries({ daily, loading }: { daily: DailyRow[]; loading: boolean }) {
-    return (
-        <div className="bg-white border border-stone-200 rounded-2xl p-5">
-            <div className="flex items-center justify-between mb-3">
-                <h2 className="font-bold text-sm text-stone-900 flex items-center gap-2">
-                    <BarChart3 className="w-4 h-4" /> Daily activity
-                </h2>
-                <div className="flex items-center gap-3 text-[10px] text-stone-500 uppercase tracking-wide">
-                    <Legend color="bg-blue-500" label="Sent" />
-                    <Legend color="bg-violet-500" label="Opened" />
-                    <Legend color="bg-cyan-500" label="Replied" />
-                </div>
-            </div>
-            {loading && daily.length === 0 ? (
-                <div className="h-48 flex items-center justify-center">
-                    <Loader2 className="w-5 h-5 animate-spin text-stone-300" />
-                </div>
-            ) : daily.length === 0 ? (
-                <div className="h-48 flex items-center justify-center text-xs text-stone-400">
-                    No activity in this range yet.
-                </div>
-            ) : (
-                <LineChart daily={daily} />
-            )}
-        </div>
-    );
-}
-
-function Legend({ color, label }: { color: string; label: string }) {
-    return (
-        <span className="inline-flex items-center gap-1">
-            <span className={clsx("w-2 h-2 rounded-full", color)} />
-            {label}
-        </span>
-    );
-}
-
-function LineChart({ daily }: { daily: DailyRow[] }) {
-    const width = 800;
-    const height = 200;
-    const pad = { top: 12, right: 12, bottom: 24, left: 36 };
-    const w = width - pad.left - pad.right;
-    const h = height - pad.top - pad.bottom;
-
-    const maxVal = Math.max(
-        1,
-        ...daily.flatMap((d) => [d.sent, d.opened, d.replied])
-    );
-
-    const x = (i: number) => pad.left + (daily.length <= 1 ? w / 2 : (i / (daily.length - 1)) * w);
-    const y = (v: number) => pad.top + h - (v / maxVal) * h;
-
-    const path = (key: keyof DailyRow) =>
-        daily
-            .map((d, i) => `${i === 0 ? "M" : "L"} ${x(i).toFixed(1)} ${y(Number(d[key])).toFixed(1)}`)
-            .join(" ");
-
-    const ticks = 4;
-    const tickVals = Array.from({ length: ticks + 1 }, (_, i) => Math.round((maxVal * i) / ticks));
-
-    return (
-        <div className="overflow-x-auto">
-            <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-48">
-                {/* Y axis grid */}
-                {tickVals.map((tv, i) => (
-                    <g key={i}>
-                        <line
-                            x1={pad.left}
-                            x2={pad.left + w}
-                            y1={y(tv)}
-                            y2={y(tv)}
-                            stroke="#f5f5f4"
-                            strokeWidth={1}
-                        />
-                        <text x={pad.left - 6} y={y(tv) + 3} textAnchor="end" fontSize={9} fill="#a8a29e">
-                            {fmtNumber(tv)}
-                        </text>
-                    </g>
-                ))}
-
-                {/* X axis labels (first / mid / last) */}
-                {daily.length > 0 && (
-                    <>
-                        <text x={x(0)} y={height - 6} fontSize={9} fill="#a8a29e">
-                            {daily[0].day.slice(5)}
-                        </text>
-                        {daily.length > 2 && (
-                            <text x={x(Math.floor(daily.length / 2))} y={height - 6} fontSize={9} fill="#a8a29e" textAnchor="middle">
-                                {daily[Math.floor(daily.length / 2)].day.slice(5)}
-                            </text>
-                        )}
-                        <text x={x(daily.length - 1)} y={height - 6} fontSize={9} fill="#a8a29e" textAnchor="end">
-                            {daily[daily.length - 1].day.slice(5)}
-                        </text>
-                    </>
-                )}
-
-                <path d={path("sent")} stroke="#3b82f6" strokeWidth={1.75} fill="none" />
-                <path d={path("opened")} stroke="#8b5cf6" strokeWidth={1.75} fill="none" />
-                <path d={path("replied")} stroke="#06b6d4" strokeWidth={1.75} fill="none" />
-            </svg>
-        </div>
-    );
-}
-
-// ---------- Top campaigns ----------
-
-function TopCampaignsTable({ campaigns, loading }: { campaigns: TopCampaign[]; loading: boolean }) {
-    return (
-        <div className="bg-white border border-stone-200 rounded-2xl overflow-hidden">
-            <div className="px-5 py-3 border-b border-stone-100 flex items-center justify-between">
-                <h2 className="font-bold text-sm flex items-center gap-2">
-                    <Megaphone className="w-4 h-4" /> Top campaigns
-                </h2>
-                <span className="text-[10px] text-stone-400 uppercase tracking-wide">By reply rate</span>
-            </div>
-            {loading && campaigns.length === 0 ? (
-                <div className="h-32 flex items-center justify-center">
-                    <Loader2 className="w-4 h-4 animate-spin text-stone-300" />
-                </div>
-            ) : campaigns.length === 0 ? (
-                <div className="px-5 py-10 text-center text-xs text-stone-400">
-                    No campaigns ran in this range yet.
-                </div>
-            ) : (
-                <table className="w-full text-sm">
-                    <thead>
-                        <tr className="border-b border-stone-100 text-[10px] text-stone-400 uppercase">
-                            <th className="text-left px-5 py-2.5">Campaign</th>
-                            <th className="text-center px-3 py-2.5">Status</th>
-                            <th className="text-right px-3 py-2.5">Sent</th>
-                            <th className="text-right px-5 py-2.5">Reply rate</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {campaigns.map((c) => (
-                            <tr key={c.id} className="border-b border-stone-50 last:border-0 hover:bg-stone-50">
-                                <td className="px-5 py-3">
-                                    <a href={`/admin/outreach/campaigns/${c.id}`} className="font-medium text-stone-900 hover:underline">
-                                        {c.name}
-                                    </a>
-                                </td>
-                                <td className="text-center px-3 py-3">
-                                    <span className="inline-block bg-stone-100 text-stone-700 text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase">
-                                        {c.status}
-                                    </span>
-                                </td>
-                                <td className="text-right px-3 py-3 tabular-nums">{fmtNumber(c.sent)}</td>
-                                <td className="text-right px-5 py-3 font-semibold tabular-nums">
-                                    {fmtRate(c.reply_rate)}
-                                </td>
+                ) : (
+                    <table className="w-full text-sm">
+                        <thead className="bg-stone-50 border-b border-stone-200">
+                            <tr className="text-left text-[10px] font-bold uppercase tracking-widest text-stone-500">
+                                <th className="px-3 py-2 w-10">
+                                    <button type="button" onClick={toggleSelectAll} title="Select all">
+                                        {selectedIds.size === prospects.length && prospects.length > 0
+                                            ? <CheckSquare className="w-4 h-4" />
+                                            : <Square className="w-4 h-4" />}
+                                    </button>
+                                </th>
+                                <th className="px-3 py-2">Company</th>
+                                <th className="px-3 py-2">Score</th>
+                                <th className="px-3 py-2">Certs</th>
+                                <th className="px-3 py-2">NAICS</th>
+                                <th className="px-3 py-2">Location</th>
+                                <th className="px-3 py-2">Registered</th>
+                                <th className="px-3 py-2 text-right">Actions</th>
                             </tr>
-                        ))}
-                    </tbody>
-                </table>
-            )}
+                        </thead>
+                        <tbody>
+                            {prospects.map(p => (
+                                <tr key={p.id} className="border-b border-stone-100 hover:bg-stone-50">
+                                    <td className="px-3 py-2">
+                                        <button type="button" onClick={() => toggleSelect(p.id)} title={`Select ${p.company_name}`}>
+                                            {selectedIds.has(p.id) ? <CheckSquare className="w-4 h-4 text-emerald-600" /> : <Square className="w-4 h-4 text-stone-400" />}
+                                        </button>
+                                    </td>
+                                    <td className="px-3 py-2 align-top">
+                                        <p className="font-bold text-black">{p.company_name}</p>
+                                        <div className="flex items-center gap-2 text-[10px] text-stone-500 mt-0.5 flex-wrap">
+                                            {p.uei && <span className="font-mono inline-flex items-center gap-0.5"><Hash className="w-2.5 h-2.5" />{p.uei}</span>}
+                                            {p.website && (
+                                                <a href={p.website} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 hover:text-black truncate max-w-[200px]">
+                                                    <Globe className="w-2.5 h-2.5" />{p.website.replace(/^https?:\/\//, "")}
+                                                </a>
+                                            )}
+                                        </div>
+                                    </td>
+                                    <td className="px-3 py-2 align-top">
+                                        <span className={clsx(
+                                            "text-xs font-black px-2 py-0.5 rounded border",
+                                            p.match_score >= 70 ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                                : p.match_score >= 40 ? "bg-amber-50 text-amber-700 border-amber-200"
+                                                : "bg-stone-50 text-stone-600 border-stone-200",
+                                        )}>{p.match_score}</span>
+                                    </td>
+                                    <td className="px-3 py-2 align-top">
+                                        <div className="flex flex-wrap gap-1">
+                                            {p.certifications.length === 0
+                                                ? <span className="text-[10px] text-stone-300">—</span>
+                                                : p.certifications.map(c => (
+                                                    <span key={c} className="text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded uppercase">{c}</span>
+                                                ))}
+                                        </div>
+                                    </td>
+                                    <td className="px-3 py-2 align-top">
+                                        <div className="flex flex-wrap gap-1">
+                                            {p.naics_codes.slice(0, 3).map(n => (
+                                                <span key={n} className="text-[10px] font-mono bg-stone-100 text-stone-600 px-1.5 py-0.5 rounded">{n}</span>
+                                            ))}
+                                            {p.naics_codes.length > 3 && <span className="text-[10px] text-stone-400">+{p.naics_codes.length - 3}</span>}
+                                        </div>
+                                    </td>
+                                    <td className="px-3 py-2 align-top text-xs text-stone-600">
+                                        {p.city || p.state ? (
+                                            <span className="inline-flex items-center gap-0.5"><MapPin className="w-3 h-3" />{[p.city, p.state].filter(Boolean).join(", ")}</span>
+                                        ) : <span className="text-stone-300">—</span>}
+                                    </td>
+                                    <td className="px-3 py-2 align-top text-xs text-stone-600">
+                                        {p.registration_date ? (
+                                            <span className="inline-flex items-center gap-0.5"><Calendar className="w-3 h-3" />{new Date(p.registration_date).toLocaleDateString()}</span>
+                                        ) : <span className="text-stone-300">—</span>}
+                                    </td>
+                                    <td className="px-3 py-2 text-right align-top">
+                                        {p.status === "pending_review" ? (
+                                            <div className="inline-flex items-center gap-1">
+                                                <button type="button" onClick={() => updateStatus(p.id, "approved")}
+                                                    className="p-1.5 rounded text-emerald-600 hover:bg-emerald-50" title="Approve">
+                                                    <Check className="w-3.5 h-3.5" />
+                                                </button>
+                                                <button type="button" onClick={() => {
+                                                    const reason = prompt("Rejection reason?");
+                                                    if (reason) updateStatus(p.id, "rejected", reason);
+                                                }}
+                                                    className="p-1.5 rounded text-rose-600 hover:bg-rose-50" title="Reject">
+                                                    <X className="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <span className={clsx(
+                                                "text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded border",
+                                                p.status === "approved" ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                                    : p.status === "rejected" ? "bg-rose-50 text-rose-700 border-rose-200"
+                                                    : p.status === "sent" ? "bg-blue-50 text-blue-700 border-blue-200"
+                                                    : "bg-stone-50 text-stone-600 border-stone-200",
+                                            )}>{p.status}</span>
+                                        )}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                )}
+            </div>
         </div>
     );
 }
 
-// ---------- Reputation strip ----------
+// ============================================================
+// Campaigns view
+// ============================================================
+function CampaignsView() {
+    const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [filter, setFilter] = useState("all");
+    const [modalOpen, setModalOpen] = useState(false);
+    const [editingId, setEditingId] = useState<string | undefined>();
 
-function ReputationStrip({ reputation, current }: { reputation: DomainReputation | null; current: KpiRow | undefined }) {
-    const delivered = Number(current?.delivered || 0);
-    const bounceRate = delivered ? (Number(current?.bounced || 0) / delivered) * 100 : 0;
-    const complaintRate = delivered ? (Number(current?.complaint || 0) / delivered) * 100 : 0;
+    const load = useCallback(async () => {
+        setLoading(true);
+        try {
+            const url = `/api/admin/outreach/campaigns?status=${filter}`;
+            const res = await fetch(url);
+            if (!res.ok) { setLoading(false); return; }
+            const body = await res.json() as { campaigns: Campaign[] };
+            setCampaigns(body.campaigns || []);
+        } catch { /* non-fatal */ }
+        setLoading(false);
+    }, [filter]);
+
+    useEffect(() => { load(); }, [load]);
+
+    const transition = async (id: string, status: string) => {
+        const res = await fetch(`/api/admin/outreach/campaigns/${id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status }),
+        });
+        if (res.ok) load();
+    };
+
+    const archive = async (id: string) => {
+        if (!confirm("Archive this campaign? It stops sending and disappears from the default view.")) return;
+        const res = await fetch(`/api/admin/outreach/campaigns/${id}`, { method: "DELETE" });
+        if (res.ok) load();
+    };
 
     return (
-        <div className="bg-white border border-stone-200 rounded-2xl p-5 space-y-3">
-            <div className="flex items-center justify-between">
-                <h2 className="font-bold text-sm flex items-center gap-2">
-                    <ShieldCheck className="w-4 h-4" /> Domain reputation
-                </h2>
-                {reputation?.last_checked && (
-                    <span className="text-[10px] text-stone-400 uppercase">
-                        Checked {new Date(reputation.last_checked).toLocaleDateString()}
-                    </span>
+        <div className="space-y-4">
+            <div className="flex items-center gap-2 flex-wrap">
+                <button
+                    type="button"
+                    onClick={() => { setEditingId(undefined); setModalOpen(true); }}
+                    className="bg-black text-white text-xs font-bold px-4 py-2 rounded-xl inline-flex items-center gap-2"
+                >
+                    <Plus className="w-4 h-4" /> Create campaign
+                </button>
+                <button
+                    type="button"
+                    onClick={load}
+                    className="text-xs font-bold text-stone-600 bg-white border border-stone-200 px-3 py-2 rounded-xl inline-flex items-center gap-1.5 hover:bg-stone-50"
+                >
+                    <RefreshCw className="w-3.5 h-3.5" /> Refresh
+                </button>
+                <div className="ml-auto flex items-center gap-1">
+                    {CAMPAIGN_FILTERS.map(f => (
+                        <button
+                            key={f.key}
+                            type="button"
+                            onClick={() => setFilter(f.key)}
+                            className={clsx(
+                                "text-xs font-bold uppercase tracking-widest px-3 py-1.5 rounded-full border",
+                                filter === f.key ? "bg-black text-white border-black" : "bg-white text-stone-600 border-stone-200 hover:bg-stone-50",
+                            )}
+                        >{f.label}</button>
+                    ))}
+                </div>
+            </div>
+
+            <div className="bg-white border border-stone-200 rounded-2xl overflow-hidden">
+                {loading ? (
+                    <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-stone-400" /></div>
+                ) : campaigns.length === 0 ? (
+                    <div className="py-12 text-center text-sm text-stone-500">
+                        No campaigns yet. Hit <strong>Create campaign</strong> to start.
+                    </div>
+                ) : (
+                    <table className="w-full text-sm">
+                        <thead className="bg-stone-50 border-b border-stone-200">
+                            <tr className="text-left text-[10px] font-bold uppercase tracking-widest text-stone-500">
+                                <th className="px-3 py-2">Name</th>
+                                <th className="px-3 py-2">Channels</th>
+                                <th className="px-3 py-2">Status</th>
+                                <th className="px-3 py-2 text-right">Contacts</th>
+                                <th className="px-3 py-2 text-right">Sent</th>
+                                <th className="px-3 py-2 text-right">Reply rate</th>
+                                <th className="px-3 py-2">Started</th>
+                                <th className="px-3 py-2 text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {campaigns.map(c => (
+                                <tr key={c.id} className="border-b border-stone-100 hover:bg-stone-50">
+                                    <td className="px-3 py-2">
+                                        <p className="font-bold text-black">{c.name}</p>
+                                        {c.description && <p className="text-[10px] text-stone-500 truncate max-w-md">{c.description}</p>}
+                                    </td>
+                                    <td className="px-3 py-2">
+                                        <div className="flex items-center gap-1">
+                                            {c.channels.includes("email") && (
+                                                <span className="inline-flex items-center gap-0.5 text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded">
+                                                    <Mail className="w-2.5 h-2.5" /> Email
+                                                </span>
+                                            )}
+                                            {c.channels.includes("sms") && (
+                                                <span className="inline-flex items-center gap-0.5 text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200 px-1.5 py-0.5 rounded">
+                                                    <MessageSquare className="w-2.5 h-2.5" /> SMS
+                                                </span>
+                                            )}
+                                        </div>
+                                    </td>
+                                    <td className="px-3 py-2">
+                                        <span className={clsx(
+                                            "text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded border",
+                                            c.status === "active" ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                                : c.status === "paused" ? "bg-amber-50 text-amber-700 border-amber-200"
+                                                : c.status === "completed" ? "bg-blue-50 text-blue-700 border-blue-200"
+                                                : c.status === "archived" ? "bg-stone-100 text-stone-500 border-stone-200"
+                                                : "bg-white text-stone-600 border-stone-200",
+                                        )}>{c.status}</span>
+                                    </td>
+                                    <td className="px-3 py-2 text-right text-xs text-stone-700">{c.contacts_count.toLocaleString()}</td>
+                                    <td className="px-3 py-2 text-right text-xs text-stone-700">{c.sent_count.toLocaleString()}</td>
+                                    <td className="px-3 py-2 text-right text-xs text-stone-700">
+                                        {c.sent_count > 0 ? `${c.reply_rate.toFixed(1)}%` : "—"}
+                                    </td>
+                                    <td className="px-3 py-2 text-xs text-stone-600">
+                                        {c.started_at ? new Date(c.started_at).toLocaleDateString() : <span className="text-stone-300">—</span>}
+                                    </td>
+                                    <td className="px-3 py-2 text-right">
+                                        <div className="inline-flex items-center gap-1">
+                                            <button
+                                                type="button"
+                                                onClick={() => { setEditingId(c.id); setModalOpen(true); }}
+                                                className="p-1.5 rounded text-stone-600 hover:bg-stone-100"
+                                                title="Edit"
+                                            >
+                                                <Pencil className="w-3.5 h-3.5" />
+                                            </button>
+                                            {c.status === "active" && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => transition(c.id, "paused")}
+                                                    className="p-1.5 rounded text-amber-700 hover:bg-amber-50"
+                                                    title="Pause"
+                                                >
+                                                    <Pause className="w-3.5 h-3.5" />
+                                                </button>
+                                            )}
+                                            {(c.status === "paused" || c.status === "draft") && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => transition(c.id, "active")}
+                                                    className="p-1.5 rounded text-emerald-700 hover:bg-emerald-50"
+                                                    title="Activate"
+                                                >
+                                                    <Play className="w-3.5 h-3.5" />
+                                                </button>
+                                            )}
+                                            {c.status !== "archived" && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => archive(c.id)}
+                                                    className="p-1.5 rounded text-rose-600 hover:bg-rose-50"
+                                                    title="Archive"
+                                                >
+                                                    <Archive className="w-3.5 h-3.5" />
+                                                </button>
+                                            )}
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
                 )}
             </div>
 
-            {reputation ? (
-                <p className="text-xs text-stone-500 -mt-1">{reputation.domain}</p>
-            ) : (
-                <p className="text-xs text-stone-400 -mt-1">Domain check pending.</p>
-            )}
-
-            <div className="grid grid-cols-3 gap-2">
-                <AuthBadge label="SPF" state={reputation?.spf ?? "unknown"} />
-                <AuthBadge label="DKIM" state={reputation?.dkim ?? "unknown"} />
-                <AuthBadge label="DMARC" state={reputation?.dmarc ?? "unknown"} />
-            </div>
-
-            <div className="border-t border-stone-100 pt-3 space-y-2">
-                <ReputationRow label="Bounce rate" value={bounceRate} target={BENCHMARKS.bounce_rate} reverse />
-                <ReputationRow label="Complaint rate" value={complaintRate} target={0.1} reverse />
-                <ReputationRow label="Delivered" value={delivered ? rate(delivered, Number(current?.sent || 0)) : 0} target={BENCHMARKS.delivered_rate} />
-            </div>
-        </div>
-    );
-}
-
-function AuthBadge({ label, state }: { label: string; state: "pass" | "fail" | "unknown" }) {
-    const tone =
-        state === "pass" ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-        : state === "fail" ? "bg-red-50 text-red-700 border-red-200"
-        : "bg-stone-50 text-stone-500 border-stone-200";
-    return (
-        <div className={clsx("border rounded-lg px-2 py-1.5 text-center", tone)}>
-            <p className="text-[10px] font-bold uppercase tracking-wide">{label}</p>
-            <p className="text-[10px] font-semibold capitalize">{state}</p>
-        </div>
-    );
-}
-
-function ReputationRow({ label, value, target, reverse }: { label: string; value: number; target: number; reverse?: boolean }) {
-    // For bounce/complaint, lower is better. Flip the badge logic.
-    let tone: "emerald" | "amber" | "red" = "emerald";
-    if (reverse) {
-        if (value > target * 1.5) tone = "red";
-        else if (value > target) tone = "amber";
-    } else {
-        const ratio = value / target;
-        if (ratio < 0.8) tone = "red";
-        else if (ratio < 1) tone = "amber";
-    }
-    const tones: Record<string, string> = {
-        emerald: "bg-emerald-500",
-        amber: "bg-amber-500",
-        red: "bg-red-500",
-    };
-    return (
-        <div className="flex items-center justify-between text-xs">
-            <span className="flex items-center gap-2 text-stone-600">
-                <span className={clsx("w-2 h-2 rounded-full", tones[tone])} />
-                {label}
-            </span>
-            <span className="font-semibold tabular-nums text-stone-900">{fmtRate(value)}</span>
-        </div>
-    );
-}
-
-// ---------- Placeholder for other tabs ----------
-
-function PlaceholderTab({ id }: { id: TabId }) {
-    const meta = TABS.find((t) => t.id === id)!;
-    const Icon = meta.icon;
-    return (
-        <div className="bg-white border border-stone-200 rounded-2xl p-12 text-center">
-            <Icon className="w-8 h-8 text-stone-300 mx-auto mb-3" />
-            <h2 className="font-bold text-stone-800">{meta.label}</h2>
-            <p className="text-sm text-stone-500 mt-1">This tab lands in a follow-up stream.</p>
+            <CampaignBuilderModal
+                open={modalOpen}
+                onClose={() => setModalOpen(false)}
+                onSaved={load}
+                editingId={editingId}
+            />
         </div>
     );
 }
