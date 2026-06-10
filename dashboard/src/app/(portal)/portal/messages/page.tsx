@@ -127,7 +127,9 @@ export default function PortalMessagesPage() {
         setRecording(true);
     };
 
-    // File upload
+    // File upload — attaches a Supabase Storage path token to the message.
+    // The bucket is private, so we embed a `storage://` reference and resolve
+    // it to a short-lived signed URL when the user clicks the link.
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file || !profile) return;
@@ -141,11 +143,54 @@ export default function PortalMessagesPage() {
             e.target.value = "";
             return;
         }
-        const { data: urlData } = supabase.storage.from("client-docs").getPublicUrl(path);
-        const msg = `📎 [${file.name}](${urlData.publicUrl})`;
+        const msg = `📎 [${file.name}](storage://${path})`;
         await handleSend(msg);
         setUploading(false);
         e.target.value = "";
+    };
+
+    // Resolve `storage://<path>` references inside a message to short-lived
+    // signed URLs and open in a new tab.
+    const openStorageRef = useCallback(async (storagePath: string) => {
+        try {
+            const res = await fetch(`/api/documents/signed-url?path=${encodeURIComponent(storagePath)}`);
+            if (!res.ok) {
+                alert("Could not open attachment. Please try again.");
+                return;
+            }
+            const { url } = await res.json();
+            if (url) window.open(url, "_blank", "noopener,noreferrer");
+        } catch {
+            alert("Could not open attachment. Please try again.");
+        }
+    }, []);
+
+    // Render a message body that may contain markdown-style attachment links
+    // like `📎 [name.pdf](storage://path/to/file.pdf)` — turn each into a
+    // click handler that mints a signed URL on demand.
+    const renderMessageBody = (text: string) => {
+        const parts: React.ReactNode[] = [];
+        const re = /\[([^\]]+)\]\(storage:\/\/([^)]+)\)/g;
+        let lastIndex = 0;
+        let m: RegExpExecArray | null;
+        while ((m = re.exec(text))) {
+            if (m.index > lastIndex) parts.push(text.slice(lastIndex, m.index));
+            const label = m[1];
+            const path = m[2];
+            parts.push(
+                <button
+                    key={`${m.index}-${path}`}
+                    type="button"
+                    onClick={() => openStorageRef(path)}
+                    className="underline hover:no-underline font-medium"
+                >
+                    {label}
+                </button>
+            );
+            lastIndex = re.lastIndex;
+        }
+        if (lastIndex < text.length) parts.push(text.slice(lastIndex));
+        return parts.length > 0 ? parts : text;
     };
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -407,7 +452,7 @@ export default function PortalMessagesPage() {
                                                         : "bg-white border border-stone-200 text-stone-800 rounded-bl-md shadow-sm"
                                                 )}
                                             >
-                                                {msg.message}
+                                                {renderMessageBody(msg.message)}
                                             </div>
 
                                             {/* Timestamp + read status */}

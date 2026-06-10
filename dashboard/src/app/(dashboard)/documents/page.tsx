@@ -99,15 +99,16 @@ export default function DocumentsPage() {
                 e.target.value = "";
                 return;
             }
-            const { data: urlData } = supabase.storage.from("client-docs").getPublicUrl(path);
 
+            // `client-docs` is a private bucket — never store a public URL.
+            // We persist only `storage_path` and mint short-lived signed URLs on demand.
             const res = await fetch("/api/documents", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     name: file.name,
                     category: selectedCategory,
-                    file_url: urlData.publicUrl,
+                    file_url: null,
                     storage_path: path,
                     file_size: file.size,
                     mime_type: file.type,
@@ -133,6 +134,28 @@ export default function DocumentsPage() {
         if (!confirm("Delete this document?")) return;
         const res = await fetch(`/api/documents/${id}`, { method: "DELETE" });
         if (res.ok) setDocs(prev => prev.filter(d => d.id !== id));
+    };
+
+    // Mint a fresh signed URL each time the user clicks "open / download".
+    // The bucket is private — never share `file_url` directly.
+    const openDoc = async (doc: UserDocument) => {
+        const path = doc.storage_path;
+        if (!path) {
+            // Legacy rows that pre-date private bucket may still have a public URL.
+            if (doc.file_url) window.open(doc.file_url, "_blank", "noopener,noreferrer");
+            return;
+        }
+        try {
+            const res = await fetch(`/api/documents/signed-url?path=${encodeURIComponent(path)}`);
+            if (!res.ok) {
+                alert("Could not open document. Please try again.");
+                return;
+            }
+            const { url } = await res.json();
+            if (url) window.open(url, "_blank", "noopener,noreferrer");
+        } catch {
+            alert("Could not open document. Please try again.");
+        }
     };
 
     const addTag = async (doc: UserDocument) => {
@@ -368,16 +391,15 @@ export default function DocumentsPage() {
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-1 flex-shrink-0">
-                                        {doc.file_url && (
-                                            <a
-                                                href={doc.file_url}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
+                                        {(doc.storage_path || doc.file_url) && (
+                                            <button
+                                                type="button"
+                                                onClick={() => openDoc(doc)}
                                                 className="text-xs font-bold text-stone-500 hover:text-black p-1.5 rounded-lg hover:bg-stone-100 inline-flex items-center gap-1"
                                                 title="Download / open"
                                             >
                                                 <Download className="w-3.5 h-3.5" />
-                                            </a>
+                                            </button>
                                         )}
                                         <button type="button" title="Delete" onClick={() => deleteDoc(doc.id)} className="text-stone-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50">
                                             <Trash2 className="w-3.5 h-3.5" />

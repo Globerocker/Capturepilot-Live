@@ -13,7 +13,8 @@ const supabase = createBrowserClient(
 interface Doc {
     id: string;
     filename: string;
-    file_url: string;
+    file_url: string | null;
+    storage_path: string | null;
     file_size: number;
     mime_type: string;
     category: string;
@@ -96,12 +97,13 @@ export default function PortalDocuments() {
             return;
         }
 
-        const { data: urlData } = supabase.storage.from("client-docs").getPublicUrl(path);
-
+        // `client-docs` is private — store only the storage path and mint
+        // short-lived signed URLs on demand.
         const newDoc = {
             user_profile_id: profileId,
             filename: file.name,
-            file_url: urlData.publicUrl,
+            file_url: null,
+            storage_path: path,
             file_size: file.size,
             mime_type: file.type,
             category: selectedCategory,
@@ -121,6 +123,26 @@ export default function PortalDocuments() {
         }
         setUploading(false);
         e.target.value = "";
+    };
+
+    // Mint a fresh signed URL per click. Bucket is private.
+    const openDoc = async (doc: Doc) => {
+        if (doc.storage_path) {
+            try {
+                const res = await fetch(`/api/documents/signed-url?path=${encodeURIComponent(doc.storage_path)}`);
+                if (!res.ok) {
+                    alert("Could not open document. Please try again.");
+                    return;
+                }
+                const { url } = await res.json();
+                if (url) window.open(url, "_blank", "noopener,noreferrer");
+            } catch {
+                alert("Could not open document. Please try again.");
+            }
+            return;
+        }
+        // Legacy rows that pre-date the private-bucket switch.
+        if (doc.file_url) window.open(doc.file_url, "_blank", "noopener,noreferrer");
     };
 
     const formatSize = (bytes: number) => {
@@ -225,9 +247,13 @@ export default function PortalDocuments() {
                             </div>
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">
-                            <a href={doc.file_url} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-blue-600 hover:text-blue-800 inline-flex items-center gap-1">
+                            <button
+                                type="button"
+                                onClick={() => openDoc(doc)}
+                                className="text-xs font-bold text-blue-600 hover:text-blue-800 inline-flex items-center gap-1"
+                            >
                                 <Download className="w-3.5 h-3.5" /> Download
-                            </a>
+                            </button>
                             <button type="button" title="Delete" onClick={async () => {
                                 if (!confirm("Delete this document?")) return;
                                 await supabase.from("client_documents").delete().eq("id", doc.id);
