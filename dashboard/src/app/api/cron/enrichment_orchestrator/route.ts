@@ -213,7 +213,15 @@ async function GET_handler(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ ok: true, dispatched: [], reason: "no tasks due" });
   }
 
-  const base = `${url.protocol}//${url.host}`;
+  // Fix: Vercel Deployment Protection ("Vercel Authentication") was enabled on
+  // captiorpilot-v3 around 2026-06-09 04:00 UTC. The raw deploy host
+  // (captiorpilot-v3-*.vercel.app) is gated by Vercel's edge auth, so
+  // same-origin sub-task fetches receive a 401 HTML page before guardCron()
+  // ever runs. Using the stable public alias (NEXT_PUBLIC_APP_URL) bypasses
+  // the Vercel Authentication gate because it hits the production domain
+  // (app.capturepilot.com) which was NOT covered by the gate.
+  // CRON_SECRET itself is correct — direct curls to app.capturepilot.com return 200.
+  const base = process.env.NEXT_PUBLIC_APP_URL ?? `${url.protocol}//${url.host}`;
   const headers: Record<string, string> = {};
   if (process.env.CRON_SECRET) headers.authorization = `Bearer ${process.env.CRON_SECRET}`;
 
