@@ -85,7 +85,7 @@ export default function SupportChat() {
                 type="button"
                 onClick={() => setIsOpen(!isOpen)}
                 className={clsx(
-                    "fixed bottom-6 right-6 z-40 w-14 h-14 rounded-full shadow-lg flex items-center justify-center transition-all",
+                    "fixed bottom-20 lg:bottom-6 right-6 z-40 w-14 h-14 rounded-full shadow-lg flex items-center justify-center transition-all",
                     isOpen ? "bg-stone-800 text-white rotate-0" : "bg-black text-white hover:bg-stone-800 hover:scale-105"
                 )}
             >
@@ -94,7 +94,7 @@ export default function SupportChat() {
 
             {/* Chat Panel */}
             {isOpen && (
-                <div className="fixed bottom-24 right-6 z-40 w-80 bg-white border border-stone-200 rounded-2xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-4 duration-200">
+                <div className="fixed bottom-36 lg:bottom-24 right-6 z-40 w-80 max-w-[calc(100vw-3rem)] bg-white border border-stone-200 rounded-2xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-4 duration-200">
                     {/* Header */}
                     <div className="bg-black text-white px-4 py-3">
                         <p className="font-bold text-sm">How can we help?</p>

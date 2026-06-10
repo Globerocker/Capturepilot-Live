@@ -174,3 +174,12 @@ select, input[type="text"], input[type="email"], input[type="password"], input[t
 select:focus, input:focus, textarea:focus {
   @apply border-emerald-500 ring-2 ring-emerald-500/20 outline-none;
 }
+
+/* Horizontal-scroll containers (mobile mini-toolbars, swipeable rows) — hide the bar but keep scrolling */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}

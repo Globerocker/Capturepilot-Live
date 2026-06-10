@@ -128,7 +128,7 @@ export default function FeedbackWidget() {
                     }
                 }}
                 className={clsx(
-                    "fixed bottom-5 right-5 z-50 w-12 h-12 rounded-full shadow-lg flex items-center justify-center transition-all duration-300 hover:scale-110",
+                    "fixed bottom-[5.25rem] lg:bottom-5 right-5 z-50 w-12 h-12 rounded-full shadow-lg flex items-center justify-center transition-all duration-300 hover:scale-110",
                     open ? "bg-stone-800 text-white rotate-90" : "bg-black text-white"
                 )}
             >
@@ -137,7 +137,7 @@ export default function FeedbackWidget() {
 
             {/* Feedback Panel */}
             {open && (
-                <div className="fixed bottom-20 right-5 z-50 w-80 bg-white rounded-2xl border border-stone-200 shadow-2xl overflow-hidden animate-in slide-in-from-bottom-4 duration-300">
+                <div className="fixed bottom-36 lg:bottom-20 right-5 z-50 w-80 max-w-[calc(100vw-2.5rem)] bg-white rounded-2xl border border-stone-200 shadow-2xl overflow-hidden animate-in slide-in-from-bottom-4 duration-300">
                     <div className="bg-stone-50 border-b border-stone-100 px-5 py-4">
                         <h3 className="font-bold text-sm text-stone-900">
                             {mode === "menu" ? "Send Feedback" : mode === "beta" ? "Beta Survey" : "Send Feedback"}

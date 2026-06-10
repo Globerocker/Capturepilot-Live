@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import Sidebar from "@/components/layout/Sidebar";
+import MobileBottomNav from "@/components/layout/MobileBottomNav";
 import UpgradeBanner from "@/components/UpgradeBanner";
 import FeedbackWidget from "@/components/FeedbackWidget";
 import GlobalToast from "@/components/GlobalToast";
@@ -27,7 +28,8 @@ export default function DashboardLayout({
           New: Light $39/mo · Pro $89/mo · 14-day free trial. <a href="/pricing" className="underline font-bold hover:text-emerald-100">See plans →</a>
         </div>
         <UpgradeBanner />
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 lg:rounded-l-[40px] bg-gradient-to-br from-stone-100 via-stone-50 to-stone-100 lg:my-2 lg:mr-2 lg:border lg:border-stone-200/80 lg:shadow-inner dot-grid-bg">
+        {/* pb-20 lg:pb-0 reserves space for the sticky MobileBottomNav on small screens */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 pb-24 lg:pb-8 lg:rounded-l-[40px] bg-gradient-to-br from-stone-100 via-stone-50 to-stone-100 lg:my-2 lg:mr-2 lg:border lg:border-stone-200/80 lg:shadow-inner dot-grid-bg">
           {children}
         </div>
       </main>
@@ -47,6 +49,8 @@ export default function DashboardLayout({
           the user has touched 3 features (Quick Checker / cap statement /
           saved match / pursuit) and hasn't already dismissed or trialed. */}
       <TrialPromptModal />
+      {/* Sticky bottom nav on mobile only — quick switching between core pages */}
+      <MobileBottomNav />
       {/* <ReviewPrompt /> — disabled until Google Business Profile is set up */}
     </div>
   );

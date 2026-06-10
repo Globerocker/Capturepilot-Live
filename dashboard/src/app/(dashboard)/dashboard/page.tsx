@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Activity, Target, Sparkles, ArrowRight, Loader2, Clock, Trophy, Search, Shield, BarChart3, Layers, CheckSquare, Phone, UserCheck, FileText, Mic, Mail, Pencil } from "lucide-react";
+import { Activity, Target, Sparkles, ArrowRight, Loader2, Clock, Trophy, Search, Shield, BarChart3, Layers, CheckSquare, Phone, UserCheck, FileText, Mic, Mail, Pencil, ChevronDown, ChevronUp } from "lucide-react";
 import ServiceCTA from "@/components/ui/ServiceCTA";
 import { Skeleton, SkeletonKpiCard } from "@/components/ui/Skeleton";
 import clsx from "clsx";
@@ -92,6 +92,8 @@ export default function UserDashboard() {
   const [pendingActions, setPendingActions] = useState<Array<{ id: string; title: string; priority: string; opportunity_id: string }>>([]);
   const [recentPipeline, setRecentPipeline] = useState<Array<{ id: string; stage: string; title: string; opportunity_id: string }>>([]);
   const [generatingMatches, setGeneratingMatches] = useState(false);
+  // Mobile: Market Watch widget collapse state — defaults to collapsed to keep above-the-fold tight on phones.
+  const [marketExpandedMobile, setMarketExpandedMobile] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -299,18 +301,19 @@ export default function UserDashboard() {
             </div>
           </div>
         ) : (
-          <div className="space-y-2">
-            {topOpps.map((opp) => {
-              const isEasyWin = opp.notice_type?.includes("Sources Sought") && opp.set_aside_code;
-              return (
-                <Link
-                  key={opp.id}
-                  href={`/opportunities/${opp.id}`}
-                  className="block bg-stone-50 hover:bg-stone-100 active:bg-stone-200 border border-stone-200 hover:border-stone-300 rounded-xl sm:rounded-2xl p-3 sm:p-4 transition-all"
-                >
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+          <>
+            {/* Mobile: horizontal swipe carousel of compact opportunity tiles */}
+            <div className="sm:hidden -mx-5 px-5 overflow-x-auto scrollbar-hide snap-x snap-mandatory">
+              <div className="flex gap-2 pb-1">
+                {topOpps.map((opp) => {
+                  const isEasyWin = opp.notice_type?.includes("Sources Sought") && opp.set_aside_code;
+                  return (
+                    <Link
+                      key={opp.id}
+                      href={`/opportunities/${opp.id}`}
+                      className="snap-start flex-shrink-0 w-[78%] bg-stone-50 active:bg-stone-100 border border-stone-200 rounded-2xl p-3 transition-all"
+                    >
+                      <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
                         {isEasyWin && (
                           <span className="text-[9px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded uppercase">Easy Win</span>
                         )}
@@ -325,20 +328,61 @@ export default function UserDashboard() {
                           </span>
                         )}
                       </div>
-                      <p className="font-bold text-sm text-black line-clamp-1">{opp.title}</p>
-                      <p className="text-xs text-stone-500 line-clamp-1">{opp.agency}</p>
+                      <p className="font-bold text-sm text-black line-clamp-2 mb-1">{opp.title}</p>
+                      <p className="text-xs text-stone-500 truncate mb-2">{opp.agency}</p>
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="font-mono bg-stone-200 px-2 py-0.5 rounded text-stone-700">{opp.naics_code}</span>
+                        <span className="font-bold text-stone-700 whitespace-nowrap">
+                          {opp.response_deadline ? new Date(opp.response_deadline).toLocaleDateString() : "TBD"}
+                        </span>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+            {/* Desktop: stacked list */}
+            <div className="hidden sm:block space-y-2">
+              {topOpps.map((opp) => {
+                const isEasyWin = opp.notice_type?.includes("Sources Sought") && opp.set_aside_code;
+                return (
+                  <Link
+                    key={opp.id}
+                    href={`/opportunities/${opp.id}`}
+                    className="block bg-stone-50 hover:bg-stone-100 active:bg-stone-200 border border-stone-200 hover:border-stone-300 rounded-xl sm:rounded-2xl p-3 sm:p-4 transition-all"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          {isEasyWin && (
+                            <span className="text-[9px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded uppercase">Easy Win</span>
+                          )}
+                          {opp.notice_type && (
+                            <span className={clsx(
+                              "text-[9px] px-2 py-0.5 rounded border uppercase tracking-widest",
+                              opp.notice_type.includes("Sources Sought") ? "bg-emerald-50 text-emerald-600 border-emerald-200" :
+                              opp.notice_type.includes("Presolicitation") ? "bg-blue-50 text-blue-600 border-blue-200" :
+                              "bg-stone-100 text-stone-500 border-stone-200"
+                            )}>
+                              {opp.notice_type}
+                            </span>
+                          )}
+                        </div>
+                        <p className="font-bold text-sm text-black line-clamp-1">{opp.title}</p>
+                        <p className="text-xs text-stone-500 line-clamp-1">{opp.agency}</p>
+                      </div>
+                      <div className="flex items-center gap-3 text-xs flex-shrink-0">
+                        <span className="font-mono bg-stone-200 px-2 py-0.5 rounded text-stone-600">{opp.naics_code}</span>
+                        <span className="font-bold text-stone-700 whitespace-nowrap">
+                          {opp.response_deadline ? new Date(opp.response_deadline).toLocaleDateString() : "TBD"}
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-3 text-xs flex-shrink-0">
-                      <span className="font-mono bg-stone-200 px-2 py-0.5 rounded text-stone-600">{opp.naics_code}</span>
-                      <span className="font-bold text-stone-700 whitespace-nowrap">
-                        {opp.response_deadline ? new Date(opp.response_deadline).toLocaleDateString() : "TBD"}
-                      </span>
-                    </div>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </>
         )}
       </section>
         </div>
@@ -539,9 +583,36 @@ export default function UserDashboard() {
         </div>
       </div>
 
-      {/* Market Intelligence */}
+      {/* Market Watch / Market Intelligence — collapses to a summary on mobile, full block on desktop */}
       {profile && profile.naics_codes.length > 0 && (
-        <MarketIntelligence naicsCodes={profile.naics_codes} companyName={profile.company_name} />
+        <section className="market-watch-section">
+          {/* Mobile summary card — tap to expand the full intel block */}
+          <button
+            type="button"
+            onClick={() => setMarketExpandedMobile(v => !v)}
+            className="sm:hidden w-full flex items-center justify-between bg-white border border-stone-200 rounded-2xl p-4 shadow-sm text-left"
+            aria-expanded={marketExpandedMobile ? "true" : "false"}
+          >
+            <div>
+              <p className="text-[10px] text-stone-400 uppercase tracking-widest mb-0.5">Market Watch</p>
+              <p className="font-bold text-sm text-black">{profile.naics_codes.length} NAICS tracked</p>
+              <p className="text-xs text-stone-500">
+                {marketExpandedMobile ? "Tap to collapse" : "Tap to expand intel"}
+              </p>
+            </div>
+            {marketExpandedMobile
+              ? <ChevronUp className="w-5 h-5 text-stone-400" />
+              : <ChevronDown className="w-5 h-5 text-stone-400" />}
+          </button>
+
+          <div className={clsx(
+            // On mobile, hide the heavy intel block until the user expands the summary.
+            "mt-3 sm:mt-0",
+            marketExpandedMobile ? "block" : "hidden sm:block"
+          )}>
+            <MarketIntelligence naicsCodes={profile.naics_codes} companyName={profile.company_name} />
+          </div>
+        </section>
       )}
     </div>
   );
