@@ -236,7 +236,7 @@ function CheckContent() {
         } catch { return url; }
     }
 
-    function runAnalysis(site: string, ueiVal: string, file: File | null) {
+    async function runAnalysis(site: string, ueiVal: string, file: File | null) {
         let url = site.trim();
         if (!/^https?:\/\//i.test(url)) url = "https://" + url;
         setRunning(true);
@@ -249,6 +249,19 @@ function CheckContent() {
         // match-rate when both fire — AdBlocker kills ~30% client-side,
         // server-side guarantees we still see the event.
         const capiEventId = track("lead", { content_name: "quick_check", website: getDomain(url) });
+
+        // Fetch the day-bucketed verification token first — the analyze
+        // endpoint rejects requests that don't echo it back.
+        let captcha_response = "";
+        try {
+            const tokRes = await fetch(`/api/analyze-company/token?website=${encodeURIComponent(url)}`);
+            if (tokRes.ok) {
+                const tokData = await tokRes.json();
+                captcha_response = String(tokData.captcha_response || "");
+            }
+        } catch {/* fall through — server will 400 */}
+
+        // POST to API — returns analysis_id immediately, processes in background
         fetch("/api/analyze-company", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -256,6 +269,8 @@ function CheckContent() {
                 website: url,
                 uei: ueiVal || undefined,
                 capi_event_id: capiEventId,
+                captcha_response,
+                hp_field: "",
             }),
         })
             .then(async (res) => {

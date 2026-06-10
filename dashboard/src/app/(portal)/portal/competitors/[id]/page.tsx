@@ -319,14 +319,27 @@ export default function CompetitorDetail() {
         setReanalyzeError("");
         setReanalyzeStep(0);
 
-        fetch("/api/analyze-company", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                website: comp.website,
-                uei: comp.uei || undefined,
-            }),
-        })
+        // Fetch the day-bucketed verification token first.
+        (async () => {
+            let captcha_response = "";
+            try {
+                const tokRes = await fetch(`/api/analyze-company/token?website=${encodeURIComponent(comp.website)}`);
+                if (tokRes.ok) {
+                    const tokData = await tokRes.json();
+                    captcha_response = String(tokData.captcha_response || "");
+                }
+            } catch {/* fall through */}
+            return fetch("/api/analyze-company", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    website: comp.website,
+                    uei: comp.uei || undefined,
+                    captcha_response,
+                    hp_field: "",
+                }),
+            });
+        })()
             .then(async (res) => {
                 if (!res.ok) {
                     const d = await res.json().catch(() => ({}));
