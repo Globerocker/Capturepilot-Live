@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { HUMAN_VOICE_RULES } from "@/lib/llm/humanizer";
+import { requireUser } from "@/lib/auth-server";
 
 export const maxDuration = 120;
 
@@ -25,13 +26,19 @@ export const maxDuration = 120;
  * - pricing_guidance
  */
 export async function POST(req: NextRequest) {
+    // Audit fix #3: require auth; resolve caller's own profile.
+    // Body-supplied user_profile_id is ignored.
+    const auth = await requireUser();
+    if (auth instanceof NextResponse) return auth;
+    const user_profile_id = auth.profile?.id;
+
     const OPENAI_KEY = process.env.OPENAI_API_KEY;
     if (!OPENAI_KEY) {
         return NextResponse.json({ error: "OpenAI API key not configured" }, { status: 500 });
     }
 
     try {
-        const { notice_id, user_profile_id } = await req.json();
+        const { notice_id } = await req.json();
         if (!notice_id) return NextResponse.json({ error: "notice_id required" }, { status: 400 });
 
         const db = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_KEY!);

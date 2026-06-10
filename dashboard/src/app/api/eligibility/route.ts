@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { requireUser } from "@/lib/auth-server";
 
 /**
  * POST /api/eligibility
  * Check if a company profile is eligible for an opportunity's set-aside.
  *
- * Body: { user_profile_id, notice_id }
+ * Body: { notice_id }
  *
  * Returns eligibility assessment with:
  * - eligible: boolean
@@ -15,19 +15,27 @@ import { createClient } from "@supabase/supabase-js";
  * - match_strength: "strong" | "moderate" | "weak" | "ineligible"
  */
 export async function POST(req: NextRequest) {
+    // Audit fix #3: require auth, resolve caller's own profile via auth_user_id.
+    // Body-supplied user_profile_id is ignored (was an IDOR read on the entire
+    // onboarding payload for every customer).
+    const auth = await requireUser();
+    if (auth instanceof NextResponse) return auth;
+    const { sb, profile: callerProfile } = auth;
+    if (!callerProfile?.id) {
+        return NextResponse.json({ error: "Profile not found for current user" }, { status: 404 });
+    }
+
     try {
-        const { user_profile_id, notice_id } = await req.json();
-        if (!user_profile_id || !notice_id) {
-            return NextResponse.json({ error: "user_profile_id and notice_id required" }, { status: 400 });
+        const { notice_id } = await req.json();
+        if (!notice_id) {
+            return NextResponse.json({ error: "notice_id required" }, { status: 400 });
         }
 
-        const db = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_KEY!);
-
         const [{ data: profile }, { data: opp }] = await Promise.all([
-            db.from("user_profiles")
+            sb.from("user_profiles")
                 .select("company_name, naics_codes, sba_certifications, state, employee_count, revenue, federal_awards_count, target_states")
-                .eq("id", user_profile_id).single(),
-            db.from("opportunities")
+                .eq("id", callerProfile.id).single(),
+            sb.from("opportunities")
                 .select("title, naics_code, set_aside_code, notice_type, place_of_performance_state, estimated_value, response_deadline, veteran_relevance_flag, small_business_relevance_flag, wosb_relevance_flag")
                 .eq("notice_id", notice_id).single(),
         ]);

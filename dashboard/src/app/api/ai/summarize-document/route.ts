@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { requireUser } from "@/lib/auth-server";
 
 export const maxDuration = 120;
 
@@ -23,6 +24,10 @@ export const maxDuration = 120;
  * - recommended_actions
  */
 export async function POST(req: NextRequest) {
+    // Audit fix #3: require auth — prevent OpenAI cost-abuse via unauth loops.
+    const auth = await requireUser();
+    if (auth instanceof NextResponse) return auth;
+
     const OPENAI_KEY = process.env.OPENAI_API_KEY;
     if (!OPENAI_KEY) {
         return NextResponse.json({ error: "OpenAI API key not configured" }, { status: 500 });

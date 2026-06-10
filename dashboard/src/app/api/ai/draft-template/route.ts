@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { HUMAN_VOICE_RULES } from "@/lib/llm/humanizer";
+import { requireUser } from "@/lib/auth-server";
 
 export const maxDuration = 90;
 
@@ -20,6 +21,14 @@ export const maxDuration = 90;
  * Returns: { title, content, saved_document_id?: string }
  */
 export async function POST(req: NextRequest) {
+    // Audit fix #3: require auth; resolve caller's own profile.
+    const auth = await requireUser();
+    if (auth instanceof NextResponse) return auth;
+    const user_profile_id = auth.profile?.id;
+    if (!user_profile_id) {
+        return NextResponse.json({ error: "Profile not found for current user" }, { status: 404 });
+    }
+
     const OPENAI_KEY = process.env.OPENAI_API_KEY;
     if (!OPENAI_KEY) {
         console.error("[draft-template] OPENAI_API_KEY not set");
@@ -30,16 +39,13 @@ export async function POST(req: NextRequest) {
     try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
 
     const {
-        user_profile_id, template_type, title, prompt, save,
+        template_type, title, prompt, save,
     } = body as {
-        user_profile_id?: string;
         template_type?: string;
         title?: string;
         prompt?: string;
         save?: boolean;
     };
-
-    if (!user_profile_id) return NextResponse.json({ error: "user_profile_id required" }, { status: 400 });
 
     const validTypes = ["past_performance", "differentiators", "management_approach", "technical_approach", "corporate_overview", "custom"];
     if (!template_type || !validTypes.includes(template_type)) {

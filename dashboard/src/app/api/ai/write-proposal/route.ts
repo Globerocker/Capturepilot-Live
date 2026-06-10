@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { HUMAN_VOICE_RULES } from "@/lib/llm/humanizer";
+import { requireUser } from "@/lib/auth-server";
 
 export const maxDuration = 300;
 
@@ -20,17 +21,24 @@ export const maxDuration = 300;
  * }
  */
 export async function POST(req: NextRequest) {
+    // Audit fix #3: require auth; resolve caller's own profile via auth_user_id.
+    // Body-supplied user_profile_id is ignored — unauthenticated callers
+    // previously could mint up to ~5K tokens per call against OpenAI.
+    const auth = await requireUser();
+    if (auth instanceof NextResponse) return auth;
+    const callerProfileId = auth.profile?.id ?? undefined;
+
     const OPENAI_KEY = process.env.OPENAI_API_KEY;
     if (!OPENAI_KEY) return NextResponse.json({ error: "OpenAI not configured" }, { status: 500 });
 
     try {
         const body = await req.json();
-        const { notice_id, user_profile_id, sections: requestedSections, tone = "formal", max_pages = 10 } = body;
+        const { notice_id, sections: requestedSections, tone = "formal", max_pages = 10 } = body;
         if (!notice_id) return NextResponse.json({ error: "notice_id required" }, { status: 400 });
 
         const db = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_KEY!);
 
-        const ctx = await loadProposalContext(db, notice_id, user_profile_id);
+        const ctx = await loadProposalContext(db, notice_id, callerProfileId);
         if (!ctx.ok) {
             return NextResponse.json(ctx.body, { status: ctx.status });
         }
