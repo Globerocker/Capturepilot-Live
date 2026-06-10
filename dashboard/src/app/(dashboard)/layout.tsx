@@ -1,4 +1,5 @@
 import Sidebar from "@/components/layout/Sidebar";
+import MobileBottomNav from "@/components/layout/MobileBottomNav";
 import UpgradeBanner from "@/components/UpgradeBanner";
 import FeedbackWidget from "@/components/FeedbackWidget";
 import GlobalToast from "@/components/GlobalToast";
@@ -14,7 +15,7 @@ export default function DashboardLayout({
   return (
     <div className="flex bg-stone-50 min-h-screen lg:h-screen lg:overflow-hidden text-stone-900 selection:bg-black selection:text-white">
       <Sidebar />
-      <main className="flex-1 flex flex-col overflow-hidden lg:pl-2 pt-14 lg:pt-0">
+      <main className="flex-1 flex flex-col overflow-hidden lg:pl-2 pt-14 lg:pt-0 pb-16 lg:pb-0">
         <div className="bg-emerald-600 text-white text-center py-2 px-4 text-xs font-medium">
           Public Beta — All features unlocked free until May 9, 2026. Give feedback to lock in $149/mo pricing (25% off forever).
         </div>
@@ -23,6 +24,7 @@ export default function DashboardLayout({
           {children}
         </div>
       </main>
+      <MobileBottomNav />
       <FeedbackWidget />
       <GlobalToast />
       <SupportChat />

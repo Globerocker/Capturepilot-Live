@@ -12,6 +12,12 @@ interface QuickActionsProps {
     onNavigate?: () => void;
 }
 
+/**
+ * Quick Actions bar at the top of the sidebar.
+ * Three tiles: Quick Checker, Write Proposal, Refresh Matches.
+ * Cap Statement lives in the main nav now, so we surface
+ * the highest-intent flows here instead.
+ */
 export default function QuickActions({ onNavigate }: QuickActionsProps) {
     const pathname = usePathname();
     const [refreshState, setRefreshState] = useState<RefreshState>("idle");
@@ -32,13 +38,13 @@ export default function QuickActions({ onNavigate }: QuickActionsProps) {
 
     const linkTiles = [
         { name: "Quick Checker", href: "/check", icon: Zap },
-        { name: "AI Drafter", href: "/ai-drafter/proposals", icon: FileText },
+        { name: "Write Proposal", href: "/ai-drafter/proposals", icon: FileText },
         { name: "Cap Statement", href: "/ai-drafter/capability-statement", icon: Mic },
     ];
 
     const tileClasses = (isActive: boolean) =>
         clsx(
-            "flex flex-col items-center justify-center gap-1.5 py-3 px-2 rounded-2xl transition-all duration-200 border",
+            "flex flex-col items-center justify-center gap-1.5 py-2.5 px-2 rounded-2xl transition-all duration-200 border",
             isActive
                 ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/40"
                 : "text-stone-500 hover:bg-stone-800/50 hover:text-stone-300 border-stone-800/60"
@@ -59,8 +65,8 @@ export default function QuickActions({ onNavigate }: QuickActionsProps) {
     };
 
     return (
-        <div className="px-3 lg:px-4 pt-3 pb-3 border-t border-stone-800/60">
-            <div className="px-2 mb-2">
+        <div className="px-3 lg:px-4 pb-3">
+            <div className="px-2 mb-1.5">
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-stone-600">
                     Quick Actions
                 </span>
@@ -87,7 +93,7 @@ export default function QuickActions({ onNavigate }: QuickActionsProps) {
                     disabled={refreshState === "loading"}
                     title="Refresh Matches"
                     className={clsx(
-                        "flex flex-col items-center justify-center gap-1.5 py-3 px-2 rounded-2xl transition-all duration-200 border disabled:cursor-wait",
+                        "flex flex-col items-center justify-center gap-1.5 py-2.5 px-2 rounded-2xl transition-all duration-200 border disabled:cursor-wait",
                         refreshState === "success"
                             ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/40"
                             : refreshState === "error"
