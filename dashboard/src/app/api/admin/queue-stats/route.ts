@@ -33,15 +33,16 @@ export async function GET(req: NextRequest) {
     const m5 = now - 5 * 60 * 1000;
     const m30 = now - 30 * 60 * 1000;
     const m60 = now - 60 * 60 * 1000;
+    const h24 = now - 24 * 60 * 60 * 1000;
 
     const byType: Record<string, {
         pending: number; running: number; done: number; failed: number; skipped: number;
-        done_5m: number; done_30m: number; done_60m: number;
+        done_5m: number; done_30m: number; done_60m: number; done_24h: number;
     }> = {};
     for (const r of rows) {
         if (!byType[r.task_type]) {
             byType[r.task_type] = { pending: 0, running: 0, done: 0, failed: 0, skipped: 0,
-                done_5m: 0, done_30m: 0, done_60m: 0 };
+                done_5m: 0, done_30m: 0, done_60m: 0, done_24h: 0 };
         }
         const b = byType[r.task_type];
         if (r.status in b) (b as Record<string, number>)[r.status]++;
@@ -50,6 +51,7 @@ export async function GET(req: NextRequest) {
             if (ft >= m5) b.done_5m++;
             if (ft >= m30) b.done_30m++;
             if (ft >= m60) b.done_60m++;
+            if (ft >= h24) b.done_24h++;
         }
     }
 
@@ -66,7 +68,8 @@ export async function GET(req: NextRequest) {
         done_5m: acc.done_5m + b.done_5m,
         done_30m: acc.done_30m + b.done_30m,
         done_60m: acc.done_60m + b.done_60m,
-    }), { pending: 0, running: 0, done: 0, failed: 0, done_5m: 0, done_30m: 0, done_60m: 0 });
+        done_24h: acc.done_24h + b.done_24h,
+    }), { pending: 0, running: 0, done: 0, failed: 0, done_5m: 0, done_30m: 0, done_60m: 0, done_24h: 0 });
 
     return NextResponse.json({
         ok: true,
