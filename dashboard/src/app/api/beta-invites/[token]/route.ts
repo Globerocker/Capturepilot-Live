@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 function getAdmin() {
     return createClient(
@@ -45,23 +46,29 @@ export async function GET(
 /**
  * POST /api/beta-invites/[token] — mark invite as claimed.
  * Called from the signup flow right after the user account is created.
- * Body: { auth_user_id }
+ * The claimer is identified by the session, NOT a body field — the previous
+ * version trusted body.auth_user_id which let any caller attribute any
+ * invite to any user id.
  */
 export async function POST(
-    req: NextRequest,
+    _req: NextRequest,
     { params }: { params: Promise<{ token: string }> }
 ) {
     const { token } = await params;
     if (!token) return NextResponse.json({ error: "Token required" }, { status: 400 });
 
-    const { auth_user_id } = await req.json().catch(() => ({}));
+    const sb = await createSupabaseServerClient();
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) {
+        return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    }
 
     const admin = getAdmin();
     const { data, error } = await admin
         .from("beta_invites")
         .update({
             claimed_at: new Date().toISOString(),
-            claimed_by: auth_user_id || null,
+            claimed_by: user.id,
         })
         .eq("token", token)
         .is("claimed_at", null)

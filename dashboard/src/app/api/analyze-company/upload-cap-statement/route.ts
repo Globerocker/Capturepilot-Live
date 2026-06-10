@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { extractFromBytes } from "@/lib/document-extract";
+import { requireUser } from "@/lib/auth-server";
+import { protectCrawl } from "@/lib/protect-crawl";
 
 export const maxDuration = 60;
 export const runtime = "nodejs";
@@ -24,6 +26,20 @@ const ALLOWED_TYPES = new Set([
  */
 export async function POST(request: NextRequest) {
     try {
+        // Gate the route: must be authenticated AND throttled per-IP, otherwise
+        // anyone can stuff 10MB blobs into Supabase Storage just by knowing
+        // (or guessing) a publicly enumerable analysis_id.
+        const auth = await requireUser();
+        if (auth instanceof NextResponse) return auth;
+
+        const limited = protectCrawl(request, {
+            route: "upload-cap-statement",
+            maxPerMin: 3,
+            // 1-hour window, max 3 uploads per IP per hour
+            windowMs: 60 * 60 * 1000,
+        });
+        if (limited) return limited;
+
         const formData = await request.formData();
         const file = formData.get("file");
         const analysisId = String(formData.get("analysis_id") || "");

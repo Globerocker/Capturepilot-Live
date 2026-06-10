@@ -29,6 +29,7 @@ import { getLeadMagnet, sendLeadMagnetEmail } from "@/lib/lead-magnets";
 import { upsertHubSpotContact } from "@/lib/hubspot";
 import { enqueueLeadBrief } from "@/lib/lead-brief";
 import { enrichPersonViaApollo } from "@/lib/lead-enrichment";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 // Same envelope as /api/leads — Apollo (8s) + HubSpot (~1s) + Resend (~1s)
@@ -104,6 +105,17 @@ function parseLinkedInMeta(meta: Record<string, unknown>): {
 
 export async function POST(req: NextRequest) {
     try {
+        // Authenticate the caller. /auth/callback exchanges the LinkedIn OIDC
+        // code first and ONLY then POSTs here. The body's email + user_metadata
+        // must match the session, otherwise anyone with a magnet key could
+        // self-deliver to arbitrary addresses + impersonate any LinkedIn user
+        // in HubSpot / marketing_leads.
+        const sbAuth = await createSupabaseServerClient();
+        const { data: { user } } = await sbAuth.auth.getUser();
+        if (!user) {
+            return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+        }
+
         const body = (await req.json()) as {
             magnet?: string;
             email?: string | null;
@@ -123,6 +135,18 @@ export async function POST(req: NextRequest) {
         const email = (body.email || parsed.email || "").trim().toLowerCase();
         if (!email || !EMAIL_RE.test(email)) {
             return NextResponse.json({ error: "missing linkedin email" }, { status: 400 });
+        }
+
+        // Bind the request to the session: claimed email must match the
+        // authenticated user, and the auth provider must be LinkedIn OIDC
+        // (this route is only for the LinkedIn shortcut path).
+        const sessionEmail = (user.email || "").trim().toLowerCase();
+        if (sessionEmail && sessionEmail !== email) {
+            return NextResponse.json({ error: "email mismatch" }, { status: 403 });
+        }
+        const provider = (user.app_metadata as { provider?: string } | null)?.provider;
+        if (provider !== "linkedin_oidc") {
+            return NextResponse.json({ error: "provider mismatch" }, { status: 403 });
         }
 
         const firstName = parsed.first_name;

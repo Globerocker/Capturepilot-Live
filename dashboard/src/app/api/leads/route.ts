@@ -6,6 +6,7 @@ import { sendCAPIEvent, userDataFromRequest, newEventId } from "@/lib/meta-capi"
 import { enrichPersonViaApollo, domainFromEmail } from "@/lib/lead-enrichment";
 import { upsertHubSpotContact } from "@/lib/hubspot";
 import { enqueueLeadBrief } from "@/lib/lead-brief";
+import { protectCrawl } from "@/lib/protect-crawl";
 
 export const runtime = "nodejs";
 // Pipeline (insert → Apollo enrich → HubSpot sync → Resend) typically runs
@@ -49,6 +50,20 @@ export async function POST(req: NextRequest) {
   const origin = req.headers.get("origin");
   const headers = corsHeaders(origin);
 
+  // Throttle public form-fills: each submission fans out to Apollo + HubSpot +
+  // Resend + Meta CAPI + OpenAI. 5/min/IP keeps a single attacker from
+  // exhausting any of those budgets while leaving plenty of headroom for a
+  // legitimate marketing-site form fill.
+  const limited = protectCrawl(req, { route: "leads", maxPerMin: 5 });
+  if (limited) {
+    // Forward the rate-limiter response but stamp our CORS headers on it so
+    // the marketing-site fetch doesn't swallow the 429 as an opaque error.
+    for (const [k, v] of Object.entries(headers)) {
+      limited.headers.set(k, v);
+    }
+    return limited;
+  }
+
   try {
     const body = await req.json();
     const email = String(body.email ?? "").trim().toLowerCase();
@@ -79,6 +94,25 @@ export async function POST(req: NextRequest) {
     const referrer = req.headers.get("referer")?.slice(0, 400) ?? null;
 
     const sb = db();
+
+    // 1-day per-email/magnet dedup: skip the expensive Apollo + HubSpot +
+    // Resend + Meta CAPI fan-out when the same person already grabbed the
+    // same magnet in the last 24h. Same email + different magnet still
+    // runs the full pipeline so each magnet drop reaches the inbox.
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const { data: recent } = await sb
+      .from("marketing_leads")
+      .select("id, magnet_key")
+      .ilike("email", email)
+      .gte("created_at", oneDayAgo)
+      .limit(1)
+      .maybeSingle();
+    if (recent && recent.magnet_key === magnet) {
+      return NextResponse.json(
+        { ok: true, deduplicated: true, lead_id: recent.id },
+        { status: 200, headers },
+      );
+    }
 
     // 1. Insert the lead row. Two-phase to survive a stale PostgREST schema
     //    cache: first inserts the base columns (always present since the
