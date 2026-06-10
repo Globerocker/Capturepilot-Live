@@ -30,6 +30,7 @@ import { upsertHubSpotContact } from "@/lib/hubspot";
 import { enqueueLeadBrief } from "@/lib/lead-brief";
 import { enrichPersonViaApollo } from "@/lib/lead-enrichment";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { enqueueDripSequence } from "@/lib/email";
 
 export const runtime = "nodejs";
 // Same envelope as /api/leads — Apollo (8s) + HubSpot (~1s) + Resend (~1s)
@@ -347,6 +348,18 @@ export async function POST(req: NextRequest) {
             }
         } catch (e) {
             console.warn("[lead-magnet/deliver] enqueue lead-brief failed (non-fatal):", (e as Error).message);
+        }
+
+        // 7. Enroll in the 7-day lead-magnet nurture (Day 1/3/5/7 follow-ups).
+        //    Skipped on duplicate so a downloader who comes back through
+        //    LinkedIn a second time doesn't get the sequence twice. The send()
+        //    wrapper in lib/email.ts respects outreach_optouts automatically.
+        if (!isDuplicate) {
+            enqueueDripSequence({
+                sequenceKey: "lead_magnet_nurture",
+                email,
+                contactName: [firstName, lastName].filter(Boolean).join(" ").trim() || undefined,
+            }).catch((err) => console.warn("[lead-magnet/deliver] enqueue lead_magnet_nurture failed (non-fatal):", err));
         }
 
         return NextResponse.json({

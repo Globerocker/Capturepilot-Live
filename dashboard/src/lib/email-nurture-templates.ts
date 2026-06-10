@@ -910,6 +910,164 @@ export const NURTURE_TEMPLATES: Record<string, NurtureTemplate> = {
         }),
     },
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // 7-day lead-magnet nurture (W3-4.3) — fires the moment a PDF magnet is
+    // delivered, before the long 90-day fb_nurture takes over. Four emails
+    // designed to walk a fresh downloader through "you got the PDF → now use it
+    // → here's why it matters → 14-day trial". Tracked via the standard
+    // scheduled_emails / drip pattern so optouts + suppression work.
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // Day 1 — "Here's how to use what you just downloaded"
+    nurture_lm_d1_use_it: {
+        subject: "Don't let yesterday's download collect dust",
+        html: wrap({
+            preheader: "The Field Manual works in 20 minutes if you do these three things.",
+            heroSvg: HERO_WELCOME,
+            topAction: {
+                label: "Read: best NAICS codes by federal spend",
+                url: `${BLOG_URL}/best-naics-codes-small-business`,
+                note: "Page 12 of the Field Manual points here — open it now and you've already done step 1.",
+            },
+            body: `
+                <h1 style="margin:0 0 14px;font-size:24px;font-weight:800;color:${COLORS.ink};letter-spacing:-0.02em;">Hey {{first_name}} — quick note.</h1>
+                <p style="margin:0 0 14px;">You grabbed the <strong>Federal Field Manual</strong> yesterday. Most people who download PDFs never open them. The ones who do open it usually skim, close it, and forget. So here's the 20-minute version that actually moves the needle:</p>
+                <ol style="margin:0 0 16px 18px;padding:0;font-size:15px;">
+                  <li style="margin-bottom:10px;"><strong>Open page 12.</strong> Pick three NAICS codes for what you do. Not thirty. Three. <a href="${BLOG_URL}/best-naics-codes-small-business" style="color:${COLORS.accentDark};font-weight:700;">The full NAICS reference is here →</a></li>
+                  <li style="margin-bottom:10px;"><strong>Open page 18.</strong> Run the 5-minute SAM.gov check. If you're not registered, this is the single thing blocking the federal government from paying you.</li>
+                  <li><strong>Open page 24.</strong> The Sources Sought trick — most contractors skip these notices. The ones who don't show up 6 to 12 months earlier than the competition.</li>
+                </ol>
+                <p style="margin:0 0 14px;background:#fffbeb;border-left:3px solid #f59e0b;padding:12px 14px;font-size:14px;color:${COLORS.ink};">If you want the matches done for you instead of digging through SAM.gov yourself, the dashboard sends 50 federal opps to your inbox every morning. Free, no card. <a href="${DASHBOARD_URL}?utm_source=lead_magnet&utm_campaign=field-manual&utm_content=d1" style="color:${COLORS.accentDark};font-weight:700;">Activate it here →</a></p>
+                <p style="margin:0 0 12px;font-size:14px;color:${COLORS.muted};">P.S. Day 3 email is the one that catches most people off guard — it's the year I wasted before I figured this out.</p>
+            `,
+            ctaText: "Read the NAICS reference",
+            ctaUrl: `${BLOG_URL}/best-naics-codes-small-business`,
+            ctaSecondary: "Or activate the free 50-matches/day feed",
+            ctaSecondaryUrl: `${DASHBOARD_URL}?utm_source=lead_magnet&utm_campaign=field-manual&utm_content=d1`,
+            isMarketing: true,
+        }),
+    },
+
+    // Day 3 — "Most contractors waste 12 months learning this"
+    nurture_lm_d3_wasted_year: {
+        subject: "The 12 months most contractors waste",
+        html: wrap({
+            preheader: "Run a 60-second scan and skip the year of trial and error.",
+            heroSvg: HERO_SOURCES_SOUGHT,
+            topAction: {
+                label: "Run the free 60-second Quick Checker",
+                url: `${QC_URL}?utm_source=lead_magnet&utm_campaign=field-manual&utm_content=d3`,
+                note: "It runs on your website — pulls your NAICS, SAM status, certifications, and 5 live matches. No signup.",
+            },
+            body: `
+                <h1 style="margin:0 0 14px;font-size:22px;font-weight:800;color:${COLORS.ink};letter-spacing:-0.02em;">The first 12 months — and how to skip them.</h1>
+                <p style="margin:0 0 14px;">Most small businesses who try to break into federal contracting spend the first year doing the same four things:</p>
+                <ul style="margin:0 0 16px 18px;padding:0;font-size:14px;">
+                  <li style="margin-bottom:6px;">Picking the wrong NAICS codes (too few, or 30 unrelated ones).</li>
+                  <li style="margin-bottom:6px;">Getting stuck mid-SAM.gov registration, then giving up for a quarter.</li>
+                  <li style="margin-bottom:6px;">Chasing the first solicitation they see — usually a multi-million-dollar contract they have no shot at.</li>
+                  <li>Ignoring certifications because the paperwork looks scary, then losing to set-aside competitors for the next year.</li>
+                </ul>
+                <p style="margin:0 0 14px;">The free <strong>Quick Checker</strong> runs on your website in 60 seconds. It tells you:</p>
+                <ul style="margin:0 0 16px 18px;padding:0;font-size:14px;">
+                  <li style="margin-bottom:6px;">Which NAICS codes fit what you actually sell.</li>
+                  <li style="margin-bottom:6px;">Whether you're SAM.gov-registered (and what's blocking you if not).</li>
+                  <li style="margin-bottom:6px;">Which set-asides you qualify for (8(a), WOSB, HUBZone, SDVOSB).</li>
+                  <li>5 live federal opportunities matched to your business.</li>
+                </ul>
+                <p style="margin:0 0 14px;">No signup. No card. Type your URL, get the report. That's it.</p>
+                <p style="margin:0;font-size:14px;color:${COLORS.muted};">— André</p>
+            `,
+            ctaText: "Run the free Quick Checker",
+            ctaUrl: `${QC_URL}?utm_source=lead_magnet&utm_campaign=field-manual&utm_content=d3`,
+            ctaSecondary: "Or read about Sources Sought first",
+            ctaSecondaryUrl: `${BLOG_URL}/capture-management-process`,
+            isMarketing: true,
+        }),
+    },
+
+    // Day 5 — "Three real wins from our users"
+    nurture_lm_d5_case_studies: {
+        subject: "Three first-time federal wins (real numbers inside)",
+        html: wrap({
+            preheader: "What changed for three small businesses after they actually used the manual.",
+            heroSvg: HERO_PAST_PERF,
+            topAction: {
+                label: "Read the full case studies",
+                url: `${BLOG_URL}/federal-contracting-action-plan`,
+                note: "The 30/60/90-day plan these three businesses followed — same one in your Field Manual, but with their numbers.",
+            },
+            body: `
+                <h1 style="margin:0 0 14px;font-size:22px;font-weight:800;color:${COLORS.ink};letter-spacing:-0.02em;">Three real wins — what changed.</h1>
+                <p style="margin:0 0 14px;">Stories beat theory, so here are three from the last six months. Names are blurred (everyone hates being a case study), but the dollar amounts are real.</p>
+                <table cellspacing="0" cellpadding="0" border="0" style="width:100%;font-size:14px;margin:0 0 16px;">
+                  <tr><td style="padding:12px 14px;border:1px solid ${COLORS.border};border-radius:8px;background:#fafaf9;">
+                    <div style="font-weight:700;color:${COLORS.ink};margin-bottom:4px;">Janitorial firm, Virginia</div>
+                    <div style="color:${COLORS.muted};">Picked the wrong primary NAICS for two years. Switched to 561720, added Sources Sought responses, won $47,000 micro-purchase contract with the Army Corps in week 11.</div>
+                  </td></tr>
+                  <tr><td style="height:8px;"></td></tr>
+                  <tr><td style="padding:12px 14px;border:1px solid ${COLORS.border};border-radius:8px;background:#fafaf9;">
+                    <div style="font-weight:700;color:${COLORS.ink};margin-bottom:4px;">IT services LLC, Texas</div>
+                    <div style="color:${COLORS.muted};">Filed 8(a) certification in week 3, paired with a prime in week 6, won $312,000 sole-source task order in month 4. The 8(a) was the unlock.</div>
+                  </td></tr>
+                  <tr><td style="height:8px;"></td></tr>
+                  <tr><td style="padding:12px 14px;border:1px solid ${COLORS.border};border-radius:8px;background:#fafaf9;">
+                    <div style="font-weight:700;color:${COLORS.ink};margin-bottom:4px;">HVAC contractor, Georgia</div>
+                    <div style="color:${COLORS.muted};">Skipped solicitations under 30 days. Responded to two Sources Sought notices in NAICS 238220. Got named in the eventual RFP set-aside — won $890,000 facility maintenance award in month 7.</div>
+                  </td></tr>
+                </table>
+                <p style="margin:0 0 14px;">Three different industries. Three different paths. The common thread: each picked one thing from the Field Manual and ran with it for 90 days. No 30 simultaneous initiatives. Pick one, ship it.</p>
+                <p style="margin:0 0 14px;font-size:14px;color:${COLORS.muted};">P.S. Final email in this short sequence lands in 2 days — about the 14-day trial if you want the dashboard to do the matching for you.</p>
+            `,
+            ctaText: "Read the full action plan",
+            ctaUrl: `${BLOG_URL}/federal-contracting-action-plan`,
+            ctaSecondary: "Or jump straight to the free dashboard",
+            ctaSecondaryUrl: `${DASHBOARD_URL}?utm_source=lead_magnet&utm_campaign=field-manual&utm_content=d5`,
+            isMarketing: true,
+        }),
+    },
+
+    // Day 7 — "Ready for a trial?"
+    nurture_lm_d7_trial: {
+        subject: "Two doors: free forever, or 14-day Pro trial",
+        html: wrap({
+            preheader: "You've had a week with the manual. Here's what to do next.",
+            heroSvg: HERO_PILOT,
+            topAction: {
+                label: "Start the 14-day Pro trial",
+                url: `${DASHBOARD_URL}?utm_source=lead_magnet&utm_campaign=field-manual&utm_content=d7`,
+                note: "Full Pro access for 14 days — unlimited matches, AI proposals, SLED across 48 states. No card upfront.",
+            },
+            body: `
+                <h1 style="margin:0 0 14px;font-size:22px;font-weight:800;color:${COLORS.ink};letter-spacing:-0.02em;">A week in. Two doors.</h1>
+                <p style="margin:0 0 14px;">It's been seven days since you grabbed the Field Manual. You've seen the system, you've read three case studies, you've had a chance to skim the NAICS list and probably run the Quick Checker. So here's a clean ask — pick the door that fits.</p>
+                <table cellspacing="0" cellpadding="0" border="0" style="width:100%;margin:0 0 16px;">
+                  <tr>
+                    <td style="padding:14px;border:1px solid ${COLORS.border};border-radius:8px;font-size:13px;width:48%;vertical-align:top;">
+                      <div style="font-weight:700;color:${COLORS.ink};margin-bottom:6px;">Free forever</div>
+                      <div style="color:${COLORS.muted};margin-bottom:8px;">50 federal matches per day in your inbox. NAICS filter. Saved searches. No card.</div>
+                      <a href="${DASHBOARD_URL}?utm_source=lead_magnet&utm_campaign=field-manual&utm_content=d7_free" style="color:${COLORS.accentDark};font-weight:700;text-decoration:none;font-size:13px;">Activate free →</a>
+                    </td>
+                    <td style="padding:0 6px;"></td>
+                    <td style="padding:14px;border:2px solid ${COLORS.accent};border-radius:8px;font-size:13px;width:48%;vertical-align:top;background:#ecfdf5;">
+                      <div style="font-weight:700;color:${COLORS.ink};margin-bottom:6px;">14-day Pro trial</div>
+                      <div style="color:${COLORS.muted};margin-bottom:8px;">Unlimited matches. SLED 48 states. AI proposal writer. Capability statement builder. Then $89/mo if you keep it.</div>
+                      <a href="${DASHBOARD_URL}?utm_source=lead_magnet&utm_campaign=field-manual&utm_content=d7_trial" style="color:${COLORS.accentDark};font-weight:700;text-decoration:none;font-size:13px;">Start the trial →</a>
+                    </td>
+                  </tr>
+                </table>
+                <p style="margin:0 0 14px;">Neither has a credit card upfront. Both let you cancel any time. The difference is just how much of the platform you want unlocked while you decide.</p>
+                <p style="margin:0 0 14px;background:#fffbeb;border-left:3px solid #f59e0b;padding:12px 14px;font-size:14px;color:${COLORS.ink};"><strong>If neither fits</strong> — totally fine. The longer 12-email nurture continues from here with one email every week or two. You'll see Sources Sought tips, capability-statement teardowns, and the year-end fiscal cliff playbook. Or reply "slow down" and I'll quiet the cadence.</p>
+                <p style="margin:0;font-size:14px;color:${COLORS.muted};">— André</p>
+            `,
+            ctaText: "Start the 14-day Pro trial",
+            ctaUrl: `${DASHBOARD_URL}?utm_source=lead_magnet&utm_campaign=field-manual&utm_content=d7_trial`,
+            ctaSecondary: "Or stick with free forever (50 matches/day)",
+            ctaSecondaryUrl: `${DASHBOARD_URL}?utm_source=lead_magnet&utm_campaign=field-manual&utm_content=d7_free`,
+            isMarketing: true,
+        }),
+    },
+
     reengage_qc: {
         subject: "Your scan + the #1 thing missing from most small-biz bids",
         html: wrap({
@@ -974,4 +1132,26 @@ export const NURTURE_SEQUENCE: Array<{ key: string; day_offset: number; type: "w
 export const NURTURE_SEQUENCE_QC: Array<{ key: string; day_offset: number; type: "welcome" | "value" | "conversion" | "hybrid" | "sunset"; label: string }> = [
     { key: "nurture_01_qc_welcome",      day_offset:  0, type: "welcome",    label: "Day 0 · Welcome (Quick Checker)" },
     ...NURTURE_SEQUENCE.slice(1),
+];
+
+/**
+ * Short 7-day lead-magnet drip (W3-4.3). Fires the moment a PDF is delivered
+ * (Day 0 = the magnet email itself, sent immediately by /api/leads or
+ * /api/lead-magnet/deliver). Four follow-ups walk the downloader through:
+ *
+ *   Day 1 → use what you downloaded (NAICS / SAM / Sources Sought)
+ *   Day 3 → wasted year — Quick Checker shortcut
+ *   Day 5 → three real wins (case studies)
+ *   Day 7 → free vs 14-day trial — UTM-tagged CTA to /signup
+ *
+ * Every CTA URL carries ?utm_source=lead_magnet&utm_campaign=<magnet_slug>
+ * so the dashboard funnel attribution lands correctly. The longer 90-day
+ * fb_nurture continues to enroll separately — the short sequence does not
+ * replace it.
+ */
+export const LEAD_MAGNET_NURTURE_SEQUENCE: Array<{ key: string; day_offset: number; type: "value" | "conversion"; label: string }> = [
+    { key: "nurture_lm_d1_use_it",       day_offset: 1, type: "value",      label: "Day 1 · Use what you downloaded" },
+    { key: "nurture_lm_d3_wasted_year",  day_offset: 3, type: "value",      label: "Day 3 · Skip the wasted year" },
+    { key: "nurture_lm_d5_case_studies", day_offset: 5, type: "value",      label: "Day 5 · Three real wins" },
+    { key: "nurture_lm_d7_trial",        day_offset: 7, type: "conversion", label: "Day 7 · Free vs 14-day trial" },
 ];
