@@ -6,10 +6,10 @@ import { usePathname } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
 import Image from "next/image";
 import {
-    LayoutDashboard, Users, Briefcase, Target,
+    LayoutDashboard, Users, Briefcase,
     Wrench, Settings, LogOut, Loader2, Search, ChevronRight, ChevronDown,
-    Menu, X, MessageSquare, Mail, Gift, Sparkles, Activity,
-    GraduationCap, ShieldCheck, Globe, Eye, Database, FileText,
+    Menu, X, MessageSquare, Mail, Sparkles, Activity,
+    GraduationCap, ShieldCheck, Database, FileText,
     Send, ListChecks, Plug, Megaphone, Newspaper, Layers,
 } from "lucide-react";
 import clsx from "clsx";
@@ -34,10 +34,10 @@ type NavSection = {
     defaultCollapsed?: boolean;
 };
 
-// R3-M4.1 sidebar reorg. Groups are logical not alphabetical. Health surfaces
-// db-health which had no nav entry. Legacy routes still resolve so deep links
-// don't 404 — they're just tucked under the "Legacy" collapsed group at the
-// bottom and visually de-emphasized.
+// Sidebar reorg (2026-06-11) — collapsed from ~9 groups to 6 per user feedback:
+// Pipeline removed entirely (we use HubSpot now), Legacy section killed
+// (redirect stubs still resolve via direct URL, just no nav clutter),
+// Content + Settings merged into a single collapsed group.
 const NAV: NavSection[] = [
     {
         label: "Overview",
@@ -68,22 +68,16 @@ const NAV: NavSection[] = [
         ],
     },
     {
-        label: "Pipeline",
-        key: "pipeline",
-        items: [
-            { href: "/admin/pipeline", icon: Target, label: "Sales Pipeline" },
-        ],
-    },
-    {
         label: "Outreach",
         key: "outreach",
         items: [
-            { href: "/admin/outreach", icon: Megaphone, label: "Campaigns" },
+            { href: "/admin/outreach", icon: Megaphone, label: "Outreach" },
         ],
     },
     {
         label: "Operations",
         key: "operations",
+        defaultCollapsed: true,
         items: [
             { href: "/admin/jobs", icon: ListChecks, label: "Jobs" },
             { href: "/admin/queue", icon: Sparkles, label: "Queue" },
@@ -92,33 +86,15 @@ const NAV: NavSection[] = [
         ],
     },
     {
-        label: "Content",
-        key: "content",
+        label: "Content + Settings",
+        key: "content_settings",
+        defaultCollapsed: true,
         items: [
             { href: "/admin/academy", icon: GraduationCap, label: "Academy" },
             { href: "/admin/messages", icon: MessageSquare, label: "Messages", badge: "unreadMessages" },
             { href: "/admin/emails", icon: Mail, label: "Emails" },
-        ],
-    },
-    {
-        label: "Settings",
-        key: "settings",
-        items: [
             { href: "/admin/connectors", icon: Plug, label: "Connectors" },
             { href: "/admin/settings", icon: Settings, label: "Settings" },
-        ],
-    },
-    {
-        label: "Legacy",
-        key: "legacy",
-        defaultCollapsed: true,
-        items: [
-            { href: "/admin/users", icon: Users, label: "Users (redirect)" },
-            { href: "/admin/lead-check", icon: Search, label: "Lead Check (redirect)" },
-            { href: "/admin/beta-invites", icon: Gift, label: "Beta Invites" },
-            { href: "/admin/email-tracking", icon: Eye, label: "Email Tracking" },
-            { href: "/admin/backlinks", icon: Globe, label: "Backlinks" },
-            { href: "/admin/enrich", icon: Sparkles, label: "Bulk Enrich" },
         ],
     },
 ];
@@ -244,7 +220,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     const hasActive = section.items.some(
                         i => pathname === i.href || (i.href !== "/admin/overview" && pathname?.startsWith(i.href + "/"))
                     );
-                    const isLegacy = section.key === "legacy";
                     return (
                         <div key={section.key} className={clsx(idx > 0 && "mt-3")}>
                             <button
@@ -252,8 +227,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                                 onClick={() => toggleSection(section.key)}
                                 className={clsx(
                                     "flex items-center gap-1 w-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] transition-colors",
-                                    hasActive ? "text-stone-300" : "text-stone-500 hover:text-stone-300",
-                                    isLegacy && "opacity-60"
+                                    hasActive ? "text-stone-300" : "text-stone-500 hover:text-stone-300"
                                 )}
                                 aria-expanded={isCollapsed ? "false" : "true"}
                             >
@@ -280,8 +254,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                                                     "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
                                                     isActive
                                                         ? "bg-white/10 text-white"
-                                                        : "text-stone-400 hover:bg-white/5 hover:text-stone-200",
-                                                    isLegacy && !isActive && "text-stone-500"
+                                                        : "text-stone-400 hover:bg-white/5 hover:text-stone-200"
                                                 )}
                                             >
                                                 <Icon className="w-4 h-4 flex-shrink-0" />

@@ -188,6 +188,29 @@ export default function AdminOverview() {
                 </div>
             </div>
 
+            {/* HubSpot deep-link — pipeline management lives in HubSpot, not in
+                /admin/pipeline. Clicking opens the deal board for the connected
+                workspace in a new tab. */}
+            <a
+                href="https://app-na2.hubspot.com/contacts/245197783/objects/0-3/views/all/list"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block bg-white border border-stone-200 rounded-2xl p-4 hover:border-orange-300 hover:bg-orange-50/30 transition-colors group"
+            >
+                <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center flex-shrink-0">
+                            <ExternalLink className="w-5 h-5" />
+                        </div>
+                        <div className="min-w-0">
+                            <p className="font-bold text-sm text-stone-900">Open HubSpot Pipeline</p>
+                            <p className="text-xs text-stone-500 mt-0.5 truncate">Deal stages, owner assignment, and forecast live in HubSpot.</p>
+                        </div>
+                    </div>
+                    <ArrowRight className="w-4 h-4 text-stone-400 group-hover:text-orange-600 flex-shrink-0" />
+                </div>
+            </a>
+
                 {/* KPI Cards */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
                     <div className="bg-white border border-stone-200 rounded-2xl p-4">

@@ -6,7 +6,7 @@ import Link from "next/link";
 import {
     Plus, Users, Mail, Phone, Globe, Hash, ChevronDown, Search,
     ListTodo, FileText, Loader2, Building2, Send, Sparkles, CheckCircle2, AlertTriangle,
-    UserCog, Shield, MoreVertical, Trash2, KeyRound, UserMinus, UserCheck, Briefcase,
+    UserCog, Shield, MoreVertical, Trash2, KeyRound, UserMinus, UserCheck, Briefcase, X,
 } from "lucide-react";
 import clsx from "clsx";
 import KeywordPicker from "@/components/KeywordPicker";
@@ -109,6 +109,24 @@ function AdminClientsPageInner() {
     const [resetPasswordFor, setResetPasswordFor] = useState<Client | null>(null);
     const [newPassword, setNewPassword] = useState("");
     const [actionToast, setActionToast] = useState<{ kind: "success" | "error"; text: string } | null>(null);
+
+    // Dismissable spam-signup banner. Stays dismissed for the rest of the
+    // browser session (localStorage) so the admin doesn't have to close it
+    // on every page visit, but is easy to re-show by clearing the key.
+    const SPAM_BANNER_KEY = "cp_admin_spam_banner_dismissed_v1";
+    const [showSpamBanner, setShowSpamBanner] = useState(false);
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+        try {
+            setShowSpamBanner(localStorage.getItem(SPAM_BANNER_KEY) !== "1");
+        } catch {
+            setShowSpamBanner(true);
+        }
+    }, []);
+    const dismissSpamBanner = () => {
+        try { localStorage.setItem(SPAM_BANNER_KEY, "1"); } catch {}
+        setShowSpamBanner(false);
+    };
 
     const showToast = (kind: "success" | "error", text: string) => {
         setActionToast({ kind, text });
@@ -476,6 +494,24 @@ function AdminClientsPageInner() {
                     )}
                 </div>
             </div>
+
+            {/* Spam-signup hint — dismissable, remembered in localStorage. */}
+            {showSpamBanner && (
+                <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-2.5 flex items-start gap-3">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                    <p className="text-xs text-amber-800 flex-1">
+                        Found a spam signup? Use the row&apos;s <span className="font-bold">⋮</span> menu → <span className="font-bold">Delete account</span>.
+                    </p>
+                    <button
+                        type="button"
+                        onClick={dismissSpamBanner}
+                        className="text-amber-600 hover:text-amber-900 flex-shrink-0"
+                        aria-label="Dismiss"
+                    >
+                        <X className="w-3.5 h-3.5" />
+                    </button>
+                </div>
+            )}
 
             {/* Account-type tabs */}
             <div className="bg-white border border-stone-200 rounded-2xl p-1 inline-flex flex-wrap gap-0.5">
