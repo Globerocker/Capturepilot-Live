@@ -71,7 +71,7 @@ async function handleClassifyNaics(sb: SbAny, job: Job) {
         .select("title, description, naics_code")
         .eq("id", oppId)
         .maybeSingle() as { data: { title: string | null; description: string | null; naics_code: string | null } | null };
-    if (!opp) return { error: "opp not found" };
+    if (!opp) return { result: { skipped: "opp_deleted" } };
     if (opp.naics_code) return { result: { skipped: "already_has_naics" } };
     const result = await classifyNaics({ title: opp.title, description: opp.description });
     if (!result) return { result: { no_classification: true } };
@@ -93,7 +93,7 @@ async function handleExtractKeywords(sb: SbAny, job: Job) {
         .select("title, description, ai_keywords")
         .eq("id", oppId)
         .maybeSingle();
-    if (!opp) return { error: "opp not found" };
+    if (!opp) return { result: { skipped: "opp_deleted" } };
     if (opp.ai_keywords && Array.isArray(opp.ai_keywords) && opp.ai_keywords.length > 0) {
         return { result: { skipped: "already_extracted" } };
     }

@@ -17,22 +17,42 @@ import {
     COLORS,
 } from "@/lib/email-template";
 import { EMAIL_SETTINGS } from "@/lib/email-settings";
+import { NURTURE_TEMPLATES } from "@/lib/email-nurture-templates";
 
 /**
  * GET /api/admin/email-preview?type=welcome
  * Returns rendered HTML for any email template with sample data.
+ * Falls back to NURTURE_TEMPLATES (long-form nurture sequence) when the
+ * type isn't in the hardcoded switch below.
  */
 export async function GET(req: NextRequest) {
     const unauth = await assertAdmin();
     if (unauth) return unauth;
     const type = req.nextUrl.searchParams.get("type") || "welcome";
-    const html = renderPreview(type);
-    if (!html) {
-        return NextResponse.json({ error: `Unknown template: ${type}` }, { status: 400 });
+
+    // 1. Hardcoded template? Render with sample data.
+    const hardcoded = renderPreview(type);
+    if (hardcoded) {
+        return new NextResponse(hardcoded, { headers: { "Content-Type": "text/html; charset=utf-8" } });
     }
-    return new NextResponse(html, {
-        headers: { "Content-Type": "text/html; charset=utf-8" },
-    });
+
+    // 2. Nurture template (NURTURE_TEMPLATES is a Record<key, {subject, html}>)?
+    //    The html is pre-built; just substitute merge tags with sample data.
+    const nurture = NURTURE_TEMPLATES[type];
+    if (nurture) {
+        const merged = nurture.html
+            .replace(/\{\{first_name\}\}/g, "Sarah")
+            .replace(/\{\{firstName\}\}/g, "Sarah")
+            .replace(/\{\{last_name\}\}/g, "Chen")
+            .replace(/\{\{company_name\}\}/g, "Acme Federal")
+            .replace(/\{\{companyName\}\}/g, "Acme Federal")
+            .replace(/\{\{email\}\}/g, "sarah@acmefed.com")
+            .replace(/\{\{unsubscribe_url\}\}/g, `${process.env.NEXT_PUBLIC_APP_URL || "https://app.capturepilot.com"}/unsubscribe?token=preview`)
+            .replace(/\{\{magnet_slug\}\}/g, "federal-launch-kit");
+        return new NextResponse(merged, { headers: { "Content-Type": "text/html; charset=utf-8" } });
+    }
+
+    return NextResponse.json({ error: `Unknown template: ${type}` }, { status: 400 });
 }
 
 function cat(key: string): "transactional" | "marketing" {

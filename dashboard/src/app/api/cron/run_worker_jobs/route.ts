@@ -84,7 +84,7 @@ async function handleClassifyNaics(sb: SbAny, job: Job) {
         .select("title, description, naics_code")
         .eq("id", oppId)
         .maybeSingle() as { data: { title: string | null; description: string | null; naics_code: string | null } | null };
-    if (!opp) return { error: "opp not found" };
+    if (!opp) return { result: { skipped: "opp_deleted" } };
     if (opp.naics_code) return { result: { skipped: "already_has_naics" } };
     const result = await classifyNaics({ title: opp.title, description: opp.description });
     if (!result) return { result: { no_classification: true } };
@@ -104,7 +104,7 @@ async function handleExtractStructuredReqs(sb: SbAny, job: Job) {
         .select("title, description, structured_requirements")
         .eq("id", oppId)
         .maybeSingle() as { data: { title: string | null; description: string | null; structured_requirements: Record<string, unknown> | null } | null };
-    if (!opp) return { error: "opp not found" };
+    if (!opp) return { result: { skipped: "opp_deleted" } };
     const existing = opp.structured_requirements || {};
     // Skip if attachments have been analyzed (deeper data lives there)
     if ((existing as { _attachments_extracted?: number })._attachments_extracted) {
@@ -147,7 +147,7 @@ async function handleExtractStructuredReqsCounty(sb: SbAny, job: Job) {
             response_deadline: string | null;
             structured_requirements: Record<string, unknown> | null;
         } | null };
-    if (!opp) return { error: "opp not found" };
+    if (!opp) return { result: { skipped: "opp_deleted" } };
 
     const existing = (opp.structured_requirements || {}) as Record<string, unknown>;
 
@@ -223,7 +223,7 @@ async function handleExtractStructuredReqsCity(sb: SbAny, job: Job) {
             response_deadline: string | null;
             structured_requirements: Record<string, unknown> | null;
         } | null };
-    if (!opp) return { error: "opp not found" };
+    if (!opp) return { result: { skipped: "opp_deleted" } };
 
     const existing = (opp.structured_requirements || {}) as Record<string, unknown>;
 
@@ -298,7 +298,7 @@ async function handleExtractStructuredReqsState(sb: SbAny, job: Job) {
             response_deadline: string | null;
             structured_requirements: Record<string, unknown> | null;
         } | null };
-    if (!opp) return { error: "opp not found" };
+    if (!opp) return { result: { skipped: "opp_deleted" } };
 
     const existing = (opp.structured_requirements || {}) as Record<string, unknown>;
 
@@ -386,7 +386,7 @@ async function handleExtractStructuredReqsFederal(sb: SbAny, job: Job) {
             response_deadline: string | null;
             structured_requirements: Record<string, unknown> | null;
         } | null };
-    if (!opp) return { error: "opp not found" };
+    if (!opp) return { result: { skipped: "opp_deleted" } };
 
     const existing = (opp.structured_requirements || {}) as Record<string, unknown>;
 
@@ -445,7 +445,7 @@ async function handleExtractKeywords(sb: SbAny, job: Job) {
         .select("title, description, ai_keywords")
         .eq("id", oppId)
         .maybeSingle();
-    if (!opp) return { error: "opp not found" };
+    if (!opp) return { result: { skipped: "opp_deleted" } };
     if (opp.ai_keywords && Array.isArray(opp.ai_keywords) && opp.ai_keywords.length > 0) {
         return { result: { skipped: "already_extracted" } };
     }
@@ -590,7 +590,7 @@ async function handleAnalyzeAttachments(sb: SbAny, job: Job) {
         .select("id, notice_id, title, description, resource_links, structured_requirements")
         .eq("id", oppId)
         .maybeSingle() as { data: { id: string; notice_id: string | null; title: string | null; description: string | null; resource_links: string[] | null; structured_requirements: Record<string, unknown> | null } | null };
-    if (!opp) return { error: "opp not found" };
+    if (!opp) return { result: { skipped: "opp_deleted" } };
 
     // Watermark check: skip opps already analyzed. Prevents reaped+requeued
     // jobs from burning another LLM call on work that's already done.
