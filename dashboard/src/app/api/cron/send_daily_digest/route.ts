@@ -141,10 +141,14 @@ async function GET_handler(req: NextRequest): Promise<NextResponse> {
     // Pulled from alert_autofixes (migration 098). Two buckets:
     //   - "fixed"     → silently resolved, mention as count + 1-line summary
     //   - "escalated" → recipe couldn't fix → list each one as a TODO for the operator
+    // dismissed_at IS NULL filter added 2026-06-11 (migration 162) — without it,
+    // the digest repeats the same 23 orchestrator-auth stale alerts every morning
+    // long after the root cause was fixed in commit 4321551e.
     const { data: autofixesRaw } = await sb
         .from("alert_autofixes")
         .select("status, recipe_slug, action_taken, connector_slug")
         .gte("created_at", yesterday)
+        .is("dismissed_at", null)
         .order("created_at", { ascending: false })
         .limit(100);
     type AutofixRow = { status: string; recipe_slug: string; action_taken: string; connector_slug: string | null };
