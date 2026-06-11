@@ -21,7 +21,7 @@ function admin() {
  */
 export async function POST(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
     const auth = await assertAdminWithUser();
-    if (!("userId" in auth)) return auth;
+    if (!("userId" in auth)) return auth.response;
 
     const { id } = await ctx.params;
     const db = admin();
