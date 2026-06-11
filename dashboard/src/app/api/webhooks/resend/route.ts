@@ -145,12 +145,131 @@ export async function POST(req: NextRequest) {
         data?: {
             email_id?: string;
             to?: string[] | string;
+            from?: string;
+            subject?: string;
+            text?: string;
+            html?: string;
+            messageId?: string;
+            inReplyTo?: string;
+            references?: string[] | string;
+            headers?: Record<string, string>;
             click?: { link?: string; ipAddress?: string; userAgent?: string };
             open?: { ipAddress?: string; userAgent?: string };
             bounce?: { message?: string };
             [k: string]: unknown;
         };
     };
+
+    // ---- INBOUND BRANCH (email.received) ----
+    // Resend Inbound delivers replies + new mail to the configured webhook.
+    // No email_id on these — they have their own messageId + inReplyTo
+    // headers we use to match back to an outbound campaign step run.
+    if (evt.type === "email.received") {
+        const sbInbound = createClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.SUPABASE_SERVICE_KEY!,
+            { auth: { persistSession: false } },
+        );
+
+        const fromRaw = evt.data?.from || "";
+        // Extract email from "Name <email@host>" or plain "email@host"
+        const fromMatch = fromRaw.match(/<([^>]+)>/);
+        const fromEmail = (fromMatch ? fromMatch[1] : fromRaw).trim().toLowerCase();
+        const fromName = fromMatch ? fromRaw.replace(/<[^>]+>/, "").trim().replace(/^"|"$/g, "") : null;
+        const subject = evt.data?.subject || null;
+        const bodyText = evt.data?.text || null;
+        const bodyHtml = evt.data?.html || null;
+        const messageId = evt.data?.messageId || null;
+        const inReplyTo = evt.data?.inReplyTo || null;
+        const receivedAt = evt.created_at ? new Date(evt.created_at).toISOString() : new Date().toISOString();
+
+        console.log(`[resend-webhook] INBOUND from=${fromEmail} subject=${(subject || "").slice(0, 60)} in_reply_to=${inReplyTo}`);
+
+        // Find the originating outbound send via inReplyTo header
+        let stepRunId: string | null = null;
+        let campaignContactId: string | null = null;
+        if (inReplyTo) {
+            const { data: stepRun } = await sbInbound
+                .from("outreach_campaign_step_runs")
+                .select("id, campaign_contact_id")
+                .eq("provider_message_id", inReplyTo.replace(/[<>]/g, ""))
+                .maybeSingle() as { data: { id: string; campaign_contact_id: string } | null };
+            if (stepRun) {
+                stepRunId = stepRun.id;
+                campaignContactId = stepRun.campaign_contact_id;
+            }
+        }
+
+        // Resolve outreach_contact_id from from_email
+        const { data: contact } = await sbInbound
+            .from("outreach_contacts")
+            .select("id")
+            .eq("email", fromEmail)
+            .maybeSingle() as { data: { id: string } | null };
+        const contactId = contact?.id || null;
+
+        // Insert the reply (sentiment='unsure' triggers async LLM classification)
+        const { data: reply, error: replyErr } = await sbInbound
+            .from("outreach_replies")
+            .insert({
+                campaign_step_run_id: stepRunId,
+                contact_id: contactId,
+                from_email: fromEmail,
+                from_name: fromName,
+                subject,
+                body_text: bodyText,
+                body_html: bodyHtml,
+                message_id: messageId,
+                in_reply_to: inReplyTo,
+                sentiment: "unsure",
+                received_at: receivedAt,
+            })
+            .select("id")
+            .single() as { data: { id: string } | null; error: { message: string } | null };
+
+        if (replyErr) {
+            console.error("[resend-webhook] outreach_replies insert failed", { error: replyErr.message, fromEmail, messageId });
+            return new NextResponse("Reply insert failed", { status: 500 });
+        }
+
+        // Mark the step_run + campaign_contact as replied
+        if (stepRunId) {
+            await sbInbound
+                .from("outreach_campaign_step_runs")
+                .update({ status: "replied", replied_at: receivedAt })
+                .eq("id", stepRunId);
+        }
+        if (campaignContactId) {
+            // Honor outreach_inbox_settings.auto_pause_campaign_on_reply
+            const { data: settings } = await sbInbound
+                .from("outreach_inbox_settings")
+                .select("auto_pause_campaign_on_reply")
+                .eq("id", 1)
+                .maybeSingle() as { data: { auto_pause_campaign_on_reply: boolean } | null };
+            if (settings?.auto_pause_campaign_on_reply !== false) {
+                await sbInbound
+                    .from("outreach_campaign_contacts")
+                    .update({ status: "replied", finished_at: receivedAt })
+                    .eq("id", campaignContactId);
+            }
+        }
+
+        // Enqueue async LLM sentiment classification
+        if (reply?.id) {
+            try {
+                await sbInbound.from("worker_jobs").insert({
+                    task_type: "classify_outreach_reply",
+                    payload: { reply_id: reply.id },
+                    priority: 50,
+                    status: "pending",
+                });
+            } catch (e) {
+                console.error("[resend-webhook] classify job enqueue failed", e);
+            }
+        }
+
+        return NextResponse.json({ ok: true, type: "received", reply_id: reply?.id, matched_step_run: stepRunId });
+    }
 
     const resendEmailId = evt.data?.email_id;
     if (!resendEmailId) {
