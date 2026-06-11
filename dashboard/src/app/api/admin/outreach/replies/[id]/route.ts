@@ -100,7 +100,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
              meeting_url, is_handled, handled_at, notes,
              campaign_id, contact_id, step_id,
              outreach_campaigns ( id, name ),
-             outreach_contacts ( id, email, name, company )`
+             outreach_contacts ( id, email, first_name, last_name, company_name )`
         )
         .eq("id", id)
         .maybeSingle();

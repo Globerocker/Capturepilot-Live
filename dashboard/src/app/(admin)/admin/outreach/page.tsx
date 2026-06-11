@@ -55,8 +55,9 @@ interface Reply {
     outreach_contacts: {
         id: string;
         email: string;
-        name: string | null;
-        company: string | null;
+        first_name: string | null;
+        last_name: string | null;
+        company_name: string | null;
     } | null;
 }
 
@@ -526,12 +527,12 @@ export default function AdminOutreachPage() {
                                     {selected.outreach_contacts && (
                                         <div className="text-xs text-stone-600 border border-stone-200 rounded-lg p-2.5">
                                             <div className="font-medium text-stone-900">
-                                                {selected.outreach_contacts.name ||
+                                                {[selected.outreach_contacts.first_name, selected.outreach_contacts.last_name].filter(Boolean).join(" ") ||
                                                     selected.outreach_contacts.email}
                                             </div>
-                                            {selected.outreach_contacts.company && (
+                                            {selected.outreach_contacts.company_name && (
                                                 <div className="text-stone-500">
-                                                    {selected.outreach_contacts.company}
+                                                    {selected.outreach_contacts.company_name}
                                                 </div>
                                             )}
                                             <Link
