@@ -9,10 +9,37 @@
 //   node tools/23_enrich_contractors_usaspending.mjs --limit 5000    # stop after N rows
 //   node tools/23_enrich_contractors_usaspending.mjs --concurrency 8 # parallel calls
 //   node tools/23_enrich_contractors_usaspending.mjs --refresh       # ignore last_usaspending_refresh cache
+//   node tools/23_enrich_contractors_usaspending.mjs --dry-run       # fetch candidates only, no writes
 //
 // Env: NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_KEY
 
 import { createClient } from "@supabase/supabase-js";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const root = path.resolve(__dirname, "..");
+
+function loadEnvFile(file) {
+    if (!fs.existsSync(file)) return;
+    for (const line of fs.readFileSync(file, "utf8").split(/\r?\n/)) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith("#") || !trimmed.includes("=")) continue;
+        const idx = trimmed.indexOf("=");
+        const key = trimmed.slice(0, idx).trim();
+        let value = trimmed.slice(idx + 1).trim();
+        if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+            value = value.slice(1, -1);
+        }
+        if (!(key in process.env)) process.env[key] = value;
+    }
+}
+
+loadEnvFile(path.join(root, ".env"));
+loadEnvFile(path.join(root, ".env.local"));
+loadEnvFile(path.join(root, "dashboard", ".env"));
+loadEnvFile(path.join(root, "dashboard", ".env.local"));
 
 const URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -34,6 +61,7 @@ function arg(flag, fallback) {
 const LIMIT = arg("--limit", 100_000);
 const CONCURRENCY = Math.max(1, Math.min(20, arg("--concurrency", 8)));
 const FORCE_REFRESH = arg("--refresh", false);
+const DRY_RUN = arg("--dry-run", false);
 const PAGE = 200;
 
 const endDate = new Date().toISOString().split("T")[0];
@@ -63,6 +91,7 @@ async function enrichOne(row) {
         const awards = data.results || [];
 
         if (awards.length === 0) {
+            if (DRY_RUN) return { id: row.id, status: "miss" };
             await db.from("contractors").update({
                 federal_awards_count: 0,
                 total_award_volume: 0,
@@ -98,6 +127,8 @@ async function enrichOne(row) {
             .map(([code, v]) => ({ code, description: v.description, amount: v.amount, count: v.count }))
             .sort((a, b) => b.amount - a.amount).slice(0, 10);
 
+        if (DRY_RUN) return { id: row.id, status: "hit", awards: awards.length, total };
+
         await db.from("contractors").update({
             federal_awards_count: awards.length,
             total_award_volume: total,
@@ -124,7 +155,7 @@ async function processBatch(rows) {
 }
 
 async function main() {
-    console.log(`Bulk USASpending enrichment — concurrency=${CONCURRENCY}, limit=${LIMIT}, force_refresh=${!!FORCE_REFRESH}`);
+    console.log(`Bulk USASpending enrichment — concurrency=${CONCURRENCY}, limit=${LIMIT}, force_refresh=${!!FORCE_REFRESH}, dry_run=${!!DRY_RUN}`);
 
     let processed = 0;
     let hits = 0;
