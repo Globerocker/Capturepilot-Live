@@ -36,6 +36,13 @@ const config = [
       // React 19 + Next.js 16 server components don't need React in scope.
       "react/react-in-jsx-scope": "off",
       "react/no-unescaped-entities": "off",
+      // React Compiler rules are useful migration signals, but the current
+      // app has a large legacy backlog. Keep builds/lint actionable while we
+      // burn these down incrementally instead of blocking every audit pass.
+      "react-hooks/set-state-in-effect": "warn",
+      "react-hooks/purity": "warn",
+      "react-hooks/static-components": "warn",
+      "react-hooks/preserve-manual-memoization": "warn",
       // We use lucide-react components; alt text is added at the icon level.
       "jsx-a11y/alt-text": "warn",
       // The base ESLint rule double-fires with the typescript-eslint

@@ -222,12 +222,12 @@ export default function BacklinksPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <a
+            <Link
               href="/api/admin/backlinks/disavow"
               className="px-3 py-2 text-xs font-medium rounded-lg border border-stone-200 bg-white hover:bg-stone-50 inline-flex items-center gap-1.5"
             >
               <Download className="w-3.5 h-3.5" /> disavow.txt
-            </a>
+            </Link>
             <button
               onClick={load}
               className="px-3 py-2 text-xs font-medium rounded-lg border border-stone-200 bg-white hover:bg-stone-50 inline-flex items-center gap-1.5"

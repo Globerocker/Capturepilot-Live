@@ -36,6 +36,7 @@ export function useResizableColumns(opts: {
     const activeKey = useRef<string | null>(null);
     const startX = useRef(0);
     const startWidth = useRef(0);
+    const onMouseUpRef = useRef<() => void>(() => {});
 
     // Hydrate from localStorage — only runs once, and only if storageKey is set.
     // We merge with defaults so new columns get their default width rather than
@@ -72,7 +73,7 @@ export function useResizableColumns(opts: {
         document.body.style.cursor = "";
         document.body.style.userSelect = "";
         window.removeEventListener("mousemove", onMouseMove);
-        window.removeEventListener("mouseup", onMouseUp);
+        window.removeEventListener("mouseup", onMouseUpRef.current);
         // Persist the final widths snapshot. We read via setWidths callback to
         // avoid stale-state closures.
         setWidths(prev => {
@@ -80,6 +81,10 @@ export function useResizableColumns(opts: {
             return prev;
         });
     }, [onMouseMove, persist]);
+
+    useEffect(() => {
+        onMouseUpRef.current = onMouseUp;
+    }, [onMouseUp]);
 
     const startDrag = useCallback((key: string) => (e: React.MouseEvent) => {
         e.preventDefault();
@@ -91,18 +96,18 @@ export function useResizableColumns(opts: {
         document.body.style.cursor = "col-resize";
         document.body.style.userSelect = "none";
         window.addEventListener("mousemove", onMouseMove);
-        window.addEventListener("mouseup", onMouseUp);
-    }, [widths, opts.defaults, onMouseMove, onMouseUp]);
+        window.addEventListener("mouseup", onMouseUpRef.current);
+    }, [widths, opts.defaults, onMouseMove]);
 
     // Safety: if the component unmounts mid-drag, release listeners.
     useEffect(() => {
         return () => {
             window.removeEventListener("mousemove", onMouseMove);
-            window.removeEventListener("mouseup", onMouseUp);
+            window.removeEventListener("mouseup", onMouseUpRef.current);
             document.body.style.cursor = "";
             document.body.style.userSelect = "";
         };
-    }, [onMouseMove, onMouseUp]);
+    }, [onMouseMove]);
 
     const getWidth = (key: string): number => widths[key] ?? opts.defaults[key] ?? 150;
 

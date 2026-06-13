@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import Link from "next/link";
 
 // Per-segment error boundary for the public Quick Checker result page.
 // Surfaces the actual error message + a way to retry rendering, so we don't
@@ -43,12 +44,12 @@ export default function CheckResultError({
                     >
                         Try again
                     </button>
-                    <a
+                    <Link
                         href="/check"
                         className="text-xs font-bold text-stone-600 hover:text-stone-900 px-4 py-2"
                     >
                         Start a new check
-                    </a>
+                    </Link>
                 </div>
             </div>
         </div>
