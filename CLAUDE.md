@@ -4,14 +4,14 @@
 - **Frontend**: Next.js 16.1.6 (Turbopack), React 19, Tailwind CSS 4, TypeScript 5
 - **Backend**: Supabase (Postgres), Vercel Serverless Functions (**Pro plan** — 40 cron limit, up to 300s maxDuration per route)
 - **Observability**: Vercel Speed Insights + Analytics wired into root layout (`@vercel/speed-insights`, `@vercel/analytics`)
-- **Python Tools**: SAM.gov ingestion, scoring, enrichment (in `/tools/`)
+- **Tools**: ESM Node utilities in `/tools/` for Supabase operations, enrichment, worker jobs, PDF generation, VPS cron helpers, and Zapier app code. Historical root-level `fix_*.py` scripts are cleanup candidates, not default workflow entrypoints.
 - **APIs**: SAM.gov, USASpending, SBIR.gov, Apollo.io, Resend, OpenAI, Stripe
 
 ## Build & Run
 ```
 cd dashboard && npm run dev          # Dev server (port 3000)
 cd dashboard && npm run build        # Production build
-cd dashboard && npm run lint         # Lint check (ESLint v9 config currently broken, fix pending)
+cd dashboard && npm run lint         # Lint check (currently passes with warnings)
 ```
 
 ## Deploy
@@ -28,8 +28,10 @@ git push captiorpilot main && git push live main && git push globerocker main
 - SAM API key via `X-Api-Key` header (NOT URL params — `?api_key=` is deprecated and can cause rejections)
 - Apollo: use `mixed_companies/search` (free tier), NOT `mixed_people/search`
 - Never commit `.env`, `.env.local`, `.mcp.json`
-- When creating migrations, pick the next free number under `supabase/migrations/` (current latest: **141**)
+- When creating migrations, pick the next free number under `supabase/migrations/` (current latest at the 2026-06-12 audit: **162**)
 - **Cron handlers must use `guardCron(req)` from `@/lib/cron-auth`** — fail-closed in production. See [CRON.md](CRON.md) for the complete cron + agent reference.
+- **Cron inventory must be checked with `node tools/45_cron_inventory.mjs`** before deleting, moving, or rescheduling any cron route. As of the 2026-06-12 audit: 86 cron route files, 40 Vercel scheduled entries, and 0 scheduled entries without route files.
+- **Enrichment backfills should use `node tools/46_enrichment_backfill_ops.mjs` first in dry-run mode**. Only run `--apply` when `CRON_SECRET` and a deliberate `--base`/`APP_URL` are set; it calls the existing guarded cron route rather than writing queue rows directly.
 - **Any AI-writing prompt for user-facing copy must prepend `HUMAN_VOICE_RULES` from `@/lib/llm/humanizer`** so output matches the CapturePilot voice. Full style guide in [HUMANIZER.md](HUMANIZER.md). Invoke `/humanizer` to review or rewrite copy.
 - **Admin handlers must call `assertAdmin()` from `@/lib/auth-admin`** at the top of every exported `GET`/`POST`/`PATCH`/`DELETE`. Returns `NextResponse` on reject; caller does `if (unauth) return unauth`. Re-run `node tools/30_smoke_admin.mjs --base <url>` after touching `/api/admin/**` to verify the gate is still there.
 - **Public POST routes must call `protectCrawl(req, { route, maxPerMin })` from `@/lib/protect-crawl`** before any work — IP-bucketed rate limiter that killed the `/api/brand` enrichment-billing abuse pattern (2026-06-10 audit #15-18).
@@ -44,9 +46,9 @@ git push captiorpilot main && git push live main && git push globerocker main
 - `/dashboard/src/app/api/` — API routes (cron, admin, analyze, email, sam, sbir, partners, brand, ai)
 - `/dashboard/src/lib/` — Shared libs (crawler, scoring, email, supabase, naics-codes, psc-codes)
 - `/dashboard/src/components/` — Shared UI components
-- `/tools/` — Python + Node enrichment scripts (numbered 1-21) + smoke/bulk harnesses (30+)
-- `/dashboard/supabase/migrations/` — DB migrations (001-141)
-- `/docs/platform-audit-2026-06-10/` — 137-finding audit deliverables (8 reports + raw JSON)
+- `/tools/` — Node enrichment/admin scripts, smoke/bulk harnesses, worker code, VPS cron helpers, and Zapier app
+- `/dashboard/supabase/migrations/` — DB migrations (001-162 at the 2026-06-12 audit)
+- `/docs/CAPTUREPILOT_DEEP_AUDIT_2026-06-12.md` — current broad platform maturity audit and roadmap
 
 ## User Types
 - `self_service` — SaaS users (full dashboard, self-onboarding)
@@ -56,7 +58,7 @@ git push captiorpilot main && git push live main && git push globerocker main
 ## Cron Schedule
 **Full reference: [CRON.md](CRON.md)** — every scheduled task with what it does, what it writes, where the handler lives.
 
-38 scheduled Vercel crons (Pro limit 40, 2 slots free after 2026-06-10 VPS migration). High-level groups:
+40 scheduled Vercel crons (Pro limit 40, no slots free as of the 2026-06-12 audit). High-level groups:
 - **Ingest** (8) — SAM.gov, Grants.gov, RSS, HigherGov, monthly awards
 - **Scoring** (3) — score_matches, naics_stats_backfill, past_performance_stats
 - **Worker queue lanes** (4) — `run_worker_jobs` (general HTTP), `run_worker_jobs_keywords` (extract_keywords drain, batch=150, maxDuration=300), `run_worker_jobs_attachments` (analyze_attachments, isolated from struct-reqs to kill priority inversion), `run_worker_jobs_rescore` (claims `rescore_user_matches` jobs — see "Async rescore" below)

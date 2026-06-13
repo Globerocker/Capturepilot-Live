@@ -2,7 +2,7 @@
 
 Every scheduled task in Caturepilot 2.0, what it does, where it writes, and how to debug it. Mirror of [`dashboard/vercel.json`](dashboard/vercel.json) + the orchestrator fan-out logic + the VPS systemd timers.
 
-**Pro-plan limit: 40 crons. Current vercel.json count: 39.** 1 slot free. Heavy workloads that would push us over the ceiling now run on the Hostinger VPS — see [Externally-run crons](#externally-run-crons-not-in-verceljson) below.
+**Pro-plan limit: 40 crons. Current vercel.json count: 40.** No slots free. Heavy workloads that would push us over the ceiling now run on the Hostinger VPS — see [Externally-run crons](#externally-run-crons-not-in-verceljson) below.
 
 All cron route handlers live in [`dashboard/src/app/api/cron/`](dashboard/src/app/api/cron/). Every handler enforces `guardCron(req)` from [`src/lib/cron-auth.ts`](dashboard/src/lib/cron-auth.ts) — **fail-closed in production**, dev-friendly locally. Every run is wrapped with `withCronTelemetry()` from [`src/lib/cron-telemetry.ts`](dashboard/src/lib/cron-telemetry.ts) which writes a row to `cron_runs` (status, duration_ms, error, stats payload) — drive the health dashboard from this table.
 
@@ -42,7 +42,7 @@ Orchestrators accept `?task=<name>` (enrichment) or `?agent=<name>` (backlinks) 
 
 | Cron | Schedule | Sub-tasks (internal schedules) |
 |---|---|---|
-| [`enrichment_orchestrator`](dashboard/src/app/api/cron/enrichment_orchestrator/route.ts) | `0,10,15,30,40 * * * *` | Dispatches to sub-tasks below when their cron-equivalent UTC minute matches. |
+| [`enrichment_orchestrator`](dashboard/src/app/api/cron/enrichment_orchestrator/route.ts) | `0,5,10,15,30,40 * * * *` | Dispatches to sub-tasks below when their cron-equivalent UTC minute matches. |
 
 | Sub-task | Effective schedule | Writes |
 |---|---|---|
@@ -139,7 +139,7 @@ Orchestrators accept `?task=<name>` (enrichment) or `?agent=<name>` (backlinks) 
 
 Cron entries that show up in the `cron_runs` table but **do not appear** in `dashboard/vercel.json`. They are triggered from the Hostinger VPS systemd timers (see [`reference_hostinger_vps.md`](reference_hostinger_vps.md) and [`reference_vps_cron_pattern.md`](reference_vps_cron_pattern.md)) hitting the HTTP route with `Authorization: Bearer $CRON_SECRET`. They will continue to land rows in `cron_runs` even though `vercel.json` doesn't reference them — that's expected.
 
-**Why offload to the VPS?** Vercel Pro caps us at 40 cron entries and we are at 39. Anything heavy or low-frequency that doesn't justify a Vercel slot lives on the VPS instead.
+**Why offload to the VPS?** Vercel Pro caps us at 40 cron entries and we are at 40. Anything heavy or low-frequency that doesn't justify a Vercel slot lives on the VPS instead.
 
 | Cron route | Schedule (VPS timer) | Why it's on the VPS |
 |---|---|---|
@@ -191,7 +191,7 @@ limit 100;
 
 1. **`beta_deadline`** hardcoded to past dates — delete or repurpose for evergreen trial-reminder emails.
 2. **`enrichment_orchestrator` runs 6×/hour** (`0,5,10,15,30,40 * * * *`) — total invocations 144/day. Worth profiling to confirm Vercel function cost is justified.
-3. **Decide whether more low-frequency Vercel crons should move to the VPS** to claw back slots toward the 40 ceiling. Candidates: weekly ingest jobs (`ingest_fpds_awards`, `ingest_subawards`, `ingest_calc`, `ingest_sec_filings_primes`).
+3. **Decide whether more low-frequency Vercel crons should move to the VPS** to claw back slots because `vercel.json` is at the 40-cron ceiling. Candidates: weekly ingest jobs (`ingest_fpds_awards`, `ingest_subawards`, `ingest_calc`, `ingest_sec_filings_primes`).
 
 ### Resolved by the 2026-06 audit (no longer open)
 
@@ -202,12 +202,19 @@ limit 100;
 
 ## Cron route inventory vs vercel.json
 
-There are **78 route files** under [`dashboard/src/app/api/cron/`](dashboard/src/app/api/cron/) but only **39 entries** in [`dashboard/vercel.json`](dashboard/vercel.json). The delta is intentional. Every route in the route directory falls into one of these buckets:
+There are **86 route files** under [`dashboard/src/app/api/cron/`](dashboard/src/app/api/cron/) but only **40 entries** in [`dashboard/vercel.json`](dashboard/vercel.json). The delta is intentional. Every route in the route directory falls into one of these buckets:
 
-- **Vercel-scheduled** — listed in `vercel.json` (39 routes).
+- **Vercel-scheduled** — listed in `vercel.json` (40 routes).
 - **Orchestrator sub-task** — only invoked by `enrichment_orchestrator` or `backlinks_orchestrator` (e.g. `enrich`, `backfill_requirements`, `strategic_scoring`, `ai_strategy`, `deep_enrich`, `bulk_enrich_ai`, `bulk_enrich_descriptions`, `enrich_contractors_usaspending`, all `backlink_*` sub-agents).
 - **Externally-run (VPS)** — see the section above (`compute_past_performance_stats`, `sync_govtribe_activity`).
 - **Webhook / admin-triggered** — only fires from a UI button or background job (e.g. `analyze_match_attachments`, `voice_brief_process`, `enrich_apollo`, `enrich_la_ramp`, `enqueue_backfill`, `discover_bonfire_tenants`, `enrich_sled_descriptions`, `ingest_bonfire_json`, `ingest_opengov`, `ingest_tx_esbd`, `backfill_naics`, `backfill_extracted_contacts`, `backfill_structured_requirements`, `cleanup_contractor_pages`, `discover_contractor_backlink_prospects`, `publish_contractor_pages`, `refresh_contractor_pages`, `send_backlink_outreach`).
 - **Deprecated** — `beta_deadline` (see above). Safe to delete after the next admin-panel review.
 
 Before deleting a route that isn't in `vercel.json`, **grep the repo for the path** (`grep -r "/api/cron/<name>"`) and also check the VPS systemd timers — orchestrator dispatches do not import the sub-route file directly, they hit the HTTP path.
+
+For a generated read-only inventory, run:
+
+```bash
+node tools/45_cron_inventory.mjs
+node tools/45_cron_inventory.mjs --json
+```

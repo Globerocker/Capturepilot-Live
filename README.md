@@ -1,41 +1,53 @@
-# CapturePilot V3 - Strategic Intelligence Engine
+# CapturePilot 2.0
 
-CapturePilot V3 is a deterministic, AI-assisted **Sales Intelligence Platform** engineered specifically for federal contracting. The platform fundamentally shifts the paradigm from "passive raw data aggregation" to active, predictive capture matching.
+CapturePilot is a B2G capture-intelligence platform for finding, qualifying, enriching, and pursuing government contracting opportunities. The repository contains the main SaaS dashboard, marketing sites, operational scripts, database schema assets, workflow automations, and deployment references.
 
-## 🚀 Live Environment & Access
+## Repository Map
 
-- **Production URL**: [https://captiorpilot-v3.vercel.app/](https://captiorpilot-v3.vercel.app/)
-  - *Main Dashboard*: `/opportunities`
-  - *Matches Matrix*: `/matches`
-  - *Contractors DB*: `/contractors`
-  - *Agency Intelligence*: `/agency-intelligence`
+- `dashboard/` - primary Next.js app for the CapturePilot product. Uses Next.js 16, React 19, TypeScript, Tailwind CSS 4, Supabase, Stripe, OpenAI/LLM integrations, Sentry, and Playwright.
+- `website/` - marketing/content site for CapturePilot. This directory contains its own `.git` metadata, so treat it as a nested repository until ownership is clarified.
+- `americurial/` - separate Americurial agency/brand site. This directory also contains its own `.git` metadata.
+- `tools/` - ESM Node utilities for Supabase operations, enrichment, worker jobs, PDF generation, VPS cron helpers, and Zapier app code.
+- `dashboard/supabase/` - schema files, migrations, and seed data for the product database.
+- `n8n-workflows/` - importable workflow JSON and setup notes for automation workflows.
+- `assets/starter-pack/` - source and rebuilt startup-pack assets.
+- `docs/` - operational, integration, product, and audit documentation.
 
-- **Database (Supabase)**: `https://ryxgjzehoijjvczqkhwr.supabase.co`
-- **Environment Config**: See `.env` for keys (SAM API, Gemini, Supabase).
+## Main Local Commands
 
-## 🛠 Core Features & Architecture
+```bash
+cd dashboard && npm run dev
+cd dashboard && npm run build
+cd dashboard && npm run lint
+cd dashboard && npm run e2e:smoke
 
-1. **Autonomous API Ingestion**: Integrates natively with the SAM.gov B2G API to fetch live Solicitation and Presolicitation data.
-2. **100-Point Deterministic Match Algorithm**: Dynamically scores the intersection of Opportunities against a vetted pool of Contractors based on NAICS correlation, Geographic proximity, Structural Capacity, and Historical Inactivity.
-3. **AI Document Extraction**: Utilizes Gemini and OpenAI pathways to scan live PDF attachments linked in SAM.gov opportunities to extract hard compliance requirements, executive summaries, and win strategies.
-4. **Sales Dossiers & Outreach Generator**: Generates B.L.A.S.T ready, tactical multi-channel outreach payloads (Cold Call, SMS, Email).
-5. **Real-Time Agency Intelligence**: A continuously running Node/Python analysis engine mapping structural metrics like Top Agencies, Top NAICS Codes, and Competitive Tier Density.
+cd website && npm run dev
+cd website && npm run build
 
-## 🗄 Project Structure & Cleanup
+cd americurial && npm run dev
+cd americurial && npm run build
+cd americurial && npm run lint
+```
 
-For clarity during the final handover, the project folder has been organized:
+`tools/` does not define package scripts at the package root. Run individual `.mjs` utilities directly with Node after reading their headers and confirming whether they are dry-run or write-mode scripts.
 
-- **`/dashboard`**: The core Next.js 15 (App Router) frontend application.
-- **`/dashboard/tools`**: Python and Next.js ingestion pipelines and intelligence logic processors.
-- **`/archive`**: Stores initial planning documents (`frontend_design.md`, `CLAUDE.md`, etc) and temporary test scripts (`test-schema.js`, `test_sam_api.js`, etc) that were used during construction but are not actively deployed.
-- **`gemini.md`**: The strict structural constitution dictating rules for the data schema and algorithms.
+Useful read-only utility:
 
-## ⚙️ Running Locally
+```bash
+node tools/45_cron_inventory.mjs
+node tools/46_enrichment_backfill_ops.mjs
+```
 
-1. `cd dashboard`
-2. `npm install`
-3. `npm run dev` (Runs locally on `localhost:3000`)
-*(Note: Production Vercel branch builds continuously from `main`)*
+## Operational References
 
----
-*Built incrementally by Antigravity AI.*
+- Cron and worker architecture: `CRON.md`
+- Latest platform audit and maturity roadmap: `docs/CAPTUREPILOT_DEEP_AUDIT_2026-06-12.md`
+- HubSpot setup and integration notes: `docs/HUBSPOT_INTEGRATION.md`, `docs/HUBSPOT_AI_SETUP_GUIDE.md`
+- VPS cron deployment notes: `tools/vps-crons/README.md`
+- n8n workflow setup: `n8n-workflows/README.md`
+
+## Safety Notes
+
+- Local `.env` files exist and may contain production secrets. Do not print, commit, or copy secret values into documentation.
+- `dashboard/vercel.json` currently defines 40 Vercel cron entries, while `dashboard/src/app/api/cron/` contains more route handlers for Vercel, orchestrator, VPS, admin-triggered, webhook-triggered, and deprecated jobs.
+- Historical one-off repair scripts such as `fix_*.py` and `rewrite_crawler.py` are archived in `archive/legacy-repair-scripts/`. Current operational tools live in `tools/`.
