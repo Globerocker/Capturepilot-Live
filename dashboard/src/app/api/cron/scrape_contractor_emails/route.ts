@@ -98,19 +98,34 @@ export async function GET(req: NextRequest) {
     const denied = guardCron(req);
     if (denied) return denied;
 
-    const batch = Math.min(60, Math.max(1, parseInt(new URL(req.url).searchParams.get("batch") || "25", 10)));
+    const params = new URL(req.url).searchParams;
+    const batch = Math.min(60, Math.max(1, parseInt(params.get("batch") || "25", 10)));
+    // Priority tiers (the "different cron cases"): run them in order so the
+    // contractors we can actually help get emails first.
+    //   awards   — has past federal awards (recent OR dormant). #1 priority.
+    //   expiring — SAM registration lapses within 90 days.
+    //   fresh    — activated in SAM in the last 120 days.
+    //   all      — everyone else with a website (the long tail).
+    const tier = params.get("tier") || "all";
     const db = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_KEY!);
 
-    const { data: rows, error } = await db
+    const today = new Date().toISOString().slice(0, 10);
+    const in90 = new Date(Date.now() + 90 * 864e5).toISOString().slice(0, 10);
+    const ago120 = new Date(Date.now() - 120 * 864e5).toISOString().slice(0, 10);
+
+    let q = db
         .from("contractors")
         .select("id, website, business_url")
         .is("email", null)
         .eq("email_scrape_done", false)
-        .or("website.not.is.null,business_url.not.is.null")
-        // Prioritise recently-active small firms (the segments we email) over
-        // long-registered primes whose sites are contact-form-only.
-        .order("activation_date", { ascending: false, nullsFirst: false })
-        .limit(batch);
+        .or("website.not.is.null,business_url.not.is.null");
+
+    if (tier === "awards") q = q.gte("federal_awards_count", 1).order("federal_awards_count", { ascending: true, nullsFirst: false });
+    else if (tier === "expiring") q = q.gte("expiration_date", today).lte("expiration_date", in90);
+    else if (tier === "fresh") q = q.gte("activation_date", ago120).order("activation_date", { ascending: false, nullsFirst: false });
+    else q = q.order("activation_date", { ascending: false, nullsFirst: false });
+
+    const { data: rows, error } = await q.limit(batch);
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     if (!rows?.length) return NextResponse.json({ ok: true, message: "Nothing to scrape", processed: 0, emails_found: 0 });
