@@ -6,10 +6,10 @@ import { getSegment } from "@/lib/outreach/segments";
 export const dynamic = "force-dynamic";
 
 // POST /api/admin/outreach/segments/enrich  { key }
-// Nudges the existing Apollo contractor-enrichment cron to fill missing emails
-// for the segment's population (it targets federal_awards_count > 0 / email IS
-// NULL, which covers dormant performers; the email-null fallback covers the
-// rest). Runs after the response so the request returns immediately.
+// Kicks the website-email scraper to fill missing emails for contractors that
+// have a website but no email. (SAM redacts POC emails and Apollo is exhausted
+// at ~0.4% yield, so scraping the contractor's own site is the practical
+// source.) Runs after the response so the request returns immediately.
 export async function POST(req: NextRequest) {
     const { unauth } = await requireAdmin();
     if (unauth) return unauth;
@@ -24,11 +24,11 @@ export async function POST(req: NextRequest) {
 
     after(async () => {
         try {
-            await fetch(`${origin}/api/cron/enrich_apollo_contractors?batch=200`, {
+            await fetch(`${origin}/api/cron/scrape_contractor_emails?batch=50`, {
                 headers: { Authorization: `Bearer ${secret}` },
             });
         } catch (e) {
-            console.error("[segments/enrich] cron trigger failed", (e as Error).message);
+            console.error("[segments/enrich] scraper trigger failed", (e as Error).message);
         }
     });
 
