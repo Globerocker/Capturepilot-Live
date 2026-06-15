@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Target, Users, Mail, Loader2, ListPlus, Sparkles, FileText, AlertCircle } from "lucide-react";
+import { Target, Users, Mail, Loader2, ListPlus, Sparkles, FileText, AlertCircle, ArrowRight } from "lucide-react";
 import OutreachNav from "@/components/outreach/OutreachNav";
 
 interface Segment {
@@ -107,7 +107,13 @@ export default function OutreachSegmentsPage() {
                             const needEnrich = s.total - s.emailable;
                             return (
                                 <div key={s.key} className="bg-white border border-stone-200 rounded-2xl p-5 flex flex-col">
-                                    <h2 className="font-bold text-base">{s.label}</h2>
+                                    <Link
+                                        href={`/admin/outreach/segments/${s.key}`}
+                                        className="group inline-flex items-center gap-1.5 font-bold text-base hover:text-orange-700"
+                                    >
+                                        {s.label}
+                                        <ArrowRight className="w-4 h-4 text-stone-300 group-hover:text-orange-700 group-hover:translate-x-0.5 transition" />
+                                    </Link>
                                     <p className="text-sm text-stone-500 mt-1 leading-relaxed flex-1">{s.description}</p>
 
                                     <div className="flex items-center gap-4 mt-4 text-sm">
