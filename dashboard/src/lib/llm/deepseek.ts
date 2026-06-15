@@ -24,7 +24,7 @@ export type LLMMessage = {
     content: string;
 };
 
-export type LLMProvider = "openai" | "deepseek" | "ollama";
+export type LLMProvider = "openai" | "deepseek" | "ollama" | "gemini";
 
 export interface LLMOptions {
     model?: string;
@@ -46,9 +46,11 @@ export interface LLMResponse {
 function pickProvider(opts: LLMOptions): LLMProvider {
     if (opts.provider && opts.provider !== "auto") return opts.provider;
     const envOverride = (process.env.LLM_PROVIDER || "").toLowerCase();
-    if (envOverride === "ollama" || envOverride === "deepseek" || envOverride === "openai") {
+    if (["ollama", "deepseek", "openai", "gemini"].includes(envOverride)) {
         return envOverride as LLMProvider;
     }
+    // Auto: Gemini Flash first (free tier / cheapest), then DeepSeek, then OpenAI.
+    if (process.env.GEMINI_API_KEY) return "gemini";
     return process.env.DEEPSEEK_API_KEY ? "deepseek" : "openai";
 }
 
@@ -72,6 +74,13 @@ function providerConfig(provider: LLMProvider): ProviderConfig {
                 authHeader: process.env.DEEPSEEK_API_KEY ? `Bearer ${process.env.DEEPSEEK_API_KEY}` : null,
                 defaultModel: "deepseek-chat",
             };
+        case "gemini":
+            // Gemini via its OpenAI-compatible endpoint — same wire format.
+            return {
+                baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+                authHeader: process.env.GEMINI_API_KEY ? `Bearer ${process.env.GEMINI_API_KEY}` : null,
+                defaultModel: process.env.GEMINI_MODEL || "gemini-2.5-flash",
+            };
         case "ollama": {
             const base = process.env.OLLAMA_URL;
             if (!base) {
@@ -86,11 +95,11 @@ function providerConfig(provider: LLMProvider): ProviderConfig {
     }
 }
 
-export async function callLLM(
+async function callOnce(
+    provider: LLMProvider,
     messages: LLMMessage[],
     opts: LLMOptions = {}
 ): Promise<LLMResponse> {
-    const provider = pickProvider(opts);
     const config = providerConfig(provider);
 
     // OpenAI + DeepSeek require an API key; Ollama is open within its network
@@ -141,6 +150,34 @@ export async function callLLM(
         prompt_tokens: data.usage?.prompt_tokens,
         completion_tokens: data.usage?.completion_tokens,
     };
+}
+
+/**
+ * Public entry point. Routes to the chosen provider (Gemini first by default)
+ * and falls back to OpenAI if the primary errors or rate-limits — so a Gemini
+ * 429 on the free tier never drops a job. An explicitly forced provider
+ * (opts.provider or LLM_PROVIDER) is used as-is with no fallback.
+ */
+export async function callLLM(
+    messages: LLMMessage[],
+    opts: LLMOptions = {}
+): Promise<LLMResponse> {
+    const forced = (opts.provider && opts.provider !== "auto") || !!(process.env.LLM_PROVIDER || "").trim();
+    const primary = pickProvider(opts);
+    const chain: LLMProvider[] = [primary];
+    if (!forced && primary !== "openai" && process.env.OPENAI_API_KEY) chain.push("openai");
+
+    let lastErr: unknown;
+    for (const provider of chain) {
+        try {
+            return await callOnce(provider, messages, opts);
+        } catch (e) {
+            lastErr = e;
+            const isLast = provider === chain[chain.length - 1];
+            console.warn(`[llm] ${provider} failed${isLast ? "" : " — falling back to OpenAI"}: ${(e as Error).message?.slice(0, 160)}`);
+        }
+    }
+    throw lastErr;
 }
 
 /**

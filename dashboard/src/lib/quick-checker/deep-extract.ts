@@ -246,12 +246,12 @@ async function callDeepExtractLLM(
     // ENV switches: LLM_PROVIDER=ollama|deepseek|openai forces a specific
     // provider; otherwise we just walk this list and use the first one with
     // credentials set.
-    const order: Array<"deepseek" | "openai" | "ollama"> = [];
+    const order: Array<"gemini" | "deepseek" | "openai"> = [];
+    if (process.env.GEMINI_API_KEY)   order.push("gemini");
     if (process.env.DEEPSEEK_API_KEY) order.push("deepseek");
     if (process.env.OPENAI_API_KEY)   order.push("openai");
-    if (process.env.OLLAMA_URL)       order.push("ollama");
     if (order.length === 0) {
-        console.warn("[deep-extract] no LLM providers configured (need DEEPSEEK_API_KEY, OPENAI_API_KEY, or OLLAMA_URL)");
+        console.warn("[deep-extract] no LLM providers configured (need GEMINI_API_KEY, DEEPSEEK_API_KEY, or OPENAI_API_KEY)");
         return null;
     }
 
@@ -276,8 +276,8 @@ async function callDeepExtractLLM(
             return {
                 extraction: parsed.data,
                 provider,
-                model: provider === "ollama"
-                    ? (process.env.OLLAMA_DEFAULT_MODEL || "qwen2.5:7b-instruct")
+                model: provider === "gemini"
+                    ? (process.env.GEMINI_MODEL || "gemini-2.5-flash")
                     : provider === "deepseek"
                         ? "deepseek-chat"
                         : (process.env.QUICK_CHECKER_MODEL || "gpt-4o-mini"),
