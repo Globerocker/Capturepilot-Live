@@ -101,6 +101,7 @@ export default function AdminOutreachPage() {
     const [composerOpen, setComposerOpen] = useState(false);
     const [composerBody, setComposerBody] = useState("");
     const [sending, setSending] = useState(false);
+    const [drafting, setDrafting] = useState(false);
     const [sendNote, setSendNote] = useState<string | null>(null);
     const [tagInput, setTagInput] = useState("");
     const [moveCampaign, setMoveCampaign] = useState("");
@@ -179,6 +180,7 @@ export default function AdminOutreachPage() {
         setSendNote(null);
         setTagInput("");
         setMoveCampaign("");
+        setDrafting(false);
     }, [selectedId]);
 
     const patchSelected = async (
@@ -237,6 +239,30 @@ export default function AdminOutreachPage() {
             setSendNote(e instanceof Error ? e.message : "Re-classify failed");
         } finally {
             setActing(null);
+        }
+    };
+
+    const draftReply = async () => {
+        if (!selected || drafting) return;
+        setDrafting(true);
+        setSendNote(null);
+        setComposerOpen(true);
+        try {
+            const res = await fetch(
+                `/api/admin/outreach/replies/${selected.id}/ai-draft`,
+                { method: "POST" }
+            );
+            const json = (await res.json().catch(() => ({}))) as {
+                draft?: string;
+                error?: string;
+            };
+            if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+            if (!json.draft) throw new Error("No draft returned");
+            setComposerBody(json.draft);
+        } catch (e) {
+            setSendNote(e instanceof Error ? e.message : "AI draft failed");
+        } finally {
+            setDrafting(false);
         }
     };
 
@@ -566,6 +592,19 @@ export default function AdminOutreachPage() {
                                         </button>
                                         <button
                                             type="button"
+                                            onClick={draftReply}
+                                            disabled={drafting}
+                                            className="text-xs px-3 py-1.5 rounded-lg border border-violet-300 bg-violet-50 text-violet-800 hover:bg-violet-100 flex items-center gap-1 disabled:opacity-60"
+                                        >
+                                            {drafting ? (
+                                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                            ) : (
+                                                <Sparkles className="w-3.5 h-3.5" />
+                                            )}
+                                            AI draft reply
+                                        </button>
+                                        <button
+                                            type="button"
                                             onClick={forwardReply}
                                             disabled={acting === "forward"}
                                             className="text-xs px-3 py-1.5 rounded-lg border border-stone-200 bg-white hover:bg-stone-50 flex items-center gap-1"
@@ -669,6 +708,19 @@ export default function AdminOutreachPage() {
                                                 className="w-full text-sm border border-stone-200 rounded-lg px-2.5 py-2"
                                             />
                                             <div className="flex items-center justify-end gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={draftReply}
+                                                    disabled={drafting}
+                                                    className="text-xs px-3 py-1.5 rounded-lg border border-violet-300 bg-violet-50 text-violet-800 hover:bg-violet-100 disabled:opacity-60 flex items-center gap-1.5"
+                                                >
+                                                    {drafting ? (
+                                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                    ) : (
+                                                        <Sparkles className="w-3.5 h-3.5" />
+                                                    )}
+                                                    {composerBody.trim() ? "Redraft" : "AI draft"}
+                                                </button>
                                                 <button
                                                     type="button"
                                                     onClick={sendReply}
