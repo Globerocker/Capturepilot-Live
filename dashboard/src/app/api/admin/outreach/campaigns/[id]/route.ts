@@ -55,10 +55,15 @@ export async function GET(
         .from("outreach_campaign_steps")
         .select("*")
         .eq("campaign_id", id)
-        .order("step_index", { ascending: true })
-        .order("variant_key", { ascending: true });
+        .order("step_order", { ascending: true });
 
-    return NextResponse.json({ campaign, steps: steps ?? [] });
+    // Alias the live columns (step_order/body_template) to the field names the
+    // builder UI expects (step_index/body) so the page stays unchanged.
+    const aliased = (steps ?? []).map((s) => {
+        const row = s as Record<string, unknown>;
+        return { ...row, step_index: row.step_order, body: row.body_template };
+    });
+    return NextResponse.json({ campaign, steps: aliased });
 }
 
 interface PatchBody {
@@ -124,10 +129,14 @@ export async function PATCH(
     if (typeof body.sender_email === "string") update.sender_email = body.sender_email.trim() || null;
     if (typeof body.sender_name === "string") update.sender_name = body.sender_name.trim() || null;
     if (body.target_segment) update.target_segment = body.target_segment;
-    if (typeof body.throttle_per_hour === "number") update.throttle_per_hour = body.throttle_per_hour;
-    if (typeof body.send_window_start === "string") update.send_window_start = body.send_window_start;
-    if (typeof body.send_window_end === "string") update.send_window_end = body.send_window_end;
-    if (typeof body.send_window_tz === "string") update.send_window_tz = body.send_window_tz;
+    if (body.throttle_per_hour !== undefined || body.send_window_start || body.send_window_end || body.send_window_tz) {
+        update.throttle = {
+            per_hour: body.throttle_per_hour ?? 60,
+            window_start: body.send_window_start ?? "09:00",
+            window_end: body.send_window_end ?? "17:00",
+            tz: body.send_window_tz ?? "America/New_York",
+        };
+    }
     if (typeof body.physical_address === "string") update.physical_address = body.physical_address.trim() || null;
     if (typeof body.unsubscribe_footer === "string") update.unsubscribe_footer = body.unsubscribe_footer;
     if (typeof body.stop_on_reply === "boolean") update.stop_on_reply = body.stop_on_reply;
@@ -163,18 +172,15 @@ export async function PATCH(
         if (body.steps.length > 0) {
             const stepRows = body.steps.map((s, idx) => ({
                 campaign_id: id,
-                step_index: s.step_index ?? idx,
+                step_order: s.step_index ?? idx,
                 channel: s.channel,
                 delay_value: Math.max(0, Number(s.delay_value || 0)),
                 delay_unit: s.delay_unit ?? "hours",
-                after_step: s.after_step ?? null,
                 subject: s.channel === "email" ? (s.subject || "").slice(0, 998) : null,
-                body: (s.body || "").slice(0, 50_000),
-                body_format: s.body_format ?? "text",
+                body_template: (s.body || "").slice(0, 50_000),
                 skip_if_replied: s.skip_if_replied !== false,
                 skip_if_clicked: !!s.skip_if_clicked,
                 send_condition: s.send_condition === "if_no_reply" ? "if_no_reply" : "always",
-                variant_key: s.variant_key ?? "A",
                 variant_weight: s.variant_weight ?? 100,
             }));
             const { error: stepErr } = await admin.from("outreach_campaign_steps").insert(stepRows);

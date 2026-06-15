@@ -111,10 +111,14 @@ export async function POST(req: NextRequest) {
         sender_email: body.sender_email?.trim() || null,
         sender_name: body.sender_name?.trim() || null,
         target_segment: body.target_segment ?? {},
-        throttle_per_hour: body.throttle_per_hour ?? 60,
-        send_window_start: body.send_window_start ?? "09:00",
-        send_window_end: body.send_window_end ?? "17:00",
-        send_window_tz: body.send_window_tz ?? "America/New_York",
+        // Live schema stores send pacing as a single throttle jsonb (the cadence
+        // reads campaign.throttle for its send-window check).
+        throttle: {
+            per_hour: body.throttle_per_hour ?? 60,
+            window_start: body.send_window_start ?? "09:00",
+            window_end: body.send_window_end ?? "17:00",
+            tz: body.send_window_tz ?? "America/New_York",
+        },
         physical_address: body.physical_address?.trim() || null,
         unsubscribe_footer: body.unsubscribe_footer ?? null,
         stop_on_reply: body.stop_on_reply !== false, // default on
@@ -140,18 +144,15 @@ export async function POST(req: NextRequest) {
     if (steps.length > 0) {
         const stepRows = steps.map((s, idx) => ({
             campaign_id: campaignId,
-            step_index: s.step_index ?? idx,
+            step_order: s.step_index ?? idx,
             channel: s.channel,
             delay_value: Math.max(0, Number(s.delay_value || 0)),
             delay_unit: s.delay_unit ?? "hours",
-            after_step: s.after_step ?? null,
             subject: s.channel === "email" ? (s.subject || "").slice(0, 998) : null,
-            body: (s.body || "").slice(0, 50_000),
-            body_format: s.body_format ?? "text",
+            body_template: (s.body || "").slice(0, 50_000),
             skip_if_replied: s.skip_if_replied !== false,
             skip_if_clicked: !!s.skip_if_clicked,
             send_condition: s.send_condition === "if_no_reply" ? "if_no_reply" : "always",
-            variant_key: s.variant_key ?? "A",
             variant_weight: s.variant_weight ?? 100,
         }));
 

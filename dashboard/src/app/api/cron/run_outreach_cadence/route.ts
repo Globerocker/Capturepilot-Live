@@ -48,8 +48,7 @@ interface Campaign {
     id: string;
     name: string;
     status: string;
-    from_email: string | null;
-    reply_to_email: string | null;
+    sender_email: string | null;
     throttle: Record<string, unknown> | null;
     stats: Record<string, unknown> | null;
     // Migration 168 — when true, the cadence completes a contact the moment
@@ -81,9 +80,9 @@ interface Step {
     step_order: number;
     channel: "email" | "sms";
     subject: string | null;
-    body: string;
-    delay_days: number;
-    delay_hours: number;
+    body_template: string;
+    delay_value: number;
+    delay_unit: string;
     skip_if_replied: boolean;
     skip_if_clicked: boolean;
     // Migration 168 — per-step send gate. 'always' fires unconditionally;
@@ -179,10 +178,11 @@ async function hasRepliedToCampaign(
 
 function computeNextSendAt(step: Step | null, base: Date): string | null {
     if (!step) return null;
-    const days = Math.max(0, step.delay_days || 0);
-    const hours = Math.max(0, step.delay_hours || 0);
-    const offsetMs = (days * 24 * 60 * 60 + hours * 60 * 60) * 1000;
-    return new Date(base.getTime() + offsetMs).toISOString();
+    const v = Math.max(0, step.delay_value || 0);
+    const unitMs = step.delay_unit === "days" ? 86_400_000
+        : step.delay_unit === "minutes" ? 60_000
+        : 3_600_000; // hours (default)
+    return new Date(base.getTime() + v * unitMs).toISOString();
 }
 
 // ───────────────────────── Per-contact processor ─────────────────────────
@@ -262,7 +262,7 @@ async function processContact(
         return "skipped";
     }
 
-    const fromEmail = campaign.from_email
+    const fromEmail = campaign.sender_email
         || process.env.FROM_EMAIL
         || "CapturePilot <noreply@capturepilot.com>";
 
@@ -270,7 +270,7 @@ async function processContact(
     if (step.channel === "sms") {
         result = await sendOutreachSMS({
             to: contact.phone || "",
-            body: step.body,
+            body: step.body_template,
             campaignId: campaign.id,
             stepId: step.id,
             contactId: contact.id,
@@ -280,9 +280,9 @@ async function processContact(
         result = await sendOutreachEmail({
             to: contact.email || "",
             from: fromEmail,
-            replyTo: campaign.reply_to_email || undefined,
+            replyTo: undefined,
             subject: step.subject || "",
-            html: step.body,
+            html: step.body_template,
             campaignId: campaign.id,
             stepId: step.id,
             contactId: contact.id,
@@ -404,7 +404,7 @@ async function GET_handler(req: NextRequest): Promise<NextResponse> {
             id, campaign_id, contact_id, status, current_step,
             next_send_at, consecutive_failures, started_at, finished_at,
             campaign:outreach_campaigns!inner (
-                id, name, status, from_email, reply_to_email, throttle, stats, stop_on_reply
+                id, name, status, sender_email, throttle, stats, stop_on_reply
             ),
             contact:outreach_contacts!inner (
                 id, email, phone, first_name, last_name, company, title, state,
@@ -459,7 +459,7 @@ async function GET_handler(req: NextRequest): Promise<NextResponse> {
     const campaignIds = Array.from(new Set(rows.map(r => r.campaign.id)));
     const { data: stepRows } = await sb
         .from("outreach_campaign_steps")
-        .select("id, campaign_id, step_order, channel, subject, body, delay_days, delay_hours, skip_if_replied, skip_if_clicked, send_condition")
+        .select("id, campaign_id, step_order, channel, subject, body_template, delay_value, delay_unit, skip_if_replied, skip_if_clicked, send_condition")
         .in("campaign_id", campaignIds)
         .order("step_order", { ascending: true });
     const stepsByCampaign = new Map<string, Step[]>();
