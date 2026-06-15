@@ -44,6 +44,49 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (t: T) => Promise<R
     return out;
 }
 
+// ── Regex email scrape (free, ~50% yield — more reliable for emails than any
+//    LLM). Used as a fallback when the QC extraction didn't surface a contact
+//    email, since emails live verbatim in the page HTML. ──────────────────────
+const UA = "Mozilla/5.0 (compatible; CapturePilotBot/1.0; +https://capturepilot.com)";
+const EMAIL_RE = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+const BAD_EMAIL = /(\.(png|jpe?g|gif|svg|webp|ico)$)|sentry|wixpress|example\.(com|org)|godaddy|cloudflare|\.cdn|@2x|wordpress|squarespace|\.wix|yourdomain|placeholder|email@|user@|name@|domain\.com|mysite\.com|wix\.com|vistaprint|weebly|no-?reply|donotreply/i;
+const BAD_HOST = /(^|\.)(google\.|bing\.|yahoo\.|facebook\.|instagram\.|twitter\.|x\.com|linkedin\.|yelp\.|indeed\.|sam\.gov|\.gov$|maps\.|youtube\.|tiktok\.)/i;
+const ROLE_PRIORITY = ["info", "contact", "sales", "hello", "office", "admin", "business", "federal", "contracts", "bd"];
+
+function siteHost(url: string): string {
+    try { return new URL(url.startsWith("http") ? url : `https://${url}`).hostname.replace(/^www\./, "").toLowerCase(); }
+    catch { return ""; }
+}
+function pickBestEmail(emails: string[], host: string): string | null {
+    const clean = [...new Set(emails.map((e) => e.toLowerCase().trim()))].filter((e) => !BAD_EMAIL.test(e) && e.length < 70 && e.includes("@"));
+    if (!clean.length) return null;
+    const same = host ? clean.filter((e) => e.endsWith("@" + host)) : [];
+    const pool = same.length ? same : clean;
+    for (const role of ROLE_PRIORITY) { const hit = pool.find((e) => e.startsWith(role + "@")); if (hit) return hit; }
+    return pool[0];
+}
+async function scrapeEmail(site: string): Promise<string | null> {
+    const base = (site.startsWith("http") ? site : `https://${site}`).replace(/\/$/, "");
+    const host = siteHost(base);
+    if (!host || BAD_HOST.test(host) || base.includes("/search?")) return null;
+    const found: string[] = [];
+    for (const path of ["", "/contact", "/contact-us", "/about"]) {
+        try {
+            const ctrl = new AbortController();
+            const t = setTimeout(() => ctrl.abort(), 7000);
+            const r = await fetch(base + path, { headers: { "User-Agent": UA }, redirect: "follow", signal: ctrl.signal });
+            clearTimeout(t);
+            if (!r.ok) continue;
+            const html = await r.text();
+            for (const m of html.matchAll(/mailto:([^"'?>\s]+)/gi)) found.push(m[1]);
+            found.push(...(html.match(EMAIL_RE) || []));
+            const best = pickBestEmail(found, host);
+            if (best) return best;
+        } catch { /* timeout/network */ }
+    }
+    return pickBestEmail(found, host);
+}
+
 export async function GET(req: NextRequest) {
     const denied = guardCron(req);
     if (denied) return denied;
@@ -81,10 +124,14 @@ export async function GET(req: NextRequest) {
             const r = await runQuickCheck(site, { companyName: c.company_name || undefined });
             const ex = r.extraction;
 
-            const foundEmail =
+            // Email: trust the LLM extraction first, but fall back to a free
+            // regex scrape of the site (the LLM under-extracts emails; they
+            // live verbatim in the HTML, so a regex is more reliable).
+            let foundEmail: string | null =
                 ex.contacts?.find((x: any) => x.email)?.email ||
                 ex.leadership?.find((p: any) => p.email)?.email ||
                 null;
+            if (!foundEmail) foundEmail = await scrapeEmail(site);
             const naics = (r.naics_suggestions || []).map((n: any) => n.code).filter(Boolean);
             const certs = (ex.certifications || []).map((x: any) => x.type).filter(Boolean);
             const dm = ex.leadership?.find((p: any) => p.is_decision_maker) || ex.leadership?.[0];
