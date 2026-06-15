@@ -16,6 +16,7 @@ interface OutreachTemplate {
     merge_tags: string[];
     category: string | null;
     description?: string | null;
+    approved?: boolean;
     created_at: string;
     updated_at: string;
 }
@@ -158,6 +159,7 @@ export default function TemplatesTab({
                                 <th className="px-3 py-2">Channel</th>
                                 <th className="px-3 py-2">Category</th>
                                 <th className="px-3 py-2">Subject / Preview</th>
+                                <th className="px-3 py-2 text-center">Approved</th>
                                 <th className="px-3 py-2">Updated</th>
                                 <th className="px-3 py-2 text-right">Actions</th>
                             </tr>
@@ -185,6 +187,24 @@ export default function TemplatesTab({
                                         {t.channel === "email" && t.subject ? <strong>{t.subject}</strong> : null}
                                         {t.channel === "email" && t.subject ? " · " : ""}
                                         <span className="text-stone-500">{t.body.slice(0, 80)}</span>
+                                    </td>
+                                    <td className="px-3 py-2 text-center">
+                                        <label className="inline-flex items-center justify-center cursor-pointer" title={t.approved ? "Approved — click to unapprove" : "Mark approved"}>
+                                            <input
+                                                type="checkbox"
+                                                aria-label={`Approve template ${t.name}`}
+                                                checked={!!t.approved}
+                                                onChange={async () => {
+                                                    await fetch(`/api/admin/outreach/templates/${t.id}`, {
+                                                        method: "PATCH",
+                                                        headers: { "Content-Type": "application/json" },
+                                                        body: JSON.stringify({ approved: !t.approved }),
+                                                    });
+                                                    load();
+                                                }}
+                                                className="w-4 h-4 accent-emerald-600 cursor-pointer"
+                                            />
+                                        </label>
                                     </td>
                                     <td className="px-3 py-2 text-xs text-stone-500">{new Date(t.updated_at).toLocaleDateString()}</td>
                                     <td className="px-3 py-2 text-right">

@@ -53,6 +53,12 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     if (typeof body.body === "string") patch.body = body.body;
     if (Array.isArray(body.merge_tags)) patch.merge_tags = body.merge_tags;
     if ("category" in body) patch.category = body.category?.toString().trim() || null;
+    if ("description" in body) patch.description = (body as { description?: unknown }).description?.toString().trim() || null;
+    if (typeof (body as { approved?: unknown }).approved === "boolean") {
+        const approved = (body as { approved: boolean }).approved;
+        patch.approved = approved;
+        patch.approved_at = approved ? new Date().toISOString() : null;
+    }
 
     if (Object.keys(patch).length === 0) {
         return NextResponse.json({ error: "No editable fields in body" }, { status: 400 });
