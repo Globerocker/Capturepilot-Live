@@ -60,7 +60,7 @@ export interface DeepExtractResult {
     extraction: QuickCheckerExtraction;
     pages_scraped: string[];
     crawl_source: "firecrawl" | "fetch-fallback" | "mixed";
-    llm_provider: "ollama" | "openai" | "deepseek" | "fallback";
+    llm_provider: "gemini" | "openai" | "deepseek" | "fallback";
     llm_model: string | null;
     duration_ms: number;
     errors: string[];
@@ -225,7 +225,7 @@ const LLMResponseSchema = z.record(z.string(), z.unknown());
 async function callDeepExtractLLM(
     combined: string,
     input: DeepExtractInput,
-): Promise<{ extraction: Record<string, unknown>; provider: "ollama" | "openai" | "deepseek"; model: string } | null> {
+): Promise<{ extraction: Record<string, unknown>; provider: "gemini" | "openai" | "deepseek"; model: string } | null> {
     const userContent = [
         `WEBSITE: ${input.website}`,
         input.companyName ? `KNOWN COMPANY NAME: ${input.companyName}` : "",
