@@ -69,7 +69,7 @@ export async function GET(req: NextRequest) {
     // table, mostly small inactive entities).
     const { data: candidates, error: cErr } = await sb
         .from("contractors")
-        .select("uei, company_name, dba_name, naics_codes, naics_awards, state, city, cage_code, sam_registered, sba_certifications, website, total_award_volume, federal_awards_count")
+        .select("uei, company_name, dba_name, naics_codes, naics_awards, state, city, cage_code, sam_registered, sba_certifications, website, total_award_volume, federal_awards_count, capability_summary_ai, years_in_business")
         .gt("total_award_volume", 0)
         .order("total_award_volume", { ascending: false })
         .limit(Math.max(1000, limit + publishedUeis.size + 100));
@@ -92,9 +92,15 @@ export async function GET(req: NextRequest) {
         website: string | null;
         total_award_volume: number | null;
         federal_awards_count: number | null;
+        capability_summary_ai: Record<string, unknown> | null;
+        years_in_business: number | null;
     };
 
-    type Cand = ContractorRow & { lifetime_total: number };
+    type Cand = ContractorRow & {
+        lifetime_total: number;
+        capability_summary_ai?: Record<string, unknown> | null;
+        years_in_business?: number | null;
+    };
 
     // Non-contractor entity blocklist. These show up in the contractors
     // table because SAM registers federal agencies, foreign governments,
@@ -183,6 +189,8 @@ export async function GET(req: NextRequest) {
             sba_certifications: c.sba_certifications,
             website: c.website,
             lifetime_total: c.lifetime_total,
+            capability_summary_ai: c.capability_summary_ai,
+            years_in_business: c.years_in_business,
         }));
 
     if (pool.length === 0) {
@@ -232,6 +240,11 @@ export async function GET(req: NextRequest) {
             const apollo = await enrichCompanyViaApollo({ name: c.business_name, domain: c.website || undefined });
             const ai = await generateAiSummary({ contractor: c, rollup, apollo });
             const score = computeFederalScore({ contractor: c, rollup, apollo });
+            // Quick Checker enrichment (crawled capability profile) — used to
+            // backfill the page when Apollo/AI come up empty.
+            const cap = (c.capability_summary_ai || {}) as Record<string, any>;
+            const capIndustry = Array.isArray(cap.industries_served) ? cap.industries_served[0] : null;
+            const capFounded = c.years_in_business ? new Date().getFullYear() - c.years_in_business : null;
 
             const insertRow = {
                 contractor_uei: c.uei,
@@ -249,14 +262,14 @@ export async function GET(req: NextRequest) {
                 top_agency_amount: rollup.top_agency_amount,
                 awards_by_year: rollup.awards_by_year,
                 top_naics_codes: rollup.top_naics_codes,
-                ai_summary: ai?.summary || null,
-                ai_summary_model: ai?.model || null,
+                ai_summary: ai?.summary || cap.long_description || cap.short_description || null,
+                ai_summary_model: ai?.model || (cap.short_description ? "quickcheck" : null),
                 apollo_data: apollo?.raw as Record<string, unknown> | null,
                 company_website: apollo?.company_website || c.website,
                 company_linkedin: apollo?.company_linkedin || null,
                 company_size_est: apollo?.company_size_est || null,
-                industry: apollo?.industry || null,
-                founded_year: apollo?.founded_year || null,
+                industry: apollo?.industry || capIndustry || null,
+                founded_year: apollo?.founded_year || capFounded || null,
                 federal_score: score.federal_score,
                 score_breakdown: score.score_breakdown,
                 badges: score.badges,
