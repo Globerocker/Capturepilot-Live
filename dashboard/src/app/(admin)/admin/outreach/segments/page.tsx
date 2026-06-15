@@ -68,7 +68,7 @@ export default function OutreachSegmentsPage() {
             });
             const json = await res.json();
             if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
-            setNotice("Apollo enrichment started — emails fill in over the next few minutes. Re-check counts shortly, then build the list.");
+            setNotice("Website email scrape started — it fetches each contractor's site for a contact email in the background. Re-check counts in a few minutes, then build the list. Yield is modest for this audience (many are big primes or JS-only sites).");
         } catch (e) {
             setNotice(`Enrichment failed: ${(e as Error).message}`);
         } finally {
@@ -142,7 +142,7 @@ export default function OutreachSegmentsPage() {
                                                 disabled={busy !== null}
                                                 className="border border-stone-300 hover:bg-stone-50 disabled:opacity-40 text-stone-700 font-medium px-3.5 py-2 rounded-lg inline-flex items-center gap-2 text-sm"
                                             >
-                                                {busy === s.key + ":enrich" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />} Enrich emails (Apollo)
+                                                {busy === s.key + ":enrich" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />} Find emails (scrape sites)
                                             </button>
                                         )}
                                     </div>
