@@ -74,6 +74,7 @@ interface PatchBody {
     send_window_tz?: string;
     physical_address?: string;
     unsubscribe_footer?: string;
+    stop_on_reply?: boolean;
     status?: string;
     steps?: Array<{
         step_index: number;
@@ -86,6 +87,7 @@ interface PatchBody {
         body_format?: "text" | "html" | "markdown";
         skip_if_replied?: boolean;
         skip_if_clicked?: boolean;
+        send_condition?: "always" | "if_no_reply";
         variant_key?: string;
         variant_weight?: number;
     }>;
@@ -128,6 +130,7 @@ export async function PATCH(
     if (typeof body.send_window_tz === "string") update.send_window_tz = body.send_window_tz;
     if (typeof body.physical_address === "string") update.physical_address = body.physical_address.trim() || null;
     if (typeof body.unsubscribe_footer === "string") update.unsubscribe_footer = body.unsubscribe_footer;
+    if (typeof body.stop_on_reply === "boolean") update.stop_on_reply = body.stop_on_reply;
 
     if (typeof body.status === "string") {
         const currentStatus = current.status as string;
@@ -170,6 +173,7 @@ export async function PATCH(
                 body_format: s.body_format ?? "text",
                 skip_if_replied: s.skip_if_replied !== false,
                 skip_if_clicked: !!s.skip_if_clicked,
+                send_condition: s.send_condition === "if_no_reply" ? "if_no_reply" : "always",
                 variant_key: s.variant_key ?? "A",
                 variant_weight: s.variant_weight ?? 100,
             }));
