@@ -15,6 +15,7 @@ interface OutreachTemplate {
     body: string;
     merge_tags: string[];
     category: string | null;
+    description?: string | null;
     created_at: string;
     updated_at: string;
 }
@@ -164,7 +165,12 @@ export default function TemplatesTab({
                         <tbody>
                             {filtered.map(t => (
                                 <tr key={t.id} className="border-b border-stone-100 hover:bg-stone-50">
-                                    <td className="px-3 py-2 font-bold">{t.name}</td>
+                                    <td className="px-3 py-2 font-bold align-top">
+                                        {t.name}
+                                        {t.description && (
+                                            <span className="block font-normal text-[11px] text-stone-400 mt-0.5 max-w-[320px] leading-snug whitespace-normal">{t.description}</span>
+                                        )}
+                                    </td>
                                     <td className="px-3 py-2">
                                         <span className={clsx(
                                             "text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded border inline-flex items-center gap-1",
