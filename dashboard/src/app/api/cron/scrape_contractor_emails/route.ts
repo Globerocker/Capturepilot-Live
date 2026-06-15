@@ -26,8 +26,10 @@ const UA = "Mozilla/5.0 (compatible; CapturePilotBot/1.0; +https://capturepilot.
 const PATHS = ["", "/contact", "/contact-us", "/about", "/about-us"];
 const EMAIL_RE = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
 const BAD =
-    /(\.(png|jpe?g|gif|svg|webp|ico)$)|sentry|wixpress|example\.(com|org)|godaddy|cloudflare|\.cdn|@2x|wordpress|squarespace|\.wix|sentry\.io|yourdomain|placeholder|email@|user@|name@|domain\.com/i;
+    /(\.(png|jpe?g|gif|svg|webp|ico)$)|sentry|wixpress|example\.(com|org)|godaddy|cloudflare|\.cdn|@2x|wordpress|squarespace|\.wix|sentry\.io|yourdomain|placeholder|email@|user@|name@|domain\.com|mysite\.com|wix\.com|vistaprint|weebly|sentry|no-?reply|donotreply/i;
 const ROLE_PRIORITY = ["info", "contact", "sales", "hello", "office", "admin", "business", "federal", "contracts", "bd"];
+// Hosts that are never the contractor's own site (directories, search, social).
+const BAD_HOST = /(^|\.)(google\.|bing\.|yahoo\.|facebook\.|instagram\.|twitter\.|x\.com|linkedin\.|yelp\.|indeed\.|sam\.gov|\.gov$|maps\.|youtube\.|tiktok\.)/i;
 
 function siteHost(url: string): string {
     try {
@@ -55,6 +57,9 @@ function pickBest(emails: string[], host: string): string | null {
 async function scrapeSite(site: string): Promise<string | null> {
     const base = (site.startsWith("http") ? site : `https://${site}`).replace(/\/$/, "");
     const host = siteHost(base);
+    // Skip junk URLs (Google-search links, social, .gov, directories) — these
+    // never carry the contractor's own contact email.
+    if (!host || BAD_HOST.test(host) || base.includes("/search?") || base.includes("/search%")) return null;
     const found: string[] = [];
     for (const path of PATHS) {
         try {
@@ -102,7 +107,9 @@ export async function GET(req: NextRequest) {
         .is("email", null)
         .eq("email_scrape_done", false)
         .or("website.not.is.null,business_url.not.is.null")
-        .order("federal_awards_count", { ascending: false, nullsFirst: false })
+        // Prioritise recently-active small firms (the segments we email) over
+        // long-registered primes whose sites are contact-form-only.
+        .order("activation_date", { ascending: false, nullsFirst: false })
         .limit(batch);
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
