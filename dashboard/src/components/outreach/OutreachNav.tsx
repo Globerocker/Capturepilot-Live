@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Inbox, FileText, Users, ListChecks } from "lucide-react";
+import { Inbox, FileText, Users, ListChecks, Target } from "lucide-react";
 import clsx from "clsx";
 
 /**
@@ -13,6 +13,7 @@ import clsx from "clsx";
  */
 const TABS = [
     { key: "inbox", label: "Inbox", href: "/admin/outreach", icon: Inbox },
+    { key: "segments", label: "Target Groups", href: "/admin/outreach/segments", icon: Target },
     { key: "templates", label: "Templates", href: "/admin/outreach/templates", icon: FileText },
     { key: "contacts", label: "Contacts", href: "/admin/outreach/contacts", icon: Users },
     { key: "lists", label: "Lists", href: "/admin/outreach/lists", icon: ListChecks },
