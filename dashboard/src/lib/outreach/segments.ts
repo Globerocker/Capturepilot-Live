@@ -18,7 +18,10 @@ type Query = any;
 export type SegmentKey =
     | "dormant_performers"
     | "fresh_sam"
-    | "expiring_registration";
+    | "expiring_registration"
+    | "set_aside_8a"
+    | "vosb_sdvosb"
+    | "gov_experienced";
 
 export interface SegmentDef {
     key: SegmentKey;
@@ -68,9 +71,33 @@ export const SEGMENTS: SegmentDef[] = [
         label: "SAM registration expiring soon",
         description:
             "Registration lapses within 90 days. Nudge them to renew before they fall out of the system — and offer to help.",
-        templateName: null,
+        templateName: "Expiring SAM · Email 1 — Renew before you lapse",
         apply: (q) =>
             q.gte("expiration_date", dateDaysAhead(0)).lte("expiration_date", dateDaysAhead(90)),
+    },
+    {
+        key: "set_aside_8a",
+        label: "8(a) certified firms",
+        description:
+            "Hold an active 8(a) certification — eligible for sole-source awards up to $4.5M. Lead with the sole-source advantage.",
+        templateName: "8(a) · Email 1 — Sole-source advantage",
+        apply: (q) => q.overlaps("sba_certifications", ["8(a)", "8A", "EIGHT_A"]),
+    },
+    {
+        key: "vosb_sdvosb",
+        label: "Veteran-owned (VOSB / SDVOSB)",
+        description:
+            "Veteran- or service-disabled-veteran-owned. Strong set-aside lane (esp. VA). Offer verification + capture help.",
+        templateName: null,
+        apply: (q) => q.overlaps("sba_certifications", ["VOSB", "SDVOSB", "VETERAN_OWNED", "SERVICE_DISABLED_VETERAN_OWNED"]),
+    },
+    {
+        key: "gov_experienced",
+        label: "Already has gov experience",
+        description:
+            "Their site shows federal/government past performance (QC-detected). Warm prospects who already understand the game — pitch scaling up.",
+        templateName: null,
+        apply: (q) => q.eq("qc_enriched", true).eq("capability_summary_ai->>has_gov_experience", "true"),
     },
 ];
 
