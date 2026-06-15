@@ -20,6 +20,7 @@ import {
     AlertCircle,
 } from "lucide-react";
 import clsx from "clsx";
+import OutreachNav from "@/components/outreach/OutreachNav";
 import { SentimentBadge } from "@/components/outreach/SentimentBadge";
 import {
     SENTIMENTS,
@@ -82,7 +83,6 @@ function relativeTime(iso: string): string {
 }
 
 export default function AdminOutreachPage() {
-    const [tab] = useState<"inbox">("inbox");
     const [replies, setReplies] = useState<Reply[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -317,20 +317,8 @@ export default function AdminOutreachPage() {
             </header>
 
             <div className="bg-white rounded-2xl border border-stone-200 shadow-sm">
-                {/* Tabs strip — only Inbox is wired in M3.6 */}
-                <div className="border-b border-stone-200 flex items-center gap-1 px-3">
-                    <button
-                        type="button"
-                        className={clsx(
-                            "px-3 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors",
-                            tab === "inbox"
-                                ? "border-stone-900 text-stone-900"
-                                : "border-transparent text-stone-500 hover:text-stone-900"
-                        )}
-                    >
-                        Inbox
-                    </button>
-                </div>
+                {/* Outreach hub tab strip */}
+                <OutreachNav active="inbox" />
 
                 {/* Filter bar */}
                 <div className="px-3 py-3 border-b border-stone-200 space-y-2">

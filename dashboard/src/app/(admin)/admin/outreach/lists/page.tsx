@@ -6,6 +6,7 @@ import {
     Users, Plus, Trash2, Edit3, Save, Loader2, ChevronRight, X,
 } from "lucide-react";
 import clsx from "clsx";
+import OutreachNav from "@/components/outreach/OutreachNav";
 
 interface OutreachList {
     id: string;
@@ -92,6 +93,8 @@ export default function OutreachListsPage() {
                     </button>
                 </div>
             </header>
+
+            <OutreachNav active="lists" />
 
             <main className="max-w-[1600px] mx-auto px-4 sm:px-6 py-6">
                 {creating && (

@@ -8,6 +8,7 @@ import {
     Briefcase, Hash, Clock, AlertCircle, ChevronDown, RefreshCw,
 } from "lucide-react";
 import clsx from "clsx";
+import OutreachNav from "@/components/outreach/OutreachNav";
 import ImportContactsModal from "@/components/outreach/ImportContactsModal";
 import ContactDrawer from "@/components/outreach/ContactDrawer";
 
@@ -257,6 +258,8 @@ export default function OutreachContactsPage() {
                     </div>
                 </div>
             </header>
+
+            <OutreachNav active="contacts" />
 
             <main className="max-w-[1600px] mx-auto px-4 sm:px-6 py-6 grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-6">
                 {/* Filter sidebar */}
