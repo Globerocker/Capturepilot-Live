@@ -6,7 +6,7 @@ import {
     Search, Filter, Plus, Upload, Users, Mail, Phone, Tag, MapPin,
     Loader2, CheckSquare, Square, X, Trash2, Send, ChevronRight, Building2,
     Briefcase, Hash, Clock, AlertCircle, ChevronDown, RefreshCw, Trophy,
-    Globe, Target,
+    Globe, Target, ArrowUp, ArrowDown, ArrowUpDown, Columns3, Check,
 } from "lucide-react";
 import clsx from "clsx";
 import OutreachNav from "@/components/outreach/OutreachNav";
@@ -70,6 +70,54 @@ const STATUS_OPTIONS = [
     { value: "bounced", label: "Bounced" },
 ];
 
+// Sort keys understood by the API. Direct columns sort in SQL; the rest
+// (past_awards / last_award / years_on_sam) sort in-memory off the contractor join.
+type SortKey =
+    | "email" | "company_name" | "state" | "created_at" | "engagement_score"
+    | "past_awards" | "last_award" | "years_on_sam";
+
+// Column model for the HubSpot-style show/hide picker. `sort` is the API sort
+// key when the column header is clickable; `align` controls cell alignment.
+type ColumnId =
+    | "email" | "name" | "company" | "phone" | "title" | "naics" | "state"
+    | "source" | "past_awards" | "last_award" | "years_sam" | "listing"
+    | "engagement" | "last_engaged" | "tags";
+
+interface ColumnDef {
+    id: ColumnId;
+    label: string;
+    sort?: SortKey;       // present => header is clickable
+    align?: "left" | "right";
+    title?: string;       // header tooltip
+}
+
+const COLUMNS: ColumnDef[] = [
+    { id: "email", label: "Email", sort: "email" },
+    { id: "name", label: "Name" },
+    { id: "company", label: "Company", sort: "company_name" },
+    { id: "phone", label: "Phone" },
+    { id: "title", label: "Title" },
+    { id: "naics", label: "NAICS" },
+    { id: "state", label: "State", sort: "state" },
+    { id: "source", label: "Source" },
+    { id: "past_awards", label: "Past awards", sort: "past_awards", title: "Federal awards on record (SAM.gov contractor match)" },
+    { id: "last_award", label: "Last award", sort: "last_award", title: "Most recent federal award" },
+    { id: "years_sam", label: "Yrs SAM", sort: "years_on_sam", align: "right", title: "Years registered on SAM.gov" },
+    { id: "listing", label: "Listing", title: "Has a published CapturePilot listing page" },
+    { id: "engagement", label: "Score", sort: "engagement_score", align: "right" },
+    { id: "last_engaged", label: "Last engaged" },
+    { id: "tags", label: "Tags" },
+];
+
+// Default-visible set (HubSpot-style). Hideable columns: phone, title, tags, engagement, source.
+const DEFAULT_VISIBLE: Record<ColumnId, boolean> = {
+    email: true, name: true, company: true, phone: false, title: false,
+    naics: true, state: true, source: false, past_awards: true,
+    last_award: true, years_sam: true, listing: true, engagement: false,
+    last_engaged: true, tags: false,
+};
+const COLS_STORAGE_KEY = "outreach_contacts_cols";
+
 export default function OutreachContactsPage() {
     const [contacts, setContacts] = useState<Contact[]>([]);
     const [total, setTotal] = useState(0);
@@ -96,8 +144,64 @@ export default function OutreachContactsPage() {
     const [stateInput, setStateInput] = useState("");
     const [pscInput, setPscInput] = useState("");
     const [page, setPage] = useState(0);
+    const [sortKey, setSortKey] = useState<SortKey>("created_at");
+    const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+    const [visibleCols, setVisibleCols] = useState<Record<ColumnId, boolean>>(DEFAULT_VISIBLE);
+    const [showColsMenu, setShowColsMenu] = useState(false);
+    const colsMenuRef = useRef<HTMLDivElement | null>(null);
     const PAGE_SIZE = 50;
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // Restore persisted column choices once on mount.
+    useEffect(() => {
+        try {
+            const raw = localStorage.getItem(COLS_STORAGE_KEY);
+            if (raw) {
+                const saved = JSON.parse(raw) as Partial<Record<ColumnId, boolean>>;
+                setVisibleCols(prev => {
+                    const next = { ...prev };
+                    for (const col of COLUMNS) {
+                        if (typeof saved[col.id] === "boolean") next[col.id] = saved[col.id]!;
+                    }
+                    return next;
+                });
+            }
+        } catch {
+            /* ignore malformed storage */
+        }
+    }, []);
+
+    // Close the columns menu on outside click.
+    useEffect(() => {
+        if (!showColsMenu) return;
+        const onClick = (e: MouseEvent) => {
+            if (colsMenuRef.current && !colsMenuRef.current.contains(e.target as Node)) {
+                setShowColsMenu(false);
+            }
+        };
+        document.addEventListener("mousedown", onClick);
+        return () => document.removeEventListener("mousedown", onClick);
+    }, [showColsMenu]);
+
+    const toggleColumn = (id: ColumnId) => {
+        setVisibleCols(prev => {
+            const next = { ...prev, [id]: !prev[id] };
+            try { localStorage.setItem(COLS_STORAGE_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+            return next;
+        });
+    };
+
+    // Header click: same column toggles direction, new column resets to a sane default.
+    const handleSort = (key: SortKey) => {
+        setPage(0);
+        if (sortKey === key) {
+            setSortDir(d => (d === "asc" ? "desc" : "asc"));
+        } else {
+            setSortKey(key);
+            // Text columns read better ascending; numeric/date columns descending.
+            setSortDir(key === "email" || key === "company_name" || key === "state" ? "asc" : "desc");
+        }
+    };
 
     const fetchContacts = useCallback(async () => {
         setLoading(true);
@@ -113,6 +217,8 @@ export default function OutreachContactsPage() {
         if (filters.engagement) params.set("engagement", filters.engagement);
         if (filters.status) params.set("status", filters.status);
         if (filters.listId) params.set("list_id", filters.listId);
+        params.set("sort", sortKey);
+        params.set("dir", sortDir);
         params.set("limit", String(PAGE_SIZE));
         params.set("offset", String(page * PAGE_SIZE));
 
@@ -126,7 +232,7 @@ export default function OutreachContactsPage() {
         } finally {
             setLoading(false);
         }
-    }, [filters, page]);
+    }, [filters, page, sortKey, sortDir]);
 
     const fetchLists = useCallback(async () => {
         try {
@@ -254,6 +360,147 @@ export default function OutreachContactsPage() {
 
     const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
+    // Columns currently rendered, in declared order. +1 for the always-on select cell.
+    const shownColumns = useMemo(() => COLUMNS.filter(c => visibleCols[c.id]), [visibleCols]);
+    const colSpan = shownColumns.length + 1;
+
+    // A single sortable/static header cell.
+    const renderHeader = (col: ColumnDef) => {
+        const alignRight = col.align === "right";
+        const base = clsx("px-3 py-3", alignRight ? "text-right" : "text-left");
+        if (!col.sort) {
+            return <th key={col.id} className={base} title={col.title}>{col.label}</th>;
+        }
+        const active = sortKey === col.sort;
+        const Icon = !active ? ArrowUpDown : sortDir === "asc" ? ArrowUp : ArrowDown;
+        return (
+            <th key={col.id} className={base} title={col.title}>
+                <button
+                    type="button"
+                    onClick={() => handleSort(col.sort!)}
+                    className={clsx(
+                        "inline-flex items-center gap-1 font-bold uppercase text-[10px] hover:text-stone-900",
+                        active ? "text-stone-900" : "text-stone-500"
+                    )}
+                >
+                    {col.label}
+                    <Icon className={clsx("w-3 h-3", active ? "text-stone-700" : "text-stone-300")} />
+                </button>
+            </th>
+        );
+    };
+
+    // Body cell for a given column + contact.
+    const renderCell = (col: ColumnDef, c: Contact) => {
+        switch (col.id) {
+            case "email": {
+                const status = c.opted_out_at ? "unsub" : c.last_bounced_at ? "bounced" : "ok";
+                return (
+                    <td key={col.id} className="px-3 py-2.5 text-stone-800 font-medium truncate max-w-[200px]">
+                        <div className="flex items-center gap-1.5">
+                            {c.email || <span className="italic text-stone-400">no email</span>}
+                            {status === "unsub" && <span className="text-[9px] bg-stone-100 text-stone-600 px-1 rounded">UNSUB</span>}
+                            {status === "bounced" && <span className="text-[9px] bg-rose-50 text-rose-700 px-1 rounded">BOUNCED</span>}
+                        </div>
+                    </td>
+                );
+            }
+            case "name":
+                return <td key={col.id} className="px-3 py-2.5 text-stone-700">{[c.first_name, c.last_name].filter(Boolean).join(" ") || "—"}</td>;
+            case "company":
+                return <td key={col.id} className="px-3 py-2.5 text-stone-700 truncate max-w-[160px]">{c.company_name || "—"}</td>;
+            case "phone":
+                return <td key={col.id} className="px-3 py-2.5 text-stone-500">{c.phone || "—"}</td>;
+            case "title":
+                return <td key={col.id} className="px-3 py-2.5 text-stone-500 truncate max-w-[140px]">{c.title || "—"}</td>;
+            case "naics":
+                return <td key={col.id} className="px-3 py-2.5 text-stone-500">{(c.naics_codes || []).slice(0, 2).join(", ") || "—"}</td>;
+            case "state":
+                return <td key={col.id} className="px-3 py-2.5 text-stone-500">{c.state || "—"}</td>;
+            case "source":
+                return <td key={col.id} className="px-3 py-2.5 text-stone-500">{c.source?.replace(/_/g, " ") || "—"}</td>;
+            case "past_awards":
+                return (
+                    <td key={col.id} className="px-3 py-2.5">
+                        {c.contractor && (c.contractor.federal_awards_count || 0) > 0 ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-emerald-50 text-emerald-700 rounded px-1.5 py-0.5">
+                                <Trophy className="w-3 h-3" /> Yes ({c.contractor.federal_awards_count})
+                            </span>
+                        ) : (
+                            <span className="text-stone-300">—</span>
+                        )}
+                    </td>
+                );
+            case "last_award":
+                return (
+                    <td key={col.id} className="px-3 py-2.5 text-stone-500">
+                        {c.contractor?.last_award_date
+                            ? new Date(c.contractor.last_award_date).toLocaleDateString()
+                            : <span className="text-stone-300">—</span>}
+                    </td>
+                );
+            case "years_sam":
+                return (
+                    <td key={col.id} className="px-3 py-2.5 text-right text-stone-600">
+                        {c.contractor?.years_on_sam != null
+                            ? c.contractor.years_on_sam
+                            : <span className="text-stone-300">—</span>}
+                    </td>
+                );
+            case "listing":
+                return (
+                    <td key={col.id} className="px-3 py-2.5">
+                        {c.contractor?.has_listing_page ? (
+                            c.contractor.listing_slug ? (
+                                <a
+                                    href={`https://www.capturepilot.com/contractors/${c.contractor.listing_slug}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={e => e.stopPropagation()}
+                                    className="inline-flex items-center gap-1 text-[10px] font-bold bg-blue-50 text-blue-700 rounded px-1.5 py-0.5 hover:bg-blue-100"
+                                >
+                                    <Globe className="w-3 h-3" /> View
+                                </a>
+                            ) : (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-blue-50 text-blue-700 rounded px-1.5 py-0.5">
+                                    <Globe className="w-3 h-3" /> Yes
+                                </span>
+                            )
+                        ) : (
+                            <span className="text-stone-300">—</span>
+                        )}
+                    </td>
+                );
+            case "engagement":
+                return (
+                    <td key={col.id} className="px-3 py-2.5 text-right">
+                        <span className={clsx(
+                            "inline-block rounded px-1.5 py-0.5 text-[10px] font-bold",
+                            c.engagement_score >= 60 ? "bg-emerald-50 text-emerald-700" :
+                            c.engagement_score >= 30 ? "bg-amber-50 text-amber-700" :
+                            "bg-stone-50 text-stone-500"
+                        )}>
+                            {c.engagement_score}
+                        </span>
+                    </td>
+                );
+            case "last_engaged":
+                return <td key={col.id} className="px-3 py-2.5 text-stone-500">{c.last_engagement_at ? new Date(c.last_engagement_at).toLocaleDateString() : "—"}</td>;
+            case "tags":
+                return (
+                    <td key={col.id} className="px-3 py-2.5">
+                        <div className="flex flex-wrap gap-1">
+                            {(c.tags || []).slice(0, 3).map(t => (
+                                <span key={t} className="text-[9px] bg-stone-100 text-stone-600 rounded px-1 py-0.5">{t}</span>
+                            ))}
+                        </div>
+                    </td>
+                );
+            default:
+                return null;
+        }
+    };
+
     return (
         <div className="min-h-screen bg-stone-50">
             <header className="bg-white border-b border-stone-200 px-4 sm:px-6 py-4">
@@ -267,6 +514,52 @@ export default function OutreachContactsPage() {
                         <span className="text-xs text-stone-500">{total.toLocaleString()} total</span>
                     </div>
                     <div className="flex gap-2">
+                        <div className="relative" ref={colsMenuRef}>
+                            <button
+                                type="button"
+                                onClick={() => setShowColsMenu(o => !o)}
+                                className="bg-white hover:bg-stone-100 border border-stone-200 text-stone-700 font-bold px-3 py-2 rounded-lg inline-flex items-center gap-2 text-sm"
+                                title="Show / hide columns"
+                            >
+                                <Columns3 className="w-4 h-4" /> Columns
+                                <ChevronDown className="w-3.5 h-3.5 text-stone-400" />
+                            </button>
+                            {showColsMenu && (
+                                <div className="absolute right-0 mt-1 w-56 bg-white border border-stone-200 rounded-xl shadow-lg z-20 p-1.5">
+                                    <div className="px-2 py-1.5 text-[10px] font-bold uppercase text-stone-400 tracking-wide flex items-center justify-between">
+                                        <span>Columns</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setVisibleCols(DEFAULT_VISIBLE);
+                                                try { localStorage.setItem(COLS_STORAGE_KEY, JSON.stringify(DEFAULT_VISIBLE)); } catch { /* ignore */ }
+                                            }}
+                                            className="text-[10px] font-medium text-stone-500 hover:text-black normal-case"
+                                        >
+                                            Reset
+                                        </button>
+                                    </div>
+                                    <div className="max-h-72 overflow-auto">
+                                        {COLUMNS.map(col => (
+                                            <button
+                                                key={col.id}
+                                                type="button"
+                                                onClick={() => toggleColumn(col.id)}
+                                                className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-stone-700 hover:bg-stone-50 rounded-lg"
+                                            >
+                                                <span className={clsx(
+                                                    "w-4 h-4 rounded border flex items-center justify-center shrink-0",
+                                                    visibleCols[col.id] ? "bg-black border-black" : "bg-white border-stone-300"
+                                                )}>
+                                                    {visibleCols[col.id] && <Check className="w-3 h-3 text-white" />}
+                                                </span>
+                                                {col.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                         <button
                             type="button"
                             onClick={() => setShowImport(true)}
@@ -561,34 +854,17 @@ export default function OutreachContactsPage() {
                                                 {selectedIds.size === contacts.length && contacts.length > 0 ? <CheckSquare className="w-4 h-4 text-black" /> : <Square className="w-4 h-4" />}
                                             </button>
                                         </th>
-                                        <th className="px-3 py-3 text-left">Email</th>
-                                        <th className="px-3 py-3 text-left">Name</th>
-                                        <th className="px-3 py-3 text-left">Company</th>
-                                        <th className="px-3 py-3 text-left">Title</th>
-                                        <th className="px-3 py-3 text-left">NAICS</th>
-                                        <th className="px-3 py-3 text-left">State</th>
-                                        <th className="px-3 py-3 text-left">Source</th>
-                                        <th className="px-3 py-3 text-left" title="Federal awards on record (SAM.gov contractor match)">Past awards</th>
-                                        <th className="px-3 py-3 text-left" title="Most recent federal award">Last award</th>
-                                        <th className="px-3 py-3 text-right" title="Years registered on SAM.gov">Yrs SAM</th>
-                                        <th className="px-3 py-3 text-left" title="Has a published CapturePilot listing page">Listing</th>
-                                        <th className="px-3 py-3 text-right">Score</th>
-                                        <th className="px-3 py-3 text-left">Last engaged</th>
-                                        <th className="px-3 py-3 text-left">Tags</th>
+                                        {shownColumns.map(col => renderHeader(col))}
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {loading ? (
-                                        <tr><td colSpan={15} className="text-center py-12"><Loader2 className="w-6 h-6 animate-spin text-stone-400 mx-auto" /></td></tr>
+                                        <tr><td colSpan={colSpan} className="text-center py-12"><Loader2 className="w-6 h-6 animate-spin text-stone-400 mx-auto" /></td></tr>
                                     ) : contacts.length === 0 ? (
-                                        <tr><td colSpan={15} className="text-center py-12 text-stone-400">
+                                        <tr><td colSpan={colSpan} className="text-center py-12 text-stone-400">
                                             No contacts match these filters yet. Try <button onClick={() => setShowImport(true)} className="underline">importing some</button>.
                                         </td></tr>
                                     ) : contacts.map(c => {
-                                        const status =
-                                            c.opted_out_at ? "unsub" :
-                                            c.last_bounced_at ? "bounced" :
-                                            "ok";
                                         const isSelected = selectedIds.has(c.id);
                                         return (
                                             <tr
@@ -599,77 +875,7 @@ export default function OutreachContactsPage() {
                                                 <td className="px-3 py-2.5" onClick={e => { e.stopPropagation(); toggleSelect(c.id); }}>
                                                     {isSelected ? <CheckSquare className="w-4 h-4 text-black" /> : <Square className="w-4 h-4 text-stone-400" />}
                                                 </td>
-                                                <td className="px-3 py-2.5 text-stone-800 font-medium truncate max-w-[200px]">
-                                                    <div className="flex items-center gap-1.5">
-                                                        {c.email || <span className="italic text-stone-400">no email</span>}
-                                                        {status === "unsub" && <span className="text-[9px] bg-stone-100 text-stone-600 px-1 rounded">UNSUB</span>}
-                                                        {status === "bounced" && <span className="text-[9px] bg-rose-50 text-rose-700 px-1 rounded">BOUNCED</span>}
-                                                    </div>
-                                                </td>
-                                                <td className="px-3 py-2.5 text-stone-700">{[c.first_name, c.last_name].filter(Boolean).join(" ") || "—"}</td>
-                                                <td className="px-3 py-2.5 text-stone-700 truncate max-w-[160px]">{c.company_name || "—"}</td>
-                                                <td className="px-3 py-2.5 text-stone-500 truncate max-w-[140px]">{c.title || "—"}</td>
-                                                <td className="px-3 py-2.5 text-stone-500">{(c.naics_codes || []).slice(0, 2).join(", ") || "—"}</td>
-                                                <td className="px-3 py-2.5 text-stone-500">{c.state || "—"}</td>
-                                                <td className="px-3 py-2.5 text-stone-500">{c.source?.replace(/_/g, " ") || "—"}</td>
-                                                <td className="px-3 py-2.5">
-                                                    {c.contractor && (c.contractor.federal_awards_count || 0) > 0 ? (
-                                                        <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-emerald-50 text-emerald-700 rounded px-1.5 py-0.5">
-                                                            <Trophy className="w-3 h-3" /> Yes ({c.contractor.federal_awards_count})
-                                                        </span>
-                                                    ) : (
-                                                        <span className="text-stone-300">—</span>
-                                                    )}
-                                                </td>
-                                                <td className="px-3 py-2.5 text-stone-500">
-                                                    {c.contractor?.last_award_date
-                                                        ? new Date(c.contractor.last_award_date).toLocaleDateString()
-                                                        : <span className="text-stone-300">—</span>}
-                                                </td>
-                                                <td className="px-3 py-2.5 text-right text-stone-600">
-                                                    {c.contractor?.years_on_sam != null
-                                                        ? c.contractor.years_on_sam
-                                                        : <span className="text-stone-300">—</span>}
-                                                </td>
-                                                <td className="px-3 py-2.5">
-                                                    {c.contractor?.has_listing_page ? (
-                                                        c.contractor.listing_slug ? (
-                                                            <a
-                                                                href={`https://www.capturepilot.com/contractors/${c.contractor.listing_slug}`}
-                                                                target="_blank"
-                                                                rel="noopener noreferrer"
-                                                                onClick={e => e.stopPropagation()}
-                                                                className="inline-flex items-center gap-1 text-[10px] font-bold bg-blue-50 text-blue-700 rounded px-1.5 py-0.5 hover:bg-blue-100"
-                                                            >
-                                                                <Globe className="w-3 h-3" /> View
-                                                            </a>
-                                                        ) : (
-                                                            <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-blue-50 text-blue-700 rounded px-1.5 py-0.5">
-                                                                <Globe className="w-3 h-3" /> Yes
-                                                            </span>
-                                                        )
-                                                    ) : (
-                                                        <span className="text-stone-300">—</span>
-                                                    )}
-                                                </td>
-                                                <td className="px-3 py-2.5 text-right">
-                                                    <span className={clsx(
-                                                        "inline-block rounded px-1.5 py-0.5 text-[10px] font-bold",
-                                                        c.engagement_score >= 60 ? "bg-emerald-50 text-emerald-700" :
-                                                        c.engagement_score >= 30 ? "bg-amber-50 text-amber-700" :
-                                                        "bg-stone-50 text-stone-500"
-                                                    )}>
-                                                        {c.engagement_score}
-                                                    </span>
-                                                </td>
-                                                <td className="px-3 py-2.5 text-stone-500">{c.last_engagement_at ? new Date(c.last_engagement_at).toLocaleDateString() : "—"}</td>
-                                                <td className="px-3 py-2.5">
-                                                    <div className="flex flex-wrap gap-1">
-                                                        {(c.tags || []).slice(0, 3).map(t => (
-                                                            <span key={t} className="text-[9px] bg-stone-100 text-stone-600 rounded px-1 py-0.5">{t}</span>
-                                                        ))}
-                                                    </div>
-                                                </td>
+                                                {shownColumns.map(col => renderCell(col, c))}
                                             </tr>
                                         );
                                     })}
