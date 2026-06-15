@@ -5,12 +5,25 @@ import Link from "next/link";
 import {
     Search, Filter, Plus, Upload, Users, Mail, Phone, Tag, MapPin,
     Loader2, CheckSquare, Square, X, Trash2, Send, ChevronRight, Building2,
-    Briefcase, Hash, Clock, AlertCircle, ChevronDown, RefreshCw,
+    Briefcase, Hash, Clock, AlertCircle, ChevronDown, RefreshCw, Trophy,
+    Globe, Target,
 } from "lucide-react";
 import clsx from "clsx";
 import OutreachNav from "@/components/outreach/OutreachNav";
 import ImportContactsModal from "@/components/outreach/ImportContactsModal";
 import ContactDrawer from "@/components/outreach/ContactDrawer";
+
+interface ContractorIntel {
+    uei: string | null;
+    federal_awards_count: number | null;
+    last_award_date: string | null;
+    activation_date: string | null;
+    years_on_sam: number | null;
+    psc_codes: string[];
+    certifications: string[];
+    has_listing_page: boolean;
+    listing_slug: string | null;
+}
 
 interface Contact {
     id: string;
@@ -23,12 +36,14 @@ interface Contact {
     naics_codes: string[];
     state: string | null;
     source: string | null;
+    source_id: string | null;
     tags: string[];
     engagement_score: number;
     last_engagement_at: string | null;
     last_bounced_at: string | null;
     opted_out_at: string | null;
     created_at: string;
+    contractor: ContractorIntel | null;
 }
 
 interface ListMeta {
@@ -38,6 +53,10 @@ interface ListMeta {
 }
 
 const SOURCES = ["sam_gov", "apollo", "manual_import", "hubspot_sync", "csv_import"];
+// Tag-based audiences the contacts get tagged with on capture.
+const AUDIENCE_TAGS = ["quick_checker", "lead_magnet"];
+// Common SBA set-asides / certifications (matched via the contractor join).
+const CERT_OPTIONS = ["8(a)", "HUBZone", "WOSB", "EDWOSB", "SDVOSB", "VOSB", "SDB"];
 const ENGAGEMENT_OPTIONS = [
     { value: "", label: "Any" },
     { value: "7d", label: "Last 7 days" },
@@ -66,12 +85,16 @@ export default function OutreachContactsPage() {
         tags: [] as string[],
         naics: [] as string[],
         states: [] as string[],
+        certs: [] as string[],
+        psc: [] as string[],
+        hasEmail: true,
         engagement: "",
         status: "",
         listId: "",
     });
     const [naicsInput, setNaicsInput] = useState("");
     const [stateInput, setStateInput] = useState("");
+    const [pscInput, setPscInput] = useState("");
     const [page, setPage] = useState(0);
     const PAGE_SIZE = 50;
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -84,6 +107,9 @@ export default function OutreachContactsPage() {
         for (const t of filters.tags) params.append("tag", t);
         for (const n of filters.naics) params.append("naics", n);
         for (const st of filters.states) params.append("state", st);
+        for (const c of filters.certs) params.append("cert", c);
+        for (const p of filters.psc) params.append("psc", p);
+        params.set("has_email", filters.hasEmail ? "1" : "0");
         if (filters.engagement) params.set("engagement", filters.engagement);
         if (filters.status) params.set("status", filters.status);
         if (filters.listId) params.set("list_id", filters.listId);
@@ -201,7 +227,7 @@ export default function OutreachContactsPage() {
         fetchContacts();
     };
 
-    const toggleArr = (key: "sources" | "tags" | "states", value: string) => {
+    const toggleArr = (key: "sources" | "tags" | "states" | "certs", value: string) => {
         setPage(0);
         setFilters(prev => ({
             ...prev,
@@ -209,7 +235,7 @@ export default function OutreachContactsPage() {
         }));
     };
 
-    const addArr = (key: "naics" | "states" | "tags", value: string) => {
+    const addArr = (key: "naics" | "states" | "tags" | "psc", value: string) => {
         const v = value.trim();
         if (!v) return;
         setPage(0);
@@ -294,6 +320,37 @@ export default function OutreachContactsPage() {
                         </div>
                     )}
 
+                    <label className="flex items-center justify-between gap-2 text-xs text-stone-700 cursor-pointer">
+                        <span className="flex items-center gap-1.5 font-medium"><Mail className="w-3.5 h-3.5 text-stone-400" /> Has email only</span>
+                        <input
+                            type="checkbox"
+                            checked={filters.hasEmail}
+                            onChange={() => { setPage(0); setFilters(f => ({ ...f, hasEmail: !f.hasEmail })); }}
+                            className="rounded border-stone-300"
+                        />
+                    </label>
+
+                    <div>
+                        <label className="text-[10px] font-bold uppercase text-stone-500 tracking-wide">Audience</label>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                            {AUDIENCE_TAGS.map(t => (
+                                <button
+                                    key={t}
+                                    type="button"
+                                    onClick={() => toggleArr("tags", t)}
+                                    className={clsx(
+                                        "text-[11px] rounded-lg px-2 py-1 border font-medium",
+                                        filters.tags.includes(t)
+                                            ? "bg-orange-50 text-orange-700 border-orange-200"
+                                            : "bg-white text-stone-500 border-stone-200 hover:border-stone-300"
+                                    )}
+                                >
+                                    {t.replace(/_/g, " ")}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
                     <div>
                         <label className="text-[10px] font-bold uppercase text-stone-500 tracking-wide">Source</label>
                         <div className="space-y-1 mt-1">
@@ -309,6 +366,10 @@ export default function OutreachContactsPage() {
                                 </label>
                             ))}
                         </div>
+                    </div>
+
+                    <div className="pt-1 border-t border-stone-100">
+                        <div className="text-[10px] font-bold uppercase text-stone-500 tracking-wide flex items-center gap-1 mb-1"><Target className="w-3 h-3" /> ICP targeting</div>
                     </div>
 
                     <div>
@@ -361,6 +422,55 @@ export default function OutreachContactsPage() {
                                 ))}
                             </div>
                         )}
+                    </div>
+
+                    <div>
+                        <label className="text-[10px] font-bold uppercase text-stone-500 tracking-wide">Set-aside / cert</label>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                            {CERT_OPTIONS.map(c => (
+                                <button
+                                    key={c}
+                                    type="button"
+                                    onClick={() => toggleArr("certs", c)}
+                                    className={clsx(
+                                        "text-[10px] rounded px-1.5 py-0.5 border",
+                                        filters.certs.includes(c)
+                                            ? "bg-violet-50 text-violet-700 border-violet-200"
+                                            : "bg-white text-stone-500 border-stone-200 hover:border-stone-300"
+                                    )}
+                                >
+                                    {c}
+                                </button>
+                            ))}
+                        </div>
+                        <p className="text-[10px] text-stone-400 mt-1">Matched via SAM.gov contractor records.</p>
+                    </div>
+
+                    <div>
+                        <label className="text-[10px] font-bold uppercase text-stone-500 tracking-wide">PSC code</label>
+                        <input
+                            type="text"
+                            value={pscInput}
+                            placeholder="e.g. R425, D302"
+                            onChange={e => setPscInput(e.target.value.toUpperCase())}
+                            onKeyDown={e => { if (e.key === "Enter") { addArr("psc", pscInput); setPscInput(""); } }}
+                            className="w-full mt-1 px-2 py-2 text-xs rounded-lg border border-stone-200 focus:outline-none focus:border-stone-400"
+                        />
+                        {filters.psc.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-2">
+                                {filters.psc.map(p => (
+                                    <button
+                                        key={p}
+                                        type="button"
+                                        onClick={() => setFilters(f => ({ ...f, psc: f.psc.filter(x => x !== p) }))}
+                                        className="text-[10px] bg-teal-50 text-teal-700 border border-teal-200 rounded px-1.5 py-0.5 inline-flex items-center gap-1"
+                                    >
+                                        {p} <X className="w-2.5 h-2.5" />
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                        <p className="text-[10px] text-stone-400 mt-1">Matched via contractor PSC codes; unmatched contacts hidden.</p>
                     </div>
 
                     <div>
@@ -420,7 +530,7 @@ export default function OutreachContactsPage() {
 
                     <button
                         type="button"
-                        onClick={() => { setFilters({ q: "", sources: [], tags: [], naics: [], states: [], engagement: "", status: "", listId: "" }); setPage(0); }}
+                        onClick={() => { setFilters({ q: "", sources: [], tags: [], naics: [], states: [], certs: [], psc: [], hasEmail: true, engagement: "", status: "", listId: "" }); setPage(0); }}
                         className="w-full text-xs text-stone-500 hover:text-black underline"
                     >
                         Clear all filters
@@ -458,6 +568,10 @@ export default function OutreachContactsPage() {
                                         <th className="px-3 py-3 text-left">NAICS</th>
                                         <th className="px-3 py-3 text-left">State</th>
                                         <th className="px-3 py-3 text-left">Source</th>
+                                        <th className="px-3 py-3 text-left" title="Federal awards on record (SAM.gov contractor match)">Past awards</th>
+                                        <th className="px-3 py-3 text-left" title="Most recent federal award">Last award</th>
+                                        <th className="px-3 py-3 text-right" title="Years registered on SAM.gov">Yrs SAM</th>
+                                        <th className="px-3 py-3 text-left" title="Has a published CapturePilot listing page">Listing</th>
                                         <th className="px-3 py-3 text-right">Score</th>
                                         <th className="px-3 py-3 text-left">Last engaged</th>
                                         <th className="px-3 py-3 text-left">Tags</th>
@@ -465,9 +579,9 @@ export default function OutreachContactsPage() {
                                 </thead>
                                 <tbody>
                                     {loading ? (
-                                        <tr><td colSpan={11} className="text-center py-12"><Loader2 className="w-6 h-6 animate-spin text-stone-400 mx-auto" /></td></tr>
+                                        <tr><td colSpan={15} className="text-center py-12"><Loader2 className="w-6 h-6 animate-spin text-stone-400 mx-auto" /></td></tr>
                                     ) : contacts.length === 0 ? (
-                                        <tr><td colSpan={11} className="text-center py-12 text-stone-400">
+                                        <tr><td colSpan={15} className="text-center py-12 text-stone-400">
                                             No contacts match these filters yet. Try <button onClick={() => setShowImport(true)} className="underline">importing some</button>.
                                         </td></tr>
                                     ) : contacts.map(c => {
@@ -498,6 +612,46 @@ export default function OutreachContactsPage() {
                                                 <td className="px-3 py-2.5 text-stone-500">{(c.naics_codes || []).slice(0, 2).join(", ") || "—"}</td>
                                                 <td className="px-3 py-2.5 text-stone-500">{c.state || "—"}</td>
                                                 <td className="px-3 py-2.5 text-stone-500">{c.source?.replace(/_/g, " ") || "—"}</td>
+                                                <td className="px-3 py-2.5">
+                                                    {c.contractor && (c.contractor.federal_awards_count || 0) > 0 ? (
+                                                        <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-emerald-50 text-emerald-700 rounded px-1.5 py-0.5">
+                                                            <Trophy className="w-3 h-3" /> Yes ({c.contractor.federal_awards_count})
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-stone-300">—</span>
+                                                    )}
+                                                </td>
+                                                <td className="px-3 py-2.5 text-stone-500">
+                                                    {c.contractor?.last_award_date
+                                                        ? new Date(c.contractor.last_award_date).toLocaleDateString()
+                                                        : <span className="text-stone-300">—</span>}
+                                                </td>
+                                                <td className="px-3 py-2.5 text-right text-stone-600">
+                                                    {c.contractor?.years_on_sam != null
+                                                        ? c.contractor.years_on_sam
+                                                        : <span className="text-stone-300">—</span>}
+                                                </td>
+                                                <td className="px-3 py-2.5">
+                                                    {c.contractor?.has_listing_page ? (
+                                                        c.contractor.listing_slug ? (
+                                                            <a
+                                                                href={`https://www.capturepilot.com/contractors/${c.contractor.listing_slug}`}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                onClick={e => e.stopPropagation()}
+                                                                className="inline-flex items-center gap-1 text-[10px] font-bold bg-blue-50 text-blue-700 rounded px-1.5 py-0.5 hover:bg-blue-100"
+                                                            >
+                                                                <Globe className="w-3 h-3" /> View
+                                                            </a>
+                                                        ) : (
+                                                            <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-blue-50 text-blue-700 rounded px-1.5 py-0.5">
+                                                                <Globe className="w-3 h-3" /> Yes
+                                                            </span>
+                                                        )
+                                                    ) : (
+                                                        <span className="text-stone-300">—</span>
+                                                    )}
+                                                </td>
                                                 <td className="px-3 py-2.5 text-right">
                                                     <span className={clsx(
                                                         "inline-block rounded px-1.5 py-0.5 text-[10px] font-bold",
