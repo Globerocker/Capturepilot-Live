@@ -5,6 +5,7 @@ import clsx from "clsx";
 import {
     Workflow, Mail, MessageSquare, Clock, Plus, Trash2, Loader2, X,
     ChevronUp, ChevronDown, AlertCircle, Send, ArrowRight, FileText, PlayCircle,
+    Check, ShieldOff,
 } from "lucide-react";
 import OutreachNav from "@/components/outreach/OutreachNav";
 
@@ -35,6 +36,7 @@ interface CampaignStepRow {
     subject: string | null;
     body: string | null;
     variant_key: string | null;
+    send_condition: "always" | "if_no_reply" | null;
 }
 
 interface Template {
@@ -47,6 +49,8 @@ interface Template {
     description?: string | null;
 }
 
+type SendCondition = "always" | "if_no_reply";
+
 // A draft step assembled from a template (or a manual wait).
 interface DraftStep {
     uid: string;
@@ -57,6 +61,7 @@ interface DraftStep {
     body: string;
     delay_value: number;           // delay BEFORE this step fires
     delay_unit: DelayUnit;
+    send_condition: SendCondition; // "if_no_reply" = only fire if no reply yet
 }
 
 // ────────────────────────────────────────────────────────────────
@@ -291,6 +296,28 @@ export default function OutreachSequencesPage() {
 }
 
 // ────────────────────────────────────────────────────────────────
+// Mini toggle switch (visual only — state lives in the parent)
+// ────────────────────────────────────────────────────────────────
+function Toggle({ on }: { on: boolean }) {
+    return (
+        <span
+            className={clsx(
+                "relative inline-flex h-4 w-7 items-center rounded-full transition-colors",
+                on ? "bg-emerald-500" : "bg-stone-300",
+            )}
+            aria-hidden
+        >
+            <span
+                className={clsx(
+                    "inline-block h-3 w-3 transform rounded-full bg-white transition-transform",
+                    on ? "translate-x-3.5" : "translate-x-0.5",
+                )}
+            />
+        </span>
+    );
+}
+
+// ────────────────────────────────────────────────────────────────
 // Status pill
 // ────────────────────────────────────────────────────────────────
 function StatusPill({ status }: { status: string }) {
@@ -363,10 +390,15 @@ function Timeline({ steps }: { steps: CampaignStepRow[] }) {
                             "rounded-2xl border p-4",
                             isWait ? "bg-stone-50 border-stone-200" : "bg-white border-stone-200 shadow-sm",
                         )}>
-                            <div className="flex items-center gap-2 mb-1">
+                            <div className="flex items-center gap-2 mb-1 flex-wrap">
                                 <span className="text-[10px] font-bold uppercase tracking-widest text-stone-400">
                                     Step {i + 1} · {s.channel}
                                 </span>
+                                {!isWait && s.send_condition === "if_no_reply" && (
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-1.5 py-0.5">
+                                        <ShieldOff className="w-2.5 h-2.5" /> Only if no reply
+                                    </span>
+                                )}
                             </div>
                             {isWait ? (
                                 <p className="text-sm text-stone-500">
@@ -413,6 +445,7 @@ function SequenceBuilder({
     const [name, setName] = useState("");
     const [description, setDescription] = useState("");
     const [steps, setSteps] = useState<DraftStep[]>([]);
+    const [stopOnReply, setStopOnReply] = useState(true); // stop the whole cadence once they reply
     const [saving, setSaving] = useState(false);
     const [err, setErr] = useState<string | null>(null);
 
@@ -449,6 +482,9 @@ function SequenceBuilder({
                 // First step fires immediately; later steps default to a 2-day wait.
                 delay_value: prev.length === 0 ? 0 : 2,
                 delay_unit: "days",
+                // First touch always sends; follow-ups default to reply-gated so
+                // we stop pestering anyone who already answered.
+                send_condition: prev.length === 0 ? "always" : "if_no_reply",
             },
         ]);
     }, []);
@@ -465,6 +501,7 @@ function SequenceBuilder({
                 body: "",
                 delay_value: prev.length === 0 ? 1 : 3,
                 delay_unit: "days",
+                send_condition: "always", // wait steps don't send; gate is irrelevant
             },
         ]);
     }, []);
@@ -506,6 +543,7 @@ function SequenceBuilder({
                 description: description.trim() || undefined,
                 channels,
                 target_segment: {},
+                stop_on_reply: stopOnReply,
                 steps: steps.map((s, idx) => ({
                     step_index: idx,
                     channel: s.channel,
@@ -517,6 +555,7 @@ function SequenceBuilder({
                     body_format: "text" as const,
                     skip_if_replied: true,
                     skip_if_clicked: false,
+                    send_condition: s.channel === "wait" ? "always" : s.send_condition,
                     variant_key: "A",
                     variant_weight: 100,
                 })),
@@ -535,7 +574,7 @@ function SequenceBuilder({
         } finally {
             setSaving(false);
         }
-    }, [name, description, steps, channels, onSaved]);
+    }, [name, description, steps, channels, stopOnReply, onSaved]);
 
     return (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
@@ -584,6 +623,38 @@ function SequenceBuilder({
                                 />
                             </div>
                         </div>
+
+                        {/* Campaign-level reply gate */}
+                        <button
+                            type="button"
+                            onClick={() => setStopOnReply((v) => !v)}
+                            className={clsx(
+                                "w-full flex items-start gap-3 text-left rounded-2xl border p-3 transition-colors",
+                                stopOnReply
+                                    ? "bg-emerald-50 border-emerald-200"
+                                    : "bg-stone-50 border-stone-200 hover:border-stone-300",
+                            )}
+                        >
+                            <span
+                                className={clsx(
+                                    "mt-0.5 w-9 h-9 rounded-full flex items-center justify-center shrink-0 border",
+                                    stopOnReply
+                                        ? "bg-emerald-100 border-emerald-200 text-emerald-700"
+                                        : "bg-white border-stone-200 text-stone-400",
+                                )}
+                            >
+                                <ShieldOff className="w-4 h-4" />
+                            </span>
+                            <span className="flex-1">
+                                <span className="text-sm font-bold text-stone-900 flex items-center gap-2">
+                                    Stop sequence when they reply
+                                    <Toggle on={stopOnReply} />
+                                </span>
+                                <span className="block text-xs text-stone-500 mt-0.5">
+                                    The moment a contact replies, all remaining steps are halted. Recommended for cold outreach.
+                                </span>
+                            </span>
+                        </button>
 
                         {/* Assembled cadence */}
                         {steps.length === 0 ? (
@@ -682,6 +753,33 @@ function SequenceBuilder({
                                                             <p className="text-xs text-stone-500 mt-0.5 break-words">{s.subject}</p>
                                                         )}
                                                         <p className="text-xs text-stone-400 mt-1 line-clamp-2 whitespace-pre-wrap break-words">{s.body}</p>
+
+                                                        {/* Per-step reply gate */}
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => updateStep(s.uid, {
+                                                                send_condition: s.send_condition === "if_no_reply" ? "always" : "if_no_reply",
+                                                            })}
+                                                            className={clsx(
+                                                                "mt-2 inline-flex items-center gap-1.5 text-[11px] font-medium rounded-full border px-2 py-1 transition-colors",
+                                                                s.send_condition === "if_no_reply"
+                                                                    ? "bg-amber-50 border-amber-200 text-amber-700"
+                                                                    : "bg-white border-stone-200 text-stone-500 hover:border-stone-300",
+                                                            )}
+                                                            title="Skip this step if the contact has already replied to the sequence"
+                                                        >
+                                                            <span
+                                                                className={clsx(
+                                                                    "w-3.5 h-3.5 rounded-[4px] border flex items-center justify-center",
+                                                                    s.send_condition === "if_no_reply"
+                                                                        ? "bg-amber-500 border-amber-500 text-white"
+                                                                        : "bg-white border-stone-300 text-transparent",
+                                                                )}
+                                                            >
+                                                                <Check className="w-2.5 h-2.5" />
+                                                            </span>
+                                                            Only send if no reply yet
+                                                        </button>
                                                     </>
                                                 )}
                                             </div>

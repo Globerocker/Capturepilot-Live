@@ -52,6 +52,9 @@ interface Campaign {
     reply_to_email: string | null;
     throttle: Record<string, unknown> | null;
     stats: Record<string, unknown> | null;
+    // Migration 168 — when true, the cadence completes a contact the moment
+    // they reply, halting all remaining steps.
+    stop_on_reply: boolean | null;
 }
 
 interface Contact extends ContactForRender {
@@ -83,6 +86,9 @@ interface Step {
     delay_hours: number;
     skip_if_replied: boolean;
     skip_if_clicked: boolean;
+    // Migration 168 — per-step send gate. 'always' fires unconditionally;
+    // 'if_no_reply' skips when the contact has already replied to this campaign.
+    send_condition: "always" | "if_no_reply";
 }
 
 // ───────────────────────── Send-window check ─────────────────────────
@@ -135,6 +141,40 @@ async function hasPriorEvent(
     return Array.isArray(data) && data.length > 0;
 }
 
+/**
+ * Migration 168 — Reply gate. Returns true when the contact has a row in
+ * outreach_replies for this campaign. The inbound webhook stamps replies with
+ * a denormalized campaign_id (migration 160) plus the contact_id and the
+ * sender's email, so we match on campaign_id AND (contact_id OR from_email)
+ * to stay robust across the two campaign-contact schemas in this codebase.
+ */
+async function hasRepliedToCampaign(
+    sb: SbAny,
+    campaignId: string,
+    contactId: string | null,
+    contactEmail: string | null,
+): Promise<boolean> {
+    const email = (contactEmail || "").trim().toLowerCase();
+    if (!contactId && !email) return false;
+
+    let q = sb
+        .from("outreach_replies")
+        .select("id")
+        .eq("campaign_id", campaignId)
+        .limit(1);
+
+    if (contactId && email) {
+        q = q.or(`contact_id.eq.${contactId},from_email.ilike.${email}`);
+    } else if (contactId) {
+        q = q.eq("contact_id", contactId);
+    } else {
+        q = q.ilike("from_email", email);
+    }
+
+    const { data } = await q;
+    return Array.isArray(data) && data.length > 0;
+}
+
 // ───────────────────────── Step advancement ─────────────────────────
 
 function computeNextSendAt(step: Step | null, base: Date): string | null {
@@ -166,8 +206,48 @@ async function processContact(
         return "completed";
     }
 
-    // Honor skip-if-replied / skip-if-clicked guardrails.
-    if (step.skip_if_replied && await hasPriorEvent(sb, cc.contact_id, cc.campaign_id, "replied")) {
+    // Migration 168 — Reply gating. Resolve "has this contact replied to this
+    // campaign?" once (an inbound reply row), then apply both the campaign-level
+    // stop-on-reply switch and the per-step send_condition='if_no_reply' gate.
+    const stopOnReply = campaign.stop_on_reply !== false; // default on
+    const needsReplyCheck =
+        stopOnReply
+        || step.send_condition === "if_no_reply"
+        || step.skip_if_replied;
+
+    const replied = needsReplyCheck
+        ? (await hasRepliedToCampaign(sb, cc.campaign_id, cc.contact_id, contact.email ?? null)
+            || await hasPriorEvent(sb, cc.contact_id, cc.campaign_id, "replied"))
+        : false;
+
+    // Campaign-level: stop the whole sequence once they reply.
+    if (stopOnReply && replied) {
+        await sb.from("outreach_campaign_contacts").update({
+            status: "completed",
+            finished_at: new Date().toISOString(),
+        }).eq("id", cc.id);
+        return "skipped";
+    }
+
+    // Per-step: this step only fires if the contact hasn't replied yet.
+    // Skip just this step and advance to the next instead of finishing the
+    // whole cadence, so later 'always' steps still run.
+    if (step.send_condition === "if_no_reply" && replied) {
+        const nextStep = steps.find(s => s.step_order === nextStepOrder + 1) || null;
+        const nextSendAt = nextStep ? computeNextSendAt(nextStep, new Date()) : null;
+        const completed = !nextStep;
+        await sb.from("outreach_campaign_contacts").update({
+            current_step: nextStepOrder,
+            next_send_at: nextSendAt,
+            status: completed ? "completed" : "active",
+            finished_at: completed ? new Date().toISOString() : null,
+            started_at: cc.started_at || new Date().toISOString(),
+        }).eq("id", cc.id);
+        return "skipped";
+    }
+
+    // Honor legacy skip-if-replied / skip-if-clicked guardrails.
+    if (step.skip_if_replied && replied) {
         await sb.from("outreach_campaign_contacts").update({
             status: "completed",
             finished_at: new Date().toISOString(),
@@ -324,7 +404,7 @@ async function GET_handler(req: NextRequest): Promise<NextResponse> {
             id, campaign_id, contact_id, status, current_step,
             next_send_at, consecutive_failures, started_at, finished_at,
             campaign:outreach_campaigns!inner (
-                id, name, status, from_email, reply_to_email, throttle, stats
+                id, name, status, from_email, reply_to_email, throttle, stats, stop_on_reply
             ),
             contact:outreach_contacts!inner (
                 id, email, phone, first_name, last_name, company, title, state,
@@ -379,13 +459,19 @@ async function GET_handler(req: NextRequest): Promise<NextResponse> {
     const campaignIds = Array.from(new Set(rows.map(r => r.campaign.id)));
     const { data: stepRows } = await sb
         .from("outreach_campaign_steps")
-        .select("id, campaign_id, step_order, channel, subject, body, delay_days, delay_hours, skip_if_replied, skip_if_clicked")
+        .select("id, campaign_id, step_order, channel, subject, body, delay_days, delay_hours, skip_if_replied, skip_if_clicked, send_condition")
         .in("campaign_id", campaignIds)
         .order("step_order", { ascending: true });
     const stepsByCampaign = new Map<string, Step[]>();
     for (const s of (stepRows || []) as Step[]) {
+        // Normalize the migration-168 gate to a safe default so a null or
+        // unexpected value can never mis-gate a send.
+        const normalized: Step = {
+            ...s,
+            send_condition: s.send_condition === "if_no_reply" ? "if_no_reply" : "always",
+        };
         const arr = stepsByCampaign.get(s.campaign_id) || [];
-        arr.push(s);
+        arr.push(normalized);
         stepsByCampaign.set(s.campaign_id, arr);
     }
 

@@ -34,6 +34,7 @@ interface CampaignStepInput {
     body_format?: "text" | "html" | "markdown";
     skip_if_replied?: boolean;
     skip_if_clicked?: boolean;
+    send_condition?: "always" | "if_no_reply";
     variant_key?: string;
     variant_weight?: number;
 }
@@ -51,6 +52,7 @@ interface CampaignPostBody {
     send_window_tz?: string;
     physical_address?: string;
     unsubscribe_footer?: string;
+    stop_on_reply?: boolean;
     steps?: CampaignStepInput[];
     activate?: boolean;
 }
@@ -115,6 +117,7 @@ export async function POST(req: NextRequest) {
         send_window_tz: body.send_window_tz ?? "America/New_York",
         physical_address: body.physical_address?.trim() || null,
         unsubscribe_footer: body.unsubscribe_footer ?? null,
+        stop_on_reply: body.stop_on_reply !== false, // default on
         status: activate ? "active" : "draft",
         started_at: activate ? new Date().toISOString() : null,
         created_by: ctx.userId,
@@ -147,6 +150,7 @@ export async function POST(req: NextRequest) {
             body_format: s.body_format ?? "text",
             skip_if_replied: s.skip_if_replied !== false,
             skip_if_clicked: !!s.skip_if_clicked,
+            send_condition: s.send_condition === "if_no_reply" ? "if_no_reply" : "always",
             variant_key: s.variant_key ?? "A",
             variant_weight: s.variant_weight ?? 100,
         }));
