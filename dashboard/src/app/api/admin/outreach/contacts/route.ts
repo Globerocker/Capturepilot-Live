@@ -15,7 +15,13 @@
  *   ?status=subscribed|unsubscribed|bounced
  *   ?q=foo                       (matches email, name, company)
  *   ?list_id=<uuid>              (members of a saved list)
+ *   ?sort=company_name&dir=asc   (sort key + direction; default created_at desc)
  *   ?limit=50&offset=0
+ *
+ * Sort keys:
+ *   - Direct columns sorted in SQL: company_name, email, state, created_at, engagement_score
+ *   - Derived (contractor-join) keys sorted in-memory before pagination:
+ *       past_awards (federal_awards_count), last_award (last_award_date), years_on_sam
  *
  * Each returned contact is augmented with a `contractor` block holding
  * best-effort SAM.gov intelligence (past awards, last award date, years on SAM,
@@ -76,6 +82,25 @@ export async function GET(req: NextRequest) {
     const q = sp.get("q")?.trim();
     const listId = sp.get("list_id");
 
+    // Sorting. Direct columns map to a real DB column for SQL .order(); derived
+    // keys sort the assembled result array in-memory (they come off the
+    // contractor join, which PostgREST can't order on here).
+    const DIRECT_SORT_COLUMNS: Record<string, string> = {
+        company_name: "company_name",
+        email: "email",
+        state: "state",
+        created_at: "created_at",
+        engagement_score: "engagement_score",
+    };
+    const DERIVED_SORT_KEYS = new Set(["past_awards", "last_award", "years_on_sam"]);
+    const sortKeyRaw = sp.get("sort") || "created_at";
+    const sortKey =
+        sortKeyRaw in DIRECT_SORT_COLUMNS || DERIVED_SORT_KEYS.has(sortKeyRaw)
+            ? sortKeyRaw
+            : "created_at";
+    const dirAsc = sp.get("dir") === "asc";
+    const isDerivedSort = DERIVED_SORT_KEYS.has(sortKey);
+
     const sb = getServiceClient();
 
     // List membership filter first — fetches matching contact_ids, then we join.
@@ -130,24 +155,37 @@ export async function GET(req: NextRequest) {
     // A PSC/cert filter resolves through the contractor join, which PostgREST
     // can't express as a normalized join. In that mode we fetch a bounded window,
     // filter it in-memory against the matched contractor set, then paginate the
-    // result locally so `total` stays consistent with the rendered rows. Without
-    // an intel filter we paginate normally with an estimated count.
+    // result locally so `total` stays consistent with the rendered rows. A
+    // derived sort (past_awards / last_award / years_on_sam) likewise needs the
+    // contractor join attached before we can order, so it forces the same
+    // bounded-window + in-memory path. Without either we paginate normally in SQL.
     const intelFilterActive = !!(intelMatchNames || intelMatchUeis);
+    const inMemoryMode = intelFilterActive || isDerivedSort;
     const SELECT_COLS =
         "id, email, phone, first_name, last_name, company_name, title, naics_codes, state, source, source_id, tags, engagement_score, last_engagement_at, last_bounced_at, opted_out_at, created_at";
 
-    // Skip the DB count while an intel filter is active — we compute the true
-    // total in-memory after the contractor-match pass below.
-    const selectOpts: { count?: "estimated" } = intelFilterActive ? {} : { count: "estimated" };
+    // Skip the DB count while we're in in-memory mode — we compute the true
+    // total in-memory after the contractor-match / sort pass below.
+    const selectOpts: { count?: "estimated" } = inMemoryMode ? {} : { count: "estimated" };
     let query = sb
         .from("outreach_contacts")
-        .select(SELECT_COLS, selectOpts)
-        .order("last_engagement_at", { ascending: false, nullsFirst: false });
+        .select(SELECT_COLS, selectOpts);
 
-    if (!intelFilterActive) {
+    // Direct-column sort happens in SQL; derived sort is applied in-memory below.
+    if (!isDerivedSort) {
+        query = query.order(DIRECT_SORT_COLUMNS[sortKey], {
+            ascending: dirAsc,
+            nullsFirst: false,
+        });
+    } else {
+        // Stable secondary order for the window we then re-sort in-memory.
+        query = query.order("created_at", { ascending: false, nullsFirst: false });
+    }
+
+    if (!inMemoryMode) {
         query = query.range(offset, offset + limit - 1);
     } else {
-        // Bounded window for the in-memory join filter (320 rows total today).
+        // Bounded window for the in-memory filter/sort (320 rows total today).
         query = query.range(0, 4999);
     }
 
@@ -200,13 +238,44 @@ export async function GET(req: NextRequest) {
     if (intelFilterActive) {
         // Drop rows with no matching contractor (in-memory pass covers the
         // normalized company-name path PostgREST can't express).
-        const filtered = contacts.filter(c => {
+        contacts = contacts.filter(c => {
             const byUei = !!(c.source === "sam_gov" && c.source_id && intelMatchUeis?.has(c.source_id));
             const byName = !!intelMatchNames?.has(normalizeCompany(c.company_name));
             return byUei || byName;
         });
-        total = filtered.length;
-        contacts = filtered.slice(offset, offset + limit);
+    }
+
+    // When sorting on a derived (contractor-join) key we must enrich the whole
+    // bounded window, sort it, then paginate locally so `total` and the rendered
+    // page agree. Attach intel to the window, sort, slice.
+    if (isDerivedSort) {
+        const intelForWindow = await buildContractorIntel(sb, contacts);
+        const windowEnriched = contacts.map(c => ({
+            ...c,
+            contractor: intelForWindow.get(c.id) || null,
+        }));
+
+        const valueOf = (row: (typeof windowEnriched)[number]): number => {
+            const ctr = row.contractor;
+            if (sortKey === "past_awards") return ctr?.federal_awards_count ?? -1;
+            if (sortKey === "years_on_sam") return ctr?.years_on_sam ?? -1;
+            // last_award → epoch ms (missing dates sort to the bottom).
+            const t = ctr?.last_award_date ? new Date(ctr.last_award_date).getTime() : NaN;
+            return Number.isNaN(t) ? -1 : t;
+        };
+        windowEnriched.sort((a, b) => {
+            const diff = valueOf(a) - valueOf(b);
+            return dirAsc ? diff : -diff;
+        });
+
+        total = windowEnriched.length;
+        const enriched = windowEnriched.slice(offset, offset + limit);
+        return NextResponse.json({ contacts: enriched, total, limit, offset });
+    }
+
+    if (intelFilterActive) {
+        total = contacts.length;
+        contacts = contacts.slice(offset, offset + limit);
     }
 
     // Attach contractor intelligence to the page of contacts. Batch the lookup:
