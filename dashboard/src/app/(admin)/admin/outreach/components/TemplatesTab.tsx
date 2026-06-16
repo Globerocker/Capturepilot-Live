@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
 import {
     Loader2, Plus, Mail, MessageSquare, Pencil, Trash2,
-    X, ShieldAlert, Eye, RefreshCw, Send,
+    X, ShieldAlert, Eye, RefreshCw, Send, History, FlaskConical, RotateCcw,
 } from "lucide-react";
 
 interface OutreachTemplate {
@@ -12,13 +12,29 @@ interface OutreachTemplate {
     name: string;
     channel: "email" | "sms";
     subject: string | null;
+    subject_b: string | null;
     body: string;
+    body_b: string | null;
     merge_tags: string[];
     category: string | null;
     description?: string | null;
     approved?: boolean;
     created_at: string;
     updated_at: string;
+}
+
+interface TemplateVersion {
+    id: string;
+    version: number;
+    name: string | null;
+    channel: string | null;
+    subject: string | null;
+    subject_b: string | null;
+    body: string | null;
+    body_b: string | null;
+    category: string | null;
+    description: string | null;
+    snapshot_at: string;
 }
 
 interface SpamFinding {
@@ -43,6 +59,7 @@ export default function TemplatesTab({
     const [loading, setLoading] = useState(true);
     const [editing, setEditing] = useState<OutreachTemplate | null>(null);
     const [creating, setCreating] = useState(false);
+    const [historyFor, setHistoryFor] = useState<OutreachTemplate | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [channelFilter, setChannelFilter] = useState<"all" | "email" | "sms">("all");
 
@@ -73,7 +90,9 @@ export default function TemplatesTab({
             name: "",
             channel,
             subject: channel === "email" ? "" : null,
+            subject_b: null,
             body: "",
+            body_b: null,
             merge_tags: ["first_name", "company"],
             category: null,
             created_at: new Date().toISOString(),
@@ -184,9 +203,14 @@ export default function TemplatesTab({
                                     </td>
                                     <td className="px-3 py-2 text-xs text-stone-500">{t.category || "—"}</td>
                                     <td className="px-3 py-2 text-xs text-stone-600 max-w-[420px] truncate">
+                                        {t.body_b ? (
+                                            <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 inline-flex items-center gap-1 mr-1.5" title="Has an A/B variant — sends split 50/50">
+                                                <FlaskConical className="w-2.5 h-2.5" /> A/B
+                                            </span>
+                                        ) : null}
                                         {t.channel === "email" && t.subject ? <strong>{t.subject}</strong> : null}
                                         {t.channel === "email" && t.subject ? " · " : ""}
-                                        <span className="text-stone-500">{t.body.slice(0, 80)}</span>
+                                        <span className="text-stone-500">{t.body.slice(0, 70)}</span>
                                     </td>
                                     <td className="px-3 py-2 text-center">
                                         <label className="inline-flex items-center justify-center cursor-pointer" title={t.approved ? "Approved — click to unapprove" : "Mark approved"}>
@@ -216,8 +240,12 @@ export default function TemplatesTab({
                                                 </button>
                                             )}
                                             <button type="button" onClick={() => { setEditing(t); setCreating(false); }}
-                                                className="p-1.5 rounded text-stone-600 hover:bg-stone-100" title="Edit">
+                                                className="p-1.5 rounded text-stone-600 hover:bg-stone-100" title="Edit (A + B variants)">
                                                 <Pencil className="w-3.5 h-3.5" />
+                                            </button>
+                                            <button type="button" onClick={() => setHistoryFor(t)}
+                                                className="p-1.5 rounded text-stone-600 hover:bg-stone-100" title="Change history">
+                                                <History className="w-3.5 h-3.5" />
                                             </button>
                                             <button type="button" onClick={() => remove(t.id)}
                                                 className="p-1.5 rounded text-rose-600 hover:bg-rose-50" title="Delete">
@@ -240,6 +268,118 @@ export default function TemplatesTab({
                     onSaved={() => { setEditing(null); setCreating(false); load(); }}
                 />
             )}
+
+            {historyFor && (
+                <HistoryModal
+                    template={historyFor}
+                    onClose={() => setHistoryFor(null)}
+                    onRestored={() => { setHistoryFor(null); load(); }}
+                />
+            )}
+        </div>
+    );
+}
+
+function HistoryModal({
+    template,
+    onClose,
+    onRestored,
+}: {
+    template: OutreachTemplate;
+    onClose: () => void;
+    onRestored: () => void;
+}) {
+    const [versions, setVersions] = useState<TemplateVersion[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [restoring, setRestoring] = useState<number | null>(null);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        (async () => {
+            setLoading(true);
+            try {
+                const res = await fetch(`/api/admin/outreach/templates/${template.id}/versions`);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const json = await res.json();
+                setVersions((json.versions || []) as TemplateVersion[]);
+            } catch (e) {
+                setError((e as Error).message);
+            }
+            setLoading(false);
+        })();
+    }, [template.id]);
+
+    const restore = async (version: number) => {
+        if (!confirm(`Restore this template to version ${version}? The current copy is snapshotted first, so you can undo this.`)) return;
+        setRestoring(version);
+        try {
+            const res = await fetch(`/api/admin/outreach/templates/${template.id}/versions`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ version }),
+            });
+            if (!res.ok) {
+                const j = await res.json().catch(() => ({}));
+                throw new Error(j.error || `HTTP ${res.status}`);
+            }
+            onRestored();
+        } catch (e) {
+            setError((e as Error).message);
+            setRestoring(null);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[85vh] overflow-hidden flex flex-col shadow-2xl">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-stone-200">
+                    <h2 className="text-lg font-bold inline-flex items-center gap-2">
+                        <History className="w-4 h-4 text-stone-500" /> Change history
+                        <span className="font-normal text-stone-400 text-sm">· {template.name}</span>
+                    </h2>
+                    <button type="button" onClick={onClose} className="p-1 text-stone-400 hover:text-stone-900">
+                        <X className="w-5 h-5" />
+                    </button>
+                </div>
+                <div className="overflow-y-auto flex-1 p-6 space-y-3">
+                    {error && (
+                        <div className="text-xs px-3 py-2 rounded-lg border bg-rose-50 text-rose-700 border-rose-200">{error}</div>
+                    )}
+                    {loading ? (
+                        <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-stone-400" /></div>
+                    ) : versions.length === 0 ? (
+                        <p className="text-sm text-stone-500 py-8 text-center">
+                            No prior versions yet. The first time this template is edited, the version before the edit is saved here.
+                        </p>
+                    ) : (
+                        versions.map(v => (
+                            <div key={v.id} className="border border-stone-200 rounded-xl p-4">
+                                <div className="flex items-center justify-between mb-2">
+                                    <div className="text-xs font-bold uppercase tracking-widest text-stone-500">
+                                        Version {v.version}
+                                        <span className="ml-2 font-normal normal-case tracking-normal text-stone-400">
+                                            {new Date(v.snapshot_at).toLocaleString()}
+                                        </span>
+                                    </div>
+                                    <button type="button" onClick={() => restore(v.version)} disabled={restoring !== null}
+                                        className="text-[11px] font-bold text-stone-700 bg-white border border-stone-200 px-2.5 py-1 rounded-lg inline-flex items-center gap-1.5 hover:bg-stone-50 disabled:opacity-50">
+                                        {restoring === v.version ? <Loader2 className="w-3 h-3 animate-spin" /> : <RotateCcw className="w-3 h-3" />}
+                                        Restore
+                                    </button>
+                                </div>
+                                {v.subject && <p className="text-xs"><span className="text-stone-400">A subject:</span> <strong>{v.subject}</strong></p>}
+                                {v.subject_b && <p className="text-xs"><span className="text-stone-400">B subject:</span> <strong>{v.subject_b}</strong></p>}
+                                <p className="text-xs text-stone-600 mt-1 whitespace-pre-wrap line-clamp-4">{v.body}</p>
+                                {v.body_b && (
+                                    <p className="text-xs text-stone-500 mt-2 pt-2 border-t border-stone-100 whitespace-pre-wrap line-clamp-3">
+                                        <span className="text-amber-600 font-bold">B:</span> {v.body_b}
+                                    </p>
+                                )}
+                            </div>
+                        ))
+                    )}
+                </div>
+            </div>
         </div>
     );
 }
@@ -258,6 +398,9 @@ function EditModal({
     const [name, setName] = useState(template.name);
     const [subject, setSubject] = useState(template.subject || "");
     const [body, setBody] = useState(template.body);
+    const [subjectB, setSubjectB] = useState(template.subject_b || "");
+    const [bodyB, setBodyB] = useState(template.body_b || "");
+    const [abOpen, setAbOpen] = useState(!!(template.subject_b || template.body_b));
     const [mergeTagsRaw, setMergeTagsRaw] = useState(template.merge_tags.join(", "));
     const [category, setCategory] = useState(template.category || "");
     const [saving, setSaving] = useState(false);
@@ -280,15 +423,18 @@ function EditModal({
             sender_name: "CapturePilot",
             unsubscribe_url: "https://app/unsubscribe?email=sample",
         };
-        let renderedSubject = subject;
-        let renderedBody = body;
-        for (const [k, v] of Object.entries(samples)) {
-            const rx = new RegExp(`\\{\\{\\s*${k}\\s*\\}\\}`, "g");
-            renderedSubject = renderedSubject.replace(rx, v);
-            renderedBody = renderedBody.replace(rx, v);
-        }
-        return { subject: renderedSubject, body: renderedBody };
-    }, [subject, body]);
+        const fill = (s: string) => {
+            let out = s;
+            for (const [k, v] of Object.entries(samples)) {
+                out = out.replace(new RegExp(`\\{\\{\\s*${k}\\s*\\}\\}`, "g"), v);
+            }
+            return out;
+        };
+        return {
+            subject: fill(subject), body: fill(body),
+            subjectB: fill(subjectB), bodyB: fill(bodyB),
+        };
+    }, [subject, body, subjectB, bodyB]);
 
     const runSpamCheck = async () => {
         setSpamLoading(true);
@@ -311,7 +457,9 @@ function EditModal({
                 name,
                 channel: template.channel,
                 subject: template.channel === "email" ? subject : null,
+                subject_b: template.channel === "email" ? (abOpen ? subjectB : "") : null,
                 body,
+                body_b: abOpen ? bodyB : "",
                 merge_tags: mergeTags,
                 category: category || null,
             };
@@ -393,6 +541,41 @@ function EditModal({
                                 </p>
                             )}
                         </div>
+                        {/* A/B variant — sends split 50/50 at send time */}
+                        <div className="rounded-xl border border-amber-200 bg-amber-50/40">
+                            <button type="button" onClick={() => setAbOpen(o => !o)}
+                                className="w-full flex items-center justify-between px-3 py-2 text-left">
+                                <span className="text-xs font-bold uppercase tracking-widest text-amber-700 inline-flex items-center gap-1.5">
+                                    <FlaskConical className="w-3.5 h-3.5" /> Variant B — 50/50 split test
+                                </span>
+                                <span className="text-[10px] font-bold text-amber-600">{abOpen ? "ON" : "OFF"}</span>
+                            </button>
+                            {abOpen && (
+                                <div className="px-3 pb-3 space-y-3">
+                                    <p className="text-[11px] text-amber-700 leading-snug">
+                                        Half the recipients get version A, half get B. Leave a field blank to reuse A for that part.
+                                    </p>
+                                    {template.channel === "email" && (
+                                        <div>
+                                            <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Subject B</label>
+                                            <input type="text" value={subjectB} onChange={e => setSubjectB(e.target.value)}
+                                                className="mt-1 w-full px-3 py-2 border border-amber-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-amber-400 bg-white"
+                                                placeholder="Falls back to A subject if blank"
+                                            />
+                                        </div>
+                                    )}
+                                    <div>
+                                        <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Body B</label>
+                                        <textarea value={bodyB} onChange={e => setBodyB(e.target.value)}
+                                            rows={template.channel === "email" ? 10 : 4}
+                                            className="mt-1 w-full px-3 py-2 border border-amber-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-amber-400 font-mono bg-white"
+                                            placeholder="Falls back to A body if blank"
+                                        />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
                         <div>
                             <label className="text-xs font-bold uppercase tracking-widest text-stone-500">Merge tags</label>
                             <input type="text" value={mergeTagsRaw} onChange={e => setMergeTagsRaw(e.target.value)}
@@ -443,21 +626,47 @@ function EditModal({
                             <Eye className="w-3 h-3" /> Live preview
                         </div>
                         {template.channel === "email" && (
-                            <div className="bg-white border border-stone-200 rounded-xl p-4 space-y-2">
-                                <p className="text-xs text-stone-500">Subject</p>
-                                <p className="text-sm font-bold">{preview.subject || <span className="text-stone-300">—</span>}</p>
-                                <hr className="border-stone-100" />
-                                <div className="text-sm whitespace-pre-wrap text-stone-800">{preview.body || <span className="text-stone-300">—</span>}</div>
-                            </div>
+                            <>
+                                <div className="bg-white border border-stone-200 rounded-xl p-4 space-y-2">
+                                    {abOpen && <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Variant A</p>}
+                                    <p className="text-xs text-stone-500">Subject</p>
+                                    <p className="text-sm font-bold">{preview.subject || <span className="text-stone-300">—</span>}</p>
+                                    <hr className="border-stone-100" />
+                                    <div className="text-sm whitespace-pre-wrap text-stone-800">{preview.body || <span className="text-stone-300">—</span>}</div>
+                                </div>
+                                {abOpen && (
+                                    <div className="bg-white border border-amber-200 rounded-xl p-4 space-y-2">
+                                        <p className="text-[10px] font-bold uppercase tracking-widest text-amber-600 inline-flex items-center gap-1"><FlaskConical className="w-3 h-3" /> Variant B</p>
+                                        <p className="text-xs text-stone-500">Subject</p>
+                                        <p className="text-sm font-bold">{preview.subjectB || preview.subject || <span className="text-stone-300">—</span>}</p>
+                                        <hr className="border-stone-100" />
+                                        <div className="text-sm whitespace-pre-wrap text-stone-800">{preview.bodyB || preview.body || <span className="text-stone-300">—</span>}</div>
+                                    </div>
+                                )}
+                            </>
                         )}
                         {template.channel === "sms" && (
-                            <div className="bg-white border border-stone-200 rounded-xl p-4">
-                                <div className="bg-stone-900 text-white rounded-2xl p-3 max-w-[280px] text-sm whitespace-pre-wrap">
-                                    {preview.body || <span className="text-stone-500">—</span>}
+                            <div className="bg-white border border-stone-200 rounded-xl p-4 space-y-3">
+                                <div>
+                                    {abOpen && <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1">Variant A</p>}
+                                    <div className="bg-stone-900 text-white rounded-2xl p-3 max-w-[280px] text-sm whitespace-pre-wrap">
+                                        {preview.body || <span className="text-stone-500">—</span>}
+                                    </div>
+                                    <p className="text-[10px] text-stone-400 mt-2">
+                                        {preview.body.length} chars · {Math.ceil(preview.body.length / 160) || 1} segment(s)
+                                    </p>
                                 </div>
-                                <p className="text-[10px] text-stone-400 mt-2">
-                                    {preview.body.length} chars · {Math.ceil(preview.body.length / 160) || 1} segment(s)
-                                </p>
+                                {abOpen && (
+                                    <div className="pt-2 border-t border-stone-100">
+                                        <p className="text-[10px] font-bold uppercase tracking-widest text-amber-600 mb-1 inline-flex items-center gap-1"><FlaskConical className="w-3 h-3" /> Variant B</p>
+                                        <div className="bg-amber-900 text-white rounded-2xl p-3 max-w-[280px] text-sm whitespace-pre-wrap">
+                                            {preview.bodyB || preview.body || <span className="text-amber-200">—</span>}
+                                        </div>
+                                        <p className="text-[10px] text-stone-400 mt-2">
+                                            {(preview.bodyB || preview.body).length} chars · {Math.ceil((preview.bodyB || preview.body).length / 160) || 1} segment(s)
+                                        </p>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>

@@ -16,7 +16,9 @@ interface CreateBody {
     name?: string;
     channel?: "email" | "sms";
     subject?: string | null;
+    subject_b?: string | null;
     body?: string;
+    body_b?: string | null;
     merge_tags?: string[];
     category?: string | null;
 }
@@ -66,7 +68,9 @@ export async function POST(req: NextRequest) {
             name: body.name.trim(),
             channel: body.channel,
             subject: body.channel === "email" ? body.subject?.trim() || null : null,
+            subject_b: body.channel === "email" ? body.subject_b?.trim() || null : null,
             body: body.body,
+            body_b: typeof body.body_b === "string" && body.body_b.trim() ? body.body_b : null,
             merge_tags: Array.isArray(body.merge_tags) ? body.merge_tags : [],
             category: body.category?.trim() || null,
             created_by: gate.userId,

@@ -19,7 +19,9 @@ interface CampaignStep {
     delay_unit: DelayUnit;
     after_step: number | null;
     subject: string;
+    subject_b: string;
     body: string;
+    body_b: string;
     body_format: "text" | "html" | "markdown";
     skip_if_replied: boolean;
     skip_if_clicked: boolean;
@@ -85,7 +87,9 @@ function blankStep(idx: number, after: number | null = null): CampaignStep {
         delay_unit: idx === 0 ? "hours" : "days",
         after_step: after,
         subject: "",
+        subject_b: "",
         body: "",
+        body_b: "",
         body_format: "text",
         skip_if_replied: true,
         skip_if_clicked: false,
@@ -209,25 +213,6 @@ export default function CampaignBuilderModal({ open, onClose, onSaved, editingId
         }));
         setActiveStepIdx(draft.steps.length);
     }, [draft.steps.length]);
-
-    const addVariant = useCallback((idx: number) => {
-        setDraft(d => {
-            const parent = d.steps[idx];
-            if (!parent) return d;
-            const siblings = d.steps.filter(s => s.step_index === parent.step_index);
-            const nextKey = String.fromCharCode(64 + siblings.length + 1); // B, C, ...
-            const variant: CampaignStep = {
-                ...parent,
-                variant_key: nextKey,
-                variant_weight: 50,
-            };
-            // Drop parent weight to balance
-            const updated = d.steps.map((s, i) =>
-                i === idx ? { ...s, variant_weight: 50 } : s
-            );
-            return { ...d, steps: [...updated, variant] };
-        });
-    }, []);
 
     const removeStep = useCallback((idx: number) => {
         setDraft(d => {
@@ -353,7 +338,6 @@ export default function CampaignBuilderModal({ open, onClose, onSaved, editingId
                                     setActiveIdx={setActiveStepIdx}
                                     updateStep={updateStep}
                                     addStep={addStep}
-                                    addVariant={addVariant}
                                     removeStep={removeStep}
                                     spam={spam[activeStepIdx]}
                                     preview={previewBody}
@@ -714,7 +698,6 @@ function CadenceStep({
     setActiveIdx,
     updateStep,
     addStep,
-    addVariant,
     removeStep,
     spam,
     preview,
@@ -728,7 +711,6 @@ function CadenceStep({
     setActiveIdx: (i: number) => void;
     updateStep: (idx: number, patch: Partial<CampaignStep>) => void;
     addStep: () => void;
-    addVariant: (idx: number) => void;
     removeStep: (idx: number) => void;
     spam: SpamResult | null | undefined;
     preview: { subject: string; body: string };
@@ -811,13 +793,7 @@ function CadenceStep({
                                     {c.toUpperCase()}
                                 </button>
                             ))}
-                            <button
-                                type="button"
-                                onClick={() => addVariant(activeIdx)}
-                                className="ml-auto text-xs font-bold text-purple-700 bg-purple-50 border border-purple-200 px-2 py-1 rounded inline-flex items-center gap-1"
-                            >
-                                <GitBranch className="w-3 h-3" /> Add A/B variant
-                            </button>
+                            <div className="ml-auto" />
                             {draft.steps.length > 1 && (
                                 <button
                                     type="button"
@@ -903,6 +879,29 @@ function CadenceStep({
                                         className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm font-mono outline-none focus:ring-2 focus:ring-black resize-none"
                                     />
                                 </div>
+                                {/* Variant B — 50/50 split at send time */}
+                                <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-3 space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-xs font-bold uppercase tracking-widest text-amber-700 inline-flex items-center gap-1.5">
+                                            <GitBranch className="w-3.5 h-3.5" /> Variant B — 50/50 split test
+                                        </span>
+                                        <span className="text-[10px] text-amber-600">{(step.subject_b || step.body_b) ? "ON" : "leave blank to send A only"}</span>
+                                    </div>
+                                    <input
+                                        type="text"
+                                        placeholder="Subject B (falls back to A if blank)"
+                                        value={step.subject_b}
+                                        onChange={e => updateStep(activeIdx, { subject_b: e.target.value })}
+                                        className="w-full px-3 py-2 border border-amber-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-amber-400 bg-white"
+                                    />
+                                    <textarea
+                                        placeholder="Body B — a different hook. Falls back to A body if blank."
+                                        value={step.body_b}
+                                        onChange={e => updateStep(activeIdx, { body_b: e.target.value })}
+                                        rows={7}
+                                        className="w-full px-3 py-2 border border-amber-200 rounded-lg text-sm font-mono outline-none focus:ring-2 focus:ring-amber-400 bg-white resize-none"
+                                    />
+                                </div>
                             </>
                         )}
 
@@ -919,6 +918,18 @@ function CadenceStep({
                                     className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-black resize-none"
                                 />
                                 <p className="text-[10px] text-stone-400 mt-1">{step.body.length}/320 chars · {Math.ceil(step.body.length / 160)} segment(s)</p>
+                                <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50/40 p-3 space-y-2">
+                                    <span className="text-xs font-bold uppercase tracking-widest text-amber-700 inline-flex items-center gap-1.5">
+                                        <GitBranch className="w-3.5 h-3.5" /> Variant B — 50/50 split
+                                    </span>
+                                    <textarea
+                                        placeholder="SMS body B (falls back to A if blank)"
+                                        value={step.body_b}
+                                        onChange={e => updateStep(activeIdx, { body_b: e.target.value.slice(0, 320) })}
+                                        rows={3}
+                                        className="w-full px-3 py-2 border border-amber-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-amber-400 bg-white resize-none"
+                                    />
+                                </div>
                             </div>
                         )}
 

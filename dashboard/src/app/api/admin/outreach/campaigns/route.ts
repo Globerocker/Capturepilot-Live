@@ -30,7 +30,9 @@ interface CampaignStepInput {
     delay_unit: "minutes" | "hours" | "days";
     after_step?: number | null;
     subject?: string;
+    subject_b?: string | null;
     body: string;
+    body_b?: string | null;
     body_format?: "text" | "html" | "markdown";
     skip_if_replied?: boolean;
     skip_if_clicked?: boolean;
@@ -149,7 +151,9 @@ export async function POST(req: NextRequest) {
             delay_value: Math.max(0, Number(s.delay_value || 0)),
             delay_unit: s.delay_unit ?? "hours",
             subject: s.channel === "email" ? (s.subject || "").slice(0, 998) : null,
+            subject_b: s.channel === "email" && s.subject_b ? s.subject_b.slice(0, 998) : null,
             body_template: (s.body || "").slice(0, 50_000),
+            body_b: s.body_b ? s.body_b.slice(0, 50_000) : null,
             skip_if_replied: s.skip_if_replied !== false,
             skip_if_clicked: !!s.skip_if_clicked,
             send_condition: s.send_condition === "if_no_reply" ? "if_no_reply" : "always",
@@ -164,9 +168,8 @@ export async function POST(req: NextRequest) {
         }
     }
 
-    // If activating, enroll contacts from the segment. We seed from
-    // outreach_prospects matching the segment filter. The send worker picks up
-    // from there.
+    // If activating, enroll contacts from the segment. The cadence picks up
+    // status='active' rows whose next_send_at has passed.
     let enrolled = 0;
     if (activate) {
         enrolled = await enrollFromSegment(admin, campaignId, body.target_segment ?? {});
@@ -176,79 +179,80 @@ export async function POST(req: NextRequest) {
 }
 
 interface SegmentInput {
+    /** Materialized list (outreach_lists) to enroll wholesale. */
+    list_id?: string | null;
+    /** A segments.ts key — contacts are tagged segment:<key> by segments/build. */
+    segment_key?: string | null;
     naics?: string[];
     states?: string[];
-    certs?: string[];
     tags?: string[];
-    list_id?: string | null;
-    custom_filter?: string;
 }
 
+/**
+ * Enroll real, sendable contacts from `outreach_contacts` into the campaign.
+ *
+ * Resolution order:
+ *   1. list_id        → every member of the saved list.
+ *   2. segment_key    → contacts tagged segment:<key> (from segments/build).
+ *   3. naics/states/tags filters on outreach_contacts.
+ *   4. no filter      → every sendable contact (has email, not opted out).
+ *
+ * Writes outreach_campaign_contacts rows the cadence understands: contact_id,
+ * status='active', current_step=0, next_send_at=now.
+ */
 async function enrollFromSegment(
     admin: ReturnType<typeof getAdmin>,
     campaignId: string,
     segment: Record<string, unknown>,
 ): Promise<number> {
     const s = segment as SegmentInput;
-    let q = admin
-        .from("outreach_prospects")
-        .select("id, primary_email, primary_phone, primary_name, company_name")
-        .eq("status", "approved")
-        .not("primary_email", "is", null)
-        .limit(5000);
+    let contactIds: string[] = [];
 
-    if (Array.isArray(s.naics) && s.naics.length > 0) {
-        q = q.overlaps("naics_codes", s.naics);
+    if (s.list_id) {
+        const { data } = await admin
+            .from("outreach_list_members")
+            .select("contact_id")
+            .eq("list_id", s.list_id)
+            .limit(20000);
+        contactIds = (data || []).map((r: { contact_id: string }) => r.contact_id);
+    } else {
+        let q = admin
+            .from("outreach_contacts")
+            .select("id")
+            .not("email", "is", null)
+            .is("opted_out_at", null)
+            .limit(20000);
+        if (s.segment_key) q = q.contains("tags", [`segment:${s.segment_key}`]);
+        if (Array.isArray(s.naics) && s.naics.length > 0) q = q.overlaps("naics_codes", s.naics);
+        if (Array.isArray(s.states) && s.states.length > 0) q = q.in("state", s.states);
+        if (Array.isArray(s.tags) && s.tags.length > 0) q = q.overlaps("tags", s.tags);
+        const { data, error } = await q;
+        if (error || !data) return 0;
+        contactIds = (data as { id: string }[]).map(r => r.id);
     }
-    if (Array.isArray(s.states) && s.states.length > 0) {
-        q = q.in("state", s.states);
-    }
-    if (Array.isArray(s.certs) && s.certs.length > 0) {
-        q = q.overlaps("certifications", s.certs);
-    }
 
-    const { data, error } = await q;
-    if (error || !data) return 0;
+    contactIds = Array.from(new Set(contactIds.filter(Boolean)));
+    if (contactIds.length === 0) return 0;
 
-    type Prospect = {
-        id: string;
-        primary_email: string | null;
-        primary_phone: string | null;
-        primary_name: string | null;
-        company_name: string;
-    };
-    const rows = (data as Prospect[]).map(p => {
-        const fullName = (p.primary_name || "").trim();
-        const [firstName, ...rest] = fullName.split(/\s+/);
-        return {
-            campaign_id: campaignId,
-            prospect_id: p.id,
-            email: p.primary_email,
-            phone: p.primary_phone,
-            first_name: firstName || null,
-            last_name: rest.length > 0 ? rest.join(" ") : null,
-            company_name: p.company_name,
-            status: "enrolled" as const,
-            current_step: 0,
-            next_send_at: new Date().toISOString(),
-        };
-    });
+    const now = new Date().toISOString();
+    const rows = contactIds.map(contact_id => ({
+        campaign_id: campaignId,
+        contact_id,
+        status: "active" as const,
+        current_step: 0,
+        next_send_at: now,
+        added_at: now,
+    }));
 
-    if (rows.length === 0) return 0;
-
-    // upsert ignores duplicates by (campaign_id, lower(email))
     const { error: insertErr, count } = await admin
         .from("outreach_campaign_contacts")
-        .upsert(rows, { onConflict: "campaign_id,email", count: "exact", ignoreDuplicates: true });
-
-    if (insertErr) return 0;
+        .upsert(rows, { onConflict: "campaign_id,contact_id", count: "exact", ignoreDuplicates: true });
+    if (insertErr) {
+        console.error("[campaigns] enrollFromSegment upsert failed:", insertErr.message);
+        return 0;
+    }
     const enrolled = count ?? rows.length;
 
-    // Bump campaign denorm count
-    await admin
-        .from("outreach_campaigns")
-        .update({ contacts_count: enrolled })
-        .eq("id", campaignId);
-
+    await admin.from("outreach_campaigns").update({ contacts_count: enrolled }).eq("id", campaignId);
     return enrolled;
 }

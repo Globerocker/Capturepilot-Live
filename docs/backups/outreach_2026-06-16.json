@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "taken_at": "2026-06-16T00:09:46.224Z",
+    "taken_at": "2026-06-16T00:33:57.066Z",
     "source": "ryxgjzehoijjvczqkhwr.supabase.co"
   },
   "outreach_templates": [
@@ -21,7 +21,9 @@
       "description": "Step 5 · Day 5 · SMS. Offers to send a couple of open solicitations that fit.",
       "approved": false,
       "approved_at": null,
-      "approved_by": null
+      "approved_by": null,
+      "subject_b": null,
+      "body_b": "{{first_name}}, want me to pull a couple of open solicitations that fit {{company}} so you can see what bidding with us looks like? Reply STOP to opt out."
     },
     {
       "id": "9ad0a3c7-a881-496e-9888-e0938715a304",
@@ -39,45 +41,32 @@
       "description": "Step 6 · Day 8 · SMS. Closes the loop, leaves the door open.",
       "approved": false,
       "approved_at": null,
-      "approved_by": null
+      "approved_by": null,
+      "subject_b": null,
+      "body_b": "All good if the timing's off, {{first_name}}. Door's open whenever you want back in the federal pipeline — just reply. Reply STOP to opt out."
     },
     {
-      "id": "4cb51502-7aaa-4d19-ace8-85c01526ba2e",
-      "name": "Fresh SAM · SMS 2",
-      "channel": "sms",
-      "subject": null,
-      "body": "{{first_name}}, most new firms miss a NAICS code or a set-aside they qualify for. Want a quick free check on {{company}}? Reply STOP to opt out.",
+      "id": "27272652-c148-48f8-82a4-44f6840b419b",
+      "name": "Fresh SAM Registration — Free Profile Review",
+      "channel": "email",
+      "subject": "Saw {{company}} just went active in SAM",
+      "body": "Hi {{first_name}},\n\nNoticed {{company}} recently activated in SAM.gov. That is the real first step into federal work.\n\nThe next 60 days matter most. Getting your NAICS, certs, and capability statement right is the difference between showing up in agency searches and being invisible.\n\nI would happily do a free 15-minute review of your profile and tell you what to fix first. No pitch, just a second set of eyes from people who do this every day.\n\nWant me to take a look?\n\nSergio\nPartner, Americurial\n\n{{unsubscribe_url}}",
       "merge_tags": [
         "first_name",
-        "company"
+        "company",
+        "sender_name",
+        "unsubscribe_url"
       ],
-      "category": "seq_fresh",
+      "category": "cold_intro",
       "created_by": null,
-      "created_at": "2026-06-15T19:16:25.791953+00:00",
-      "updated_at": "2026-06-15T19:16:25.791953+00:00",
-      "description": "Step 5 · Day 5 · SMS. Missed-NAICS hook.",
+      "created_at": "2026-06-15T18:30:41.348311+00:00",
+      "updated_at": "2026-06-15T18:30:41.348311+00:00",
+      "description": "Standalone version of the fresh-SAM open. Use the \"Fresh SAM\" sequence for the full cadence.",
       "approved": false,
       "approved_at": null,
-      "approved_by": null
-    },
-    {
-      "id": "9d98104c-4834-4354-ab15-3845cf6fbd30",
-      "name": "Fresh SAM · SMS 3 — Break-up",
-      "channel": "sms",
-      "subject": null,
-      "body": "All good if you're set, {{first_name}}. The offer stands if you want eyes on {{company}}'s SAM profile later. Reply STOP to opt out.",
-      "merge_tags": [
-        "first_name",
-        "company"
-      ],
-      "category": "seq_fresh",
-      "created_by": null,
-      "created_at": "2026-06-15T19:16:25.791953+00:00",
-      "updated_at": "2026-06-15T19:16:25.791953+00:00",
-      "description": "Step 6 · Day 8 · SMS. Close the loop.",
-      "approved": false,
-      "approved_at": null,
-      "approved_by": null
+      "approved_by": null,
+      "subject_b": "{{company}}'s first 60 days in SAM",
+      "body_b": "Hi {{first_name}},\n\nMost firms that register on SAM.gov never win a thing. Not because they can't do the work — because their profile is set up so no contracting officer ever finds them.\n\nThat's fixable, and it takes about 15 minutes. I'll look at {{company}}'s NAICS, size standard, and capability statement and tell you exactly what's costing you visibility.\n\nFree, no pitch. Want me to run through it?\n\nSergio\nPartner, Americurial\n\n{{unsubscribe_url}}"
     },
     {
       "id": "89fbefaa-7edc-43be-be54-d7511c6f95c4",
@@ -99,28 +88,9 @@
       "description": "Standalone version of the dormant open. Use the \"Dormant\" sequence for the full cadence.",
       "approved": false,
       "approved_at": null,
-      "approved_by": null
-    },
-    {
-      "id": "27272652-c148-48f8-82a4-44f6840b419b",
-      "name": "Fresh SAM Registration — Free Profile Review",
-      "channel": "email",
-      "subject": "Saw {{company}} just went active in SAM",
-      "body": "Hi {{first_name}},\n\nNoticed {{company}} recently activated in SAM.gov. That is the real first step into federal work.\n\nThe next 60 days matter most. Getting your NAICS, certs, and capability statement right is the difference between showing up in agency searches and being invisible.\n\nI would happily do a free 15-minute review of your profile and tell you what to fix first. No pitch, just a second set of eyes from people who do this every day.\n\nWant me to take a look?\n\nSergio\nPartner, Americurial\n\n{{unsubscribe_url}}",
-      "merge_tags": [
-        "first_name",
-        "company",
-        "sender_name",
-        "unsubscribe_url"
-      ],
-      "category": "cold_intro",
-      "created_by": null,
-      "created_at": "2026-06-15T18:30:41.348311+00:00",
-      "updated_at": "2026-06-15T18:30:41.348311+00:00",
-      "description": "Standalone version of the fresh-SAM open. Use the \"Fresh SAM\" sequence for the full cadence.",
-      "approved": false,
-      "approved_at": null,
-      "approved_by": null
+      "approved_by": null,
+      "subject_b": "Your federal past performance is just sitting there",
+      "body_b": "Hi {{first_name}},\n\nYou won federal work before. Past performance is the hardest thing to earn in this game, and right now {{company}}'s is sitting idle while newer firms with weaker records keep bidding.\n\nWe'd put it back to work. We run the pipeline — find the solicitations, prep the bids — and you only pay when you win. No retainer, 10-15% of awarded value.\n\nWorth a quick call to see what's open in your lane?\n\nSergio\nPartner, Americurial\n\n{{unsubscribe_url}}"
     },
     {
       "id": "825541ca-4e54-43d4-b42e-c74bc696d6b0",
@@ -142,28 +112,51 @@
       "description": "Step 1 · Day 0 · email. Cold open. Researched icebreaker on their award history, then the commission offer (pay only if you win). Goal: book 15 min.",
       "approved": false,
       "approved_at": null,
-      "approved_by": null
+      "approved_by": null,
+      "subject_b": "Re-opening {{company}}'s federal pipeline",
+      "body_b": "Hi {{first_name}},\n\nThe contracts {{company}} used to win don't disappear — they come back up for recompete every few years. Firms that show up for those have a real edge, and right now you're not in the room.\n\nWe watch the recompetes and sources-sought in your NAICS and bring you the ones that fit, with the bid most of the way done. You pay only when you win.\n\nCan I send you two or three that are open now?\n\nSergio\nPartner, Americurial\n{{unsubscribe_url}}"
     },
     {
-      "id": "0d02b959-e42c-4d38-b4e3-5907578f6798",
-      "name": "Dormant · Email 2 — Why you, follow-up",
-      "channel": "email",
-      "subject": "Re: {{company}} + federal work",
-      "body": "Hi {{first_name}},\n\nQuick follow-up. The reason I reached out to {{company}} specifically: firms that already have awards win again at a much higher rate than first-time bidders. The agency knows you can deliver. The hard part is just being in the room when the next one drops.\n\nWe watch SAM, the sources-sought notices, and the recompetes in your NAICS so you don't have to. When something fits, we bring it to you with a bid most of the way done.\n\nNo cost unless you win. Happy to pull two or three that are open right now and fit you.\n\nSergio\nPartner, Americurial\n{{unsubscribe_url}}",
+      "id": "4cb51502-7aaa-4d19-ace8-85c01526ba2e",
+      "name": "Fresh SAM · SMS 2",
+      "channel": "sms",
+      "subject": null,
+      "body": "{{first_name}}, most new firms miss a NAICS code or a set-aside they qualify for. Want a quick free check on {{company}}? Reply STOP to opt out.",
       "merge_tags": [
         "first_name",
-        "company",
-        "sender_name",
-        "unsubscribe_url"
+        "company"
       ],
-      "category": "seq_dormant",
+      "category": "seq_fresh",
       "created_by": null,
       "created_at": "2026-06-15T19:16:25.791953+00:00",
       "updated_at": "2026-06-15T19:16:25.791953+00:00",
-      "description": "Step 2 · Day 3 · email. No reply to step 1. Reframes around the \"firms with past awards win again\" angle and offers to pull live fits.",
+      "description": "Step 5 · Day 5 · SMS. Missed-NAICS hook.",
       "approved": false,
       "approved_at": null,
-      "approved_by": null
+      "approved_by": null,
+      "subject_b": null,
+      "body_b": "{{first_name}}, quick one — most newly-registered firms are missing a NAICS code or set-aside they qualify for. Want a free check on {{company}}? Reply STOP to opt out."
+    },
+    {
+      "id": "9d98104c-4834-4354-ab15-3845cf6fbd30",
+      "name": "Fresh SAM · SMS 3 — Break-up",
+      "channel": "sms",
+      "subject": null,
+      "body": "All good if you're set, {{first_name}}. The offer stands if you want eyes on {{company}}'s SAM profile later. Reply STOP to opt out.",
+      "merge_tags": [
+        "first_name",
+        "company"
+      ],
+      "category": "seq_fresh",
+      "created_by": null,
+      "created_at": "2026-06-15T19:16:25.791953+00:00",
+      "updated_at": "2026-06-15T19:16:25.791953+00:00",
+      "description": "Step 6 · Day 8 · SMS. Close the loop.",
+      "approved": false,
+      "approved_at": null,
+      "approved_by": null,
+      "subject_b": null,
+      "body_b": "No worries if you're all set, {{first_name}}. The free review on {{company}}'s SAM profile is here whenever you want it. Reply STOP to opt out."
     },
     {
       "id": "fc7faf69-b80f-4cb6-b6d6-28a918b2a4a0",
@@ -184,29 +177,9 @@
       "description": "Step 3 · Day 6 · email. Final touch. Low-pressure break-up that often gets the reply. Offers a \"later\" path.",
       "approved": false,
       "approved_at": null,
-      "approved_by": null
-    },
-    {
-      "id": "cee24e98-52e4-4830-b3bf-5c57fbebcb1e",
-      "name": "Fresh SAM · Email 1 — Icebreaker + free review",
-      "channel": "email",
-      "subject": "Saw {{company}} just went active in SAM",
-      "body": "Hi {{first_name}},\n\nNoticed {{company}} recently got active in SAM.gov, out of {{state}}. Congrats. That's the step most people stall on.\n\nThe next couple of months matter more than people realize. Your NAICS codes, your size standard, and your capability statement decide whether you show up when a contracting officer searches for what you do. Get them wrong and you're invisible.\n\nI'll do a free 15-minute review of your setup and tell you the two or three things to fix first. No pitch. We just do this every day and it's easy to spot.\n\nWant me to take a look?\n\nSergio\nPartner, Americurial\n{{unsubscribe_url}}",
-      "merge_tags": [
-        "first_name",
-        "company",
-        "state",
-        "sender_name",
-        "unsubscribe_url"
-      ],
-      "category": "seq_fresh",
-      "created_by": null,
-      "created_at": "2026-06-15T19:16:25.791953+00:00",
-      "updated_at": "2026-06-15T19:16:25.791953+00:00",
-      "description": "Step 1 · Day 0 · email. Congrats-on-activation open, then a free 15-min profile review. No-pitch tone.",
-      "approved": false,
-      "approved_at": null,
-      "approved_by": null
+      "approved_by": null,
+      "subject_b": "Last one from me",
+      "body_b": "Hi {{first_name}},\n\nI'll leave it here so I'm not crowding your inbox. If getting {{company}} back into federal work lands on the list this year, the offer's open — we bid for you, you pay only when you win.\n\nWrong time? Just reply \"later\" and I'll check back down the road.\n\nSergio\nPartner, Americurial\n{{unsubscribe_url}}"
     },
     {
       "id": "767259c4-e82a-49bc-bb73-3b97445ecee7",
@@ -228,7 +201,9 @@
       "description": "Step 2 · Day 3 · email. The \"you probably missed a NAICS or set-aside\" angle to earn the review.",
       "approved": false,
       "approved_at": null,
-      "approved_by": null
+      "approved_by": null,
+      "subject_b": "The NAICS code {{company}} probably missed",
+      "body_b": "Hi {{first_name}},\n\nFollowing up. The most common thing I see with new registrations: two or three NAICS codes picked, and the one where the real money is for their kind of work left off. Sometimes a set-aside they qualify for and never claimed.\n\nThat's exactly what the free review catches. Fifteen minutes, no slides — just your profile and where the work actually is in {{state}}.\n\nOpen to it?\n\nSergio\nPartner, Americurial\n{{unsubscribe_url}}"
     },
     {
       "id": "c5f96c1e-1fea-402f-bd83-5fc774dd1e70",
@@ -249,29 +224,9 @@
       "description": "Step 3 · Day 6 · email. Friendly sign-off, offer stays open.",
       "approved": false,
       "approved_at": null,
-      "approved_by": null
-    },
-    {
-      "id": "2d183f9a-895c-4ca3-a111-c5ad5c4ff1eb",
-      "name": "Backlink · Email 1 — Your listing is live",
-      "channel": "email",
-      "subject": "Put {{company}} on our contractor directory",
-      "body": "Hi {{first_name}},\n\nWe run a directory of federal contractors and I built a page for {{company}}: {{listing_url}}. It pulls your NAICS, certifications, and registration so buyers and primes can find you.\n\nIt's live and free. If it's useful, a link back from your site (a \"featured on\" note or your partners page) helps both of us. Your page ranks better and more buyers land on it.\n\nWant me to adjust anything on the page first?\n\nSergio\nPartner, Americurial\n{{unsubscribe_url}}",
-      "merge_tags": [
-        "first_name",
-        "company",
-        "listing_url",
-        "sender_name",
-        "unsubscribe_url"
-      ],
-      "category": "seq_backlink",
-      "created_by": null,
-      "created_at": "2026-06-15T19:16:25.791953+00:00",
-      "updated_at": "2026-06-15T19:16:25.791953+00:00",
-      "description": "Step 1 · Day 0 · email. We built them a directory page; ask for a link back. Mutual-benefit framing.",
-      "approved": false,
-      "approved_at": null,
-      "approved_by": null
+      "approved_by": null,
+      "subject_b": "I'll stop here",
+      "body_b": "Hi {{first_name}},\n\nLast one. If you ever want a second set of eyes on {{company}}'s federal setup before you start chasing work, the free review's open — just reply.\n\nEither way, good luck. It's a slow game but the work is real and steady once you're in.\n\nSergio\nPartner, Americurial\n{{unsubscribe_url}}"
     },
     {
       "id": "adda0ba1-6a0d-41f8-8414-698fa38eacd3",
@@ -293,7 +248,53 @@
       "description": "Step 2 · Day 4 · email. Offers the exact HTML snippet to make linking back a 2-minute job.",
       "approved": false,
       "approved_at": null,
-      "approved_by": null
+      "approved_by": null,
+      "subject_b": "Two-minute favor on the {{company}} listing",
+      "body_b": "Hi {{first_name}},\n\nCircling back on {{company}}'s directory page: {{listing_url}}.\n\nIf you're up for linking back, a footer link or a line on your partners page is plenty. I'll send the exact snippet so whoever runs your site can drop it in without thinking about it.\n\nNot interested? No problem at all — say the word and I'll leave the page as-is.\n\nSergio\nPartner, Americurial\n{{unsubscribe_url}}"
+    },
+    {
+      "id": "18788ca4-cf89-4b47-8bca-7473eb327e25",
+      "name": "Fresh SAM · SMS 1",
+      "channel": "sms",
+      "subject": null,
+      "body": "Hi {{first_name}}, Sergio here. Saw {{company}} just activated in SAM. Happy to do a free 15-min review of your NAICS and profile so you actually show up in searches. Interested? Reply STOP to opt out.",
+      "merge_tags": [
+        "first_name",
+        "company",
+        "sender_name"
+      ],
+      "category": "seq_fresh",
+      "created_by": null,
+      "created_at": "2026-06-15T19:16:25.791953+00:00",
+      "updated_at": "2026-06-15T19:16:25.791953+00:00",
+      "description": "Step 4 · Day 2 · SMS. Free-review nudge.",
+      "approved": false,
+      "approved_at": null,
+      "approved_by": null,
+      "subject_b": null,
+      "body_b": "Hi {{first_name}}, Sergio here. Saw {{company}} went active in SAM — congrats. Free 15-min review so your profile actually shows up in searches. Want it? Reply STOP to opt out."
+    },
+    {
+      "id": "ef41c1de-a2d5-4ff7-953a-b8cfd9b38b1f",
+      "name": "Dormant · SMS 1",
+      "channel": "sms",
+      "subject": null,
+      "body": "{{first_name}}, Sergio here. I emailed about running {{company}}'s federal bidding on commission, so you only pay if you win. Worth a quick call? Reply STOP to opt out.",
+      "merge_tags": [
+        "first_name",
+        "company",
+        "sender_name"
+      ],
+      "category": "seq_dormant",
+      "created_by": null,
+      "created_at": "2026-06-15T19:16:25.791953+00:00",
+      "updated_at": "2026-06-15T19:16:25.791953+00:00",
+      "description": "Step 4 · Day 2 · SMS. Short nudge referencing the email. Use only where we have a mobile + consent.",
+      "approved": false,
+      "approved_at": null,
+      "approved_by": null,
+      "subject_b": null,
+      "body_b": "{{first_name}}, Sergio from Americurial. We can run {{company}}'s federal bids on commission — you only pay if you win. Worth a quick call? Reply STOP to opt out."
     },
     {
       "id": "5fa3534b-7117-43b0-9cb7-24fc2d952269",
@@ -314,47 +315,32 @@
       "description": "Step 3 · Day 3 · SMS. Short reminder with the listing link.",
       "approved": false,
       "approved_at": null,
-      "approved_by": null
+      "approved_by": null,
+      "subject_b": null,
+      "body_b": "{{first_name}}, Sergio here. {{company}} has a free page on our contractor directory: {{listing_url}}. A quick link back helps it rank — want the snippet? Reply STOP to opt out."
     },
     {
-      "id": "ef41c1de-a2d5-4ff7-953a-b8cfd9b38b1f",
-      "name": "Dormant · SMS 1",
-      "channel": "sms",
-      "subject": null,
-      "body": "{{first_name}}, Sergio here. I emailed about running {{company}}'s federal bidding on commission, so you only pay if you win. Worth a quick call? Reply STOP to opt out.",
+      "id": "0d02b959-e42c-4d38-b4e3-5907578f6798",
+      "name": "Dormant · Email 2 — Why you, follow-up",
+      "channel": "email",
+      "subject": "Re: {{company}} + federal work",
+      "body": "Hi {{first_name}},\n\nQuick follow-up. The reason I reached out to {{company}} specifically: firms that already have awards win again at a much higher rate than first-time bidders. The agency knows you can deliver. The hard part is just being in the room when the next one drops.\n\nWe watch SAM, the sources-sought notices, and the recompetes in your NAICS so you don't have to. When something fits, we bring it to you with a bid most of the way done.\n\nNo cost unless you win. Happy to pull two or three that are open right now and fit you.\n\nSergio\nPartner, Americurial\n{{unsubscribe_url}}",
       "merge_tags": [
         "first_name",
         "company",
-        "sender_name"
+        "sender_name",
+        "unsubscribe_url"
       ],
       "category": "seq_dormant",
       "created_by": null,
       "created_at": "2026-06-15T19:16:25.791953+00:00",
       "updated_at": "2026-06-15T19:16:25.791953+00:00",
-      "description": "Step 4 · Day 2 · SMS. Short nudge referencing the email. Use only where we have a mobile + consent.",
+      "description": "Step 2 · Day 3 · email. No reply to step 1. Reframes around the \"firms with past awards win again\" angle and offers to pull live fits.",
       "approved": false,
       "approved_at": null,
-      "approved_by": null
-    },
-    {
-      "id": "18788ca4-cf89-4b47-8bca-7473eb327e25",
-      "name": "Fresh SAM · SMS 1",
-      "channel": "sms",
-      "subject": null,
-      "body": "Hi {{first_name}}, Sergio here. Saw {{company}} just activated in SAM. Happy to do a free 15-min review of your NAICS and profile so you actually show up in searches. Interested? Reply STOP to opt out.",
-      "merge_tags": [
-        "first_name",
-        "company",
-        "sender_name"
-      ],
-      "category": "seq_fresh",
-      "created_by": null,
-      "created_at": "2026-06-15T19:16:25.791953+00:00",
-      "updated_at": "2026-06-15T19:16:25.791953+00:00",
-      "description": "Step 4 · Day 2 · SMS. Free-review nudge.",
-      "approved": false,
-      "approved_at": null,
-      "approved_by": null
+      "approved_by": null,
+      "subject_b": "Why firms with past awards win again",
+      "body_b": "Hi {{first_name}},\n\nQuick one. The data's pretty clear: a firm that's already delivered for an agency wins its next bid at a much higher rate than a first-timer. Lower risk for the buyer, so you start ahead.\n\n{{company}} already cleared that bar. The missing piece is consistent bidding, and that's the part we handle. No cost unless you win.\n\nWant me to pull a couple that fit you right now?\n\nSergio\nPartner, Americurial\n{{unsubscribe_url}}"
     },
     {
       "id": "baaf8019-0f9d-4a0a-ad2f-4b7e4b2d046c",
@@ -377,7 +363,187 @@
       "description": "Step 1 · Day 0 · email. Warm re-engagement for past Quick Checker leads. Re-runs their check and surfaces 3 fresh HOT matches. Highest-intent audience we have.",
       "approved": false,
       "approved_at": null,
-      "approved_by": null
+      "approved_by": null,
+      "subject_b": "3 new federal matches for {{company}} this week",
+      "body_b": "Hi {{first_name}},\n\nYou ran {{company}} through our Quick Checker a while back. I re-ran it against this week's solicitations and three solid fits came up:\n\n1. {{match_1}}\n2. {{match_2}}\n3. {{match_3}}\n\nThese move fast once the deadline's close. Want the full list with dates and links? Two minutes for me to send.\n\nSergio\nPartner, Americurial\n{{unsubscribe_url}}"
+    },
+    {
+      "id": "3662c381-08f2-4e93-890c-b8842d13b460",
+      "name": "IT/Pro Services · Email 1",
+      "channel": "email",
+      "subject": "Federal IT and services work for {{company}}",
+      "body": "Hi {{first_name}},\n\nFederal agencies spend heavily on IT and professional services, and a lot of it is set aside for small businesses. The trick is being in front of the contracting officer when the requirement drops.\n\nThat's what we do for firms like {{company}}: watch the right NAICS, bring you the fits, prep the bid. No retainer, just commission on wins.\n\nWant a couple of live examples?\n\nSergio\nPartner, Americurial\n{{unsubscribe_url}}",
+      "merge_tags": [
+        "first_name",
+        "company",
+        "unsubscribe_url"
+      ],
+      "category": "seq_vertical_it",
+      "created_by": null,
+      "created_at": "2026-06-15T21:45:09.128981+00:00",
+      "updated_at": "2026-06-15T21:45:09.128981+00:00",
+      "description": "Vertical angle for IT / professional-services firms. Day 0 cold open.",
+      "approved": false,
+      "approved_at": null,
+      "approved_by": null,
+      "subject_b": "{{company}} and the federal IT spend",
+      "body_b": "Hi {{first_name}},\n\nThe government spends a fortune on IT and professional services, and a big chunk is reserved for small businesses. The catch is timing — you have to be in front of the contracting officer when the requirement drops, not after.\n\nThat's what we do for firms like {{company}}: watch the right NAICS, bring you the fits, prep the bid. No retainer, commission on wins.\n\nWant a couple of live examples?\n\nSergio\nPartner, Americurial\n{{unsubscribe_url}}"
+    },
+    {
+      "id": "c9ec1d5a-7a0e-4328-aa23-3e7c2b502792",
+      "name": "Teaming · Email 1 — Subcontract with a prime",
+      "channel": "email",
+      "subject": "A teaming angle for {{company}}",
+      "body": "Hi {{first_name}},\n\nNot every federal win starts as a prime. A lot of small firms get their first past performance by subcontracting to a prime who already holds the vehicle.\n\nWe track which primes are winning in your NAICS and who's looking for small-business teammates to hit their subcontracting goals. For {{company}} that can be a faster door in.\n\nWant me to send a couple of primes worth approaching?\n\nSergio\nPartner, Americurial\n{{unsubscribe_url}}",
+      "merge_tags": [
+        "first_name",
+        "company",
+        "unsubscribe_url"
+      ],
+      "category": "seq_teaming",
+      "created_by": null,
+      "created_at": "2026-06-15T23:56:34.882864+00:00",
+      "updated_at": "2026-06-15T23:56:34.882864+00:00",
+      "description": "Teaming/subcontracting angle. Day 0. Pitch sub-to-prime as a faster entry.",
+      "approved": false,
+      "approved_at": null,
+      "approved_by": null,
+      "subject_b": "A faster way into federal work for {{company}}",
+      "body_b": "Hi {{first_name}},\n\nMost small firms get their first federal past performance not as a prime, but by subcontracting to one who already holds the contract. Faster, lower-risk door in.\n\nWe track which primes are winning in your NAICS and which ones need small-business teammates to hit their subcontracting goals. For {{company}}, that's a shortcut worth taking.\n\nWant a couple of primes worth approaching?\n\nSergio\nPartner, Americurial\n{{unsubscribe_url}}"
+    },
+    {
+      "id": "db6c2b7e-b747-4c2e-8c54-031a140de980",
+      "name": "Generic · SMS — soft intro",
+      "channel": "sms",
+      "subject": null,
+      "body": "Hi {{first_name}}, Sergio from Americurial. We help {{company}} win federal contracts on commission (you only pay if you win). Open to a quick look at what fits you? Reply STOP to opt out.",
+      "merge_tags": [
+        "first_name",
+        "company"
+      ],
+      "category": "seq_generic",
+      "created_by": null,
+      "created_at": "2026-06-15T21:45:09.128981+00:00",
+      "updated_at": "2026-06-15T21:45:09.128981+00:00",
+      "description": "Channel-agnostic soft SMS intro. Use where we have a mobile + consent.",
+      "approved": false,
+      "approved_at": null,
+      "approved_by": null,
+      "subject_b": null,
+      "body_b": "Hi {{first_name}}, Sergio from Americurial. We help firms like {{company}} win federal contracts and only get paid when you do. Open to a quick look at what fits? Reply STOP to opt out."
+    },
+    {
+      "id": "e4d171b8-b544-4d44-a44d-802e0ebc7a75",
+      "name": "Re-engage · SMS — soft check-in",
+      "channel": "sms",
+      "subject": null,
+      "body": "{{first_name}}, Sergio here. Circling back on federal work for {{company}} — still worth a quick look at what fits you? Reply STOP to opt out.",
+      "merge_tags": [
+        "first_name",
+        "company"
+      ],
+      "category": "seq_generic",
+      "created_by": null,
+      "created_at": "2026-06-15T23:56:34.882864+00:00",
+      "updated_at": "2026-06-15T23:56:34.882864+00:00",
+      "description": "Generic re-engagement SMS for any stalled thread.",
+      "approved": false,
+      "approved_at": null,
+      "approved_by": null,
+      "subject_b": null,
+      "body_b": "{{first_name}}, Sergio here — still want me to take a look at what federal work fits {{company}}? Happy to send a couple. Reply STOP to opt out."
+    },
+    {
+      "id": "cee24e98-52e4-4830-b3bf-5c57fbebcb1e",
+      "name": "Fresh SAM · Email 1 — Icebreaker + free review",
+      "channel": "email",
+      "subject": "Saw {{company}} just went active in SAM",
+      "body": "Hi {{first_name}},\n\nNoticed {{company}} recently got active in SAM.gov, out of {{state}}. Congrats. That's the step most people stall on.\n\nThe next couple of months matter more than people realize. Your NAICS codes, your size standard, and your capability statement decide whether you show up when a contracting officer searches for what you do. Get them wrong and you're invisible.\n\nI'll do a free 15-minute review of your setup and tell you the two or three things to fix first. No pitch. We just do this every day and it's easy to spot.\n\nWant me to take a look?\n\nSergio\nPartner, Americurial\n{{unsubscribe_url}}",
+      "merge_tags": [
+        "first_name",
+        "company",
+        "state",
+        "sender_name",
+        "unsubscribe_url"
+      ],
+      "category": "seq_fresh",
+      "created_by": null,
+      "created_at": "2026-06-15T19:16:25.791953+00:00",
+      "updated_at": "2026-06-15T19:16:25.791953+00:00",
+      "description": "Step 1 · Day 0 · email. Congrats-on-activation open, then a free 15-min profile review. No-pitch tone.",
+      "approved": false,
+      "approved_at": null,
+      "approved_by": null,
+      "subject_b": "Congrats on the SAM registration, {{first_name}}",
+      "body_b": "Hi {{first_name}},\n\nWelcome to federal contracting — getting active in SAM out of {{state}} is the step most people stall on, so that's real.\n\nHere's what nobody tells you: your NAICS codes and size standard decide whether you even show up when a contracting officer searches. Get them wrong and you're invisible no matter how good you are.\n\nI'll do a free 15-minute pass on your setup and flag the two or three things to fix first. No pitch — we just see this every day.\n\nWant me to look?\n\nSergio\nPartner, Americurial\n{{unsubscribe_url}}"
+    },
+    {
+      "id": "2d183f9a-895c-4ca3-a111-c5ad5c4ff1eb",
+      "name": "Backlink · Email 1 — Your listing is live",
+      "channel": "email",
+      "subject": "Put {{company}} on our contractor directory",
+      "body": "Hi {{first_name}},\n\nWe run a directory of federal contractors and I built a page for {{company}}: {{listing_url}}. It pulls your NAICS, certifications, and registration so buyers and primes can find you.\n\nIt's live and free. If it's useful, a link back from your site (a \"featured on\" note or your partners page) helps both of us. Your page ranks better and more buyers land on it.\n\nWant me to adjust anything on the page first?\n\nSergio\nPartner, Americurial\n{{unsubscribe_url}}",
+      "merge_tags": [
+        "first_name",
+        "company",
+        "listing_url",
+        "sender_name",
+        "unsubscribe_url"
+      ],
+      "category": "seq_backlink",
+      "created_by": null,
+      "created_at": "2026-06-15T19:16:25.791953+00:00",
+      "updated_at": "2026-06-15T19:16:25.791953+00:00",
+      "description": "Step 1 · Day 0 · email. We built them a directory page; ask for a link back. Mutual-benefit framing.",
+      "approved": false,
+      "approved_at": null,
+      "approved_by": null,
+      "subject_b": "{{company}} is on our contractor directory",
+      "body_b": "Hi {{first_name}},\n\nWe keep a directory of federal contractors and {{company}} now has a page: {{listing_url}}. It pulls your NAICS, certs, and registration so primes and buyers looking for a teammate can find you.\n\nIt's live and free, nothing needed from you. If it's useful, a link back from your site helps both pages rank — and sends more buyers your way, not just ours.\n\nWant me to tweak anything on it first?\n\nSergio\nPartner, Americurial\n{{unsubscribe_url}}"
+    },
+    {
+      "id": "87e4478f-aa7b-41df-8101-75cec5d60493",
+      "name": "Construction/Trades · Email 1",
+      "channel": "email",
+      "subject": "Federal construction work for {{company}}",
+      "body": "Hi {{first_name}},\n\nFederal construction and trades work runs through set-asides and IDIQ vehicles that most small builders never see. If {{company}} is registered in SAM, you already cleared the hard part.\n\nWe find the right solicitations, handle the bid paperwork, and you only pay when you win.\n\nWorth 15 minutes to see what's open?\n\nSergio\nPartner, Americurial\n{{unsubscribe_url}}",
+      "merge_tags": [
+        "first_name",
+        "company",
+        "unsubscribe_url"
+      ],
+      "category": "seq_vertical_construction",
+      "created_by": null,
+      "created_at": "2026-06-15T21:45:09.128981+00:00",
+      "updated_at": "2026-06-15T21:45:09.128981+00:00",
+      "description": "Vertical angle for construction/trades firms. Day 0 cold open.",
+      "approved": false,
+      "approved_at": null,
+      "approved_by": null,
+      "subject_b": "The federal construction work most builders never see",
+      "body_b": "Hi {{first_name}},\n\nMost of the federal construction money runs through set-asides and IDIQ vehicles that small builders never get visibility into. If {{company}} is in SAM, you've already cleared the part that stops most firms.\n\nWe find the right solicitations, run the bid paperwork, and you only pay when you win. No retainer.\n\nWant to see what's open in your area?\n\nSergio\nPartner, Americurial\n{{unsubscribe_url}}"
+    },
+    {
+      "id": "01e46dbe-5aa0-4816-bd78-91f97d4325cd",
+      "name": "8(a) · Email 1 — Sole-source advantage",
+      "channel": "email",
+      "subject": "{{company}} and the 8(a) sole-source lane",
+      "body": "Hi {{first_name}},\n\nIf {{company}} is 8(a) certified, you have an advantage most contractors don't: agencies can award you sole-source contracts up to $4.5M without a full competition.\n\nThe catch is they have to know you exist and trust you can deliver. That's the part we help with — getting you in front of the right contracting officers with a clean capability statement.\n\nWorth 15 minutes to map your best agencies?\n\nSergio\nPartner, Americurial\n{{unsubscribe_url}}",
+      "merge_tags": [
+        "first_name",
+        "company",
+        "unsubscribe_url"
+      ],
+      "category": "seq_8a",
+      "created_by": null,
+      "created_at": "2026-06-15T23:56:34.882864+00:00",
+      "updated_at": "2026-06-15T23:56:34.882864+00:00",
+      "description": "8(a)-certified segment. Day 0. Lead with the sole-source advantage.",
+      "approved": false,
+      "approved_at": null,
+      "approved_by": null,
+      "subject_b": "$4.5M without a competition — if {{company}} is 8(a)",
+      "body_b": "Hi {{first_name}},\n\nAn 8(a) certification is one of the strongest advantages in federal contracting: agencies can hand you a sole-source award up to $4.5M with no open competition. Most contractors would kill for that.\n\nThe catch is the agency has to know you exist and trust you'll deliver. That's where we come in — getting {{company}} in front of the right contracting officers with a clean capability statement.\n\nWorth 15 minutes to map your best agencies?\n\nSergio\nPartner, Americurial\n{{unsubscribe_url}}"
     },
     {
       "id": "78e7a9a8-eb83-4efd-958b-0b2a148d0396",
@@ -398,66 +564,9 @@
       "description": "Vertical angle for janitorial/facilities firms (NAICS 561720). Day 0 cold open.",
       "approved": false,
       "approved_at": null,
-      "approved_by": null
-    },
-    {
-      "id": "87e4478f-aa7b-41df-8101-75cec5d60493",
-      "name": "Construction/Trades · Email 1",
-      "channel": "email",
-      "subject": "Federal construction work for {{company}}",
-      "body": "Hi {{first_name}},\n\nFederal construction and trades work runs through set-asides and IDIQ vehicles that most small builders never see. If {{company}} is registered in SAM, you already cleared the hard part.\n\nWe find the right solicitations, handle the bid paperwork, and you only pay when you win.\n\nWorth 15 minutes to see what's open?\n\nSergio\nPartner, Americurial\n{{unsubscribe_url}}",
-      "merge_tags": [
-        "first_name",
-        "company",
-        "unsubscribe_url"
-      ],
-      "category": "seq_vertical_construction",
-      "created_by": null,
-      "created_at": "2026-06-15T21:45:09.128981+00:00",
-      "updated_at": "2026-06-15T21:45:09.128981+00:00",
-      "description": "Vertical angle for construction/trades firms. Day 0 cold open.",
-      "approved": false,
-      "approved_at": null,
-      "approved_by": null
-    },
-    {
-      "id": "3662c381-08f2-4e93-890c-b8842d13b460",
-      "name": "IT/Pro Services · Email 1",
-      "channel": "email",
-      "subject": "Federal IT and services work for {{company}}",
-      "body": "Hi {{first_name}},\n\nFederal agencies spend heavily on IT and professional services, and a lot of it is set aside for small businesses. The trick is being in front of the contracting officer when the requirement drops.\n\nThat's what we do for firms like {{company}}: watch the right NAICS, bring you the fits, prep the bid. No retainer, just commission on wins.\n\nWant a couple of live examples?\n\nSergio\nPartner, Americurial\n{{unsubscribe_url}}",
-      "merge_tags": [
-        "first_name",
-        "company",
-        "unsubscribe_url"
-      ],
-      "category": "seq_vertical_it",
-      "created_by": null,
-      "created_at": "2026-06-15T21:45:09.128981+00:00",
-      "updated_at": "2026-06-15T21:45:09.128981+00:00",
-      "description": "Vertical angle for IT / professional-services firms. Day 0 cold open.",
-      "approved": false,
-      "approved_at": null,
-      "approved_by": null
-    },
-    {
-      "id": "db6c2b7e-b747-4c2e-8c54-031a140de980",
-      "name": "Generic · SMS — soft intro",
-      "channel": "sms",
-      "subject": null,
-      "body": "Hi {{first_name}}, Sergio from Americurial. We help {{company}} win federal contracts on commission (you only pay if you win). Open to a quick look at what fits you? Reply STOP to opt out.",
-      "merge_tags": [
-        "first_name",
-        "company"
-      ],
-      "category": "seq_generic",
-      "created_by": null,
-      "created_at": "2026-06-15T21:45:09.128981+00:00",
-      "updated_at": "2026-06-15T21:45:09.128981+00:00",
-      "description": "Channel-agnostic soft SMS intro. Use where we have a mobile + consent.",
-      "approved": false,
-      "approved_at": null,
-      "approved_by": null
+      "approved_by": null,
+      "subject_b": "{{company}} + recurring federal facilities contracts",
+      "body_b": "Hi {{first_name}},\n\nFederal facilities and janitorial work is some of the steadiest money in government contracting — agencies rebuy it on a cycle, and they favor firms already in SAM with the right NAICS (561720 and its neighbors).\n\nIf {{company}} is registered, the hard part's done. We find the open solicitations in {{state}}, handle the bid paperwork, and you pay only when you win.\n\nWant the current ones?\n\nSergio\nPartner, Americurial\n{{unsubscribe_url}}"
     },
     {
       "id": "4935015f-d466-422b-ab7a-6a498acf0a29",
@@ -477,66 +586,9 @@
       "description": "Expiring-registration segment. Day 0. Renewal nudge + offer to help.",
       "approved": false,
       "approved_at": null,
-      "approved_by": null
-    },
-    {
-      "id": "c9ec1d5a-7a0e-4328-aa23-3e7c2b502792",
-      "name": "Teaming · Email 1 — Subcontract with a prime",
-      "channel": "email",
-      "subject": "A teaming angle for {{company}}",
-      "body": "Hi {{first_name}},\n\nNot every federal win starts as a prime. A lot of small firms get their first past performance by subcontracting to a prime who already holds the vehicle.\n\nWe track which primes are winning in your NAICS and who's looking for small-business teammates to hit their subcontracting goals. For {{company}} that can be a faster door in.\n\nWant me to send a couple of primes worth approaching?\n\nSergio\nPartner, Americurial\n{{unsubscribe_url}}",
-      "merge_tags": [
-        "first_name",
-        "company",
-        "unsubscribe_url"
-      ],
-      "category": "seq_teaming",
-      "created_by": null,
-      "created_at": "2026-06-15T23:56:34.882864+00:00",
-      "updated_at": "2026-06-15T23:56:34.882864+00:00",
-      "description": "Teaming/subcontracting angle. Day 0. Pitch sub-to-prime as a faster entry.",
-      "approved": false,
-      "approved_at": null,
-      "approved_by": null
-    },
-    {
-      "id": "01e46dbe-5aa0-4816-bd78-91f97d4325cd",
-      "name": "8(a) · Email 1 — Sole-source advantage",
-      "channel": "email",
-      "subject": "{{company}} and the 8(a) sole-source lane",
-      "body": "Hi {{first_name}},\n\nIf {{company}} is 8(a) certified, you have an advantage most contractors don't: agencies can award you sole-source contracts up to $4.5M without a full competition.\n\nThe catch is they have to know you exist and trust you can deliver. That's the part we help with — getting you in front of the right contracting officers with a clean capability statement.\n\nWorth 15 minutes to map your best agencies?\n\nSergio\nPartner, Americurial\n{{unsubscribe_url}}",
-      "merge_tags": [
-        "first_name",
-        "company",
-        "unsubscribe_url"
-      ],
-      "category": "seq_8a",
-      "created_by": null,
-      "created_at": "2026-06-15T23:56:34.882864+00:00",
-      "updated_at": "2026-06-15T23:56:34.882864+00:00",
-      "description": "8(a)-certified segment. Day 0. Lead with the sole-source advantage.",
-      "approved": false,
-      "approved_at": null,
-      "approved_by": null
-    },
-    {
-      "id": "e4d171b8-b544-4d44-a44d-802e0ebc7a75",
-      "name": "Re-engage · SMS — soft check-in",
-      "channel": "sms",
-      "subject": null,
-      "body": "{{first_name}}, Sergio here. Circling back on federal work for {{company}} — still worth a quick look at what fits you? Reply STOP to opt out.",
-      "merge_tags": [
-        "first_name",
-        "company"
-      ],
-      "category": "seq_generic",
-      "created_by": null,
-      "created_at": "2026-06-15T23:56:34.882864+00:00",
-      "updated_at": "2026-06-15T23:56:34.882864+00:00",
-      "description": "Generic re-engagement SMS for any stalled thread.",
-      "approved": false,
-      "approved_at": null,
-      "approved_by": null
+      "approved_by": null,
+      "subject_b": "{{company}} drops off SAM in a few weeks",
+      "body_b": "Hi {{first_name}},\n\nHeads up — {{company}}'s SAM.gov registration is coming up on renewal. If it lapses, you vanish from every contracting officer's search and can't be awarded anything until it's active again. That gap costs people real bids.\n\nRenewing is free, but the paperwork trips firms up every year. I'll walk you through it in 15 minutes so you keep your place in line.\n\nWant a hand?\n\nSergio\nPartner, Americurial\n{{unsubscribe_url}}"
     }
   ],
   "outreach_campaigns": [],

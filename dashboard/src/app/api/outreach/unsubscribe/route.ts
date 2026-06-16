@@ -1,30 +1,68 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { verifyEmailSig } from "@/lib/outreach/unsubscribe";
 
 /**
  * GET (one-click unsubscribe — RFC 8058) and POST handlers for the CAN-SPAM
- * footer link. Token-only lookup so the recipient never needs to log in.
+ * footer link. Two paths:
+ *   A) email + sig  — the outreach_contacts cadence (HMAC-signed email).
+ *   B) token        — the legacy prospect path (unsubscribe_token lookup).
  *
- * Behavior:
- *   1. Resolve prospect by unsubscribe_token.
- *   2. Insert the prospect's email into outreach_optouts (idempotent).
- *   3. Flip the prospect status to 'opted_out'.
- *   4. Cancel any scheduled sequence steps.
- *   5. Redirect to /unsubscribed confirmation page (or return JSON for POST).
+ * Either way the recipient never needs to log in, and we always appear to
+ * succeed (don't leak whether an address/token exists).
  */
-async function handle(req: NextRequest, method: "GET" | "POST") {
-    const token = method === "GET"
-        ? req.nextUrl.searchParams.get("token")
-        : new URLSearchParams(await req.text()).get("token") || req.nextUrl.searchParams.get("token");
-    if (!token) {
-        return NextResponse.json({ error: "token required" }, { status: 400 });
+function done(req: NextRequest, method: "GET" | "POST") {
+    if (method === "GET") {
+        const url = new URL("/unsubscribed", req.url);
+        url.searchParams.set("ok", "1");
+        return NextResponse.redirect(url);
     }
+    return NextResponse.json({ ok: true });
+}
+
+async function handle(req: NextRequest, method: "GET" | "POST") {
+    const params = method === "GET"
+        ? req.nextUrl.searchParams
+        : new URLSearchParams(await req.text());
 
     const admin = createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.SUPABASE_SERVICE_KEY!,
         { auth: { persistSession: false } },
     );
+
+    // ── Path A: signed-email unsubscribe (outreach_contacts cadence) ──
+    const email = (params.get("email") || "").toLowerCase().trim();
+    const sig = params.get("sig") || req.nextUrl.searchParams.get("sig") || "";
+    if (email) {
+        if (verifyEmailSig(email, sig)) {
+            await admin.from("outreach_optouts").upsert(
+                { email, reason: "one-click unsubscribe", source: "outreach:contact" },
+                { onConflict: "email" },
+            );
+            await admin.from("outreach_contacts")
+                .update({ opted_out_at: new Date().toISOString() })
+                .eq("email", email);
+            // Stop any in-flight cadence rows for this contact.
+            const { data: contacts } = await admin
+                .from("outreach_contacts").select("id").eq("email", email);
+            const ids = (contacts || []).map((c: { id: string }) => c.id);
+            if (ids.length) {
+                await admin.from("outreach_campaign_contacts")
+                    .update({ status: "unsubscribed", finished_at: new Date().toISOString() })
+                    .in("contact_id", ids)
+                    .in("status", ["active", "queued"]);
+            }
+        }
+        // Always appear to succeed.
+        return done(req, method);
+    }
+
+    // ── Path B: legacy prospect token ──
+    const token = params.get("token") || req.nextUrl.searchParams.get("token");
+    if (!token) {
+        return NextResponse.json({ error: "token or email required" }, { status: 400 });
+    }
 
     const { data: prospect } = await admin
         .from("outreach_prospects")

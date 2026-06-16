@@ -58,6 +58,17 @@ function getDbAdmin(): SbAny | null {
     return createClient(url, key, { auth: { persistSession: false } });
 }
 
+function escapeHtml(s: string): string {
+    return s
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+}
+// Wrap bare URLs in anchors so the html fallback of a plain-text email keeps a
+// clickable (one-click-unsubscribe-compliant) link.
+function linkify(escaped: string): string {
+    return escaped.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" style="color:#0369a1;">$1</a>');
+}
+
 // ───────────────────────── Merge tag rendering ─────────────────────────
 
 export interface ContactForRender {
@@ -71,37 +82,61 @@ export interface ContactForRender {
 }
 
 /**
- * Render a template string against a contact. Unknown tags are left in place
- * so the caller can spot bugs (vs silently emitting an empty string), with the
- * exception of the known short-list which use friendly fallbacks.
- *
- *   {{firstName}} → contact.first_name || "there"
- *   {{lastName}}  → contact.last_name || ""
- *   {{company}}   → contact.company || "your company"
- *   {{title}}     → contact.title || ""
- *   {{state}}     → contact.state || ""
- *   {{customField:key}} → String(contact.custom_fields?.[key] ?? "")
+ * Build the merge-variable map for a contact. Supports BOTH the snake_case
+ * convention used by the seeded outreach_templates ({{first_name}},
+ * {{company}}, {{state}}, {{unsubscribe_url}}, {{last_award_year}}, …) and the
+ * camelCase the campaign builder emits ({{firstName}}). Every key in
+ * custom_fields becomes a tag too, and `extra` (e.g. unsubscribe_url,
+ * sender_name) is merged last so the caller can inject per-send values.
  */
-export function renderTemplate(template: string, contact: ContactForRender): string {
+export function buildContactVars(
+    contact: ContactForRender,
+    extra?: Record<string, string>,
+): Record<string, string> {
+    const first = (contact.first_name || "").trim();
+    const last = (contact.last_name || "").trim();
+    const company = (contact.company || "").trim();
+    const vars: Record<string, string> = {
+        first_name: first || "there",
+        firstName: first || "there",
+        last_name: last,
+        lastName: last,
+        company: company || "your company",
+        title: (contact.title || "").trim(),
+        state: (contact.state || "").trim(),
+    };
+    if (contact.custom_fields) {
+        for (const [k, v] of Object.entries(contact.custom_fields)) {
+            if (v !== undefined && v !== null) vars[k] = String(v);
+        }
+    }
+    if (extra) {
+        for (const [k, v] of Object.entries(extra)) {
+            if (v !== undefined && v !== null) vars[k] = v;
+        }
+    }
+    return vars;
+}
+
+/**
+ * Replace {{ tag }} / {{ customField:key }} from a flat var map. Unknown tags
+ * resolve to "" so a live send never leaks a literal "{{tag}}" (which screams
+ * broken mail-merge and tanks reply + spam scores).
+ */
+export function renderWithVars(template: string, vars: Record<string, string>): string {
     if (!template) return "";
+    return template.replace(/\{\{\s*([\w.:-]+)\s*\}\}/g, (_full, raw: string) => {
+        const key = raw.trim();
+        if (Object.prototype.hasOwnProperty.call(vars, key)) return vars[key];
+        const m = /^customField:(.+)$/.exec(key);
+        if (m && Object.prototype.hasOwnProperty.call(vars, m[1])) return vars[m[1]];
+        return "";
+    });
+}
 
-    const firstName = (contact.first_name || "").trim() || "there";
-    const lastName = (contact.last_name || "").trim();
-    const company = (contact.company || "").trim() || "your company";
-    const title = (contact.title || "").trim();
-    const state = (contact.state || "").trim();
-
-    return template
-        .replace(/\{\{\s*firstName\s*\}\}/gi, firstName)
-        .replace(/\{\{\s*lastName\s*\}\}/gi, lastName)
-        .replace(/\{\{\s*company\s*\}\}/gi, company)
-        .replace(/\{\{\s*title\s*\}\}/gi, title)
-        .replace(/\{\{\s*state\s*\}\}/gi, state)
-        .replace(/\{\{\s*customField\s*:\s*([\w-]+)\s*\}\}/gi, (_full, key) => {
-            const v = contact.custom_fields?.[key];
-            if (v === undefined || v === null) return "";
-            return String(v);
-        });
+/** Back-compat single-arg renderer (contact only). */
+export function renderTemplate(template: string, contact: ContactForRender): string {
+    return renderWithVars(template, buildContactVars(contact));
 }
 
 // ───────────────────────── Optout check ─────────────────────────
@@ -134,28 +169,31 @@ async function isOptedOut(
 
 interface StepRunUpsert {
     runId?: string | null;
-    campaignId: string;
+    campaignContactId: string;
     stepId: string;
-    contactId: string;
     channel: "email" | "sms";
     status: "sent" | "failed" | "suppressed" | "skipped";
     providerMessageId?: string | null;
     error?: string | null;
     renderedSubject?: string | null;
     renderedBody?: string | null;
+    variant?: "A" | "B" | null;
 }
 
 async function persistStepRun(sb: SbAny, params: StepRunUpsert): Promise<void> {
+    // Columns match the live outreach_campaign_step_runs schema: the row is
+    // keyed by campaign_contact_id (+ step_id), and the error column is
+    // error_message.
     const row: Record<string, unknown> = {
-        campaign_id: params.campaignId,
+        campaign_contact_id: params.campaignContactId,
         step_id: params.stepId,
-        contact_id: params.contactId,
         channel: params.channel,
         status: params.status,
         provider_message_id: params.providerMessageId ?? null,
-        error: params.error ?? null,
+        error_message: params.error ?? null,
         rendered_subject: params.renderedSubject ?? null,
         rendered_body: params.renderedBody ?? null,
+        variant: params.variant ?? null,
         sent_at: new Date().toISOString(),
     };
     try {
@@ -179,11 +217,13 @@ export interface SendOutreachEmailParams {
     subject: string;
     html: string;
     replyTo?: string;
-    campaignId: string;
+    campaignContactId: string;
     stepId: string;
-    contactId: string;
     runId?: string | null;
     contact?: ContactForRender;
+    variant?: "A" | "B" | null;
+    /** Extra merge vars merged over the contact's (e.g. unsubscribe_url). */
+    vars?: Record<string, string>;
 }
 
 export interface SendOutreachResult {
@@ -206,11 +246,11 @@ export async function sendOutreachEmail(
         return { ok: false, status: "failed", error: "supabase not configured" };
     }
 
-    const { to, from, replyTo, campaignId, stepId, contactId, runId, contact } = params;
+    const { to, from, replyTo, campaignContactId, stepId, runId, contact, variant } = params;
 
     if (!to || !to.includes("@")) {
         await persistStepRun(sb, {
-            runId, campaignId, stepId, contactId,
+            runId, campaignContactId, stepId, variant,
             channel: "email", status: "failed", error: "invalid email address",
         });
         return { ok: false, status: "failed", error: "invalid email address" };
@@ -218,19 +258,20 @@ export async function sendOutreachEmail(
 
     if (await isOptedOut(sb, "email", to)) {
         await persistStepRun(sb, {
-            runId, campaignId, stepId, contactId,
+            runId, campaignContactId, stepId, variant,
             channel: "email", status: "suppressed", error: "recipient opted out",
         });
         return { ok: true, status: "suppressed" };
     }
 
-    const renderedSubject = renderTemplate(params.subject, contact || {});
-    const renderedHtml = renderTemplate(params.html, contact || {});
+    const vars = buildContactVars(contact || {}, params.vars);
+    const renderedSubject = renderWithVars(params.subject, vars);
+    const renderedHtml = renderWithVars(params.html, vars);
 
     const r = getResend();
     if (!r) {
         await persistStepRun(sb, {
-            runId, campaignId, stepId, contactId,
+            runId, campaignContactId, stepId, variant,
             channel: "email", status: "failed", error: "RESEND_API_KEY not set",
             renderedSubject, renderedBody: renderedHtml,
         });
@@ -238,13 +279,18 @@ export async function sendOutreachEmail(
     }
 
     try {
+        const isHtml = /<[a-z][\s\S]*>/i.test(renderedHtml);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const sendArgs: any = {
-            from,
-            to,
-            subject: renderedSubject,
-            html: renderedHtml,
-        };
+        const sendArgs: any = { from, to, subject: renderedSubject };
+        if (isHtml) {
+            sendArgs.html = renderedHtml;
+        } else {
+            // Plain-text template — send a real text/plain part plus a
+            // whitespace-preserving HTML fallback. Looks personal (better
+            // deliverability than a styled blast) and keeps links clickable.
+            sendArgs.text = renderedHtml;
+            sendArgs.html = `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.55;color:#171717;white-space:pre-wrap;">${linkify(escapeHtml(renderedHtml))}</div>`;
+        }
         if (replyTo) sendArgs.replyTo = replyTo;
 
         const res = await r.emails.send(sendArgs);
@@ -256,7 +302,7 @@ export async function sendOutreachEmail(
         if (err) {
             const msg = typeof err === "string" ? err : (err.message || JSON.stringify(err));
             await persistStepRun(sb, {
-                runId, campaignId, stepId, contactId,
+                runId, campaignContactId, stepId, variant,
                 channel: "email", status: "failed", error: msg.slice(0, 500),
                 renderedSubject, renderedBody: renderedHtml,
             });
@@ -264,7 +310,7 @@ export async function sendOutreachEmail(
         }
         const providerMessageId = (data?.id as string | undefined) || null;
         await persistStepRun(sb, {
-            runId, campaignId, stepId, contactId,
+            runId, campaignContactId, stepId, variant,
             channel: "email", status: "sent",
             providerMessageId,
             renderedSubject, renderedBody: renderedHtml,
@@ -273,7 +319,7 @@ export async function sendOutreachEmail(
     } catch (e) {
         const msg = (e instanceof Error ? e.message : String(e)).slice(0, 500);
         await persistStepRun(sb, {
-            runId, campaignId, stepId, contactId,
+            runId, campaignContactId, stepId, variant,
             channel: "email", status: "failed", error: msg,
             renderedSubject, renderedBody: renderedHtml,
         });
@@ -286,12 +332,13 @@ export async function sendOutreachEmail(
 export interface SendOutreachSMSParams {
     to: string;
     body: string;
-    campaignId: string;
+    campaignContactId: string;
     stepId: string;
-    contactId: string;
     runId?: string | null;
     contact?: ContactForRender;
     from?: string; // optional — defaults to TWILIO_PHONE_NUMBER
+    variant?: "A" | "B" | null;
+    vars?: Record<string, string>;
 }
 
 const E164_RE = /^\+[1-9]\d{1,14}$/;
@@ -310,19 +357,19 @@ export async function sendOutreachSMS(
         return { ok: false, status: "failed", error: "supabase not configured" };
     }
 
-    const { to, campaignId, stepId, contactId, runId, contact } = params;
+    const { to, campaignContactId, stepId, runId, contact, variant } = params;
     const from = params.from || process.env.TWILIO_PHONE_NUMBER || "";
 
     if (!to || !E164_RE.test(to)) {
         await persistStepRun(sb, {
-            runId, campaignId, stepId, contactId,
+            runId, campaignContactId, stepId, variant,
             channel: "sms", status: "failed", error: "invalid E.164 phone number",
         });
         return { ok: false, status: "failed", error: "invalid E.164 phone number" };
     }
     if (!from) {
         await persistStepRun(sb, {
-            runId, campaignId, stepId, contactId,
+            runId, campaignContactId, stepId, variant,
             channel: "sms", status: "failed", error: "TWILIO_PHONE_NUMBER not set",
         });
         return { ok: false, status: "failed", error: "TWILIO_PHONE_NUMBER not set" };
@@ -330,19 +377,19 @@ export async function sendOutreachSMS(
 
     if (await isOptedOut(sb, "sms", to)) {
         await persistStepRun(sb, {
-            runId, campaignId, stepId, contactId,
+            runId, campaignContactId, stepId, variant,
             channel: "sms", status: "suppressed", error: "recipient opted out",
         });
         return { ok: true, status: "suppressed" };
     }
 
-    const renderedBody = renderTemplate(params.body, contact || {});
+    const renderedBody = renderWithVars(params.body, buildContactVars(contact || {}, params.vars));
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const client = (await getTwilio()) as any;
     if (!client) {
         await persistStepRun(sb, {
-            runId, campaignId, stepId, contactId,
+            runId, campaignContactId, stepId, variant,
             channel: "sms", status: "failed", error: "Twilio not configured",
             renderedBody,
         });
@@ -357,7 +404,7 @@ export async function sendOutreachSMS(
         });
         const providerMessageId = (res?.sid as string | undefined) || null;
         await persistStepRun(sb, {
-            runId, campaignId, stepId, contactId,
+            runId, campaignContactId, stepId, variant,
             channel: "sms", status: "sent",
             providerMessageId,
             renderedBody,
@@ -366,7 +413,7 @@ export async function sendOutreachSMS(
     } catch (e) {
         const msg = (e instanceof Error ? e.message : String(e)).slice(0, 500);
         await persistStepRun(sb, {
-            runId, campaignId, stepId, contactId,
+            runId, campaignContactId, stepId, variant,
             channel: "sms", status: "failed", error: msg,
             renderedBody,
         });

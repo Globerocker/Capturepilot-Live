@@ -1,28 +1,25 @@
 /**
  * Cadence runner — advances outreach_campaign_contacts through their
  * outreach_campaign_steps and fires the next email/SMS step via
- * @/lib/outreach-sender.
+ * @/lib/outreach-sender, under the deliverability governor.
  *
- * Schedule: this route is NOT wired into vercel.json (Pro plan is at the
- * 40-cron ceiling). Instead it's dispatched by enrichment_orchestrator at
- * every 5-min tick — see TASKS["run_outreach_cadence"] there.
+ * Schedule: NOT in vercel.json (Pro plan is at the 40-cron ceiling). It's
+ * dispatched by enrichment_orchestrator every tick and/or by a VPS systemd
+ * timer hitting this route with the CRON_SECRET bearer.
  *
  * Per-run flow:
- *   1. Reap zombie campaign_contacts whose status is "running" past lease.
- *   2. Claim up to 100 ready contacts: (cc.status='active'
- *      AND cc.next_send_at <= now() AND campaign.status='active' AND
- *      send_window respected).
- *   3. For each contact, load the next step (step_order = current_step + 1).
- *   4. Respect skip_if_replied / skip_if_clicked by looking at prior
- *      step_runs for the same contact.
- *   5. Send via outreach-sender (email or sms based on step.channel).
- *   6. On success: advance current_step, compute next_send_at from next
- *      step's delay; reset consecutive_failures.
- *   7. On failure: increment consecutive_failures; >= 3 marks contact failed.
- *   8. When no more steps: status='completed', finished_at=NOW().
- *   9. Update campaign.stats cache at the end.
+ *   1. Load the deliverability governor (warm-up ramp, daily + per-domain caps,
+ *      batch size, jitter).
+ *   2. Claim up to `limit` ready contacts (status='active', next_send_at<=now,
+ *      campaign active).
+ *   3. For each: load next step; honor reply / skip gates.
+ *   4. Pick A or B 50/50 (deterministic per contact+step so retries don't
+ *      flip), MX/syntax pre-check, per-domain + daily caps, then send.
+ *   5. Advance current_step with a jittered next_send_at; reset failures.
+ *   6. Refresh campaign.stats.
  *
- * Budget: 270s total (Vercel 300s ceiling, 30s reserved for cleanup).
+ * A/B: every send records its variant ('A'/'B') on the step run so open/click/
+ * reply rates can be compared per variant.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
@@ -33,6 +30,19 @@ import {
     sendOutreachSMS,
     type ContactForRender,
 } from "@/lib/outreach-sender";
+import { unsubscribeUrl } from "@/lib/outreach/unsubscribe";
+import {
+    loadGovernor,
+    ensureWarmupStart,
+    effectiveDailyCap,
+    countSentToday,
+    domainSentToday,
+    isDeliverable,
+    pickBatchSize,
+    jitter,
+    emailDomain,
+    type GovernorSettings,
+} from "@/lib/outreach/governor";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -49,10 +59,10 @@ interface Campaign {
     name: string;
     status: string;
     sender_email: string | null;
+    sender_name: string | null;
+    physical_address: string | null;
     throttle: Record<string, unknown> | null;
     stats: Record<string, unknown> | null;
-    // Migration 168 — when true, the cadence completes a contact the moment
-    // they reply, halting all remaining steps.
     stop_on_reply: boolean | null;
 }
 
@@ -80,23 +90,30 @@ interface Step {
     step_order: number;
     channel: "email" | "sms";
     subject: string | null;
+    subject_b: string | null;
     body_template: string;
+    body_b: string | null;
     delay_value: number;
     delay_unit: string;
     skip_if_replied: boolean;
     skip_if_clicked: boolean;
-    // Migration 168 — per-step send gate. 'always' fires unconditionally;
-    // 'if_no_reply' skips when the contact has already replied to this campaign.
     send_condition: "always" | "if_no_reply";
 }
 
+// Mutable per-tick send budget enforced by the governor.
+interface SendBudget {
+    enabled: boolean;
+    remainingTick: number;
+    perDomainCap: number;
+    domainCounts: Record<string, number>;
+    gov: GovernorSettings;
+    warmupStarted: boolean;
+}
+
+type Outcome = "sent" | "skipped" | "failed" | "completed" | "deferred" | "invalid";
+
 // ───────────────────────── Send-window check ─────────────────────────
 
-/**
- * Honor campaign.throttle.send_window_start / send_window_end (24h clock,
- * local to throttle.timezone — defaults to UTC). Returns true if "now" is
- * inside the window or no window is configured.
- */
 function isInsideSendWindow(throttle: Record<string, unknown> | null, now: Date): boolean {
     if (!throttle) return true;
     const start = throttle["send_window_start"];
@@ -105,13 +122,10 @@ function isInsideSendWindow(throttle: Record<string, unknown> | null, now: Date)
     const tz = (throttle["timezone"] as string) || "UTC";
     let hour: number;
     try {
-        const fmt = new Intl.DateTimeFormat("en-US", {
-            hour: "2-digit", hour12: false, timeZone: tz,
-        });
+        const fmt = new Intl.DateTimeFormat("en-US", { hour: "2-digit", hour12: false, timeZone: tz });
         const parts = fmt.formatToParts(now);
         const h = parts.find(p => p.type === "hour")?.value;
         hour = h ? parseInt(h, 10) : now.getUTCHours();
-        // "24" comes back for midnight in some locales — normalize to 0.
         if (hour === 24) hour = 0;
     } catch {
         hour = now.getUTCHours();
@@ -121,32 +135,54 @@ function isInsideSendWindow(throttle: Record<string, unknown> | null, now: Date)
     return hour >= lo && hour < hi;
 }
 
-// ───────────────────────── Skip checks ─────────────────────────
+// ───────────────────────── A/B variant pick ─────────────────────────
+
+// djb2 — small stable hash so the same (contact, step) always lands on the
+// same variant. Keeps a retried step from flipping A↔B mid-sequence.
+function stableHash(s: string): number {
+    let h = 5381;
+    for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;
+    return h;
+}
+
+function pickVariant(step: Step, ccId: string): {
+    variant: "A" | "B" | null;
+    subject: string;
+    body: string;
+} {
+    const hasB = !!(step.body_b?.trim() || step.subject_b?.trim());
+    if (!hasB) {
+        return { variant: null, subject: step.subject || "", body: step.body_template };
+    }
+    // 50/50 split.
+    const pickB = stableHash(`${ccId}:${step.id}`) % 2 === 1;
+    if (!pickB) {
+        return { variant: "A", subject: step.subject || "", body: step.body_template };
+    }
+    return {
+        variant: "B",
+        subject: step.subject_b?.trim() || step.subject || "",
+        body: step.body_b?.trim() || step.body_template,
+    };
+}
+
+// ───────────────────────── Skip / reply checks ─────────────────────────
 
 async function hasPriorEvent(
     sb: SbAny,
-    contactId: string,
-    campaignId: string,
+    campaignContactId: string,
     event: "replied" | "clicked",
 ): Promise<boolean> {
-    const column = event === "replied" ? "replied_at" : "clicked_at";
+    const column = event === "replied" ? "replied_at" : "first_click_at";
     const { data } = await sb
         .from("outreach_campaign_step_runs")
         .select("id")
-        .eq("contact_id", contactId)
-        .eq("campaign_id", campaignId)
+        .eq("campaign_contact_id", campaignContactId)
         .not(column, "is", null)
         .limit(1);
     return Array.isArray(data) && data.length > 0;
 }
 
-/**
- * Migration 168 — Reply gate. Returns true when the contact has a row in
- * outreach_replies for this campaign. The inbound webhook stamps replies with
- * a denormalized campaign_id (migration 160) plus the contact_id and the
- * sender's email, so we match on campaign_id AND (contact_id OR from_email)
- * to stay robust across the two campaign-contact schemas in this codebase.
- */
 async function hasRepliedToCampaign(
     sb: SbAny,
     campaignId: string,
@@ -155,34 +191,24 @@ async function hasRepliedToCampaign(
 ): Promise<boolean> {
     const email = (contactEmail || "").trim().toLowerCase();
     if (!contactId && !email) return false;
-
-    let q = sb
-        .from("outreach_replies")
-        .select("id")
-        .eq("campaign_id", campaignId)
-        .limit(1);
-
-    if (contactId && email) {
-        q = q.or(`contact_id.eq.${contactId},from_email.ilike.${email}`);
-    } else if (contactId) {
-        q = q.eq("contact_id", contactId);
-    } else {
-        q = q.ilike("from_email", email);
-    }
-
+    let q = sb.from("outreach_replies").select("id").eq("campaign_id", campaignId).limit(1);
+    if (contactId && email) q = q.or(`contact_id.eq.${contactId},from_email.ilike.${email}`);
+    else if (contactId) q = q.eq("contact_id", contactId);
+    else q = q.ilike("from_email", email);
     const { data } = await q;
     return Array.isArray(data) && data.length > 0;
 }
 
 // ───────────────────────── Step advancement ─────────────────────────
 
-function computeNextSendAt(step: Step | null, base: Date): string | null {
+function computeNextSendAt(step: Step | null, base: Date, gov: GovernorSettings | null): string | null {
     if (!step) return null;
     const v = Math.max(0, step.delay_value || 0);
     const unitMs = step.delay_unit === "days" ? 86_400_000
         : step.delay_unit === "minutes" ? 60_000
-        : 3_600_000; // hours (default)
-    return new Date(base.getTime() + v * unitMs).toISOString();
+        : 3_600_000;
+    const iso = new Date(base.getTime() + v * unitMs).toISOString();
+    return gov?.enabled ? jitter(iso, gov) : iso;
 }
 
 // ───────────────────────── Per-contact processor ─────────────────────────
@@ -193,48 +219,37 @@ async function processContact(
     contact: Contact,
     campaign: Campaign,
     steps: Step[],
-): Promise<"sent" | "skipped" | "failed" | "completed"> {
+    budget: SendBudget,
+): Promise<Outcome> {
     const nextStepOrder = (cc.current_step || 0) + 1;
     const step = steps.find(s => s.step_order === nextStepOrder) || null;
+    const gov = budget.enabled ? budget.gov : null;
 
-    // No more steps — mark completed.
     if (!step) {
         await sb.from("outreach_campaign_contacts").update({
-            status: "completed",
-            finished_at: new Date().toISOString(),
+            status: "completed", finished_at: new Date().toISOString(),
         }).eq("id", cc.id);
         return "completed";
     }
 
-    // Migration 168 — Reply gating. Resolve "has this contact replied to this
-    // campaign?" once (an inbound reply row), then apply both the campaign-level
-    // stop-on-reply switch and the per-step send_condition='if_no_reply' gate.
-    const stopOnReply = campaign.stop_on_reply !== false; // default on
-    const needsReplyCheck =
-        stopOnReply
-        || step.send_condition === "if_no_reply"
-        || step.skip_if_replied;
-
+    // Reply gating (campaign stop-on-reply + per-step if_no_reply).
+    const stopOnReply = campaign.stop_on_reply !== false;
+    const needsReplyCheck = stopOnReply || step.send_condition === "if_no_reply" || step.skip_if_replied;
     const replied = needsReplyCheck
         ? (await hasRepliedToCampaign(sb, cc.campaign_id, cc.contact_id, contact.email ?? null)
-            || await hasPriorEvent(sb, cc.contact_id, cc.campaign_id, "replied"))
+            || await hasPriorEvent(sb, cc.id, "replied"))
         : false;
 
-    // Campaign-level: stop the whole sequence once they reply.
     if (stopOnReply && replied) {
         await sb.from("outreach_campaign_contacts").update({
-            status: "completed",
-            finished_at: new Date().toISOString(),
+            status: "completed", finished_at: new Date().toISOString(),
         }).eq("id", cc.id);
         return "skipped";
     }
 
-    // Per-step: this step only fires if the contact hasn't replied yet.
-    // Skip just this step and advance to the next instead of finishing the
-    // whole cadence, so later 'always' steps still run.
     if (step.send_condition === "if_no_reply" && replied) {
         const nextStep = steps.find(s => s.step_order === nextStepOrder + 1) || null;
-        const nextSendAt = nextStep ? computeNextSendAt(nextStep, new Date()) : null;
+        const nextSendAt = nextStep ? computeNextSendAt(nextStep, new Date(), gov) : null;
         const completed = !nextStep;
         await sb.from("outreach_campaign_contacts").update({
             current_step: nextStepOrder,
@@ -246,56 +261,98 @@ async function processContact(
         return "skipped";
     }
 
-    // Honor legacy skip-if-replied / skip-if-clicked guardrails.
     if (step.skip_if_replied && replied) {
         await sb.from("outreach_campaign_contacts").update({
-            status: "completed",
-            finished_at: new Date().toISOString(),
+            status: "completed", finished_at: new Date().toISOString(),
         }).eq("id", cc.id);
         return "skipped";
     }
-    if (step.skip_if_clicked && await hasPriorEvent(sb, cc.contact_id, cc.campaign_id, "clicked")) {
+    if (step.skip_if_clicked && await hasPriorEvent(sb, cc.id, "clicked")) {
         await sb.from("outreach_campaign_contacts").update({
-            status: "completed",
-            finished_at: new Date().toISOString(),
+            status: "completed", finished_at: new Date().toISOString(),
         }).eq("id", cc.id);
         return "skipped";
     }
 
+    const pick = pickVariant(step, cc.id);
+
+    // ── Governor gates (email only) ──────────────────────────────────────
+    if (step.channel === "email" && budget.enabled) {
+        if (budget.remainingTick <= 0) return "deferred"; // out of budget this tick
+        const dom = emailDomain(contact.email || "");
+        if (budget.perDomainCap > 0 && (budget.domainCounts[dom] || 0) >= budget.perDomainCap) {
+            return "deferred"; // domain capped for today — try next tick
+        }
+        const deliver = await isDeliverable(contact.email || "");
+        if (!deliver.ok) {
+            // Permanent: stop retrying an address that can't receive mail.
+            await sb.from("outreach_campaign_contacts").update({
+                status: "failed",
+                finished_at: new Date().toISOString(),
+                next_send_at: null,
+            }).eq("id", cc.id);
+            return "invalid";
+        }
+    }
+
+    const fromName = campaign.sender_name?.trim();
     const fromEmail = campaign.sender_email
         || process.env.FROM_EMAIL
-        || "CapturePilot <noreply@capturepilot.com>";
+        || "noreply@capturepilot.com";
+    const from = fromName ? `${fromName} <${fromEmail}>` : fromEmail;
+
+    const vars: Record<string, string> = {
+        unsubscribe_url: unsubscribeUrl(contact.email || ""),
+        sender_name: fromName || "",
+    };
 
     let result;
     if (step.channel === "sms") {
         result = await sendOutreachSMS({
             to: contact.phone || "",
-            body: step.body_template,
-            campaignId: campaign.id,
+            body: pick.body,
+            campaignContactId: cc.id,
             stepId: step.id,
-            contactId: contact.id,
             contact,
+            variant: pick.variant,
+            vars,
         });
     } else {
+        // CAN-SPAM: ensure a one-click unsubscribe + physical address are
+        // present. Templates end with {{unsubscribe_url}}; append a fallback
+        // if a step body omitted it, then the mailing address.
+        let body = pick.body;
+        if (!/\{\{\s*unsubscribe_url\s*\}\}/.test(body)) {
+            body += `\n\nUnsubscribe: {{unsubscribe_url}}`;
+        }
+        const addr = campaign.physical_address?.trim();
+        if (addr) body += `\n${addr}`;
         result = await sendOutreachEmail({
             to: contact.email || "",
-            from: fromEmail,
-            replyTo: undefined,
-            subject: step.subject || "",
-            html: step.body_template,
-            campaignId: campaign.id,
+            from,
+            subject: pick.subject,
+            html: body,
+            campaignContactId: cc.id,
             stepId: step.id,
-            contactId: contact.id,
             contact,
+            variant: pick.variant,
+            vars,
         });
     }
 
-    // Decide downstream state from the sender's result.
     if (result.ok && (result.status === "sent" || result.status === "suppressed")) {
-        // Suppressed counts as "step delivered" — we still advance, otherwise
-        // a single bounced address would block the entire cadence forever.
+        // Consume governor budget on an actual email send.
+        if (step.channel === "email" && budget.enabled && result.status === "sent") {
+            budget.remainingTick--;
+            const dom = emailDomain(contact.email || "");
+            budget.domainCounts[dom] = (budget.domainCounts[dom] || 0) + 1;
+            if (!budget.warmupStarted) {
+                budget.gov = await ensureWarmupStart(sb, budget.gov);
+                budget.warmupStarted = true;
+            }
+        }
         const nextStep = steps.find(s => s.step_order === nextStepOrder + 1) || null;
-        const nextSendAt = nextStep ? computeNextSendAt(nextStep, new Date()) : null;
+        const nextSendAt = nextStep ? computeNextSendAt(nextStep, new Date(), gov) : null;
         const completed = !nextStep;
         await sb.from("outreach_campaign_contacts").update({
             current_step: nextStepOrder,
@@ -308,14 +365,12 @@ async function processContact(
         return result.status === "suppressed" ? "skipped" : "sent";
     }
 
-    // Failure path — bump consecutive_failures, mark failed at threshold.
+    // Failure path.
     const failures = (cc.consecutive_failures || 0) + 1;
     const giveUp = failures >= FAILURE_THRESHOLD;
     await sb.from("outreach_campaign_contacts").update({
         consecutive_failures: failures,
         status: giveUp ? "failed" : "active",
-        // Back off 1 hour before next attempt so transient upstream blips
-        // don't burn through all 3 attempts in one tick.
         next_send_at: giveUp ? null : new Date(Date.now() + 60 * 60 * 1000).toISOString(),
         finished_at: giveUp ? new Date().toISOString() : null,
     }).eq("id", cc.id);
@@ -330,20 +385,32 @@ async function updateCampaignStats(sb: SbAny, campaignIds: string[]): Promise<vo
         try {
             const [contactStats, runStats] = await Promise.all([
                 sb.from("outreach_campaign_contacts")
-                    .select("status", { count: "exact" })
+                    .select("status")
                     .eq("campaign_id", id),
                 sb.from("outreach_campaign_step_runs")
-                    .select("status, clicked_at, replied_at, opened_at", { count: "exact" })
-                    .eq("campaign_id", id),
+                    .select("status, variant, first_click_at, replied_at, opened_at, campaign_contact:outreach_campaign_contacts!inner(campaign_id)")
+                    .eq("campaign_contact.campaign_id", id),
             ]);
 
             const cRows = (contactStats.data || []) as Array<{ status: string }>;
             const rRows = (runStats.data || []) as Array<{
                 status: string;
-                clicked_at: string | null;
+                variant: string | null;
+                first_click_at: string | null;
                 replied_at: string | null;
                 opened_at: string | null;
             }>;
+
+            const sent = rRows.filter(r => r.status === "sent");
+            const variantStat = (v: "A" | "B") => {
+                const vs = sent.filter(r => r.variant === v);
+                return {
+                    sent: vs.length,
+                    opens: vs.filter(r => r.opened_at).length,
+                    clicks: vs.filter(r => r.first_click_at).length,
+                    replies: vs.filter(r => r.replied_at).length,
+                };
+            };
 
             const stats = {
                 contacts_total: cRows.length,
@@ -351,18 +418,26 @@ async function updateCampaignStats(sb: SbAny, campaignIds: string[]): Promise<vo
                 contacts_completed: cRows.filter(r => r.status === "completed").length,
                 contacts_failed: cRows.filter(r => r.status === "failed").length,
                 sends_total: rRows.length,
-                sends_sent: rRows.filter(r => r.status === "sent").length,
+                sends_sent: sent.length,
                 sends_failed: rRows.filter(r => r.status === "failed").length,
                 sends_suppressed: rRows.filter(r => r.status === "suppressed").length,
-                opens: rRows.filter(r => r.opened_at).length,
-                clicks: rRows.filter(r => r.clicked_at).length,
-                replies: rRows.filter(r => r.replied_at).length,
+                opens: sent.filter(r => r.opened_at).length,
+                clicks: sent.filter(r => r.first_click_at).length,
+                replies: sent.filter(r => r.replied_at).length,
+                variant_a: variantStat("A"),
+                variant_b: variantStat("B"),
                 updated_at: new Date().toISOString(),
             };
 
-            await sb.from("outreach_campaigns")
-                .update({ stats })
-                .eq("id", id);
+            const denorm = {
+                contacts_count: stats.contacts_total,
+                sent_count: stats.sends_sent,
+                open_count: stats.opens,
+                click_count: stats.clicks,
+                reply_count: stats.replies,
+            };
+
+            await sb.from("outreach_campaigns").update({ stats, ...denorm }).eq("id", id);
         } catch (e) {
             console.error(`[run_outreach_cadence] stats update failed for ${id}:`, e);
         }
@@ -382,32 +457,48 @@ async function GET_handler(req: NextRequest): Promise<NextResponse> {
     );
 
     const url = new URL(req.url);
-    const budget = Math.min(
-        Math.max(Number(url.searchParams.get("budget") || TOTAL_BUDGET_MS), 5000),
-        290_000,
-    );
-    const limit = Math.min(
-        Math.max(Number(url.searchParams.get("limit") || BATCH_SIZE), 1),
-        500,
-    );
+    const budgetMs = Math.min(Math.max(Number(url.searchParams.get("budget") || TOTAL_BUDGET_MS), 5000), 290_000);
+    const limit = Math.min(Math.max(Number(url.searchParams.get("limit") || BATCH_SIZE), 1), 500);
 
     const startedAt = Date.now();
-    const now = new Date();
-    const nowIso = now.toISOString();
+    const nowIso = new Date().toISOString();
 
-    // ---- Load ready contacts ----------------------------------------------
-    // Join through campaign so we can filter on campaign.status='active' and
-    // surface the throttle column for the send-window check below.
+    // ── Governor: compute this tick's email send budget ───────────────────
+    const gov = await loadGovernor(sb);
+    const sendBudget: SendBudget = {
+        enabled: gov.enabled,
+        remainingTick: Number.MAX_SAFE_INTEGER,
+        perDomainCap: gov.per_domain_daily_cap,
+        domainCounts: {},
+        gov,
+        warmupStarted: !!gov.warmup_start_date,
+    };
+    if (gov.enabled) {
+        const dailyCap = effectiveDailyCap(gov);
+        const sentToday = await countSentToday(sb);
+        const remainingDaily = Math.max(0, dailyCap - sentToday);
+        if (remainingDaily <= 0) {
+            return NextResponse.json({
+                ok: true, processed: 0, sent: 0, governor: "daily_cap_reached",
+                daily_cap: dailyCap, sent_today: sentToday,
+                elapsed_ms: Date.now() - startedAt,
+            });
+        }
+        sendBudget.remainingTick = Math.min(remainingDaily, pickBatchSize(gov));
+        sendBudget.domainCounts = await domainSentToday(sb);
+    }
+
+    // ── Load ready contacts ────────────────────────────────────────────────
     const { data: ccRaw, error: ccErr } = await sb
         .from("outreach_campaign_contacts")
         .select(`
             id, campaign_id, contact_id, status, current_step,
             next_send_at, consecutive_failures, started_at, finished_at,
             campaign:outreach_campaigns!inner (
-                id, name, status, sender_email, throttle, stats, stop_on_reply
+                id, name, status, sender_email, sender_name, physical_address, throttle, stats, stop_on_reply
             ),
             contact:outreach_contacts!inner (
-                id, email, phone, first_name, last_name, company, title, state,
+                id, email, phone, first_name, last_name, company_name, title, state,
                 custom_fields
             )
         `)
@@ -417,55 +508,54 @@ async function GET_handler(req: NextRequest): Promise<NextResponse> {
         .order("next_send_at", { ascending: true, nullsFirst: true })
         .limit(limit);
 
-    if (ccErr) {
-        return NextResponse.json({ error: ccErr.message }, { status: 500 });
-    }
+    if (ccErr) return NextResponse.json({ error: ccErr.message }, { status: 500 });
 
-    type Joined = CampaignContact & {
-        campaign: Campaign | Campaign[] | null;
-        contact: Contact | Contact[] | null;
-    };
-    const rows = ((ccRaw || []) as unknown as Joined[]).map(r => ({
-        cc: {
-            id: r.id,
-            campaign_id: r.campaign_id,
-            contact_id: r.contact_id,
-            status: r.status,
-            current_step: r.current_step || 0,
-            next_send_at: r.next_send_at,
-            consecutive_failures: r.consecutive_failures || 0,
-            started_at: r.started_at,
-            finished_at: r.finished_at,
-        } as CampaignContact,
-        campaign: Array.isArray(r.campaign) ? r.campaign[0] : r.campaign,
-        contact: Array.isArray(r.contact) ? r.contact[0] : r.contact,
-    })).filter(r => r.campaign && r.contact) as Array<{
-        cc: CampaignContact;
-        campaign: Campaign;
-        contact: Contact;
-    }>;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    type Joined = any;
+    const rows = ((ccRaw || []) as Joined[]).map((r: Joined) => {
+        const campaign = Array.isArray(r.campaign) ? r.campaign[0] : r.campaign;
+        const rawContact = Array.isArray(r.contact) ? r.contact[0] : r.contact;
+        const contact: Contact | null = rawContact ? {
+            id: rawContact.id,
+            email: rawContact.email,
+            phone: rawContact.phone,
+            first_name: rawContact.first_name,
+            last_name: rawContact.last_name,
+            company: rawContact.company_name, // map company_name → company for render
+            title: rawContact.title,
+            state: rawContact.state,
+            custom_fields: rawContact.custom_fields,
+        } : null;
+        return {
+            cc: {
+                id: r.id,
+                campaign_id: r.campaign_id,
+                contact_id: r.contact_id,
+                status: r.status,
+                current_step: r.current_step || 0,
+                next_send_at: r.next_send_at,
+                consecutive_failures: r.consecutive_failures || 0,
+                started_at: r.started_at,
+                finished_at: r.finished_at,
+            } as CampaignContact,
+            campaign: campaign as Campaign,
+            contact,
+        };
+    }).filter(r => r.campaign && r.contact) as Array<{ cc: CampaignContact; campaign: Campaign; contact: Contact }>;
 
     if (rows.length === 0) {
-        return NextResponse.json({
-            ok: true,
-            processed: 0,
-            sent: 0,
-            failed: 0,
-            elapsed_ms: Date.now() - startedAt,
-        });
+        return NextResponse.json({ ok: true, processed: 0, sent: 0, failed: 0, elapsed_ms: Date.now() - startedAt });
     }
 
-    // ---- Pre-load all steps for the campaigns we'll touch ----------------
+    // ── Pre-load steps for the campaigns we'll touch ────────────────────────
     const campaignIds = Array.from(new Set(rows.map(r => r.campaign.id)));
     const { data: stepRows } = await sb
         .from("outreach_campaign_steps")
-        .select("id, campaign_id, step_order, channel, subject, body_template, delay_value, delay_unit, skip_if_replied, skip_if_clicked, send_condition")
+        .select("id, campaign_id, step_order, channel, subject, subject_b, body_template, body_b, delay_value, delay_unit, skip_if_replied, skip_if_clicked, send_condition")
         .in("campaign_id", campaignIds)
         .order("step_order", { ascending: true });
     const stepsByCampaign = new Map<string, Step[]>();
     for (const s of (stepRows || []) as Step[]) {
-        // Normalize the migration-168 gate to a safe default so a null or
-        // unexpected value can never mis-gate a send.
         const normalized: Step = {
             ...s,
             send_condition: s.send_condition === "if_no_reply" ? "if_no_reply" : "always",
@@ -475,38 +565,38 @@ async function GET_handler(req: NextRequest): Promise<NextResponse> {
         stepsByCampaign.set(s.campaign_id, arr);
     }
 
-    let processed = 0;
-    let sent = 0;
-    let failed = 0;
-    let skipped = 0;
-    let completed = 0;
+    let processed = 0, sent = 0, failed = 0, skipped = 0, completed = 0, deferred = 0, invalid = 0;
     const touchedCampaigns = new Set<string>();
 
     for (const { cc, campaign, contact } of rows) {
-        if (Date.now() - startedAt > budget) break;
-
-        // Send-window: skip silently — the next tick will re-pick this row.
-        if (!isInsideSendWindow(campaign.throttle, new Date())) {
-            continue;
-        }
+        if (Date.now() - startedAt > budgetMs) break;
+        if (!isInsideSendWindow(campaign.throttle, new Date())) continue;
 
         const steps = stepsByCampaign.get(campaign.id) || [];
         processed++;
         try {
-            const outcome = await processContact(sb, cc, contact, campaign, steps);
+            const outcome = await processContact(sb, cc, contact, campaign, steps, sendBudget);
             touchedCampaigns.add(campaign.id);
             switch (outcome) {
                 case "sent": sent++; break;
                 case "failed": failed++; break;
                 case "skipped": skipped++; break;
                 case "completed": completed++; break;
+                case "invalid": invalid++; break;
+                case "deferred":
+                    deferred++;
+                    // Budget exhausted for this tick — stop; rest re-pick next tick.
+                    if (sendBudget.enabled && sendBudget.remainingTick <= 0) {
+                        processed--; // didn't really process a send
+                        break;
+                    }
+                    break;
             }
+            if (outcome === "deferred" && sendBudget.enabled && sendBudget.remainingTick <= 0) break;
         } catch (e) {
             failed++;
             const msg = (e instanceof Error ? e.message : String(e)).slice(0, 300);
             console.error(`[run_outreach_cadence] contact=${cc.id} crashed: ${msg}`);
-            // Surface as a failure on the contact row so the next tick doesn't
-            // retry instantly.
             const failures = (cc.consecutive_failures || 0) + 1;
             const giveUp = failures >= FAILURE_THRESHOLD;
             await sb.from("outreach_campaign_contacts").update({
@@ -518,17 +608,15 @@ async function GET_handler(req: NextRequest): Promise<NextResponse> {
         }
     }
 
-    // ---- Refresh campaign.stats cache atomically -------------------------
     await updateCampaignStats(sb, Array.from(touchedCampaigns));
 
     return NextResponse.json({
         ok: true,
-        processed,
-        sent,
-        failed,
-        skipped,
-        completed,
+        processed, sent, failed, skipped, completed, deferred, invalid,
         campaigns_touched: touchedCampaigns.size,
+        governor: sendBudget.enabled
+            ? { daily_cap: effectiveDailyCap(gov), remaining_tick: sendBudget.remainingTick }
+            : "disabled",
         elapsed_ms: Date.now() - startedAt,
     });
 }

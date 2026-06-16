@@ -14,7 +14,9 @@ export const maxDuration = 30;
 interface PatchBody {
     name?: string;
     subject?: string | null;
+    subject_b?: string | null;
     body?: string;
+    body_b?: string | null;
     merge_tags?: string[];
     category?: string | null;
 }
@@ -50,7 +52,9 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     const patch: Record<string, unknown> = {};
     if (typeof body.name === "string") patch.name = body.name.trim();
     if ("subject" in body) patch.subject = body.subject?.toString().trim() || null;
+    if ("subject_b" in body) patch.subject_b = body.subject_b?.toString().trim() || null;
     if (typeof body.body === "string") patch.body = body.body;
+    if ("body_b" in body) patch.body_b = typeof body.body_b === "string" && body.body_b.trim() ? body.body_b : null;
     if (Array.isArray(body.merge_tags)) patch.merge_tags = body.merge_tags;
     if ("category" in body) patch.category = body.category?.toString().trim() || null;
     if ("description" in body) patch.description = (body as { description?: unknown }).description?.toString().trim() || null;

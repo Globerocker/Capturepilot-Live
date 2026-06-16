@@ -88,7 +88,9 @@ interface PatchBody {
         delay_unit: "minutes" | "hours" | "days";
         after_step?: number | null;
         subject?: string;
+        subject_b?: string | null;
         body: string;
+        body_b?: string | null;
         body_format?: "text" | "html" | "markdown";
         skip_if_replied?: boolean;
         skip_if_clicked?: boolean;
@@ -177,7 +179,9 @@ export async function PATCH(
                 delay_value: Math.max(0, Number(s.delay_value || 0)),
                 delay_unit: s.delay_unit ?? "hours",
                 subject: s.channel === "email" ? (s.subject || "").slice(0, 998) : null,
+                subject_b: s.channel === "email" && s.subject_b ? s.subject_b.slice(0, 998) : null,
                 body_template: (s.body || "").slice(0, 50_000),
+                body_b: s.body_b ? s.body_b.slice(0, 50_000) : null,
                 skip_if_replied: s.skip_if_replied !== false,
                 skip_if_clicked: !!s.skip_if_clicked,
                 send_condition: s.send_condition === "if_no_reply" ? "if_no_reply" : "always",
