@@ -133,8 +133,14 @@ async function callGemini(messages: ChatMessage[], timeoutMs = 15000): Promise<{
                     contents,
                     generationConfig: {
                         temperature: 0.2,
-                        maxOutputTokens: 300,
+                        // gemini-2.5-flash is a thinking model — with a tiny
+                        // output cap the reasoning tokens consume the whole
+                        // budget and the response comes back empty (every call
+                        // was silently falling back to paid OpenAI). Disable
+                        // thinking + give the JSON room so keywords run FREE.
+                        maxOutputTokens: 1024,
                         responseMimeType: "application/json",
+                        thinkingConfig: { thinkingBudget: 0 },
                     },
                 }),
                 signal: AbortSignal.timeout(timeoutMs),
