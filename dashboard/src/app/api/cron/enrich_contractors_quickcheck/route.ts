@@ -22,6 +22,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { guardCron } from "@/lib/cron-auth";
 import { runQuickCheck } from "@/lib/quick-checker";
+import { analyzeSiteTech } from "@/lib/quick-checker/website-tech";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -174,6 +175,41 @@ export async function GET(req: NextRequest) {
                 scraped_at: r.scraped_at,
             };
             patch.capability_summary_refreshed_at = new Date().toISOString();
+
+            // Deterministic social + CMS extraction. The LLM can't see social
+            // URLs (markdown strips <a href>), so scan the raw links/html here.
+            try {
+                const tech = await analyzeSiteTech(site, r.raw_pages || []);
+                const so = tech.socials;
+                if (so.linkedin) { patch.social_linkedin = so.linkedin; patch.company_linkedin = so.linkedin; }
+                if (so.facebook) patch.social_facebook = so.facebook;
+                if (so.twitter) patch.social_twitter = so.twitter;
+                if (so.instagram) patch.social_instagram = so.instagram;
+                if (so.youtube) patch.social_youtube = so.youtube;
+                if (so.tiktok) patch.social_tiktok = so.tiktok;
+                if (Object.keys(so.other).length) patch.social_other = so.other;
+                if (so.linkedin_people.length) patch.capability_summary_ai.linkedin_people = so.linkedin_people;
+                if (tech.cms) patch.website_cms = tech.cms;
+                patch.social_extracted_at = new Date().toISOString();
+                // Keep the cap-AI social_links blob consistent with the columns.
+                patch.capability_summary_ai.social_links = {
+                    linkedin: so.linkedin || ex.social_links?.linkedin || null,
+                    facebook: so.facebook || ex.social_links?.facebook || null,
+                    twitter: so.twitter || ex.social_links?.twitter || null,
+                    youtube: so.youtube || ex.social_links?.youtube || null,
+                    instagram: so.instagram || null,
+                    tiktok: so.tiktok || null,
+                };
+                // Personal /in/ profile that matches the decision-maker's full name → owner_linkedin.
+                if (dm?.name && so.linkedin_people.length && !c.owner_linkedin) {
+                    const parts = dm.name.toLowerCase().split(/\s+/).filter((p: string) => p.length > 1);
+                    const match = so.linkedin_people.find(u => {
+                        const tail = (u.toLowerCase().split("/in/")[1] || "");
+                        return parts.length >= 2 && parts.every(p => tail.includes(p));
+                    });
+                    if (match) patch.owner_linkedin = match;
+                }
+            } catch { /* non-fatal — socials/CMS are best-effort */ }
 
             // Fill scalar fields only when empty so we never clobber better data.
             if (foundEmail && !c.email) { patch.email = String(foundEmail).toLowerCase(); emails++; }
