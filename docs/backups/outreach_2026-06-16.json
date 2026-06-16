@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "taken_at": "2026-06-16T00:33:57.066Z",
+    "taken_at": "2026-06-16T02:44:55.601Z",
     "source": "ryxgjzehoijjvczqkhwr.supabase.co"
   },
   "outreach_templates": [
@@ -368,28 +368,6 @@
       "body_b": "Hi {{first_name}},\n\nYou ran {{company}} through our Quick Checker a while back. I re-ran it against this week's solicitations and three solid fits came up:\n\n1. {{match_1}}\n2. {{match_2}}\n3. {{match_3}}\n\nThese move fast once the deadline's close. Want the full list with dates and links? Two minutes for me to send.\n\nSergio\nPartner, Americurial\n{{unsubscribe_url}}"
     },
     {
-      "id": "3662c381-08f2-4e93-890c-b8842d13b460",
-      "name": "IT/Pro Services · Email 1",
-      "channel": "email",
-      "subject": "Federal IT and services work for {{company}}",
-      "body": "Hi {{first_name}},\n\nFederal agencies spend heavily on IT and professional services, and a lot of it is set aside for small businesses. The trick is being in front of the contracting officer when the requirement drops.\n\nThat's what we do for firms like {{company}}: watch the right NAICS, bring you the fits, prep the bid. No retainer, just commission on wins.\n\nWant a couple of live examples?\n\nSergio\nPartner, Americurial\n{{unsubscribe_url}}",
-      "merge_tags": [
-        "first_name",
-        "company",
-        "unsubscribe_url"
-      ],
-      "category": "seq_vertical_it",
-      "created_by": null,
-      "created_at": "2026-06-15T21:45:09.128981+00:00",
-      "updated_at": "2026-06-15T21:45:09.128981+00:00",
-      "description": "Vertical angle for IT / professional-services firms. Day 0 cold open.",
-      "approved": false,
-      "approved_at": null,
-      "approved_by": null,
-      "subject_b": "{{company}} and the federal IT spend",
-      "body_b": "Hi {{first_name}},\n\nThe government spends a fortune on IT and professional services, and a big chunk is reserved for small businesses. The catch is timing — you have to be in front of the contracting officer when the requirement drops, not after.\n\nThat's what we do for firms like {{company}}: watch the right NAICS, bring you the fits, prep the bid. No retainer, commission on wins.\n\nWant a couple of live examples?\n\nSergio\nPartner, Americurial\n{{unsubscribe_url}}"
-    },
-    {
       "id": "c9ec1d5a-7a0e-4328-aa23-3e7c2b502792",
       "name": "Teaming · Email 1 — Subcontract with a prime",
       "channel": "email",
@@ -569,11 +547,33 @@
       "body_b": "Hi {{first_name}},\n\nFederal facilities and janitorial work is some of the steadiest money in government contracting — agencies rebuy it on a cycle, and they favor firms already in SAM with the right NAICS (561720 and its neighbors).\n\nIf {{company}} is registered, the hard part's done. We find the open solicitations in {{state}}, handle the bid paperwork, and you pay only when you win.\n\nWant the current ones?\n\nSergio\nPartner, Americurial\n{{unsubscribe_url}}"
     },
     {
+      "id": "3662c381-08f2-4e93-890c-b8842d13b460",
+      "name": "IT/Pro Services · Email 1",
+      "channel": "email",
+      "subject": "Federal IT and services work for {{company}}",
+      "body": "Hi {{first_name}},\n\nIn 2026, the Federal government is spending upwards of $120 billion on IT and professional services through its various agencies, with much of it set aside for small businesses. The trick to putting yourself in the way of those funds is  making sure the procurement agent already knows your name when the RFP drops.\n\nThat's what Americurial does for firms like {{company}}: Tracking solicitations from their initial inception, matching firms to the right opportunities, helping to shape the eventual RFP based on client capabilities, and prepping the bid. \n\nPlus, our customizable fee structuring allows us to meet firms where they're at, no matter their position in the business cycle.\n\nWould a couple of live examples be a bad idea?\n\nSergio\nPartner, Americurial\n{{unsubscribe_url}}",
+      "merge_tags": [
+        "first_name",
+        "company",
+        "unsubscribe_url"
+      ],
+      "category": "seq_vertical_it",
+      "created_by": null,
+      "created_at": "2026-06-15T21:45:09.128981+00:00",
+      "updated_at": "2026-06-15T21:45:09.128981+00:00",
+      "description": "Vertical angle for IT / professional-services firms. Day 0 cold open.",
+      "approved": false,
+      "approved_at": null,
+      "approved_by": null,
+      "subject_b": "{{company}} and the federal IT spend",
+      "body_b": "Hi {{first_name}},\n\nThe government spends a fortune on IT and professional services, and a big chunk is reserved for small businesses. The catch is timing — you have to be in front of the contracting officer when the requirement drops, not after.\n\nThat's what we do for firms like {{company}}: watch the right NAICS, bring you the fits, prep the bid. No retainer, commission on wins.\n\nWant a couple of live examples?\n\nSergio\nPartner, Americurial\n{{unsubscribe_url}}"
+    },
+    {
       "id": "4935015f-d466-422b-ab7a-6a498acf0a29",
       "name": "Expiring SAM · Email 1 — Renew before you lapse",
       "channel": "email",
       "subject": "Your SAM registration is about to lapse",
-      "body": "Hi {{first_name}},\n\n{{company}}'s SAM.gov registration is coming up for renewal. If it lapses you drop out of every contracting officer's search and can't be awarded anything until it's active again.\n\nRenewing is free but the paperwork trips people up. Happy to walk you through it in 15 minutes so you don't lose your place in line.\n\nWant a hand?\n\nSergio\nPartner, Americurial\n{{unsubscribe_url}}",
+      "body": "Hi {{first_name}},\n\n{{company}}'s SAM.gov registration is coming up for renewal. If it lapses you drop out of every contracting officer's search and can't be awarded anything until it's active again.\n\nRenewal is free but the paperwork can trip people up. Happy to walk you through it in 15 minutes so you don't lose your place in line.\n\nShall we?\n\nSergio\nPartner, Americurial\n{{unsubscribe_url}}",
       "merge_tags": [
         "first_name",
         "company",
@@ -589,6 +589,32 @@
       "approved_by": null,
       "subject_b": "{{company}} drops off SAM in a few weeks",
       "body_b": "Hi {{first_name}},\n\nHeads up — {{company}}'s SAM.gov registration is coming up on renewal. If it lapses, you vanish from every contracting officer's search and can't be awarded anything until it's active again. That gap costs people real bids.\n\nRenewing is free, but the paperwork trips firms up every year. I'll walk you through it in 15 minutes so you keep your place in line.\n\nWant a hand?\n\nSergio\nPartner, Americurial\n{{unsubscribe_url}}"
+    },
+    {
+      "id": "86a88894-ef98-4a3c-a1bc-6172e7fba3f5",
+      "name": "Match-Drop · Email 1 — 3 matches + a gap",
+      "channel": "email",
+      "subject": "3 federal matches we found for {{company}}",
+      "body": "Hi {{first_name}},\n\nWe run a Quick Checker over federal contractors' profiles, and I pointed it at {{company}}. Two things came back worth your time.\n\nFirst, three live opportunities that actually fit you:\n1. {{match_1}}\n2. {{match_2}}\n3. {{match_3}}\n\nSecond, one thing worth fixing: {{gap_hook}}.\n\nI'd walk you through all of it — the matches plus a few other findings — on a quick call. And the way we work is no-risk: we run the bids, you only pay if you win.\n\nWorth 15 minutes?\n\nSergio\nPartner, Americurial\n{{unsubscribe_url}}",
+      "merge_tags": [
+        "first_name",
+        "company",
+        "match_1",
+        "match_2",
+        "match_3",
+        "gap_hook",
+        "unsubscribe_url"
+      ],
+      "category": "seq_match_drop",
+      "created_by": null,
+      "created_at": "2026-06-16T02:43:12.264387+00:00",
+      "updated_at": "2026-06-16T02:43:12.264387+00:00",
+      "description": "Highest-intent play. 3 live matches (from our scorer) + the sharpest website gap. Needs the match_drop segment — custom_fields are filled by enrich_contractor_matches.",
+      "approved": false,
+      "approved_at": null,
+      "approved_by": null,
+      "subject_b": "Did {{company}} have these 3 on your radar?",
+      "body_b": "Hi {{first_name}},\n\nQuick one. We checked {{company}}'s profile with our own software and {{gap_hook}} — and that's usually the first thing a contracting officer looks at.\n\nWhile we were in there, we pulled three live opportunities you can actually win:\n1. {{match_1}}\n2. {{match_2}}\n3. {{match_3}}\n\nHappy to send the full list and the other findings. We only get paid when you win, so there's no downside to a look.\n\nOpen to a quick chat?\n\nSergio\nPartner, Americurial\n{{unsubscribe_url}}"
     }
   ],
   "outreach_campaigns": [],

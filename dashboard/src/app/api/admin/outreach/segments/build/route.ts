@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin, getServiceClient } from "@/lib/admin-auth";
 import { getSegment, emailableFilter } from "@/lib/outreach/segments";
+import { formatMatchLine, type TopMatch } from "@/lib/outreach/match-drop";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +26,7 @@ export async function POST(req: NextRequest) {
     const { data: rows, error } = await emailableFilter(
         seg.apply(
             sb.from("contractors").select(
-                "uei, company_name, state, naics_codes, email, primary_poc_email, primary_poc_name"
+                "uei, company_name, state, naics_codes, email, primary_poc_email, primary_poc_name, capability_summary_ai"
             )
         )
     ).limit(MAX);
@@ -38,6 +39,16 @@ export async function POST(req: NextRequest) {
             if (!email || seen.has(email)) return null;
             seen.add(email);
             const parts = String(r.primary_poc_name || "").trim().split(/\s+/).filter(Boolean);
+            // Carry the Match-Drop hooks into custom_fields so the cadence
+            // renderer fills {{match_1}}/{{match_2}}/{{match_3}}/{{gap_hook}}.
+            const blob = (r.capability_summary_ai || {}) as Record<string, unknown>;
+            const top = (Array.isArray(blob.top_matches) ? blob.top_matches : []) as TopMatch[];
+            const custom_fields: Record<string, unknown> = {};
+            if (blob.gap_hook) custom_fields.gap_hook = blob.gap_hook;
+            if (top[0]) custom_fields.match_1 = formatMatchLine(top[0]);
+            if (top[1]) custom_fields.match_2 = formatMatchLine(top[1]);
+            if (top[2]) custom_fields.match_3 = formatMatchLine(top[2]);
+            if (top.length) custom_fields.match_count = top.length;
             return {
                 email,
                 first_name: parts[0] || null,
@@ -48,6 +59,7 @@ export async function POST(req: NextRequest) {
                 source: "sam_gov" as const,
                 source_id: r.uei || null,
                 tags: [`segment:${seg.key}`],
+                custom_fields: Object.keys(custom_fields).length ? custom_fields : null,
             };
         })
         .filter(Boolean) as any[];

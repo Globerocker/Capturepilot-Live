@@ -21,7 +21,8 @@ export type SegmentKey =
     | "expiring_registration"
     | "set_aside_8a"
     | "vosb_sdvosb"
-    | "gov_experienced";
+    | "gov_experienced"
+    | "match_drop";
 
 export interface SegmentDef {
     key: SegmentKey;
@@ -98,6 +99,14 @@ export const SEGMENTS: SegmentDef[] = [
             "Their site shows federal/government past performance (QC-detected). Warm prospects who already understand the game — pitch scaling up.",
         templateName: null,
         apply: (q) => q.eq("qc_enriched", true).eq("capability_summary_ai->>has_gov_experience", "true"),
+    },
+    {
+        key: "match_drop",
+        label: "Match-Drop (3 live matches found)",
+        description:
+            "We ran our Quick Checker on their site and found live opportunities they can actually win, plus the gaps on their profile. Highest-intent play — lead with the 3 matches + the one thing missing from their site.",
+        templateName: "Match-Drop · Email 1 — 3 matches + a gap",
+        apply: (q) => q.eq("qc_enriched", true).gt("top_match_count", 0),
     },
 ];
 

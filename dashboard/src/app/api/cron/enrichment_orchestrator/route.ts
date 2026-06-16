@@ -116,6 +116,12 @@ const TASKS = {
   // tick. The route itself is budgeted at 270s and processes up to 100
   // contacts per fire — well inside the orchestrator's parallel fan-out.
   run_outreach_cadence:            "run_outreach_cadence",
+  // Match-Drop enrichment — post-QC scoring lane. For QC-enriched contractors
+  // it computes the top-3 live opportunity matches (same model as the public
+  // Quick Checker) + the website data-gaps used as email hooks. Pure DB
+  // scoring (no crawl/LLM), so it's cheap and rides the orchestrator. Prioritizes
+  // emailable contractors so the Match-Drop campaign audience fills fastest.
+  enrich_contractor_matches:       "enrich_contractor_matches",
 } as const;
 
 type TaskName = keyof typeof TASKS;
@@ -251,6 +257,10 @@ function tasksDueAt(d: Date): TaskName[] {
   // doesn't starve siblings in the parallel fan-out.
   due.push("run_outreach_cadence");
 
+  // Match-Drop scoring lane — every tick, small batch, self-throttling (no-op
+  // once every QC-enriched contractor has matches). Cheap DB-only work.
+  due.push("enrich_contractor_matches");
+
   return due;
 }
 
@@ -300,6 +310,7 @@ async function GET_handler(req: NextRequest): Promise<NextResponse> {
     run_worker_jobs_rescore: async () => (await import("../run_worker_jobs_rescore/route")).GET as Handler,
     recompute_lead_scores: async () => (await import("../recompute_lead_scores/route")).GET as Handler,
     run_outreach_cadence: async () => (await import("../run_outreach_cadence/route")).GET as Handler,
+    enrich_contractor_matches: async () => (await import("../enrich_contractor_matches/route")).GET as Handler,
   };
 
   function buildChildRequest(task: TaskName): NextRequest {
