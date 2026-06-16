@@ -150,11 +150,12 @@ export function detectCms(html: string | undefined, headers?: Headers): string |
  * CMS detection + a deeper social scan still work.
  */
 export async function analyzeSiteTech(baseUrl: string, pages: FirecrawlPage[]): Promise<SiteTech> {
+    const url = /^https?:\/\//i.test(baseUrl) ? baseUrl : `https://${baseUrl}`;
     let homeHtml: string | undefined = pages.find(p => p.html)?.html;
     let headers: Headers | undefined;
     if (!homeHtml) {
         try {
-            const res = await fetch(baseUrl, {
+            const res = await fetch(url, {
                 headers: { "User-Agent": "Mozilla/5.0 (compatible; CapturePilot-QuickChecker/1.0)" },
                 signal: AbortSignal.timeout(10000),
                 redirect: "follow",
