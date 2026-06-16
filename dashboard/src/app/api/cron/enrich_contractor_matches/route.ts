@@ -19,7 +19,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { guardCron } from "@/lib/cron-auth";
-import { computeDataGaps, topMatchesFor } from "@/lib/outreach/match-drop";
+import { computeDataGaps, topMatchesFor, buildFindingsSummary } from "@/lib/outreach/match-drop";
 import type { OpportunityForScoring } from "@/lib/match-scoring";
 
 export const runtime = "nodejs";
@@ -80,6 +80,7 @@ export async function GET(req: NextRequest) {
 
         const top = topMatchesFor(c, blob, opps, 3);
         const { gaps, gap_hook } = computeDataGaps(blob, c);
+        const findings_summary = buildFindingsSummary(gaps, top);
 
         if (top.length) withMatches++;
         if (gap_hook) withGap++;
@@ -92,6 +93,7 @@ export async function GET(req: NextRequest) {
                 top_matches: top,
                 data_gaps: gaps,
                 gap_hook,
+                findings_summary,
                 match_enriched_at: nowIso,
             },
         };

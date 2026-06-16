@@ -93,6 +93,34 @@ export function computeDataGaps(blob: any, contractor: any): { gaps: DataGap[]; 
     return { gaps, gap_hook: gaps[0]?.hook ?? null };
 }
 
+// Short, glanceable labels per gap — for the findings summary + Loom prep.
+const GAP_LABEL: Record<string, string> = {
+    no_gov_signal: "no federal-experience signal on site",
+    no_past_performance: "no past performance shown",
+    no_certs: "certifications not visible",
+    no_years: "no years-in-business shown",
+    no_contact: "no contact email on site",
+    thin_positioning: "weak / unclear positioning",
+};
+
+/**
+ * One-line briefing a partner can read at a glance before recording a Loom or
+ * sending: how many matches, top fit %, and the site gaps (sharpest first).
+ */
+export function buildFindingsSummary(gaps: DataGap[], top: TopMatch[]): string {
+    const parts: string[] = [];
+    if (top.length) {
+        parts.push(`${top.length} live match${top.length === 1 ? "" : "es"} (top fit ~${top[0].pwin}%)`);
+    } else {
+        parts.push("no live matches in their NAICS right now");
+    }
+    if (gaps.length) {
+        const labels = gaps.map(g => GAP_LABEL[g.key] || g.key).slice(0, 4);
+        parts.push(`site gaps: ${labels.join("; ")}`);
+    }
+    return parts.join(". ") + ".";
+}
+
 // ── Build the scoring profile from a contractor + its QC blob. ─────────────
 export function buildScoringProfile(contractor: any, blob: any): ProfileForScoring {
     const certs: string[] = (contractor?.certifications || blob?.certifications || [])
