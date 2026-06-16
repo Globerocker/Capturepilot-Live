@@ -635,7 +635,16 @@ async function handleAnalyzeAttachments(sb: SbAny, job: Job) {
     for (const url of links.slice(0, 2)) {
         if (Date.now() - start > 30_000) break;
         try {
-            const ext = await fetchAndExtract(url, { samApiKey: SAM_API_KEY });
+            // Hard 40s cap per doc — the Mistral OCR fallback inside
+            // fetchAndExtract has no timeout of its own, so a scanned/huge PDF
+            // could hang for minutes and get the whole job reaped (the 13.7k
+            // "reaped after stuck running >10min" failures). Bounding each doc
+            // keeps a single bad attachment from killing the job.
+            const ext = await Promise.race([
+                fetchAndExtract(url, { samApiKey: SAM_API_KEY }),
+                new Promise<null>(r => setTimeout(() => r(null), 40_000)),
+            ]);
+            if (!ext) { console.warn(`[analyze_attachments] doc timeout (40s) ${url}`); continue; }
             if (ext.bytes > MAX_BYTES || !ext.text || ext.text.length < 100) continue;
             docTexts.push({ filename: ext.filename, text: ext.text, kind: ext.kind });
             await sb.from("opportunity_attachments").upsert({
