@@ -257,9 +257,11 @@ function tasksDueAt(d: Date): TaskName[] {
   // doesn't starve siblings in the parallel fan-out.
   due.push("run_outreach_cadence");
 
-  // Match-Drop scoring lane — every tick, small batch, self-throttling (no-op
-  // once every QC-enriched contractor has matches). Cheap DB-only work.
-  due.push("enrich_contractor_matches");
+  // Match-Drop scoring lane — TEMPORARILY DISABLED (2026-06-16 incident). The
+  // per-contractor opportunity scoring is DB-heavy; pulled out of the tick while
+  // the database recovers from the overnight enrichment overload. Re-enable once
+  // the instance is comfortably headroomed (and ideally after a compute bump).
+  // due.push("enrich_contractor_matches");
 
   return due;
 }
