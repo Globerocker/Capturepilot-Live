@@ -35,17 +35,18 @@ import { scrapePage, pickInterestingLinks, scrapePages, type FirecrawlPage } fro
 import { extractEmails, extractPhones } from "./contacts";
 import { QuickCheckerExtraction } from "./schema";
 
-// Tuned 2026-06-04 after live-prod debug. Hostinger VPS Ollama has no GPU +
-// only 7.8GB RAM — qwen2.5:7b OOMs and qwen2.5:3b can't process more than
-// ~3-6KB in <2 min on CPU. Real-time use REQUIRES a paid provider (DeepSeek
-// $3/mo or OpenAI top-up). Ollama stays as best-effort fallback for offline
-// dev + bulk reruns.
-//   - 6KB cap = ~1500 tokens input, fits on Ollama 3b in ~60-90s
-//   - 1800 max output tokens = full strategic schema, ~30-50s on 3b
-//   - 120s timeout = OpenAI/DeepSeek easily, Ollama 3b sometimes
-const MAX_COMBINED_MD = 6_000;
+// Budget retuned 2026-06-16. Ollama was dropped from the chain (Gemini is now
+// primary, OpenAI fallback) so the old 6KB cap — tuned for a GPU-less VPS
+// running qwen2.5:3b — was strangling extraction: with 6 pages it left only
+// ~466 chars PER PAGE, which truncated the /about + /team content where the
+// founding year and team size actually live. Gemini 2.5 Flash (≈1M ctx) and
+// gpt-4o-mini (128k) handle far more, so we give each page real room.
+//   - 30KB cap ≈ 8K input tokens → ~4.5KB per page across a 6-page crawl
+//   - 2600 output tokens = full strategic schema with headroom
+//   - 120s timeout = comfortable for Gemini/OpenAI (~6-15s typical)
+const MAX_COMBINED_MD = 30_000;
 const LLM_TIMEOUT_MS = 120_000;
-const LLM_MAX_TOKENS = 1800;
+const LLM_MAX_TOKENS = 2_600;
 
 interface DeepExtractInput {
     website: string;
@@ -162,6 +163,15 @@ CORE RULES
   (Navy, Army, DHS, NASA, etc.). Empty if none mentioned.
 - Leadership: real people with real titles. Mark is_decision_maker for C-suite, Founder, Owner,
   President, Partner, Managing Director.
+- "founded_year": the 4-digit year the company was founded. DERIVE it from any phrasing —
+  "founded in 1998", "since 2005", "established 1990", "est. 1987", "serving X since 2010",
+  "in business since 2003", "celebrating 20 years" (subtract from this year), or an anniversary
+  badge. Do NOT use the website's copyright year (that's just the current year). Return the
+  EARLIEST credible founding year. null only if no founding signal appears anywhere on the pages.
+- "employee_count_estimate": an INTEGER estimate of team/headcount. DERIVE it from "team of 25",
+  "30+ employees", "our 50 professionals", "a staff of 12", "100-person firm", or by COUNTING the
+  distinct people shown on a team/leadership/about page. If only a range is hinted ("small team",
+  "family-owned"), estimate conservatively (e.g. 5). null only if there is genuinely no signal.
 
 RESPONSE FORMAT: Return ONLY a JSON object with the exact keys below. Use [] for empty arrays,
 null where appropriate, never omit a key.`;
@@ -198,6 +208,41 @@ const SCHEMA_HINT = `{
   "gov_experience_evidence": ["exact quote"],
   "social_links": {"linkedin":null,"facebook":null,"twitter":null,"youtube":null}
 }`;
+
+// Deterministic founding-year scrape. Patterns like "founded in 1998", "since
+// 2005", "established 1990", "est. 1987", "serving … since 2010". Returns the
+// EARLIEST plausible year (founding, not a later milestone). Copyright lines
+// (e.g. "© 2026") are deliberately NOT matched — they're the current year.
+function deriveFoundedYear(text: string): number | null {
+    if (!text) return null;
+    const CUR = new Date().getUTCFullYear();
+    const re = /\b(?:founded(?:\s+in)?|since|established|est\.?|in\s+business\s+since|serving\b[^.]{0,40}?\bsince)\b[^0-9]{0,12}((?:18|19|20)\d{2})\b/gi;
+    const years: number[] = [];
+    for (const m of text.matchAll(re)) {
+        const y = parseInt(m[1], 10);
+        if (y >= 1850 && y <= CUR) years.push(y);
+    }
+    // "celebrating 20 years" / "20 years in business" → CUR - N
+    const anniv = /\b(\d{1,3})\s*(?:\+)?\s*years?\s+(?:in\s+business|of\s+(?:service|experience|excellence)|strong)\b/gi;
+    for (const m of text.matchAll(anniv)) {
+        const n = parseInt(m[1], 10);
+        if (n >= 1 && n <= 175) years.push(CUR - n);
+    }
+    return years.length ? Math.min(...years) : null;
+}
+
+// Deterministic team-size scrape. "team of 25", "30+ employees", "staff of 12",
+// "50 professionals/engineers/people". Returns the largest plausible figure.
+function deriveTeamSize(text: string): number | null {
+    if (!text) return null;
+    const sizes: number[] = [];
+    const re1 = /\b(?:team|staff|crew|workforce)\s+of\s+(\d{1,5})\b/gi;
+    const re2 = /\b(\d{1,5})\s*\+?\s*(?:employees|professionals|engineers|team\s*members|staff\s*members|people\s+on\s+staff|person\s+(?:team|firm|company))\b/gi;
+    for (const m of text.matchAll(re1)) sizes.push(parseInt(m[1], 10));
+    for (const m of text.matchAll(re2)) sizes.push(parseInt(m[1], 10));
+    const plausible = sizes.filter(n => n >= 1 && n <= 500_000);
+    return plausible.length ? Math.max(...plausible) : null;
+}
 
 /** Heuristic fallback used when LLM fails entirely. */
 function heuristicExtraction(input: DeepExtractInput, md: string, meta: FirecrawlPage["metadata"]): QuickCheckerExtraction {
@@ -385,6 +430,18 @@ export async function runDeepExtract(input: DeepExtractInput): Promise<DeepExtra
             extraction.contacts.push({ email: e.normalized, phone: null, phone_type: null });
             seenEmails.add(e.normalized);
         }
+    }
+
+    // 4b) Overlay deterministic founding-year / team-size when the LLM missed
+    //     them — these live verbatim in "since 2005" / "team of 25" text, so a
+    //     regex is more reliable than the model and never invents a number.
+    if (extraction.founded_year == null) {
+        const fy = deriveFoundedYear(combined);
+        if (fy) extraction.founded_year = fy;
+    }
+    if (extraction.employee_count_estimate == null) {
+        const ts = deriveTeamSize(combined);
+        if (ts) extraction.employee_count_estimate = ts;
     }
 
     // 5) Apply company-name override if caller knew it
