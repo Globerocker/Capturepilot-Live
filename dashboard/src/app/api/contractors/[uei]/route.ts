@@ -42,7 +42,7 @@ export async function GET(_req: NextRequest, ctx: RouteContext) {
     // POC fields from contractors table.
     const { data: poc } = await sb
         .from("contractors")
-        .select("uei, email, direct_phone, primary_poc_name, primary_poc_title, business_url, capability_summary_ai, capability_summary_refreshed_at")
+        .select("uei, email, direct_phone, primary_poc_name, primary_poc_title, business_url, capability_summary_ai, capability_summary_refreshed_at, social_linkedin, company_linkedin, owner_linkedin, social_facebook, social_twitter, social_instagram, social_youtube, social_other, website_cms, top_match_count, qc_enriched")
         .eq("uei", uei)
         .maybeSingle();
 
@@ -93,6 +93,19 @@ export async function GET(_req: NextRequest, ctx: RouteContext) {
         state_rank: p?.state_rank ?? null,
         state_total: p?.state_total ?? null,
         badges: p?.badges ?? [],
+        // Web presence (deterministic social + CMS capture from QC enrichment).
+        website_cms: c?.website_cms ?? null,
+        qc_enriched: c?.qc_enriched ?? null,
+        top_match_count: c?.top_match_count ?? null,
+        social_links: {
+            linkedin: (c?.social_linkedin as string | null) ?? (c?.company_linkedin as string | null) ?? (p?.company_linkedin as string | null) ?? null,
+            owner_linkedin: (c?.owner_linkedin as string | null) ?? null,
+            facebook: (c?.social_facebook as string | null) ?? null,
+            twitter: (c?.social_twitter as string | null) ?? null,
+            instagram: (c?.social_instagram as string | null) ?? null,
+            youtube: (c?.social_youtube as string | null) ?? null,
+            other: (c?.social_other as Record<string, string> | null) ?? null,
+        },
         created_at: null,
         updated_at: null,
     };

@@ -44,6 +44,18 @@ interface ContractorRow {
     last_award_date?: string | null;
     agency_relationships?: AgencyAward[] | null;
     naics_awards?: NaicsAward[] | null;
+    website_cms?: string | null;
+    qc_enriched?: boolean | null;
+    top_match_count?: number | null;
+    social_links?: {
+        linkedin?: string | null;
+        owner_linkedin?: string | null;
+        facebook?: string | null;
+        twitter?: string | null;
+        instagram?: string | null;
+        youtube?: string | null;
+        other?: Record<string, string> | null;
+    } | null;
 }
 
 interface IncumbentOpp {
@@ -250,6 +262,48 @@ export function ContractorDetailView({ uei, fallbackName }: { uei: string; fallb
                     </div>
                 </div>
             </Section>
+
+            {/* Web presence — socials + CMS from deterministic QC extraction */}
+            {(() => {
+                const s = c.social_links || {};
+                const entries: Array<{ label: string; url: string; cls: string }> = [];
+                if (s.linkedin) entries.push({ label: "LinkedIn", url: s.linkedin, cls: "bg-sky-50 text-sky-700 border-sky-200" });
+                if (s.owner_linkedin) entries.push({ label: "Owner LinkedIn", url: s.owner_linkedin, cls: "bg-sky-100 text-sky-800 border-sky-300" });
+                if (s.facebook) entries.push({ label: "Facebook", url: s.facebook, cls: "bg-blue-50 text-blue-700 border-blue-200" });
+                if (s.twitter) entries.push({ label: "X / Twitter", url: s.twitter, cls: "bg-stone-100 text-stone-700 border-stone-200" });
+                if (s.instagram) entries.push({ label: "Instagram", url: s.instagram, cls: "bg-pink-50 text-pink-700 border-pink-200" });
+                if (s.youtube) entries.push({ label: "YouTube", url: s.youtube, cls: "bg-red-50 text-red-700 border-red-200" });
+                if (s.other) for (const [k, v] of Object.entries(s.other)) {
+                    if (v) entries.push({ label: k.charAt(0).toUpperCase() + k.slice(1), url: v, cls: "bg-stone-100 text-stone-700 border-stone-200" });
+                }
+                if (!entries.length && !c.website_cms && !c.qc_enriched) return null;
+                return (
+                    <Section label="Web Presence" icon={Globe} accent="text-indigo-700">
+                        <div className="flex flex-wrap items-center gap-2">
+                            {c.website_cms && (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-1 rounded">
+                                    <Hash className="w-3 h-3" /> {c.website_cms}
+                                </span>
+                            )}
+                            {entries.map((e, i) => (
+                                <a key={i} href={e.url} target="_blank" rel="noopener noreferrer"
+                                    className={`inline-flex items-center gap-1 text-[11px] font-semibold border px-2 py-1 rounded hover:opacity-80 ${e.cls}`}>
+                                    {e.label} <ExternalLink className="w-2.5 h-2.5" />
+                                </a>
+                            ))}
+                            {!entries.length && (
+                                <span className="text-xs text-stone-400 italic">No social profiles found on the company site.</span>
+                            )}
+                        </div>
+                        {c.qc_enriched && (
+                            <div className="flex items-center gap-1.5 text-[11px] text-emerald-700 mt-3">
+                                <CheckCircle2 className="w-3 h-3" />
+                                Profile analyzed{typeof c.top_match_count === "number" ? ` · ${c.top_match_count} live opportunity match${c.top_match_count === 1 ? "" : "es"}` : ""}
+                            </div>
+                        )}
+                    </Section>
+                );
+            })()}
 
             {/* Past awards KPIs */}
             {hasAwards && (
