@@ -7,6 +7,11 @@
  */
 
 const FIRECRAWL_URL = "https://api.firecrawl.dev/v2";
+// Jina AI Reader — free, JS-rendering HTML→markdown service (https://r.jina.ai).
+// Used as a tier-2 scraper when Firecrawl is unavailable / over its monthly
+// quota (429) so the pipeline keeps getting clean, JS-rendered markdown + links
+// for $0. JINA_API_KEY (free) lifts the per-IP rate limit but is optional.
+const JINA_READER_URL = "https://r.jina.ai/";
 
 export interface FirecrawlPage {
     url: string;
@@ -25,7 +30,7 @@ export interface FirecrawlPage {
         sourceURL?: string;
         statusCode?: number;
     };
-    source: "firecrawl" | "fetch-fallback";
+    source: "firecrawl" | "jina" | "fetch-fallback";
 }
 
 export interface ScrapeOptions {
@@ -101,11 +106,19 @@ async function scrapeFallback(url: string): Promise<FirecrawlPage | null> {
             .replace(/\s+/g, " ")
             .trim()
             .slice(0, 30000);
+        // Extract hrefs so the sub-page crawl (/contact, /about, /team) still
+        // works in fallback mode — Firecrawl/Jina used to be the only link source.
+        const links: string[] = [];
+        const linkRe = /href=["']([^"'#\s]+)["']/gi;
+        let lm: RegExpExecArray | null;
+        while ((lm = linkRe.exec(html)) !== null && links.length < 300) {
+            links.push(lm[1]);
+        }
         return {
             url,
             markdown,
             html,
-            links: [],
+            links,
             metadata: {
                 title,
                 description: desc,
@@ -122,15 +135,74 @@ async function scrapeFallback(url: string): Promise<FirecrawlPage | null> {
     }
 }
 
-/** Scrape a single URL — Firecrawl first, fetch fallback if the key/service is unavailable. */
+/**
+ * Jina AI Reader — tier-2 scraper. GET https://r.jina.ai/<url> returns clean,
+ * JS-rendered markdown for free. X-With-Links-Summary also returns the page's
+ * links, so the sub-page crawl keeps working. JINA_API_KEY (free) lifts the
+ * per-IP rate limit; the call still works without it.
+ */
+async function scrapeJina(url: string): Promise<FirecrawlPage | null> {
+    try {
+        const headers: Record<string, string> = {
+            "Accept": "application/json",
+            "X-Return-Format": "markdown",
+            "X-With-Links-Summary": "true",
+            "X-Timeout": "25",
+        };
+        if (process.env.JINA_API_KEY) headers["Authorization"] = `Bearer ${process.env.JINA_API_KEY}`;
+        const res = await fetch(`${JINA_READER_URL}${url}`, {
+            headers,
+            signal: AbortSignal.timeout(35000),
+        });
+        if (!res.ok) {
+            console.warn(`[jina] ${res.status} ${res.statusText} for ${url}`);
+            return null;
+        }
+        const payload = await res.json();
+        const data = payload?.data ?? payload ?? {};
+        const markdown = String(data.content || data.text || "");
+        if (markdown.length < 50) return null;
+        // Jina returns links as { "anchor text": "https://..." }
+        const linkVals = data.links && typeof data.links === "object" ? Object.values(data.links) : [];
+        const links = linkVals.map((v) => String(v)).filter(Boolean);
+        return {
+            url: String(data.url || url),
+            markdown,
+            html: undefined,
+            links,
+            metadata: {
+                title: data.title,
+                description: data.description,
+                sourceURL: String(data.url || url),
+            },
+            source: "jina",
+        };
+    } catch (err) {
+        console.warn(`[jina] exception for ${url}:`, err instanceof Error ? err.message : err);
+        return null;
+    }
+}
+
+/**
+ * Scrape a single URL through a graceful cascade:
+ *   1. Firecrawl   (if FIRECRAWL_API_KEY set + within quota)
+ *   2. Jina Reader (free, JS-rendered markdown + links) — becomes the de-facto
+ *      primary the moment Firecrawl is over its monthly limit / returns 429
+ *   3. Raw fetch + regex (no JS, but always available)
+ * Returns whichever produced the most usable content.
+ */
 export async function scrapePage(url: string, opts: ScrapeOptions = {}): Promise<FirecrawlPage | null> {
     const fc = await scrapeFirecrawl(url, opts);
     if (fc && fc.markdown.length > 200) return fc;
-    // If Firecrawl returned a tiny result, try the fallback to compare
+
+    const jina = await scrapeJina(url);
+    if (jina && jina.markdown.length > 200) return jina;
+
     const fallback = await scrapeFallback(url);
-    if (!fc) return fallback;
-    if (!fallback) return fc;
-    return fallback.markdown.length > fc.markdown.length * 1.5 ? fallback : fc;
+
+    const candidates = [fc, jina, fallback].filter((p): p is FirecrawlPage => p !== null);
+    if (candidates.length === 0) return null;
+    return candidates.sort((a, b) => b.markdown.length - a.markdown.length)[0];
 }
 
 /** Scrape a small set of additional pages (e.g. /contact, /about, /team) for deeper signals. */
