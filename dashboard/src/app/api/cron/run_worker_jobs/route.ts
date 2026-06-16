@@ -441,23 +441,49 @@ async function handleExtractStructuredReqsFederal(sb: SbAny, job: Job) {
 async function handleExtractKeywords(sb: SbAny, job: Job) {
     const oppId = job.payload.opp_id as string;
     if (!oppId) return { error: "missing opp_id" };
+    // FIX: the column is extracted_keywords (not ai_keywords, which doesn't
+    // exist — selecting it errored, surfacing as "opp not found" and failing
+    // ~19k jobs). Also pull analyzed attachment text so keywords come from the
+    // full solicitation (scope, specs, requirements), not just the short SAM
+    // description — that's what makes opp↔contractor keyword matching good.
     const { data: opp } = await sb.from("opportunities")
-        .select("title, description, ai_keywords")
+        .select("title, description, extracted_keywords")
         .eq("id", oppId)
-        .maybeSingle();
+        .maybeSingle() as { data: { title: string | null; description: string | null; extracted_keywords: unknown } | null };
     if (!opp) return { result: { skipped: "opp_deleted" } };
-    if (opp.ai_keywords && Array.isArray(opp.ai_keywords) && opp.ai_keywords.length > 0) {
+    if (Array.isArray(opp.extracted_keywords) && opp.extracted_keywords.length > 0) {
         return { result: { skipped: "already_extracted" } };
     }
-    const result = await extractAiKeywords({ title: opp.title, description: opp.description });
+
+    let attachmentText = "";
+    try {
+        const { data: atts } = await sb.from("opportunity_attachments")
+            .select("extracted_text")
+            .eq("opportunity_id", oppId)
+            .limit(3) as { data: Array<{ extracted_text: string | null }> | null };
+        attachmentText = (atts || [])
+            .map(a => a.extracted_text || "")
+            .filter(Boolean)
+            .join("\n\n")
+            .slice(0, 12_000);
+    } catch { /* attachments optional */ }
+
+    const description = [opp.description || "", attachmentText]
+        .filter(Boolean).join("\n\n").slice(0, 16_000);
+
+    const result = await extractAiKeywords({ title: opp.title, description });
     if (!result || !result.keywords || result.keywords.length === 0) {
         return { result: { no_keywords: true } };
     }
     const { error: upErr } = await sb.from("opportunities")
-        .update({ ai_keywords: result.keywords })
+        .update({
+            extracted_keywords: result.keywords,
+            keywords_extracted_at: new Date().toISOString(),
+            keywords_extraction_model: result.model,
+        })
         .eq("id", oppId);
     if (upErr) return { error: upErr.message };
-    return { result: { keyword_count: result.keywords.length } };
+    return { result: { keyword_count: result.keywords.length, used_attachments: attachmentText.length > 0 } };
 }
 
 // Fix: marketing_leads.apollo_enriched_at was never written for leads where
