@@ -92,26 +92,37 @@ export async function GET(req: NextRequest) {
     if (denied) return denied;
 
     const params = new URL(req.url).searchParams;
-    const batch = Math.min(20, Math.max(1, parseInt(params.get("batch") || "8", 10)));
-    const tier = params.get("tier") || "all";
+    const batch = Math.min(50, Math.max(1, parseInt(params.get("batch") || "10", 10)));
+    const tier = params.get("tier") || "claim";
     const db = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_KEY!);
 
     const today = new Date().toISOString().slice(0, 10);
     const in90 = new Date(Date.now() + 90 * 864e5).toISOString().slice(0, 10);
     const ago120 = new Date(Date.now() - 120 * 864e5).toISOString().slice(0, 10);
 
-    let q = db
-        .from("contractors")
-        .select("id, company_name, website, business_url, email, naics_codes, state, years_in_business, employee_count, primary_poc_name")
-        .eq("qc_enriched", false)
-        .or("website.not.is.null,business_url.not.is.null");
-
-    if (tier === "awards") q = q.gte("federal_awards_count", 1).order("federal_awards_count", { ascending: true, nullsFirst: false });
-    else if (tier === "expiring") q = q.gte("expiration_date", today).lte("expiration_date", in90);
-    else if (tier === "fresh") q = q.gte("activation_date", ago120).order("activation_date", { ascending: false, nullsFirst: false });
-    else q = q.order("activation_date", { ascending: false, nullsFirst: false });
-
-    const { data: rows, error } = await q.limit(batch);
+    // Default path: atomic claim so multiple workers can run in parallel without
+    // double-crawling. Email-having contractors are claimed first. Explicit
+    // ?tier=... still works for targeted single-worker runs.
+    let rows: any[] | null = null;
+    let error: { message: string } | null = null;
+    if (tier === "claim") {
+        const r = await db.rpc("claim_contractors_for_qc", { p_batch: batch });
+        rows = (r.data as any[]) || null;
+        error = r.error;
+    } else {
+        let q = db
+            .from("contractors")
+            .select("id, company_name, website, business_url, email, naics_codes, state, years_in_business, employee_count, primary_poc_name")
+            .eq("qc_enriched", false)
+            .or("website.not.is.null,business_url.not.is.null");
+        if (tier === "awards") q = q.gte("federal_awards_count", 1).order("federal_awards_count", { ascending: true, nullsFirst: false });
+        else if (tier === "expiring") q = q.gte("expiration_date", today).lte("expiration_date", in90);
+        else if (tier === "fresh") q = q.gte("activation_date", ago120).order("activation_date", { ascending: false, nullsFirst: false });
+        else q = q.order("activation_date", { ascending: false, nullsFirst: false });
+        const res = await q.limit(batch);
+        rows = res.data;
+        error = res.error;
+    }
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     if (!rows?.length) return NextResponse.json({ ok: true, tier, processed: 0, enriched: 0, emails_found: 0 });
 

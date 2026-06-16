@@ -257,11 +257,12 @@ function tasksDueAt(d: Date): TaskName[] {
   // doesn't starve siblings in the parallel fan-out.
   due.push("run_outreach_cadence");
 
-  // Match-Drop scoring lane — TEMPORARILY DISABLED (2026-06-16 incident). The
-  // per-contractor opportunity scoring is DB-heavy; pulled out of the tick while
-  // the database recovers from the overnight enrichment overload. Re-enable once
-  // the instance is comfortably headroomed (and ideally after a compute bump).
-  // due.push("enrich_contractor_matches");
+  // Match-Drop scoring lane — RE-ENABLED 2026-06-16 after the Medium compute
+  // upgrade + migration 175 (idx_opps_naics_active_deadline). The per-contractor
+  // NAICS opportunity query is now an index scan instead of a ~47k-row seq scan,
+  // so the lane is cheap again. Rides every tick at default batch=20; it is a
+  // no-op once every QC-enriched + emailable contractor has matches.
+  due.push("enrich_contractor_matches");
 
   return due;
 }
