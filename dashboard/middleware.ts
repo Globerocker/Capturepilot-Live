@@ -15,7 +15,9 @@ export const config = {
   //    irrelevant. The enrichment_orchestrator stopped firing on 2026-05-26
   //    at 23:08 UTC — best-guess cause was middleware interference.
   //  - /api/health and /api/public/* — anonymous, cached, no session needed.
+  //  - /outreach-console.html — token-gated static tool (its own token + the
+  //    /api/outreach-console endpoint check); the auth gate must not 307 it to /login.
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|api/cron/|api/health|api/public/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api/cron/|api/health|api/public/|outreach-console|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
