@@ -28,9 +28,11 @@ import {
     Target, Search, Loader2, Building2, Mail, Phone, Linkedin, Globe,
     AlertTriangle, Sparkles, Copy, Check, Send, ClipboardList, Video,
     ExternalLink, RefreshCw, User, Award, Users as UsersIcon, Trophy,
-    ChevronRight, Filter, MapPin, FileText,
+    ChevronRight, Filter, MapPin, FileText, Wand2, RotateCcw, Download, X,
 } from "lucide-react";
 import clsx from "clsx";
+import CallButton, { type SavedCallLog } from "@/components/CallButton";
+import { buildCapabilityPdf, type CapSection, type CapMetadata } from "@/components/capability/pdfBuilder";
 
 // ───────────────────────── shared shapes (mirror the leads API) ─────────────
 
@@ -78,6 +80,7 @@ interface Lead {
     has_website: boolean;
     readiness_score?: number | null;
     check_page_url?: string;
+    check_analysis_id?: string | null;   // contractor leads: set once a /check page is materialized
     created_at?: string | null;
 }
 
@@ -196,26 +199,33 @@ export default function CockpitPage() {
         return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
     }, [fetchQueue]);
 
-    // ── Detail fetch when a lead is selected ───────────────────────────────────
-    const selectLead = useCallback(async (lead: Lead) => {
-        setSelectedId(lead.id);
-        // Show the queue row's data immediately while we re-fetch the full dossier.
-        setDetail(lead);
+    // ── Detail fetch (re-fetch the full dossier for a lead id) ──────────────────
+    // Extracted so both selectLead AND a child action (e.g. "Enrich now") can
+    // pull fresh values after a server-side write.
+    const fetchDetail = useCallback(async (id: string, leadSource: "contractors" | "inbound") => {
         setDetailError(null);
         setLoadingDetail(true);
         try {
-            const params = new URLSearchParams({ id: lead.id, source: lead.source });
+            const params = new URLSearchParams({ id, source: leadSource });
             const res = await fetch(`/api/admin/cockpit/leads?${params}`);
             const data = await res.json();
             if (!res.ok) throw new Error(data?.error || `Request failed (${res.status})`);
             if (data.lead) setDetail(data.lead);
         } catch (e) {
-            // Keep the queue-row data on the screen; just note the refresh failed.
+            // Keep whatever is already on the screen; just note the refresh failed.
             setDetailError(e instanceof Error ? e.message : "Could not load full details");
         } finally {
             setLoadingDetail(false);
         }
     }, []);
+
+    // ── Detail fetch when a lead is selected ───────────────────────────────────
+    const selectLead = useCallback(async (lead: Lead) => {
+        setSelectedId(lead.id);
+        // Show the queue row's data immediately while we re-fetch the full dossier.
+        setDetail(lead);
+        await fetchDetail(lead.id, lead.source);
+    }, [fetchDetail]);
 
     const clearFilters = () => {
         setQ("");
@@ -445,6 +455,7 @@ export default function CockpitPage() {
                             lead={detail}
                             loading={loadingDetail}
                             detailError={detailError}
+                            onRefresh={() => fetchDetail(detail.id, detail.source)}
                         />
                     )}
                 </section>
@@ -455,8 +466,21 @@ export default function CockpitPage() {
 
 // ───────────────────────── per-lead card ─────────────────────────
 
-function LeadCard({ lead, loading, detailError }: { lead: Lead; loading: boolean; detailError: string | null }) {
+function LeadCard({ lead, loading, detailError, onRefresh }: {
+    lead: Lead;
+    loading: boolean;
+    detailError: string | null;
+    onRefresh: () => void;
+}) {
     const contactName = lead.contact.name || "";
+    const isContractor = lead.source === "contractors";
+
+    // Notes + call transcript live up here so the Call widget (Step 5) can
+    // pre-fill them on a saved call, and the HubSpot hand-off (Step 6) can read
+    // them. Reset when the selected lead changes (component is keyed by id, so a
+    // fresh mount already clears these — but be explicit for safety).
+    const [notes, setNotes] = useState("");
+    const [transcript, setTranscript] = useState("");
 
     return (
         <div className="space-y-5">
@@ -489,12 +513,30 @@ function LeadCard({ lead, loading, detailError }: { lead: Lead; loading: boolean
                 </div>
             </div>
 
-            <StepWho lead={lead} />
+            <StepWho lead={lead} onRefresh={onRefresh} refreshing={loading} />
             <StepWhy lead={lead} />
-            <StepLoom lead={lead} />
-            <StepMessage lead={lead} />
-            <StepNotesAndHandoff lead={lead} contactName={contactName} />
-            {lead.source === "inbound" && lead.check_page_url && <StepCheckPage url={lead.check_page_url} />}
+            {/* Cap statement is contractors-only and sits at step 3, shifting the
+                rest of the contractor checklist down by one vs. the inbound flow. */}
+            {isContractor && <StepCapStatement lead={lead} />}
+            <StepLoom lead={lead} n={isContractor ? 4 : 3} />
+            <StepMessage lead={lead} n={isContractor ? 5 : 4} />
+            <StepNotesAndHandoff
+                lead={lead}
+                contactName={contactName}
+                notesN={isContractor ? 6 : 5}
+                handoffN={isContractor ? 7 : 6}
+                notes={notes}
+                setNotes={setNotes}
+                transcript={transcript}
+                setTranscript={setTranscript}
+                onCallSaved={(log: SavedCallLog) => {
+                    // Fold a saved call into the hand-off fields so it flows to HubSpot.
+                    if (log.notes) setNotes(prev => prev ? `${prev}\n\n${log.notes}` : log.notes);
+                    if (log.transcription) setTranscript(prev => prev ? `${prev}\n\n${log.transcription}` : log.transcription);
+                }}
+            />
+            {lead.source === "inbound" && lead.check_page_url && <StepCheckPage url={lead.check_page_url} n={7} />}
+            {isContractor && <StepMaterializeCheck lead={lead} n={8} />}
         </div>
     );
 }
@@ -522,7 +564,7 @@ function Step({ n, title, icon: Icon, children }: {
 
 // ── Step 1: WHO ───────────────────────────────────────────────────────────────
 
-function StepWho({ lead }: { lead: Lead }) {
+function StepWho({ lead, onRefresh, refreshing }: { lead: Lead; onRefresh: () => void; refreshing: boolean }) {
     return (
         <Step n={1} title="Who you're talking to" icon={User}>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
@@ -617,7 +659,153 @@ function StepWho({ lead }: { lead: Lead }) {
                     })}
                 </div>
             </div>
+
+            {/* Enrich + Re-run controls — contractor leads only. Inbound (website)
+                leads have no contractors row to enrich/re-queue. */}
+            {lead.source === "contractors" && (
+                <div className="mt-5 border-t border-stone-100 pt-4 space-y-4">
+                    <EnrichControls lead={lead} onRefresh={onRefresh} refreshing={refreshing} />
+                    <RerunControl lead={lead} />
+                </div>
+            )}
         </Step>
+    );
+}
+
+// ── "Enrich now" — fills LinkedIn + firmographics on demand, then refreshes ───
+function EnrichControls({ lead, onRefresh, refreshing }: { lead: Lead; onRefresh: () => void; refreshing: boolean }) {
+    const [busy, setBusy] = useState(false);
+    const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
+
+    const enrich = async () => {
+        setBusy(true);
+        setResult(null);
+        try {
+            const res = await fetch("/api/admin/cockpit/enrich", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ contractor_id: lead.id }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.ok) throw new Error(data?.error || `Failed (${res.status})`);
+
+            const u = (data.updated || {}) as { employee_count?: number; years_in_business?: number; owner_linkedin?: string };
+            const found: string[] = [];
+            if (u.owner_linkedin) found.push("owner LinkedIn");
+            if (u.employee_count != null) found.push(`${u.employee_count} employees`);
+            if (u.years_in_business != null) found.push(`${u.years_in_business} yrs in business`);
+            setResult({
+                ok: true,
+                message: found.length ? `Found ${found.join(", ")}.` : "Checked — nothing new to add (already complete).",
+            });
+            // Pull the fresh dossier so the new values show above.
+            onRefresh();
+        } catch (e) {
+            setResult({ ok: false, message: e instanceof Error ? e.message : "Enrichment failed" });
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    return (
+        <div>
+            <FieldLabel>Fill the gaps</FieldLabel>
+            <button
+                type="button"
+                onClick={enrich}
+                disabled={busy}
+                className="mt-2 inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold px-4 py-2 rounded-lg text-sm"
+            >
+                {busy
+                    ? <><Loader2 className="w-4 h-4 animate-spin" /> Enriching…</>
+                    : <><Wand2 className="w-4 h-4" /> Enrich now (LinkedIn + firmographics)</>}
+            </button>
+            <p className="text-xs text-stone-500 mt-1.5">
+                Looks up the owner&apos;s LinkedIn and fills in employees / years in business when we can find them.
+            </p>
+            {result && (
+                <div
+                    className={clsx(
+                        "mt-2 rounded-lg px-3 py-2 text-xs flex items-start gap-2",
+                        result.ok ? "bg-emerald-50 border border-emerald-200 text-emerald-800" : "bg-rose-50 border border-rose-200 text-rose-700",
+                    )}
+                >
+                    {result.ok
+                        ? (refreshing ? <Loader2 className="w-3.5 h-3.5 shrink-0 mt-0.5 animate-spin" /> : <Check className="w-3.5 h-3.5 shrink-0 mt-0.5" />)
+                        : <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />}
+                    <span className="font-medium">{result.message}</span>
+                </div>
+            )}
+        </div>
+    );
+}
+
+// ── "Re-run match" — re-queues the contractor's match scoring (optional full re-crawl) ──
+function RerunControl({ lead }: { lead: Lead }) {
+    const [busy, setBusy] = useState(false);
+    const [full, setFull] = useState(false);
+    const [toast, setToast] = useState<{ ok: boolean; message: string } | null>(null);
+
+    const rerun = async () => {
+        setBusy(true);
+        setToast(null);
+        try {
+            const res = await fetch("/api/admin/cockpit/rerun", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ contractor_id: lead.id, full }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.ok) throw new Error(data?.error || `Failed (${res.status})`);
+            setToast({
+                ok: true,
+                message: data.requeued === "full"
+                    ? "Queued a full re-crawl + re-score. Refresh in a few minutes."
+                    : "Queued a fresh match re-score. Refresh in a few minutes.",
+            });
+        } catch (e) {
+            setToast({ ok: false, message: e instanceof Error ? e.message : "Re-run failed" });
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    return (
+        <div>
+            <FieldLabel>Out of date?</FieldLabel>
+            <div className="mt-2 flex flex-wrap items-center gap-3">
+                <button
+                    type="button"
+                    onClick={rerun}
+                    disabled={busy}
+                    className="inline-flex items-center gap-2 bg-white hover:bg-stone-100 border border-stone-200 text-stone-700 font-bold px-4 py-2 rounded-lg text-sm disabled:opacity-50"
+                >
+                    {busy
+                        ? <><Loader2 className="w-4 h-4 animate-spin" /> Queueing…</>
+                        : <><RotateCcw className="w-4 h-4" /> Re-run match</>}
+                </button>
+                <label className="inline-flex items-center gap-1.5 text-xs text-stone-600 cursor-pointer">
+                    <input
+                        type="checkbox"
+                        checked={full}
+                        onChange={() => setFull(v => !v)}
+                        className="rounded border-stone-300"
+                    />
+                    Full re-crawl (slower)
+                </label>
+            </div>
+            {toast && (
+                <div
+                    className={clsx(
+                        "mt-2 rounded-lg px-3 py-2 text-xs flex items-start gap-2",
+                        toast.ok ? "bg-emerald-50 border border-emerald-200 text-emerald-800" : "bg-rose-50 border border-rose-200 text-rose-700",
+                    )}
+                >
+                    {toast.ok ? <Check className="w-3.5 h-3.5 shrink-0 mt-0.5" /> : <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />}
+                    <span className="font-medium">{toast.message}</span>
+                </div>
+            )}
+        </div>
     );
 }
 
@@ -670,11 +858,224 @@ function StepWhy({ lead }: { lead: Lead }) {
     );
 }
 
-// ── Step 3: LOOM ──────────────────────────────────────────────────────────────
+// ── Cap statement (contractors only): SSE-streamed 6 sections + Copy-all/PDF ──
 
-function StepLoom({ lead }: { lead: Lead }) {
+interface CapStatementSection {
+    key?: string;
+    title: string;
+    content: string;
+    status: "pending" | "running" | "done";
+    word_count?: number;
+}
+
+function StepCapStatement({ lead }: { lead: Lead }) {
+    const [open, setOpen] = useState(false);
+    const [generating, setGenerating] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [sections, setSections] = useState<CapStatementSection[]>([]);
+    const [metadata, setMetadata] = useState<CapMetadata | null>(null);
+    const [copiedAll, setCopiedAll] = useState(false);
+    const [downloading, setDownloading] = useState(false);
+
+    const generate = async () => {
+        setGenerating(true);
+        setError(null);
+        setSections([]);
+        setMetadata(null);
+        try {
+            const res = await fetch("/api/ai/capability-statement-for-contractor", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ contractor_id: lead.id }),
+            });
+            if (!res.ok || !res.body) {
+                throw new Error(res.statusText || `Failed (${res.status})`);
+            }
+
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = "";
+
+            for (;;) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+
+                let idx: number;
+                while ((idx = buffer.indexOf("\n\n")) !== -1) {
+                    const rawEvt = buffer.slice(0, idx);
+                    buffer = buffer.slice(idx + 2);
+                    const lines = rawEvt.split("\n");
+                    let event = "message";
+                    let data = "";
+                    for (const line of lines) {
+                        if (line.startsWith("event:")) event = line.slice(6).trim();
+                        else if (line.startsWith("data:")) data += line.slice(5).trim();
+                    }
+                    if (!data) continue;
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    let payload: any;
+                    try { payload = JSON.parse(data); } catch { continue; }
+
+                    if (event === "meta") {
+                        setMetadata(payload.metadata as CapMetadata);
+                        const total = Number(payload.sections_total) || 0;
+                        setSections(Array.from({ length: total }).map((_, i) => ({
+                            title: "", content: "", status: i === 0 ? "running" : "pending",
+                        })));
+                    } else if (event === "section_start") {
+                        setSections(prev => {
+                            const next = [...prev];
+                            next[payload.index] = { ...(next[payload.index] || { content: "" }), title: payload.title, key: payload.key, status: "running" };
+                            return next;
+                        });
+                    } else if (event === "section_done") {
+                        setSections(prev => {
+                            const next = [...prev];
+                            next[payload.index] = {
+                                title: payload.title,
+                                key: payload.key,
+                                content: payload.content || "",
+                                word_count: payload.word_count,
+                                status: "done",
+                            };
+                            return next;
+                        });
+                    } else if (event === "error") {
+                        setError(payload.message || "Generation error");
+                    }
+                }
+            }
+        } catch (e) {
+            setError(e instanceof Error ? e.message : "Could not draft the capability statement");
+        } finally {
+            setGenerating(false);
+        }
+    };
+
+    const doneSections = sections.filter(s => s.status === "done" && s.content);
+
+    const allText = () =>
+        [
+            metadata?.company_name ? `${metadata.company_name} — Capability Statement\n` : "",
+            ...doneSections.map(s => `${s.title}\n${"-".repeat(s.title.length)}\n${s.content}`),
+        ].filter(Boolean).join("\n\n");
+
+    const copyAll = async () => {
+        try {
+            await navigator.clipboard.writeText(allText());
+            setCopiedAll(true);
+            setTimeout(() => setCopiedAll(false), 1800);
+        } catch { /* clipboard may be blocked */ }
+    };
+
+    const downloadPdf = async () => {
+        if (!metadata || doneSections.length === 0) return;
+        setDownloading(true);
+        try {
+            // The contractor route emits plain text content, so no HTML→text step.
+            const cleanSections: CapSection[] = doneSections.map(s => ({ title: s.title, content: s.content, key: s.key }));
+            const blob = await buildCapabilityPdf(cleanSections, metadata);
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `${(metadata.company_name || "capability-statement").replace(/[^a-z0-9]+/gi, "-")}-capability-statement.pdf`;
+            a.click();
+            URL.revokeObjectURL(url);
+        } catch (e) {
+            setError("PDF build failed: " + (e instanceof Error ? e.message : "unknown"));
+        } finally {
+            setDownloading(false);
+        }
+    };
+
     return (
-        <Step n={3} title="Loom video angle" icon={Video}>
+        <Step n={3} title="Draft a capability statement" icon={FileText}>
+            <p className="text-sm text-stone-600 mb-3">
+                Generate a polished, federal-ready capability statement for this firm — hand it to them during outreach.
+            </p>
+            <button
+                type="button"
+                onClick={() => { setOpen(true); generate(); }}
+                disabled={generating}
+                className="inline-flex items-center gap-2 bg-stone-900 hover:bg-black disabled:opacity-50 text-white font-bold px-4 py-2.5 rounded-lg text-sm"
+            >
+                {generating
+                    ? <><Loader2 className="w-4 h-4 animate-spin" /> Drafting…</>
+                    : <><FileText className="w-4 h-4" /> {doneSections.length > 0 ? "Re-draft statement" : "Draft capability statement"}</>}
+            </button>
+
+            {error && (
+                <p className="mt-3 text-sm text-rose-600 inline-flex items-center gap-1.5">
+                    <AlertTriangle className="w-4 h-4" /> {error}
+                </p>
+            )}
+
+            {open && (sections.length > 0 || generating) && (
+                <div className="mt-4 border border-stone-200 rounded-xl overflow-hidden">
+                    <div className="flex items-center justify-between gap-2 bg-stone-50 border-b border-stone-200 px-4 py-2.5">
+                        <span className="text-sm font-bold text-stone-700">
+                            {metadata?.company_name || lead.company_name || "Capability statement"}
+                        </span>
+                        <div className="flex items-center gap-2">
+                            <button
+                                type="button"
+                                onClick={copyAll}
+                                disabled={doneSections.length === 0}
+                                className="text-xs text-stone-500 hover:text-black inline-flex items-center gap-1 disabled:opacity-40"
+                            >
+                                {copiedAll ? <><Check className="w-3.5 h-3.5 text-emerald-600" /> Copied</> : <><Copy className="w-3.5 h-3.5" /> Copy all</>}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={downloadPdf}
+                                disabled={doneSections.length === 0 || downloading}
+                                className="text-xs text-stone-500 hover:text-black inline-flex items-center gap-1 disabled:opacity-40"
+                            >
+                                {downloading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />} PDF
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setOpen(false)}
+                                title="Hide"
+                                aria-label="Hide capability statement"
+                                className="text-stone-400 hover:text-black"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+                    </div>
+                    <div className="max-h-[28rem] overflow-y-auto divide-y divide-stone-100">
+                        {sections.map((s, i) => (
+                            <div key={i} className="px-4 py-3">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-[10px] font-bold uppercase text-stone-400 tracking-wide">
+                                        {s.title || `Section ${i + 1}`}
+                                    </span>
+                                    {s.status === "running" && <Loader2 className="w-3 h-3 animate-spin text-stone-300" />}
+                                    {s.status === "done" && s.word_count != null && (
+                                        <span className="text-[10px] text-stone-300">{s.word_count} words</span>
+                                    )}
+                                </div>
+                                {s.content
+                                    ? <p className="text-sm text-stone-700 mt-1 whitespace-pre-wrap leading-relaxed">{s.content}</p>
+                                    : s.status !== "pending"
+                                        ? <p className="text-xs text-stone-400 mt-1">Writing…</p>
+                                        : <p className="text-xs text-stone-300 mt-1">Waiting…</p>}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+        </Step>
+    );
+}
+
+// ── Step (Loom) ─────────────────────────────────────────────────────────────
+
+function StepLoom({ lead, n }: { lead: Lead; n: number }) {
+    return (
+        <Step n={n} title="Loom video angle" icon={Video}>
             {lead.loom_url ? (
                 <div className="space-y-3">
                     <p className="text-sm text-stone-600">
@@ -699,9 +1100,9 @@ function StepLoom({ lead }: { lead: Lead }) {
     );
 }
 
-// ── Step 4: MESSAGE ───────────────────────────────────────────────────────────
+// ── Step (Message) ────────────────────────────────────────────────────────────
 
-function StepMessage({ lead }: { lead: Lead }) {
+function StepMessage({ lead, n }: { lead: Lead; n: number }) {
     const [tone, setTone] = useState<Tone>("warm_intro");
     const [generating, setGenerating] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -747,7 +1148,7 @@ function StepMessage({ lead }: { lead: Lead }) {
     };
 
     return (
-        <Step n={4} title="Write a personalized message" icon={Sparkles}>
+        <Step n={n} title="Write a personalized message" icon={Sparkles}>
             {/* Tone picker */}
             <div>
                 <FieldLabel>Pick the style</FieldLabel>
@@ -801,6 +1202,8 @@ function StepMessage({ lead }: { lead: Lead }) {
                             type="text"
                             value={subject}
                             onChange={e => setSubject(e.target.value)}
+                            aria-label="Email subject"
+                            placeholder="Subject"
                             className="w-full mt-1 px-3 py-2 text-sm rounded-lg border border-stone-200 focus:outline-none focus:border-stone-400 font-medium"
                         />
                     </div>
@@ -815,6 +1218,8 @@ function StepMessage({ lead }: { lead: Lead }) {
                             value={bodyText}
                             onChange={e => setBodyText(e.target.value)}
                             rows={10}
+                            aria-label="Email message body"
+                            placeholder="Message body"
                             className="w-full mt-1 px-3 py-2 text-sm rounded-lg border border-stone-200 focus:outline-none focus:border-stone-400 leading-relaxed"
                         />
                     </div>
@@ -833,9 +1238,17 @@ function StepMessage({ lead }: { lead: Lead }) {
 
 // ── Steps 5 + 6: NOTES + HUBSPOT HAND-OFF ─────────────────────────────────────
 
-function StepNotesAndHandoff({ lead, contactName }: { lead: Lead; contactName: string }) {
-    const [notes, setNotes] = useState("");
-    const [transcript, setTranscript] = useState("");
+function StepNotesAndHandoff({ lead, contactName, notesN, handoffN, notes, setNotes, transcript, setTranscript, onCallSaved }: {
+    lead: Lead;
+    contactName: string;
+    notesN: number;
+    handoffN: number;
+    notes: string;
+    setNotes: React.Dispatch<React.SetStateAction<string>>;
+    transcript: string;
+    setTranscript: React.Dispatch<React.SetStateAction<string>>;
+    onCallSaved: (log: SavedCallLog) => void;
+}) {
     const [pushing, setPushing] = useState(false);
     const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
 
@@ -889,7 +1302,18 @@ function StepNotesAndHandoff({ lead, contactName }: { lead: Lead; contactName: s
 
     return (
         <>
-            <Step n={5} title="Your notes" icon={ClipboardList}>
+            <Step n={notesN} title="Your notes" icon={ClipboardList}>
+                {/* Call widget — a saved call folds its notes + transcript into the
+                    fields below (and from there into the HubSpot hand-off). */}
+                <div className="mb-4">
+                    <CallButton
+                        contractorId={lead.source === "contractors" ? lead.id : undefined}
+                        leadName={lead.contact.name || undefined}
+                        leadPhone={lead.contact.phone || undefined}
+                        onSaved={onCallSaved}
+                    />
+                </div>
+
                 <FieldLabel>Notes (anything worth remembering)</FieldLabel>
                 <textarea
                     value={notes}
@@ -908,7 +1332,7 @@ function StepNotesAndHandoff({ lead, contactName }: { lead: Lead; contactName: s
                 />
             </Step>
 
-            <Step n={6} title="Hand off to HubSpot" icon={Send}>
+            <Step n={handoffN} title="Hand off to HubSpot" icon={Send}>
                 <p className="text-sm text-stone-600 mb-4">
                     This adds the contact, saves your notes, and creates a follow-up task for Sergio. Do this once you&apos;ve made contact or want him to take it from here.
                 </p>
@@ -945,9 +1369,9 @@ function StepNotesAndHandoff({ lead, contactName }: { lead: Lead; contactName: s
 
 // ── Step 7: CHECK PAGE (inbound only) ─────────────────────────────────────────
 
-function StepCheckPage({ url }: { url: string }) {
+function StepCheckPage({ url, n }: { url: string; n: number }) {
     return (
-        <Step n={7} title="Their results page" icon={FileText}>
+        <Step n={n} title="Their results page" icon={FileText}>
             <p className="text-sm text-stone-600 mb-3">
                 This lead ran our website checker. Open the exact page they saw so you can talk to it directly.
             </p>
@@ -959,6 +1383,109 @@ function StepCheckPage({ url }: { url: string }) {
             >
                 <ExternalLink className="w-4 h-4" /> Open check page
             </a>
+        </Step>
+    );
+}
+
+// ── Step 7 (contractor): MATERIALIZE A SHAREABLE CHECK PAGE ───────────────────
+// Contractors never ran the public form, so there's no /check page to open. This
+// synthesizes one FROM the contractor (POST /api/admin/cockpit/materialize-check),
+// then hands the partner the same public, shareable results URL the inbound flow
+// uses. Idempotent server-side — re-clicking refreshes the same page.
+function StepMaterializeCheck({ lead, n }: { lead: Lead; n: number }) {
+    const [busy, setBusy] = useState(false);
+    const [err, setErr] = useState<string | null>(null);
+    // Seed from the dossier if the contractor already has a materialized page.
+    const [url, setUrl] = useState<string | null>(
+        lead.check_analysis_id ? `/check/${lead.check_analysis_id}` : null,
+    );
+    const [copied, setCopied] = useState(false);
+
+    // Reset when the selected lead changes (component is reused across rows).
+    useEffect(() => {
+        setUrl(lead.check_analysis_id ? `/check/${lead.check_analysis_id}` : null);
+        setErr(null);
+        setCopied(false);
+    }, [lead.id, lead.check_analysis_id]);
+
+    const generate = async () => {
+        setBusy(true);
+        setErr(null);
+        try {
+            const res = await fetch("/api/admin/cockpit/materialize-check", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ contractor_id: lead.id }),
+            });
+            const body = await res.json().catch(() => ({}));
+            if (!res.ok || !body?.check_url) {
+                throw new Error(body?.error || `Failed (${res.status})`);
+            }
+            setUrl(body.check_url as string);
+        } catch (e) {
+            setErr(e instanceof Error ? e.message : "Could not build the page");
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const absoluteUrl = url
+        ? (typeof window !== "undefined" ? `${window.location.origin}${url}` : url)
+        : "";
+
+    const copy = async () => {
+        if (!absoluteUrl) return;
+        try {
+            await navigator.clipboard.writeText(absoluteUrl);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1800);
+        } catch { /* ignore */ }
+    };
+
+    return (
+        <Step n={n} title="Their results page" icon={FileText}>
+            <p className="text-sm text-stone-600 mb-3">
+                This firm never ran our website checker. Build the same shareable results
+                page from what we know — then send them the link.
+            </p>
+            {err && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-800 mb-3">
+                    {err}
+                </div>
+            )}
+            <div className="flex flex-wrap items-center gap-2">
+                <button
+                    type="button"
+                    onClick={generate}
+                    disabled={busy}
+                    className="inline-flex items-center gap-2 bg-stone-900 hover:bg-black text-white font-bold px-4 py-2 rounded-lg text-sm disabled:opacity-50"
+                >
+                    {busy
+                        ? <><Loader2 className="w-4 h-4 animate-spin" /> Building…</>
+                        : url
+                            ? <><RefreshCw className="w-4 h-4" /> Rebuild page</>
+                            : <><Sparkles className="w-4 h-4" /> Build check page</>}
+                </button>
+                {url && (
+                    <>
+                        <a
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-2 bg-white hover:bg-stone-100 border border-stone-200 text-stone-700 font-bold px-4 py-2 rounded-lg text-sm"
+                        >
+                            <ExternalLink className="w-4 h-4" /> Open page
+                        </a>
+                        <button
+                            type="button"
+                            onClick={copy}
+                            className="inline-flex items-center gap-2 bg-white hover:bg-stone-100 border border-stone-200 text-stone-700 font-bold px-4 py-2 rounded-lg text-sm"
+                        >
+                            {copied ? <><Check className="w-4 h-4 text-emerald-600" /> Copied</> : <><Copy className="w-4 h-4" /> Copy link</>}
+                        </button>
+                    </>
+                )}
+            </div>
         </Step>
     );
 }

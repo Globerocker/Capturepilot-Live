@@ -6,13 +6,39 @@ import { createSupabaseClient } from "@/lib/supabase/client";
 
 const supabase = createSupabaseClient();
 
-interface CallButtonProps {
-    opportunityId: string;
-    contactPhone?: string;
-    contactName?: string;
+export interface SavedCallLog {
+    transcription: string;
+    notes: string;
+    duration_seconds: number;
+    contact_name: string | null;
+    contact_phone: string | null;
 }
 
-export default function CallButton({ opportunityId, contactPhone, contactName }: CallButtonProps) {
+interface CallButtonProps {
+    /** Opportunity-scoped usage (e.g. /opportunities/[id]). Omit for cockpit-lead usage. */
+    opportunityId?: string;
+    contactPhone?: string;
+    contactName?: string;
+    /** Cockpit-lead usage: attach the call to a contractors row instead of an opportunity. */
+    contractorId?: string;
+    /** Optional explicit lead name/phone (cockpit). Falls back to contactName/contactPhone. */
+    leadName?: string;
+    leadPhone?: string;
+    /** Fired after a successful save with the transcript+notes so a parent can pre-fill. */
+    onSaved?: (log: SavedCallLog) => void;
+}
+
+export default function CallButton({
+    opportunityId,
+    contactPhone,
+    contactName,
+    contractorId,
+    leadName,
+    leadPhone,
+    onSaved,
+}: CallButtonProps) {
+    const effectiveName = leadName ?? contactName;
+    const effectivePhone = leadPhone ?? contactPhone;
     const [isRecording, setIsRecording] = useState(false);
     const [transcription, setTranscription] = useState("");
     const [notes, setNotes] = useState("");
@@ -107,18 +133,28 @@ export default function CallButton({ opportunityId, contactPhone, contactName }:
 
         if (!profile) { setSaving(false); return; }
 
+        // Cockpit-lead usage attaches to a contractor (opportunity_id stays null);
+        // opportunity usage keeps the existing opportunity_id behavior.
         await supabase.from("call_logs").insert({
             user_profile_id: (profile as Record<string, unknown>).id,
-            opportunity_id: opportunityId,
-            contact_name: contactName || null,
-            contact_phone: contactPhone || null,
+            opportunity_id: contractorId ? null : (opportunityId ?? null),
+            contractor_id: contractorId ?? null,
+            contact_name: effectiveName || null,
+            contact_phone: effectivePhone || null,
             transcription: transcription || null,
             notes: notes || null,
             duration_seconds: seconds,
-        });
+        } as Record<string, unknown>);
 
         setSaving(false);
         setSaved(true);
+        onSaved?.({
+            transcription: transcription || "",
+            notes: notes || "",
+            duration_seconds: seconds,
+            contact_name: effectiveName || null,
+            contact_phone: effectivePhone || null,
+        });
     };
 
     const formatTime = (s: number) => {
@@ -139,17 +175,17 @@ export default function CallButton({ opportunityId, contactPhone, contactName }:
                             Call & Transcribe
                         </p>
                         <p className="text-xs text-emerald-700 leading-relaxed mb-3">
-                            {contactName ? `Call ${contactName}` : "Call the contracting officer"} and record notes with live transcription.
+                            {effectiveName ? `Call ${effectiveName}` : "Call the contracting officer"} and record notes with live transcription.
                         </p>
 
                         <div className="flex flex-wrap gap-2">
-                            {contactPhone && (
+                            {effectivePhone && (
                                 <a
-                                    href={`tel:${contactPhone.replace(/[^\d+]/g, "")}`}
+                                    href={`tel:${effectivePhone.replace(/[^\d+]/g, "")}`}
                                     className="inline-flex items-center bg-emerald-600 text-white font-bold px-4 py-2 rounded-full text-xs hover:bg-emerald-700 transition-all"
                                 >
                                     <Phone className="w-3 h-3 mr-1.5" />
-                                    Call {contactPhone}
+                                    Call {effectivePhone}
                                 </a>
                             )}
 

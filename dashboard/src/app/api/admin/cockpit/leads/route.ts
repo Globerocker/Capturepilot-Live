@@ -95,6 +95,7 @@ interface LeadRow {
     has_website: boolean;
     readiness_score?: number | null;        // inbound only
     check_page_url?: string;                // inbound only
+    check_analysis_id?: string | null;      // contractors only — set once /check page is materialized
     created_at?: string | null;
 }
 
@@ -195,6 +196,7 @@ function contractorToLead(c: any): LeadRow {
         findings_summary: (blob.findings_summary as string) || null,
         owner_linkedin: c.owner_linkedin ?? c.social_linkedin ?? null,
         has_website: !!c.website,
+        check_analysis_id: c.check_analysis_id ?? null,
         created_at: c.created_at ?? null,
     };
 }
@@ -278,7 +280,7 @@ function sortLeads(leads: LeadRow[], sort: string): LeadRow[] {
 const CONTRACTOR_COLS =
     "id, uei, company_name, website, email, primary_poc_name, primary_poc_email, primary_poc_title, phone, " +
     "naics_codes, certifications, sba_certifications, state, city, employee_count, years_in_business, " +
-    "federal_awards_count, qc_enriched, top_match_count, capability_summary_ai, owner_linkedin, social_linkedin, website_cms, created_at";
+    "federal_awards_count, qc_enriched, top_match_count, capability_summary_ai, owner_linkedin, social_linkedin, website_cms, check_analysis_id, created_at";
 
 const ANALYSIS_COLS =
     "id, company_name, website, lead_email, readiness_score, readiness_breakdown, inferred_profile, preview_matches, status, created_at";
