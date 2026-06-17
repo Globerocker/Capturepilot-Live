@@ -218,6 +218,73 @@ async function send(
     }
 }
 
+/**
+ * Low-level send for the outreach cockpit — sends with a CUSTOM from/replyTo
+ * (the admin-configured cockpit sender) rather than the platform FROM_EMAIL.
+ *
+ * Unlike the private send() above this does NOT consult isEmailEnabled() —
+ * the cockpit operator is composing a one-off message by hand, so there's no
+ * category toggle to respect. It DOES reuse the same Resend client and the
+ * same outreach_optouts suppression check so a bounced/complained/opted-out
+ * address can never be re-emailed from the cockpit either.
+ *
+ * Returns { ok, id } on success or { ok:false, error } on failure/suppression.
+ */
+export async function sendCockpitEmail(params: {
+    from: string;        // "Name <email@domain>"
+    to: string;
+    subject: string;
+    html: string;
+    replyTo?: string;
+}): Promise<{ ok: true; id: string | null } | { ok: false; error: string }> {
+    const { from, to, subject, html, replyTo } = params;
+
+    // Suppression: never send to an opted-out / bounced / complained address.
+    try {
+        const sb = getDbAdmin();
+        if (sb) {
+            const { data: optout } = await sb
+                .from("outreach_optouts")
+                .select("email, reason")
+                .eq("email", to.toLowerCase())
+                .maybeSingle();
+            if (optout) {
+                console.log(`[cockpit] ${to} opted out (${optout.reason || "unknown"}), skipping send`);
+                return { ok: false, error: `${to} is on the suppression list (${optout.reason || "opted out"})` };
+            }
+        }
+    } catch (e) {
+        // Same posture as send(): a transient suppression-lookup failure must
+        // not black-hole a legitimate manual send. Log loudly and proceed.
+        console.error(`[cockpit] suppression check failed for ${to}, allowing send:`, e);
+    }
+
+    const r = getResend();
+    if (!r) {
+        console.warn("[cockpit] RESEND_API_KEY not set, cannot send");
+        return { ok: false, error: "Email transport not configured (RESEND_API_KEY missing)" };
+    }
+
+    try {
+        const res = await r.emails.send({
+            from,
+            to,
+            subject,
+            html,
+            replyTo: replyTo || undefined,
+        });
+        if (res.error) {
+            console.error("[cockpit] Resend rejected send:", res.error);
+            return { ok: false, error: res.error.message || "Resend rejected the message" };
+        }
+        return { ok: true, id: res.data?.id ?? null };
+    } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error("[cockpit] send failed:", msg);
+        return { ok: false, error: msg };
+    }
+}
+
 // ─── Welcome (Self-Service) ─────────────────────────────────
 export async function sendWelcomeEmail(to: string, companyName: string) {
     const html = emailTemplate({

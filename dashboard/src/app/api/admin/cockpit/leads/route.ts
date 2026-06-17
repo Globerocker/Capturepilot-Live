@@ -21,6 +21,23 @@
  *   page             1-based page number (default 1)
  *   pageSize         default 50, max 200
  *
+ * Rich contractor filters (applied IN the DB query before the CANDIDATE_CAP
+ * working set is sliced, so they filter the whole pool — not just the page;
+ * ignored for the 'inbound' source which has no contractor columns):
+ *   years_min        min years_in_business (gte)
+ *   years_max        max years_in_business (lte)
+ *   emp_min          min employee_count (gte)
+ *   emp_max          max employee_count (lte)
+ *   awards_min       min federal_awards_count (gte)
+ *   awards_max       max federal_awards_count (lte)
+ *   revenue_min      min total_award_volume (gte)
+ *   sam_registered   '1' → is_sam_registered = true
+ *   expiring_soon    '1' → expiration_date is set AND ≤ now + 90 days
+ *   has_linkedin     '1' → owner_linkedin OR social_linkedin OR company_linkedin not null
+ *   has_email        '1' → email not null
+ *   has_phone        '1' → primary_poc_phone OR direct_phone OR main_phone OR phone not null
+ *   has_website      '1' → website not null
+ *
  * Single-lead detail: GET ...?id=<contractor_id or analysis_id>&source=...
  *   returns { lead: <full dossier> }.
  *
@@ -38,6 +55,7 @@ import { assertAdmin } from "@/lib/auth-admin";
 import { computeIcpFit, icpTier, type IcpBreakdownItem } from "@/lib/icp-fit";
 import { computeDataGaps } from "@/lib/outreach/match-drop";
 import { LOOM_BY_GAP } from "@/lib/outreach/loom-videos";
+import { toTitleCaseName } from "@/lib/format-name";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -103,7 +121,16 @@ interface LeadRow {
     loom_url: string | null;
     findings_summary: string | null;
     owner_linkedin: string | null;
+    company_linkedin: string | null;
     has_website: boolean;
+    // ── V2: surfaced contractor stats + provenance ───────────────────────────
+    total_federal_revenue: number | null;   // total_award_volume ?? revenue
+    total_federal_awards: number | null;     // total_federal_awards ?? federal_awards_count
+    sam_registered: boolean | null;          // is_sam_registered ?? sam_registered
+    sam_expiration: string | null;           // SAM registration expiry (expiration_date)
+    sam_expiring_soon: boolean;              // expiration within 90 days
+    /** Quick "what do we know" flags for badge rendering in the cockpit. */
+    known: { linkedin: boolean; email: boolean; phone: boolean; website: boolean };
     readiness_score?: number | null;        // inbound only
     check_page_url?: string;                // inbound only
     check_analysis_id?: string | null;      // contractors only — set once /check page is materialized
@@ -183,11 +210,31 @@ function normalizeResearch(v: any): LeadResearch | null {
     };
 }
 
+/** True when a SAM registration expiry date falls within the next `days` days. */
+function isExpiringSoon(expiration: unknown, days = 90): boolean {
+    if (!expiration) return false;
+    const t = new Date(expiration as string).getTime();
+    if (Number.isNaN(t)) return false;
+    const now = Date.now();
+    return t >= now && t <= now + days * 86400000;
+}
+
 /** Build a full contractor lead row from a DB row. */
 function contractorToLead(c: any): LeadRow {
     const blob = (c.capability_summary_ai || {}) as any;
     const certifications = toStrArray(c.certifications);
     const sba = toStrArray(c.sba_certifications);
+
+    // Phone fallback chain — the dedicated `phone` column is ~0% populated; the
+    // real number, when present, hides in the POC/direct/main columns.
+    const phone = c.primary_poc_phone || c.direct_phone || c.main_phone || c.phone || null;
+    const email = c.email ?? c.primary_poc_email ?? null;
+    const linkedin = c.owner_linkedin ?? c.social_linkedin ?? null;
+    const companyLinkedin = c.company_linkedin ?? null;
+    const samRegistered: boolean | null =
+        typeof c.is_sam_registered === "boolean" ? c.is_sam_registered
+        : typeof c.sam_registered === "boolean" ? c.sam_registered
+        : null;
 
     const icp = computeIcpFit({
         certifications,
@@ -221,10 +268,10 @@ function contractorToLead(c: any): LeadRow {
         certifications,
         sba_certifications: sba,
         contact: {
-            name: c.primary_poc_name ?? null,
-            email: c.email ?? c.primary_poc_email ?? null,
+            name: toTitleCaseName(c.primary_poc_name) ?? null,
+            email,
             title: c.primary_poc_title ?? null,
-            phone: c.phone ?? null,
+            phone,
         },
         icp_score: icp.score,
         icp_tier: icpTier(icp.score),
@@ -236,8 +283,20 @@ function contractorToLead(c: any): LeadRow {
         gap_hook,
         loom_url: loomForGapKey(firstGapKey),
         findings_summary: (blob.findings_summary as string) || null,
-        owner_linkedin: c.owner_linkedin ?? c.social_linkedin ?? null,
+        owner_linkedin: linkedin,
+        company_linkedin: companyLinkedin,
         has_website: !!c.website,
+        total_federal_revenue: c.total_award_volume ?? c.revenue ?? null,
+        total_federal_awards: c.total_federal_awards ?? c.federal_awards_count ?? null,
+        sam_registered: samRegistered,
+        sam_expiration: c.expiration_date ?? null,
+        sam_expiring_soon: isExpiringSoon(c.expiration_date),
+        known: {
+            linkedin: !!(linkedin || companyLinkedin),
+            email: !!email,
+            phone: !!phone,
+            website: !!c.website,
+        },
         check_analysis_id: c.check_analysis_id ?? null,
         research: normalizeResearch(c.research_findings),
         // website_url is filled in the single-lead detail path (needs a join to
@@ -266,6 +325,10 @@ function analysisToLead(a: any): LeadRow {
     const top = rawMatches.slice(0, 3).map(normalizeTopMatch);
     const best = top.length ? Math.max(...top.map((t: LeadTopMatch) => t.score_pct)) : null;
 
+    const email = a.lead_email ?? null;
+    const phone = inferred.phone ?? null;
+    const linkedin = inferred.owner_linkedin ?? inferred.social_linkedin ?? null;
+
     return {
         id: String(a.id),
         source: "inbound",
@@ -279,10 +342,10 @@ function analysisToLead(a: any): LeadRow {
         certifications,
         sba_certifications: sba,
         contact: {
-            name: inferred.contact_person ?? null,
-            email: a.lead_email ?? null,
+            name: toTitleCaseName(inferred.contact_person) ?? null,
+            email,
             title: null,
-            phone: inferred.phone ?? null,
+            phone,
         },
         icp_score: icp.score,
         icp_tier: icpTier(icp.score),
@@ -294,8 +357,21 @@ function analysisToLead(a: any): LeadRow {
         gap_hook: null,
         loom_url: null,
         findings_summary: null,
-        owner_linkedin: null,
+        owner_linkedin: linkedin,
+        company_linkedin: inferred.company_linkedin ?? null,
         has_website: !!a.website,
+        // Inbound (company_analyses) has no SAM/award columns — null them out.
+        total_federal_revenue: null,
+        total_federal_awards: inferred.federal_awards_count ?? null,
+        sam_registered: null,
+        sam_expiration: null,
+        sam_expiring_soon: false,
+        known: {
+            linkedin: !!linkedin,
+            email: !!email,
+            phone: !!phone,
+            website: !!a.website,
+        },
         readiness_score: a.readiness_score ?? null,
         check_page_url: `/check/${a.id}`,
         created_at: a.created_at ?? null,
@@ -324,16 +400,45 @@ function sortLeads(leads: LeadRow[], sort: string): LeadRow[] {
 // ───────────────────────── fetchers ─────────────────────────
 
 const CONTRACTOR_COLS =
-    "id, uei, company_name, website, email, primary_poc_name, primary_poc_email, primary_poc_title, phone, " +
+    "id, uei, company_name, website, email, primary_poc_name, primary_poc_email, primary_poc_title, " +
+    "primary_poc_phone, direct_phone, main_phone, phone, " +
     "naics_codes, certifications, sba_certifications, state, city, employee_count, years_in_business, " +
-    "federal_awards_count, qc_enriched, top_match_count, capability_summary_ai, owner_linkedin, social_linkedin, website_cms, check_analysis_id, research_findings, created_at";
+    "federal_awards_count, total_federal_awards, total_award_volume, revenue, " +
+    "is_sam_registered, sam_registered, expiration_date, " +
+    "qc_enriched, top_match_count, capability_summary_ai, owner_linkedin, social_linkedin, company_linkedin, " +
+    "website_cms, check_analysis_id, research_findings, created_at";
 
 const ANALYSIS_COLS =
     "id, company_name, website, lead_email, readiness_score, readiness_breakdown, inferred_profile, preview_matches, status, created_at";
 
+/**
+ * Rich contractor filters — applied as Supabase predicates BEFORE the
+ * CANDIDATE_CAP slice so they constrain the entire ~3275-row pool, not just the
+ * page the caller is on. (Post-ICP filters like tier/min_icp still run in JS in
+ * the handler because ICP is computed there.)
+ */
+interface ContractorFilters {
+    q?: string;
+    state?: string;
+    onlyWithMatches: boolean;
+    yearsMin?: number;
+    yearsMax?: number;
+    empMin?: number;
+    empMax?: number;
+    awardsMin?: number;
+    awardsMax?: number;
+    revenueMin?: number;
+    samRegistered?: boolean;
+    expiringSoon?: boolean;
+    hasLinkedin?: boolean;
+    hasEmail?: boolean;
+    hasPhone?: boolean;
+    hasWebsite?: boolean;
+}
+
 async function fetchContractorLeads(
     sb: ReturnType<typeof svc>,
-    opts: { q?: string; state?: string; onlyWithMatches: boolean },
+    opts: ContractorFilters,
 ): Promise<{ leads: LeadRow[]; capped: boolean }> {
     let query = sb
         .from("contractors")
@@ -349,6 +454,36 @@ async function fetchContractorLeads(
         const safe = opts.q.replace(/[%,]/g, "");
         query = query.ilike("company_name", `%${safe}%`);
     }
+
+    // Numeric range filters (run on the whole pool, pre-cap).
+    if (opts.yearsMin != null) query = query.gte("years_in_business", opts.yearsMin);
+    if (opts.yearsMax != null) query = query.lte("years_in_business", opts.yearsMax);
+    if (opts.empMin != null) query = query.gte("employee_count", opts.empMin);
+    if (opts.empMax != null) query = query.lte("employee_count", opts.empMax);
+    if (opts.awardsMin != null) query = query.gte("federal_awards_count", opts.awardsMin);
+    if (opts.awardsMax != null) query = query.lte("federal_awards_count", opts.awardsMax);
+    if (opts.revenueMin != null) query = query.gte("total_award_volume", opts.revenueMin);
+
+    // Boolean / presence filters.
+    if (opts.samRegistered) query = query.eq("is_sam_registered", true);
+    if (opts.expiringSoon) {
+        const cutoff = new Date(Date.now() + 90 * 86400000).toISOString();
+        query = query.not("expiration_date", "is", null).lte("expiration_date", cutoff);
+    }
+    // Presence OR-groups: supabase-js routes EVERY .or() through the same `or=`
+    // param, so two separate .or() calls collide and PostgREST keeps only one.
+    // Collect the groups and emit a SINGLE .or(), AND-nesting when both are on.
+    const liGroup = "owner_linkedin.not.is.null,social_linkedin.not.is.null,company_linkedin.not.is.null";
+    const phGroup = "primary_poc_phone.not.is.null,direct_phone.not.is.null,main_phone.not.is.null,phone.not.is.null";
+    if (opts.hasLinkedin && opts.hasPhone) {
+        query = query.or(`and(or(${liGroup}),or(${phGroup}))`);
+    } else if (opts.hasLinkedin) {
+        query = query.or(liGroup);
+    } else if (opts.hasPhone) {
+        query = query.or(phGroup);
+    }
+    if (opts.hasEmail) query = query.not("email", "is", null);
+    if (opts.hasWebsite) query = query.not("website", "is", null);
 
     const { data, error } = await query;
     if (error) throw new Error(error.message);
@@ -448,12 +583,41 @@ export async function GET(req: NextRequest) {
     // only_with_matches defaults true for contractors; ignored for inbound.
     const onlyWithMatches = sp.get("only_with_matches") !== "false" && sp.get("only_with_matches") !== "0";
 
+    // Rich contractor filters. Parsed into the ContractorFilters shape; each is
+    // optional and only applied when present/truthy. Numeric ranges are parsed
+    // with a NaN guard so a junk value is treated as "no filter".
+    const numParam = (k: string): number | undefined => {
+        const raw = sp.get(k);
+        if (raw == null || raw.trim() === "") return undefined;
+        const n = Number(raw);
+        return Number.isFinite(n) ? n : undefined;
+    };
+    const flagParam = (k: string): boolean => sp.get(k) === "1";
+    const contractorFilters: ContractorFilters = {
+        q,
+        state,
+        onlyWithMatches,
+        yearsMin: numParam("years_min"),
+        yearsMax: numParam("years_max"),
+        empMin: numParam("emp_min"),
+        empMax: numParam("emp_max"),
+        awardsMin: numParam("awards_min"),
+        awardsMax: numParam("awards_max"),
+        revenueMin: numParam("revenue_min"),
+        samRegistered: flagParam("sam_registered"),
+        expiringSoon: flagParam("expiring_soon"),
+        hasLinkedin: flagParam("has_linkedin"),
+        hasEmail: flagParam("has_email"),
+        hasPhone: flagParam("has_phone"),
+        hasWebsite: flagParam("has_website"),
+    };
+
     try {
         let pool: LeadRow[] = [];
         let capped = false;
 
         if (source === "contractors" || source === "all") {
-            const r = await fetchContractorLeads(sb, { q, state, onlyWithMatches });
+            const r = await fetchContractorLeads(sb, contractorFilters);
             pool = pool.concat(r.leads);
             capped = capped || r.capped;
         }
