@@ -337,15 +337,16 @@ export function computeReadinessScore(args: {
     });
 
     // Established business — 5+ years (+1)
-    const founded = (crawlData.founded_year as number) || (crawlData.founding_year as number) || 0;
-    const yearsOld = founded > 1900 ? new Date().getFullYear() - founded : 0;
+    const directYears = (crawlData.years_in_business as number) || 0;
+    const founded = (crawlData.founded_year as number) || (crawlData.founding_year as number) || (crawlData.foundingYear as number) || (crawlData.year_founded as number) || 0;
+    const yearsOld = directYears > 0 ? directYears : (founded > 1900 ? new Date().getFullYear() - founded : 0);
     const established = yearsOld >= 5;
     if (established) points += 1;
     factors.push({
         label: "Established Business (5+ years)",
         points: 1,
         present: established,
-        detail: yearsOld > 0 ? `${yearsOld} years in business` : undefined,
+        detail: yearsOld > 0 ? `${yearsOld} years in business` : "No founding year found on the website",
     });
 
     // Real operations — services list + detailed description (+1)
@@ -372,17 +373,21 @@ export function computeReadinessScore(args: {
 
     // Reachable contact info (+0.75)
     const ctList = (crawlData.contacts as { email?: string; phone?: string }[]) || [];
-    const reachable = ctList.some(c => c.email) && ctList.some(c => c.phone);
+    const reachable = ctList.some(c => c.email || c.phone);
     if (reachable) points += 0.75;
     factors.push({
         label: "Reachable Contact Info",
         points: 0.75,
         present: reachable,
-        detail: reachable ? "Email + phone published" : "Add email and phone to your website",
+        detail: reachable ? "Email or phone published" : "Add email or phone to your website",
     });
 
     // Employee count >= 10 (+0.5)
-    const empCount = (crawlData.employee_count as number) || (crawlData.employees as number) || 0;
+    const empCount = (crawlData.employee_count as number)
+        || ((crawlData.employee_signals as { estimate?: number } | null)?.estimate as number)
+        || (crawlData.employee_count_estimate as number)
+        || (crawlData.employees as number)
+        || 0;
     const decentSize = empCount >= 10;
     if (decentSize) points += 0.5;
     factors.push({

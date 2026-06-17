@@ -733,7 +733,7 @@ export async function runPostConfirmationPipeline(analysisId: string): Promise<v
         );
 
         // Readiness Score (with confirmed certs/data)
-        const { score: readinessScore, breakdown: readinessBreakdown } = computeReadinessScore({
+        let { score: readinessScore, breakdown: readinessBreakdown } = computeReadinessScore({
             samData,
             crawlData: {
                 ...crawlData,
@@ -787,6 +787,27 @@ export async function runPostConfirmationPipeline(analysisId: string): Promise<v
             if (firmo.industries.value && firmo.industries.value.length > 0) {
                 profileUpdates.industries = firmo.industries.value;
             }
+            // Re-score readiness now that the firmographic cascade resolved
+            // employees / years_in_business. The first pass (above) ran BEFORE
+            // these were known, so it read artificially low (the "Established
+            // Business" + "10+ Employees" factors silently scored 0).
+            try {
+                const re = computeReadinessScore({
+                    samData,
+                    crawlData: {
+                        ...crawlData,
+                        employee_count: (tempProfile.employee_count as number) || (crawlData.employee_count as number) || 0,
+                        years_in_business: (profileUpdates.years_in_business as number) || 0,
+                    },
+                    certifications: [
+                        ...certifications,
+                        ...((tempProfile.sba_certifications || []).map(t => ({ type: t, confidence: 1 }))),
+                    ],
+                    usaspendingAwardCount: usaspendingData?.award_count || 0,
+                });
+                readinessScore = re.score;
+                readinessBreakdown = re.breakdown;
+            } catch { /* keep first-pass readiness if re-score fails */ }
             updates.inferred_profile = profileUpdates;
             updates.firmographics = firmo;
             await sb.from("company_analyses").update(updates).eq("id", analysisId);
