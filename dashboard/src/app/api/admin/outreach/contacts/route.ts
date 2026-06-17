@@ -10,7 +10,8 @@
  *   ?cert=8(a)&cert=WOSB         (ICP set-aside / SBA cert — matched via contractor join)
  *   ?psc=R425&psc=D302           (matched via contractor join — contacts with no
  *                                 contractor match are excluded while a PSC filter is active)
- *   ?has_email=1                 (only rows with a non-null email; default on)
+ *   ?has_email=1                 (only rows with a non-null email; OFF by default —
+ *                                 pass has_email=1 to hide phone-only / email-less rows)
  *   ?engagement=7d|30d|never
  *   ?status=subscribed|unsubscribed|bounced
  *   ?q=foo                       (matches email, name, company)
@@ -75,8 +76,9 @@ export async function GET(req: NextRequest) {
     const states = sp.getAll("state").filter(Boolean);
     const certs = sp.getAll("cert").filter(Boolean);
     const pscList = sp.getAll("psc").map(p => p.trim().toUpperCase()).filter(Boolean);
-    // Has-email defaults on; pass has_email=0 to include phone-only contacts.
-    const hasEmail = sp.get("has_email") !== "0";
+    // Has-email is OFF by default so SMS-only / email-less contacts are visible.
+    // Pass has_email=1 (the UI "Has email only" toggle) to hide rows with no email.
+    const hasEmail = sp.get("has_email") === "1";
     const engagement = sp.get("engagement");
     const status = sp.get("status");
     const q = sp.get("q")?.trim();
@@ -113,7 +115,7 @@ export async function GET(req: NextRequest) {
             .limit(5000);
         listMemberIds = (members || []).map(m => m.contact_id);
         if (listMemberIds.length === 0) {
-            return NextResponse.json({ contacts: [], total: 0, limit, offset });
+            return NextResponse.json({ contacts: [], total: 0, limit, offset, capped: false });
         }
     }
 
@@ -126,7 +128,7 @@ export async function GET(req: NextRequest) {
         let cq = sb
             .from("contractors")
             .select("uei, company_name")
-            .limit(5000);
+            .limit(50000);
         if (pscList.length) cq = cq.overlaps("psc_codes", pscList);
         if (certs.length) {
             // Match either the SAM cert array or the generic certifications array.
@@ -148,7 +150,7 @@ export async function GET(req: NextRequest) {
         }
         if (intelMatchNames.size === 0 && intelMatchUeis.size === 0) {
             // Nothing in the contractor set satisfies the filter → no contacts can.
-            return NextResponse.json({ contacts: [], total: 0, limit, offset });
+            return NextResponse.json({ contacts: [], total: 0, limit, offset, capped: false });
         }
     }
 
@@ -161,8 +163,14 @@ export async function GET(req: NextRequest) {
     // bounded-window + in-memory path. Without either we paginate normally in SQL.
     const intelFilterActive = !!(intelMatchNames || intelMatchUeis);
     const inMemoryMode = intelFilterActive || isDerivedSort;
+    // Bounded window for the in-memory filter/sort path. Raised from 5k → 50k so
+    // we no longer SILENTLY truncate large result sets when a derived-sort /
+    // PSC / cert filter is active. If the DB returns exactly this many rows the
+    // window is (likely) full and we surface a `capped` flag to the UI instead
+    // of pretending the page is complete.
+    const IN_MEMORY_WINDOW = 50000;
     const SELECT_COLS =
-        "id, email, phone, first_name, last_name, company_name, title, naics_codes, state, source, source_id, tags, engagement_score, last_engagement_at, last_bounced_at, opted_out_at, created_at";
+        "id, email, phone, first_name, last_name, company_name, title, naics_codes, state, source, source_id, tags, custom_fields, engagement_score, last_engagement_at, last_bounced_at, opted_out_at, created_at";
 
     // Skip the DB count while we're in in-memory mode — we compute the true
     // total in-memory after the contractor-match / sort pass below.
@@ -185,8 +193,8 @@ export async function GET(req: NextRequest) {
     if (!inMemoryMode) {
         query = query.range(offset, offset + limit - 1);
     } else {
-        // Bounded window for the in-memory filter/sort (320 rows total today).
-        query = query.range(0, 4999);
+        // Bounded window for the in-memory filter/sort. See IN_MEMORY_WINDOW.
+        query = query.range(0, IN_MEMORY_WINDOW - 1);
     }
 
     if (sources.length) query = query.in("source", sources);
@@ -234,6 +242,12 @@ export async function GET(req: NextRequest) {
 
     let contacts = data || [];
     let total = count ?? 0;
+    // In in-memory mode the bounded window may have clipped the true result set.
+    // If the raw DB rows came back at exactly the window size there are (almost
+    // certainly) more rows we didn't see, so the in-memory `total` and any
+    // derived sort are computed over a partial set. Flag it so the UI can warn
+    // the user to narrow filters rather than silently truncating.
+    const capped = inMemoryMode && (data?.length || 0) >= IN_MEMORY_WINDOW;
 
     if (intelFilterActive) {
         // Drop rows with no matching contractor (in-memory pass covers the
@@ -270,7 +284,7 @@ export async function GET(req: NextRequest) {
 
         total = windowEnriched.length;
         const enriched = windowEnriched.slice(offset, offset + limit);
-        return NextResponse.json({ contacts: enriched, total, limit, offset });
+        return NextResponse.json({ contacts: enriched, total, limit, offset, capped });
     }
 
     if (intelFilterActive) {
@@ -284,7 +298,7 @@ export async function GET(req: NextRequest) {
     const intelByContactId = await buildContractorIntel(sb, contacts);
     const enriched = contacts.map(c => ({ ...c, contractor: intelByContactId.get(c.id) || null }));
 
-    return NextResponse.json({ contacts: enriched, total, limit, offset });
+    return NextResponse.json({ contacts: enriched, total, limit, offset, capped });
 }
 
 /**

@@ -38,6 +38,7 @@ interface Contact {
     source: string | null;
     source_id: string | null;
     tags: string[];
+    custom_fields: Record<string, unknown> | null;
     engagement_score: number;
     last_engagement_at: string | null;
     last_bounced_at: string | null;
@@ -78,10 +79,17 @@ type SortKey =
 
 // Column model for the HubSpot-style show/hide picker. `sort` is the API sort
 // key when the column header is clickable; `align` controls cell alignment.
-type ColumnId =
+type StaticColumnId =
     | "email" | "name" | "company" | "phone" | "title" | "naics" | "state"
     | "source" | "past_awards" | "last_award" | "years_sam" | "listing"
     | "engagement" | "last_engaged" | "tags";
+
+// Custom-field columns are keyed off custom_fields jsonb keys discovered in the
+// loaded rows, namespaced with a "cf:" prefix so they never collide with the
+// static column ids above. A ColumnId is therefore either a known static id or
+// any "cf:<key>" string.
+const CF_PREFIX = "cf:";
+type ColumnId = StaticColumnId | `${typeof CF_PREFIX}${string}`;
 
 interface ColumnDef {
     id: ColumnId;
@@ -89,9 +97,13 @@ interface ColumnDef {
     sort?: SortKey;       // present => header is clickable
     align?: "left" | "right";
     title?: string;       // header tooltip
+    custom?: boolean;     // true => sourced from custom_fields jsonb
+    cfKey?: string;       // the raw custom_fields key (when custom)
 }
 
-const COLUMNS: ColumnDef[] = [
+// Static (built-in) columns. Custom_fields columns are appended at runtime once
+// the loaded rows reveal which jsonb keys exist.
+const STATIC_COLUMNS: ColumnDef[] = [
     { id: "email", label: "Email", sort: "email" },
     { id: "name", label: "Name" },
     { id: "company", label: "Company", sort: "company_name" },
@@ -110,7 +122,8 @@ const COLUMNS: ColumnDef[] = [
 ];
 
 // Default-visible set (HubSpot-style). Hideable columns: phone, title, tags, engagement, source.
-const DEFAULT_VISIBLE: Record<ColumnId, boolean> = {
+// custom_fields columns default to hidden (opt-in via the column picker).
+const DEFAULT_VISIBLE: Record<StaticColumnId, boolean> = {
     email: true, name: true, company: true, phone: false, title: false,
     naics: true, state: true, source: false, past_awards: true,
     last_award: true, years_sam: true, listing: true, engagement: false,
@@ -118,9 +131,26 @@ const DEFAULT_VISIBLE: Record<ColumnId, boolean> = {
 };
 const COLS_STORAGE_KEY = "outreach_contacts_cols";
 
+// Pretty-print a custom_fields key as a column label ("gap_hook" → "Gap Hook").
+function cfLabel(key: string): string {
+    return key
+        .replace(/[_-]+/g, " ")
+        .replace(/\b\w/g, ch => ch.toUpperCase())
+        .trim();
+}
+
+// Render any custom_fields value as a short display string for a table cell.
+function cfDisplay(val: unknown): string {
+    if (val == null) return "";
+    if (typeof val === "string") return val;
+    if (typeof val === "number" || typeof val === "boolean") return String(val);
+    try { return JSON.stringify(val); } catch { return String(val); }
+}
+
 export default function OutreachContactsPage() {
     const [contacts, setContacts] = useState<Contact[]>([]);
     const [total, setTotal] = useState(0);
+    const [capped, setCapped] = useState(false);
     const [loading, setLoading] = useState(true);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [openContactId, setOpenContactId] = useState<string | null>(null);
@@ -135,7 +165,8 @@ export default function OutreachContactsPage() {
         states: [] as string[],
         certs: [] as string[],
         psc: [] as string[],
-        hasEmail: true,
+        // Default OFF → show ALL contacts, including SMS-only / email-less rows.
+        hasEmail: false,
         engagement: "",
         status: "",
         listId: "",
@@ -146,22 +177,29 @@ export default function OutreachContactsPage() {
     const [page, setPage] = useState(0);
     const [sortKey, setSortKey] = useState<SortKey>("created_at");
     const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
-    const [visibleCols, setVisibleCols] = useState<Record<ColumnId, boolean>>(DEFAULT_VISIBLE);
+    // visibleCols spans both static + "cf:<key>" custom columns, so it's a loose
+    // string-keyed map. Static defaults seed it; custom columns default hidden.
+    const [visibleCols, setVisibleCols] = useState<Record<string, boolean>>(DEFAULT_VISIBLE);
+    // custom_fields keys discovered across the loaded rows (sticky across pages so
+    // the picker doesn't lose options when a page happens to omit a key).
+    const [customFieldKeys, setCustomFieldKeys] = useState<string[]>([]);
     const [showColsMenu, setShowColsMenu] = useState(false);
     const colsMenuRef = useRef<HTMLDivElement | null>(null);
     const PAGE_SIZE = 50;
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    // Restore persisted column choices once on mount.
+    // Restore persisted column choices once on mount. Saved keys can be static
+    // column ids OR "cf:<key>" custom-field ids — merge whatever's there over the
+    // static defaults so both kinds of preference survive a reload.
     useEffect(() => {
         try {
             const raw = localStorage.getItem(COLS_STORAGE_KEY);
             if (raw) {
-                const saved = JSON.parse(raw) as Partial<Record<ColumnId, boolean>>;
+                const saved = JSON.parse(raw) as Record<string, unknown>;
                 setVisibleCols(prev => {
                     const next = { ...prev };
-                    for (const col of COLUMNS) {
-                        if (typeof saved[col.id] === "boolean") next[col.id] = saved[col.id]!;
+                    for (const [k, v] of Object.entries(saved)) {
+                        if (typeof v === "boolean") next[k] = v;
                     }
                     return next;
                 });
@@ -183,7 +221,7 @@ export default function OutreachContactsPage() {
         return () => document.removeEventListener("mousedown", onClick);
     }, [showColsMenu]);
 
-    const toggleColumn = (id: ColumnId) => {
+    const toggleColumn = (id: string) => {
         setVisibleCols(prev => {
             const next = { ...prev, [id]: !prev[id] };
             try { localStorage.setItem(COLS_STORAGE_KEY, JSON.stringify(next)); } catch { /* ignore */ }
@@ -213,7 +251,9 @@ export default function OutreachContactsPage() {
         for (const st of filters.states) params.append("state", st);
         for (const c of filters.certs) params.append("cert", c);
         for (const p of filters.psc) params.append("psc", p);
-        params.set("has_email", filters.hasEmail ? "1" : "0");
+        // Only constrain to rows with an email when the toggle is ON. Default OFF
+        // shows everything, including SMS-only / email-less contacts.
+        if (filters.hasEmail) params.set("has_email", "1");
         if (filters.engagement) params.set("engagement", filters.engagement);
         if (filters.status) params.set("status", filters.status);
         if (filters.listId) params.set("list_id", filters.listId);
@@ -225,10 +265,25 @@ export default function OutreachContactsPage() {
         try {
             const res = await fetch(`/api/admin/outreach/contacts?${params}`);
             const data = await res.json();
-            setContacts(data.contacts || []);
+            const rows: Contact[] = data.contacts || [];
+            setContacts(rows);
             setTotal(data.total || 0);
+            setCapped(!!data.capped);
+            // Accumulate custom_fields keys discovered in this page so the column
+            // picker keeps offering them even as the user pages around.
+            setCustomFieldKeys(prev => {
+                const seen = new Set(prev);
+                let changed = false;
+                for (const c of rows) {
+                    for (const k of Object.keys(c.custom_fields || {})) {
+                        if (!seen.has(k)) { seen.add(k); changed = true; }
+                    }
+                }
+                return changed ? Array.from(seen).sort() : prev;
+            });
         } catch {
             setContacts([]);
+            setCapped(false);
         } finally {
             setLoading(false);
         }
@@ -360,8 +415,26 @@ export default function OutreachContactsPage() {
 
     const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
+    // Custom-field column defs derived from the keys discovered in loaded rows.
+    const customColumns = useMemo<ColumnDef[]>(
+        () => customFieldKeys.map(key => ({
+            id: `${CF_PREFIX}${key}` as ColumnId,
+            label: cfLabel(key),
+            custom: true,
+            cfKey: key,
+            title: `custom_fields.${key}`,
+        })),
+        [customFieldKeys]
+    );
+
+    // Full column universe for the picker: static columns first, then custom_fields.
+    const allColumns = useMemo<ColumnDef[]>(
+        () => [...STATIC_COLUMNS, ...customColumns],
+        [customColumns]
+    );
+
     // Columns currently rendered, in declared order. +1 for the always-on select cell.
-    const shownColumns = useMemo(() => COLUMNS.filter(c => visibleCols[c.id]), [visibleCols]);
+    const shownColumns = useMemo(() => allColumns.filter(c => visibleCols[c.id]), [allColumns, visibleCols]);
     const colSpan = shownColumns.length + 1;
 
     // A single sortable/static header cell.
@@ -392,6 +465,16 @@ export default function OutreachContactsPage() {
 
     // Body cell for a given column + contact.
     const renderCell = (col: ColumnDef, c: Contact) => {
+        // custom_fields columns: render the raw jsonb value as a clamped string.
+        if (col.custom && col.cfKey) {
+            const raw = (c.custom_fields || {})[col.cfKey];
+            const text = cfDisplay(raw);
+            return (
+                <td key={col.id} className="px-3 py-2.5 text-stone-600 truncate max-w-[200px]" title={text || undefined}>
+                    {text ? text : <span className="text-stone-300">—</span>}
+                </td>
+            );
+        }
         switch (col.id) {
             case "email": {
                 const status = c.opted_out_at ? "unsub" : c.last_bounced_at ? "bounced" : "ok";
@@ -525,22 +608,26 @@ export default function OutreachContactsPage() {
                                 <ChevronDown className="w-3.5 h-3.5 text-stone-400" />
                             </button>
                             {showColsMenu && (
-                                <div className="absolute right-0 mt-1 w-56 bg-white border border-stone-200 rounded-xl shadow-lg z-20 p-1.5">
+                                <div className="absolute right-0 mt-1 w-64 bg-white border border-stone-200 rounded-xl shadow-lg z-20 p-1.5">
                                     <div className="px-2 py-1.5 text-[10px] font-bold uppercase text-stone-400 tracking-wide flex items-center justify-between">
-                                        <span>Columns</span>
+                                        <span>Configure columns</span>
                                         <button
                                             type="button"
                                             onClick={() => {
-                                                setVisibleCols(DEFAULT_VISIBLE);
-                                                try { localStorage.setItem(COLS_STORAGE_KEY, JSON.stringify(DEFAULT_VISIBLE)); } catch { /* ignore */ }
+                                                // Reset standard columns to defaults; custom_fields columns back to hidden.
+                                                const reset: Record<string, boolean> = { ...DEFAULT_VISIBLE };
+                                                for (const col of customColumns) reset[col.id] = false;
+                                                setVisibleCols(reset);
+                                                try { localStorage.setItem(COLS_STORAGE_KEY, JSON.stringify(reset)); } catch { /* ignore */ }
                                             }}
                                             className="text-[10px] font-medium text-stone-500 hover:text-black normal-case"
                                         >
                                             Reset
                                         </button>
                                     </div>
-                                    <div className="max-h-72 overflow-auto">
-                                        {COLUMNS.map(col => (
+                                    <div className="max-h-80 overflow-auto">
+                                        <div className="px-2 pt-1 pb-0.5 text-[9px] font-bold uppercase text-stone-300 tracking-wide">Standard</div>
+                                        {STATIC_COLUMNS.map(col => (
                                             <button
                                                 key={col.id}
                                                 type="button"
@@ -556,6 +643,28 @@ export default function OutreachContactsPage() {
                                                 {col.label}
                                             </button>
                                         ))}
+                                        {customColumns.length > 0 && (
+                                            <>
+                                                <div className="px-2 pt-2 pb-0.5 text-[9px] font-bold uppercase text-stone-300 tracking-wide border-t border-stone-100 mt-1">Custom fields</div>
+                                                {customColumns.map(col => (
+                                                    <button
+                                                        key={col.id}
+                                                        type="button"
+                                                        onClick={() => toggleColumn(col.id)}
+                                                        className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-stone-700 hover:bg-stone-50 rounded-lg"
+                                                        title={col.title}
+                                                    >
+                                                        <span className={clsx(
+                                                            "w-4 h-4 rounded border flex items-center justify-center shrink-0",
+                                                            visibleCols[col.id] ? "bg-black border-black" : "bg-white border-stone-300"
+                                                        )}>
+                                                            {visibleCols[col.id] && <Check className="w-3 h-3 text-white" />}
+                                                        </span>
+                                                        <span className="truncate">{col.label}</span>
+                                                    </button>
+                                                ))}
+                                            </>
+                                        )}
                                     </div>
                                 </div>
                             )}
@@ -823,7 +932,7 @@ export default function OutreachContactsPage() {
 
                     <button
                         type="button"
-                        onClick={() => { setFilters({ q: "", sources: [], tags: [], naics: [], states: [], certs: [], psc: [], hasEmail: true, engagement: "", status: "", listId: "" }); setPage(0); }}
+                        onClick={() => { setFilters({ q: "", sources: [], tags: [], naics: [], states: [], certs: [], psc: [], hasEmail: false, engagement: "", status: "", listId: "" }); setPage(0); }}
                         className="w-full text-xs text-stone-500 hover:text-black underline"
                     >
                         Clear all filters
@@ -831,6 +940,16 @@ export default function OutreachContactsPage() {
                 </aside>
 
                 <section className="space-y-3 min-w-0">
+                    {capped && (
+                        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-2 text-xs text-amber-800">
+                            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                            <span>
+                                Showing the first {total.toLocaleString()} contacts that match — this sort/filter exceeds the
+                                lookup window, so more rows exist beyond what&apos;s loaded. Narrow your filters
+                                (NAICS, state, source, tags) to see the full set.
+                            </span>
+                        </div>
+                    )}
                     {selectedIds.size > 0 && (
                         <div className="bg-orange-50 border border-orange-200 rounded-xl p-3 flex sm:flex-row flex-col justify-between items-center text-sm gap-3">
                             <span className="font-bold text-orange-700">{selectedIds.size} selected</span>

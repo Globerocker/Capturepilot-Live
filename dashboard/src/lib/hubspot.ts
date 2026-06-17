@@ -863,3 +863,214 @@ export async function createSupportTicket(args: {
         return null;
     }
 }
+
+// ─── Tasks (cockpit follow-ups) ───────────────────────────────────────────────
+
+/** Default HubSpot owner for cockpit-generated tasks — Sergio Gouveia. */
+export const COCKPIT_TASK_OWNER_ID = process.env.HUBSPOT_TASK_OWNER_ID || "88389389";
+
+/**
+ * Create a HubSpot CRM task and (best-effort) associate it to a contact.
+ *
+ * Used by the cockpit to drop a "send this message" follow-up into Sergio's
+ * task queue when an admin generates an AI message for a contractor/lead. The
+ * task body carries the generated subject + body so the rep can copy/paste.
+ *
+ * Returns the task ID or null on failure (fire-and-forget safe — logged, never
+ * thrown). Mirrors the createSupportTicket fetch+token pattern.
+ *
+ * Association: HubSpot's default task→contact association typeId is 204
+ * (HUBSPOT_DEFINED). We use the v4 associations/default endpoint which picks
+ * the canonical type without us hardcoding it.
+ */
+export async function createHubSpotTask(args: {
+    subject: string;
+    body: string;
+    /** Epoch ms the task is due. Defaults to ~24h from now. */
+    dueAt?: number;
+    ownerId?: string;
+    /** Contact ID to associate the task to (so it shows on the CRM record). */
+    contactId?: string | null;
+    /** HubSpot task status — defaults to NOT_STARTED. */
+    status?: "NOT_STARTED" | "IN_PROGRESS" | "WAITING" | "COMPLETED" | "DEFERRED";
+}): Promise<{ id: string } | null> {
+    if (!HUBSPOT_TOKEN) {
+        console.warn("[hubspot] createHubSpotTask: HUBSPOT_TOKEN unset — skipping");
+        return null;
+    }
+    const dueAt = args.dueAt ?? Date.now() + 24 * 60 * 60 * 1000;
+    const properties: Record<string, string> = {
+        hs_task_subject: args.subject.slice(0, 250),
+        hs_task_body: args.body.slice(0, 65000),
+        hs_task_status: args.status || "NOT_STARTED",
+        hs_task_type: "EMAIL",
+        hs_timestamp: String(dueAt),
+        hubspot_owner_id: args.ownerId || COCKPIT_TASK_OWNER_ID,
+    };
+
+    try {
+        const res = await fetch(`${BASE}/crm/v3/objects/tasks`, {
+            method: "POST",
+            headers: {
+                Authorization: `Bearer ${HUBSPOT_TOKEN}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ properties }),
+            signal: AbortSignal.timeout(8000),
+        });
+        if (!res.ok) {
+            const errBody = await res.text().catch(() => "");
+            console.warn(`[hubspot] createHubSpotTask failed (${res.status}): ${errBody.slice(0, 200)}`);
+            return null;
+        }
+        const data = (await res.json()) as { id: string };
+
+        // Associate to contact — best effort, non-fatal. v4 default association
+        // lets HubSpot resolve the canonical task→contact type for us.
+        if (args.contactId) {
+            try {
+                await fetch(
+                    `${BASE}/crm/v4/objects/tasks/${data.id}/associations/default/contacts/${args.contactId}`,
+                    {
+                        method: "PUT",
+                        headers: { Authorization: `Bearer ${HUBSPOT_TOKEN}` },
+                        signal: AbortSignal.timeout(4000),
+                    },
+                );
+            } catch { /* non-fatal */ }
+        }
+
+        return { id: data.id };
+    } catch (e) {
+        console.warn(`[hubspot] createHubSpotTask exception: ${(e as Error).message}`);
+        return null;
+    }
+}
+
+// ─── Notes (cockpit hand-off context) ─────────────────────────────────────────
+
+/**
+ * Create a HubSpot Note and (best-effort) associate it to a contact.
+ *
+ * Used by the cockpit warm hand-off to drop call notes + transcript onto the
+ * contact's timeline. `body` is HTML — HubSpot keeps basic inline tags
+ * (<p>/<ul>/<a>/<strong>) and strips most CSS. Returns the note ID or null on
+ * failure (fire-and-forget safe). Mirrors createHubSpotTask's fetch+token +
+ * v4 default-association pattern.
+ */
+export async function createNoteForContact(
+    contactId: string,
+    body: string,
+): Promise<{ id: string } | null> {
+    if (!HUBSPOT_TOKEN) {
+        console.warn("[hubspot] createNoteForContact: HUBSPOT_TOKEN unset — skipping");
+        return null;
+    }
+    if (!contactId || !body) return null;
+    try {
+        const res = await fetch(`${BASE}/crm/v3/objects/notes`, {
+            method: "POST",
+            headers: {
+                Authorization: `Bearer ${HUBSPOT_TOKEN}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                properties: {
+                    hs_note_body: body.slice(0, 65000),
+                    hs_timestamp: new Date().toISOString(),
+                },
+            }),
+            signal: AbortSignal.timeout(8000),
+        });
+        if (!res.ok) {
+            const errBody = await res.text().catch(() => "");
+            console.warn(`[hubspot] createNoteForContact failed (${res.status}): ${errBody.slice(0, 200)}`);
+            return null;
+        }
+        const data = (await res.json()) as { id: string };
+
+        // Associate to contact — best effort, non-fatal.
+        try {
+            await fetch(
+                `${BASE}/crm/v4/objects/notes/${data.id}/associations/default/contacts/${contactId}`,
+                {
+                    method: "PUT",
+                    headers: { Authorization: `Bearer ${HUBSPOT_TOKEN}` },
+                    signal: AbortSignal.timeout(4000),
+                },
+            );
+        } catch { /* non-fatal */ }
+
+        return { id: data.id };
+    } catch (e) {
+        console.warn(`[hubspot] createNoteForContact exception: ${(e as Error).message}`);
+        return null;
+    }
+}
+
+// ─── Calls (logged call engagements) ──────────────────────────────────────────
+
+/**
+ * Log a HubSpot Call engagement and (best-effort) associate it to a contact.
+ *
+ * Used by the cockpit hand-off when a discovery-call transcript is supplied —
+ * the transcript lands in the call body so it shows up under the contact's
+ * "Calls" timeline filter (distinct from the Note). Returns the call ID or null
+ * on failure. Same fetch+token + v4 default-association pattern as the others.
+ */
+export async function createCallForContact(args: {
+    contactId: string;
+    body: string;
+    title?: string;
+    /** Epoch ms when the call happened. Defaults to now. */
+    timestamp?: number;
+    ownerId?: string;
+}): Promise<{ id: string } | null> {
+    if (!HUBSPOT_TOKEN) {
+        console.warn("[hubspot] createCallForContact: HUBSPOT_TOKEN unset — skipping");
+        return null;
+    }
+    if (!args.contactId || !args.body) return null;
+    const ts = args.timestamp ?? Date.now();
+    const properties: Record<string, string> = {
+        hs_call_body: args.body.slice(0, 65000),
+        hs_timestamp: String(ts),
+        hs_call_title: (args.title || "Discovery call (CapturePilot cockpit)").slice(0, 250),
+        hs_call_status: "COMPLETED",
+        hs_call_direction: "OUTBOUND",
+        hubspot_owner_id: args.ownerId || COCKPIT_TASK_OWNER_ID,
+    };
+    try {
+        const res = await fetch(`${BASE}/crm/v3/objects/calls`, {
+            method: "POST",
+            headers: {
+                Authorization: `Bearer ${HUBSPOT_TOKEN}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ properties }),
+            signal: AbortSignal.timeout(8000),
+        });
+        if (!res.ok) {
+            const errBody = await res.text().catch(() => "");
+            console.warn(`[hubspot] createCallForContact failed (${res.status}): ${errBody.slice(0, 200)}`);
+            return null;
+        }
+        const data = (await res.json()) as { id: string };
+
+        try {
+            await fetch(
+                `${BASE}/crm/v4/objects/calls/${data.id}/associations/default/contacts/${args.contactId}`,
+                {
+                    method: "PUT",
+                    headers: { Authorization: `Bearer ${HUBSPOT_TOKEN}` },
+                    signal: AbortSignal.timeout(4000),
+                },
+            );
+        } catch { /* non-fatal */ }
+
+        return { id: data.id };
+    } catch (e) {
+        console.warn(`[hubspot] createCallForContact exception: ${(e as Error).message}`);
+        return null;
+    }
+}
