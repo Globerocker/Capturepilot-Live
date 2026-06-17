@@ -10,7 +10,7 @@ import {
     Wrench, Settings, LogOut, Loader2, Search, ChevronRight, ChevronDown,
     Menu, X, MessageSquare, Mail, Sparkles, Activity,
     GraduationCap, ShieldCheck, Database, FileText,
-    Send, ListChecks, Plug, Megaphone, Newspaper, Layers,
+    Send, ListChecks, Plug, Megaphone, Newspaper, Layers, Target,
 } from "lucide-react";
 import clsx from "clsx";
 
@@ -47,6 +47,13 @@ const NAV: NavSection[] = [
             { href: "/admin/health", icon: Activity, label: "Env Health" },
             { href: "/admin/db-health", icon: Database, label: "DB Health" },
             { href: "/admin/changelog", icon: Newspaper, label: "Changelog" },
+        ],
+    },
+    {
+        label: "Acquire",
+        key: "acquire",
+        items: [
+            { href: "/admin/cockpit", icon: Target, label: "Sales Cockpit" },
         ],
     },
     {
