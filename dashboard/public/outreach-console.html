@@ -49,7 +49,9 @@ label.f{display:block;font-size:12px;color:var(--muted);margin:8px 0 3px}
   <section id="v-seq"></section>
   <section id="v-leads" class="hidden"><div class="tpl-grid">
     <div><div class="row" style="margin-bottom:8px"><input type="text" id="leadSearch" placeholder="Suche Firma…" style="flex:1"/>
-      <select id="stepSel"></select></div><div class="leadlist" id="leadList"></div>
+      <select id="stepSel"></select></div>
+      <div class="row" style="margin-bottom:8px"><button class="act" onclick="exportList()">⬇ Liste (CSV)</button><button class="act" onclick="exportEmails()">⬇ Alle E-Mails (CSV)</button></div>
+      <div class="leadlist" id="leadList"></div>
       <div class="sub" id="leadCount" style="margin-top:6px"></div></div>
     <div><div class="preview" id="leadPreview"></div><h4 style="margin:14px 0 6px">Matches</h4><div id="leadMatches"></div></div>
   </div></section>
@@ -125,6 +127,19 @@ function listLeads(){
   showLead();
 }
 window.pickLead=i=>{curLead=i;listLeads()};
+function dlCsv(name,rows){const csv=rows.map(r=>r.map(c=>'"'+String(c??"").replace(/"/g,'""')+'"').join(",")).join("\n");const a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8"}));a.download=name;a.click();}
+window.exportList=()=>{
+  const m=(l,i)=>{const x=(l.matches||[])[i];return x?`${x.title} | ${x.office} | ${x.score}% | ${x.deadline||""}`:""};
+  const rows=[["Firma","E-Mail","Gap-Hook","Match 1","Match 2","Match 3"]];
+  D.leads.forEach(l=>rows.push([l.company||"",l.email||"",(l.vars&&l.vars.gap_hook)||"",m(l,0),m(l,1),m(l,2)]));
+  dlCsv("match-drop-liste.csv",rows);toast(D.leads.length+" Leads exportiert");
+};
+window.exportEmails=()=>{
+  const s=D.steps[curStep]||D.steps[0];
+  const rows=[["Firma","E-Mail","Betreff","E-Mail-Text (E-Mail "+(s.step_order)+")"]];
+  D.leads.forEach(l=>rows.push([l.company||"",l.email||"",fill(s.subject,l.vars),fill(s.body_template,l.vars)]));
+  dlCsv("match-drop-emails-step"+s.step_order+".csv",rows);toast(D.leads.length+" E-Mails (E-Mail "+s.step_order+") exportiert");
+};
 function showLead(){
   const l=D.leads[curLead];if(!l){$("leadPreview").textContent="Keine Leads.";$("leadMatches").innerHTML="";return}
   const s=D.steps[curStep]||D.steps[0];
