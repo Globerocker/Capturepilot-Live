@@ -1,0 +1,172 @@
+<!DOCTYPE html><html lang="de"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Outreach Console — Match-Drop</title>
+<style>
+:root{--bg:#f7f6f3;--card:#fff;--line:#e7e5e0;--ink:#1c1917;--muted:#78716c;--accent:#4f46e5;--ok:#059669;}
+*{box-sizing:border-box}body{margin:0;font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink)}
+header{position:sticky;top:0;z-index:10;background:var(--card);border-bottom:1px solid var(--line);padding:10px 20px}
+h1{font-size:16px;margin:0}.sub{color:var(--muted);font-size:12px}
+nav button{background:none;border:none;padding:8px 4px;margin-right:18px;font:inherit;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent}
+nav button.on{color:var(--accent);border-bottom-color:var(--accent)}
+main{padding:18px 20px;max-width:1100px;margin:0 auto}
+input,select,textarea,button{font:inherit}
+input[type=text],input[type=email],input[type=number],select,textarea{padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)}
+textarea{width:100%;min-height:190px;font-family:ui-monospace,Menlo,monospace;font-size:13px}
+.card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:14px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+button.act{border:1px solid var(--line);background:#fff;border-radius:8px;padding:7px 12px;cursor:pointer}
+button.ok{background:var(--accent);color:#fff;border-color:var(--accent)}
+.badge{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:6px;background:#eef2ff;color:var(--accent)}
+.b-draft{background:#f3f4f6;color:#6b7280}.b-active{background:#ecfdf5;color:#047857}.b-paused{background:#fffbeb;color:#b45309}
+.hidden{display:none}
+.tpl-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}@media(max-width:880px){.tpl-grid{grid-template-columns:1fr}}
+.preview{background:#fff;border:1px solid var(--line);border-radius:10px;padding:14px;white-space:pre-wrap;font-size:14px;line-height:1.55}
+.leadlist{max-height:520px;overflow:auto;border:1px solid var(--line);border-radius:10px}
+.leadlist div{padding:7px 10px;border-bottom:1px solid #f0efec;cursor:pointer;font-size:13px}
+.leadlist div:hover{background:#fafaf9}.leadlist div.sel{background:#eef2ff}
+.match{border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:8px}
+.match b{font-size:13px}.match .meta{font-size:12px;color:var(--muted)}
+.score{float:right;font-weight:700;color:var(--ok)}
+table{width:100%;border-collapse:collapse}td,th{padding:5px 8px;border-bottom:1px solid var(--line);text-align:left;font-size:12.5px}
+label.f{display:block;font-size:12px;color:var(--muted);margin:8px 0 3px}
+.toast{position:fixed;bottom:18px;right:18px;background:#1c1917;color:#fff;padding:10px 14px;border-radius:10px;opacity:0;transition:.2s}.toast.show{opacity:1}
+.gate{max-width:420px;margin:14vh auto;background:#fff;border:1px solid var(--line);border-radius:14px;padding:28px;text-align:center}
+</style></head><body>
+<div id="gate" class="gate hidden"><h1>Outreach Console</h1><p class="sub">Bitte den Zugangs-Link mit ?token=… verwenden.</p></div>
+<div id="app" class="hidden">
+<header>
+  <div class="row"><h1>Outreach Console</h1><span class="sub" id="campName"></span><span id="statusBadge"></span><div style="flex:1"></div>
+    <button class="act" id="startBtn"></button></div>
+  <nav style="margin-top:6px">
+    <button data-v="seq" class="on">Sequenz</button>
+    <button data-v="leads">Vorschau / Leads</button>
+    <button data-v="settings">Einstellungen</button>
+    <button data-v="report">Report</button>
+  </nav>
+</header>
+<main>
+  <div id="banner" class="sub"></div>
+  <section id="v-seq"></section>
+  <section id="v-leads" class="hidden"><div class="tpl-grid">
+    <div><div class="row" style="margin-bottom:8px"><input type="text" id="leadSearch" placeholder="Suche Firma…" style="flex:1"/>
+      <select id="stepSel"></select></div><div class="leadlist" id="leadList"></div>
+      <div class="sub" id="leadCount" style="margin-top:6px"></div></div>
+    <div><div class="preview" id="leadPreview"></div><h4 style="margin:14px 0 6px">Matches</h4><div id="leadMatches"></div></div>
+  </div></section>
+  <section id="v-settings" class="hidden"></section>
+  <section id="v-report" class="hidden"></section>
+</main></div>
+<div class="toast" id="toast"></div>
+<script>
+const API="/api/outreach-console";
+const TOKEN=new URLSearchParams(location.search).get("token");
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const toast=m=>{const t=$("toast");t.textContent=m;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),1600)};
+let D=null, curLead=0, curStep=0;
+const fill=(t,v)=>String(t||"").replace(/\{\{(\w+)\}\}/g,(_,k)=>k in v?v[k]:(k==="sender_name"?(D.campaign.sender_name||"CapturePilot"):k==="unsubscribe_url"?"(Abmelde-Link)":""));
+
+if(!TOKEN){$("gate").classList.remove("hidden");}else{$("app").classList.remove("hidden");load();}
+
+async function api(action,extra){const r=await fetch(API+"?token="+TOKEN,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action,...extra})});const j=await r.json().catch(()=>({error:"bad response"}));if(!r.ok||j.error){toast("Fehler: "+(j.error||r.status));return null}return j}
+async function load(){const r=await fetch(API+"?token="+TOKEN+"&data=1&cb="+Date.now());const j=await r.json().catch(()=>({error:"Ladefehler"}));if(j.error){$("banner").textContent=j.error;return}D=j;render()}
+
+function render(){
+  $("campName").textContent=D.campaign.name;
+  const st=D.campaign.status;
+  $("statusBadge").innerHTML='<span class="badge b-'+st+'">'+st+'</span>';
+  $("startBtn").textContent = st==="active"?"⏸ Pausieren":"▶ Start (live schalten)";
+  $("startBtn").className="act "+(st==="active"?"":"ok");
+  $("startBtn").onclick=async()=>{const ns=st==="active"?"paused":"active";if(ns==="active"&&!confirm("Kampagne live schalten? Es wird ab jetzt (im Sendefenster, mit Tageslimit) gesendet."))return;await api("set_status",{status:ns});toast(ns==="active"?"Live ✓":"Pausiert");load()};
+  document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>show(b.dataset.v));
+  renderSeq();renderSettings();renderReport();renderLeads();
+}
+function show(v){["seq","leads","settings","report"].forEach(x=>$("v-"+x).classList.toggle("hidden",x!==v));document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("on",b.dataset.v===v))}
+
+function renderSeq(){
+  $("v-seq").innerHTML=D.steps.map((s,i)=>`<div class="card">
+    <div class="row"><b>E-Mail ${s.step_order}</b>
+      <span class="badge b-draft">${s.step_order===1?"sofort":"+"+s.delay_value+" "+s.delay_unit}</span>
+      <span class="sub">${s.send_condition==="if_no_reply"?"nur wenn keine Antwort":"immer"}</span>
+      <div style="flex:1"></div>
+      <button class="act" onclick="toggleEdit(${i})">Bearbeiten</button>
+      ${D.steps.length>1?`<button class="act" onclick="delStep('${s.id}')">Löschen</button>`:""}</div>
+    <div id="ed${i}" class="hidden" style="margin-top:10px">
+      <div class="row"><div><label class="f">Verzögerung</label><input type="number" id="dv${i}" value="${s.delay_value}" style="width:70px"/></div>
+        <div><label class="f">Einheit</label><select id="du${i}"><option ${s.delay_unit==="days"?"selected":""}>days</option><option ${s.delay_unit==="hours"?"selected":""}>hours</option><option ${s.delay_unit==="minutes"?"selected":""}>minutes</option></select></div>
+        <div><label class="f">Bedingung</label><select id="sc${i}"><option value="always" ${s.send_condition!=="if_no_reply"?"selected":""}>immer senden</option><option value="if_no_reply" ${s.send_condition==="if_no_reply"?"selected":""}>nur wenn keine Antwort</option></select></div>
+        <div><label class="f"><input type="checkbox" id="sr${i}" ${s.skip_if_replied?"checked":""}/> bei Antwort stoppen</label></div></div>
+      <label class="f">Betreff (A)</label><input type="text" id="su${i}" value="${esc(s.subject)}" style="width:100%" oninput="livePrev(${i})"/>
+      <label class="f">Betreff (B) — optional, 50/50 Split</label><input type="text" id="sb${i}" value="${esc(s.subject_b||"")}" style="width:100%"/>
+      <label class="f">Text</label><textarea id="bo${i}" oninput="livePrev(${i})">${esc(s.body_template)}</textarea>
+      <div class="row" style="margin-top:8px"><button class="act ok" onclick="saveStep(${i},'${s.id}')">Speichern</button>
+        <span class="sub">Platzhalter: {{first_name}} {{company}} {{matches_block}} {{gap_line}} {{loom_url}} {{sender_name}}</span></div>
+      <label class="f">Vorschau (erste Firma)</label><div class="preview" id="pv${i}"></div>
+    </div></div>`).join("")
+    + `<button class="act" onclick="addStep()">+ E-Mail hinzufügen</button>`;
+}
+window.toggleEdit=i=>{$("ed"+i).classList.toggle("hidden");livePrev(i)};
+window.livePrev=i=>{const l=D.leads[0]||{vars:{}};$("pv"+i).innerHTML="<b>Betreff:</b> "+esc(fill($("su"+i).value,l.vars))+"\n\n"+esc(fill($("bo"+i).value,l.vars))};
+window.saveStep=async(i,id)=>{const r=await api("save_step",{id,subject:$("su"+i).value,subject_b:$("sb"+i).value,body_template:$("bo"+i).value,delay_value:$("dv"+i).value,delay_unit:$("du"+i).value,send_condition:$("sc"+i).value,skip_if_replied:$("sr"+i).checked});if(r){toast("E-Mail gespeichert ✓");load()}};
+window.delStep=async id=>{if(!confirm("E-Mail löschen?"))return;await api("delete_step",{id});toast("gelöscht");load()};
+window.addStep=async()=>{await api("add_step",{});toast("E-Mail hinzugefügt");load()};
+
+function renderLeads(){
+  $("stepSel").innerHTML=D.steps.map((s,i)=>`<option value="${i}">E-Mail ${s.step_order}</option>`).join("");
+  $("stepSel").onchange=e=>{curStep=+e.target.value;showLead()};
+  $("leadSearch").oninput=()=>listLeads();
+  listLeads();
+}
+function listLeads(){
+  const q=$("leadSearch").value.toLowerCase();
+  const items=D.leads.map((l,i)=>({l,i})).filter(x=>!q||(x.l.company||"").toLowerCase().includes(q)||(x.l.email||"").toLowerCase().includes(q));
+  $("leadCount").textContent=items.length+" von "+D.leads.length+" Leads";
+  $("leadList").innerHTML=items.slice(0,400).map(x=>`<div class="${x.i===curLead?'sel':''}" onclick="pickLead(${x.i})">${esc(x.l.company||x.l.email)}<div class="sub">${esc(x.l.email)}</div></div>`).join("");
+  showLead();
+}
+window.pickLead=i=>{curLead=i;listLeads()};
+function showLead(){
+  const l=D.leads[curLead];if(!l){$("leadPreview").textContent="Keine Leads.";$("leadMatches").innerHTML="";return}
+  const s=D.steps[curStep]||D.steps[0];
+  $("leadPreview").innerHTML="<div class='sub'>An: "+esc(l.email)+"</div><b>Betreff:</b> "+esc(fill(s.subject,l.vars))+"\n\n"+esc(fill(s.body_template,l.vars));
+  $("leadMatches").innerHTML=(l.matches||[]).length?l.matches.map(m=>`<div class="match"><span class="score">${m.score}/100</span><b>${esc(m.title)}</b>
+    <div class="meta">Vergabestelle: ${esc(m.office)}${m.deadline?" · Frist: "+esc(m.deadline):""}</div>
+    <div class="meta">Warum Match: ${esc(m.reason)}</div></div>`).join(""):'<div class="sub">Keine strukturierten Matches.</div>';
+}
+
+function renderSettings(){
+  const g=D.governor,t=D.campaign.throttle||{};
+  $("v-settings").innerHTML=`<div class="card"><h3 style="margin:0 0 8px">Versand-Limits (Governor)</h3>
+    <div class="row"><div><label class="f">Max. E-Mails / Tag</label><input type="number" id="dcap" value="${g.daily_cap}"/></div>
+      <div><label class="f">Max. / Empfänger-Domain / Tag</label><input type="number" id="pdcap" value="${g.per_domain_daily_cap}"/></div>
+      <div><label class="f"><input type="checkbox" id="warm" ${g.warmup_enabled?"checked":""}/> Warm-up-Rampe</label>
+        <div class="sub">Rampe: ${(g.warmup_ramp||[]).join(", ")}</div></div></div>
+    <div class="sub" style="margin-top:6px">Sendungen werden automatisch über den Tag verteilt (kleine zufällige Batches + ${g.jitter_min_sec}-${g.jitter_max_sec}s Jitter).</div>
+    <button class="act ok" style="margin-top:10px" onclick="saveSettings()">Limits speichern</button></div>
+  <div class="card"><h3 style="margin:0 0 8px">Sendefenster & Absender</h3>
+    <div class="row"><div><label class="f">Fenster von (Std, ${t.timezone||"America/New_York"})</label><input type="number" id="ws" value="${t.send_window_start??13}"/></div>
+      <div><label class="f">bis (Std)</label><input type="number" id="we" value="${t.send_window_end??22}"/></div></div>
+    <label class="f">Absender-Name</label><input type="text" id="sname" value="${esc(D.campaign.sender_name||"")}" style="width:320px"/>
+    <label class="f">Absender-E-Mail (verifizierte Domain)</label><input type="email" id="semail" value="${esc(D.campaign.sender_email||"")}" style="width:320px"/>
+    <label class="f">Postanschrift (CAN-SPAM Pflicht)</label><input type="text" id="paddr" value="${esc(D.campaign.physical_address||"")}" style="width:100%"/>
+    <label class="f"><input type="checkbox" id="sor" ${D.campaign.stop_on_reply!==false?"checked":""}/> Sequenz bei Antwort stoppen</label>
+    <div><button class="act ok" style="margin-top:10px" onclick="saveCampaign()">Speichern</button></div></div>`;
+}
+window.saveSettings=async()=>{await api("save_settings",{daily_cap:$("dcap").value,per_domain_daily_cap:$("pdcap").value,warmup_enabled:$("warm").checked});toast("Limits gespeichert ✓");load()};
+window.saveCampaign=async()=>{await api("save_campaign",{send_window_start:$("ws").value,send_window_end:$("we").value,sender_name:$("sname").value,sender_email:$("semail").value,physical_address:$("paddr").value,stop_on_reply:$("sor").checked});toast("Gespeichert ✓");load()};
+
+function renderReport(){
+  const a=D.analytics;const rate=(n,d)=>d?Math.round(n/d*100)+"%":"–";
+  if(!a.sent){$("v-report").innerHTML='<div class="card sub">Noch keine Sendungen. Sobald die Kampagne live ist, erscheinen hier Öffnungs-, Klick- und Antwortraten – plus die beste Uhrzeit und der beste Wochentag. Die Auto-Tune-Routine verschiebt das Sendefenster danach wöchentlich selbstständig.</div>';return}
+  const dows=["So","Mo","Di","Mi","Do","Fr","Sa"];
+  const hourRows=Object.entries(a.byHour).sort((x,y)=>y[1].opens/y[1].sent-x[1].opens/x[1].sent).map(([h,v])=>`<tr><td>${h}:00 UTC</td><td>${v.sent}</td><td>${rate(v.opens,v.sent)}</td></tr>`).join("");
+  const dowRows=Object.entries(a.byDow).sort((x,y)=>y[1].opens/y[1].sent-x[1].opens/x[1].sent).map(([d,v])=>`<tr><td>${dows[d]}</td><td>${v.sent}</td><td>${rate(v.opens,v.sent)}</td></tr>`).join("");
+  $("v-report").innerHTML=`<div class="card"><div class="row">
+    <div><div class="sub">Gesendet</div><b style="font-size:22px">${a.sent}</b></div>
+    <div style="margin-left:20px"><div class="sub">Öffnungen</div><b style="font-size:22px">${rate(a.opens,a.sent)}</b></div>
+    <div style="margin-left:20px"><div class="sub">Klicks</div><b style="font-size:22px">${rate(a.clicks,a.sent)}</b></div>
+    <div style="margin-left:20px"><div class="sub">Antworten</div><b style="font-size:22px">${rate(a.replies,a.sent)}</b></div></div></div>
+  <div class="tpl-grid"><div class="card"><h4 style="margin:0 0 6px">Beste Uhrzeit (Öffnungsrate)</h4><table><tr><th>Stunde</th><th>Gesendet</th><th>Öffnung</th></tr>${hourRows}</table></div>
+    <div class="card"><h4 style="margin:0 0 6px">Bester Wochentag</h4><table><tr><th>Tag</th><th>Gesendet</th><th>Öffnung</th></tr>${dowRows}</table></div></div>`;
+}
+</script></body></html>

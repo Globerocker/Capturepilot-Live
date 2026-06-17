@@ -51,14 +51,24 @@ Want the full list and the detail on these three? Just reply. If not, no hard fe
 
 {{unsubscribe_url}}`;
 
-const STEP2_SUBJECT = "following up — {{company}}";
+const STEP2_SUBJECT = "did these land? — {{company}}";
 const STEP2_BODY =
 `Hi {{first_name}},
 
-Floating this back up in case it got buried. We found live federal contracts that fit {{company}}, and the offer stands — we run the bids, you only pay if you win:
-{{matches_block}}
+Did the contracts I sent for {{company}} land? Happy to send the full list — a one-word reply ("yes") is all I need.
 
-A one-line reply ("send the list") is all it takes. If it's not for you, I won't follow up again.
+{{sender_name}}
+
+{{unsubscribe_url}}`;
+
+const STEP3_SUBJECT = "heads-up — we might call {{company}}";
+const STEP3_BODY =
+`Hi {{first_name}},
+
+Quick heads-up: you might get a short call from us in the next few days. No pitch — five minutes on the federal contracts we found for {{company}} and how the "you only pay if you win" part actually works. If you'd rather we didn't, just reply and we'll hold off.
+
+Either way, your matches are still here:
+{{matches_block}}
 
 {{sender_name}}
 
@@ -154,15 +164,20 @@ export async function GET(req: NextRequest) {
         camp = ins.data as any;
     }
 
-    // 5. Steps — create once.
-    const { data: existingSteps } = await sb.from("outreach_campaign_steps").select("id").eq("campaign_id", camp!.id).limit(1);
-    if (!existingSteps?.length) {
+    // 5. Steps — seed the canonical 3-email cadence when not yet set up
+    // (count != 3). Leaves edited steps alone once the 3 exist.
+    const { data: existingSteps } = await sb.from("outreach_campaign_steps").select("id").eq("campaign_id", camp!.id);
+    if (!existingSteps || existingSteps.length !== 3) {
+        await sb.from("outreach_campaign_steps").delete().eq("campaign_id", camp!.id);
         const { error: stepErr } = await sb.from("outreach_campaign_steps").insert([
             { campaign_id: camp!.id, step_order: 1, channel: "email", delay_value: 0, delay_unit: "hours",
               subject: STEP1_SUBJECT, subject_b: STEP1_SUBJECT_B, body_template: STEP1_BODY,
               skip_if_replied: true, send_condition: "always" },
-            { campaign_id: camp!.id, step_order: 2, channel: "email", delay_value: 4, delay_unit: "days",
+            { campaign_id: camp!.id, step_order: 2, channel: "email", delay_value: 3, delay_unit: "days",
               subject: STEP2_SUBJECT, body_template: STEP2_BODY,
+              skip_if_replied: true, send_condition: "if_no_reply" },
+            { campaign_id: camp!.id, step_order: 3, channel: "email", delay_value: 4, delay_unit: "days",
+              subject: STEP3_SUBJECT, body_template: STEP3_BODY,
               skip_if_replied: true, send_condition: "if_no_reply" },
         ]);
         if (stepErr) return NextResponse.json({ error: `steps: ${stepErr.message}` }, { status: 500 });
