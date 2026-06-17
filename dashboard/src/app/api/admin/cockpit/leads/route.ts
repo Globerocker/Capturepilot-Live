@@ -68,6 +68,17 @@ interface LeadTopMatch {
     opp_id: string | null;
 }
 
+/** Persisted output of the cockpit company-research agent (contractors only). */
+interface LeadResearch {
+    overall_sentiment: "positive" | "mixed" | "negative" | "unknown";
+    rating: number | null;
+    reviews_count: number | null;
+    summary: string;
+    what_they_do: string;
+    sources: Array<{ url: string; title: string; source_type: string }>;
+    researched_at: string | null;
+}
+
 interface LeadRow {
     id: string;
     source: "contractors" | "inbound";
@@ -96,6 +107,8 @@ interface LeadRow {
     readiness_score?: number | null;        // inbound only
     check_page_url?: string;                // inbound only
     check_analysis_id?: string | null;      // contractors only — set once /check page is materialized
+    research?: LeadResearch | null;         // contractors only — persisted research-agent output
+    website_url?: string | null;            // contractors only — /site/<slug> if a one-pager was built
     created_at?: string | null;
 }
 
@@ -139,6 +152,35 @@ function normalizeTopMatch(m: any): LeadTopMatch {
 function loomForGapKey(gapKey: string | null): string | null {
     if (!gapKey) return null;
     return LOOM_BY_GAP[gapKey]?.url ?? null;
+}
+
+/** Normalize a persisted contractors.research_findings blob into LeadResearch (null when absent/empty). */
+function normalizeResearch(v: any): LeadResearch | null {
+    if (!v || typeof v !== "object") return null;
+    const sentiment = ["positive", "mixed", "negative", "unknown"].includes(v.overall_sentiment)
+        ? v.overall_sentiment
+        : "unknown";
+    const sources = Array.isArray(v.sources)
+        ? v.sources
+            .map((s: any) => ({
+                url: String(s?.url || ""),
+                title: String(s?.title || ""),
+                source_type: String(s?.source_type || "web"),
+            }))
+            .filter((s: { url: string }) => s.url)
+        : [];
+    const summary = String(v.summary || "").trim();
+    // Treat a row with no summary AND no rating AND no sources as "not researched yet".
+    if (!summary && v.rating == null && sources.length === 0) return null;
+    return {
+        overall_sentiment: sentiment,
+        rating: typeof v.rating === "number" ? v.rating : null,
+        reviews_count: typeof v.reviews_count === "number" ? v.reviews_count : null,
+        summary,
+        what_they_do: String(v.what_they_do || "").trim(),
+        sources,
+        researched_at: v.researched_at ?? null,
+    };
 }
 
 /** Build a full contractor lead row from a DB row. */
@@ -197,6 +239,10 @@ function contractorToLead(c: any): LeadRow {
         owner_linkedin: c.owner_linkedin ?? c.social_linkedin ?? null,
         has_website: !!c.website,
         check_analysis_id: c.check_analysis_id ?? null,
+        research: normalizeResearch(c.research_findings),
+        // website_url is filled in the single-lead detail path (needs a join to
+        // contractor_websites); left null in the bulk list to avoid N extra reads.
+        website_url: null,
         created_at: c.created_at ?? null,
     };
 }
@@ -280,7 +326,7 @@ function sortLeads(leads: LeadRow[], sort: string): LeadRow[] {
 const CONTRACTOR_COLS =
     "id, uei, company_name, website, email, primary_poc_name, primary_poc_email, primary_poc_title, phone, " +
     "naics_codes, certifications, sba_certifications, state, city, employee_count, years_in_business, " +
-    "federal_awards_count, qc_enriched, top_match_count, capability_summary_ai, owner_linkedin, social_linkedin, website_cms, check_analysis_id, created_at";
+    "federal_awards_count, qc_enriched, top_match_count, capability_summary_ai, owner_linkedin, social_linkedin, website_cms, check_analysis_id, research_findings, created_at";
 
 const ANALYSIS_COLS =
     "id, company_name, website, lead_email, readiness_score, readiness_breakdown, inferred_profile, preview_matches, status, created_at";
@@ -374,7 +420,18 @@ export async function GET(req: NextRequest) {
                 .maybeSingle();
             if (error) return NextResponse.json({ error: error.message }, { status: 500 });
             if (!data) return NextResponse.json({ error: "not found" }, { status: 404 });
-            return NextResponse.json({ lead: contractorToLead(data) });
+            const lead = contractorToLead(data);
+            // Surface an already-built one-pager (if any) so the UI can show its
+            // shareable link on reload without re-building. Best-effort; ignore errors.
+            try {
+                const { data: site } = await sb
+                    .from("contractor_websites")
+                    .select("slug")
+                    .eq("contractor_id", id)
+                    .maybeSingle();
+                if (site?.slug) lead.website_url = `/site/${site.slug}`;
+            } catch { /* table may be empty / not migrated yet — non-fatal */ }
+            return NextResponse.json({ lead });
         } catch (e: any) {
             return NextResponse.json({ error: e?.message || "lookup failed" }, { status: 500 });
         }

@@ -29,6 +29,7 @@ import {
     AlertTriangle, Sparkles, Copy, Check, Send, ClipboardList, Video,
     ExternalLink, RefreshCw, User, Award, Users as UsersIcon, Trophy,
     ChevronRight, Filter, MapPin, FileText, Wand2, RotateCcw, Download, X,
+    Star, MessageSquare, LayoutTemplate, Package,
 } from "lucide-react";
 import clsx from "clsx";
 import CallButton, { type SavedCallLog } from "@/components/CallButton";
@@ -51,6 +52,22 @@ interface LeadTopMatch {
     deadline: string | null;
     naics: string | null;
     opp_id: string | null;
+}
+
+interface ResearchSource {
+    url: string;
+    title: string;
+    source_type: string;
+}
+
+interface LeadResearch {
+    overall_sentiment: "positive" | "mixed" | "negative" | "unknown";
+    rating: number | null;
+    reviews_count: number | null;
+    summary: string;
+    what_they_do: string;
+    sources: ResearchSource[];
+    researched_at: string | null;
 }
 
 interface Lead {
@@ -81,6 +98,8 @@ interface Lead {
     readiness_score?: number | null;
     check_page_url?: string;
     check_analysis_id?: string | null;   // contractor leads: set once a /check page is materialized
+    research?: LeadResearch | null;      // contractor leads: persisted research-agent output
+    website_url?: string | null;         // contractor leads: /site/<slug> if a one-pager was built
     created_at?: string | null;
 }
 
@@ -518,6 +537,9 @@ function LeadCard({ lead, loading, detailError, onRefresh }: {
             {/* Cap statement is contractors-only and sits at step 3, shifting the
                 rest of the contractor checklist down by one vs. the inbound flow. */}
             {isContractor && <StepCapStatement lead={lead} />}
+            {/* Assets — contractors only. Unnumbered grouped block (research +
+                one-pager) so the numbered checklist stays stable. */}
+            {isContractor && <AssetsSection lead={lead} onRefresh={onRefresh} />}
             <StepLoom lead={lead} n={isContractor ? 4 : 3} />
             <StepMessage lead={lead} n={isContractor ? 5 : 4} />
             <StepNotesAndHandoff
@@ -1487,6 +1509,291 @@ function StepMaterializeCheck({ lead, n }: { lead: Lead; n: number }) {
                 )}
             </div>
         </Step>
+    );
+}
+
+// ── Assets section (contractors): research agent + one-pager builder ──────────
+// An unnumbered grouped block that sits between the cap statement and the Loom
+// step. Holds two dead-simple actions a non-technical partner can fire:
+//   • Research (reviews + web presence)  → POST /api/admin/cockpit/research
+//   • Build one-pager website            → POST /api/admin/cockpit/website
+// Both persist server-side; onRefresh re-pulls the dossier so the results stick
+// on reload.
+
+function AssetsSection({ lead, onRefresh }: { lead: Lead; onRefresh: () => void }) {
+    const noWebsite = lead.has_website === false;
+    return (
+        <div className="bg-white border border-stone-200 rounded-2xl p-5">
+            <div className="flex items-center gap-2 mb-1">
+                <Package className="w-4 h-4 text-stone-400" />
+                <h3 className="font-bold text-stone-900">Assets you can hand them</h3>
+            </div>
+            <p className="text-sm text-stone-500 mb-4">
+                {noWebsite
+                    ? "This firm has no website on file — these two are your strongest openers. Show them you found everything about them, then hand them a site."
+                    : "Pull their public reviews + web presence, or build them a clean one-pager to share."}
+            </p>
+            <div className="space-y-4">
+                <ResearchAction lead={lead} onRefresh={onRefresh} highlight={noWebsite} />
+                <WebsiteAction lead={lead} onRefresh={onRefresh} highlight={noWebsite} />
+            </div>
+        </div>
+    );
+}
+
+// ── Research (reviews + web presence) ─────────────────────────────────────────
+function sentimentStyle(s: LeadResearch["overall_sentiment"]): { label: string; cls: string } {
+    switch (s) {
+        case "positive": return { label: "Positive", cls: "bg-emerald-100 text-emerald-800 border-emerald-300" };
+        case "mixed": return { label: "Mixed", cls: "bg-amber-100 text-amber-800 border-amber-300" };
+        case "negative": return { label: "Negative", cls: "bg-rose-100 text-rose-800 border-rose-300" };
+        default: return { label: "No clear signal", cls: "bg-stone-100 text-stone-600 border-stone-300" };
+    }
+}
+
+/** Render a 0-5 rating as filled/empty stars + "N/5". */
+function Stars({ rating }: { rating: number }) {
+    const full = Math.round(rating);
+    return (
+        <span className="inline-flex items-center gap-1.5">
+            <span className="inline-flex">
+                {[0, 1, 2, 3, 4].map(i => (
+                    <Star
+                        key={i}
+                        className={clsx("w-4 h-4", i < full ? "fill-amber-400 text-amber-400" : "text-stone-300")}
+                    />
+                ))}
+            </span>
+            <span className="text-sm font-bold text-stone-800">{rating.toFixed(1)}/5</span>
+        </span>
+    );
+}
+
+function ResearchResultPanel({ research }: { research: LeadResearch }) {
+    const sent = sentimentStyle(research.overall_sentiment);
+    return (
+        <div className="mt-3 border border-stone-200 rounded-xl p-4 bg-stone-50/60">
+            <div className="flex flex-wrap items-center gap-3">
+                {research.rating != null
+                    ? <Stars rating={research.rating} />
+                    : <span className="text-sm text-stone-500">No star rating found</span>}
+                {research.reviews_count != null && (
+                    <span className="text-xs text-stone-500">
+                        {research.reviews_count.toLocaleString()} review{research.reviews_count === 1 ? "" : "s"}
+                    </span>
+                )}
+                <span className={clsx("text-[11px] font-bold border rounded-full px-2 py-0.5", sent.cls)}>
+                    {sent.label}
+                </span>
+            </div>
+            {research.what_they_do && (
+                <p className="text-sm text-stone-700 mt-3"><span className="font-medium">What they do:</span> {research.what_they_do}</p>
+            )}
+            {research.summary && (
+                <p className="text-sm text-stone-600 mt-2 leading-relaxed">{research.summary}</p>
+            )}
+            {research.sources.length > 0 && (
+                <div className="mt-3">
+                    <FieldLabel>Where this came from</FieldLabel>
+                    <ul className="mt-1.5 space-y-1">
+                        {research.sources.slice(0, 6).map((s, i) => (
+                            <li key={i}>
+                                <a
+                                    href={s.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-blue-700 hover:underline inline-flex items-center gap-1.5 text-sm break-all"
+                                >
+                                    <ExternalLink className="w-3 h-3 shrink-0" />
+                                    <span className="truncate max-w-[28rem]">{s.title || s.url}</span>
+                                    <span className="text-[10px] text-stone-400 shrink-0">· {s.source_type}</span>
+                                </a>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            )}
+        </div>
+    );
+}
+
+function ResearchAction({ lead, onRefresh, highlight }: { lead: Lead; onRefresh: () => void; highlight: boolean }) {
+    const [busy, setBusy] = useState(false);
+    const [err, setErr] = useState<string | null>(null);
+    // Seed from the persisted dossier so a prior run shows on reload.
+    const [research, setResearch] = useState<LeadResearch | null>(lead.research ?? null);
+
+    // Reset when the selected lead changes (component is reused across rows).
+    useEffect(() => {
+        setResearch(lead.research ?? null);
+        setErr(null);
+    }, [lead.id, lead.research]);
+
+    const run = async () => {
+        setBusy(true);
+        setErr(null);
+        try {
+            const res = await fetch("/api/admin/cockpit/research", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ contractor_id: lead.id }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.ok) throw new Error(data?.error || `Failed (${res.status})`);
+            setResearch({
+                overall_sentiment: data.sentiment ?? "unknown",
+                rating: data.rating ?? null,
+                reviews_count: data.reviews_count ?? null,
+                summary: data.summary ?? "",
+                what_they_do: data.what_they_do ?? "",
+                sources: Array.isArray(data.sources) ? data.sources : [],
+                researched_at: new Date().toISOString(),
+            });
+            // Re-pull the stored dossier so the result survives a reload.
+            onRefresh();
+        } catch (e) {
+            setErr(e instanceof Error ? e.message : "Research failed");
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    return (
+        <div className={clsx("rounded-xl border p-4", highlight ? "border-orange-300 bg-orange-50/50" : "border-stone-200")}>
+            <div className="flex items-center gap-2">
+                <MessageSquare className={clsx("w-4 h-4", highlight ? "text-orange-600" : "text-stone-400")} />
+                <span className="font-bold text-stone-800 text-sm">Research (reviews + web presence)</span>
+                {highlight && (
+                    <span className="text-[10px] font-bold bg-orange-600 text-white rounded-full px-2 py-0.5">Lead with this</span>
+                )}
+            </div>
+            <p className="text-xs text-stone-500 mt-1">
+                Pulls their public reviews, rating, and what people say — so you can open with &ldquo;I looked you up.&rdquo;
+            </p>
+            <button
+                type="button"
+                onClick={run}
+                disabled={busy}
+                className="mt-3 inline-flex items-center gap-2 bg-stone-900 hover:bg-black disabled:opacity-50 text-white font-bold px-4 py-2 rounded-lg text-sm"
+            >
+                {busy
+                    ? <><Loader2 className="w-4 h-4 animate-spin" /> Researching…</>
+                    : <><Search className="w-4 h-4" /> {research ? "Re-run research" : "Research this firm"}</>}
+            </button>
+            {err && (
+                <p className="mt-2 text-xs text-rose-600 inline-flex items-center gap-1.5">
+                    <AlertTriangle className="w-3.5 h-3.5" /> {err}
+                </p>
+            )}
+            {research && <ResearchResultPanel research={research} />}
+        </div>
+    );
+}
+
+// ── Build one-pager website ───────────────────────────────────────────────────
+function WebsiteAction({ lead, onRefresh, highlight }: { lead: Lead; onRefresh: () => void; highlight: boolean }) {
+    const [busy, setBusy] = useState(false);
+    const [err, setErr] = useState<string | null>(null);
+    const [copied, setCopied] = useState(false);
+    // Seed from the dossier if a one-pager was already built for this contractor.
+    const [url, setUrl] = useState<string | null>(lead.website_url ?? null);
+
+    useEffect(() => {
+        setUrl(lead.website_url ?? null);
+        setErr(null);
+        setCopied(false);
+    }, [lead.id, lead.website_url]);
+
+    const build = async () => {
+        setBusy(true);
+        setErr(null);
+        try {
+            const res = await fetch("/api/admin/cockpit/website", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ contractor_id: lead.id }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.ok || !data.url) throw new Error(data?.error || `Failed (${res.status})`);
+            setUrl(data.url as string);
+            // Re-pull the dossier so the link survives a reload.
+            onRefresh();
+        } catch (e) {
+            setErr(e instanceof Error ? e.message : "Could not build the site");
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const absoluteUrl = url
+        ? (typeof window !== "undefined" ? `${window.location.origin}${url}` : url)
+        : "";
+
+    const copy = async () => {
+        if (!absoluteUrl) return;
+        try {
+            await navigator.clipboard.writeText(absoluteUrl);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1800);
+        } catch { /* clipboard may be blocked */ }
+    };
+
+    return (
+        <div className={clsx("rounded-xl border p-4", highlight ? "border-orange-300 bg-orange-50/50" : "border-stone-200")}>
+            <div className="flex items-center gap-2">
+                <LayoutTemplate className={clsx("w-4 h-4", highlight ? "text-orange-600" : "text-stone-400")} />
+                <span className="font-bold text-stone-800 text-sm">Build one-pager website</span>
+                {highlight && (
+                    <span className="text-[10px] font-bold bg-orange-600 text-white rounded-full px-2 py-0.5">Great opener</span>
+                )}
+            </div>
+            <p className="text-xs text-stone-500 mt-1">
+                Generates a clean, shareable site from what we know. Takes about a minute or two.
+            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+                <button
+                    type="button"
+                    onClick={build}
+                    disabled={busy}
+                    className="inline-flex items-center gap-2 bg-stone-900 hover:bg-black disabled:opacity-50 text-white font-bold px-4 py-2 rounded-lg text-sm"
+                >
+                    {busy
+                        ? <><Loader2 className="w-4 h-4 animate-spin" /> Building… (~1-2 min)</>
+                        : url
+                            ? <><RefreshCw className="w-4 h-4" /> Rebuild site</>
+                            : <><LayoutTemplate className="w-4 h-4" /> Build one-pager website</>}
+                </button>
+                {url && !busy && (
+                    <>
+                        <a
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-2 bg-white hover:bg-stone-100 border border-stone-200 text-stone-700 font-bold px-4 py-2 rounded-lg text-sm"
+                        >
+                            <ExternalLink className="w-4 h-4" /> Open
+                        </a>
+                        <button
+                            type="button"
+                            onClick={copy}
+                            className="inline-flex items-center gap-2 bg-white hover:bg-stone-100 border border-stone-200 text-stone-700 font-bold px-4 py-2 rounded-lg text-sm"
+                        >
+                            {copied ? <><Check className="w-4 h-4 text-emerald-600" /> Copied</> : <><Copy className="w-4 h-4" /> Copy link</>}
+                        </button>
+                    </>
+                )}
+            </div>
+            {err && (
+                <p className="mt-2 text-xs text-rose-600 inline-flex items-center gap-1.5">
+                    <AlertTriangle className="w-3.5 h-3.5" /> {err}
+                </p>
+            )}
+            {url && (
+                <p className="mt-2 text-xs text-stone-600 bg-stone-100 rounded-lg px-3 py-2">
+                    Paste this to them: &ldquo;Here&apos;s what your site could look like — built it for you.&rdquo;
+                </p>
+            )}
+        </div>
     );
 }
 

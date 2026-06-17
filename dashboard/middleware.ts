@@ -17,7 +17,9 @@ export const config = {
   //  - /api/health and /api/public/* — anonymous, cached, no session needed.
   //  - /outreach-console.html — token-gated static tool (its own token + the
   //    /api/outreach-console endpoint check); the auth gate must not 307 it to /login.
+  //  - /site/* — PUBLIC shareable contractor one-pagers (served raw by the
+  //    /site/[slug] route handler). The auth gate must not 307 them to /login.
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|api/cron/|api/health|api/public/|outreach-console|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api/cron/|api/health|api/public/|outreach-console|site/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
