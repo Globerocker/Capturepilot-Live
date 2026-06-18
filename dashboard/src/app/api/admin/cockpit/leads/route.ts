@@ -177,6 +177,11 @@ interface LeadRow {
     sam_registered: boolean | null;          // is_sam_registered ?? sam_registered
     sam_expiration: string | null;           // SAM registration expiry (expiration_date)
     sam_expiring_soon: boolean;              // expiration within 90 days
+    // ── SAM-REFRESH lane (migration 187 + /api/cron/refresh_sam_registration) ──
+    registration_status: string | null;     // authoritative SAM 'Active' | 'Inactive' | null
+    registered_since: string | null;        // sam_registration_date ("registered since")
+    sam_days_to_expiry: number | null;       // days from now to expiration_date (negative if lapsed)
+    sam_status_label: string | null;         // human badge: 'Active · expires in N days' | 'Expires in N days' | 'Lapsed' | null
     /** Quick "what do we know" flags for badge rendering in the cockpit. */
     known: { linkedin: boolean; email: boolean; phone: boolean; website: boolean };
     readiness_score?: number | null;        // inbound only
@@ -438,6 +443,36 @@ function isExpiringSoon(expiration: unknown, days = 90): boolean {
     if (Number.isNaN(t)) return false;
     const now = Date.now();
     return t >= now && t <= now + days * 86400000;
+}
+
+/** Whole days from now until `expiration` (negative = already lapsed); null when unparseable. */
+function daysToExpiry(expiration: unknown): number | null {
+    if (!expiration) return null;
+    const t = new Date(expiration as string).getTime();
+    if (Number.isNaN(t)) return null;
+    return Math.ceil((t - Date.now()) / 86400000);
+}
+
+/**
+ * Human badge for the cockpit FirmographicsCard. Combines the authoritative SAM
+ * registration_status with the computed days-to-expiry:
+ *   • lapsed (days < 0)                  → 'Lapsed'
+ *   • status === 'Active'                → 'Active · expires in N days'
+ *   • status set but not Active          → that status verbatim ('Inactive')
+ *   • no status, expiry known + future   → 'Expires in N days'
+ *   • nothing usable                     → null
+ */
+function samStatusLabel(status: string | null, days: number | null): string | null {
+    const lapsed = days != null && days < 0;
+    if (lapsed) return "Lapsed";
+    if (status) {
+        if (status.toLowerCase() === "active") {
+            return days != null ? `Active · expires in ${days} days` : "Active";
+        }
+        return status; // 'Inactive' (or any other authoritative SAM status)
+    }
+    if (days != null) return `Expires in ${days} days`;
+    return null;
 }
 
 /** Coerce a money-ish value (number | numeric string) to a finite number or null. */
@@ -707,6 +742,10 @@ function contractorToLead(c: any): LeadRow {
         sam_registered: samRegistered,
         sam_expiration: c.expiration_date ?? null,
         sam_expiring_soon: isExpiringSoon(c.expiration_date),
+        registration_status: c.registration_status ?? null,
+        registered_since: c.sam_registration_date ?? null,
+        sam_days_to_expiry: daysToExpiry(c.expiration_date),
+        sam_status_label: samStatusLabel(c.registration_status ?? null, daysToExpiry(c.expiration_date)),
         known: {
             linkedin: !!(linkedin || companyLinkedin),
             email: !!email,
@@ -807,6 +846,11 @@ function analysisToLead(a: any): LeadRow {
         sam_registered: null,
         sam_expiration: null,
         sam_expiring_soon: false,
+        // Inbound (company_analyses) has no SAM registration columns — null them out.
+        registration_status: null,
+        registered_since: null,
+        sam_days_to_expiry: null,
+        sam_status_label: null,
         known: {
             linkedin: !!(linkedin || inferred.company_linkedin || inferred.social_linkedin),
             email: !!email,
@@ -854,7 +898,7 @@ const CONTRACTOR_COLS =
     "employee_count, years_in_business, " +
     "federal_awards_count, total_federal_awards, total_award_volume, revenue, " +
     "naics_awards, agency_relationships, last_award_date, " +
-    "is_sam_registered, sam_registered, expiration_date, " +
+    "is_sam_registered, sam_registered, expiration_date, registration_status, sam_registration_date, " +
     "qc_enriched, top_match_count, capability_summary_ai, owner_linkedin, social_linkedin, company_linkedin, " +
     "website_cms, check_analysis_id, research_findings, created_at";
 

@@ -160,6 +160,11 @@ interface Lead {
     sam_registered?: boolean | null;
     sam_expiration?: string | null;
     sam_expiring_soon?: boolean;
+    // ── SAM-REFRESH lane (V4.1 leads API) ──
+    registration_status?: string | null;    // authoritative SAM 'Active' | 'Inactive' | null
+    registered_since?: string | null;        // sam_registration_date ("registered since")
+    sam_days_to_expiry?: number | null;       // days from now to expiration (negative if lapsed)
+    sam_status_label?: string | null;         // human badge from the API
     known?: { linkedin: boolean; email: boolean; phone: boolean; website: boolean };
     readiness_score?: number | null;
     check_page_url?: string;
@@ -243,6 +248,135 @@ function compactCurrency(n: number | string | null | undefined): string | null {
     } catch {
         return `$${Math.round(num).toLocaleString()}`;
     }
+}
+
+/** Short year-only date ("2019") for the "on SAM since" line. */
+function formatYear(d: string | null | undefined): string | null {
+    if (!d) return null;
+    const dt = new Date(d);
+    if (Number.isNaN(dt.getTime())) return null;
+    return String(dt.getFullYear());
+}
+
+/** Whole years since a date (e.g. "registered since 2019" → 7). null when unknown. */
+function yearsSince(d: string | null | undefined): number | null {
+    if (!d) return null;
+    const dt = new Date(d);
+    if (Number.isNaN(dt.getTime())) return null;
+    const ms = Date.now() - dt.getTime();
+    if (ms <= 0) return 0;
+    return Math.floor(ms / (365.25 * 86400000));
+}
+
+/**
+ * Derived SAM-registration presentation for the cockpit. Combines the
+ * authoritative registration_status with days-to-expiry / expiring-soon to pick a
+ * single semantic "state" the hero + firmographics both render off of:
+ *   • 'lapsed'  — status Inactive OR days-to-expiry negative → red, "reactivate to bid"
+ *   • 'expiring'— expiring within 90 days (and not lapsed)    → amber, urgent hook
+ *   • 'active'  — registered + not expiring soon              → green
+ *   • 'unknown' — no SAM data on file                         → neutral
+ */
+type SamState = "active" | "expiring" | "lapsed" | "unknown";
+
+interface SamView {
+    state: SamState;
+    /** authoritative status text when present ('Active' | 'Inactive'). */
+    statusText: string | null;
+    /** "2019" or null. */
+    sinceYear: string | null;
+    /** whole years on SAM, or null. */
+    sinceYears: number | null;
+    /** days to expiry (negative = lapsed), or null. */
+    daysToExpiry: number | null;
+    /** formatted expiration date, or null. */
+    expirationLabel: string | null;
+}
+
+function samView(lead: Lead): SamView {
+    const status = (lead.registration_status || "").trim() || null;
+    const days = lead.sam_days_to_expiry ?? daysToExpiryLocal(lead.sam_expiration);
+    const lapsed =
+        (status && status.toLowerCase() !== "active") || (days != null && days < 0);
+    const expiringSoon = !lapsed && (lead.sam_expiring_soon || (days != null && days >= 0 && days <= 90));
+
+    // Has ANY SAM signal? (status, expiry date, or sam_registered flag)
+    const hasSignal = !!status || !!lead.sam_expiration || lead.sam_registered === true;
+
+    let state: SamState;
+    if (!hasSignal) state = "unknown";
+    else if (lapsed) state = "lapsed";
+    else if (expiringSoon) state = "expiring";
+    else state = "active";
+
+    return {
+        state,
+        statusText: status,
+        sinceYear: formatYear(lead.registered_since),
+        sinceYears: yearsSince(lead.registered_since),
+        daysToExpiry: days,
+        expirationLabel: lead.sam_expiration ? formatDeadline(lead.sam_expiration) : null,
+    };
+}
+
+/** Local days-to-expiry fallback when the API didn't compute it. */
+function daysToExpiryLocal(expiration: string | null | undefined): number | null {
+    if (!expiration) return null;
+    const t = new Date(expiration).getTime();
+    if (Number.isNaN(t)) return null;
+    return Math.ceil((t - Date.now()) / 86400000);
+}
+
+/**
+ * The one-line hero SAM hook the rep reads first. Mirrors the semantic state:
+ *   lapsed   → "SAM registration LAPSED — reactivate to bid"
+ *   expiring → "On SAM since 2019 · expires in 41 days"
+ *   active   → "Active on SAM since 2019" (no urgency)
+ *   unknown  → null (hero omits the line)
+ */
+function samHook(v: SamView): string | null {
+    const since = v.sinceYear ? `on SAM since ${v.sinceYear}` : "registered on SAM";
+    if (v.state === "lapsed") {
+        return "SAM registration LAPSED — reactivate to bid";
+    }
+    if (v.state === "expiring") {
+        const d = v.daysToExpiry;
+        const tail = d != null ? `expires in ${d} day${d === 1 ? "" : "s"}` : "expiring soon";
+        return `Registered ${since} · ${tail}`;
+    }
+    if (v.state === "active") {
+        return `Active ${since}`;
+    }
+    return null;
+}
+
+/** SBA/veteran cert label the headline can name (e.g. "SDVOSB-eligible"). */
+function topCertLabel(lead: Lead): string | null {
+    const hay = [...lead.certifications, ...lead.sba_certifications].join(" ").toLowerCase();
+    if (/sdvosb|service.?disabled/.test(hay)) return "SDVOSB";
+    if (/8\(a\)|\b8a\b/.test(hay)) return "8(a)";
+    if (/hubzone/.test(hay)) return "HUBZone";
+    if (/\bedwosb\b/.test(hay)) return "EDWOSB";
+    if (/\bwosb\b|women.?owned/.test(hay)) return "WOSB";
+    if (/\bvosb\b|veteran/.test(hay)) return "VOSB";
+    return null;
+}
+
+/**
+ * The bold one-line headline at the top of the hero. Composes the fit verdict
+ * with the best live match % and the sharpest cert so the rep gets the verdict in
+ * one read: "Strong fit — 89% top match, SDVOSB-eligible".
+ */
+function heroHeadline(lead: Lead): string {
+    const verdict =
+        lead.icp_tier === "A" ? "Strong fit"
+        : lead.icp_tier === "B" ? "Worth a look"
+        : "Lower priority";
+    const bits: string[] = [];
+    if (lead.best_match_pct != null) bits.push(`${lead.best_match_pct}% top match`);
+    const cert = topCertLabel(lead);
+    if (cert) bits.push(`${cert}-eligible`);
+    return bits.length ? `${verdict} — ${bits.join(", ")}` : verdict;
 }
 
 // ───────────────────────── filter state ─────────────────────────
@@ -1249,53 +1383,118 @@ function CompanyDetailCard({ lead, notes, setNotes }: {
     );
 }
 
-// ── The briefing (gap hook + findings) ──────────────────────────────────────────
+// ── The HERO briefing — the first thing the rep reads ────────────────────────────
+//
+// Dominant block at the top of the Company tab. Stacks, sharpest-first:
+//   1. company name + Fit tier/score chip + the verdict headline
+//      ("Strong fit — 89% top match, SDVOSB-eligible")
+//   2. the SHARPEST GAP (gap_hook) as the opener line — big, dark
+//   3. the SAM-registration HOOK — green (active) / amber (expiring) / red (lapsed)
+//   4. the single best live match (title · agency · fit %)
+//   5. findings_summary as a quiet secondary line
+//
+// Uses the stone/orange theme + size/weight so it dominates the column, not a
+// gray subtitle. Inbound leads (no gap/SAM) fall back to a readiness opener.
 function BriefingCard({ lead }: { lead: Lead }) {
-    const hasHook = !!lead.gap_hook;
-    const hasFindings = !!lead.findings_summary;
-    if (!hasHook && !hasFindings) {
-        // Inbound leads have neither — give the rep a readiness fallback when present.
-        if (lead.source === "inbound" && lead.readiness_score != null) {
-            return (
-                <Card className="bg-emerald-50/60 border-emerald-200">
-                    <div className="flex items-start gap-3">
-                        <span className="shrink-0 w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center">
-                            <Sparkles className="w-4 h-4 text-emerald-600" />
-                        </span>
-                        <div>
-                            <FieldLabel>They came to us</FieldLabel>
-                            <p className="text-sm text-stone-700 mt-1">
-                                This lead ran our website checker and scored <span className="font-bold">{lead.readiness_score}/100</span> readiness.
-                                Open their results page (Assets tab) and talk to it directly.
-                            </p>
-                        </div>
-                    </div>
-                </Card>
-            );
-        }
-        return null;
-    }
+    const sam = samView(lead);
+    const samLine = samHook(sam);
+    const bestMatch = pickBestMatch(lead);
+    const hasGap = !!lead.gap_hook;
+    const headline = heroHeadline(lead);
+
+    // SAM hook color treatment by state.
+    const samTone =
+        sam.state === "lapsed"
+            ? "bg-rose-100 text-rose-800 border-rose-300"
+            : sam.state === "expiring"
+                ? "bg-amber-100 text-amber-900 border-amber-300"
+                : sam.state === "active"
+                    ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                    : "bg-stone-100 text-stone-600 border-stone-300";
+    const SamIcon = sam.state === "lapsed" ? AlertTriangle : sam.state === "expiring" ? CalendarClock : BadgeCheck;
+
+    // Inbound has no gap/SAM — give the rep the readiness opener instead.
+    const inboundFallback = lead.source === "inbound" && !hasGap && !samLine;
+
     return (
-        <Card className="bg-amber-50/40 border-amber-200">
-            {hasHook && (
-                <div className="flex items-start gap-3">
-                    <span className="shrink-0 w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center">
-                        <Sparkles className="w-4 h-4 text-amber-600" />
+        <div className="relative overflow-hidden rounded-2xl border border-stone-300 bg-gradient-to-br from-stone-900 via-stone-900 to-stone-800 text-white shadow-sm">
+            {/* subtle orange wash on the right */}
+            <div className="pointer-events-none absolute -right-12 -top-12 w-48 h-48 rounded-full bg-orange-500/20 blur-3xl" aria-hidden />
+            <div className="relative p-4 sm:p-5">
+                {/* 1 — verdict line: name + fit chip + headline */}
+                <div className="flex items-center gap-2 flex-wrap">
+                    <span className={clsx(
+                        "inline-flex items-center gap-1 font-black border rounded-full px-2.5 py-0.5 text-xs",
+                        TIER_STYLE[lead.icp_tier],
+                    )}>
+                        Fit {lead.icp_tier} · {lead.icp_score}
                     </span>
-                    <div className="min-w-0">
-                        <FieldLabel>Your opener — the sharpest thing they&apos;re missing</FieldLabel>
-                        <p className="text-base text-stone-800 mt-1 leading-relaxed">{lead.gap_hook}</p>
+                    <span className="text-sm font-semibold text-orange-300">{headline}</span>
+                </div>
+
+                {/* 2 — the sharpest gap, the opener (big + dominant) */}
+                {hasGap ? (
+                    <div className="mt-3">
+                        <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-orange-300/90">
+                            <Sparkles className="w-3.5 h-3.5" /> Your opener
+                        </div>
+                        <p className="mt-1 text-xl sm:text-2xl font-bold leading-snug text-white">
+                            {lead.gap_hook}
+                        </p>
                     </div>
-                </div>
-            )}
-            {hasFindings && (
-                <div className={clsx(hasHook && "mt-4 pt-4 border-t border-amber-200/70")}>
-                    <FieldLabel className="inline-flex items-center gap-1.5"><FileText className="w-3 h-3" /> Quick briefing</FieldLabel>
-                    <p className="text-sm text-stone-600 leading-relaxed mt-1">{lead.findings_summary}</p>
-                </div>
-            )}
-        </Card>
+                ) : inboundFallback && lead.readiness_score != null ? (
+                    <div className="mt-3">
+                        <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-emerald-300/90">
+                            <Sparkles className="w-3.5 h-3.5" /> They came to us
+                        </div>
+                        <p className="mt-1 text-lg sm:text-xl font-bold leading-snug text-white">
+                            Ran our checker · scored {lead.readiness_score}/100 readiness — open their results (Assets) and talk to it.
+                        </p>
+                    </div>
+                ) : null}
+
+                {/* 3 + 4 — the SAM hook + the single best live match, side by side on sm+ */}
+                {(samLine || bestMatch) && (
+                    <div className="mt-3 flex flex-wrap items-stretch gap-2">
+                        {samLine && (
+                            <span className={clsx(
+                                "inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-sm font-bold",
+                                samTone,
+                            )}>
+                                <SamIcon className="w-4 h-4 shrink-0" /> {samLine}
+                            </span>
+                        )}
+                        {bestMatch && (
+                            <span className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/10 px-3 py-1.5 text-sm max-w-full">
+                                <Trophy className="w-4 h-4 shrink-0 text-orange-300" />
+                                <span className="min-w-0 truncate font-medium text-white" title={bestMatch.title}>
+                                    {bestMatch.title}
+                                </span>
+                                {bestMatch.agency && (
+                                    <span className="hidden sm:inline shrink-0 text-white/60">· {bestMatch.agency}</span>
+                                )}
+                                <span className="shrink-0 font-black text-orange-300">{bestMatch.score_pct}%</span>
+                            </span>
+                        )}
+                    </div>
+                )}
+
+                {/* 5 — findings_summary, quiet secondary line */}
+                {lead.findings_summary && (
+                    <p className="mt-3 text-sm leading-relaxed text-stone-300 border-t border-white/10 pt-3">
+                        {lead.findings_summary}
+                    </p>
+                )}
+            </div>
+        </div>
     );
+}
+
+/** The single best live match for the hero — highest score, with a real title. */
+function pickBestMatch(lead: Lead): LeadTopMatch | null {
+    const matches = Array.isArray(lead.top_matches) ? lead.top_matches : [];
+    if (!matches.length) return null;
+    return matches.reduce((best, m) => (m.score_pct > best.score_pct ? m : best), matches[0]);
 }
 
 // ── Contact block ────────────────────────────────────────────────────────────────
@@ -1399,35 +1598,103 @@ function FirmographicsCard({ lead }: { lead: Lead }) {
     return (
         <Card>
             <SectionHeading icon={Building2} title="Firmographics" />
+            {/* SAM registration — prominent, the expiring-soon filter's payoff. */}
+            {isContractor && <SamRegistrationBlock lead={lead} />}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                 <Stat icon={UsersIcon} label="Employees" value={lead.employee_count != null && lead.employee_count > 0 ? String(lead.employee_count) : "Unknown"} />
                 <Stat icon={Building2} label="Years in business" value={lead.years_in_business != null && lead.years_in_business > 0 ? String(lead.years_in_business) : "Unknown"} />
                 <Stat icon={Trophy} label="Federal awards" value={lead.total_federal_awards != null ? String(lead.total_federal_awards) : (lead.federal_awards_count != null ? String(lead.federal_awards_count) : "Unknown")} />
                 {isContractor && <Stat icon={DollarSign} label="Federal revenue" value={revenue || "Unknown"} />}
                 {estRevenue && <Stat icon={DollarSign} label="Est. revenue" value={estRevenue} />}
-                {isContractor && (
-                    <Stat
-                        icon={BadgeCheck}
-                        label="SAM registered"
-                        value={lead.sam_registered == null ? "Unknown" : lead.sam_registered ? "Yes" : "No"}
-                        tone={lead.sam_registered ? "good" : undefined}
-                    />
-                )}
-                {isContractor && (
-                    <Stat
-                        icon={CalendarClock}
-                        label="SAM expires"
-                        value={lead.sam_expiration ? formatDeadline(lead.sam_expiration) : "Unknown"}
-                        tone={lead.sam_expiring_soon ? "warn" : undefined}
-                    />
+            </div>
+        </Card>
+    );
+}
+
+// ── SAM registration block — the headline of the firmographics card ──────────────
+//
+// Status badge (green Active / red Lapsed/Inactive / amber Expiring), the
+// "on SAM since {year} · {N} years" tenure line, and the expiry countdown with an
+// amber/red treatment when expiring-soon or lapsed. This is what the
+// expiring-soon FILTER pays off into — so it leads the card, not buried in a tile.
+function SamRegistrationBlock({ lead }: { lead: Lead }) {
+    const v = samView(lead);
+
+    // No SAM signal at all — keep it honest, one quiet line.
+    if (v.state === "unknown") {
+        return (
+            <div className="mb-3 rounded-xl border border-stone-200 bg-stone-50 px-3 py-2.5 flex items-center gap-2 text-sm text-stone-500">
+                <BadgeCheck className="w-4 h-4 text-stone-300 shrink-0" />
+                <span>SAM registration unknown — run Research &amp; fill gaps.</span>
+            </div>
+        );
+    }
+
+    const lapsed = v.state === "lapsed";
+    const expiring = v.state === "expiring";
+
+    const frame = lapsed
+        ? "border-rose-300 bg-rose-50"
+        : expiring
+            ? "border-amber-300 bg-amber-50"
+            : "border-emerald-300 bg-emerald-50";
+    const badge = lapsed
+        ? "bg-rose-600 text-white"
+        : expiring
+            ? "bg-amber-500 text-white"
+            : "bg-emerald-600 text-white";
+    const BadgeI = lapsed ? AlertTriangle : BadgeCheck;
+    const badgeText = lapsed
+        ? (v.statusText && v.statusText.toLowerCase() !== "active" ? v.statusText : "Lapsed")
+        : (v.statusText || "Active");
+
+    // Expiry line tone: red when lapsed, amber when expiring, neutral otherwise.
+    const expiryTone = lapsed ? "text-rose-700" : expiring ? "text-amber-800" : "text-stone-600";
+    const days = v.daysToExpiry;
+    const expiryDays =
+        days == null ? null
+        : days < 0 ? `${Math.abs(days)} day${Math.abs(days) === 1 ? "" : "s"} ago`
+        : `${days} day${days === 1 ? "" : "s"}`;
+
+    return (
+        <div className={clsx("mb-3 rounded-xl border p-3", frame)}>
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold uppercase tracking-wide text-stone-500 inline-flex items-center gap-1.5">
+                        <BadgeCheck className="w-3.5 h-3.5" /> SAM registration
+                    </span>
+                    <span className={clsx("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-black", badge)}>
+                        <BadgeI className="w-3 h-3" /> {badgeText}
+                    </span>
+                </div>
+                {/* Tenure: "on SAM since 2019 · 7 yrs" */}
+                {v.sinceYear && (
+                    <span className="text-xs text-stone-600 inline-flex items-center gap-1.5">
+                        <CalendarClock className="w-3.5 h-3.5 text-stone-400" />
+                        On SAM since <span className="font-bold text-stone-800">{v.sinceYear}</span>
+                        {v.sinceYears != null && v.sinceYears > 0 && (
+                            <span className="text-stone-400">· {v.sinceYears} yr{v.sinceYears === 1 ? "" : "s"}</span>
+                        )}
+                    </span>
                 )}
             </div>
-            {lead.sam_expiring_soon && (
-                <p className="mt-3 text-xs text-amber-700 inline-flex items-center gap-1.5">
-                    <AlertTriangle className="w-3.5 h-3.5" /> Their SAM registration expires within 90 days — a natural reason to reach out.
+            {/* Expiry countdown — the payoff for the expiring-soon filter. */}
+            {(v.expirationLabel || expiryDays) && (
+                <p className={clsx("mt-2 text-sm font-bold inline-flex items-center gap-1.5", expiryTone)}>
+                    <CalendarClock className="w-4 h-4 shrink-0" />
+                    {lapsed ? (
+                        <>Expired {v.expirationLabel || ""}{expiryDays ? ` · ${expiryDays}` : ""} — reactivate to bid</>
+                    ) : (
+                        <>Expires {v.expirationLabel || "soon"}{expiryDays ? ` · ${expiryDays}` : ""}</>
+                    )}
                 </p>
             )}
-        </Card>
+            {expiring && (
+                <p className="mt-1.5 text-xs text-amber-700">
+                    Within 90 days — a natural reason to reach out.
+                </p>
+            )}
+        </div>
     );
 }
 
