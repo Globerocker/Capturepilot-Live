@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
-import { extractFromUrl, isMistralConfigured } from "@/lib/llm/mistral-ocr";
+import { extractFromUrl, isOcrConfigured } from "@/lib/llm/ocr";
 
 export const maxDuration = 180;
 
@@ -28,9 +28,9 @@ export async function POST(req: NextRequest) {
     const { data: { user } } = await sb.auth.getUser();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    if (!isMistralConfigured()) {
+    if (!isOcrConfigured()) {
         return NextResponse.json(
-            { error: "MISTRAL_API_KEY not configured. Falling back to OpenAI vision pipeline is handled by the deep-enrich cron." },
+            { error: "No OCR backend configured (set GEMINI_API_KEY — Gemini is the primary OCR engine — or MISTRAL_API_KEY)." },
             { status: 501 }
         );
     }

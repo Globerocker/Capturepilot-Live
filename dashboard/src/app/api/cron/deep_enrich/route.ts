@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { extractFromUrl, isMistralConfigured } from "@/lib/llm/mistral-ocr";
+import { extractFromUrl, isOcrConfigured } from "@/lib/llm/ocr";
 import { guardCron } from "@/lib/cron-auth";
 
 export const maxDuration = 300;
@@ -107,8 +107,8 @@ export async function GET(req: NextRequest) {
                 const isPdf = link.toLowerCase().includes(".pdf") || link.includes("download");
                 if (!isPdf) continue;
 
-                // ─ Mistral OCR primary path ─
-                if (isMistralConfigured()) {
+                // ─ OCR primary path (Gemini, with Mistral fallback) ─
+                if (isOcrConfigured()) {
                     try {
                         const ocr = await extractFromUrl(link);
                         if (ocr.full_markdown && ocr.full_markdown.length > 200) {

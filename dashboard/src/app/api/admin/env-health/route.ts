@@ -117,16 +117,24 @@ export async function GET(_req: NextRequest) {
         checks.push({ key: "Apollo.io", env_var: "APOLLO_API_KEY", configured, reachable, last_check: now });
     }
 
-    // Mistral (OCR)
+    // OCR — Gemini is the primary engine now (Mistral was disabled on billing).
     {
-        const configured = !!process.env.MISTRAL_API_KEY;
+        const configured = !!process.env.GEMINI_API_KEY;
         let reachable: ServiceStatus["reachable"] = "unknown";
         if (configured) {
-            reachable = await probe("https://api.mistral.ai/v1/models", {
-                headers: { Authorization: `Bearer ${process.env.MISTRAL_API_KEY}` },
-            });
+            reachable = await probe(
+                `https://generativelanguage.googleapis.com/v1beta/models?key=${process.env.GEMINI_API_KEY}`,
+            );
         }
-        checks.push({ key: "Mistral OCR", env_var: "MISTRAL_API_KEY", configured, reachable, last_check: now });
+        checks.push({ key: "Gemini OCR/LLM", env_var: "GEMINI_API_KEY", configured, reachable, last_check: now });
+    }
+
+    // Mistral OCR (legacy fallback — only if billing is restored)
+    if (process.env.MISTRAL_API_KEY) {
+        const reachable = await probe("https://api.mistral.ai/v1/models", {
+            headers: { Authorization: `Bearer ${process.env.MISTRAL_API_KEY}` },
+        });
+        checks.push({ key: "Mistral OCR (fallback)", env_var: "MISTRAL_API_KEY", configured: true, reachable, last_check: now });
     }
 
     // Firecrawl

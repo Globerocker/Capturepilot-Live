@@ -16,7 +16,7 @@ import mammoth from "mammoth";
 import JSZip from "jszip";
 import { createHash } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
-import { extractFromUrl as mistralExtractFromUrl, isMistralConfigured } from "@/lib/llm/mistral-ocr";
+import { extractFromUrl as ocrExtractFromUrl, isOcrConfigured } from "@/lib/llm/ocr";
 import { tikaExtract, isTikaConfigured } from "@/lib/llm/tika";
 
 // ---------------------------------------------------------------------------
@@ -142,9 +142,9 @@ async function extractPdf(bytes: Uint8Array, url: string): Promise<{ text: strin
     }
     // 2. Mistral OCR — paid, handles scanned PDFs cleanly. Capped at 4 MB to
     //    avoid Lambda heap blowup on long documents.
-    if (isMistralConfigured() && bytes.byteLength <= MISTRAL_PDF_BYTES_CAP && url) {
+    if (isOcrConfigured() && bytes.byteLength <= MISTRAL_PDF_BYTES_CAP && url) {
         try {
-            const ocr = await mistralExtractFromUrl(url);
+            const ocr = await ocrExtractFromUrl(url);
             if (ocr.full_markdown && ocr.full_markdown.length > 200) {
                 void cacheStore(hash, ocr.full_markdown, bytes.byteLength, "mistral");
                 return { text: ocr.full_markdown.slice(0, 40_000), ocr: true };
@@ -292,9 +292,9 @@ export async function fetchAndExtract(
                     }
                 } catch { /* fall through */ }
             }
-            if (isMistralConfigured() && buf.byteLength <= MISTRAL_PDF_BYTES_CAP) {
+            if (isOcrConfigured() && buf.byteLength <= MISTRAL_PDF_BYTES_CAP) {
                 try {
-                    const ocr = await mistralExtractFromUrl(url);
+                    const ocr = await ocrExtractFromUrl(url);
                     if (ocr.full_markdown && ocr.full_markdown.length > 200) {
                         return {
                             text: ocr.full_markdown.slice(0, 40_000),
