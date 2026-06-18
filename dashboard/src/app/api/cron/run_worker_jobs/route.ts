@@ -89,12 +89,20 @@ async function handleClassifyNaics(sb: SbAny, job: Job) {
     const result = await classifyNaics({ title: opp.title, description: opp.description });
     if (!result) return { result: { no_classification: true } };
     if (result.confidence < 0.6) return { result: { low_confidence: result.confidence } };
+    // Validate against the naics_codes whitelist BEFORE writing — opportunities.naics_code
+    // has a FK to naics_codes, so an off-whitelist code (e.g. a 7-digit or retired code
+    // the model invents) gets rejected and the job fails. This was ~500 failures/day.
+    // Skip cleanly instead of attempting a doomed write.
+    const code = String(result.naics_code || "").trim();
+    if (!code) return { result: { no_classification: true } };
+    const { data: known } = await sb.from("naics_codes").select("code").eq("code", code).maybeSingle();
+    if (!known) return { result: { skipped: "naics_not_in_whitelist", code } };
     const { error: upErr } = await sb.from("opportunities")
-        .update({ naics_code: result.naics_code })
+        .update({ naics_code: code })
         .eq("id", oppId)
         .is("naics_code", null);
     if (upErr) return { error: upErr.message };
-    return { result: { naics_code: result.naics_code, confidence: result.confidence } };
+    return { result: { naics_code: code, confidence: result.confidence } };
 }
 
 async function handleExtractStructuredReqs(sb: SbAny, job: Job) {
@@ -803,7 +811,12 @@ async function GET_handler(req: NextRequest): Promise<NextResponse> {
     // to now()+25min for session-only CF cookies — a freshly-saved cookie
     // would already look "expiring soon" under a wider window and burn
     // warm jobs in a loop. 2 min is well inside the 25-min default TTL.
-    {
+    // Only warm CF cookies when FlareSolverr is actually configured. The
+    // Playwright worker hard-fails warm_cf_cookie with "FLARESOLVERR_URL not
+    // configured" on strict-CF tenants, so topping these up while the env is
+    // unset just manufactures ~1k failed jobs/day. Set FLARESOLVERR_URL (+
+    // FLARESOLVERR_AUTH_TOKEN) to re-enable SLED portal scraping.
+    if (process.env.FLARESOLVERR_URL) {
         const expirySoon = new Date(Date.now() + 2 * 60 * 1000).toISOString();
         const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
         const { data: expiring } = await sb.from("portal_cookies")
