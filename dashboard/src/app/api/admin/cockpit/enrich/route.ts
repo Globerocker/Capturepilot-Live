@@ -1,44 +1,52 @@
 /**
- * POST /api/admin/cockpit/enrich — on-demand "Pro AI enrich" for ONE contractor
- * from the cockpit lead queue.
- *
- * SMARTER ENRICHMENT (v2): finds MORE per contractor by deriving a website from
- * a company email and crawling it for contact info, on top of the existing
- * firmographic cascade + LinkedIn finder.
+ * POST /api/admin/cockpit/enrich — on-demand "Research & fill gaps" for ONE
+ * contractor from the cockpit lead queue. ONE action does everything: deep
+ * website crawl + deterministic extraction + firmographics + owner LinkedIn +
+ * public-reputation research.
  *
  * Sub-steps (each independently try/caught — a slow/failed third-party never
  * fails the whole request):
  *   0. DERIVE WEBSITE FROM EMAIL — if the row has NO website (website +
- *      business_url both empty) but has a company email (email or
- *      primary_poc_email that is NOT a free webmail/ISP provider), derive
- *      website = 'https://' + emailDomain and persist it to contractors.website
- *      (only when it was empty). This unlocks the crawl below for the ~thousands
- *      of email-only rows.
- *   1. CRAWL FOR CONTACT INFO — when a website is now known (existing or
- *      derived), best-effort crawl the homepage + the best contact/about/team
- *      sub-page (reusing the Quick Checker scrapePage cascade + the
- *      libphonenumber/RFC-5322 contact extractors). Fills primary_poc_phone
- *      (when empty), primary_poc_title (when empty) and improves
- *      primary_poc_name (only when the existing value is missing/weak).
- *   2. FIRMOGRAPHIC CASCADE (Apollo → SAM → OpenCorporates → Wayback) via the
- *      shared enrichFirmographics() helper — fills employee_count /
- *      years_in_business that the QC crawl couldn't extract.
- *   3. Owner/CEO LinkedIn finder (Brave-primary, DuckDuckGo-fallback) for the
- *      contractor's primary POC.
+ *      business_url both empty) but has a non-free company email, derive
+ *      website = 'https://' + emailDomain and persist it (only when empty).
+ *   1. DEEP CRAWL — when a website is known, crawl up to 3 pages (homepage +
+ *      best About + best Contact, via pickInterestingLinks), each SSRF-guarded.
+ *      From the combined markdown + raw HTML extract, DETERMINISTICALLY:
+ *        - PHONE: every phone incl. footer (extractPhones). Fill
+ *          primary_poc_phone when empty (prefer fixed-line); store ALL found in
+ *          capability_summary_ai.phones[].
+ *        - EMAIL: all business emails (extractEmails). Fill primary_poc_email
+ *          when empty; store capability_summary_ai.emails[].
+ *        - COMPANY LINKEDIN + socials from <a href> (classifySocials over the
+ *          raw HTML) — write contractors.company_linkedin (when empty). Never
+ *          guessed; pulled straight from footer/header links.
+ *        - YEARS / TRACK RECORD: regex the prose ("NN years", "since YYYY") →
+ *          years_in_business when empty; "NN+ projects/clients" →
+ *          capability_summary_ai.track_record[].
+ *        - LEGAL NAME: "…LLC/Inc/Corp" / "legally known as" →
+ *          capability_summary_ai.legal_name.
+ *        - POC title + name (best-effort) as before.
+ *   2. FIRMOGRAPHIC CASCADE (Apollo → SAM → OpenCorporates → Wayback) — fills
+ *      employee_count / years_in_business the crawl couldn't extract.
+ *   3. Owner/CEO LinkedIn finder (Brave-primary, DDG-fallback) — STRICT: only
+ *      writes a profile when the slug unambiguously matches both names.
+ *   4. COMPANY RESEARCH — reuses runCompanyResearch() (reviews / web presence /
+ *      sentiment) and recomputes the reputation blob in the same call.
  *
- * Write-back rules (mirrors the Phase-8 cascade in quick-checker-finish):
- *   - Only OVERWRITE a column when the new value is REAL (non-null, real source).
- *     Never clobber a good existing value with null or a weaker value.
- *   - Always stamp owner_linkedin_searched_at when we ran the LinkedIn finder
- *     (found or not) so the cron never re-searches this row.
+ * Write-back rules:
+ *   - Only OVERWRITE a column when the new value is REAL. Never clobber a good
+ *     existing value with null or a weaker value.
+ *   - Always stamp owner_linkedin_searched_at when we ran the LinkedIn finder.
  *
  * Admin-gated via assertAdmin(). Service client for the read + write.
  *
  * Body: { contractor_id: string }
  * Returns: {
  *   ok,
- *   updated: { website?, phone?, title?, poc_name?, employee_count?,
- *              years_in_business?, owner_linkedin? },
+ *   updated: { website?, phone?, title?, poc_name?, poc_email?, company_linkedin?,
+ *              employee_count?, years_in_business?, owner_linkedin?,
+ *              phones?, emails?, track_record?, legal_name? },
+ *   research: { rating, reviews_count, sentiment, summary, sources } | null,
  *   sources
  * }
  */
@@ -46,16 +54,19 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { assertAdmin } from "@/lib/auth-admin";
 import { enrichFirmographics } from "@/lib/quick-checker/firmographics";
-import { findOwnerLinkedIn } from "@/lib/quick-checker/find-linkedin";
+import { findOwnerLinkedIn, matchKnownProfileByName } from "@/lib/quick-checker/find-linkedin";
 import { extractPhones, extractEmails } from "@/lib/quick-checker/contacts";
-import { scrapePage, pickInterestingLinks } from "@/lib/quick-checker/firecrawl";
+import { scrapePage, pickInterestingLinks, type FirecrawlPage } from "@/lib/quick-checker/firecrawl";
+import { classifySocials } from "@/lib/quick-checker/website-tech";
+import { extractYearsInBusiness, extractTrackRecord, extractLegalName } from "@/lib/quick-checker/prose-signals";
+import { runCompanyResearch } from "../research/route";
 import { FREE_EMAIL_DOMAINS } from "@/lib/lead-validation";
 import { assertSafePublicUrl } from "@/lib/ssrf-guard";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 export const runtime = "nodejs";
-export const maxDuration = 90;
+export const maxDuration = 180;
 
 function svc() {
     return createClient(
@@ -177,8 +188,9 @@ export async function POST(req: NextRequest) {
     const { data: c, error } = await db
         .from("contractors")
         .select(
-            "id, company_name, website, business_url, uei, email, primary_poc_name, primary_poc_email, " +
-                "primary_poc_title, primary_poc_phone, employee_count, years_in_business, owner_linkedin",
+            "id, company_name, website, business_url, uei, state, email, primary_poc_name, primary_poc_email, " +
+                "primary_poc_title, primary_poc_phone, employee_count, years_in_business, owner_linkedin, " +
+                "company_linkedin, social_linkedin, capability_summary_ai",
         )
         .eq("id", contractor_id)
         .maybeSingle();
@@ -198,15 +210,31 @@ export async function POST(req: NextRequest) {
         phone?: string;
         title?: string;
         poc_name?: string;
+        poc_email?: string;
+        company_linkedin?: string;
         employee_count?: number;
         years_in_business?: number;
         owner_linkedin?: string;
+        phones?: string[];
+        emails?: string[];
+        track_record?: string[];
+        legal_name?: string;
     } = {};
     const sources: Record<string, string> = {};
     const patch: Record<string, unknown> = {};
 
+    // Existing capability_summary_ai blob — we MERGE into it (never clobber).
+    const capBlob: Record<string, any> = (row.capability_summary_ai && typeof row.capability_summary_ai === "object")
+        ? { ...(row.capability_summary_ai as Record<string, any>) }
+        : {};
+    let capBlobDirty = false;
+
     // Track the website we'll crawl: existing, or derived this run.
     let website: string | null = (row.website as string) || (row.business_url as string) || null;
+
+    // Personal linkedin.com/in/ profiles found ON the contractor's own site —
+    // matched against the POC name in the LinkedIn sub-step (deterministic source).
+    let onSitePersonalLinkedIn: string[] = [];
 
     // ── Sub-step 0: derive website from a company email ────────────────────────
     // Only when BOTH website + business_url are empty and we have a non-free
@@ -229,51 +257,150 @@ export async function POST(req: NextRequest) {
 
     const domain = toDomain(website);
 
-    // ── Sub-step 1: crawl the website for contact info ─────────────────────────
-    // Cheap, SSRF-safe, best-effort. Homepage + best contact/about/team page.
-    // Fills primary_poc_phone (empty), primary_poc_title (empty); upgrades a
-    // weak/all-caps primary_poc_name. Never clobbers a good existing value.
+    // ── Sub-step 1: DEEP crawl the website ─────────────────────────────────────
+    // SSRF-safe, best-effort. Homepage + the best About + best Contact sub-page
+    // (up to 3 pages total). Reads BOTH combined markdown AND raw HTML so footer
+    // <a href> socials + footer phones survive. Everything here is
+    // deterministic/regex — never guessed.
     if (website) {
         try {
             const startUrl = /^https?:\/\//i.test(website) ? website : `https://${website}`;
             // SSRF guard before any outbound fetch.
             await assertSafePublicUrl(startUrl);
 
-            const home = await scrapePage(startUrl, { formats: ["markdown", "links"] });
-            const pages = home ? [home] : [];
+            // Homepage — request HTML too so we can read footer/header <a href>.
+            const home = await scrapePage(startUrl, { formats: ["markdown", "links", "html"] });
+            const pages: FirecrawlPage[] = home ? [home] : [];
 
-            // Pull the single highest-signal contact/about/team sub-page.
+            // Pull up to 2 high-signal sub-pages, biasing toward an About page AND
+            // a Contact page (not just the single top-scored link). pickInterestingLinks
+            // scores /contact highest then /about, so taking the top 4 and keeping
+            // the first about-ish + first contact-ish gives us both when present.
             if (home) {
-                const [extraUrl] = pickInterestingLinks(home.links, startUrl, 1);
-                if (extraUrl) {
+                const ranked = pickInterestingLinks(home.links, startUrl, 6);
+                const aboutUrl = ranked.find((u) => /\/about|who-we-are/i.test(u));
+                const contactUrl = ranked.find((u) => /\/contact/i.test(u));
+                const chosen = [aboutUrl, contactUrl].filter((v): v is string => !!v);
+                // Fill remaining budget (up to 3 pages total) with next-best links.
+                for (const u of ranked) {
+                    if (chosen.length >= 2) break;
+                    if (!chosen.includes(u)) chosen.push(u);
+                }
+                for (const extraUrl of chosen.slice(0, 2)) {
                     try {
                         await assertSafePublicUrl(extraUrl);
-                        const extra = await scrapePage(extraUrl, { formats: ["markdown", "links"] });
+                        const extra = await scrapePage(extraUrl, { formats: ["markdown", "links", "html"] });
                         if (extra) pages.push(extra);
                     } catch {
-                        /* sub-page failed — homepage alone is fine */
+                        /* sub-page failed — keep going */
                     }
                 }
             }
 
-            const combined = pages.map((p) => p.markdown).join("\n\n").slice(0, 60_000);
+            const combined = pages.map((p) => p.markdown).join("\n\n").slice(0, 120_000);
+            const combinedHtml = pages.map((p) => p.html || "").join("\n").slice(0, 400_000);
 
-            // Phone — first valid fixed_line/main number we can find.
-            if (combined && !(row.primary_poc_phone as string)?.trim()) {
+            // ── PHONES — every phone across all pages incl. footer ──────────────
+            if (combined) {
                 const phones = extractPhones(combined);
-                // Prefer a fixed line / main number over mobile/toll-free noise.
-                const best =
-                    phones.find((p) => p.type === "fixed_line") ||
-                    phones.find((p) => p.type === "mobile") ||
-                    phones[0];
-                if (best) {
-                    patch.primary_poc_phone = best.national;
-                    updated.phone = best.national;
-                    sources.phone = "website-crawl";
+                if (phones.length) {
+                    // Store ALL found phones (national format) in the cap blob.
+                    const allNational = [...new Set(phones.map((p) => p.national))];
+                    if (allNational.length) { capBlob.phones = allNational; capBlobDirty = true; updated.phones = allNational; }
+                    // Fill primary_poc_phone when empty — prefer a real fixed line.
+                    if (!(row.primary_poc_phone as string)?.trim()) {
+                        const best =
+                            phones.find((p) => p.type === "fixed_line") ||
+                            phones.find((p) => p.type === "mobile") ||
+                            phones[0];
+                        if (best) {
+                            patch.primary_poc_phone = best.national;
+                            updated.phone = best.national;
+                            sources.phone = "website-crawl";
+                        }
+                    }
                 }
             }
 
-            // POC title + name from page text.
+            // ── EMAILS — all business emails ────────────────────────────────────
+            if (combined) {
+                const emails = extractEmails(combined);
+                const bizEmails = emails.filter((e) => !FREE_EMAIL_DOMAINS.has(e.domain));
+                const all = [...new Set((bizEmails.length ? bizEmails : emails).map((e) => e.normalized))];
+                if (all.length) { capBlob.emails = all; capBlobDirty = true; updated.emails = all; }
+                // Fill primary_poc_email when empty.
+                if (!(row.email as string)?.trim() && !(row.primary_poc_email as string)?.trim()) {
+                    const biz = bizEmails[0] || emails[0];
+                    if (biz) {
+                        patch.primary_poc_email = biz.normalized;
+                        updated.poc_email = biz.normalized;
+                        sources.poc_email = "website-crawl";
+                    }
+                }
+            }
+
+            // ── COMPANY LINKEDIN + socials from FOOTER/HEADER <a href> ──────────
+            // Deterministic — classifySocials scans raw links + html, not prose.
+            try {
+                const linkPool: string[] = [];
+                for (const p of pages) for (const l of p.links || []) linkPool.push(l);
+                const socials = classifySocials(linkPool.length ? linkPool : []);
+                // Re-scan raw HTML too (footer links often aren't in links[]).
+                if (combinedHtml) {
+                    const hrefRe = /https?:\/\/[^\s"'<>)\]]+/gi;
+                    const htmlUrls: string[] = [];
+                    let mm: RegExpExecArray | null;
+                    while ((mm = hrefRe.exec(combinedHtml)) !== null) htmlUrls.push(mm[0]);
+                    const htmlSocials = classifySocials(htmlUrls);
+                    socials.linkedin ||= htmlSocials.linkedin;
+                    socials.linkedin_people.push(...htmlSocials.linkedin_people);
+                }
+                // Write company_linkedin ONLY when empty and a real COMPANY page
+                // found (classifySocials routes /company/ + /school/ here; personal
+                // /in/ profiles go to linkedin_people and are NEVER written here).
+                const haveCompanyLi = Boolean((row.company_linkedin as string) || (row.social_linkedin as string));
+                if (socials.linkedin && !haveCompanyLi) {
+                    patch.company_linkedin = socials.linkedin;
+                    updated.company_linkedin = socials.linkedin;
+                    sources.company_linkedin = "website-footer";
+                }
+                // Hold on-site personal profiles for the owner-LinkedIn match below.
+                onSitePersonalLinkedIn = [...new Set(socials.linkedin_people)];
+            } catch (e) {
+                console.error("[cockpit/enrich] socials scan failed:", e instanceof Error ? e.message : String(e));
+            }
+
+            // ── YEARS IN BUSINESS / TRACK RECORD (deterministic prose) ──────────
+            if (combined) {
+                if (!(row.years_in_business > 0)) {
+                    const yrs = extractYearsInBusiness(combined);
+                    if (yrs && yrs > 0) {
+                        patch.years_in_business = yrs;
+                        updated.years_in_business = yrs;
+                        sources.years_in_business = "website-prose";
+                    }
+                }
+                const track = extractTrackRecord(combined);
+                if (track.length && !(Array.isArray(capBlob.track_record) && capBlob.track_record.length)) {
+                    capBlob.track_record = track;
+                    capBlobDirty = true;
+                    updated.track_record = track;
+                }
+            }
+
+            // ── LEGAL COMPANY NAME ──────────────────────────────────────────────
+            if ((combined || combinedHtml) && !capBlob.legal_name) {
+                const legal = extractLegalName(combined) || extractLegalName(
+                    combinedHtml.replace(/<[^>]+>/g, " "),
+                );
+                if (legal) {
+                    capBlob.legal_name = legal;
+                    capBlobDirty = true;
+                    updated.legal_name = legal;
+                }
+            }
+
+            // ── POC title + name (best-effort prose) ────────────────────────────
             if (combined) {
                 const poc = extractPocFromText(combined);
                 if (poc.title && !(row.primary_poc_title as string)?.trim()) {
@@ -281,27 +408,15 @@ export async function POST(req: NextRequest) {
                     updated.title = poc.title;
                     sources.title = "website-crawl";
                 }
-                // Only upgrade the POC name when the existing one is missing or
-                // a weak all-caps SAM value — never overwrite a clean name.
+                // Only upgrade the POC name when missing or a weak all-caps SAM value.
                 if (poc.name && isWeakPocName(row.primary_poc_name as string)) {
                     patch.primary_poc_name = poc.name;
                     updated.poc_name = poc.name;
                     sources.poc_name = "website-crawl";
                 }
             }
-
-            // Belt-and-suspenders: if we still have no company email on file,
-            // pick up the first business email the crawl found.
-            if (combined && !(row.email as string)?.trim() && !(row.primary_poc_email as string)?.trim()) {
-                const emails = extractEmails(combined);
-                const biz = emails.find((e) => !FREE_EMAIL_DOMAINS.has(e.domain)) || emails[0];
-                if (biz) {
-                    patch.primary_poc_email = biz.normalized;
-                    sources.poc_email = "website-crawl";
-                }
-            }
         } catch (e) {
-            console.error("[cockpit/enrich] contact crawl failed:", e instanceof Error ? e.message : String(e));
+            console.error("[cockpit/enrich] deep crawl failed:", e instanceof Error ? e.message : String(e));
         }
     }
 
@@ -333,12 +448,14 @@ export async function POST(req: NextRequest) {
         }
 
         // years_in_business — derived from founded_year by the cascade. Only fill
-        // when real and the row is empty.
+        // when real and the row is empty AND the deep crawl didn't already capture
+        // an explicit on-site claim (the crawl value is preferred).
         if (
             firmo.years_in_business.value !== null &&
             firmo.years_in_business.source !== "missing" &&
             firmo.years_in_business.source !== "crawl" &&
-            !(row.years_in_business > 0)
+            !(row.years_in_business > 0) &&
+            patch.years_in_business == null
         ) {
             patch.years_in_business = firmo.years_in_business.value;
             updated.years_in_business = firmo.years_in_business.value;
@@ -348,24 +465,42 @@ export async function POST(req: NextRequest) {
         console.error("[cockpit/enrich] firmographics failed:", e instanceof Error ? e.message : String(e));
     }
 
-    // ── Sub-step 3: owner/CEO LinkedIn finder (Brave → DDG) ────────────────────
+    // ── Sub-step 3: owner/CEO LinkedIn finder ──────────────────────────────────
     // Always stamp searched_at so the cron lane never re-walks this row. Never
     // clobber an already-resolved owner_linkedin. Use the (possibly upgraded)
-    // POC name so an all-caps SAM name doesn't sabotage the search.
+    // POC name so an all-caps SAM name doesn't sabotage the match. Two sources,
+    // both STRICT (slug must carry both names):
+    //   1. A personal /in/ profile the company published on its OWN site
+    //      (most reliable — it's their own link, not a search guess).
+    //   2. Brave/DDG search fallback.
     try {
         patch.owner_linkedin_searched_at = new Date().toISOString();
         const pocNameForSearch = (updated.poc_name as string) || (row.primary_poc_name as string) || "";
         if (!row.owner_linkedin && pocNameForSearch) {
-            const li = await findOwnerLinkedIn(pocNameForSearch, companyName);
-            if (li?.url) {
-                patch.owner_linkedin = li.url;
-                updated.owner_linkedin = li.url;
-                sources.owner_linkedin = process.env.BRAVE_SEARCH_API_KEY ? "brave" : "duckduckgo";
+            // 1. On-site personal profile (deterministic).
+            const onSite = onSitePersonalLinkedIn.length
+                ? matchKnownProfileByName(onSitePersonalLinkedIn, pocNameForSearch)
+                : null;
+            if (onSite) {
+                patch.owner_linkedin = onSite;
+                updated.owner_linkedin = onSite;
+                sources.owner_linkedin = "website-onsite";
+            } else {
+                // 2. Search fallback (strict-gated inside findOwnerLinkedIn).
+                const li = await findOwnerLinkedIn(pocNameForSearch, companyName);
+                if (li?.url) {
+                    patch.owner_linkedin = li.url;
+                    updated.owner_linkedin = li.url;
+                    sources.owner_linkedin = process.env.BRAVE_SEARCH_API_KEY ? "brave" : "duckduckgo";
+                }
             }
         }
     } catch (e) {
         console.error("[cockpit/enrich] linkedin finder failed:", e instanceof Error ? e.message : String(e));
     }
+
+    // Fold the merged capability_summary_ai blob into the patch when changed.
+    if (capBlobDirty) patch.capability_summary_ai = capBlob;
 
     // ── Persist (resilient — log on failure, still return what we resolved) ────
     try {
@@ -387,5 +522,35 @@ export async function POST(req: NextRequest) {
         );
     }
 
-    return NextResponse.json({ ok: true, updated, sources });
+    // ── Sub-step 4: COMPANY RESEARCH (reviews / web presence / sentiment) ──────
+    // Reuse the shared research core so ONE "Research & fill gaps" action does
+    // everything. It persists research_findings + google_rating itself; we just
+    // surface the result. Best-effort — never fails the enrich.
+    let research: {
+        rating: number | null;
+        reviews_count: number | null;
+        sentiment: string;
+        summary: string;
+        sources: Array<{ url: string; title: string; source_type: string }>;
+    } | null = null;
+    try {
+        const r = await runCompanyResearch({
+            contractorId: contractor_id,
+            companyName,
+            state: (row.state as string | null) || null,
+            website,
+        });
+        research = {
+            rating: r.rating,
+            reviews_count: r.reviews_count,
+            sentiment: r.sentiment,
+            summary: r.summary,
+            sources: r.sources,
+        };
+        if (r.rating != null) sources.research_rating = "brave+openai";
+    } catch (e) {
+        console.error("[cockpit/enrich] research failed:", e instanceof Error ? e.message : String(e));
+    }
+
+    return NextResponse.json({ ok: true, updated, research, sources });
 }

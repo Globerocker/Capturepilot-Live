@@ -40,7 +40,10 @@ interface CockpitSender {
     reply_to: string;
     footer_html: string;
     physical_address: string;
+    title?: string; // optional sender title (e.g. "Founder") — used in the auto-footer
 }
+
+const CAPTUREPILOT_URL = "https://www.capturepilot.com";
 
 const COLORS = {
     black: "#0c0a09",
@@ -125,6 +128,7 @@ export async function POST(req: NextRequest) {
     const html = buildHtml({
         body,
         fromName,
+        fromTitle: (sender.title || "").trim(),
         replyTo,
         leadCompany: lead_company,
         physicalAddress: (sender.physical_address || "").trim(),
@@ -165,13 +169,14 @@ function escapeHtml(s: string): string {
 function buildHtml(args: {
     body: string;
     fromName: string;
+    fromTitle: string;
     replyTo: string;
     leadCompany: string;
     physicalAddress: string;
     footerHtml: string;
     toEmail: string;
 }): string {
-    const { body, fromName, replyTo, leadCompany, physicalAddress, footerHtml, toEmail } = args;
+    const { body, fromName, fromTitle, replyTo, leadCompany, physicalAddress, footerHtml, toEmail } = args;
 
     // Plain body → paragraphs. Split on blank lines; single newlines become <br>.
     const paragraphs = body
@@ -185,19 +190,9 @@ function buildHtml(args: {
         )
         .join("\n");
 
-    const companyLine = leadCompany
-        ? `<p style="color:${COLORS.stone500};font-size:12px;margin:0 0 2px;">Sent to ${escapeHtml(leadCompany)}</p>`
-        : "";
-
-    // Tasteful branded footer: sender + reply-to + CAN-SPAM physical address +
-    // a subtle "Sent via CapturePilot" line and an opt-out line.
-    const extraFooter = footerHtml
-        ? `<div style="color:${COLORS.stone500};font-size:12px;line-height:1.6;margin:0 0 12px;">${footerHtml}</div>`
-        : "";
-
-    const addressLine = physicalAddress
-        ? `<p style="color:${COLORS.stone500};font-size:11px;line-height:1.6;margin:0 0 4px;">${escapeHtml(physicalAddress)}</p>`
-        : "";
+    const footer = footerHtml
+        ? customFooter({ footerHtml, fromName, replyTo, leadCompany, physicalAddress })
+        : autoFooter({ fromName, fromTitle, replyTo, leadCompany, physicalAddress });
 
     return `<!doctype html>
 <html>
@@ -210,23 +205,93 @@ function buildHtml(args: {
           ${paragraphs}
         </td></tr>
         <tr><td style="border-top:1px solid ${COLORS.stone200};padding:18px 0 0;">
-          ${companyLine}
-          <p style="color:${COLORS.black};font-size:13px;font-weight:600;margin:0 0 2px;">${escapeHtml(fromName)}</p>
-          <p style="color:${COLORS.stone500};font-size:12px;margin:0 0 12px;">
-            Reply to <a href="mailto:${escapeHtml(replyTo)}" style="color:${COLORS.emerald700};text-decoration:none;">${escapeHtml(replyTo)}</a>
-          </p>
-          ${extraFooter}
-          ${addressLine}
-          <p style="color:${COLORS.stone500};font-size:11px;line-height:1.6;margin:8px 0 0;">
-            Sent via CapturePilot. You're receiving this because we think federal contracting could be a fit for your business.
-            If you'd rather not hear from us, just reply with &ldquo;unsubscribe&rdquo; and we won't contact you again.
-          </p>
+          ${footer}
         </td></tr>
       </table>
     </td></tr>
   </table>
 </body>
 </html>`;
+}
+
+// The shared CAN-SPAM compliance lines (Sent via CapturePilot + unsubscribe).
+function complianceLines(): string {
+    return `<p style="color:${COLORS.stone500};font-size:11px;line-height:1.6;margin:8px 0 0;">
+            Sent via <a href="${CAPTUREPILOT_URL}" style="color:${COLORS.stone500};text-decoration:underline;">CapturePilot</a>. You're receiving this because we think federal contracting could be a fit for your business.
+            If you'd rather not hear from us, just reply with &ldquo;unsubscribe&rdquo; and we won't contact you again.
+          </p>`;
+}
+
+// Operator supplied their own footer HTML — keep the existing behavior (their
+// block + sender + reply-to + address + the CAN-SPAM lines).
+function customFooter(args: {
+    footerHtml: string;
+    fromName: string;
+    replyTo: string;
+    leadCompany: string;
+    physicalAddress: string;
+}): string {
+    const { footerHtml, fromName, replyTo, leadCompany, physicalAddress } = args;
+
+    const companyLine = leadCompany
+        ? `<p style="color:${COLORS.stone500};font-size:12px;margin:0 0 2px;">Sent to ${escapeHtml(leadCompany)}</p>`
+        : "";
+    const addressLine = physicalAddress
+        ? `<p style="color:${COLORS.stone500};font-size:11px;line-height:1.6;margin:0 0 4px;">${escapeHtml(physicalAddress)}</p>`
+        : "";
+
+    return `${companyLine}
+          <p style="color:${COLORS.black};font-size:13px;font-weight:600;margin:0 0 2px;">${escapeHtml(fromName)}</p>
+          <p style="color:${COLORS.stone500};font-size:12px;margin:0 0 12px;">
+            Reply to <a href="mailto:${escapeHtml(replyTo)}" style="color:${COLORS.emerald700};text-decoration:none;">${escapeHtml(replyTo)}</a>
+          </p>
+          <div style="color:${COLORS.stone500};font-size:12px;line-height:1.6;margin:0 0 12px;">${footerHtml}</div>
+          ${addressLine}
+          ${complianceLines()}`;
+}
+
+// No footer_html stored → GENERATE a clean professional footer from known facts
+// so the operator never has to write one. Sources: sender from_name (+ optional
+// title), the CapturePilot brand + URL, the physical address (CAN-SPAM), a
+// reply-to line, and the CAN-SPAM unsubscribe line.
+function autoFooter(args: {
+    fromName: string;
+    fromTitle: string;
+    replyTo: string;
+    leadCompany: string;
+    physicalAddress: string;
+}): string {
+    const { fromName, fromTitle, replyTo, leadCompany, physicalAddress } = args;
+
+    const companyLine = leadCompany
+        ? `<p style="color:${COLORS.stone500};font-size:12px;margin:0 0 2px;">Sent to ${escapeHtml(leadCompany)}</p>`
+        : "";
+
+    // "Sergio · CapturePilot" → name line; title (if any) on its own muted line.
+    const nameLine = `<p style="color:${COLORS.black};font-size:13px;font-weight:600;margin:0 0 1px;">${escapeHtml(fromName)}</p>`;
+    const titleLine = fromTitle
+        ? `<p style="color:${COLORS.stone500};font-size:12px;margin:0 0 2px;">${escapeHtml(fromTitle)}</p>`
+        : "";
+
+    const brandLine = `<p style="color:${COLORS.stone500};font-size:12px;margin:0 0 10px;">
+            CapturePilot · <a href="${CAPTUREPILOT_URL}" style="color:${COLORS.emerald700};text-decoration:none;">www.capturepilot.com</a>
+          </p>`;
+
+    const replyLine = `<p style="color:${COLORS.stone500};font-size:12px;margin:0 0 12px;">
+            Reply to <a href="mailto:${escapeHtml(replyTo)}" style="color:${COLORS.emerald700};text-decoration:none;">${escapeHtml(replyTo)}</a>
+          </p>`;
+
+    const addressLine = physicalAddress
+        ? `<p style="color:${COLORS.stone500};font-size:11px;line-height:1.6;margin:0 0 4px;">${escapeHtml(physicalAddress)}</p>`
+        : "";
+
+    return `${companyLine}
+          ${nameLine}
+          ${titleLine}
+          ${brandLine}
+          ${replyLine}
+          ${addressLine}
+          ${complianceLines()}`;
 }
 
 // ── Send log (best-effort, schema-tolerant) ─────────────────────────────────

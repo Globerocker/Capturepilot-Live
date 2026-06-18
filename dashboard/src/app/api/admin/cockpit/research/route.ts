@@ -289,6 +289,133 @@ async function extractFindings(
     }
 }
 
+// ─── Shared core (reused by /enrich so ONE action does everything) ───────────
+
+export interface CompanyResearchResult {
+    ok: boolean;
+    rating: number | null;
+    reviews_count: number | null;
+    sentiment: ResearchFindings["overall_sentiment"];
+    summary: string;
+    sources: ResearchSource[];
+    /** The full persisted blob (also written to contractors.research_findings). */
+    findings: ResearchFindings;
+    errors: string[];
+}
+
+/**
+ * Run the public-reputation sweep for one company and persist it to the
+ * contractors row (research_findings + researched_at, plus google_rating /
+ * google_reviews_count when found). Resilient by design — Brave, crawl, and
+ * OpenAI are each independently try/caught.
+ *
+ * Extracted from the route handler so the cockpit /enrich endpoint can run the
+ * SAME research step inside its single "Research & fill gaps" action.
+ */
+export async function runCompanyResearch(args: {
+    contractorId: string;
+    companyName: string;
+    state: string | null;
+    website: string | null;
+}): Promise<CompanyResearchResult> {
+    const { contractorId, website } = args;
+    const companyName = (args.companyName || "").trim();
+    const state = (args.state || "").trim() || null;
+    const errors: string[] = [];
+    const sb = svc();
+
+    const emptyFindings = (summary: string): ResearchFindings => ({
+        overall_sentiment: "unknown",
+        rating: null,
+        reviews_count: null,
+        summary,
+        what_they_do: "",
+        sources: [],
+        researched_at: new Date().toISOString(),
+    });
+
+    if (!process.env.BRAVE_SEARCH_API_KEY) {
+        const findings = emptyFindings(`Research skipped — BRAVE_SEARCH_API_KEY not configured.`);
+        errors.push("BRAVE_SEARCH_API_KEY not set");
+        return { ok: false, rating: null, reviews_count: null, sentiment: "unknown", summary: findings.summary, sources: [], findings, errors };
+    }
+    if (!companyName) {
+        const findings = emptyFindings("Research skipped — contractor has no company_name.");
+        errors.push("contractor has no company_name");
+        return { ok: false, rating: null, reviews_count: null, sentiment: "unknown", summary: findings.summary, sources: [], findings, errors };
+    }
+
+    // 1) Brave web searches (reputation + general presence), in parallel.
+    const reviewsQuery = `"${companyName}"${state ? ` ${state}` : ""} reviews`;
+    const presenceQuery = `"${companyName}"${state ? ` ${state}` : ""}`;
+    const [reviewHits, presenceHits] = await Promise.all([
+        braveSearch(reviewsQuery, 10),
+        braveSearch(presenceQuery, 10),
+    ]);
+
+    const ranked = rankResults([...reviewHits, ...presenceHits], website);
+    if (ranked.length === 0) {
+        errors.push("Brave returned no results for either query");
+        const findings = emptyFindings(`No public web results found for ${companyName}${state ? ` (${state})` : ""}.`);
+        try {
+            await sb.from("contractors").update({ research_findings: findings, researched_at: findings.researched_at }).eq("id", contractorId);
+        } catch (e: any) {
+            errors.push(`persist failed: ${e?.message || e}`);
+        }
+        return { ok: true, rating: null, reviews_count: null, sentiment: "unknown", summary: findings.summary, sources: [], findings, errors };
+    }
+
+    // 2) Crawl the most relevant 2-3 result pages (best-effort).
+    const toCrawl = ranked.slice(0, 3);
+    const crawled: Array<{ url: string; title: string; source_type: string; markdown: string }> = [];
+    const crawlResults = await Promise.all(
+        toCrawl.map(async (r) => {
+            try {
+                const page = await scrapePage(r.url, { formats: ["markdown"], timeout: 25000 });
+                if (page && page.markdown && page.markdown.length > 80) {
+                    return { url: r.url, title: r.title, source_type: r.source_type, markdown: page.markdown };
+                }
+            } catch (e) {
+                console.warn(`[research] crawl failed for ${r.url}:`, e instanceof Error ? e.message : e);
+            }
+            return null;
+        }),
+    );
+    for (const c of crawlResults) if (c) crawled.push(c);
+
+    // 3) OpenAI structured extraction.
+    const { findings: extracted, errors: extractErrors } = await extractFindings(companyName, state, ranked, crawled);
+    errors.push(...extractErrors);
+
+    const findings: ResearchFindings = { ...extracted, researched_at: new Date().toISOString() };
+
+    // 4) Persist. google_rating / google_reviews_count only when found.
+    const update: Record<string, any> = {
+        research_findings: findings,
+        researched_at: findings.researched_at,
+    };
+    if (findings.rating != null) update.google_rating = findings.rating;
+    if (findings.reviews_count != null) update.google_reviews_count = findings.reviews_count;
+
+    try {
+        const { error: upErr } = await sb.from("contractors").update(update).eq("id", contractorId);
+        if (upErr) errors.push(`persist failed: ${upErr.message}`);
+    } catch (e: any) {
+        errors.push(`persist failed: ${e?.message || e}`);
+    }
+
+    return {
+        ok: true,
+        rating: findings.rating,
+        reviews_count: findings.reviews_count,
+        sentiment: findings.overall_sentiment,
+        summary: findings.summary,
+        sources: findings.sources,
+        findings,
+        errors,
+    };
+}
+
 // ─── Handler ─────────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
@@ -312,7 +439,7 @@ export async function POST(req: NextRequest) {
 
     const sb = svc();
 
-    // 1) Load the contractor.
+    // Load the contractor.
     const { data: contractor, error: loadErr } = await sb
         .from("contractors")
         .select("id, company_name, state, website")
@@ -325,91 +452,21 @@ export async function POST(req: NextRequest) {
     if (!companyName) {
         return NextResponse.json({ ok: false, error: "contractor has no company_name" }, { status: 400 });
     }
-    const state = (contractor.state || "").trim() || null;
-    const errors: string[] = [];
 
-    // 2) Brave web searches (reputation + general presence), in parallel.
-    const reviewsQuery = `"${companyName}"${state ? ` ${state}` : ""} reviews`;
-    const presenceQuery = `"${companyName}"${state ? ` ${state}` : ""}`;
-    const [reviewHits, presenceHits] = await Promise.all([
-        braveSearch(reviewsQuery, 10),
-        braveSearch(presenceQuery, 10),
-    ]);
-
-    const ranked = rankResults([...reviewHits, ...presenceHits], contractor.website);
-    if (ranked.length === 0) {
-        errors.push("Brave returned no results for either query");
-        const findings: ResearchFindings = {
-            overall_sentiment: "unknown",
-            rating: null,
-            reviews_count: null,
-            summary: `No public web results found for ${companyName}${state ? ` (${state})` : ""}.`,
-            what_they_do: "",
-            sources: [],
-            researched_at: new Date().toISOString(),
-        };
-        try {
-            await sb.from("contractors").update({ research_findings: findings, researched_at: findings.researched_at }).eq("id", contractorId);
-        } catch (e: any) {
-            errors.push(`persist failed: ${e?.message || e}`);
-        }
-        return NextResponse.json({
-            ok: true,
-            rating: null,
-            reviews_count: null,
-            sentiment: "unknown",
-            summary: findings.summary,
-            sources: [],
-            errors,
-        });
-    }
-
-    // 3) Crawl the most relevant 2-3 result pages (best-effort).
-    const toCrawl = ranked.slice(0, 3);
-    const crawled: Array<{ url: string; title: string; source_type: string; markdown: string }> = [];
-    const crawlResults = await Promise.all(
-        toCrawl.map(async (r) => {
-            try {
-                const page = await scrapePage(r.url, { formats: ["markdown"], timeout: 25000 });
-                if (page && page.markdown && page.markdown.length > 80) {
-                    return { url: r.url, title: r.title, source_type: r.source_type, markdown: page.markdown };
-                }
-            } catch (e) {
-                console.warn(`[research] crawl failed for ${r.url}:`, e instanceof Error ? e.message : e);
-            }
-            return null;
-        }),
-    );
-    for (const c of crawlResults) if (c) crawled.push(c);
-
-    // 4) OpenAI structured extraction.
-    const { findings: extracted, errors: extractErrors } = await extractFindings(companyName, state, ranked, crawled);
-    errors.push(...extractErrors);
-
-    const findings: ResearchFindings = { ...extracted, researched_at: new Date().toISOString() };
-
-    // 5) Persist. google_rating / google_reviews_count only when found.
-    const update: Record<string, any> = {
-        research_findings: findings,
-        researched_at: findings.researched_at,
-    };
-    if (findings.rating != null) update.google_rating = findings.rating;
-    if (findings.reviews_count != null) update.google_reviews_count = findings.reviews_count;
-
-    try {
-        const { error: upErr } = await sb.from("contractors").update(update).eq("id", contractorId);
-        if (upErr) errors.push(`persist failed: ${upErr.message}`);
-    } catch (e: any) {
-        errors.push(`persist failed: ${e?.message || e}`);
-    }
+    const res = await runCompanyResearch({
+        contractorId,
+        companyName,
+        state: contractor.state || null,
+        website: contractor.website || null,
+    });
 
     return NextResponse.json({
-        ok: true,
-        rating: findings.rating,
-        reviews_count: findings.reviews_count,
-        sentiment: findings.overall_sentiment,
-        summary: findings.summary,
-        sources: findings.sources,
-        errors: errors.length ? errors : undefined,
+        ok: res.ok,
+        rating: res.rating,
+        reviews_count: res.reviews_count,
+        sentiment: res.sentiment,
+        summary: res.summary,
+        sources: res.sources,
+        errors: res.errors.length ? res.errors : undefined,
     });
 }

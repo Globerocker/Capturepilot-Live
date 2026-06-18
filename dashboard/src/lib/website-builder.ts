@@ -42,6 +42,12 @@ export interface OnePagerInput {
     uei?: string | null;
     cageCode?: string | null;
     federalAwardsCount?: number | null;
+    /** Total obligated federal award volume (USD). Drives the PAST PERFORMANCE section. */
+    totalAwardVolume?: number | null;
+    /** Top federal customers by obligated amount (name + optional amount). */
+    topAgencies?: Array<{ name: string; amount?: number | null }> | null;
+    /** Named past/commercial clients → rendered as logos-less name chips. */
+    clientList?: string[] | null;
     yearsInBusiness?: number | null;
     employeeCount?: number | null;
     contact?: {
@@ -110,6 +116,15 @@ function darken(hex: string, factor: number): string {
     const [r, g, b] = hexToRgb(hex);
     const d = (v: number) => Math.max(0, Math.round(v * (1 - factor)));
     return "#" + [d(r), d(g), d(b)].map((v) => v.toString(16).padStart(2, "0")).join("");
+}
+
+/** Compact USD for the past-performance strip, e.g. 2400000 → "$2.4M". "" for 0/null. */
+function compactUsd(n: number | null | undefined): string {
+    if (!n || !Number.isFinite(n) || n <= 0) return "";
+    if (n >= 1_000_000_000) return `$${(n / 1_000_000_000).toFixed(1)}B`;
+    if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
+    if (n >= 1_000) return `$${Math.round(n / 1_000)}K`;
+    return `$${Math.round(n).toLocaleString()}`;
 }
 
 function uniqStrings(arr: (string | null | undefined)[] | null | undefined): string[] {
@@ -275,23 +290,90 @@ export function buildOnePager(input: OnePagerInput): string {
       </section>`
             : "";
 
-    const pastPerfHtml =
+    // ── Past performance ──
+    // Surfaces award count + compact total obligated volume + top federal
+    // customers. Renders when there's ANY signal (count, volume, or agencies);
+    // each sub-part is included only when present.
+    const awardVolume = compactUsd(input.totalAwardVolume);
+    const topAgencies = (Array.isArray(input.topAgencies) ? input.topAgencies : [])
+        .map((a) => ({ name: (a?.name || "").trim(), amount: typeof a?.amount === "number" ? a.amount : null }))
+        .filter((a) => a.name);
+    // Dedupe agencies case-insensitively, keep first (already amount-sorted upstream).
+    const seenAgency = new Set<string>();
+    const dedupedAgencies = topAgencies.filter((a) => {
+        const k = a.name.toLowerCase();
+        if (seenAgency.has(k)) return false;
+        seenAgency.add(k);
+        return true;
+    });
+
+    const hasPastPerf = awards > 0 || !!awardVolume || dedupedAgencies.length > 0;
+
+    const perfStatChips: string[] = [];
+    if (awards > 0) {
+        perfStatChips.push(
+            `<div class="perf-stat"><div class="perf-stat-value">${awards}</div><div class="perf-stat-label">Federal award${
+                awards === 1 ? "" : "s"
+            }</div></div>`,
+        );
+    }
+    if (awardVolume) {
+        perfStatChips.push(
+            `<div class="perf-stat"><div class="perf-stat-value">${esc(awardVolume)}</div><div class="perf-stat-label">Obligated to date</div></div>`,
+        );
+    }
+
+    const agencyChips = dedupedAgencies
+        .slice(0, 6)
+        .map((a) => `<span class="badge">${esc(a.name)}</span>`)
+        .join("");
+
+    const perfLead =
         awards > 0
-            ? `<section class="section" id="performance">
+            ? `${esc(company)} has delivered on <strong>${awards}</strong> federal contract${
+                  awards === 1 ? "" : "s"
+              }${awardVolume ? `, totaling <strong>${esc(awardVolume)}</strong> in obligated work` : ""}, performing to the standard agencies expect.`
+            : awardVolume
+                ? `${esc(company)} has delivered <strong>${esc(awardVolume)}</strong> in federal work, performing to the standard agencies expect.`
+                : `${esc(company)} has a track record of federal performance with the agencies below.`;
+
+    const pastPerfHtml = hasPastPerf
+        ? `<section class="section" id="performance">
         <div class="container">
           <div class="perf">
             <div class="perf-icon">${shieldSvg(accent)}</div>
-            <div>
+            <div class="perf-body">
               <span class="eyebrow">Past performance</span>
               <h2>Trusted by federal agencies</h2>
-              <p>${esc(company)} has been awarded <strong>${awards}</strong> federal contract${
-                  awards === 1 ? "" : "s"
-              }, delivering on requirements with the discipline agencies expect.</p>
+              <p>${perfLead}</p>
+              ${perfStatChips.length ? `<div class="perf-stats">${perfStatChips.join("")}</div>` : ""}
+              ${
+                  dedupedAgencies.length
+                      ? `<div class="perf-agencies"><span class="perf-agencies-label">Selected customers</span><div class="badges">${agencyChips}</div></div>`
+                      : ""
+              }
             </div>
           </div>
         </div>
       </section>`
-            : "";
+        : "";
+
+    // ── Client list ──
+    // Deduped (case-insensitive) named clients rendered as logos-less name chips.
+    const clientList = uniqStrings(input.clientList).slice(0, 24);
+    const clientListHtml = clientList.length
+        ? `<section class="section section-alt" id="clients">
+        <div class="container">
+          <div class="section-head">
+            <span class="eyebrow">Who we serve</span>
+            <h2>Client list</h2>
+          </div>
+          <div class="client-chips">
+            ${clientList.map((name) => `<span class="client-chip">${esc(name)}</span>`).join("")}
+          </div>
+        </div>
+      </section>`
+        : "";
 
     const contactRows: string[] = [];
     if (contact.name) contactRows.push(`<li><span class="ct-label">Contact</span><span>${esc(contact.name)}</span></li>`);
@@ -446,8 +528,22 @@ export function buildOnePager(input: OnePagerInput): string {
   /* ── Past performance ── */
   .perf { display: flex; gap: 24px; align-items: flex-start; }
   .perf-icon { flex: 0 0 auto; }
+  .perf-body { flex: 1 1 auto; min-width: 0; }
   .perf h2 { font-size: clamp(24px, 3.2vw, 32px); font-weight: 800; }
   .perf p { font-size: 17px; color: var(--muted); margin: 12px 0 0; max-width: 640px; }
+  .perf-stats { display: flex; flex-wrap: wrap; gap: 28px; margin-top: 22px; }
+  .perf-stat { display: flex; flex-direction: column; }
+  .perf-stat-value { font-size: 28px; font-weight: 800; color: var(--accent); letter-spacing: -0.03em; }
+  .perf-stat-label { font-size: 13px; color: var(--muted); font-weight: 600; margin-top: 2px; }
+  .perf-agencies { margin-top: 26px; }
+  .perf-agencies-label { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); font-weight: 700; margin-bottom: 12px; }
+
+  /* ── Client list ── */
+  .client-chips { display: flex; flex-wrap: wrap; gap: 12px; }
+  .client-chip {
+    display: inline-flex; align-items: center; background: #fff; border: 1px solid var(--line);
+    color: var(--ink); font-size: 15px; font-weight: 600; padding: 12px 20px; border-radius: 12px;
+  }
 
   /* ── Contact ── */
   .contact-card {
@@ -512,6 +608,7 @@ export function buildOnePager(input: OnePagerInput): string {
     ${servicesHtml}
     ${capabilitiesHtml}
     ${pastPerfHtml}
+    ${clientListHtml}
 
     <section class="section section-alt" id="contact">
       <div class="container">

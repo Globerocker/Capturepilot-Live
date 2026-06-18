@@ -34,12 +34,29 @@ export const maxDuration = 60;
 type Tone = "warm_intro" | "short" | "call_heads_up";
 const VALID_TONES: Tone[] = ["warm_intro", "short", "call_heads_up"];
 
+interface LeadMatch {
+    title: string;
+    agency: string | null;
+    deadline: string | null;
+    /** Our fit/pwin %, 0-100. Prefer pwin, fall back to score_pct. */
+    fit_pct: number | null;
+    /** opportunities.id — when present we can build a real sam.gov link. */
+    opp_id: string | null;
+}
+
+interface LeadPastPerf {
+    federal_awards_count: number | null;
+    total_award_volume: number | null;
+    top_agency: string | null;
+}
+
 interface LeadContext {
     company_name: string;
     first_name: string | null;
     state: string | null;
     certifications: string[];
-    top_matches: Array<{ title: string; agency: string | null; deadline: string | null; pwin: number | null }>;
+    top_matches: LeadMatch[];
+    past_perf: LeadPastPerf;
     gap_hook: string | null;
     findings_summary: string | null;
     result_url: string | null; // /check/[id] for inbound leads
@@ -100,13 +117,24 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: false, error: msg }, { status: 404 });
     }
 
-    // ── Build the prompt ──────────────────────────────────────────────────────
-    const matchLines = lead.top_matches.slice(0, 3).map((m, i) => {
-        const agency = m.agency ? ` — ${m.agency}` : "";
-        const dl = m.deadline ? `, responses due ${formatDeadline(m.deadline)}` : "";
-        const fit = typeof m.pwin === "number" ? ` (~${m.pwin}% fit)` : "";
-        return `${i + 1}. ${m.title}${agency}${dl}${fit}`;
-    });
+    // ── Build the deterministic matches block (links + fit %) ────────────────
+    // This block is appended VERBATIM after the AI intro so the SAM.gov links and
+    // fit percentages are exact (never paraphrased / hallucinated by the model).
+    const topMatches = lead.top_matches.slice(0, 3);
+    const matchesBlock = buildMatchesBlock(topMatches);
+    const pastPerfLine = buildPastPerfLine(lead.past_perf);
+
+    // The AI writes ONLY the short human intro (greeting + 1-2 sentences + soft
+    // setup) — the structured match list and CTA are appended by code below.
+    const matchSummaryForPrompt = topMatches.length
+        ? topMatches
+              .map((m, i) => {
+                  const agency = m.agency ? ` — ${m.agency}` : "";
+                  const fit = typeof m.fit_pct === "number" ? ` (~${m.fit_pct}% fit)` : "";
+                  return `${i + 1}. ${m.title}${agency}${fit}`;
+              })
+              .join("\n")
+        : "No live matches found.";
 
     const leadContext = `
 LEAD:
@@ -115,25 +143,33 @@ First name (use in greeting if present): ${lead.first_name || "unknown — use a
 State: ${lead.state || "unknown"}
 Certifications: ${lead.certifications.length ? lead.certifications.join(", ") : "none found"}
 
-LIVE OPPORTUNITY MATCHES (real, currently open — reference the TOP one by name):
-${matchLines.length ? matchLines.join("\n") : "No live matches found — do NOT invent one. Lead with the site gap instead."}
+LIVE OPPORTUNITY MATCHES (reference the TOP one by name in the intro — the full list is appended after your text by our system, so DO NOT list them all yourself):
+${matchSummaryForPrompt}
 
 THE ONE GAP WE CAN FIX (reference this, phrased plainly):
 ${lead.gap_hook || "No specific gap captured — keep the lead-in about the live match only."}
 
+PAST PERFORMANCE (for context — a one-line summary is appended by our system, don't restate the numbers):
+${pastPerfLine || "No federal award history on file."}
+
 ${lead.findings_summary ? `INTERNAL BRIEFING (context only, do not quote verbatim):\n${lead.findings_summary}` : ""}
 ${lead.result_url ? `\nFull results page we can point them to: ${lead.result_url}` : ""}`.trim();
 
-    const system = `You are the founder of CapturePilot, a federal-contracting platform built for small, often veteran-owned firms. You write the first cold email yourself — vet-owned IT-firm CEO talking to his cousin over coffee, not a marketer. Your job here: one short, specific, non-salesy lead-in to ONE contractor that proves you actually looked at their business.
+    const system = `You are the founder of CapturePilot, a federal-contracting platform built for small, often veteran-owned firms. You write the first cold email yourself — vet-owned IT-firm CEO talking to his cousin over coffee, not a marketer. Your job here: one short, specific, non-salesy INTRO to ONE contractor that proves you actually looked at their business.
+
+IMPORTANT — you write ONLY the intro paragraph(s). Our system appends the formatted match list (with SAM.gov links and fit %) and a soft call-to-action after your text. So:
+- Greet them, then in 1-3 plain sentences explain that you pulled a few live federal opportunities that fit their shop and that the specifics are below.
+- Reference the single strongest live opportunity by its real title to prove you looked. Do not list all three — the list is appended after you.
+- Do NOT write the match list yourself, do NOT write SAM.gov links, do NOT write a closing CTA — those are appended.
 
 Hard rules:
-- Reference the single strongest live opportunity by its real title. Do not invent opportunities, awards, or certifications not given to you.
+- Do not invent opportunities, awards, certifications, or numbers not given to you.
 - Name the one gap we can fix, in one clause, as an observation — never a pitch.
 - No marketing fluff, no "I hope this finds you well", no calendar links unless the tone calls for it.
 - Plain, direct, a little weary. It should read like a real person typed it.
 - Always return JSON with keys "subject" and "body".`;
 
-    const user = `Write a cold lead-in email to this contractor.
+    const user = `Write the cold INTRO for an email to this contractor.
 
 TONE/STYLE: ${TONE_GUIDE[tone]}
 
@@ -144,8 +180,8 @@ Requirements:
 - Greeting uses the first name when one is given; otherwise a plain opener with no placeholder.
 - Reference the top live match by its actual title (shorten it naturally if it's long).
 - Mention the one gap as a quick observation, not a sales line.
-- Sign off as the CapturePilot founder (first name only is fine). Do not invent a fake signature block with phone/address.
-- Output MUST be JSON: {"subject": "...", "body": "..."} — body is plain text with real newlines (\\n).`;
+- The intro should END right before the match list — do NOT add a sign-off, the list, or a CTA. We append all of that.
+- Output MUST be JSON: {"subject": "...", "body": "..."} — body is plain text with real newlines (\\n) and is JUST the intro.`;
 
     try {
         const res = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -192,7 +228,28 @@ Requirements:
             );
         }
 
-        return NextResponse.json({ ok: true, subject: parsed.subject, body: parsed.body });
+        // ── Assemble the ready-to-send email ────────────────────────────────
+        // AI intro → deterministic matches block (titles + SAM.gov links + fit %)
+        // → one-line past-performance → soft CTA. The structured parts are built
+        // by code (never the model) so links and percentages are always exact.
+        const intro = String(parsed.body).trim();
+        const ctaTarget = lead.result_url ? lead.result_url : null;
+        const cta = topMatches.length
+            ? ctaTarget
+                ? `Want the full breakdown — deadlines, fit notes, and the rest of the list? It's here: ${ctaTarget}\nOr just reply and I'll send it over.`
+                : `Want the full breakdown — deadlines, fit notes, and the rest of the list? Reply and I'll send it over.`
+            : ctaTarget
+                ? `Happy to walk you through what we found: ${ctaTarget}`
+                : `Happy to send over what we found — just reply.`;
+
+        const sections: string[] = [intro];
+        if (matchesBlock) sections.push(matchesBlock);
+        if (pastPerfLine) sections.push(pastPerfLine);
+        sections.push(cta);
+
+        const finalBody = sections.join("\n\n");
+
+        return NextResponse.json({ ok: true, subject: parsed.subject, body: finalBody });
     } catch (err) {
         console.error("[cockpit/message] fatal:", err);
         return NextResponse.json({ ok: false, error: "Generation failed" }, { status: 500 });
@@ -219,11 +276,58 @@ function normalizeCerts(...arrs: any[]): string[] {
     return [...out];
 }
 
+/**
+ * Normalize one capability_summary_ai.top_matches entry into a LeadMatch.
+ * Handles legacy (notice_id/score) + richer (opp_id/score(0-1)/pwin/deadline)
+ * shapes. fit_pct prefers pwin, then score_pct, coerced to a 0-100 integer.
+ */
+function normalizeMatch(m: any): LeadMatch {
+    const pctOf = (v: unknown): number | null => {
+        if (typeof v !== "number" || !Number.isFinite(v)) return null;
+        return v <= 1 ? Math.round(v * 100) : Math.round(v);
+    };
+    const fit = pctOf(m?.pwin) ?? pctOf(m?.score) ?? pctOf(m?.score_pct);
+    return {
+        title: String(m?.title || "Untitled opportunity"),
+        agency: m?.agency ?? null,
+        deadline: m?.deadline ?? m?.response_deadline ?? null,
+        fit_pct: fit,
+        opp_id: (m?.opp_id ?? m?.notice_id ?? null) || null,
+    };
+}
+
+/** Top agency by obligated amount from agency_relationships (array or map). */
+function topAgencyName(v: unknown): string | null {
+    let best: { name: string; amount: number } | null = null;
+    const consider = (name: string, amount: number) => {
+        const nm = name.trim();
+        if (!nm) return;
+        if (!best || amount > best.amount) best = { name: nm, amount };
+    };
+    if (Array.isArray(v)) {
+        for (const e of v) {
+            if (!e || typeof e !== "object") continue;
+            const name = String((e as any).name || (e as any).agency || "");
+            const amount = Number((e as any).amount ?? (e as any).obligated ?? 0) || 0;
+            consider(name, amount);
+        }
+    } else if (v && typeof v === "object") {
+        for (const [name, val] of Object.entries(v as Record<string, any>)) {
+            const amount =
+                val && typeof val === "object" ? Number(val.amount ?? val.obligated ?? 0) || 0 : Number(val) || 0;
+            consider(name, amount);
+        }
+    }
+    return best ? (best as { name: string }).name : null;
+}
+
 async function loadContractor(db: any, id: string): Promise<LeadContext> {
     const { data, error } = await db
         .from("contractors")
         .select(
-            "id, company_name, primary_poc_name, state, certifications, sba_certifications, capability_summary_ai",
+            "id, company_name, primary_poc_name, state, certifications, sba_certifications, " +
+            "federal_awards_count, total_federal_awards, total_award_volume, revenue, " +
+            "agency_relationships, capability_summary_ai",
         )
         .eq("id", id)
         .maybeSingle();
@@ -238,12 +342,18 @@ async function loadContractor(db: any, id: string): Promise<LeadContext> {
         first_name: firstNameOf(data.primary_poc_name),
         state: data.state || null,
         certifications: normalizeCerts(data.certifications, data.sba_certifications, blob.certifications),
-        top_matches: top.slice(0, 3).map((m: any) => ({
-            title: String(m?.title || "Untitled opportunity"),
-            agency: m?.agency ?? null,
-            deadline: m?.deadline ?? null,
-            pwin: typeof m?.pwin === "number" ? m.pwin : typeof m?.score === "number" ? Math.round(m.score * 100) : null,
-        })),
+        top_matches: top.slice(0, 3).map(normalizeMatch),
+        past_perf: {
+            federal_awards_count:
+                typeof data.total_federal_awards === "number" ? data.total_federal_awards
+                : typeof data.federal_awards_count === "number" ? data.federal_awards_count
+                : null,
+            total_award_volume:
+                typeof data.total_award_volume === "number" ? data.total_award_volume
+                : typeof data.revenue === "number" ? data.revenue
+                : null,
+            top_agency: topAgencyName(data.agency_relationships),
+        },
         gap_hook: blob.gap_hook || (Array.isArray(blob.data_gaps) ? blob.data_gaps[0] : null) || null,
         findings_summary: blob.findings_summary || null,
         result_url: null,
@@ -279,17 +389,14 @@ async function loadAnalysis(db: any, id: string): Promise<LeadContext> {
         first_name: firstNameOf(inferred.contact_person),
         state: inferred.state || null,
         certifications: normalizeCerts(inferred.sba_certifications, inferred.certifications),
-        top_matches: preview.slice(0, 3).map((m: any) => ({
-            title: String(m?.title || "Untitled opportunity"),
-            agency: m?.agency ?? null,
-            deadline: m?.response_deadline ?? m?.deadline ?? null,
-            pwin:
-                typeof m?.pwin === "number"
-                    ? m.pwin
-                    : typeof m?.score === "number"
-                        ? Math.round(m.score * 100)
-                        : null,
-        })),
+        top_matches: preview.slice(0, 3).map(normalizeMatch),
+        // Inbound (company_analyses) carries no SAM award columns — no past perf.
+        past_perf: {
+            federal_awards_count:
+                typeof inferred.federal_awards_count === "number" ? inferred.federal_awards_count : null,
+            total_award_volume: null,
+            top_agency: null,
+        },
         gap_hook: typeof gapHook === "string" ? gapHook : null,
         findings_summary: breakdown.findings_summary || null,
         result_url: appBase ? `${appBase}/check/${data.id}` : `/check/${data.id}`,
@@ -305,4 +412,63 @@ function formatDeadline(d: string | null): string {
     } catch {
         return d;
     }
+}
+
+// ── Email-block builders (deterministic — never paraphrased by the model) ──────
+
+/** Compact USD, e.g. 2400000 → "$2.4M". Empty string for null/0. */
+function compactUsd(n: number | null | undefined): string {
+    if (!n || !Number.isFinite(n)) return "";
+    if (n >= 1_000_000_000) return `$${(n / 1_000_000_000).toFixed(1)}B`;
+    if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
+    if (n >= 1_000) return `$${Math.round(n / 1_000)}K`;
+    return `$${Math.round(n).toLocaleString()}`;
+}
+
+/** sam.gov opportunity link when we have an opp_id, else null. */
+function samOppLink(oppId: string | null): string | null {
+    const id = (oppId || "").trim();
+    if (!id) return null;
+    return `https://sam.gov/opp/${id}/view`;
+}
+
+/**
+ * The TOP-3 matches block. Each match:
+ *   <title> — <agency> · <fit %> fit
+ *   <sam.gov link>      (omitted when no opp_id)
+ * Returns "" when there are no matches.
+ */
+function buildMatchesBlock(matches: LeadMatch[]): string {
+    if (!matches.length) return "";
+    const lines: string[] = ["A few live ones that fit your shop:"];
+    for (const m of matches) {
+        const agency = m.agency ? ` — ${m.agency}` : "";
+        const fit = typeof m.fit_pct === "number" ? ` · ${m.fit_pct}% fit` : "";
+        lines.push("");
+        lines.push(`${m.title}${agency}${fit}`);
+        const link = samOppLink(m.opp_id);
+        if (link) lines.push(link);
+    }
+    return lines.join("\n");
+}
+
+/**
+ * One-line past-performance summary from award count + total volume + top agency.
+ * Returns "" when there's nothing worth stating.
+ */
+function buildPastPerfLine(pp: LeadPastPerf): string {
+    const count = pp.federal_awards_count;
+    const vol = compactUsd(pp.total_award_volume);
+    const hasCount = typeof count === "number" && count > 0;
+    if (!hasCount && !vol) return "";
+
+    const bits: string[] = [];
+    if (hasCount) {
+        bits.push(`${count} federal award${count === 1 ? "" : "s"}`);
+    }
+    if (vol) bits.push(`${vol} in obligated work`);
+    let line = `Past performance: ${bits.join(", ")}`;
+    if (pp.top_agency) line += ` — top customer ${pp.top_agency}`;
+    line += ".";
+    return line;
 }

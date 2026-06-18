@@ -91,6 +91,70 @@ function normalizeUrl(raw: string): string {
     return t;
 }
 
+/** Coerce a money-ish value (number | numeric string) to a finite number or null. */
+function toNum(v: unknown): number | null {
+    if (v == null) return null;
+    const n = typeof v === "number" ? v : Number(v);
+    return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Normalize agency_relationships → top agencies by obligated amount.
+ * Tolerates array ({name|agency, amount|obligated}) and object-map shapes.
+ */
+function toTopAgencies(v: unknown, n = 6): Array<{ name: string; amount: number | null }> {
+    let entries: Array<{ name: string; amount: number | null }> = [];
+    if (Array.isArray(v)) {
+        entries = v
+            .map((e: any) => {
+                if (!e || typeof e !== "object") return null;
+                const name = String(e.name || e.agency || "").trim();
+                if (!name) return null;
+                return { name, amount: toNum(e.amount ?? e.obligated) };
+            })
+            .filter(Boolean) as Array<{ name: string; amount: number | null }>;
+    } else if (v && typeof v === "object") {
+        entries = Object.entries(v as Record<string, any>)
+            .map(([name, val]) => {
+                const nm = String(name || "").trim();
+                if (!nm) return null;
+                const amount = val && typeof val === "object" ? toNum(val.amount ?? val.obligated) : toNum(val);
+                return { name: nm, amount };
+            })
+            .filter(Boolean) as Array<{ name: string; amount: number | null }>;
+    }
+    return entries.sort((a, b) => (b.amount ?? -1) - (a.amount ?? -1)).slice(0, n);
+}
+
+/**
+ * Past clients live in capability_summary_ai.past_clients / .past_customers.
+ * Each may be an array of strings or objects ({name|client|customer|company}).
+ * Returns a deduped (case-insensitive) string list.
+ */
+function toClientList(blob: any): string[] {
+    const raw: unknown[] = [];
+    for (const key of ["past_clients", "past_customers", "clients", "customers"]) {
+        const v = blob?.[key];
+        if (Array.isArray(v)) raw.push(...v);
+    }
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const item of raw) {
+        const name =
+            typeof item === "string"
+                ? item.trim()
+                : item && typeof item === "object"
+                    ? String((item as any).name || (item as any).client || (item as any).customer || (item as any).company || "").trim()
+                    : "";
+        if (!name) continue;
+        const k = name.toLowerCase();
+        if (seen.has(k)) continue;
+        seen.add(k);
+        out.push(name);
+    }
+    return out;
+}
+
 // ── Light brand-color extraction (cheap path of /api/brand) ──
 // Single homepage fetch; pull the strongest signal: theme-color meta, then
 // --primary/--brand CSS vars, then the most frequent non-noise hex. Returns null
@@ -197,7 +261,8 @@ async function findHeroImage(query: string): Promise<string | null> {
 const CONTRACTOR_COLS =
     "id, uei, cage_code, company_name, website, business_url, email, primary_poc_name, primary_poc_email, " +
     "primary_poc_title, phone, naics_codes, certifications, sba_certifications, state, city, employee_count, " +
-    "years_in_business, federal_awards_count, capability_summary_ai";
+    "years_in_business, federal_awards_count, total_federal_awards, total_award_volume, revenue, " +
+    "agency_relationships, capability_summary_ai";
 
 export async function POST(req: NextRequest) {
     const unauth = await assertAdmin();
@@ -273,7 +338,16 @@ export async function POST(req: NextRequest) {
         sbaCertifications: toStrArray(c.sba_certifications),
         uei: c.uei || null,
         cageCode: c.cage_code || null,
-        federalAwardsCount: typeof c.federal_awards_count === "number" ? c.federal_awards_count : null,
+        federalAwardsCount:
+            typeof c.total_federal_awards === "number" ? c.total_federal_awards
+            : typeof c.federal_awards_count === "number" ? c.federal_awards_count
+            : null,
+        totalAwardVolume:
+            typeof c.total_award_volume === "number" ? c.total_award_volume
+            : typeof c.revenue === "number" ? c.revenue
+            : null,
+        topAgencies: toTopAgencies(c.agency_relationships),
+        clientList: toClientList(blob),
         yearsInBusiness: typeof c.years_in_business === "number" ? c.years_in_business : null,
         employeeCount: typeof c.employee_count === "number" ? c.employee_count : null,
         contact: {

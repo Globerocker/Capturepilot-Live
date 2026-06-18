@@ -85,6 +85,9 @@ interface LeadTopMatch {
     deadline: string | null;
     naics: string | null;
     opp_id: string | null;
+    set_aside: string | null;          // set-aside type when present on the blob
+    value: number | string | null;     // estimated contract value when present
+    why: string | null;                // a short "why it fits" line when present
 }
 
 /** Persisted output of the cockpit company-research agent (contractors only). */
@@ -103,6 +106,7 @@ interface LeadRow {
     source: "contractors" | "inbound";
     uei: string | null;
     company_name: string | null;
+    legal_name: string | null;          // from capability_summary_ai.legal_name (contractors)
     website: string | null;
     state: string | null;
     employee_count: number | null;
@@ -121,6 +125,7 @@ interface LeadRow {
     gap_hook: string | null;
     loom_url: string | null;
     findings_summary: string | null;
+    track_record: string[];            // capability_summary_ai.track_record (contractors; [] for inbound)
     owner_linkedin: string | null;     // the PERSON (never the company/social page)
     company_linkedin: string | null;   // the COMPANY (company_linkedin ?? social_linkedin)
     sam_entity_url: string | null;     // sam.gov coreData page when a UEI is known
@@ -182,6 +187,17 @@ function normalizeTopMatch(m: any): LeadTopMatch {
         deadline: m?.deadline ?? null,
         naics: m?.naics ?? null,
         opp_id: m?.opp_id ?? m?.notice_id ?? null,
+        // Richer fields surfaced in the cockpit's expandable Matches card. All
+        // tolerate the multiple blob shapes seen in prod (and stay null when absent).
+        set_aside: m?.set_aside ?? m?.setAside ?? m?.set_aside_type ?? null,
+        value: m?.value ?? m?.award_value ?? m?.estimated_value ?? m?.amount ?? null,
+        why: (typeof m?.why === "string" && m.why.trim())
+            ? m.why.trim()
+            : (typeof m?.why_it_fits === "string" && m.why_it_fits.trim())
+                ? m.why_it_fits.trim()
+                : (typeof m?.reason === "string" && m.reason.trim())
+                    ? m.reason.trim()
+                    : null,
     };
 }
 
@@ -351,6 +367,7 @@ function contractorToLead(c: any): LeadRow {
         source: "contractors",
         uei: c.uei ?? null,
         company_name: c.company_name ?? null,
+        legal_name: (typeof blob.legal_name === "string" && blob.legal_name.trim()) ? blob.legal_name.trim() : null,
         website: c.website ?? null,
         state: c.state ?? null,
         employee_count: c.employee_count ?? null,
@@ -372,6 +389,7 @@ function contractorToLead(c: any): LeadRow {
         match_count: typeof c.top_match_count === "number" ? c.top_match_count : rawMatches.length,
         gaps: blobGaps.length ? blobGaps : computedGaps.map((g) => g.hook),
         gap_hook,
+        track_record: toStrArray(blob.track_record),
         loom_url: loomForGapKey(firstGapKey),
         findings_summary: (blob.findings_summary as string) || null,
         owner_linkedin: linkedin,
@@ -434,6 +452,7 @@ function analysisToLead(a: any): LeadRow {
         source: "inbound",
         uei: inferred.uei ?? null,
         company_name: a.company_name ?? null,
+        legal_name: null,
         website: a.website ?? null,
         state: inferred.state ?? inferred.business_state ?? null,
         employee_count: inferred.employee_count ?? null,
@@ -457,6 +476,7 @@ function analysisToLead(a: any): LeadRow {
         gap_hook: null,
         loom_url: null,
         findings_summary: null,
+        track_record: [],
         owner_linkedin: linkedin,
         company_linkedin: inferred.company_linkedin ?? inferred.social_linkedin ?? null,
         sam_entity_url: inferred.uei ? `https://sam.gov/entity/${inferred.uei}/coreData` : null,

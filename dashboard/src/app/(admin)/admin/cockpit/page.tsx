@@ -1,32 +1,42 @@
 "use client";
 
 /**
- * Sales Cockpit V2 — the daily driver for a NON-TECHNICAL sales partner.
+ * Sales Cockpit V3 — the daily driver for a NON-TECHNICAL sales rep whose job is:
+ *   understand the lead → email them → record a Loom → call them → push to HubSpot.
  *
  * Full-height two-pane workspace:
  *   LEFT  (lg+): a filter panel + a scrollable prioritized lead queue (own scroll).
  *   RIGHT (lg+): the selected lead's detail, TABBED (own scroll):
- *       • Matches  — top-3 live contracts, the sharpest gap, the briefing.
- *       • Company  — contact + firmographics + ICP-fit breakdown.
- *       • Assets   — research, one-pager site, capability statement, check page.
- *       • Outreach — AI message generator + send-email composer + notes/transcript.
+ *       • Company  (DEFAULT — the rep's home base) — header + action bar, the
+ *                  briefing, contact block, firmographics + past awards + revenue,
+ *                  one "Research & fill the gaps" button, and outreach inline
+ *                  (generate → edit → send email + notes/transcript).
+ *       • Matches  — foldable contract cards (collapsed: title/agency/fit%; expand:
+ *                  deadline/NAICS/set-aside/value/why-it-fits + View on SAM.gov).
+ *       • Assets   — one-pager site, capability statement, check page.
  *
  * On mobile the list shows first; tapping a lead slides the detail in as a
  * full-screen panel with a back button.
  *
- * Top action bar (always visible on the detail header):
- *   [Send to HubSpot] [Open their website ↗] [Send email]
+ * DENSITY: cards are tight; grids go multi-column on xl to use a 27" screen,
+ * comfortable on laptop, single-column on mobile. No giant empty frames.
  *
- * A phone number opens a CALL NOTES modal (CallButton + notes); saving it folds
- * the notes/transcript into the Outreach tab so they flow to HubSpot.
+ * VANISHING-LEAD FIX: after Research/Enrich/Rerun (or any in-detail mutation) we
+ * patch the lead IN PLACE in the loaded queue array from the detail re-fetch — we
+ * never re-run the filtered list query (which could drop a lead whose employee
+ * count / ICP just changed under an active filter). A manual "Refresh queue"
+ * re-applies filters on demand.
+ *
+ * INBOUND ROBUSTNESS: every contractor-only field (top_matches, past_awards,
+ * research, LinkedIn, SAM, asset generators) is guarded for source==='inbound'
+ * so an inbound detail never throws.
  *
  * Backed by:
  *   GET  /api/admin/cockpit/leads            — queue + single-lead detail
  *   POST /api/admin/cockpit/message          — AI lead-in (subject + body)
  *   POST /api/admin/cockpit/hubspot-push     — warm hand-off to HubSpot
- *   POST /api/admin/cockpit/enrich           — fill LinkedIn + firmographics
+ *   POST /api/admin/cockpit/enrich           — research + fill LinkedIn + firmographics (ONE pass)
  *   POST /api/admin/cockpit/rerun            — re-queue match scoring
- *   POST /api/admin/cockpit/research         — reviews + web presence
  *   POST /api/admin/cockpit/website          — build a shareable one-pager
  *   POST /api/admin/cockpit/materialize-check — synthesize a /check page
  *   POST /api/ai/capability-statement-for-contractor — SSE cap statement
@@ -39,8 +49,8 @@ import {
     Target, Search, Loader2, Building2, Mail, Phone, Linkedin, Globe,
     AlertTriangle, Sparkles, Copy, Check, Send, ClipboardList, Video,
     ExternalLink, RefreshCw, User, Award, Users as UsersIcon, Trophy,
-    ChevronRight, Filter, MapPin, FileText, Wand2, RotateCcw, Download, X,
-    Star, MessageSquare, LayoutTemplate, Package, ArrowLeft, Settings,
+    ChevronRight, MapPin, FileText, Wand2, RotateCcw, Download, X,
+    Star, LayoutTemplate, Package, ArrowLeft, Settings,
     DollarSign, CalendarClock, BadgeCheck, Info, ChevronDown, SlidersHorizontal,
 } from "lucide-react";
 import clsx from "clsx";
@@ -64,6 +74,9 @@ interface LeadTopMatch {
     deadline: string | null;
     naics: string | null;
     opp_id: string | null;
+    set_aside?: string | null;
+    value?: number | string | null;
+    why?: string | null;
 }
 
 interface ResearchSource {
@@ -87,6 +100,7 @@ interface Lead {
     source: "contractors" | "inbound";
     uei: string | null;
     company_name: string | null;
+    legal_name?: string | null;
     website: string | null;
     state: string | null;
     employee_count: number | null;
@@ -105,6 +119,7 @@ interface Lead {
     gap_hook: string | null;
     loom_url: string | null;
     findings_summary: string | null;
+    track_record?: string[];
     owner_linkedin: string | null;
     company_linkedin?: string | null;
     sam_entity_url?: string | null;
@@ -150,23 +165,27 @@ const TIER_STYLE: Record<Lead["icp_tier"], string> = {
 const FIT_TOOLTIP =
     "Fit (A/B/C) = the founder's ICP: veteran-owned + 8(a)/HUBZone/WOSB + 1-50 staff + 1-5 prior federal awards. A = bullseye, C = deprioritize.";
 
-/** Build the one-line "why" a partner reads at a glance on each queue row. */
-function whyLine(l: Lead): string {
-    const bits: string[] = [];
-    const certHay = [...l.certifications, ...l.sba_certifications].join(" ").toLowerCase();
-    if (/sdvosb|service.?disabled/.test(certHay)) bits.push("SDVOSB");
-    else if (/\bvosb\b|veteran/.test(certHay)) bits.push("VOSB");
-    if (/8\(a\)|\b8a\b/.test(certHay)) bits.push("8(a)");
-    else if (/hubzone/.test(certHay)) bits.push("HUBZone");
-    else if (/\bwosb\b|\bedwosb\b|women.?owned/.test(certHay)) bits.push("WOSB");
-
-    const awards = l.federal_awards_count ?? 0;
-    if (awards > 0) bits.push(`${awards} award${awards === 1 ? "" : "s"}`);
-
-    if (l.match_count > 0) bits.push(`${l.match_count} live match${l.match_count === 1 ? "" : "es"}`);
-    else bits.push("no live matches yet");
-
-    return bits.join(" · ");
+/** Title-case a company name without mangling acronyms / mixed-case brands. */
+function toTitleCaseCompany(name: string | null | undefined): string {
+    const n = (name || "").trim();
+    if (!n) return "";
+    // Only re-case names that are entirely upper- or lower-case (SAM style); leave
+    // already-mixed-case brands ("McKinsey LLC") alone.
+    const isAllUpper = n === n.toUpperCase();
+    const isAllLower = n === n.toLowerCase();
+    if (!isAllUpper && !isAllLower) return n;
+    const SMALL = new Set(["llc", "inc", "corp", "co", "of", "and", "the", "for"]);
+    const ACRONYMS = new Set(["llc", "inc", "corp", "usa", "us", "it", "hvac", "dba", "pllc", "lp", "llp"]);
+    return n
+        .toLowerCase()
+        .split(/\s+/)
+        .map((w, i) => {
+            const bare = w.replace(/[^a-z0-9]/gi, "");
+            if (ACRONYMS.has(bare)) return w.toUpperCase();
+            if (i > 0 && SMALL.has(bare)) return w;
+            return w.charAt(0).toUpperCase() + w.slice(1);
+        })
+        .join(" ");
 }
 
 function formatDeadline(d: string | null): string {
@@ -184,18 +203,26 @@ function normalizeWebsiteHref(site: string): string {
     return /^https?:\/\//i.test(site) ? site : `https://${site}`;
 }
 
-function compactCurrency(n: number | null | undefined): string | null {
-    if (n == null || !Number.isFinite(n) || n <= 0) return null;
+function compactCurrency(n: number | string | null | undefined): string | null {
+    const num = typeof n === "string" ? Number(n.replace(/[^0-9.-]/g, "")) : n;
+    if (num == null || !Number.isFinite(num) || num <= 0) return null;
     try {
         return new Intl.NumberFormat("en-US", {
             style: "currency",
             currency: "USD",
             notation: "compact",
             maximumFractionDigits: 1,
-        }).format(n);
+        }).format(num);
     } catch {
-        return `$${Math.round(n).toLocaleString()}`;
+        return `$${Math.round(num).toLocaleString()}`;
     }
+}
+
+/** Build a sam.gov opportunity URL from an opp_id (skips obvious non-ids). */
+function samOppUrl(oppId: string | null | undefined): string | null {
+    const id = (oppId || "").trim();
+    if (!id) return null;
+    return `https://sam.gov/opp/${encodeURIComponent(id)}/view`;
 }
 
 // ───────────────────────── filter state ─────────────────────────
@@ -228,9 +255,28 @@ const EMPTY_FILTERS: Filters = {
     onlyWithMatches: true,
 };
 
+/** One-line "why" a rep reads at a glance on each queue row. */
+function whyLine(l: Lead): string {
+    const bits: string[] = [];
+    const certHay = [...l.certifications, ...l.sba_certifications].join(" ").toLowerCase();
+    if (/sdvosb|service.?disabled/.test(certHay)) bits.push("SDVOSB");
+    else if (/\bvosb\b|veteran/.test(certHay)) bits.push("VOSB");
+    if (/8\(a\)|\b8a\b/.test(certHay)) bits.push("8(a)");
+    else if (/hubzone/.test(certHay)) bits.push("HUBZone");
+    else if (/\bwosb\b|\bedwosb\b|women.?owned/.test(certHay)) bits.push("WOSB");
+
+    const awards = l.federal_awards_count ?? 0;
+    if (awards > 0) bits.push(`${awards} award${awards === 1 ? "" : "s"}`);
+
+    if (l.match_count > 0) bits.push(`${l.match_count} live match${l.match_count === 1 ? "" : "es"}`);
+    else bits.push("no live matches yet");
+
+    return bits.join(" · ");
+}
+
 // ───────────────────────── page ─────────────────────────
 
-type TabKey = "matches" | "company" | "assets" | "outreach";
+type TabKey = "company" | "matches" | "assets";
 
 export default function CockpitPage() {
     // Queue state
@@ -325,7 +371,24 @@ export default function CockpitPage() {
         return () => { alive = false; };
     }, [senderOpen]);
 
-    // ── Detail fetch ────────────────────────────────────────────────────────
+    /**
+     * VANISHING-LEAD FIX — patch a lead in place in the loaded queue array from a
+     * detail re-fetch instead of re-running the filtered list query. A lead whose
+     * employee_count / ICP / presence just changed under an active filter would
+     * otherwise drop off the list mid-work; this keeps it visible. The manual
+     * "Refresh queue" button (fetchQueue) is the only thing that re-applies filters.
+     */
+    const patchLeadInQueue = useCallback((updated: Lead) => {
+        setLeads(prev => {
+            const idx = prev.findIndex(l => l.id === updated.id && l.source === updated.source);
+            if (idx === -1) return prev; // not in current page — nothing to patch
+            const next = [...prev];
+            next[idx] = { ...next[idx], ...updated };
+            return next;
+        });
+    }, []);
+
+    // ── Detail fetch (also patches the queue row in place) ─────────────────────
     const fetchDetail = useCallback(async (id: string, leadSource: "contractors" | "inbound") => {
         setDetailError(null);
         setLoadingDetail(true);
@@ -334,13 +397,16 @@ export default function CockpitPage() {
             const res = await fetch(`/api/admin/cockpit/leads?${params}`);
             const data = await res.json();
             if (!res.ok) throw new Error(data?.error || `Request failed (${res.status})`);
-            if (data.lead) setDetail(data.lead);
+            if (data.lead) {
+                setDetail(data.lead);
+                patchLeadInQueue(data.lead);
+            }
         } catch (e) {
             setDetailError(e instanceof Error ? e.message : "Could not load full details");
         } finally {
             setLoadingDetail(false);
         }
-    }, []);
+    }, [patchLeadInQueue]);
 
     const selectLead = useCallback(async (lead: Lead) => {
         setSelectedId(lead.id);
@@ -377,22 +443,19 @@ export default function CockpitPage() {
     return (
         <div className="h-screen flex flex-col bg-stone-50 overflow-hidden">
             {/* Header */}
-            <header className="bg-white border-b border-stone-200 px-4 sm:px-6 py-3 shrink-0">
+            <header className="bg-white border-b border-stone-200 px-4 sm:px-6 py-2.5 shrink-0">
                 <div className="flex items-center justify-between gap-3 flex-wrap">
                     <div className="min-w-0">
-                        <h1 className="font-bold text-lg sm:text-xl flex items-center gap-2">
+                        <h1 className="font-bold text-lg flex items-center gap-2">
                             <Target className="w-5 h-5 text-orange-600 shrink-0" /> Sales Cockpit
                         </h1>
-                        <p className="hidden sm:block text-sm text-stone-500 mt-0.5">
-                            Pick a company on the left, then work the tabs on the right.
-                        </p>
                     </div>
                     <div className="flex items-center gap-2">
                         <button
                             type="button"
                             onClick={() => setSenderOpen(true)}
                             className={clsx(
-                                "inline-flex items-center gap-2 border font-bold px-3 py-2 rounded-lg text-sm",
+                                "inline-flex items-center gap-2 border font-bold px-3 py-1.5 rounded-lg text-sm",
                                 senderConfigured === false
                                     ? "bg-amber-50 border-amber-300 text-amber-800 hover:bg-amber-100"
                                     : "bg-white border-stone-200 text-stone-700 hover:bg-stone-100",
@@ -408,10 +471,11 @@ export default function CockpitPage() {
                         <button
                             type="button"
                             onClick={() => fetchQueue()}
-                            className="bg-white hover:bg-stone-100 border border-stone-200 text-stone-700 font-bold px-3 py-2 rounded-lg inline-flex items-center gap-2 text-sm"
+                            title="Re-apply your filters and reload the list"
+                            className="bg-white hover:bg-stone-100 border border-stone-200 text-stone-700 font-bold px-3 py-1.5 rounded-lg inline-flex items-center gap-2 text-sm"
                         >
                             <RefreshCw className={clsx("w-4 h-4", loadingQueue && "animate-spin")} />
-                            <span className="hidden sm:inline">Refresh</span>
+                            <span className="hidden sm:inline">Refresh queue</span>
                         </button>
                     </div>
                 </div>
@@ -423,7 +487,7 @@ export default function CockpitPage() {
                 <aside
                     className={clsx(
                         "flex flex-col min-h-0 bg-white border-r border-stone-200",
-                        "w-full lg:w-[400px] xl:w-[420px] shrink-0",
+                        "w-full lg:w-[360px] xl:w-[380px] shrink-0",
                         // On mobile, hide the list once a lead is selected.
                         detail ? "hidden lg:flex" : "flex",
                     )}
@@ -474,7 +538,7 @@ export default function CockpitPage() {
                             <ul className="divide-y divide-stone-100">
                                 {leads.map(lead => (
                                     <LeadRow
-                                        key={lead.id}
+                                        key={`${lead.source}:${lead.id}`}
                                         lead={lead}
                                         selected={selectedId === lead.id}
                                         onClick={() => selectLead(lead)}
@@ -497,11 +561,11 @@ export default function CockpitPage() {
                         <div className="flex-1 flex flex-col items-center justify-center text-center text-stone-400 px-6">
                             <Target className="w-12 h-12 text-stone-300 mb-3" />
                             <p className="font-medium text-stone-500">Pick a company on the left to get started.</p>
-                            <p className="text-sm mt-1">Their matches, firmographics, assets, and outreach show up here.</p>
+                            <p className="text-sm mt-1">Their briefing, contact, firmographics, and outreach show up here.</p>
                         </div>
                     ) : (
                         <LeadDetail
-                            key={detail.id}
+                            key={`${detail.source}:${detail.id}`}
                             lead={detail}
                             loading={loadingDetail}
                             detailError={detailError}
@@ -537,7 +601,7 @@ function QueueFilters({
 }) {
     const isContractors = source === "contractors";
     return (
-        <div className="border-b border-stone-200 p-3 space-y-3 shrink-0">
+        <div className="border-b border-stone-200 p-3 space-y-2.5 shrink-0">
             {/* Source toggle */}
             <div className="grid grid-cols-2 gap-1 bg-stone-100 rounded-xl p-1">
                 <button
@@ -719,13 +783,13 @@ function LeadRow({ lead, selected, onClick }: { lead: Lead; selected: boolean; o
                 type="button"
                 onClick={onClick}
                 className={clsx(
-                    "w-full text-left px-3 py-3 hover:bg-stone-50 transition-colors flex items-start gap-3",
+                    "w-full text-left px-3 py-2.5 hover:bg-stone-50 transition-colors flex items-start gap-3",
                     selected && "bg-orange-50/70 hover:bg-orange-50",
                 )}
             >
                 <div
                     className={clsx(
-                        "shrink-0 w-10 h-10 rounded-xl border flex flex-col items-center justify-center font-black leading-none",
+                        "shrink-0 w-9 h-9 rounded-xl border flex flex-col items-center justify-center font-black leading-none",
                         TIER_STYLE[lead.icp_tier],
                     )}
                     title={`ICP fit ${lead.icp_score}/100`}
@@ -736,7 +800,7 @@ function LeadRow({ lead, selected, onClick }: { lead: Lead; selected: boolean; o
 
                 <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                        <span className="font-bold text-stone-800 truncate">{lead.company_name || "Unnamed company"}</span>
+                        <span className="font-bold text-stone-800 truncate">{toTitleCaseCompany(lead.company_name) || "Unnamed company"}</span>
                         {lead.best_match_pct != null && (
                             <span className="shrink-0 text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 rounded px-1.5 py-0.5">
                                 {lead.best_match_pct}%
@@ -744,12 +808,12 @@ function LeadRow({ lead, selected, onClick }: { lead: Lead; selected: boolean; o
                         )}
                     </div>
                     <p className="text-xs text-stone-500 mt-0.5 truncate">{whyLine(lead)}</p>
-                    <div className="flex items-center gap-2 mt-1.5">
+                    <div className="flex items-center gap-2 mt-1">
                         {lead.state && <span className="text-[10px] text-stone-400">{lead.state}</span>}
                         <PresenceDots lead={lead} />
                     </div>
                 </div>
-                <ChevronRight className={clsx("w-4 h-4 shrink-0 mt-3", selected ? "text-orange-500" : "text-stone-300")} />
+                <ChevronRight className={clsx("w-4 h-4 shrink-0 mt-2.5", selected ? "text-orange-500" : "text-stone-300")} />
             </button>
         </li>
     );
@@ -792,7 +856,8 @@ function LeadDetail({
     onRefresh: () => void;
     onBack: () => void;
 }) {
-    const [tab, setTab] = useState<TabKey>("matches");
+    // Company is the rep's home base → default tab.
+    const [tab, setTab] = useState<TabKey>("company");
 
     // Shared outreach scratch — notes + transcript live here so the Call modal,
     // the HubSpot hand-off, and the email composer can all read/write them.
@@ -803,7 +868,7 @@ function LeadDetail({
     const [callOpen, setCallOpen] = useState(false);
 
     // Email composer is prefilled by the AI message generator; keep it lifted so
-    // the Outreach tab's two halves share one draft.
+    // the Company tab's outreach block survives a tab switch.
     const [emailSubject, setEmailSubject] = useState("");
     const [emailBody, setEmailBody] = useState("");
 
@@ -812,18 +877,19 @@ function LeadDetail({
         if (log.transcription) setTranscript(prev => (prev ? `${prev}\n\n${log.transcription}` : log.transcription));
     }, []);
 
-    const TABS: { key: TabKey; label: string; Icon: React.ComponentType<{ className?: string }> }[] = [
-        { key: "matches", label: "Matches", Icon: Trophy },
+    const companyName = toTitleCaseCompany(lead.company_name) || "Unnamed company";
+
+    const TABS: { key: TabKey; label: string; Icon: React.ComponentType<{ className?: string }>; count?: number }[] = [
         { key: "company", label: "Company", Icon: User },
+        { key: "matches", label: "Matches", Icon: Trophy, count: lead.top_matches.length || undefined },
         { key: "assets", label: "Assets", Icon: Package },
-        { key: "outreach", label: "Outreach", Icon: Sparkles },
     ];
 
     return (
         <div className="flex flex-col min-h-0 h-full">
-            {/* Sticky header + action bar */}
+            {/* Sticky header + tabs */}
             <div className="bg-white border-b border-stone-200 shrink-0">
-                <div className="px-4 sm:px-6 pt-3 sm:pt-4 pb-3">
+                <div className="px-4 sm:px-6 pt-2.5 pb-2">
                     {/* Mobile back */}
                     <button
                         type="button"
@@ -833,111 +899,72 @@ function LeadDetail({
                         <ArrowLeft className="w-4 h-4" /> Back to list
                     </button>
 
-                    <div className="flex items-start justify-between gap-3 flex-wrap">
-                        <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                                <h2 className="font-bold text-xl sm:text-2xl text-stone-900 truncate">
-                                    {lead.company_name || "Unnamed company"}
-                                </h2>
-                                {loading && <Loader2 className="w-4 h-4 animate-spin text-stone-300 shrink-0" />}
-                            </div>
-                            <div className="text-sm text-stone-500 mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-                                <span className={clsx("inline-flex items-center gap-1 font-bold border rounded-full px-2 py-0.5 text-xs", TIER_STYLE[lead.icp_tier])} title={FIT_TOOLTIP}>
-                                    Fit {lead.icp_tier} · {lead.icp_score}
-                                </span>
-                                {lead.state && <span className="inline-flex items-center gap-1"><MapPin className="w-3.5 h-3.5" /> {lead.state}</span>}
-                                {lead.source === "inbound"
-                                    ? <span className="inline-flex items-center gap-1 text-emerald-700 font-medium"><Sparkles className="w-3.5 h-3.5" /> Came to us</span>
-                                    : <span className="inline-flex items-center gap-1"><Building2 className="w-3.5 h-3.5" /> SAM.gov firm</span>}
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Top action bar */}
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                        <HubspotButton lead={lead} notes={notes} transcript={transcript} />
-                        {lead.website ? (
-                            <a
-                                href={normalizeWebsiteHref(lead.website)}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-2 bg-violet-600 hover:bg-violet-700 text-white font-bold px-3.5 py-2 rounded-lg text-sm"
-                                title="Open their site to record a Loom walkthrough"
-                            >
-                                <Globe className="w-4 h-4" /> Open their website <ExternalLink className="w-3.5 h-3.5" />
-                            </a>
-                        ) : (
-                            <span className="inline-flex items-center gap-2 bg-stone-100 text-stone-400 font-bold px-3.5 py-2 rounded-lg text-sm cursor-not-allowed" title="No website on file">
-                                <Globe className="w-4 h-4" /> No website on file
-                            </span>
-                        )}
-                        <button
-                            type="button"
-                            onClick={() => { setTab("outreach"); }}
-                            className="inline-flex items-center gap-2 bg-stone-900 hover:bg-black text-white font-bold px-3.5 py-2 rounded-lg text-sm"
-                        >
-                            <Mail className="w-4 h-4" /> Send email
-                        </button>
+                    {/* Tight header strip: company + fit + state + source */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <h2 className="font-bold text-lg sm:text-xl text-stone-900 truncate min-w-0">{companyName}</h2>
+                        {loading && <Loader2 className="w-4 h-4 animate-spin text-stone-300 shrink-0" />}
+                        <span className={clsx("inline-flex items-center gap-1 font-bold border rounded-full px-2 py-0.5 text-xs", TIER_STYLE[lead.icp_tier])} title={FIT_TOOLTIP}>
+                            Fit {lead.icp_tier} · {lead.icp_score}
+                        </span>
+                        {lead.state && <span className="text-sm text-stone-500 inline-flex items-center gap-1"><MapPin className="w-3.5 h-3.5" /> {lead.state}</span>}
+                        {lead.source === "inbound"
+                            ? <span className="text-sm inline-flex items-center gap-1 text-emerald-700 font-medium"><Sparkles className="w-3.5 h-3.5" /> Came to us</span>
+                            : <span className="text-sm text-stone-500 inline-flex items-center gap-1"><Building2 className="w-3.5 h-3.5" /> SAM.gov firm</span>}
                     </div>
                 </div>
 
                 {/* Tabs */}
                 <div className="px-2 sm:px-4 flex gap-1 overflow-x-auto">
-                    {TABS.map(({ key, label, Icon }) => (
+                    {TABS.map(({ key, label, Icon, count }) => (
                         <button
                             key={key}
                             type="button"
                             onClick={() => setTab(key)}
                             className={clsx(
-                                "px-3 sm:px-4 py-2.5 text-sm font-bold border-b-2 -mb-px inline-flex items-center gap-1.5 whitespace-nowrap transition-colors",
+                                "px-3 sm:px-4 py-2 text-sm font-bold border-b-2 -mb-px inline-flex items-center gap-1.5 whitespace-nowrap transition-colors",
                                 tab === key
                                     ? "border-orange-600 text-stone-900"
                                     : "border-transparent text-stone-400 hover:text-stone-700",
                             )}
                         >
                             <Icon className="w-4 h-4" /> {label}
+                            {count != null && (
+                                <span className={clsx("text-[10px] font-bold rounded-full px-1.5 py-0.5", tab === key ? "bg-orange-100 text-orange-700" : "bg-stone-100 text-stone-500")}>{count}</span>
+                            )}
                         </button>
                     ))}
                 </div>
             </div>
 
-            {/* Tab body (own scroll) */}
-            <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-5">
-                <div className="max-w-4xl mx-auto">
-                    {detailError && (
-                        <div className="mb-4 bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-2 text-xs text-amber-800">
-                            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                            <span>Showing what we have. Full details didn&apos;t reload: {detailError}</span>
-                        </div>
-                    )}
+            {/* Tab body (own scroll). No max-w clamp — use the full width on 27". */}
+            <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-4">
+                {detailError && (
+                    <div className="mb-4 bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-2 text-xs text-amber-800">
+                        <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                        <span>Showing what we have. Full details didn&apos;t reload: {detailError}</span>
+                    </div>
+                )}
 
-                    {tab === "matches" && <MatchesTab lead={lead} />}
-                    {tab === "company" && (
-                        <CompanyTab
-                            lead={lead}
-                            loading={loading}
-                            onRefresh={onRefresh}
-                            onOpenCall={() => setCallOpen(true)}
-                        />
-                    )}
-                    {tab === "assets" && <AssetsTab lead={lead} onRefresh={onRefresh} />}
-                    {tab === "outreach" && (
-                        <OutreachTab
-                            lead={lead}
-                            senderConfigured={senderConfigured}
-                            onOpenSender={onOpenSender}
-                            notes={notes}
-                            setNotes={setNotes}
-                            transcript={transcript}
-                            setTranscript={setTranscript}
-                            onOpenCall={() => setCallOpen(true)}
-                            emailSubject={emailSubject}
-                            setEmailSubject={setEmailSubject}
-                            emailBody={emailBody}
-                            setEmailBody={setEmailBody}
-                        />
-                    )}
-                </div>
+                {tab === "company" && (
+                    <CompanyTab
+                        lead={lead}
+                        loading={loading}
+                        senderConfigured={senderConfigured}
+                        onOpenSender={onOpenSender}
+                        onRefresh={onRefresh}
+                        onOpenCall={() => setCallOpen(true)}
+                        notes={notes}
+                        setNotes={setNotes}
+                        transcript={transcript}
+                        setTranscript={setTranscript}
+                        emailSubject={emailSubject}
+                        setEmailSubject={setEmailSubject}
+                        emailBody={emailBody}
+                        setEmailBody={setEmailBody}
+                    />
+                )}
+                {tab === "matches" && <MatchesTab lead={lead} />}
+                {tab === "assets" && <AssetsTab lead={lead} onRefresh={onRefresh} />}
             </div>
 
             {callOpen && (
@@ -951,239 +978,312 @@ function LeadDetail({
     );
 }
 
-// ───────────────────────── TAB: Matches ─────────────────────────
+// ───────────────────────── TAB: Company (the rep's home base) ─────────────────────────
 
-function MatchesTab({ lead }: { lead: Lead }) {
-    return (
-        <div className="space-y-5">
-            {lead.gap_hook && (
-                <Card>
-                    <div className="flex items-start gap-3">
-                        <span className="shrink-0 w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center">
-                            <Sparkles className="w-5 h-5 text-amber-600" />
-                        </span>
-                        <div>
-                            <FieldLabel>Your opener — the sharpest thing they&apos;re missing</FieldLabel>
-                            <p className="text-base text-stone-800 mt-1 leading-relaxed">{lead.gap_hook}</p>
-                        </div>
-                    </div>
-                </Card>
-            )}
-
-            <Card>
-                <SectionHeading icon={Trophy} title="Live opportunities that fit them now" />
-                {lead.top_matches.length > 0 ? (
-                    <ul className="space-y-3">
-                        {lead.top_matches.map((m, i) => (
-                            <li key={i} className="border border-stone-200 rounded-xl p-4 hover:border-stone-300 transition-colors">
-                                <div className="flex items-start justify-between gap-3">
-                                    <span className="font-bold text-stone-800">{m.title}</span>
-                                    <span className="shrink-0 text-xs font-black bg-blue-50 text-blue-700 border border-blue-200 rounded-lg px-2 py-1">
-                                        {m.score_pct}% fit
-                                    </span>
-                                </div>
-                                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-stone-500 mt-2">
-                                    {m.agency && <span className="inline-flex items-center gap-1"><Building2 className="w-3.5 h-3.5" /> {m.agency}</span>}
-                                    {m.deadline && <span className="inline-flex items-center gap-1"><CalendarClock className="w-3.5 h-3.5" /> Due {formatDeadline(m.deadline)}</span>}
-                                    {m.naics && <span>NAICS {m.naics}</span>}
-                                </div>
-                            </li>
-                        ))}
-                    </ul>
-                ) : (
-                    <p className="text-sm text-stone-500">
-                        No live matches captured yet. Lead the conversation with the website gap above instead.
-                    </p>
-                )}
-            </Card>
-
-            {lead.findings_summary && (
-                <Card>
-                    <SectionHeading icon={FileText} title="Quick briefing" />
-                    <p className="text-sm text-stone-600 leading-relaxed">{lead.findings_summary}</p>
-                </Card>
-            )}
-        </div>
-    );
-}
-
-// ───────────────────────── TAB: Company ─────────────────────────
-
-function CompanyTab({ lead, loading, onRefresh, onOpenCall }: {
-    lead: Lead; loading: boolean; onRefresh: () => void; onOpenCall: () => void;
+function CompanyTab({
+    lead, loading, senderConfigured, onOpenSender, onRefresh, onOpenCall,
+    notes, setNotes, transcript, setTranscript,
+    emailSubject, setEmailSubject, emailBody, setEmailBody,
+}: {
+    lead: Lead;
+    loading: boolean;
+    senderConfigured: boolean | null;
+    onOpenSender: () => void;
+    onRefresh: () => void;
+    onOpenCall: () => void;
+    notes: string;
+    setNotes: React.Dispatch<React.SetStateAction<string>>;
+    transcript: string;
+    setTranscript: React.Dispatch<React.SetStateAction<string>>;
+    emailSubject: string;
+    setEmailSubject: (v: string) => void;
+    emailBody: string;
+    setEmailBody: (v: string) => void;
 }) {
-    const revenue = compactCurrency(lead.total_federal_revenue);
+    const isContractor = lead.source === "contractors";
     return (
-        <div className="space-y-5">
-            <Card>
-                <SectionHeading icon={User} title="Who you're talking to" />
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4 text-sm">
-                    <Field label="Contact" value={lead.contact.name || "Name not on file"} />
-                    <Field label="Title" value={lead.contact.title || "—"} />
-                    <div>
-                        <FieldLabel>Email</FieldLabel>
-                        {lead.contact.email ? (
-                            <a href={`mailto:${lead.contact.email}`} className="text-blue-700 hover:underline inline-flex items-center gap-1.5 break-all mt-0.5">
-                                <Mail className="w-3.5 h-3.5 shrink-0" /> {lead.contact.email}
-                            </a>
-                        ) : (
-                            <span className="text-rose-600 inline-flex items-center gap-1.5 mt-0.5">
-                                <AlertTriangle className="w-3.5 h-3.5" /> No email on file
-                            </span>
-                        )}
-                    </div>
-                    <div>
-                        <FieldLabel>Phone</FieldLabel>
-                        {lead.contact.phone ? (
-                            <button
-                                type="button"
-                                onClick={onOpenCall}
-                                className="text-blue-700 hover:underline inline-flex items-center gap-1.5 mt-0.5"
-                                title="Open call notes"
-                            >
-                                <Phone className="w-3.5 h-3.5" /> {lead.contact.phone}
-                            </button>
-                        ) : (
-                            <span className="text-stone-400 mt-0.5 block">—</span>
-                        )}
-                    </div>
-                    <div>
-                        <FieldLabel>Website</FieldLabel>
-                        {lead.website ? (
-                            <a href={normalizeWebsiteHref(lead.website)} target="_blank" rel="noopener noreferrer" className="text-blue-700 hover:underline inline-flex items-center gap-1.5 break-all mt-0.5">
-                                <Globe className="w-3.5 h-3.5 shrink-0" /> {lead.website} <ExternalLink className="w-3 h-3" />
-                            </a>
-                        ) : (
-                            <span className="text-amber-700 inline-flex items-center gap-1.5 mt-0.5">
-                                <AlertTriangle className="w-3.5 h-3.5" /> No website found
-                            </span>
-                        )}
-                    </div>
-                    <div>
-                        <FieldLabel>Owner / POC LinkedIn</FieldLabel>
-                        {lead.owner_linkedin ? (
-                            <a href={lead.owner_linkedin} target="_blank" rel="noopener noreferrer" className="text-blue-700 hover:underline inline-flex items-center gap-1.5 mt-0.5">
-                                <Linkedin className="w-3.5 h-3.5" /> Owner profile
-                                <span className="text-[10px] font-medium text-stone-400 hover:text-stone-600 inline-flex items-center gap-0.5">
-                                    <ExternalLink className="w-3 h-3" /> verify
-                                </span>
-                            </a>
-                        ) : (
-                            <span className="text-stone-400 inline-flex items-center gap-1.5 mt-0.5 text-xs">
-                                <Info className="w-3.5 h-3.5 shrink-0" /> not found — click Enrich to search
-                            </span>
-                        )}
-                    </div>
-                    <div>
-                        <FieldLabel>Company LinkedIn</FieldLabel>
-                        {lead.company_linkedin ? (
-                            <a href={lead.company_linkedin} target="_blank" rel="noopener noreferrer" className="text-blue-700 hover:underline inline-flex items-center gap-1.5 mt-0.5">
-                                <Linkedin className="w-3.5 h-3.5" /> Company page
-                                <span className="text-[10px] font-medium text-stone-400 hover:text-stone-600 inline-flex items-center gap-0.5">
-                                    <ExternalLink className="w-3 h-3" /> verify
-                                </span>
-                            </a>
-                        ) : (
-                            <span className="text-stone-400 mt-0.5 block">—</span>
-                        )}
-                    </div>
-                </div>
-
-                {/* Certs */}
-                {(lead.sba_certifications.length > 0 || lead.certifications.length > 0) && (
-                    <div className="flex flex-wrap gap-2 mt-5">
-                        {[...lead.sba_certifications, ...lead.certifications].slice(0, 6).map((c, i) => (
-                            <Pill key={`${c}-${i}`} icon={Award}>{c}</Pill>
-                        ))}
-                    </div>
+        <div className="space-y-4">
+            {/* TOP ACTION BAR */}
+            <div className="flex flex-wrap items-center gap-2">
+                <HubspotButton lead={lead} notes={notes} transcript={transcript} />
+                {lead.website ? (
+                    <a
+                        href={normalizeWebsiteHref(lead.website)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 bg-violet-600 hover:bg-violet-700 text-white font-bold px-3.5 py-2 rounded-lg text-sm"
+                        title="Open their site to record a Loom walkthrough"
+                    >
+                        <Video className="w-4 h-4" /> Open their website <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                ) : (
+                    <span className="inline-flex items-center gap-2 bg-stone-100 text-stone-400 font-bold px-3.5 py-2 rounded-lg text-sm cursor-not-allowed" title="No website on file">
+                        <Globe className="w-4 h-4" /> No website on file
+                    </span>
                 )}
-
-                {/* SAM.gov entity link */}
                 {lead.sam_entity_url && (
                     <a
                         href={lead.sam_entity_url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="mt-5 inline-flex items-center gap-2 border border-stone-200 hover:border-stone-300 hover:bg-stone-50 text-stone-700 font-medium px-3 py-2 rounded-lg text-sm"
+                        className="inline-flex items-center gap-2 border border-stone-200 hover:border-stone-300 hover:bg-stone-50 text-stone-700 font-bold px-3 py-2 rounded-lg text-sm"
                         title="Open this entity's official SAM.gov record"
                     >
-                        <BadgeCheck className="w-4 h-4 text-stone-400" /> View on SAM.gov <ExternalLink className="w-3.5 h-3.5" />
+                        <BadgeCheck className="w-4 h-4 text-stone-400" /> SAM.gov <ExternalLink className="w-3.5 h-3.5" />
                     </a>
                 )}
-            </Card>
+            </div>
 
-            {/* Firmographics */}
-            <Card>
-                <SectionHeading icon={Building2} title="Firmographics" />
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    <Stat icon={UsersIcon} label="Employees" value={lead.employee_count != null && lead.employee_count > 0 ? String(lead.employee_count) : "Unknown"} />
-                    <Stat icon={Building2} label="Years in business" value={lead.years_in_business != null && lead.years_in_business > 0 ? String(lead.years_in_business) : "Unknown"} />
-                    <Stat icon={Trophy} label="Federal awards" value={lead.total_federal_awards != null ? String(lead.total_federal_awards) : (lead.federal_awards_count != null ? String(lead.federal_awards_count) : "Unknown")} />
-                    <Stat icon={DollarSign} label="Federal revenue" value={revenue || "Unknown"} />
+            {/* THE BRIEFING — moved here from Matches; it never belonged there. */}
+            <BriefingCard lead={lead} />
+
+            {/* Two-column workspace on xl: left = who/firmographics, right = outreach. */}
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
+                {/* LEFT COLUMN */}
+                <div className="space-y-4 min-w-0">
+                    <ContactCard lead={lead} onOpenCall={onOpenCall} />
+                    <FirmographicsCard lead={lead} />
+                    {isContractor && <PastAwardsCard lead={lead} />}
+                    {isContractor && <RevenueStreamsCard lead={lead} />}
+                    <IcpBreakdownCard lead={lead} />
+                    {/* ONE button — Research & fill the gaps (enrich also researches). */}
+                    {isContractor && <ResearchAndFillCard lead={lead} onRefresh={onRefresh} refreshing={loading} />}
+                </div>
+
+                {/* RIGHT COLUMN — outreach lives inline on the rep's home base. */}
+                <div className="space-y-4 min-w-0">
+                    <MessageGenerator lead={lead} onUseInComposer={(s, b) => { setEmailSubject(s); setEmailBody(b); }} />
+                    <EmailComposer
+                        lead={lead}
+                        senderConfigured={senderConfigured}
+                        onOpenSender={onOpenSender}
+                        subject={emailSubject}
+                        setSubject={setEmailSubject}
+                        body={emailBody}
+                        setBody={setEmailBody}
+                    />
+                    <NotesCard
+                        lead={lead}
+                        notes={notes}
+                        setNotes={setNotes}
+                        transcript={transcript}
+                        setTranscript={setTranscript}
+                        onOpenCall={onOpenCall}
+                    />
+                    {isContractor && <RerunCard lead={lead} />}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ── The briefing (gap hook + findings) ──────────────────────────────────────────
+function BriefingCard({ lead }: { lead: Lead }) {
+    const hasHook = !!lead.gap_hook;
+    const hasFindings = !!lead.findings_summary;
+    if (!hasHook && !hasFindings) {
+        // Inbound leads have neither — give the rep a readiness fallback when present.
+        if (lead.source === "inbound" && lead.readiness_score != null) {
+            return (
+                <Card className="bg-emerald-50/60 border-emerald-200">
+                    <div className="flex items-start gap-3">
+                        <span className="shrink-0 w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center">
+                            <Sparkles className="w-4 h-4 text-emerald-600" />
+                        </span>
+                        <div>
+                            <FieldLabel>They came to us</FieldLabel>
+                            <p className="text-sm text-stone-700 mt-1">
+                                This lead ran our website checker and scored <span className="font-bold">{lead.readiness_score}/100</span> readiness.
+                                Open their results page (Assets tab) and talk to it directly.
+                            </p>
+                        </div>
+                    </div>
+                </Card>
+            );
+        }
+        return null;
+    }
+    return (
+        <Card className="bg-amber-50/40 border-amber-200">
+            {hasHook && (
+                <div className="flex items-start gap-3">
+                    <span className="shrink-0 w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center">
+                        <Sparkles className="w-4 h-4 text-amber-600" />
+                    </span>
+                    <div className="min-w-0">
+                        <FieldLabel>Your opener — the sharpest thing they&apos;re missing</FieldLabel>
+                        <p className="text-base text-stone-800 mt-1 leading-relaxed">{lead.gap_hook}</p>
+                    </div>
+                </div>
+            )}
+            {hasFindings && (
+                <div className={clsx(hasHook && "mt-4 pt-4 border-t border-amber-200/70")}>
+                    <FieldLabel className="inline-flex items-center gap-1.5"><FileText className="w-3 h-3" /> Quick briefing</FieldLabel>
+                    <p className="text-sm text-stone-600 leading-relaxed mt-1">{lead.findings_summary}</p>
+                </div>
+            )}
+        </Card>
+    );
+}
+
+// ── Contact block ────────────────────────────────────────────────────────────────
+function ContactCard({ lead, onOpenCall }: { lead: Lead; onOpenCall: () => void }) {
+    const trackRecord = Array.isArray(lead.track_record) ? lead.track_record : [];
+    return (
+        <Card>
+            <SectionHeading icon={User} title="Who you're talking to" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
+                <Field label="Contact" value={toTitleCaseCompany(lead.contact.name) || "Name not on file"} />
+                <Field label="Title" value={lead.contact.title || "—"} />
+                <div>
+                    <FieldLabel>Email</FieldLabel>
+                    {lead.contact.email ? (
+                        <a href={`mailto:${lead.contact.email}`} className="text-blue-700 hover:underline inline-flex items-center gap-1.5 break-all mt-0.5">
+                            <Mail className="w-3.5 h-3.5 shrink-0" /> {lead.contact.email}
+                        </a>
+                    ) : (
+                        <span className="text-rose-600 inline-flex items-center gap-1.5 mt-0.5">
+                            <AlertTriangle className="w-3.5 h-3.5" /> No email on file
+                        </span>
+                    )}
+                </div>
+                <div>
+                    <FieldLabel>Phone</FieldLabel>
+                    {lead.contact.phone ? (
+                        <button
+                            type="button"
+                            onClick={onOpenCall}
+                            className="text-blue-700 hover:underline inline-flex items-center gap-1.5 mt-0.5"
+                            title="Open call notes"
+                        >
+                            <Phone className="w-3.5 h-3.5" /> {lead.contact.phone}
+                        </button>
+                    ) : (
+                        <span className="text-stone-400 mt-0.5 block">—</span>
+                    )}
+                </div>
+                <div>
+                    <FieldLabel>Website</FieldLabel>
+                    {lead.website ? (
+                        <a href={normalizeWebsiteHref(lead.website)} target="_blank" rel="noopener noreferrer" className="text-blue-700 hover:underline inline-flex items-center gap-1.5 break-all mt-0.5">
+                            <Globe className="w-3.5 h-3.5 shrink-0" /> {lead.website} <ExternalLink className="w-3 h-3" />
+                        </a>
+                    ) : (
+                        <span className="text-amber-700 inline-flex items-center gap-1.5 mt-0.5">
+                            <AlertTriangle className="w-3.5 h-3.5" /> No website found
+                        </span>
+                    )}
+                </div>
+                {lead.legal_name && lead.legal_name !== lead.company_name && (
+                    <Field label="Legal name" value={lead.legal_name} />
+                )}
+                {/* Owner LinkedIn + Company LinkedIn — SEPARATE rows; owner shows "not found" when null. */}
+                <div>
+                    <FieldLabel>Owner / POC LinkedIn</FieldLabel>
+                    {lead.owner_linkedin ? (
+                        <a href={lead.owner_linkedin} target="_blank" rel="noopener noreferrer" className="text-blue-700 hover:underline inline-flex items-center gap-1.5 mt-0.5">
+                            <Linkedin className="w-3.5 h-3.5" /> Owner profile <ExternalLink className="w-3 h-3 text-stone-400" />
+                        </a>
+                    ) : (
+                        <span className="text-stone-400 inline-flex items-center gap-1.5 mt-0.5 text-xs">
+                            <Info className="w-3.5 h-3.5 shrink-0" /> not found
+                        </span>
+                    )}
+                </div>
+                <div>
+                    <FieldLabel>Company LinkedIn</FieldLabel>
+                    {lead.company_linkedin ? (
+                        <a href={lead.company_linkedin} target="_blank" rel="noopener noreferrer" className="text-blue-700 hover:underline inline-flex items-center gap-1.5 mt-0.5">
+                            <Linkedin className="w-3.5 h-3.5" /> Company page <ExternalLink className="w-3 h-3 text-stone-400" />
+                        </a>
+                    ) : (
+                        <span className="text-stone-400 inline-flex items-center gap-1.5 mt-0.5 text-xs">
+                            <Info className="w-3.5 h-3.5 shrink-0" /> not found
+                        </span>
+                    )}
+                </div>
+            </div>
+
+            {/* Certs + track-record chips */}
+            {(lead.sba_certifications.length > 0 || lead.certifications.length > 0 || trackRecord.length > 0) && (
+                <div className="flex flex-wrap gap-2 mt-4">
+                    {[...lead.sba_certifications, ...lead.certifications].slice(0, 6).map((c, i) => (
+                        <Pill key={`cert-${c}-${i}`} icon={Award}>{c}</Pill>
+                    ))}
+                    {trackRecord.slice(0, 4).map((t, i) => (
+                        <Pill key={`tr-${i}`} icon={Trophy}>{t}</Pill>
+                    ))}
+                </div>
+            )}
+        </Card>
+    );
+}
+
+// ── Firmographics ──────────────────────────────────────────────────────────────
+function FirmographicsCard({ lead }: { lead: Lead }) {
+    const revenue = compactCurrency(lead.total_federal_revenue);
+    const isContractor = lead.source === "contractors";
+    return (
+        <Card>
+            <SectionHeading icon={Building2} title="Firmographics" />
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                <Stat icon={UsersIcon} label="Employees" value={lead.employee_count != null && lead.employee_count > 0 ? String(lead.employee_count) : "Unknown"} />
+                <Stat icon={Building2} label="Years in business" value={lead.years_in_business != null && lead.years_in_business > 0 ? String(lead.years_in_business) : "Unknown"} />
+                <Stat icon={Trophy} label="Federal awards" value={lead.total_federal_awards != null ? String(lead.total_federal_awards) : (lead.federal_awards_count != null ? String(lead.federal_awards_count) : "Unknown")} />
+                {isContractor && <Stat icon={DollarSign} label="Federal revenue" value={revenue || "Unknown"} />}
+                {isContractor && (
                     <Stat
                         icon={BadgeCheck}
                         label="SAM registered"
                         value={lead.sam_registered == null ? "Unknown" : lead.sam_registered ? "Yes" : "No"}
                         tone={lead.sam_registered ? "good" : undefined}
                     />
+                )}
+                {isContractor && (
                     <Stat
                         icon={CalendarClock}
                         label="SAM expires"
                         value={lead.sam_expiration ? formatDeadline(lead.sam_expiration) : "Unknown"}
                         tone={lead.sam_expiring_soon ? "warn" : undefined}
                     />
-                </div>
-                {lead.sam_expiring_soon && (
-                    <p className="mt-3 text-xs text-amber-700 inline-flex items-center gap-1.5">
-                        <AlertTriangle className="w-3.5 h-3.5" /> Their SAM registration expires within 90 days — a natural reason to reach out.
-                    </p>
                 )}
-            </Card>
-
-            {/* Past federal awards */}
-            <PastAwardsCard lead={lead} />
-
-            {/* USASpending revenue streams */}
-            <RevenueStreamsCard lead={lead} />
-
-            {/* ICP-fit breakdown */}
-            <Card>
-                <SectionHeading icon={Target} title="Why they're a fit (each factor)" />
-                <div className="space-y-3">
-                    {lead.icp_breakdown.map((b, i) => {
-                        const pct = b.max > 0 ? Math.round((b.points / b.max) * 100) : 0;
-                        return (
-                            <div key={i}>
-                                <div className="flex items-center justify-between gap-2">
-                                    <span className="font-medium text-stone-700 text-sm">{b.label}</span>
-                                    <span className="text-xs font-bold text-stone-500">{b.points}/{b.max}</span>
-                                </div>
-                                <div className="h-2 rounded-full bg-stone-100 overflow-hidden mt-1">
-                                    <div
-                                        className={clsx("h-full rounded-full", pct >= 70 ? "bg-emerald-500" : pct >= 35 ? "bg-amber-500" : "bg-stone-300")}
-                                        style={{ width: `${pct}%` }}
-                                    />
-                                </div>
-                                <p className="text-xs text-stone-500 mt-1">{b.detail}</p>
-                            </div>
-                        );
-                    })}
-                </div>
-            </Card>
-
-            {/* Enrich + re-run — contractors only */}
-            {lead.source === "contractors" && (
-                <Card>
-                    <SectionHeading icon={Wand2} title="Fill the gaps / refresh" />
-                    <div className="space-y-5">
-                        <EnrichControls lead={lead} onRefresh={onRefresh} refreshing={loading} />
-                        <div className="border-t border-stone-100 pt-5">
-                            <RerunControl lead={lead} />
-                        </div>
-                    </div>
-                </Card>
+            </div>
+            {lead.sam_expiring_soon && (
+                <p className="mt-3 text-xs text-amber-700 inline-flex items-center gap-1.5">
+                    <AlertTriangle className="w-3.5 h-3.5" /> Their SAM registration expires within 90 days — a natural reason to reach out.
+                </p>
             )}
-        </div>
+        </Card>
+    );
+}
+
+// ── ICP-fit breakdown ──────────────────────────────────────────────────────────
+function IcpBreakdownCard({ lead }: { lead: Lead }) {
+    if (!Array.isArray(lead.icp_breakdown) || lead.icp_breakdown.length === 0) return null;
+    return (
+        <Card>
+            <SectionHeading icon={Target} title="Why they're a fit (each factor)" />
+            <div className="space-y-2.5">
+                {lead.icp_breakdown.map((b, i) => {
+                    const pct = b.max > 0 ? Math.round((b.points / b.max) * 100) : 0;
+                    return (
+                        <div key={i}>
+                            <div className="flex items-center justify-between gap-2">
+                                <span className="font-medium text-stone-700 text-sm">{b.label}</span>
+                                <span className="text-xs font-bold text-stone-500">{b.points}/{b.max}</span>
+                            </div>
+                            <div className="h-2 rounded-full bg-stone-100 overflow-hidden mt-1">
+                                <div
+                                    className={clsx("h-full rounded-full", pct >= 70 ? "bg-emerald-500" : pct >= 35 ? "bg-amber-500" : "bg-stone-300")}
+                                    style={{ width: `${pct}%` }}
+                                />
+                            </div>
+                            <p className="text-xs text-stone-500 mt-1">{b.detail}</p>
+                        </div>
+                    );
+                })}
+            </div>
+        </Card>
     );
 }
 
@@ -1200,7 +1300,7 @@ function PastAwardsCard({ lead }: { lead: Lead }) {
     return (
         <Card>
             <SectionHeading icon={Trophy} title="Past federal awards" />
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-3 gap-2.5">
                 <Stat icon={Award} label="Total awards" value={totalCount != null && totalCount > 0 ? String(totalCount) : "—"} />
                 <Stat icon={DollarSign} label="Federal revenue" value={compactCurrency(totalVolume) || "—"} />
                 <Stat icon={CalendarClock} label="Last award" value={lastAward ? formatDeadline(lastAward) : "—"} />
@@ -1238,11 +1338,11 @@ function RevenueStreamsCard({ lead }: { lead: Lead }) {
     return (
         <Card>
             <SectionHeading icon={DollarSign} title="Revenue streams (USASpending)" />
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
                 {agencies.length > 0 && (
                     <div>
                         <FieldLabel className="mb-2">Top agencies</FieldLabel>
-                        <div className="space-y-3">
+                        <div className="space-y-2.5">
                             {agencies.map((a, i) => (
                                 <RevenueBar key={`${a.name}-${i}`} label={a.name} amount={a.amount} max={maxAgency} />
                             ))}
@@ -1252,7 +1352,7 @@ function RevenueStreamsCard({ lead }: { lead: Lead }) {
                 {naics.length > 0 && (
                     <div>
                         <FieldLabel className="mb-2">Top NAICS</FieldLabel>
-                        <div className="space-y-3">
+                        <div className="space-y-2.5">
                             {naics.map((n, i) => (
                                 <RevenueBar key={`${n.code}-${i}`} label={n.label || n.code} sublabel={n.label ? n.code : null} amount={n.amount} max={maxNaics} />
                             ))}
@@ -1264,12 +1364,19 @@ function RevenueStreamsCard({ lead }: { lead: Lead }) {
     );
 }
 
-// ── "Enrich now" ──────────────────────────────────────────────────────────────
-function EnrichControls({ lead, onRefresh, refreshing }: { lead: Lead; onRefresh: () => void; refreshing: boolean }) {
+// ── "Research & fill the gaps" — ONE button (enrich also researches) ─────────────
+function ResearchAndFillCard({ lead, onRefresh, refreshing }: { lead: Lead; onRefresh: () => void; refreshing: boolean }) {
     const [busy, setBusy] = useState(false);
     const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
+    // Show persisted research immediately; replace with the live result after a run.
+    const [research, setResearch] = useState<LeadResearch | null>(lead.research ?? null);
 
-    const enrich = async () => {
+    useEffect(() => {
+        setResearch(lead.research ?? null);
+        setResult(null);
+    }, [lead.id, lead.research]);
+
+    const run = async () => {
         setBusy(true);
         setResult(null);
         try {
@@ -1280,45 +1387,79 @@ function EnrichControls({ lead, onRefresh, refreshing }: { lead: Lead; onRefresh
             });
             const data = await res.json().catch(() => ({}));
             if (!res.ok || !data.ok) throw new Error(data?.error || `Failed (${res.status})`);
-            const u = (data.updated || {}) as { employee_count?: number; years_in_business?: number; owner_linkedin?: string };
+            const u = (data.updated || {}) as {
+                employee_count?: number; years_in_business?: number; owner_linkedin?: string;
+                company_linkedin?: string; phone?: string; poc_email?: string;
+                phones?: string[]; emails?: string[]; track_record?: string[]; legal_name?: string;
+            };
+            const r = (data.research || null) as {
+                rating?: number | null; reviews_count?: number | null; sentiment?: string;
+                summary?: string; what_they_do?: string;
+                sources?: Array<{ url: string; title: string; source_type: string }>;
+            } | null;
+
+            // Surface the research inline right away (don't wait on the re-fetch).
+            if (r && (r.summary || r.rating != null || (r.sources?.length ?? 0) > 0)) {
+                setResearch({
+                    overall_sentiment: (r.sentiment as LeadResearch["overall_sentiment"]) ?? "unknown",
+                    rating: r.rating ?? null,
+                    reviews_count: r.reviews_count ?? null,
+                    summary: r.summary ?? "",
+                    what_they_do: r.what_they_do ?? "",
+                    sources: Array.isArray(r.sources) ? r.sources : [],
+                    researched_at: new Date().toISOString(),
+                });
+            }
+
             const found: string[] = [];
             if (u.owner_linkedin) found.push("owner LinkedIn");
+            if (u.company_linkedin) found.push("company LinkedIn");
+            if (u.phone) found.push(`phone ${u.phone}`);
+            else if (u.phones?.length) found.push(`${u.phones.length} phone${u.phones.length > 1 ? "s" : ""}`);
+            if (u.poc_email) found.push("email");
             if (u.employee_count != null) found.push(`${u.employee_count} employees`);
             if (u.years_in_business != null) found.push(`${u.years_in_business} yrs in business`);
+            if (u.legal_name) found.push(`legal name "${u.legal_name}"`);
+            if (u.track_record?.length) found.push(`${u.track_record.length} track-record stat${u.track_record.length > 1 ? "s" : ""}`);
+            if (r?.rating != null) found.push(`${r.rating}★ rating`);
             setResult({ ok: true, message: found.length ? `Found ${found.join(", ")}.` : "Checked — nothing new to add (already complete)." });
+            // Patch the queue row in place via the detail re-fetch (vanishing-lead fix).
             onRefresh();
         } catch (e) {
-            setResult({ ok: false, message: e instanceof Error ? e.message : "Enrichment failed" });
+            setResult({ ok: false, message: e instanceof Error ? e.message : "Research failed" });
         } finally {
             setBusy(false);
         }
     };
 
     return (
-        <div>
+        <Card>
+            <SectionHeading icon={Wand2} title="Research & fill the gaps" />
+            <p className="text-sm text-stone-500 -mt-2 mb-3">
+                One pass: deep-crawls their site for phone, email, company LinkedIn, years and track record;
+                looks up the owner&apos;s LinkedIn + firmographics; and pulls their public reviews so you can open with &ldquo;I looked you up.&rdquo;
+            </p>
             <button
                 type="button"
-                onClick={enrich}
+                onClick={run}
                 disabled={busy}
                 className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold px-4 py-2 rounded-lg text-sm"
             >
-                {busy ? <><Loader2 className="w-4 h-4 animate-spin" /> Enriching…</> : <><Wand2 className="w-4 h-4" /> Enrich now (LinkedIn + firmographics)</>}
+                {busy ? <><Loader2 className="w-4 h-4 animate-spin" /> Researching…</> : <><Wand2 className="w-4 h-4" /> {research ? "Re-run research" : "Research & fill the gaps"}</>}
             </button>
-            <p className="text-xs text-stone-500 mt-1.5">
-                Looks up the owner&apos;s LinkedIn and fills in employees / years in business when we can find them.
-            </p>
             {result && (
                 <div className={clsx("mt-2 rounded-lg px-3 py-2 text-xs flex items-start gap-2", result.ok ? "bg-emerald-50 border border-emerald-200 text-emerald-800" : "bg-rose-50 border border-rose-200 text-rose-700")}>
                     {result.ok ? (refreshing ? <Loader2 className="w-3.5 h-3.5 shrink-0 mt-0.5 animate-spin" /> : <Check className="w-3.5 h-3.5 shrink-0 mt-0.5" />) : <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />}
                     <span className="font-medium">{result.message}</span>
                 </div>
             )}
-        </div>
+            {research && <ResearchResultPanel research={research} />}
+        </Card>
     );
 }
 
 // ── "Re-run match" ─────────────────────────────────────────────────────────────
-function RerunControl({ lead }: { lead: Lead }) {
+function RerunCard({ lead }: { lead: Lead }) {
     const [busy, setBusy] = useState(false);
     const [full, setFull] = useState(false);
     const [toast, setToast] = useState<{ ok: boolean; message: string } | null>(null);
@@ -1348,9 +1489,9 @@ function RerunControl({ lead }: { lead: Lead }) {
     };
 
     return (
-        <div>
-            <FieldLabel>Out of date?</FieldLabel>
-            <div className="mt-2 flex flex-wrap items-center gap-3">
+        <Card>
+            <SectionHeading icon={RotateCcw} title="Matches out of date?" noMargin />
+            <div className="mt-3 flex flex-wrap items-center gap-3">
                 <button
                     type="button"
                     onClick={rerun}
@@ -1370,6 +1511,94 @@ function RerunControl({ lead }: { lead: Lead }) {
                     <span className="font-medium">{toast.message}</span>
                 </div>
             )}
+        </Card>
+    );
+}
+
+// ───────────────────────── TAB: Matches (foldable cards) ─────────────────────────
+
+function MatchesTab({ lead }: { lead: Lead }) {
+    if (lead.top_matches.length === 0) {
+        // Inbound robustness: no top_matches → readiness/preview fallback, never a wall.
+        return (
+            <Card>
+                <SectionHeading icon={Trophy} title="Live opportunities that fit them now" />
+                {lead.source === "inbound" && lead.readiness_score != null ? (
+                    <p className="text-sm text-stone-500">
+                        No preview matches captured for this inbound lead. Their checker readiness score was{" "}
+                        <span className="font-bold text-stone-700">{lead.readiness_score}/100</span> — open their results page on the Assets tab.
+                    </p>
+                ) : (
+                    <p className="text-sm text-stone-500">
+                        No live matches captured yet. Lead the conversation with the website gap in the Company briefing instead.
+                    </p>
+                )}
+            </Card>
+        );
+    }
+    return (
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 items-start">
+            {lead.top_matches.map((m, i) => (
+                <MatchCard key={`${m.opp_id ?? "m"}-${i}`} match={m} />
+            ))}
+        </div>
+    );
+}
+
+function MatchCard({ match }: { match: LeadTopMatch }) {
+    const [open, setOpen] = useState(false);
+    const oppUrl = samOppUrl(match.opp_id);
+    const value = compactCurrency(match.value);
+    return (
+        <div className="border border-stone-200 rounded-xl overflow-hidden bg-white">
+            {/* Collapsed header — title + agency + fit % */}
+            <button
+                type="button"
+                onClick={() => setOpen(o => !o)}
+                className="w-full text-left px-4 py-3 hover:bg-stone-50 transition-colors flex items-start gap-3"
+            >
+                <ChevronRight className={clsx("w-4 h-4 shrink-0 mt-0.5 text-stone-400 transition-transform", open && "rotate-90")} />
+                <div className="min-w-0 flex-1">
+                    <span className="font-bold text-stone-800 block">{match.title}</span>
+                    {match.agency && (
+                        <span className="text-xs text-stone-500 inline-flex items-center gap-1 mt-0.5">
+                            <Building2 className="w-3.5 h-3.5" /> {match.agency}
+                        </span>
+                    )}
+                </div>
+                <span className="shrink-0 text-xs font-black bg-blue-50 text-blue-700 border border-blue-200 rounded-lg px-2 py-1">
+                    {match.score_pct}% fit
+                </span>
+            </button>
+
+            {/* Expanded body */}
+            {open && (
+                <div className="px-4 pb-4 pt-1 border-t border-stone-100 space-y-3">
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-stone-600 pt-3">
+                        {match.deadline && <span className="inline-flex items-center gap-1"><CalendarClock className="w-3.5 h-3.5 text-stone-400" /> Due {formatDeadline(match.deadline)}</span>}
+                        {match.naics && <span className="inline-flex items-center gap-1"><Package className="w-3.5 h-3.5 text-stone-400" /> NAICS {match.naics}</span>}
+                        {match.set_aside && <span className="inline-flex items-center gap-1"><BadgeCheck className="w-3.5 h-3.5 text-stone-400" /> {match.set_aside}</span>}
+                        {value && <span className="inline-flex items-center gap-1"><DollarSign className="w-3.5 h-3.5 text-stone-400" /> {value}</span>}
+                        {match.pwin != null && <span className="inline-flex items-center gap-1"><Target className="w-3.5 h-3.5 text-stone-400" /> {match.pwin}% pWin</span>}
+                    </div>
+                    {match.why && (
+                        <div>
+                            <FieldLabel>Why it fits</FieldLabel>
+                            <p className="text-sm text-stone-600 leading-relaxed mt-1">{match.why}</p>
+                        </div>
+                    )}
+                    {oppUrl && (
+                        <a
+                            href={oppUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-2 border border-stone-200 hover:border-stone-300 hover:bg-stone-50 text-stone-700 font-medium px-3 py-1.5 rounded-lg text-sm"
+                        >
+                            <ExternalLink className="w-3.5 h-3.5 text-stone-400" /> View on SAM.gov
+                        </a>
+                    )}
+                </div>
+            )}
         </div>
     );
 }
@@ -1379,8 +1608,7 @@ function RerunControl({ lead }: { lead: Lead }) {
 function AssetsTab({ lead, onRefresh }: { lead: Lead; onRefresh: () => void }) {
     const isContractor = lead.source === "contractors";
     return (
-        <div className="space-y-5">
-            {isContractor && <ResearchAction lead={lead} onRefresh={onRefresh} highlight={lead.has_website === false} />}
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
             {isContractor && <WebsiteAction lead={lead} onRefresh={onRefresh} highlight={lead.has_website === false} />}
             {isContractor && <CapStatementCard lead={lead} />}
             {isContractor && <MaterializeCheckCard lead={lead} />}
@@ -1388,8 +1616,8 @@ function AssetsTab({ lead, onRefresh }: { lead: Lead; onRefresh: () => void }) {
             {!isContractor && (
                 <Card>
                     <p className="text-sm text-stone-500">
-                        Asset generation (research, one-pager, capability statement) is available for firms in our database.
-                        This is an inbound website lead — use the Matches and Outreach tabs.
+                        Asset generation (one-pager, capability statement) is available for firms in our database.
+                        This is an inbound website lead — use the Company and Matches tabs.
                     </p>
                 </Card>
             )}
@@ -1521,7 +1749,7 @@ function CapStatementCard({ lead }: { lead: Lead }) {
     return (
         <Card>
             <SectionHeading icon={FileText} title="Draft a capability statement" />
-            <p className="text-sm text-stone-600 mb-3">
+            <p className="text-sm text-stone-600 -mt-2 mb-3">
                 Generate a polished, federal-ready capability statement for this firm — hand it to them during outreach.
             </p>
             <button
@@ -1540,7 +1768,7 @@ function CapStatementCard({ lead }: { lead: Lead }) {
             {open && (sections.length > 0 || generating) && (
                 <div className="mt-4 border border-stone-200 rounded-xl overflow-hidden">
                     <div className="flex items-center justify-between gap-2 bg-stone-50 border-b border-stone-200 px-4 py-2.5">
-                        <span className="text-sm font-bold text-stone-700">{metadata?.company_name || lead.company_name || "Capability statement"}</span>
+                        <span className="text-sm font-bold text-stone-700">{metadata?.company_name || toTitleCaseCompany(lead.company_name) || "Capability statement"}</span>
                         <div className="flex items-center gap-3">
                             <button type="button" onClick={copyAll} disabled={doneSections.length === 0} className="text-xs text-stone-500 hover:text-black inline-flex items-center gap-1 disabled:opacity-40">
                                 {copiedAll ? <><Check className="w-3.5 h-3.5 text-emerald-600" /> Copied</> : <><Copy className="w-3.5 h-3.5" /> Copy all</>}
@@ -1575,7 +1803,7 @@ function CapStatementCard({ lead }: { lead: Lead }) {
     );
 }
 
-// ── Research (reviews + web presence) ─────────────────────────────────────────
+// ── Research result panel (shared — used inline on Company) ──────────────────────
 function sentimentStyle(s: LeadResearch["overall_sentiment"]): { label: string; cls: string } {
     switch (s) {
         case "positive": return { label: "Positive", cls: "bg-emerald-100 text-emerald-800 border-emerald-300" };
@@ -1634,68 +1862,6 @@ function ResearchResultPanel({ research }: { research: LeadResearch }) {
     );
 }
 
-function ResearchAction({ lead, onRefresh, highlight }: { lead: Lead; onRefresh: () => void; highlight: boolean }) {
-    const [busy, setBusy] = useState(false);
-    const [err, setErr] = useState<string | null>(null);
-    const [research, setResearch] = useState<LeadResearch | null>(lead.research ?? null);
-
-    useEffect(() => {
-        setResearch(lead.research ?? null);
-        setErr(null);
-    }, [lead.id, lead.research]);
-
-    const run = async () => {
-        setBusy(true);
-        setErr(null);
-        try {
-            const res = await fetch("/api/admin/cockpit/research", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ contractor_id: lead.id }),
-            });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok || !data.ok) throw new Error(data?.error || `Failed (${res.status})`);
-            setResearch({
-                overall_sentiment: data.sentiment ?? "unknown",
-                rating: data.rating ?? null,
-                reviews_count: data.reviews_count ?? null,
-                summary: data.summary ?? "",
-                what_they_do: data.what_they_do ?? "",
-                sources: Array.isArray(data.sources) ? data.sources : [],
-                researched_at: new Date().toISOString(),
-            });
-            onRefresh();
-        } catch (e) {
-            setErr(e instanceof Error ? e.message : "Research failed");
-        } finally {
-            setBusy(false);
-        }
-    };
-
-    return (
-        <Card className={highlight ? "ring-2 ring-orange-200" : undefined}>
-            <div className="flex items-center gap-2">
-                <MessageSquare className={clsx("w-4 h-4", highlight ? "text-orange-600" : "text-stone-400")} />
-                <h3 className="font-bold text-stone-900">Research (reviews + web presence)</h3>
-                {highlight && <span className="text-[10px] font-bold bg-orange-600 text-white rounded-full px-2 py-0.5">Lead with this</span>}
-            </div>
-            <p className="text-sm text-stone-500 mt-1">
-                Pulls their public reviews, rating, and what people say — so you can open with &ldquo;I looked you up.&rdquo;
-            </p>
-            <button
-                type="button"
-                onClick={run}
-                disabled={busy}
-                className="mt-3 inline-flex items-center gap-2 bg-stone-900 hover:bg-black disabled:opacity-50 text-white font-bold px-4 py-2 rounded-lg text-sm"
-            >
-                {busy ? <><Loader2 className="w-4 h-4 animate-spin" /> Researching…</> : <><Search className="w-4 h-4" /> {research ? "Re-run research" : "Research this firm"}</>}
-            </button>
-            {err && <p className="mt-2 text-xs text-rose-600 inline-flex items-center gap-1.5"><AlertTriangle className="w-3.5 h-3.5" /> {err}</p>}
-            {research && <ResearchResultPanel research={research} />}
-        </Card>
-    );
-}
-
 // ── Build one-pager website ───────────────────────────────────────────────────
 function WebsiteAction({ lead, onRefresh, highlight }: { lead: Lead; onRefresh: () => void; highlight: boolean }) {
     const [busy, setBusy] = useState(false);
@@ -1747,7 +1913,7 @@ function WebsiteAction({ lead, onRefresh, highlight }: { lead: Lead; onRefresh: 
                 {highlight && <span className="text-[10px] font-bold bg-orange-600 text-white rounded-full px-2 py-0.5">Great opener</span>}
             </div>
             <p className="text-sm text-stone-500 mt-1">
-                Generates a clean, shareable site from what we know. Takes about a minute or two.
+                Generates a clean, shareable site (with their past performance + clients) from what we know. Takes about a minute or two.
             </p>
             <div className="mt-3 flex flex-wrap items-center gap-2">
                 <button
@@ -1824,7 +1990,7 @@ function MaterializeCheckCard({ lead }: { lead: Lead }) {
     return (
         <Card>
             <SectionHeading icon={FileText} title="Their results page" />
-            <p className="text-sm text-stone-600 mb-3">
+            <p className="text-sm text-stone-600 -mt-2 mb-3">
                 This firm never ran our website checker. Build the same shareable results page from what we know — then send them the link.
             </p>
             {err && <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-800 mb-3">{err}</div>}
@@ -1852,7 +2018,7 @@ function CheckPageCard({ url }: { url: string }) {
     return (
         <Card>
             <SectionHeading icon={FileText} title="Their results page" />
-            <p className="text-sm text-stone-600 mb-3">
+            <p className="text-sm text-stone-600 -mt-2 mb-3">
                 This lead ran our website checker. Open the exact page they saw so you can talk to it directly.
             </p>
             <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 bg-white hover:bg-stone-100 border border-stone-200 text-stone-700 font-bold px-4 py-2 rounded-lg text-sm">
@@ -1862,49 +2028,7 @@ function CheckPageCard({ url }: { url: string }) {
     );
 }
 
-// ───────────────────────── TAB: Outreach ─────────────────────────
-
-function OutreachTab({
-    lead, senderConfigured, onOpenSender,
-    notes, setNotes, transcript, setTranscript, onOpenCall,
-    emailSubject, setEmailSubject, emailBody, setEmailBody,
-}: {
-    lead: Lead;
-    senderConfigured: boolean | null;
-    onOpenSender: () => void;
-    notes: string;
-    setNotes: React.Dispatch<React.SetStateAction<string>>;
-    transcript: string;
-    setTranscript: React.Dispatch<React.SetStateAction<string>>;
-    onOpenCall: () => void;
-    emailSubject: string;
-    setEmailSubject: (v: string) => void;
-    emailBody: string;
-    setEmailBody: (v: string) => void;
-}) {
-    return (
-        <div className="space-y-5">
-            <MessageGenerator lead={lead} onUseInComposer={(s, b) => { setEmailSubject(s); setEmailBody(b); }} />
-            <EmailComposer
-                lead={lead}
-                senderConfigured={senderConfigured}
-                onOpenSender={onOpenSender}
-                subject={emailSubject}
-                setSubject={setEmailSubject}
-                body={emailBody}
-                setBody={setEmailBody}
-            />
-            <NotesCard
-                lead={lead}
-                notes={notes}
-                setNotes={setNotes}
-                transcript={transcript}
-                setTranscript={setTranscript}
-                onOpenCall={onOpenCall}
-            />
-        </div>
-    );
-}
+// ───────────────────────── Outreach pieces (inline on Company) ─────────────────────────
 
 // ── AI message generator ──────────────────────────────────────────────────────
 function MessageGenerator({ lead, onUseInComposer }: { lead: Lead; onUseInComposer: (subject: string, body: string) => void }) {
@@ -1953,7 +2077,7 @@ function MessageGenerator({ lead, onUseInComposer }: { lead: Lead; onUseInCompos
 
     return (
         <Card>
-            <SectionHeading icon={Sparkles} title="Write a personalized message" />
+            <SectionHeading icon={Sparkles} title="Write a personalized email" />
             <div>
                 <FieldLabel>Pick the style</FieldLabel>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2">
@@ -1962,7 +2086,7 @@ function MessageGenerator({ lead, onUseInComposer }: { lead: Lead; onUseInCompos
                             key={t.value}
                             type="button"
                             onClick={() => setTone(t.value)}
-                            className={clsx("text-left rounded-xl border p-3 transition-colors", tone === t.value ? "border-orange-400 bg-orange-50" : "border-stone-200 hover:border-stone-300")}
+                            className={clsx("text-left rounded-xl border p-2.5 transition-colors", tone === t.value ? "border-orange-400 bg-orange-50" : "border-stone-200 hover:border-stone-300")}
                         >
                             <div className={clsx("text-sm font-bold", tone === t.value ? "text-orange-700" : "text-stone-700")}>{t.label}</div>
                             <div className="text-[11px] text-stone-500 mt-0.5 leading-snug">{t.help}</div>
@@ -1975,7 +2099,7 @@ function MessageGenerator({ lead, onUseInComposer }: { lead: Lead; onUseInCompos
                 type="button"
                 onClick={generate}
                 disabled={generating}
-                className="mt-4 inline-flex items-center gap-2 bg-stone-900 hover:bg-black disabled:opacity-50 text-white font-bold px-4 py-2.5 rounded-lg text-sm"
+                className="mt-3 inline-flex items-center gap-2 bg-stone-900 hover:bg-black disabled:opacity-50 text-white font-bold px-4 py-2.5 rounded-lg text-sm"
             >
                 {generating ? <><Loader2 className="w-4 h-4 animate-spin" /> Writing…</> : <><Sparkles className="w-4 h-4" /> {generated ? "Rewrite message" : "Generate message"}</>}
             </button>
@@ -2005,7 +2129,7 @@ function MessageGenerator({ lead, onUseInComposer }: { lead: Lead; onUseInCompos
                             </button>
                         </div>
                         <textarea
-                            value={bodyText} onChange={e => setBodyText(e.target.value)} rows={10}
+                            value={bodyText} onChange={e => setBodyText(e.target.value)} rows={9}
                             aria-label="Generated message body" placeholder="Message body"
                             className="w-full mt-1 px-3 py-2 text-sm rounded-lg border border-stone-200 focus:outline-none focus:border-stone-400 leading-relaxed"
                         />
@@ -2144,7 +2268,7 @@ function EmailComposer({
     );
 }
 
-// ── Notes + transcript (+ HubSpot is in the top action bar) ─────────────────────
+// ── Notes + transcript (HubSpot button is in the top action bar) ─────────────────
 function NotesCard({
     lead, notes, setNotes, transcript, setTranscript, onOpenCall,
 }: {
@@ -2157,7 +2281,7 @@ function NotesCard({
 }) {
     return (
         <Card>
-            <div className="flex items-center justify-between gap-2 mb-3">
+            <div className="flex items-center justify-between gap-2 mb-2">
                 <SectionHeading icon={ClipboardList} title="Notes & call transcript" noMargin />
                 {lead.contact.phone && (
                     <button
@@ -2170,22 +2294,22 @@ function NotesCard({
                 )}
             </div>
             <p className="text-xs text-stone-500 mb-3">
-                These flow into HubSpot when you use the &ldquo;Send to HubSpot&rdquo; button at the top.
+                These flow into HubSpot when you use the &ldquo;Send to HubSpot&rdquo; button at the top of this tab.
             </p>
 
             <FieldLabel>Notes (anything worth remembering)</FieldLabel>
             <textarea
                 value={notes}
                 onChange={e => setNotes(e.target.value)}
-                rows={4}
+                rows={3}
                 placeholder="e.g. Left a voicemail. Owner is a Navy vet, sounded interested in the VA janitorial match."
                 className="w-full mt-1 px-3 py-2 text-sm rounded-lg border border-stone-200 focus:outline-none focus:border-stone-400 leading-relaxed"
             />
-            <FieldLabel className="mt-4">Call transcript (optional)</FieldLabel>
+            <FieldLabel className="mt-3">Call transcript (optional)</FieldLabel>
             <textarea
                 value={transcript}
                 onChange={e => setTranscript(e.target.value)}
-                rows={4}
+                rows={3}
                 placeholder="Paste a call summary or transcript here if you spoke with them."
                 className="w-full mt-1 px-3 py-2 text-sm rounded-lg border border-stone-200 focus:outline-none focus:border-stone-400 leading-relaxed"
             />
@@ -2293,7 +2417,7 @@ function CallNotesModal({ lead, onClose, onSaved }: { lead: Lead; onClose: () =>
                 <div className="flex items-center justify-between gap-2 px-5 py-4 border-b border-stone-200 sticky top-0 bg-white">
                     <div className="min-w-0">
                         <h3 className="font-bold text-stone-900 flex items-center gap-2">
-                            <Phone className="w-4 h-4 text-emerald-600" /> Call {lead.contact.name || lead.company_name || "lead"}
+                            <Phone className="w-4 h-4 text-emerald-600" /> Call {toTitleCaseCompany(lead.contact.name) || toTitleCaseCompany(lead.company_name) || "lead"}
                         </h3>
                         {lead.contact.phone && <p className="text-xs text-stone-500 mt-0.5">{lead.contact.phone}</p>}
                     </div>
@@ -2309,7 +2433,7 @@ function CallNotesModal({ lead, onClose, onSaved }: { lead: Lead; onClose: () =>
                         onSaved={onSaved}
                     />
                     <p className="text-xs text-stone-500 mt-3">
-                        When you save, the notes + transcript get folded into the Outreach tab so they flow to HubSpot.
+                        When you save, the notes + transcript get folded into the Company tab so they flow to HubSpot.
                     </p>
                 </div>
             </div>
@@ -2327,12 +2451,24 @@ interface CockpitSender {
     physical_address: string;
 }
 
+// "sergio@capturepilot.com" → ["sergio", "capturepilot.com"]; "" → ["", ""].
+function splitEmail(email: string): [string, string] {
+    const at = (email || "").indexOf("@");
+    if (at < 0) return [email || "", ""];
+    return [email.slice(0, at), email.slice(at + 1)];
+}
+
 function SenderModal({ onClose }: { onClose: () => void }) {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [saved, setSaved] = useState(false);
     const [configured, setConfigured] = useState<boolean | null>(null);
+    const [domains, setDomains] = useState<{ name: string; status: string }[]>([]);
+    const [replyOptions, setReplyOptions] = useState<string[]>([]);
+    // From-address is composed from a local part + a verified domain when domains exist.
+    const [fromLocal, setFromLocal] = useState("");
+    const [fromDomain, setFromDomain] = useState("");
     const [sender, setSender] = useState<CockpitSender>({
         from_email: "", from_name: "", reply_to: "", footer_html: "", physical_address: "",
     });
@@ -2362,6 +2498,18 @@ function SenderModal({ onClose }: { onClose: () => void }) {
                     physical_address: s.physical_address || "",
                 });
                 setConfigured(!!data.configured);
+
+                const verified = Array.isArray(data.domains) ? data.domains : [];
+                setDomains(verified);
+                setReplyOptions(Array.isArray(data.reply_options) ? data.reply_options : []);
+
+                // Seed the from-address builder from the saved email.
+                const [local, dom] = splitEmail(fromEmail);
+                setFromLocal(local);
+                // If the saved domain is one of the verified ones, preselect it;
+                // otherwise default to the first verified domain (if any).
+                const domNames = verified.map((d: { name: string }) => d.name);
+                setFromDomain(dom && domNames.includes(dom) ? dom : (domNames[0] || dom || ""));
             } catch (e) {
                 if (alive) setError(e instanceof Error ? e.message : "Could not load the sender");
             } finally {
@@ -2371,19 +2519,28 @@ function SenderModal({ onClose }: { onClose: () => void }) {
         return () => { alive = false; };
     }, []);
 
+    // When verified domains exist the from-address is built from local@domain;
+    // otherwise we fall back to the free-text sender.from_email field.
+    const composedFromEmail = domains.length > 0 && fromLocal.trim() && fromDomain
+        ? `${fromLocal.trim()}@${fromDomain}`
+        : sender.from_email.trim();
+
     const save = async () => {
         setSaving(true);
         setError(null);
         setSaved(false);
         try {
+            const payload = { ...sender, from_email: composedFromEmail };
             const res = await fetch("/api/admin/cockpit/sender", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(sender),
+                body: JSON.stringify(payload),
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data?.error || `Failed (${res.status})`);
             setConfigured(!!data.configured);
+            setSender(prev => ({ ...prev, from_email: composedFromEmail }));
+            if (Array.isArray(data.reply_options)) setReplyOptions(data.reply_options);
             setSaved(true);
             setTimeout(() => setSaved(false), 2500);
         } catch (e) {
@@ -2427,11 +2584,36 @@ function SenderModal({ onClose }: { onClose: () => void }) {
                             )}
                             <div>
                                 <FieldLabel>From email (required)</FieldLabel>
-                                <input
-                                    type="email" value={sender.from_email} onChange={e => set("from_email", e.target.value)}
-                                    placeholder="sergio@capturepilot.com"
-                                    className="w-full mt-1 px-3 py-2 text-sm rounded-lg border border-stone-200 focus:outline-none focus:border-stone-400"
-                                />
+                                {domains.length > 0 ? (
+                                    <>
+                                        <div className="flex items-stretch gap-2 mt-1">
+                                            <input
+                                                type="text" value={fromLocal} onChange={e => setFromLocal(e.target.value.replace(/@.*$/, "").trim())}
+                                                placeholder="sergio"
+                                                className="flex-1 px-3 py-2 text-sm rounded-lg border border-stone-200 focus:outline-none focus:border-stone-400"
+                                            />
+                                            <span className="self-center text-stone-400 text-sm">@</span>
+                                            <select
+                                                value={fromDomain} onChange={e => setFromDomain(e.target.value)}
+                                                title="Sending domain" aria-label="Sending domain"
+                                                className="px-2 py-2 text-sm rounded-lg border border-stone-200 bg-white focus:outline-none focus:border-stone-400"
+                                            >
+                                                {domains.map(d => (
+                                                    <option key={d.name} value={d.name}>{d.name}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <p className="mt-1 text-xs text-stone-400">
+                                            {composedFromEmail ? <>Sends as <span className="font-medium text-stone-600">{composedFromEmail}</span></> : "Pick a local part + verified domain."}
+                                        </p>
+                                    </>
+                                ) : (
+                                    <input
+                                        type="email" value={sender.from_email} onChange={e => set("from_email", e.target.value)}
+                                        placeholder="sergio@capturepilot.com"
+                                        className="w-full mt-1 px-3 py-2 text-sm rounded-lg border border-stone-200 focus:outline-none focus:border-stone-400"
+                                    />
+                                )}
                             </div>
                             <div>
                                 <FieldLabel>From name</FieldLabel>
@@ -2444,10 +2626,17 @@ function SenderModal({ onClose }: { onClose: () => void }) {
                             <div>
                                 <FieldLabel>Reply-to (optional)</FieldLabel>
                                 <input
-                                    type="email" value={sender.reply_to} onChange={e => set("reply_to", e.target.value)}
-                                    placeholder="defaults to the from email"
+                                    type="email" list="cockpit-reply-options"
+                                    value={sender.reply_to} onChange={e => set("reply_to", e.target.value)}
+                                    placeholder="defaults to the from email — pick a saved inbox or type one"
                                     className="w-full mt-1 px-3 py-2 text-sm rounded-lg border border-stone-200 focus:outline-none focus:border-stone-400"
                                 />
+                                <datalist id="cockpit-reply-options">
+                                    {replyOptions.map(opt => <option key={opt} value={opt} />)}
+                                </datalist>
+                                {replyOptions.length > 0 && (
+                                    <p className="mt-1 text-xs text-stone-400">Saved inboxes: {replyOptions.join(", ")}</p>
+                                )}
                             </div>
                             <div>
                                 <FieldLabel>Physical mailing address (CAN-SPAM)</FieldLabel>
@@ -2488,7 +2677,7 @@ function SenderModal({ onClose }: { onClose: () => void }) {
 // ───────────────────────── tiny presentational helpers ─────────────────────────
 
 function Card({ children, className }: { children: React.ReactNode; className?: string }) {
-    return <div className={clsx("bg-white border border-stone-200 rounded-2xl p-5", className)}>{children}</div>;
+    return <div className={clsx("bg-white border border-stone-200 rounded-2xl p-4", className)}>{children}</div>;
 }
 
 function SectionHeading({ icon: Icon, title, noMargin }: {
@@ -2497,7 +2686,7 @@ function SectionHeading({ icon: Icon, title, noMargin }: {
     noMargin?: boolean;
 }) {
     return (
-        <h3 className={clsx("font-bold text-stone-900 flex items-center gap-2", !noMargin && "mb-4")}>
+        <h3 className={clsx("font-bold text-stone-900 flex items-center gap-2", !noMargin && "mb-3")}>
             <Icon className="w-4 h-4 text-stone-400" /> {title}
         </h3>
     );
@@ -2523,7 +2712,7 @@ function Stat({ icon: Icon, label, value, tone }: {
     tone?: "good" | "warn";
 }) {
     return (
-        <div className="rounded-xl border border-stone-200 p-3">
+        <div className="rounded-xl border border-stone-200 p-2.5">
             <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase text-stone-400 tracking-wide">
                 <Icon className="w-3.5 h-3.5" /> {label}
             </div>

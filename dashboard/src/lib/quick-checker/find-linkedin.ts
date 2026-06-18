@@ -40,23 +40,52 @@ export function parseLinkedInProfiles(html: string): string[] {
 export interface OwnerLinkedInResult { url: string; confidence: "high" | "medium" }
 
 /**
- * Strict name → slug matcher shared by both backends. Requires the last name in
- * the slug; a slug that also carries the first name is "high" confidence, last
- * name only is "medium". Returns null when no candidate matches.
+ * STRICT name → slug matcher shared by both backends. Returns "high" ONLY when
+ * the slug unambiguously belongs to this person:
+ *   - it contains BOTH the first AND last name (in any order), OR
+ *   - it matches an explicit first.last / firstlast pattern.
+ * A slug carrying ONLY the last name is "medium" — common surname collisions
+ * (e.g. /in/smith) make it untrustworthy. The caller drops everything below
+ * "high" to NOT-FOUND. Better not-found than wrong-person.
  */
 function matchByName(candidates: string[], tokens: string[]): OwnerLinkedInResult | null {
     if (!candidates.length || tokens.length < 2) return null;
     const first = tokens[0];
     const last = tokens[tokens.length - 1];
+    if (first.length < 2 || last.length < 2) return null;
+    // Slug-segment forms LinkedIn actually uses: first-last, firstlast, first.last.
+    const firstlast = `${first}${last}`;
+    const firstDashLast = `${first}-${last}`;
+    const lastDashFirst = `${last}-${first}`;
     let medium: string | null = null;
     for (const url of candidates) {
-        const slug = (url.split("/in/")[1] || "").replace(/-\d+$/, ""); // drop trailing -123 disambiguators
-        if (last.length > 2 && slug.includes(last)) {
-            if (first.length > 1 && slug.includes(first)) return { url, confidence: "high" };
-            medium ||= url;
-        }
+        const slug = (url.split("/in/")[1] || "").replace(/-\d+$/, "").toLowerCase(); // drop trailing -123 disambiguators
+        if (!slug) continue;
+        // HIGH: both names present, or an unambiguous first/last slug pattern.
+        const hasBoth = slug.includes(first) && slug.includes(last);
+        const explicitPattern =
+            slug === firstlast || slug === firstDashLast || slug === lastDashFirst ||
+            slug.startsWith(`${firstDashLast}-`) || slug.startsWith(`${firstlast}-`);
+        if (hasBoth || explicitPattern) return { url, confidence: "high" };
+        // MEDIUM: last name only — recorded but never returned (see findOwnerLinkedIn).
+        if (slug.includes(last)) medium ||= url;
     }
     return medium ? { url: medium, confidence: "medium" } : null;
+}
+
+/**
+ * STRICT match of a person's name against a set of already-known linkedin.com/in/
+ * URLs (e.g. the personal profiles classifySocials() pulled off the contractor's
+ * OWN website). Returns the URL ONLY on "high" confidence — both names in the
+ * slug. This is the most reliable owner-LinkedIn source: it's the link the
+ * company itself published, not a search guess. Better not-found than
+ * wrong-person.
+ */
+export function matchKnownProfileByName(candidates: string[], name: string): string | null {
+    const tokens = (name || "").toLowerCase().split(/\s+/).filter(t => /^[a-z][a-z'.-]+$/i.test(t) && t.length > 1);
+    if (tokens.length < 2) return null;
+    const r = matchByName(candidates, tokens);
+    return r && r.confidence === "high" ? r.url : null;
 }
 
 /** Brave Web Search backend. Returns matched profile or null on error/empty/no-key. */
@@ -126,9 +155,15 @@ export async function findOwnerLinkedIn(
 
     // Brave is PRIMARY when the key is present. Fall back to DuckDuckGo on any
     // Brave error / empty / missing-key path.
+    let result: OwnerLinkedInResult | null = null;
     if (process.env.BRAVE_SEARCH_API_KEY) {
-        const brave = await findViaBrave(q, tokens, timeoutMs);
-        if (brave) return brave;
+        result = await findViaBrave(q, tokens, timeoutMs);
     }
-    return findViaDuckDuckGo(q, tokens, timeoutMs);
+    if (!result) result = await findViaDuckDuckGo(q, tokens, timeoutMs);
+
+    // STRICT GATE: only return a URL when the slug unambiguously matches BOTH
+    // names. Anything "medium"/uncertain → NOT FOUND. We never write a guessed
+    // profile. Better not-found than wrong-person.
+    if (result && result.confidence === "high") return result;
+    return null;
 }
