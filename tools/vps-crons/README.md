@@ -15,6 +15,11 @@ logic stays on Vercel — only the schedule moves.
 | `cp-ingest-grants.timer` | Daily 02:30 | `POST /api/cron/ingest_grants` |
 | `cp-backfill-requirements.timer` | Daily 06:00 | `POST /api/cron/backfill_requirements` |
 | `cp-beta-deadline.timer` | Daily 12:00 | `POST /api/cron/beta_deadline` |
+| `cp-refresh-sam-registration.timer` | Every 10 min | `POST /api/cron/refresh_sam_registration?limit=40` |
+
+> **`refresh_sam_registration` is a continuous-drain lane**, not low-frequency: ~40 contractors/run × 6 runs/hr ≈ 240 SAM Entity calls/hr (under the throttle). It lives on the VPS because the Vercel 40-cron ceiling is full. Keep it **VPS-only** — adding it to `vercel.json` would double-run and burn the SAM quota.
+
+> **POST alias required:** `_runner.mjs` POSTs, but App Router routes default to GET-only and 405 a POST. Every route above must `export const POST = GET;`. (This was a live bug — all six lanes 405'd silently until it was fixed; if you add a lane, alias POST.)
 
 Each `.service` is a `Type=oneshot` that runs `node <name>.mjs`. Every `.mjs`
 shells into `_runner.mjs`, which does the actual `fetch` with bearer auth.

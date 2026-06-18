@@ -27,11 +27,15 @@ echo "==> source: $SRC_DIR"
 echo "==> target: $TARGET_BIN"
 
 # 1. Ensure binary location exists and contains the runner + per-cron scripts.
+#    Skip the copy when running in-place (SRC_DIR == TARGET_BIN), otherwise
+#    `cp -f` of a file onto itself aborts the script under `set -e`.
 mkdir -p "$TARGET_BIN"
-cp -f "$SRC_DIR"/_runner.mjs "$TARGET_BIN/"
-for f in "$SRC_DIR"/*.mjs; do
-  cp -f "$f" "$TARGET_BIN/"
-done
+if [ "$SRC_DIR" != "$TARGET_BIN" ]; then
+  cp -f "$SRC_DIR"/_runner.mjs "$TARGET_BIN/"
+  for f in "$SRC_DIR"/*.mjs; do
+    cp -f "$f" "$TARGET_BIN/"
+  done
+fi
 chmod 0755 "$TARGET_BIN"/*.mjs
 
 # 2. Ensure env file exists.
