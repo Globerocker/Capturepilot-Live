@@ -107,6 +107,15 @@ interface Lead {
     findings_summary: string | null;
     owner_linkedin: string | null;
     company_linkedin?: string | null;
+    sam_entity_url?: string | null;
+    /** Past federal awards + USASpending revenue streams (contractors; empty-ish for inbound). */
+    past_awards?: {
+        total_count: number | null;
+        total_volume: number | null;
+        last_award_date: string | null;
+        top_agencies: Array<{ name: string; amount: number | null }>;
+        top_naics: Array<{ code: string; label: string; amount: number | null }>;
+    };
     has_website: boolean;
     total_federal_revenue?: number | null;
     total_federal_awards?: number | null;
@@ -1051,10 +1060,28 @@ function CompanyTab({ lead, loading, onRefresh, onOpenCall }: {
                         )}
                     </div>
                     <div>
-                        <FieldLabel>LinkedIn</FieldLabel>
+                        <FieldLabel>Owner / POC LinkedIn</FieldLabel>
                         {lead.owner_linkedin ? (
                             <a href={lead.owner_linkedin} target="_blank" rel="noopener noreferrer" className="text-blue-700 hover:underline inline-flex items-center gap-1.5 mt-0.5">
-                                <Linkedin className="w-3.5 h-3.5" /> Owner profile <ExternalLink className="w-3 h-3" />
+                                <Linkedin className="w-3.5 h-3.5" /> Owner profile
+                                <span className="text-[10px] font-medium text-stone-400 hover:text-stone-600 inline-flex items-center gap-0.5">
+                                    <ExternalLink className="w-3 h-3" /> verify
+                                </span>
+                            </a>
+                        ) : (
+                            <span className="text-stone-400 inline-flex items-center gap-1.5 mt-0.5 text-xs">
+                                <Info className="w-3.5 h-3.5 shrink-0" /> not found — click Enrich to search
+                            </span>
+                        )}
+                    </div>
+                    <div>
+                        <FieldLabel>Company LinkedIn</FieldLabel>
+                        {lead.company_linkedin ? (
+                            <a href={lead.company_linkedin} target="_blank" rel="noopener noreferrer" className="text-blue-700 hover:underline inline-flex items-center gap-1.5 mt-0.5">
+                                <Linkedin className="w-3.5 h-3.5" /> Company page
+                                <span className="text-[10px] font-medium text-stone-400 hover:text-stone-600 inline-flex items-center gap-0.5">
+                                    <ExternalLink className="w-3 h-3" /> verify
+                                </span>
                             </a>
                         ) : (
                             <span className="text-stone-400 mt-0.5 block">—</span>
@@ -1069,6 +1096,19 @@ function CompanyTab({ lead, loading, onRefresh, onOpenCall }: {
                             <Pill key={`${c}-${i}`} icon={Award}>{c}</Pill>
                         ))}
                     </div>
+                )}
+
+                {/* SAM.gov entity link */}
+                {lead.sam_entity_url && (
+                    <a
+                        href={lead.sam_entity_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-5 inline-flex items-center gap-2 border border-stone-200 hover:border-stone-300 hover:bg-stone-50 text-stone-700 font-medium px-3 py-2 rounded-lg text-sm"
+                        title="Open this entity's official SAM.gov record"
+                    >
+                        <BadgeCheck className="w-4 h-4 text-stone-400" /> View on SAM.gov <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
                 )}
             </Card>
 
@@ -1099,6 +1139,12 @@ function CompanyTab({ lead, loading, onRefresh, onOpenCall }: {
                     </p>
                 )}
             </Card>
+
+            {/* Past federal awards */}
+            <PastAwardsCard lead={lead} />
+
+            {/* USASpending revenue streams */}
+            <RevenueStreamsCard lead={lead} />
 
             {/* ICP-fit breakdown */}
             <Card>
@@ -1138,6 +1184,83 @@ function CompanyTab({ lead, loading, onRefresh, onOpenCall }: {
                 </Card>
             )}
         </div>
+    );
+}
+
+// ── Past federal awards ─────────────────────────────────────────────────────────
+function PastAwardsCard({ lead }: { lead: Lead }) {
+    const pa = lead.past_awards;
+    // total_count / total_volume fall back to the surfaced firmographic columns so the
+    // card still renders for rows where past_awards wasn't populated but the totals were.
+    const totalCount = pa?.total_count ?? lead.total_federal_awards ?? lead.federal_awards_count ?? null;
+    const totalVolume = pa?.total_volume ?? lead.total_federal_revenue ?? null;
+    const lastAward = pa?.last_award_date ?? null;
+    const hasAny = (totalCount != null && totalCount > 0) || (totalVolume != null && totalVolume > 0) || !!lastAward;
+    if (!hasAny) return null;
+    return (
+        <Card>
+            <SectionHeading icon={Trophy} title="Past federal awards" />
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <Stat icon={Award} label="Total awards" value={totalCount != null && totalCount > 0 ? String(totalCount) : "—"} />
+                <Stat icon={DollarSign} label="Federal revenue" value={compactCurrency(totalVolume) || "—"} />
+                <Stat icon={CalendarClock} label="Last award" value={lastAward ? formatDeadline(lastAward) : "—"} />
+            </div>
+        </Card>
+    );
+}
+
+// ── USASpending revenue streams ───────────────────────────────────────────────
+/** One labeled bar row in a revenue-stream list (relative-width bar by $). */
+function RevenueBar({ label, sublabel, amount, max }: {
+    label: string; sublabel?: string | null; amount: number | null; max: number;
+}) {
+    const pct = amount != null && amount > 0 && max > 0 ? Math.max(4, Math.round((amount / max) * 100)) : 0;
+    return (
+        <div>
+            <div className="flex items-center justify-between gap-2">
+                <span className="font-medium text-stone-700 text-sm truncate" title={label}>{label}</span>
+                <span className="text-xs font-bold text-stone-500 shrink-0">{compactCurrency(amount) || "—"}</span>
+            </div>
+            {sublabel && <p className="text-[11px] text-stone-400 truncate" title={sublabel}>{sublabel}</p>}
+            <div className="h-2 rounded-full bg-stone-100 overflow-hidden mt-1">
+                <div className="h-full rounded-full bg-indigo-500" style={{ width: `${pct}%` }} />
+            </div>
+        </div>
+    );
+}
+
+function RevenueStreamsCard({ lead }: { lead: Lead }) {
+    const agencies = lead.past_awards?.top_agencies ?? [];
+    const naics = lead.past_awards?.top_naics ?? [];
+    if (agencies.length === 0 && naics.length === 0) return null;
+    const maxAgency = Math.max(1, ...agencies.map((a) => a.amount ?? 0));
+    const maxNaics = Math.max(1, ...naics.map((n) => n.amount ?? 0));
+    return (
+        <Card>
+            <SectionHeading icon={DollarSign} title="Revenue streams (USASpending)" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-5">
+                {agencies.length > 0 && (
+                    <div>
+                        <FieldLabel className="mb-2">Top agencies</FieldLabel>
+                        <div className="space-y-3">
+                            {agencies.map((a, i) => (
+                                <RevenueBar key={`${a.name}-${i}`} label={a.name} amount={a.amount} max={maxAgency} />
+                            ))}
+                        </div>
+                    </div>
+                )}
+                {naics.length > 0 && (
+                    <div>
+                        <FieldLabel className="mb-2">Top NAICS</FieldLabel>
+                        <div className="space-y-3">
+                            {naics.map((n, i) => (
+                                <RevenueBar key={`${n.code}-${i}`} label={n.label || n.code} sublabel={n.label ? n.code : null} amount={n.amount} max={maxNaics} />
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </div>
+        </Card>
     );
 }
 

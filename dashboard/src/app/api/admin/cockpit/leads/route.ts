@@ -56,6 +56,7 @@ import { computeIcpFit, icpTier, type IcpBreakdownItem } from "@/lib/icp-fit";
 import { computeDataGaps } from "@/lib/outreach/match-drop";
 import { LOOM_BY_GAP } from "@/lib/outreach/loom-videos";
 import { toTitleCaseName } from "@/lib/format-name";
+import { getNaicsDescription } from "@/lib/naics-labels";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -120,9 +121,18 @@ interface LeadRow {
     gap_hook: string | null;
     loom_url: string | null;
     findings_summary: string | null;
-    owner_linkedin: string | null;
-    company_linkedin: string | null;
+    owner_linkedin: string | null;     // the PERSON (never the company/social page)
+    company_linkedin: string | null;   // the COMPANY (company_linkedin ?? social_linkedin)
+    sam_entity_url: string | null;     // sam.gov coreData page when a UEI is known
     has_website: boolean;
+    /** Past federal awards + USASpending revenue streams (contractors; null-ish for inbound). */
+    past_awards: {
+        total_count: number | null;
+        total_volume: number | null;
+        last_award_date: string | null;
+        top_agencies: Array<{ name: string; amount: number | null }>;
+        top_naics: Array<{ code: string; label: string; amount: number | null }>;
+    };
     // ── V2: surfaced contractor stats + provenance ───────────────────────────
     total_federal_revenue: number | null;   // total_award_volume ?? revenue
     total_federal_awards: number | null;     // total_federal_awards ?? federal_awards_count
@@ -219,6 +229,85 @@ function isExpiringSoon(expiration: unknown, days = 90): boolean {
     return t >= now && t <= now + days * 86400000;
 }
 
+/** Coerce a money-ish value (number | numeric string) to a finite number or null. */
+function toNum(v: unknown): number | null {
+    if (v == null) return null;
+    const n = typeof v === "number" ? v : Number(v);
+    return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Normalize agency_relationships → top-N agencies by amount.
+ * Probed shapes (both observed in prod, all arrays):
+ *   { name, count, amount }           — the common shape
+ *   { agency, count, obligated }      — the older USASpending shape
+ * Also tolerates an object-map ({ "<agency>": amount | {amount|obligated} }).
+ */
+function topAgencies(v: unknown, n = 5): Array<{ name: string; amount: number | null }> {
+    let entries: Array<{ name: string; amount: number | null }> = [];
+    if (Array.isArray(v)) {
+        entries = v
+            .map((e: any) => {
+                if (!e || typeof e !== "object") return null;
+                const name = String(e.name || e.agency || "").trim();
+                if (!name) return null;
+                return { name, amount: toNum(e.amount ?? e.obligated) };
+            })
+            .filter(Boolean) as Array<{ name: string; amount: number | null }>;
+    } else if (v && typeof v === "object") {
+        entries = Object.entries(v as Record<string, any>)
+            .map(([name, val]) => {
+                const nm = String(name || "").trim();
+                if (!nm) return null;
+                const amount =
+                    val && typeof val === "object" ? toNum(val.amount ?? val.obligated) : toNum(val);
+                return { name: nm, amount };
+            })
+            .filter(Boolean) as Array<{ name: string; amount: number | null }>;
+    }
+    return entries
+        .sort((a, b) => (b.amount ?? -1) - (a.amount ?? -1))
+        .slice(0, n);
+}
+
+/**
+ * Normalize naics_awards → top-N NAICS by amount.
+ * Probed shape (array): { code, count, amount, description }.
+ * Prefer the embedded description; fall back to the NAICS label lib.
+ * Also tolerates an object-map ({ "<code>": amount | {amount} }).
+ */
+function topNaics(v: unknown, n = 5): Array<{ code: string; label: string; amount: number | null }> {
+    let entries: Array<{ code: string; label: string; amount: number | null }> = [];
+    const labelFor = (code: string, desc?: unknown): string => {
+        const d = typeof desc === "string" ? desc.trim() : "";
+        return d || getNaicsDescription(code);
+    };
+    if (Array.isArray(v)) {
+        entries = v
+            .map((e: any) => {
+                if (!e || typeof e !== "object") return null;
+                const code = String(e.code || "").trim();
+                if (!code) return null;
+                return { code, label: labelFor(code, e.description), amount: toNum(e.amount) };
+            })
+            .filter(Boolean) as Array<{ code: string; label: string; amount: number | null }>;
+    } else if (v && typeof v === "object") {
+        entries = Object.entries(v as Record<string, any>)
+            .map(([code, val]) => {
+                const c = String(code || "").trim();
+                if (!c) return null;
+                const amount =
+                    val && typeof val === "object" ? toNum(val.amount) : toNum(val);
+                const desc = val && typeof val === "object" ? val.description : undefined;
+                return { code: c, label: labelFor(c, desc), amount };
+            })
+            .filter(Boolean) as Array<{ code: string; label: string; amount: number | null }>;
+    }
+    return entries
+        .sort((a, b) => (b.amount ?? -1) - (a.amount ?? -1))
+        .slice(0, n);
+}
+
 /** Build a full contractor lead row from a DB row. */
 function contractorToLead(c: any): LeadRow {
     const blob = (c.capability_summary_ai || {}) as any;
@@ -229,8 +318,10 @@ function contractorToLead(c: any): LeadRow {
     // real number, when present, hides in the POC/direct/main columns.
     const phone = c.primary_poc_phone || c.direct_phone || c.main_phone || c.phone || null;
     const email = c.email ?? c.primary_poc_email ?? null;
-    const linkedin = c.owner_linkedin ?? c.social_linkedin ?? null;
-    const companyLinkedin = c.company_linkedin ?? null;
+    // owner_linkedin is the PERSON only — never fall back to the company/social page,
+    // which mislabels the company as the owner. company_linkedin carries the company.
+    const linkedin = c.owner_linkedin ?? null;
+    const companyLinkedin = c.company_linkedin ?? c.social_linkedin ?? null;
     const samRegistered: boolean | null =
         typeof c.is_sam_registered === "boolean" ? c.is_sam_registered
         : typeof c.sam_registered === "boolean" ? c.sam_registered
@@ -285,7 +376,15 @@ function contractorToLead(c: any): LeadRow {
         findings_summary: (blob.findings_summary as string) || null,
         owner_linkedin: linkedin,
         company_linkedin: companyLinkedin,
+        sam_entity_url: c.uei ? `https://sam.gov/entity/${c.uei}/coreData` : null,
         has_website: !!c.website,
+        past_awards: {
+            total_count: c.total_federal_awards ?? c.federal_awards_count ?? null,
+            total_volume: c.total_award_volume ?? c.revenue ?? null,
+            last_award_date: c.last_award_date ?? null,
+            top_agencies: topAgencies(c.agency_relationships),
+            top_naics: topNaics(c.naics_awards),
+        },
         total_federal_revenue: c.total_award_volume ?? c.revenue ?? null,
         total_federal_awards: c.total_federal_awards ?? c.federal_awards_count ?? null,
         sam_registered: samRegistered,
@@ -327,7 +426,8 @@ function analysisToLead(a: any): LeadRow {
 
     const email = a.lead_email ?? null;
     const phone = inferred.phone ?? null;
-    const linkedin = inferred.owner_linkedin ?? inferred.social_linkedin ?? null;
+    // owner_linkedin = the PERSON only; the company/social page lives on company_linkedin.
+    const linkedin = inferred.owner_linkedin ?? null;
 
     return {
         id: String(a.id),
@@ -358,8 +458,17 @@ function analysisToLead(a: any): LeadRow {
         loom_url: null,
         findings_summary: null,
         owner_linkedin: linkedin,
-        company_linkedin: inferred.company_linkedin ?? null,
+        company_linkedin: inferred.company_linkedin ?? inferred.social_linkedin ?? null,
+        sam_entity_url: inferred.uei ? `https://sam.gov/entity/${inferred.uei}/coreData` : null,
         has_website: !!a.website,
+        // Inbound (company_analyses) has no SAM/award columns — empty past-awards.
+        past_awards: {
+            total_count: inferred.federal_awards_count ?? null,
+            total_volume: null,
+            last_award_date: null,
+            top_agencies: [],
+            top_naics: [],
+        },
         // Inbound (company_analyses) has no SAM/award columns — null them out.
         total_federal_revenue: null,
         total_federal_awards: inferred.federal_awards_count ?? null,
@@ -367,7 +476,7 @@ function analysisToLead(a: any): LeadRow {
         sam_expiration: null,
         sam_expiring_soon: false,
         known: {
-            linkedin: !!linkedin,
+            linkedin: !!(linkedin || inferred.company_linkedin || inferred.social_linkedin),
             email: !!email,
             phone: !!phone,
             website: !!a.website,
@@ -404,6 +513,7 @@ const CONTRACTOR_COLS =
     "primary_poc_phone, direct_phone, main_phone, phone, " +
     "naics_codes, certifications, sba_certifications, state, city, employee_count, years_in_business, " +
     "federal_awards_count, total_federal_awards, total_award_volume, revenue, " +
+    "naics_awards, agency_relationships, last_award_date, " +
     "is_sam_registered, sam_registered, expiration_date, " +
     "qc_enriched, top_match_count, capability_summary_ai, owner_linkedin, social_linkedin, company_linkedin, " +
     "website_cms, check_analysis_id, research_findings, created_at";
