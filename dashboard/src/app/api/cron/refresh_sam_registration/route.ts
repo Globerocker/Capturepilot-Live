@@ -377,3 +377,6 @@ async function GET_handler(req: NextRequest) {
 }
 
 export const GET = withCronTelemetry("/api/cron/refresh_sam_registration", GET_handler);
+// VPS systemd timer drives this via _runner.mjs (POST). Alias POST → the same
+// guarded handler so the continuous-drain lane isn't 405'd.
+export const POST = GET;

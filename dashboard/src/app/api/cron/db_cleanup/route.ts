@@ -327,3 +327,5 @@ async function GET_handler(req: NextRequest) {
 }
 
 export const GET = withCronTelemetry("/api/cron/db_cleanup", GET_handler);
+// VPS systemd timers POST via _runner.mjs — alias POST so the lane isn't 405'd.
+export const POST = GET;

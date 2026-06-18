@@ -1,0 +1,10 @@
+[Unit]
+Description=Run cp-refresh-sam-registration every 10 minutes (continuous SAM drain)
+
+[Timer]
+OnCalendar=*:0/10
+Persistent=true
+Unit=cp-refresh-sam-registration.service
+
+[Install]
+WantedBy=timers.target

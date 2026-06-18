@@ -23,6 +23,10 @@ const SEND_DATES = ["2026-05-01", "2026-05-05", "2026-05-08"];
  * Targets free/trialing self-service users who haven't subscribed.
  * Uses promo code BETA25 for 25% off forever.
  */
+// VPS systemd timers POST via _runner.mjs — alias POST so the lane isn't 405'd.
+// (GET is a hoisted function declaration, so referencing it here is safe.)
+export const POST = GET;
+
 export async function GET(req: NextRequest) {
     const denied = guardCron(req);
     if (denied) return denied;

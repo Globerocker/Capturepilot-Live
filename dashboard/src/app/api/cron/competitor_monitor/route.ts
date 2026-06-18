@@ -134,3 +134,6 @@ async function GET_handler(req: NextRequest) {
 }
 
 export const GET = withCronTelemetry("/api/cron/competitor_monitor", GET_handler);
+// VPS systemd timers drive this via _runner.mjs, which POSTs. A GET-only App
+// Router route 405s a POST, so alias POST → the same guarded handler.
+export const POST = GET;

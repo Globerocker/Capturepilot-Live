@@ -151,6 +151,10 @@ function extractContactsFromDescription(description: string, noticeId: string): 
     return out;
 }
 
+// VPS systemd timers POST via _runner.mjs — alias POST so the lane isn't 405'd.
+// (GET is a hoisted function declaration, so referencing it here is safe.)
+export const POST = GET;
+
 export async function GET(req: NextRequest) {
     const denied = guardCron(req);
     if (denied) return denied;
