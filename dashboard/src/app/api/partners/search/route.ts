@@ -245,7 +245,7 @@ export async function GET(req: NextRequest) {
                     registration_status: String(reg.registrationStatus || ""),
                     expiration_date: String(reg.registrationExpirationDate || ""),
                     entity_type: String(reg.entityType || ""),
-                    sam_url: `https://sam.gov/entity/${uei}/coreData`,
+                    sam_url: `https://sam.gov/search/?q=${encodeURIComponent(uei)}&index=ei`,
                     poc_name: poc.name,
                     poc_title: poc.title,
                     poc_email: poc.email,

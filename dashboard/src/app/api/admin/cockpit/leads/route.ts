@@ -42,6 +42,16 @@
  *   has_email        '1' → email not null
  *   has_phone        '1' → primary_poc_phone OR direct_phone OR main_phone OR phone not null
  *   has_website      '1' → website not null
+ *   naics            repeated/comma-joined NAICS prefixes (2-6 digits each).
+ *                    Contractors whose naics_codes array OVERLAPS the selected
+ *                    codes match. Exact 6-digit codes use a real array overlap;
+ *                    shorter prefixes ALSO match any code that starts with them
+ *                    (e.g. '23' → 2361..). Pre-cap DB predicate.
+ *   registered_within_months  int → sam_registration_date ≥ now() − N months
+ *                    (recently SAM-registered firms; rows without a
+ *                    registration date simply don't match).
+ *   awarded_within_months     int → last_award_date ≥ now() − N months
+ *                    (firms that won a federal award recently).
  *
  * Single-lead detail: GET ...?id=<contractor_id or analysis_id>&source=...
  *   returns { lead: <full dossier> }.
@@ -61,7 +71,9 @@ import { computeIcpFit, icpTier, type IcpBreakdownItem } from "@/lib/icp-fit";
 import { computeDataGaps } from "@/lib/outreach/match-drop";
 import { LOOM_BY_GAP } from "@/lib/outreach/loom-videos";
 import { toTitleCaseName } from "@/lib/format-name";
-import { getNaicsDescription } from "@/lib/naics-labels";
+import { getNaicsDescription, NAICS_LABELS } from "@/lib/naics-labels";
+import { deriveCapabilityKeywords } from "@/lib/derive-keywords";
+import { FREE_EMAIL_DOMAINS } from "@/lib/lead-validation";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -141,6 +153,15 @@ interface LeadRow {
     company_linkedin: string | null;   // the COMPANY (company_linkedin ?? social_linkedin)
     sam_entity_url: string | null;     // sam.gov coreData page when a UEI is known
     has_website: boolean;
+    /**
+     * Best-effort company website. Prefers a stored URL (website ?? business_url);
+     * when neither exists but a company (non-free-provider) email is on file, we
+     * derive https://<domain> from it. So "info@aveterans.com" surfaces
+     * aveterans.com instead of "not found".
+     */
+    derived_website: string | null;
+    /** Where derived_website came from: 'stored' (real column) | 'email' (likely site) | null. */
+    derived_website_source: "stored" | "email" | null;
     /** Past federal awards + USASpending revenue streams (contractors; null-ish for inbound). */
     past_awards: {
         total_count: number | null;
@@ -436,6 +457,13 @@ function normalizeResearch(v: any): LeadResearch | null {
     };
 }
 
+/** ISO timestamp for `months` months before now (used for the recency filters). */
+function monthsAgoISO(months: number): string {
+    const d = new Date();
+    d.setMonth(d.getMonth() - months);
+    return d.toISOString();
+}
+
 /** True when a SAM registration expiry date falls within the next `days` days. */
 function isExpiringSoon(expiration: unknown, days = 90): boolean {
     if (!expiration) return false;
@@ -598,6 +626,34 @@ function usaSpendingAwardUrl(piid: string | null): string | null {
 }
 
 /**
+ * Best-effort company website resolution. Returns the stored URL when one is on
+ * file (website ?? business_url); otherwise derives https://<domain> from a
+ * company email (email ?? primary_poc_email) when its domain is NOT a free
+ * provider (gmail/yahoo/…). This turns "info@aveterans.com" into aveterans.com
+ * so the cockpit surfaces a likely site instead of "not found".
+ *
+ *   source 'stored'  — came from a real website/business_url column.
+ *   source 'email'   — derived from a company-email domain (label it "likely site").
+ *   source null      — nothing usable.
+ */
+function resolveWebsite(
+    stored: unknown,
+    ...emails: Array<unknown>
+): { url: string | null; source: "stored" | "email" | null } {
+    const s = typeof stored === "string" ? stored.trim() : "";
+    if (s) return { url: s, source: "stored" };
+    for (const e of emails) {
+        const email = typeof e === "string" ? e.trim().toLowerCase() : "";
+        const domain = email.split("@")[1]?.trim() || "";
+        // Need a plausible domain (has a dot) that isn't a free webmail provider.
+        if (domain && domain.includes(".") && !FREE_EMAIL_DOMAINS.has(domain)) {
+            return { url: `https://${domain}`, source: "email" };
+        }
+    }
+    return { url: null, source: null };
+}
+
+/**
  * Fetch the MOST-RECENT fpds_award for a UEI + a total count. Detail-path only.
  * Builds a short human description from the structured fields (FPDS has no free
  * "description" column) and a USASpending keyword-search URL on the PIID.
@@ -659,6 +715,9 @@ function contractorToLead(c: any): LeadRow {
     // real number, when present, hides in the POC/direct/main columns.
     const phone = c.primary_poc_phone || c.direct_phone || c.main_phone || c.phone || null;
     const email = c.email ?? c.primary_poc_email ?? null;
+    // Best-effort site: stored website/business_url, else derived from a company
+    // email domain (email or primary_poc_email). source labels stored vs likely.
+    const web = resolveWebsite(c.website ?? c.business_url, c.email, c.primary_poc_email);
     // owner_linkedin is the PERSON only — never fall back to the company/social page,
     // which mislabels the company as the owner. company_linkedin carries the company.
     const linkedin = c.owner_linkedin ?? null;
@@ -721,8 +780,12 @@ function contractorToLead(c: any): LeadRow {
         findings_summary: (blob.findings_summary as string) || null,
         owner_linkedin: linkedin,
         company_linkedin: companyLinkedin,
-        sam_entity_url: c.uei ? `https://sam.gov/entity/${c.uei}/coreData` : null,
-        has_website: !!c.website,
+        // Search-by-UEI, NOT /entity/{uei}/coreData — the deep-link path wants
+        // SAM's internal entity _id, so a UEI 404s cold. Search always resolves.
+        sam_entity_url: c.uei ? `https://sam.gov/search/?q=${encodeURIComponent(c.uei)}&index=ei` : null,
+        has_website: !!web.url,
+        derived_website: web.url,
+        derived_website_source: web.source,
         past_awards: {
             total_count: c.total_federal_awards ?? c.federal_awards_count ?? null,
             total_volume: c.total_award_volume ?? c.revenue ?? null,
@@ -750,7 +813,7 @@ function contractorToLead(c: any): LeadRow {
             linkedin: !!(linkedin || companyLinkedin),
             email: !!email,
             phone: !!phone,
-            website: !!c.website,
+            website: !!web.url,
         },
         check_analysis_id: c.check_analysis_id ?? null,
         research: normalizeResearch(c.research_findings),
@@ -758,13 +821,17 @@ function contractorToLead(c: any): LeadRow {
         // contractor_websites); left null in the bulk list to avoid N extra reads.
         website_url: null,
         created_at: c.created_at ?? null,
-        // capability_keywords: merge the text[] column with the blob mirror so the
-        // Keywords tab sees the same union the keywords route writes to.
-        capability_keywords: Array.from(
-            new Set([...toStrArray(c.capability_keywords), ...toStrArray(blob.capability_keywords)]
-                .map((k) => k.toLowerCase().trim())
-                .filter(Boolean)),
-        ).sort(),
+        // capability_keywords: merge the text[] column with the blob mirror, then
+        // fall back to NAICS-derived phrases so the Keywords tab is never empty
+        // for a firm whose crawl never produced structured services. The backfill
+        // tool persists these into the column; this is the live safety net.
+        capability_keywords: deriveCapabilityKeywords({
+            existing: [...toStrArray(c.capability_keywords), ...toStrArray(blob.capability_keywords)],
+            services: blob.services,
+            strengths: blob.strengths,
+            naicsLabels: (Array.isArray(c.naics_codes) ? c.naics_codes : [])
+                .map((code: unknown) => NAICS_LABELS[String(code)] || null),
+        }),
     };
 }
 
@@ -791,6 +858,9 @@ function analysisToLead(a: any): LeadRow {
     const phone = inferred.phone ?? null;
     // owner_linkedin = the PERSON only; the company/social page lives on company_linkedin.
     const linkedin = inferred.owner_linkedin ?? null;
+    // Best-effort site: stored analysis website, else derive from the lead email
+    // domain (free-provider domains are skipped, so a gmail lead stays "no site").
+    const web = resolveWebsite(a.website, a.lead_email, inferred.email);
 
     return {
         id: String(a.id),
@@ -824,8 +894,10 @@ function analysisToLead(a: any): LeadRow {
         track_record: [],
         owner_linkedin: linkedin,
         company_linkedin: inferred.company_linkedin ?? inferred.social_linkedin ?? null,
-        sam_entity_url: inferred.uei ? `https://sam.gov/entity/${inferred.uei}/coreData` : null,
-        has_website: !!a.website,
+        sam_entity_url: inferred.uei ? `https://sam.gov/search/?q=${encodeURIComponent(inferred.uei)}&index=ei` : null,
+        has_website: !!web.url,
+        derived_website: web.url,
+        derived_website_source: web.source,
         // Inbound (company_analyses) has no SAM/award columns — empty past-awards.
         past_awards: {
             total_count: inferred.federal_awards_count ?? null,
@@ -855,18 +927,19 @@ function analysisToLead(a: any): LeadRow {
             linkedin: !!(linkedin || inferred.company_linkedin || inferred.social_linkedin),
             email: !!email,
             phone: !!phone,
-            website: !!a.website,
+            website: !!web.url,
         },
         readiness_score: a.readiness_score ?? null,
         check_page_url: `/check/${a.id}`,
         created_at: a.created_at ?? null,
-        // Inbound: pull whatever keywords the inferred profile carries (read-only;
-        // the Keywords tab edit path is contractors-only).
-        capability_keywords: Array.from(
-            new Set([...toStrArray(inferred.capability_keywords), ...toStrArray(inferred.keywords)]
-                .map((k) => k.toLowerCase().trim())
-                .filter(Boolean)),
-        ).sort(),
+        // Inbound: pull whatever keywords the inferred profile carries, then fall
+        // back to NAICS-derived phrases so the tab is never empty (read-only; the
+        // Keywords edit path is contractors-only).
+        capability_keywords: deriveCapabilityKeywords({
+            existing: [...toStrArray(inferred.capability_keywords), ...toStrArray(inferred.keywords)],
+            naicsLabels: (Array.isArray(inferred.naics_codes) ? inferred.naics_codes : [])
+                .map((code: unknown) => NAICS_LABELS[String(code)] || null),
+        }),
     };
 }
 
@@ -892,7 +965,7 @@ function sortLeads(leads: LeadRow[], sort: string): LeadRow[] {
 // ───────────────────────── fetchers ─────────────────────────
 
 const CONTRACTOR_COLS =
-    "id, uei, company_name, website, email, primary_poc_name, primary_poc_email, primary_poc_title, " +
+    "id, uei, company_name, website, business_url, email, primary_poc_name, primary_poc_email, primary_poc_title, " +
     "primary_poc_phone, direct_phone, main_phone, phone, " +
     "naics_codes, capability_keywords, certifications, sba_certifications, state, city, address_line_1, address_line_2, zip_code, " +
     "employee_count, years_in_business, " +
@@ -928,6 +1001,12 @@ interface ContractorFilters {
     hasEmail?: boolean;
     hasPhone?: boolean;
     hasWebsite?: boolean;
+    /** NAICS prefixes (2-6 digits). Contractor matches if its naics_codes array overlaps. */
+    naics?: string[];
+    /** Recently SAM-registered: sam_registration_date ≥ now() − N months. */
+    registeredWithinMonths?: number;
+    /** Awarded recently: last_award_date ≥ now() − N months. */
+    awardedWithinMonths?: number;
 }
 
 async function fetchContractorLeads(
@@ -978,6 +1057,46 @@ async function fetchContractorLeads(
     }
     if (opts.hasEmail) query = query.not("email", "is", null);
     if (opts.hasWebsite) query = query.not("website", "is", null);
+
+    // NAICS multi-select. naics_codes is text[]. Match a contractor whose array
+    // OVERLAPS the selected codes. Full 6-digit codes use a real array overlap
+    // (`ov`); shorter prefixes (e.g. '23' should match '2361..') can't be an
+    // overlap, so they use PostgREST's `like(any)` array operator — true when
+    // ANY element of the array matches the `<prefix>*` pattern. Both forms are
+    // combined into ONE PostgREST .or() so the predicates don't collide
+    // (supabase-js routes every .or() through the same `or=` param) — the whole
+    // selection lives in a single OR group. Pre-cap DB predicate.
+    if (opts.naics && opts.naics.length) {
+        const codes = Array.from(
+            new Set(
+                opts.naics
+                    .map((c) => c.replace(/[^0-9]/g, ""))
+                    .filter((c) => c.length >= 2 && c.length <= 6),
+            ),
+        );
+        if (codes.length) {
+            const exact = codes.filter((c) => c.length === 6);
+            const prefixes = codes.filter((c) => c.length < 6);
+            const orParts: string[] = [];
+            // Exact 6-digit codes → array overlap (cheapest, index-friendly).
+            if (exact.length) orParts.push(`naics_codes.ov.{${exact.join(",")}}`);
+            // Prefixes → any array element starts with the prefix.
+            for (const p of prefixes) orParts.push(`naics_codes.like(any).{${p}*}`);
+            if (orParts.length) query = query.or(orParts.join(","));
+        }
+    }
+
+    // Recently SAM-registered (sam_registration_date is populated by the
+    // SAM-refresh lane; rows without it simply won't match — that's fine).
+    if (opts.registeredWithinMonths != null && opts.registeredWithinMonths > 0) {
+        const cutoff = monthsAgoISO(opts.registeredWithinMonths);
+        query = query.not("sam_registration_date", "is", null).gte("sam_registration_date", cutoff);
+    }
+    // Awarded recently (last_award_date within N months).
+    if (opts.awardedWithinMonths != null && opts.awardedWithinMonths > 0) {
+        const cutoff = monthsAgoISO(opts.awardedWithinMonths);
+        query = query.not("last_award_date", "is", null).gte("last_award_date", cutoff);
+    }
 
     const { data, error } = await query;
     if (error) throw new Error(error.message);
@@ -1166,6 +1285,16 @@ export async function GET(req: NextRequest) {
         return Number.isFinite(n) ? n : undefined;
     };
     const flagParam = (k: string): boolean => sp.get(k) === "1";
+    // NAICS multi-select: accept BOTH repeated ?naics=23&naics=541511 AND a single
+    // comma-joined ?naics=23,541511. Strip non-digits; keep 2-6 digit prefixes.
+    const naicsParam: string[] = Array.from(
+        new Set(
+            sp.getAll("naics")
+                .flatMap((v) => v.split(","))
+                .map((c) => c.replace(/[^0-9]/g, ""))
+                .filter((c) => c.length >= 2 && c.length <= 6),
+        ),
+    );
     const contractorFilters: ContractorFilters = {
         q,
         state,
@@ -1183,6 +1312,9 @@ export async function GET(req: NextRequest) {
         hasEmail: flagParam("has_email"),
         hasPhone: flagParam("has_phone"),
         hasWebsite: flagParam("has_website"),
+        naics: naicsParam.length ? naicsParam : undefined,
+        registeredWithinMonths: numParam("registered_within_months"),
+        awardedWithinMonths: numParam("awarded_within_months"),
     };
 
     try {

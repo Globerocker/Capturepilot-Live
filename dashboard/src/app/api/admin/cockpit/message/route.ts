@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { HUMAN_VOICE_RULES } from "@/lib/llm/humanizer";
 import { assertAdmin } from "@/lib/auth-admin";
 import { getNaicsDescription } from "@/lib/naics-labels";
+import { toTitleCaseName } from "@/lib/format-name";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -118,10 +119,9 @@ export async function POST(req: NextRequest) {
     const unauth = await assertAdmin();
     if (unauth) return unauth;
 
-    const OPENAI_KEY = process.env.OPENAI_API_KEY;
-    if (!OPENAI_KEY) {
-        console.error("[cockpit/message] OPENAI_API_KEY not set");
-        return NextResponse.json({ ok: false, error: "OpenAI not configured" }, { status: 500 });
+    if (!process.env.OPENAI_API_KEY && !process.env.DEEPSEEK_API_KEY) {
+        console.error("[cockpit/message] no LLM key (OPENAI_API_KEY / DEEPSEEK_API_KEY) set");
+        return NextResponse.json({ ok: false, error: "No AI writer configured" }, { status: 500 });
     }
 
     let body: Record<string, unknown>;
@@ -194,8 +194,7 @@ export async function POST(req: NextRequest) {
     const { system, user } = buildPrompt(template, tone, lead, topMatches);
 
     // ── Call OpenAI with retry/backoff on 429/503 ────────────────────────────
-    const ai = await openaiChatJson(OPENAI_KEY, {
-        model: "gpt-4o-mini",
+    const ai = await draftJson({
         temperature: 0.5,
         messages: [
             { role: "system", content: `${HUMAN_VOICE_RULES}\n\n${system}` },
@@ -208,7 +207,7 @@ export async function POST(req: NextRequest) {
         // shows "try again in a few seconds" instead of a raw 500.
         if (ai.code === 429) {
             return NextResponse.json(
-                { ok: false, error: "OpenAI is rate-limited, try again in a few seconds", code: 429 },
+                { ok: false, error: "The writer is busy right now — try again in a few seconds.", code: 429 },
                 { status: 502 },
             );
         }
@@ -261,28 +260,29 @@ type OpenAiResult =
  * up to 3 times (~800ms, ~1600ms, ~3200ms + jitter). On exhaustion returns
  * { ok:false, code:429 } so the caller can surface a friendly retry message.
  */
-async function openaiChatJson(
-    apiKey: string,
+async function chatJsonProvider(
+    cfg: { endpoint: string; apiKey: string; model: string; label: string },
     payload: {
-        model: string;
         temperature: number;
         messages: Array<{ role: string; content: string }>;
     },
 ): Promise<OpenAiResult> {
-    const MAX_ATTEMPTS = 4; // 1 initial + 3 retries
+    const MAX_ATTEMPTS = 3; // 1 initial + 2 retries, then fall to the next provider
     let lastStatus: number | undefined;
 
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
         let res: Response;
         try {
-            res = await fetch("https://api.openai.com/v1/chat/completions", {
+            res = await fetch(cfg.endpoint, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    Authorization: `Bearer ${apiKey}`,
+                    Authorization: `Bearer ${cfg.apiKey}`,
                 },
                 body: JSON.stringify({
-                    ...payload,
+                    model: cfg.model,
+                    temperature: payload.temperature,
+                    messages: payload.messages,
                     response_format: { type: "json_object" },
                 }),
             });
@@ -325,7 +325,30 @@ async function openaiChatJson(
         return { ok: false, status: res.status, error: `OpenAI request failed: ${res.status}` };
     }
 
-    return { ok: false, code: 429, status: lastStatus, error: "OpenAI rate-limited" };
+    return { ok: false, code: 429, status: lastStatus, error: `${cfg.label} rate-limited` };
+}
+
+/**
+ * Draft JSON via the first available provider, falling back on failure. OpenAI
+ * (gpt-4o-mini) is primary; DeepSeek (deepseek-chat, OpenAI-compatible) is the
+ * fallback so a draft still lands when OpenAI is rate-limited ("writer is busy").
+ */
+async function draftJson(payload: {
+    temperature: number;
+    messages: Array<{ role: string; content: string }>;
+}): Promise<OpenAiResult> {
+    const providers: { endpoint: string; apiKey: string; model: string; label: string }[] = [];
+    if (process.env.OPENAI_API_KEY) providers.push({ endpoint: "https://api.openai.com/v1/chat/completions", apiKey: process.env.OPENAI_API_KEY, model: "gpt-4o-mini", label: "OpenAI" });
+    if (process.env.DEEPSEEK_API_KEY) providers.push({ endpoint: "https://api.deepseek.com/chat/completions", apiKey: process.env.DEEPSEEK_API_KEY, model: "deepseek-chat", label: "DeepSeek" });
+    if (!providers.length) return { ok: false, error: "No AI writer configured" };
+    let last: OpenAiResult = { ok: false, code: 429, error: "all writers busy" };
+    for (const p of providers) {
+        const r = await chatJsonProvider(p, payload);
+        if (r.ok) return r;
+        last = r;
+        console.warn(`[cockpit/message] ${p.label} failed (${r.error}) — trying next provider`);
+    }
+    return last;
 }
 
 /** Exponential backoff with jitter: ~800ms, ~1600ms, ~3200ms. */
@@ -371,7 +394,7 @@ function buildPrompt(
 
     const leadContext = `
 LEAD:
-Company: ${lead.company_name}
+Company: ${lead.company_name}   (write the company name AND the person's name in normal Title Case exactly as given here — NEVER ALL-CAPS, even if source data was uppercase)
 First name (use in greeting if present): ${lead.first_name || "unknown — use a plain opener, no name"}
 State: ${lead.state || "unknown"}
 Certifications: ${lead.certifications.length ? lead.certifications.join(", ") : "none found"}
@@ -462,7 +485,9 @@ function buildSoftCta(
 function firstNameOf(fullName: string | null | undefined): string | null {
     const t = (fullName || "").trim();
     if (!t) return null;
-    return t.split(/\s+/)[0] || null;
+    const first = t.split(/\s+/)[0] || null;
+    // SAM stores names ALL-CAPS — normalize so the email never shouts "JOHN".
+    return first ? toTitleCaseName(first) : null;
 }
 
 function normalizeCerts(...arrs: any[]): string[] {
@@ -555,7 +580,7 @@ async function loadContractor(db: any, id: string): Promise<LeadContext> {
         .slice(0, 30);
 
     return {
-        company_name: data.company_name || "your company",
+        company_name: toTitleCaseName(data.company_name) || "your company",
         first_name: firstNameOf(data.primary_poc_name),
         state: data.state || null,
         certifications: normalizeCerts(data.certifications, data.sba_certifications, blob.certifications),
@@ -604,7 +629,7 @@ async function loadAnalysis(db: any, id: string): Promise<LeadContext> {
     const appBase = (process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "").replace(/\/$/, "");
 
     return {
-        company_name: data.company_name || "your company",
+        company_name: toTitleCaseName(data.company_name) || "your company",
         first_name: firstNameOf(inferred.contact_person),
         state: inferred.state || null,
         certifications: normalizeCerts(inferred.sba_certifications, inferred.certifications),

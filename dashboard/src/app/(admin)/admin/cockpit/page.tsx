@@ -58,6 +58,7 @@ import clsx from "clsx";
 import CallButton, { type SavedCallLog } from "@/components/CallButton";
 import { buildCapabilityPdf, type CapSection, type CapMetadata } from "@/components/capability/pdfBuilder";
 import { certInfo } from "@/lib/cert-glossary";
+import { NAICS_CODES, searchNaics } from "@/lib/naics-codes";
 
 // ───────────────────────── shared shapes (mirror the leads API) ─────────────
 
@@ -111,6 +112,10 @@ interface Lead {
     company_name: string | null;
     legal_name?: string | null;
     website: string | null;
+    /** Best-effort site: stored URL, else derived from a company email domain. */
+    derived_website?: string | null;
+    /** 'stored' (real column) | 'email' (likely site, label it) | null. */
+    derived_website_source?: "stored" | "email" | null;
     state: string | null;
     employee_count: number | null;
     years_in_business: number | null;
@@ -195,7 +200,7 @@ const TIER_STYLE: Record<Lead["icp_tier"], string> = {
 };
 
 const FIT_TOOLTIP =
-    "Fit (A/B/C) = the founder's ICP: veteran-owned + 8(a)/HUBZone/WOSB + 1-50 staff + 1-5 prior federal awards. A = bullseye, C = deprioritize.";
+    "ICP fit — how good a CUSTOMER they are for us: veteran-owned + 8(a) + ≤50 staff + 1–5 past awards. (Separate from the match %, which is what they could win.)";
 
 /** Title-case a company name without mangling acronyms / mixed-case brands. */
 function toTitleCaseCompany(name: string | null | undefined): string {
@@ -233,6 +238,11 @@ function formatDeadline(d: string | null): string {
 
 function normalizeWebsiteHref(site: string): string {
     return /^https?:\/\//i.test(site) ? site : `https://${site}`;
+}
+
+/** A clean tel: href from a free-form phone string (keeps digits + leading +). */
+function telHref(phone: string): string {
+    return `tel:${phone.replace(/[^\d+]/g, "")}`;
 }
 
 function compactCurrency(n: number | string | null | undefined): string | null {
@@ -399,6 +409,12 @@ interface Filters {
     hasPhone: boolean;
     hasWebsite: boolean;
     onlyWithMatches: boolean;
+    /** Selected NAICS codes (2-6 digit). Wired to the leads API repeated `naics` param. */
+    naics: string[];
+    /** "Registered on SAM in last N months" → registered_within_months. "" = off. */
+    registeredWithinMonths: string;
+    /** "Awarded in last 12 months" toggle → awarded_within_months=12. */
+    awardedLast12mo: boolean;
 }
 
 const EMPTY_FILTERS: Filters = {
@@ -407,6 +423,7 @@ const EMPTY_FILTERS: Filters = {
     samRegistered: false, expiringSoon: false,
     hasLinkedin: false, hasEmail: false, hasPhone: false, hasWebsite: false,
     onlyWithMatches: true,
+    naics: [], registeredWithinMonths: "", awardedLast12mo: false,
 };
 
 /** One-line "why" a rep reads at a glance on each queue row. */
@@ -433,6 +450,15 @@ function whyLine(l: Lead): string {
 type TabKey = "company" | "matches" | "keywords" | "assets";
 type LeadSource = "contractors" | "inbound" | "saved";
 
+// Resizable left-rail bounds (lg+). Width persists to localStorage.
+const RAIL_STORAGE_KEY = "cp_cockpit_rail_w";
+const RAIL_MIN_W = 300;
+const RAIL_MAX_W = 560;
+const RAIL_DEFAULT_W = 380;
+function clampRailWidth(n: number): number {
+    return Math.max(RAIL_MIN_W, Math.min(RAIL_MAX_W, Math.round(n)));
+}
+
 export default function CockpitPage() {
     // Queue state
     const [leads, setLeads] = useState<Lead[]>([]);
@@ -455,6 +481,48 @@ export default function CockpitPage() {
     // Sender (email identity) modal
     const [senderOpen, setSenderOpen] = useState(false);
     const [senderConfigured, setSenderConfigured] = useState<boolean | null>(null);
+
+    // Resizable left rail (lg+). Persisted to localStorage; clamped 300–560px.
+    // The custom width only applies on lg+ (mobile keeps the full-width slide-over).
+    const [railWidth, setRailWidth] = useState(RAIL_DEFAULT_W);
+    const [resizing, setResizing] = useState(false);
+    const [isLg, setIsLg] = useState(false);
+    useEffect(() => {
+        try {
+            const raw = localStorage.getItem(RAIL_STORAGE_KEY);
+            if (raw) {
+                const n = Number(raw);
+                if (Number.isFinite(n)) setRailWidth(clampRailWidth(n));
+            }
+        } catch { /* localStorage unavailable */ }
+        if (typeof window === "undefined" || !window.matchMedia) return;
+        const mq = window.matchMedia("(min-width: 1024px)");
+        const onChange = () => setIsLg(mq.matches);
+        onChange();
+        mq.addEventListener("change", onChange);
+        return () => mq.removeEventListener("change", onChange);
+    }, []);
+    const startResize = useCallback((e: React.PointerEvent) => {
+        e.preventDefault();
+        setResizing(true);
+        const startX = e.clientX;
+        const startW = railWidth;
+        const onMove = (ev: PointerEvent) => {
+            const next = clampRailWidth(startW + (ev.clientX - startX));
+            setRailWidth(next);
+        };
+        const onUp = () => {
+            setResizing(false);
+            window.removeEventListener("pointermove", onMove);
+            window.removeEventListener("pointerup", onUp);
+            setRailWidth(w => {
+                try { localStorage.setItem(RAIL_STORAGE_KEY, String(w)); } catch { /* ignore */ }
+                return w;
+            });
+        };
+        window.addEventListener("pointermove", onMove);
+        window.addEventListener("pointerup", onUp);
+    }, [railWidth]);
 
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -490,6 +558,11 @@ export default function CockpitPage() {
             if (filters.hasEmail) params.set("has_email", "1");
             if (filters.hasPhone) params.set("has_phone", "1");
             if (filters.hasWebsite) params.set("has_website", "1");
+            // NAICS multi-select → repeated `naics` params (API accepts repeated/comma).
+            for (const code of filters.naics) params.append("naics", code);
+            // Recently SAM-registered (last N months) + awarded in last 12 months.
+            if (filters.registeredWithinMonths) params.set("registered_within_months", filters.registeredWithinMonths);
+            if (filters.awardedLast12mo) params.set("awarded_within_months", "12");
         }
         try {
             const res = await fetch(`/api/admin/cockpit/leads?${params}`);
@@ -631,6 +704,9 @@ export default function CockpitPage() {
         if (filters.hasEmail) n++;
         if (filters.hasPhone) n++;
         if (filters.hasWebsite) n++;
+        if (filters.naics.length) n++;
+        if (filters.registeredWithinMonths) n++;
+        if (filters.awardedLast12mo) n++;
         return n;
     }, [filters]);
 
@@ -676,12 +752,13 @@ export default function CockpitPage() {
             </header>
 
             {/* Body: two-pane on lg+, single pane (list ⇄ detail) on mobile */}
-            <div className="flex-1 min-h-0 flex">
+            <div className={clsx("flex-1 min-h-0 flex", resizing && "select-none cursor-col-resize")}>
                 {/* ───────── LEFT: lead queue ───────── */}
                 <aside
+                    style={isLg ? { width: railWidth } : undefined}
                     className={clsx(
                         "flex flex-col min-h-0 bg-white border-r border-stone-200",
-                        "w-full lg:w-[360px] xl:w-[380px] shrink-0",
+                        "w-full lg:shrink-0",
                         // On mobile, hide the list once a lead is selected.
                         detail ? "hidden lg:flex" : "flex",
                     )}
@@ -743,6 +820,24 @@ export default function CockpitPage() {
                         )}
                     </div>
                 </aside>
+
+                {/* ───────── Drag handle (lg+ only) — resize the queue rail ───────── */}
+                <div
+                    role="separator"
+                    aria-orientation="vertical"
+                    aria-label="Resize the lead queue"
+                    onPointerDown={startResize}
+                    className={clsx(
+                        "hidden lg:flex shrink-0 w-1.5 cursor-col-resize items-center justify-center group relative -ml-px z-10",
+                        resizing ? "bg-orange-200" : "hover:bg-orange-100",
+                    )}
+                    title="Drag to resize"
+                >
+                    <span className={clsx(
+                        "h-10 w-0.5 rounded-full transition-colors",
+                        resizing ? "bg-orange-500" : "bg-stone-300 group-hover:bg-orange-400",
+                    )} />
+                </div>
 
                 {/* ───────── RIGHT: per-lead detail ───────── */}
                 <section
@@ -908,6 +1003,31 @@ function QueueFilters({
                                 />
                             </div>
 
+                            {/* NAICS multi-select — searchable by code or keyword, chips below. */}
+                            <NaicsMultiSelect
+                                selected={filters.naics}
+                                onChange={(codes) => setF("naics", codes)}
+                            />
+
+                            {/* SAM registration recency. */}
+                            <div>
+                                <FieldLabel>Registered on SAM in last…</FieldLabel>
+                                <select
+                                    value={filters.registeredWithinMonths}
+                                    onChange={e => setF("registeredWithinMonths", e.target.value)}
+                                    aria-label="Registered on SAM within the last N months"
+                                    className="w-full mt-1 px-2 py-1.5 text-sm rounded-lg border border-stone-200 bg-white focus:outline-none focus:border-stone-400"
+                                >
+                                    <option value="">Any time</option>
+                                    <option value="3">3 months</option>
+                                    <option value="6">6 months</option>
+                                    <option value="12">12 months</option>
+                                    <option value="24">24 months</option>
+                                </select>
+                            </div>
+
+                            <CheckRow label="Awarded in last 12 months" checked={filters.awardedLast12mo} onChange={v => setF("awardedLast12mo", v)} />
+
                             <div className="grid grid-cols-2 gap-2 pt-1">
                                 <CheckRow label="SAM registered" checked={filters.samRegistered} onChange={v => setF("samRegistered", v)} />
                                 <CheckRow label="Reg. expiring soon" checked={filters.expiringSoon} onChange={v => setF("expiringSoon", v)} />
@@ -967,6 +1087,105 @@ function CheckRow({ label, checked, onChange }: { label: string; checked: boolea
             <input type="checkbox" checked={checked} onChange={() => onChange(!checked)} className="rounded border-stone-300" />
             {label}
         </label>
+    );
+}
+
+/**
+ * Searchable NAICS multi-select for the cockpit filter panel. Mirrors the
+ * partners-page picker: a disclosure button → search box (code + keyword aliases
+ * via searchNaics) → checkable list, with removable chips below. Selected codes
+ * flow to the leads API as repeated `naics` params (contractor-pool predicate).
+ */
+function NaicsMultiSelect({ selected, onChange }: { selected: string[]; onChange: (codes: string[]) => void }) {
+    const [open, setOpen] = useState(false);
+    const [query, setQuery] = useState("");
+    const ref = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (!open) return;
+        const onDoc = (e: MouseEvent) => {
+            if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+        };
+        document.addEventListener("mousedown", onDoc);
+        return () => document.removeEventListener("mousedown", onDoc);
+    }, [open]);
+
+    const results = useMemo(() => {
+        if (!query.trim()) return NAICS_CODES.filter(n => n.popular).slice(0, 30);
+        return searchNaics(query).slice(0, 50);
+    }, [query]);
+
+    const toggle = (code: string) => {
+        onChange(selected.includes(code) ? selected.filter(c => c !== code) : [...selected, code]);
+    };
+
+    return (
+        <div ref={ref} className="relative">
+            <FieldLabel>NAICS codes</FieldLabel>
+            <button
+                type="button"
+                onClick={() => setOpen(v => !v)}
+                className="w-full mt-1 px-2 py-1.5 text-sm rounded-lg border border-stone-200 hover:border-stone-300 text-left flex items-center justify-between"
+            >
+                <span className="truncate">
+                    {selected.length === 0
+                        ? <span className="text-stone-400">Any NAICS</span>
+                        : <span className="font-medium text-stone-700">{selected.length} selected</span>}
+                </span>
+                <ChevronDown className={clsx("w-4 h-4 text-stone-400 transition-transform shrink-0 ml-2", open && "rotate-180")} />
+            </button>
+
+            {selected.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-1.5">
+                    {selected.map(c => (
+                        <span key={c} className="inline-flex items-center bg-stone-800 text-white text-[10px] font-mono px-2 py-0.5 rounded-full">
+                            {c}
+                            <button type="button" onClick={() => toggle(c)} className="ml-1.5 hover:text-rose-300" title={`Remove ${c}`} aria-label={`Remove ${c}`}>
+                                <X className="w-2.5 h-2.5" />
+                            </button>
+                        </span>
+                    ))}
+                </div>
+            )}
+
+            {open && (
+                <div className="absolute z-30 left-0 right-0 mt-1 bg-white border border-stone-200 rounded-xl shadow-lg max-h-72 overflow-hidden flex flex-col">
+                    <div className="p-2 border-b border-stone-100">
+                        <input
+                            autoFocus
+                            type="text"
+                            value={query}
+                            onChange={e => setQuery(e.target.value)}
+                            placeholder="Search code or keyword (IT, janitorial, HVAC…)"
+                            className="w-full border border-stone-200 rounded-lg px-2.5 py-1.5 text-sm outline-none focus:ring-2 focus:ring-stone-900/10"
+                        />
+                    </div>
+                    <div className="overflow-y-auto flex-1">
+                        {results.length === 0 ? (
+                            <p className="text-xs text-stone-400 p-4 text-center">No matches</p>
+                        ) : (
+                            results.map(n => (
+                                <button
+                                    type="button"
+                                    key={n.code}
+                                    onClick={() => toggle(n.code)}
+                                    className={clsx(
+                                        "w-full text-left px-2.5 py-2 text-sm hover:bg-stone-50 flex items-center gap-2 border-b border-stone-50 last:border-0",
+                                        selected.includes(n.code) && "bg-emerald-50",
+                                    )}
+                                >
+                                    {selected.includes(n.code)
+                                        ? <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                        : <span className="w-3.5 shrink-0" />}
+                                    <span className="font-mono text-xs text-stone-500 shrink-0">{n.code}</span>
+                                    <span className="text-xs truncate">{n.label}</span>
+                                </button>
+                            ))
+                        )}
+                    </div>
+                </div>
+            )}
+        </div>
     );
 }
 
@@ -1245,26 +1464,34 @@ function CompanyTab({
             {/* TOP ACTION BAR */}
             <div className="flex flex-wrap items-center gap-2">
                 <HubspotButton lead={lead} notes={notes} transcript={transcript} />
-                {/* Call — opens the call-notes modal AND auto-starts recording on mount. */}
-                <button
-                    type="button"
-                    onClick={onStartCall}
-                    className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3.5 py-2 rounded-lg text-sm"
-                    title="Open the notepad and start recording the call"
-                >
-                    <PhoneCall className="w-4 h-4" /> Call
-                </button>
+                {/* Call — only when we actually have a number to dial. Clicking dials
+                    the rep's device (tel:) AND opens the notepad with transcription
+                    auto-started. No phone → no button (nothing to call). */}
+                {lead.contact.phone && (
+                    <a
+                        href={telHref(lead.contact.phone)}
+                        onClick={onStartCall}
+                        className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3.5 py-2 rounded-lg text-sm"
+                        title={`Call ${lead.contact.phone} — dials your phone and opens the notepad`}
+                    >
+                        <PhoneCall className="w-4 h-4" /> Call
+                    </a>
+                )}
                 {/* Research & fill gaps — moved up from the bottom card (contractors only). */}
                 {isContractor && <ResearchButton lead={lead} onRefresh={onRefresh} refreshing={loading} />}
-                {lead.website ? (
+                {lead.derived_website ? (
                     <a
-                        href={normalizeWebsiteHref(lead.website)}
+                        href={normalizeWebsiteHref(lead.derived_website)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-2 bg-violet-600 hover:bg-violet-700 text-white font-bold px-3.5 py-2 rounded-lg text-sm"
-                        title="Open their site to record a Loom walkthrough"
+                        title={lead.derived_website_source === "email"
+                            ? `Likely site (from their email domain) — ${lead.derived_website}`
+                            : "Open their site to record a Loom walkthrough"}
                     >
-                        <Video className="w-4 h-4" /> Open their website <ExternalLink className="w-3.5 h-3.5" />
+                        <Video className="w-4 h-4" />
+                        {lead.derived_website_source === "email" ? "Open likely site" : "Open their website"}
+                        <ExternalLink className="w-3.5 h-3.5" />
                     </a>
                 ) : (
                     <span className="inline-flex items-center gap-2 bg-stone-100 text-stone-400 font-bold px-3.5 py-2 rounded-lg text-sm cursor-not-allowed" title="No website on file">
@@ -1291,7 +1518,7 @@ function CompanyTab({
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
                 {/* LEFT COLUMN */}
                 <div className="space-y-4 min-w-0">
-                    <ContactCard lead={lead} onOpenCall={onOpenCall} />
+                    <ContactCard lead={lead} onStartCall={onStartCall} />
                     <CompanyDetailCard lead={lead} notes={notes} setNotes={setNotes} />
                     <FirmographicsCard lead={lead} />
                     {isContractor && <PastAwardsCard lead={lead} />}
@@ -1498,7 +1725,7 @@ function pickBestMatch(lead: Lead): LeadTopMatch | null {
 }
 
 // ── Contact block ────────────────────────────────────────────────────────────────
-function ContactCard({ lead, onOpenCall }: { lead: Lead; onOpenCall: () => void }) {
+function ContactCard({ lead, onStartCall }: { lead: Lead; onStartCall: () => void }) {
     const trackRecord = Array.isArray(lead.track_record) ? lead.track_record : [];
     return (
         <Card>
@@ -1521,24 +1748,36 @@ function ContactCard({ lead, onOpenCall }: { lead: Lead; onOpenCall: () => void 
                 <div>
                     <FieldLabel>Phone</FieldLabel>
                     {lead.contact.phone ? (
-                        <button
-                            type="button"
-                            onClick={onOpenCall}
+                        <a
+                            href={telHref(lead.contact.phone)}
+                            onClick={onStartCall}
                             className="text-blue-700 hover:underline inline-flex items-center gap-1.5 mt-0.5"
-                            title="Open call notes"
+                            title={`Call ${lead.contact.phone} — dials your phone and opens the notepad`}
                         >
                             <Phone className="w-3.5 h-3.5" /> {lead.contact.phone}
-                        </button>
+                        </a>
                     ) : (
-                        <span className="text-stone-400 mt-0.5 block">—</span>
+                        <span className="text-stone-400 mt-0.5 block">No phone on file</span>
                     )}
                 </div>
                 <div>
                     <FieldLabel>Website</FieldLabel>
-                    {lead.website ? (
-                        <a href={normalizeWebsiteHref(lead.website)} target="_blank" rel="noopener noreferrer" className="text-blue-700 hover:underline inline-flex items-center gap-1.5 break-all mt-0.5">
-                            <Globe className="w-3.5 h-3.5 shrink-0" /> {lead.website} <ExternalLink className="w-3 h-3" />
-                        </a>
+                    {lead.derived_website ? (
+                        <>
+                            <a
+                                href={normalizeWebsiteHref(lead.derived_website)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-700 hover:underline inline-flex items-center gap-1.5 break-all mt-0.5"
+                                title={lead.derived_website_source === "email" ? "Derived from their email domain — verify before sharing" : undefined}
+                            >
+                                <Globe className="w-3.5 h-3.5 shrink-0" />
+                                {lead.derived_website.replace(/^https?:\/\//i, "")} <ExternalLink className="w-3 h-3" />
+                            </a>
+                            {lead.derived_website_source === "email" && (
+                                <span className="block text-[11px] text-stone-400 mt-0.5">likely site (from email)</span>
+                            )}
+                        </>
                     ) : (
                         <span className="text-amber-700 inline-flex items-center gap-1.5 mt-0.5">
                             <AlertTriangle className="w-3.5 h-3.5" /> No website found

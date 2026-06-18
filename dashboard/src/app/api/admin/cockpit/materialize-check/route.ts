@@ -331,7 +331,7 @@ export async function POST(req: NextRequest) {
     // the contractor has no site so the insert never fails.
     const website =
         contractor.website ||
-        (contractor.uei ? `https://sam.gov/entity/${contractor.uei}` : "https://capturepilot.com");
+        (contractor.uei ? `https://sam.gov/search/?q=${encodeURIComponent(contractor.uei)}&index=ei` : "https://capturepilot.com");
 
     const analysisRow: Record<string, any> = {
         company_name: contractor.company_name || "Unnamed contractor",
