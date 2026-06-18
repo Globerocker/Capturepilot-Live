@@ -52,10 +52,12 @@ import {
     ChevronRight, MapPin, FileText, Wand2, RotateCcw, Download, X,
     Star, LayoutTemplate, Package, ArrowLeft, Settings,
     DollarSign, CalendarClock, BadgeCheck, Info, ChevronDown, SlidersHorizontal,
+    Tag, Plus, PhoneCall,
 } from "lucide-react";
 import clsx from "clsx";
 import CallButton, { type SavedCallLog } from "@/components/CallButton";
 import { buildCapabilityPdf, type CapSection, type CapMetadata } from "@/components/capability/pdfBuilder";
+import { certInfo } from "@/lib/cert-glossary";
 
 // ───────────────────────── shared shapes (mirror the leads API) ─────────────
 
@@ -76,7 +78,14 @@ interface LeadTopMatch {
     opp_id: string | null;
     set_aside?: string | null;
     value?: number | string | null;
-    why?: string | null;
+    /** REAL canonical URL (opportunities.link, the 404 fix); null when broken/unknown. */
+    real_link?: string | null;
+    /** Trimmed solicitation description (~400 chars). */
+    description?: string | null;
+    /** Top extracted keywords for the opp. */
+    keywords?: string[];
+    /** 1-3 plain "why it fits" bullets. */
+    why?: string[];
 }
 
 interface ResearchSource {
@@ -131,6 +140,20 @@ interface Lead {
         top_agencies: Array<{ name: string; amount: number | null }>;
         top_naics: Array<{ code: string; label: string; amount: number | null }>;
     };
+    /** The single most-recent FPDS award (contractors, detail path only). */
+    last_award?: {
+        date: string | null;
+        agency: string | null;
+        amount: number | null;
+        naics: string | null;
+        description: string | null;
+        piid: string | null;
+        url: string | null;
+    } | null;
+    awards_count?: number | null;
+    company_address?: string | null;
+    company_history?: string | null;
+    estimated_revenue?: number | null;
     has_website: boolean;
     total_federal_revenue?: number | null;
     total_federal_awards?: number | null;
@@ -144,6 +167,10 @@ interface Lead {
     research?: LeadResearch | null;
     website_url?: string | null;
     created_at?: string | null;
+    /** This admin has starred the contractor (contractors source only). */
+    saved?: boolean;
+    /** Contractor capability keywords (text[], migration 183). */
+    capability_keywords?: string[];
 }
 
 type Tone = "warm_intro" | "short" | "call_heads_up";
@@ -218,13 +245,6 @@ function compactCurrency(n: number | string | null | undefined): string | null {
     }
 }
 
-/** Build a sam.gov opportunity URL from an opp_id (skips obvious non-ids). */
-function samOppUrl(oppId: string | null | undefined): string | null {
-    const id = (oppId || "").trim();
-    if (!id) return null;
-    return `https://sam.gov/opp/${encodeURIComponent(id)}/view`;
-}
-
 // ───────────────────────── filter state ─────────────────────────
 
 interface Filters {
@@ -276,7 +296,8 @@ function whyLine(l: Lead): string {
 
 // ───────────────────────── page ─────────────────────────
 
-type TabKey = "company" | "matches" | "assets";
+type TabKey = "company" | "matches" | "keywords" | "assets";
+type LeadSource = "contractors" | "inbound" | "saved";
 
 export default function CockpitPage() {
     // Queue state
@@ -287,7 +308,7 @@ export default function CockpitPage() {
     const [queueError, setQueueError] = useState<string | null>(null);
 
     // Filters
-    const [source, setSource] = useState<"contractors" | "inbound">("contractors");
+    const [source, setSource] = useState<LeadSource>("contractors");
     const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
     const [filtersOpen, setFiltersOpen] = useState(false);
 
@@ -389,7 +410,7 @@ export default function CockpitPage() {
     }, []);
 
     // ── Detail fetch (also patches the queue row in place) ─────────────────────
-    const fetchDetail = useCallback(async (id: string, leadSource: "contractors" | "inbound") => {
+    const fetchDetail = useCallback(async (id: string, leadSource: LeadSource) => {
         setDetailError(null);
         setLoadingDetail(true);
         try {
@@ -414,14 +435,53 @@ export default function CockpitPage() {
         await fetchDetail(lead.id, lead.source);
     }, [fetchDetail]);
 
-    const switchSource = (s: "contractors" | "inbound") => {
+    const switchSource = (s: LeadSource) => {
         setSource(s);
         setSelectedId(null);
         setDetail(null);
     };
 
+    /** Patch a single field of the selected detail + its queue row (e.g. star toggle). */
+    const patchDetail = useCallback((partial: Partial<Lead>) => {
+        setDetail(prev => {
+            if (!prev) return prev;
+            const next = { ...prev, ...partial };
+            patchLeadInQueue(next);
+            return next;
+        });
+    }, [patchLeadInQueue]);
+
     const clearFilters = () =>
         setFilters(prev => ({ ...EMPTY_FILTERS, onlyWithMatches: prev.onlyWithMatches }));
+
+    /**
+     * Toggle the saved-star for a contractor. Optimistically patches the queue row
+     * (and the detail if it's the selected lead), then fires the POST. On the
+     * "Saved" source we drop an un-saved lead from the list immediately.
+     */
+    const toggleSaved = useCallback(async (lead: Lead) => {
+        if (lead.source !== "contractors") return;
+        const nextSaved = !lead.saved;
+        // Optimistic UI.
+        setLeads(prev => {
+            if (source === "saved" && !nextSaved) {
+                return prev.filter(l => !(l.id === lead.id && l.source === lead.source));
+            }
+            return prev.map(l => (l.id === lead.id && l.source === lead.source ? { ...l, saved: nextSaved } : l));
+        });
+        setDetail(prev => (prev && prev.id === lead.id && prev.source === lead.source ? { ...prev, saved: nextSaved } : prev));
+        try {
+            await fetch("/api/admin/cockpit/saved", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ contractor_id: lead.id, action: nextSaved ? "save" : "unsave" }),
+            });
+        } catch {
+            // Roll back on failure.
+            setLeads(prev => prev.map(l => (l.id === lead.id && l.source === lead.source ? { ...l, saved: lead.saved } : l)));
+            setDetail(prev => (prev && prev.id === lead.id && prev.source === lead.source ? { ...prev, saved: lead.saved } : prev));
+        }
+    }, [source]);
 
     const activeFilterCount = useMemo(() => {
         let n = 0;
@@ -542,6 +602,7 @@ export default function CockpitPage() {
                                         lead={lead}
                                         selected={selectedId === lead.id}
                                         onClick={() => selectLead(lead)}
+                                        onToggleSaved={() => toggleSaved(lead)}
                                     />
                                 ))}
                             </ul>
@@ -573,6 +634,8 @@ export default function CockpitPage() {
                             onOpenSender={() => setSenderOpen(true)}
                             onRefresh={() => fetchDetail(detail.id, detail.source)}
                             onBack={() => { setSelectedId(null); setDetail(null); }}
+                            onToggleSaved={() => toggleSaved(detail)}
+                            onPatchDetail={patchDetail}
                         />
                     )}
                 </section>
@@ -589,8 +652,8 @@ function QueueFilters({
     source, onSwitchSource, filters, setF, filtersOpen, setFiltersOpen,
     activeFilterCount, total, onClear,
 }: {
-    source: "contractors" | "inbound";
-    onSwitchSource: (s: "contractors" | "inbound") => void;
+    source: LeadSource;
+    onSwitchSource: (s: LeadSource) => void;
     filters: Filters;
     setF: <K extends keyof Filters>(k: K, v: Filters[K]) => void;
     filtersOpen: boolean;
@@ -600,30 +663,29 @@ function QueueFilters({
     onClear: () => void;
 }) {
     const isContractors = source === "contractors";
+    const SOURCES: { key: LeadSource; label: string }[] = [
+        { key: "contractors", label: "Our DB" },
+        { key: "inbound", label: "Inbound" },
+        { key: "saved", label: "Saved" },
+    ];
     return (
         <div className="border-b border-stone-200 p-3 space-y-2.5 shrink-0">
             {/* Source toggle */}
-            <div className="grid grid-cols-2 gap-1 bg-stone-100 rounded-xl p-1">
-                <button
-                    type="button"
-                    onClick={() => onSwitchSource("contractors")}
-                    className={clsx(
-                        "px-3 py-1.5 rounded-lg text-sm font-bold transition-colors",
-                        isContractors ? "bg-white text-stone-900 shadow-sm" : "text-stone-500 hover:text-stone-700",
-                    )}
-                >
-                    Our DB
-                </button>
-                <button
-                    type="button"
-                    onClick={() => onSwitchSource("inbound")}
-                    className={clsx(
-                        "px-3 py-1.5 rounded-lg text-sm font-bold transition-colors",
-                        !isContractors ? "bg-white text-stone-900 shadow-sm" : "text-stone-500 hover:text-stone-700",
-                    )}
-                >
-                    Inbound
-                </button>
+            <div className="grid grid-cols-3 gap-1 bg-stone-100 rounded-xl p-1">
+                {SOURCES.map(({ key, label }) => (
+                    <button
+                        key={key}
+                        type="button"
+                        onClick={() => onSwitchSource(key)}
+                        className={clsx(
+                            "px-2 py-1.5 rounded-lg text-sm font-bold transition-colors inline-flex items-center justify-center gap-1",
+                            source === key ? "bg-white text-stone-900 shadow-sm" : "text-stone-500 hover:text-stone-700",
+                        )}
+                    >
+                        {key === "saved" && <Star className={clsx("w-3.5 h-3.5", source === key && "fill-amber-400 text-amber-400")} />}
+                        {label}
+                    </button>
+                ))}
             </div>
 
             {/* Search + state */}
@@ -776,45 +838,61 @@ function CheckRow({ label, checked, onChange }: { label: string; checked: boolea
 
 // ───────────────────────── LEFT: a single lead row ─────────────────────────
 
-function LeadRow({ lead, selected, onClick }: { lead: Lead; selected: boolean; onClick: () => void }) {
+function LeadRow({ lead, selected, onClick, onToggleSaved }: { lead: Lead; selected: boolean; onClick: () => void; onToggleSaved: () => void }) {
+    const canSave = lead.source === "contractors";
     return (
         <li>
-            <button
-                type="button"
-                onClick={onClick}
+            <div
                 className={clsx(
-                    "w-full text-left px-3 py-2.5 hover:bg-stone-50 transition-colors flex items-start gap-3",
+                    "w-full px-3 py-2.5 hover:bg-stone-50 transition-colors flex items-start gap-3",
                     selected && "bg-orange-50/70 hover:bg-orange-50",
                 )}
             >
-                <div
-                    className={clsx(
-                        "shrink-0 w-9 h-9 rounded-xl border flex flex-col items-center justify-center font-black leading-none",
-                        TIER_STYLE[lead.icp_tier],
-                    )}
-                    title={`ICP fit ${lead.icp_score}/100`}
-                >
-                    <span className="text-sm">{lead.icp_tier}</span>
-                    <span className="text-[9px] font-bold opacity-70">{lead.icp_score}</span>
-                </div>
-
-                <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                        <span className="font-bold text-stone-800 truncate">{toTitleCaseCompany(lead.company_name) || "Unnamed company"}</span>
-                        {lead.best_match_pct != null && (
-                            <span className="shrink-0 text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 rounded px-1.5 py-0.5">
-                                {lead.best_match_pct}%
-                            </span>
+                <button type="button" onClick={onClick} className="flex items-start gap-3 min-w-0 flex-1 text-left">
+                    <div
+                        className={clsx(
+                            "shrink-0 w-9 h-9 rounded-xl border flex flex-col items-center justify-center font-black leading-none",
+                            TIER_STYLE[lead.icp_tier],
                         )}
+                        title={`ICP fit ${lead.icp_score}/100`}
+                    >
+                        <span className="text-sm">{lead.icp_tier}</span>
+                        <span className="text-[9px] font-bold opacity-70">{lead.icp_score}</span>
                     </div>
-                    <p className="text-xs text-stone-500 mt-0.5 truncate">{whyLine(lead)}</p>
-                    <div className="flex items-center gap-2 mt-1">
-                        {lead.state && <span className="text-[10px] text-stone-400">{lead.state}</span>}
-                        <PresenceDots lead={lead} />
+
+                    <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                            <span className="font-bold text-stone-800 truncate">{toTitleCaseCompany(lead.company_name) || "Unnamed company"}</span>
+                            {lead.best_match_pct != null && (
+                                <span className="shrink-0 text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 rounded px-1.5 py-0.5">
+                                    {lead.best_match_pct}%
+                                </span>
+                            )}
+                        </div>
+                        <p className="text-xs text-stone-500 mt-0.5 truncate">{whyLine(lead)}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                            {lead.state && <span className="text-[10px] text-stone-400">{lead.state}</span>}
+                            <PresenceDots lead={lead} />
+                        </div>
                     </div>
+                </button>
+                <div className="flex flex-col items-center gap-1 shrink-0">
+                    {canSave && (
+                        <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); onToggleSaved(); }}
+                            title={lead.saved ? "Remove from saved" : "Save to shortlist"}
+                            aria-label={lead.saved ? "Remove from saved" : "Save to shortlist"}
+                            className="p-1 rounded-lg hover:bg-stone-100"
+                        >
+                            <Star className={clsx("w-4 h-4", lead.saved ? "fill-amber-400 text-amber-400" : "text-stone-300 hover:text-stone-400")} />
+                        </button>
+                    )}
+                    <button type="button" onClick={onClick} aria-label="Open lead" className="p-1">
+                        <ChevronRight className={clsx("w-4 h-4", selected ? "text-orange-500" : "text-stone-300")} />
+                    </button>
                 </div>
-                <ChevronRight className={clsx("w-4 h-4 shrink-0 mt-2.5", selected ? "text-orange-500" : "text-stone-300")} />
-            </button>
+            </div>
         </li>
     );
 }
@@ -847,6 +925,7 @@ function PresenceDots({ lead }: { lead: Lead }) {
 
 function LeadDetail({
     lead, loading, detailError, senderConfigured, onOpenSender, onRefresh, onBack,
+    onToggleSaved, onPatchDetail,
 }: {
     lead: Lead;
     loading: boolean;
@@ -855,6 +934,8 @@ function LeadDetail({
     onOpenSender: () => void;
     onRefresh: () => void;
     onBack: () => void;
+    onToggleSaved: () => void;
+    onPatchDetail: (partial: Partial<Lead>) => void;
 }) {
     // Company is the rep's home base → default tab.
     const [tab, setTab] = useState<TabKey>("company");
@@ -864,8 +945,11 @@ function LeadDetail({
     const [notes, setNotes] = useState("");
     const [transcript, setTranscript] = useState("");
 
-    // Call notes modal.
+    // Call notes modal. autoStart fires the recorder on mount (the top-bar "Call"
+    // button); a phone-number click opens it WITHOUT auto-starting.
     const [callOpen, setCallOpen] = useState(false);
+    const [callAutoStart, setCallAutoStart] = useState(false);
+    const openCall = useCallback((autoStart: boolean) => { setCallAutoStart(autoStart); setCallOpen(true); }, []);
 
     // Email composer is prefilled by the AI message generator; keep it lifted so
     // the Company tab's outreach block survives a tab switch.
@@ -878,10 +962,12 @@ function LeadDetail({
     }, []);
 
     const companyName = toTitleCaseCompany(lead.company_name) || "Unnamed company";
+    const isContractor = lead.source === "contractors";
 
     const TABS: { key: TabKey; label: string; Icon: React.ComponentType<{ className?: string }>; count?: number }[] = [
         { key: "company", label: "Company", Icon: User },
         { key: "matches", label: "Matches", Icon: Trophy, count: lead.top_matches.length || undefined },
+        ...(isContractor ? [{ key: "keywords" as const, label: "Keywords", Icon: Tag, count: lead.capability_keywords?.length || undefined }] : []),
         { key: "assets", label: "Assets", Icon: Package },
     ];
 
@@ -901,11 +987,24 @@ function LeadDetail({
 
                     {/* Tight header strip: company + fit + state + source */}
                     <div className="flex items-center gap-2 flex-wrap">
+                        {isContractor && (
+                            <button
+                                type="button"
+                                onClick={onToggleSaved}
+                                title={lead.saved ? "Remove from saved" : "Save to shortlist"}
+                                aria-label={lead.saved ? "Remove from saved" : "Save to shortlist"}
+                                className="shrink-0 p-1 rounded-lg hover:bg-stone-100"
+                            >
+                                <Star className={clsx("w-5 h-5", lead.saved ? "fill-amber-400 text-amber-400" : "text-stone-300 hover:text-stone-400")} />
+                            </button>
+                        )}
                         <h2 className="font-bold text-lg sm:text-xl text-stone-900 truncate min-w-0">{companyName}</h2>
                         {loading && <Loader2 className="w-4 h-4 animate-spin text-stone-300 shrink-0" />}
-                        <span className={clsx("inline-flex items-center gap-1 font-bold border rounded-full px-2 py-0.5 text-xs", TIER_STYLE[lead.icp_tier])} title={FIT_TOOLTIP}>
-                            Fit {lead.icp_tier} · {lead.icp_score}
-                        </span>
+                        <CertTooltip blurb={FIT_TOOLTIP}>
+                            <span className={clsx("inline-flex items-center gap-1 font-bold border rounded-full px-2 py-0.5 text-xs cursor-help", TIER_STYLE[lead.icp_tier])}>
+                                Fit {lead.icp_tier} · {lead.icp_score} <Info className="w-3 h-3" />
+                            </span>
+                        </CertTooltip>
                         {lead.state && <span className="text-sm text-stone-500 inline-flex items-center gap-1"><MapPin className="w-3.5 h-3.5" /> {lead.state}</span>}
                         {lead.source === "inbound"
                             ? <span className="text-sm inline-flex items-center gap-1 text-emerald-700 font-medium"><Sparkles className="w-3.5 h-3.5" /> Came to us</span>
@@ -952,7 +1051,8 @@ function LeadDetail({
                         senderConfigured={senderConfigured}
                         onOpenSender={onOpenSender}
                         onRefresh={onRefresh}
-                        onOpenCall={() => setCallOpen(true)}
+                        onOpenCall={() => openCall(false)}
+                        onStartCall={() => openCall(true)}
                         notes={notes}
                         setNotes={setNotes}
                         transcript={transcript}
@@ -964,12 +1064,16 @@ function LeadDetail({
                     />
                 )}
                 {tab === "matches" && <MatchesTab lead={lead} />}
+                {tab === "keywords" && (
+                    <KeywordsTab lead={lead} notes={notes} transcript={transcript} onPatchDetail={onPatchDetail} />
+                )}
                 {tab === "assets" && <AssetsTab lead={lead} onRefresh={onRefresh} />}
             </div>
 
             {callOpen && (
                 <CallNotesModal
                     lead={lead}
+                    autoStart={callAutoStart}
                     onClose={() => setCallOpen(false)}
                     onSaved={(log) => { onCallSaved(log); setCallOpen(false); }}
                 />
@@ -981,7 +1085,7 @@ function LeadDetail({
 // ───────────────────────── TAB: Company (the rep's home base) ─────────────────────────
 
 function CompanyTab({
-    lead, loading, senderConfigured, onOpenSender, onRefresh, onOpenCall,
+    lead, loading, senderConfigured, onOpenSender, onRefresh, onOpenCall, onStartCall,
     notes, setNotes, transcript, setTranscript,
     emailSubject, setEmailSubject, emailBody, setEmailBody,
 }: {
@@ -991,6 +1095,7 @@ function CompanyTab({
     onOpenSender: () => void;
     onRefresh: () => void;
     onOpenCall: () => void;
+    onStartCall: () => void;
     notes: string;
     setNotes: React.Dispatch<React.SetStateAction<string>>;
     transcript: string;
@@ -1006,6 +1111,17 @@ function CompanyTab({
             {/* TOP ACTION BAR */}
             <div className="flex flex-wrap items-center gap-2">
                 <HubspotButton lead={lead} notes={notes} transcript={transcript} />
+                {/* Call — opens the call-notes modal AND auto-starts recording on mount. */}
+                <button
+                    type="button"
+                    onClick={onStartCall}
+                    className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3.5 py-2 rounded-lg text-sm"
+                    title="Open the notepad and start recording the call"
+                >
+                    <PhoneCall className="w-4 h-4" /> Call
+                </button>
+                {/* Research & fill gaps — moved up from the bottom card (contractors only). */}
+                {isContractor && <ResearchButton lead={lead} onRefresh={onRefresh} refreshing={loading} />}
                 {lead.website ? (
                     <a
                         href={normalizeWebsiteHref(lead.website)}
@@ -1042,12 +1158,18 @@ function CompanyTab({
                 {/* LEFT COLUMN */}
                 <div className="space-y-4 min-w-0">
                     <ContactCard lead={lead} onOpenCall={onOpenCall} />
+                    <CompanyDetailCard lead={lead} notes={notes} setNotes={setNotes} />
                     <FirmographicsCard lead={lead} />
                     {isContractor && <PastAwardsCard lead={lead} />}
                     {isContractor && <RevenueStreamsCard lead={lead} />}
                     <IcpBreakdownCard lead={lead} />
-                    {/* ONE button — Research & fill the gaps (enrich also researches). */}
-                    {isContractor && <ResearchAndFillCard lead={lead} onRefresh={onRefresh} refreshing={loading} />}
+                    {/* Persisted research output surfaces here once a run completes. */}
+                    {isContractor && lead.research && (
+                        <Card>
+                            <SectionHeading icon={Wand2} title="What we found" />
+                            <ResearchResultPanel research={lead.research} />
+                        </Card>
+                    )}
                 </div>
 
                 {/* RIGHT COLUMN — outreach lives inline on the rep's home base. */}
@@ -1074,6 +1196,56 @@ function CompanyTab({
                 </div>
             </div>
         </div>
+    );
+}
+
+// ── Company detail block (address / history / est. revenue + transcription notes) ─
+function CompanyDetailCard({ lead, notes, setNotes }: {
+    lead: Lead;
+    notes: string;
+    setNotes: React.Dispatch<React.SetStateAction<string>>;
+}) {
+    const estRevenue = compactCurrency(lead.estimated_revenue);
+    const hasProfile = !!(lead.company_address || lead.company_history || estRevenue);
+    return (
+        <Card>
+            <SectionHeading icon={Building2} title="Company" />
+            {hasProfile ? (
+                <div className="space-y-3">
+                    {lead.company_address && (
+                        <div>
+                            <FieldLabel className="inline-flex items-center gap-1.5"><MapPin className="w-3 h-3" /> Address</FieldLabel>
+                            <p className="text-sm text-stone-700 mt-0.5">{lead.company_address}</p>
+                        </div>
+                    )}
+                    {estRevenue && (
+                        <div>
+                            <FieldLabel className="inline-flex items-center gap-1.5"><DollarSign className="w-3 h-3" /> Estimated revenue</FieldLabel>
+                            <p className="text-sm text-stone-700 mt-0.5">{estRevenue}</p>
+                        </div>
+                    )}
+                    {lead.company_history && (
+                        <div>
+                            <FieldLabel className="inline-flex items-center gap-1.5"><FileText className="w-3 h-3" /> Company history</FieldLabel>
+                            <p className="text-sm text-stone-600 leading-relaxed mt-0.5">{lead.company_history}</p>
+                        </div>
+                    )}
+                </div>
+            ) : (
+                <p className="text-sm text-stone-400 -mt-1">No company profile captured yet — run Research &amp; fill gaps.</p>
+            )}
+            {/* Transcription notes — reuses the shared notes state so it flows to HubSpot. */}
+            <div className="mt-3 pt-3 border-t border-stone-100">
+                <FieldLabel className="inline-flex items-center gap-1.5"><ClipboardList className="w-3 h-3" /> Transcription notes</FieldLabel>
+                <textarea
+                    value={notes}
+                    onChange={e => setNotes(e.target.value)}
+                    rows={3}
+                    placeholder="Jot down anything from the call — it's the same notepad as the Notes card and flows to HubSpot."
+                    className="w-full mt-1 px-3 py-2 text-sm rounded-lg border border-stone-200 focus:outline-none focus:border-stone-400 leading-relaxed"
+                />
+            </div>
+        </Card>
     );
 }
 
@@ -1208,7 +1380,7 @@ function ContactCard({ lead, onOpenCall }: { lead: Lead; onOpenCall: () => void 
             {(lead.sba_certifications.length > 0 || lead.certifications.length > 0 || trackRecord.length > 0) && (
                 <div className="flex flex-wrap gap-2 mt-4">
                     {[...lead.sba_certifications, ...lead.certifications].slice(0, 6).map((c, i) => (
-                        <Pill key={`cert-${c}-${i}`} icon={Award}>{c}</Pill>
+                        <CertBadge key={`cert-${c}-${i}`} code={c} />
                     ))}
                     {trackRecord.slice(0, 4).map((t, i) => (
                         <Pill key={`tr-${i}`} icon={Trophy}>{t}</Pill>
@@ -1222,6 +1394,7 @@ function ContactCard({ lead, onOpenCall }: { lead: Lead; onOpenCall: () => void 
 // ── Firmographics ──────────────────────────────────────────────────────────────
 function FirmographicsCard({ lead }: { lead: Lead }) {
     const revenue = compactCurrency(lead.total_federal_revenue);
+    const estRevenue = compactCurrency(lead.estimated_revenue);
     const isContractor = lead.source === "contractors";
     return (
         <Card>
@@ -1231,6 +1404,7 @@ function FirmographicsCard({ lead }: { lead: Lead }) {
                 <Stat icon={Building2} label="Years in business" value={lead.years_in_business != null && lead.years_in_business > 0 ? String(lead.years_in_business) : "Unknown"} />
                 <Stat icon={Trophy} label="Federal awards" value={lead.total_federal_awards != null ? String(lead.total_federal_awards) : (lead.federal_awards_count != null ? String(lead.federal_awards_count) : "Unknown")} />
                 {isContractor && <Stat icon={DollarSign} label="Federal revenue" value={revenue || "Unknown"} />}
+                {estRevenue && <Stat icon={DollarSign} label="Est. revenue" value={estRevenue} />}
                 {isContractor && (
                     <Stat
                         icon={BadgeCheck}
@@ -1290,12 +1464,14 @@ function IcpBreakdownCard({ lead }: { lead: Lead }) {
 // ── Past federal awards ─────────────────────────────────────────────────────────
 function PastAwardsCard({ lead }: { lead: Lead }) {
     const pa = lead.past_awards;
+    const la = lead.last_award;
     // total_count / total_volume fall back to the surfaced firmographic columns so the
     // card still renders for rows where past_awards wasn't populated but the totals were.
-    const totalCount = pa?.total_count ?? lead.total_federal_awards ?? lead.federal_awards_count ?? null;
+    // awards_count (live FPDS count) wins over the stored firmographic count when present.
+    const totalCount = lead.awards_count ?? pa?.total_count ?? lead.total_federal_awards ?? lead.federal_awards_count ?? null;
     const totalVolume = pa?.total_volume ?? lead.total_federal_revenue ?? null;
-    const lastAward = pa?.last_award_date ?? null;
-    const hasAny = (totalCount != null && totalCount > 0) || (totalVolume != null && totalVolume > 0) || !!lastAward;
+    const lastAwardDate = la?.date ?? pa?.last_award_date ?? null;
+    const hasAny = (totalCount != null && totalCount > 0) || (totalVolume != null && totalVolume > 0) || !!lastAwardDate || !!la;
     if (!hasAny) return null;
     return (
         <Card>
@@ -1303,8 +1479,37 @@ function PastAwardsCard({ lead }: { lead: Lead }) {
             <div className="grid grid-cols-3 gap-2.5">
                 <Stat icon={Award} label="Total awards" value={totalCount != null && totalCount > 0 ? String(totalCount) : "—"} />
                 <Stat icon={DollarSign} label="Federal revenue" value={compactCurrency(totalVolume) || "—"} />
-                <Stat icon={CalendarClock} label="Last award" value={lastAward ? formatDeadline(lastAward) : "—"} />
+                <Stat icon={CalendarClock} label="Last award" value={lastAwardDate ? formatDeadline(lastAwardDate) : "—"} />
             </div>
+
+            {/* Most-recent award detail (FPDS) — the "I saw your recent win" opener. */}
+            {la && (la.agency || la.amount != null || la.description) && (
+                <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50/50 p-3">
+                    <div className="flex items-start justify-between gap-3 flex-wrap">
+                        <div className="min-w-0">
+                            <FieldLabel className="inline-flex items-center gap-1.5"><Trophy className="w-3 h-3" /> Most recent award</FieldLabel>
+                            <p className="text-sm text-stone-800 mt-1 font-medium">
+                                {la.agency || "Federal agency"}
+                                {la.amount != null && <span className="text-stone-500 font-normal"> · {compactCurrency(la.amount)}</span>}
+                                {la.date && <span className="text-stone-500 font-normal"> · {formatDeadline(la.date)}</span>}
+                            </p>
+                            {la.description && <p className="text-xs text-stone-600 mt-1 leading-relaxed">{la.description}</p>}
+                            {la.piid && <p className="text-[11px] text-stone-400 mt-1">PIID {la.piid}</p>}
+                        </div>
+                        {la.url && (
+                            <a
+                                href={la.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="shrink-0 inline-flex items-center gap-1.5 border border-stone-200 hover:border-stone-300 hover:bg-white text-stone-700 font-medium px-2.5 py-1.5 rounded-lg text-xs"
+                                title="Open this award on USASpending.gov"
+                            >
+                                <ExternalLink className="w-3.5 h-3.5 text-stone-400" /> USASpending
+                            </a>
+                        )}
+                    </div>
+                </div>
+            )}
         </Card>
     );
 }
@@ -1364,17 +1569,15 @@ function RevenueStreamsCard({ lead }: { lead: Lead }) {
     );
 }
 
-// ── "Research & fill the gaps" — ONE button (enrich also researches) ─────────────
-function ResearchAndFillCard({ lead, onRefresh, refreshing }: { lead: Lead; onRefresh: () => void; refreshing: boolean }) {
+// ── "Research & fill the gaps" — top-bar BUTTON (enrich also researches) ──────────
+// Moved out of the bottom card per founder feedback: it now lives in the Company
+// tab top action bar. Result shows as a transient popover under the button; the
+// persisted research panel renders in the left column once the detail re-fetches.
+function ResearchButton({ lead, onRefresh, refreshing }: { lead: Lead; onRefresh: () => void; refreshing: boolean }) {
     const [busy, setBusy] = useState(false);
     const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
-    // Show persisted research immediately; replace with the live result after a run.
-    const [research, setResearch] = useState<LeadResearch | null>(lead.research ?? null);
 
-    useEffect(() => {
-        setResearch(lead.research ?? null);
-        setResult(null);
-    }, [lead.id, lead.research]);
+    useEffect(() => { setResult(null); }, [lead.id]);
 
     const run = async () => {
         setBusy(true);
@@ -1392,24 +1595,7 @@ function ResearchAndFillCard({ lead, onRefresh, refreshing }: { lead: Lead; onRe
                 company_linkedin?: string; phone?: string; poc_email?: string;
                 phones?: string[]; emails?: string[]; track_record?: string[]; legal_name?: string;
             };
-            const r = (data.research || null) as {
-                rating?: number | null; reviews_count?: number | null; sentiment?: string;
-                summary?: string; what_they_do?: string;
-                sources?: Array<{ url: string; title: string; source_type: string }>;
-            } | null;
-
-            // Surface the research inline right away (don't wait on the re-fetch).
-            if (r && (r.summary || r.rating != null || (r.sources?.length ?? 0) > 0)) {
-                setResearch({
-                    overall_sentiment: (r.sentiment as LeadResearch["overall_sentiment"]) ?? "unknown",
-                    rating: r.rating ?? null,
-                    reviews_count: r.reviews_count ?? null,
-                    summary: r.summary ?? "",
-                    what_they_do: r.what_they_do ?? "",
-                    sources: Array.isArray(r.sources) ? r.sources : [],
-                    researched_at: new Date().toISOString(),
-                });
-            }
+            const r = (data.research || null) as { rating?: number | null } | null;
 
             const found: string[] = [];
             if (u.owner_linkedin) found.push("owner LinkedIn");
@@ -1422,39 +1608,40 @@ function ResearchAndFillCard({ lead, onRefresh, refreshing }: { lead: Lead; onRe
             if (u.legal_name) found.push(`legal name "${u.legal_name}"`);
             if (u.track_record?.length) found.push(`${u.track_record.length} track-record stat${u.track_record.length > 1 ? "s" : ""}`);
             if (r?.rating != null) found.push(`${r.rating}★ rating`);
-            setResult({ ok: true, message: found.length ? `Found ${found.join(", ")}.` : "Checked — nothing new to add (already complete)." });
-            // Patch the queue row in place via the detail re-fetch (vanishing-lead fix).
+            setResult({ ok: true, message: found.length ? `Found ${found.join(", ")}.` : "Checked — nothing new to add." });
+            // Patch the queue row + detail in place via the detail re-fetch (surfaces
+            // the research panel + filled gaps; vanishing-lead fix).
             onRefresh();
+            setTimeout(() => setResult(null), 6000);
         } catch (e) {
             setResult({ ok: false, message: e instanceof Error ? e.message : "Research failed" });
+            setTimeout(() => setResult(null), 6000);
         } finally {
             setBusy(false);
         }
     };
 
     return (
-        <Card>
-            <SectionHeading icon={Wand2} title="Research & fill the gaps" />
-            <p className="text-sm text-stone-500 -mt-2 mb-3">
-                One pass: deep-crawls their site for phone, email, company LinkedIn, years and track record;
-                looks up the owner&apos;s LinkedIn + firmographics; and pulls their public reviews so you can open with &ldquo;I looked you up.&rdquo;
-            </p>
+        <div className="relative">
             <button
                 type="button"
                 onClick={run}
                 disabled={busy}
-                className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold px-4 py-2 rounded-lg text-sm"
+                title="Deep-crawl their site + look up the owner's LinkedIn, firmographics and reviews"
+                className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold px-3.5 py-2 rounded-lg text-sm"
             >
-                {busy ? <><Loader2 className="w-4 h-4 animate-spin" /> Researching…</> : <><Wand2 className="w-4 h-4" /> {research ? "Re-run research" : "Research & fill the gaps"}</>}
+                {busy ? <><Loader2 className="w-4 h-4 animate-spin" /> Researching…</> : <><Wand2 className="w-4 h-4" /> {lead.research ? "Re-run research" : "Research & fill gaps"}</>}
             </button>
             {result && (
-                <div className={clsx("mt-2 rounded-lg px-3 py-2 text-xs flex items-start gap-2", result.ok ? "bg-emerald-50 border border-emerald-200 text-emerald-800" : "bg-rose-50 border border-rose-200 text-rose-700")}>
+                <div className={clsx(
+                    "absolute left-0 top-full mt-2 z-10 w-72 rounded-xl p-3 text-xs flex items-start gap-2 shadow-lg border",
+                    result.ok ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-rose-50 border-rose-200 text-rose-700",
+                )}>
                     {result.ok ? (refreshing ? <Loader2 className="w-3.5 h-3.5 shrink-0 mt-0.5 animate-spin" /> : <Check className="w-3.5 h-3.5 shrink-0 mt-0.5" />) : <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />}
                     <span className="font-medium">{result.message}</span>
                 </div>
             )}
-            {research && <ResearchResultPanel research={research} />}
-        </Card>
+        </div>
     );
 }
 
@@ -1547,8 +1734,13 @@ function MatchesTab({ lead }: { lead: Lead }) {
 
 function MatchCard({ match }: { match: LeadTopMatch }) {
     const [open, setOpen] = useState(false);
-    const oppUrl = samOppUrl(match.opp_id);
+    // Use the FIXED canonical link (opportunities.link, joined by notice_id) — never
+    // a constructed sam.gov/opp/<id> URL (the 404 bug). Null → "link unavailable".
+    const realLink = match.real_link ?? null;
     const value = compactCurrency(match.value);
+    const why = Array.isArray(match.why) ? match.why : [];
+    const keywords = Array.isArray(match.keywords) ? match.keywords : [];
+    const setAsideInfo = match.set_aside ? certInfo(match.set_aside) : null;
     return (
         <div className="border border-stone-200 rounded-xl overflow-hidden bg-white">
             {/* Collapsed header — title + agency + fit % */}
@@ -1577,28 +1769,248 @@ function MatchCard({ match }: { match: LeadTopMatch }) {
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-stone-600 pt-3">
                         {match.deadline && <span className="inline-flex items-center gap-1"><CalendarClock className="w-3.5 h-3.5 text-stone-400" /> Due {formatDeadline(match.deadline)}</span>}
                         {match.naics && <span className="inline-flex items-center gap-1"><Package className="w-3.5 h-3.5 text-stone-400" /> NAICS {match.naics}</span>}
-                        {match.set_aside && <span className="inline-flex items-center gap-1"><BadgeCheck className="w-3.5 h-3.5 text-stone-400" /> {match.set_aside}</span>}
+                        {match.set_aside && (
+                            setAsideInfo ? (
+                                <CertTooltip blurb={setAsideInfo.blurb}>
+                                    <span className="inline-flex items-center gap-1 cursor-help"><BadgeCheck className="w-3.5 h-3.5 text-stone-400" /> {match.set_aside} <Info className="w-3 h-3 text-stone-300" /></span>
+                                </CertTooltip>
+                            ) : (
+                                <span className="inline-flex items-center gap-1"><BadgeCheck className="w-3.5 h-3.5 text-stone-400" /> {match.set_aside}</span>
+                            )
+                        )}
                         {value && <span className="inline-flex items-center gap-1"><DollarSign className="w-3.5 h-3.5 text-stone-400" /> {value}</span>}
                         {match.pwin != null && <span className="inline-flex items-center gap-1"><Target className="w-3.5 h-3.5 text-stone-400" /> {match.pwin}% pWin</span>}
                     </div>
-                    {match.why && (
+
+                    {match.description && (
                         <div>
-                            <FieldLabel>Why it fits</FieldLabel>
-                            <p className="text-sm text-stone-600 leading-relaxed mt-1">{match.why}</p>
+                            <FieldLabel>What it's for</FieldLabel>
+                            <p className="text-sm text-stone-600 leading-relaxed mt-1">{match.description}</p>
                         </div>
                     )}
-                    {oppUrl && (
+
+                    {keywords.length > 0 && (
+                        <div>
+                            <FieldLabel>Top keywords</FieldLabel>
+                            <div className="flex flex-wrap gap-1.5 mt-1.5">
+                                {keywords.slice(0, 8).map((k, i) => (
+                                    <span key={`${k}-${i}`} className="inline-flex items-center text-[11px] font-medium bg-stone-100 text-stone-600 rounded-full px-2 py-0.5">{k}</span>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {why.length > 0 && (
+                        <div>
+                            <FieldLabel>Why it's a good fit</FieldLabel>
+                            <ul className="mt-1.5 space-y-1">
+                                {why.map((w, i) => (
+                                    <li key={i} className="text-sm text-stone-600 leading-relaxed flex items-start gap-1.5">
+                                        <Check className="w-3.5 h-3.5 shrink-0 mt-0.5 text-emerald-500" /> {w}
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+
+                    {realLink ? (
                         <a
-                            href={oppUrl}
+                            href={realLink}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="inline-flex items-center gap-2 border border-stone-200 hover:border-stone-300 hover:bg-stone-50 text-stone-700 font-medium px-3 py-1.5 rounded-lg text-sm"
                         >
-                            <ExternalLink className="w-3.5 h-3.5 text-stone-400" /> View on SAM.gov
+                            <ExternalLink className="w-3.5 h-3.5 text-stone-400" /> View opportunity
                         </a>
+                    ) : (
+                        <span className="inline-flex items-center gap-2 text-stone-400 text-sm" title="No canonical link on file for this notice">
+                            <Info className="w-3.5 h-3.5" /> link unavailable
+                        </span>
                     )}
                 </div>
             )}
+        </div>
+    );
+}
+
+// ───────────────────────── TAB: Keywords (contractors) ─────────────────────────
+
+// Common English stop-words to drop when pulling candidate keywords from notes.
+const KW_STOPWORDS = new Set([
+    "the", "and", "for", "with", "that", "this", "they", "their", "them", "from", "have", "has",
+    "was", "were", "are", "you", "your", "our", "can", "will", "would", "should", "could", "about",
+    "into", "over", "under", "than", "then", "there", "here", "what", "when", "where", "which", "who",
+    "how", "why", "not", "but", "all", "any", "out", "off", "via", "per", "also", "just", "like", "got",
+    "get", "very", "much", "many", "some", "more", "most", "such", "been", "being", "does", "did", "doing",
+    "him", "her", "his", "she", "its", "it's", "i'm", "we're", "they're", "call", "called", "said", "talk",
+    "talked", "spoke", "left", "voicemail", "email", "phone", "going", "good", "great", "okay", "yeah",
+]);
+
+/**
+ * Pull candidate keywords from free-text notes/transcript so the rep can one-click
+ * add the ones that matter. Heuristic, deliberately simple:
+ *   • capture multi-word phrases that look like services ("hvac maintenance")
+ *   • single tokens ≥4 chars that aren't stop-words and aren't already keywords
+ * Returns a deduped, lowercased list, longest/most-specific first, capped at 12.
+ */
+function extractCandidateKeywords(text: string, existing: string[]): string[] {
+    const have = new Set(existing.map((k) => k.toLowerCase().trim()));
+    const cleaned = text.toLowerCase().replace(/[^a-z0-9\s-]/g, " ");
+    const tokens = cleaned.split(/\s+/).filter(Boolean);
+    const candidates = new Set<string>();
+
+    // 2-word phrases (e.g. "janitorial services", "cyber security").
+    for (let i = 0; i < tokens.length - 1; i++) {
+        const a = tokens[i], b = tokens[i + 1];
+        if (a.length < 3 || b.length < 3) continue;
+        if (KW_STOPWORDS.has(a) || KW_STOPWORDS.has(b)) continue;
+        const phrase = `${a} ${b}`;
+        if (!have.has(phrase)) candidates.add(phrase);
+    }
+    // Single meaningful tokens.
+    for (const t of tokens) {
+        if (t.length < 4 || KW_STOPWORDS.has(t)) continue;
+        if (/^\d+$/.test(t)) continue;
+        if (!have.has(t)) candidates.add(t);
+    }
+    return Array.from(candidates)
+        .sort((a, b) => b.length - a.length)
+        .slice(0, 12);
+}
+
+function KeywordsTab({ lead, notes, transcript, onPatchDetail }: {
+    lead: Lead;
+    notes: string;
+    transcript: string;
+    onPatchDetail: (partial: Partial<Lead>) => void;
+}) {
+    const [keywords, setKeywords] = useState<string[]>(lead.capability_keywords ?? []);
+    const [input, setInput] = useState("");
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => { setKeywords(lead.capability_keywords ?? []); }, [lead.id, lead.capability_keywords]);
+
+    // Candidate keywords from the shared notes + transcript scratch (filter out ones
+    // we already have on the contractor).
+    const candidates = useMemo(
+        () => extractCandidateKeywords([notes, transcript].filter(Boolean).join(" "), keywords),
+        [notes, transcript, keywords],
+    );
+
+    const persist = useCallback(async (add: string[], remove: string[]) => {
+        setBusy(true);
+        setError(null);
+        try {
+            const res = await fetch("/api/admin/cockpit/keywords", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ contractor_id: lead.id, add, remove }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.ok) throw new Error(data?.error || `Failed (${res.status})`);
+            const next: string[] = Array.isArray(data.capability_keywords) ? data.capability_keywords : keywords;
+            setKeywords(next);
+            // Keep the detail (and queue row) in sync so a tab switch doesn't revert.
+            onPatchDetail({ capability_keywords: next });
+        } catch (e) {
+            setError(e instanceof Error ? e.message : "Could not save keywords");
+        } finally {
+            setBusy(false);
+        }
+    }, [lead.id, keywords, onPatchDetail]);
+
+    const addKeyword = (raw: string) => {
+        const k = raw.toLowerCase().trim();
+        if (!k || keywords.includes(k)) { setInput(""); return; }
+        persist([k], []);
+        setInput("");
+    };
+
+    const removeKeyword = (k: string) => persist([], [k]);
+
+    return (
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
+            <Card>
+                <SectionHeading icon={Tag} title="Capability keywords" />
+                <p className="text-sm text-stone-500 -mt-2 mb-3">
+                    These drive reverse-matching — the words we match this firm against live opportunities. Add what you learn on calls; remove anything off-base.
+                </p>
+
+                {keywords.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                        {keywords.map((k) => (
+                            <span key={k} className="inline-flex items-center gap-1.5 text-sm font-medium bg-stone-100 text-stone-700 rounded-lg pl-2.5 pr-1.5 py-1">
+                                {k}
+                                <button
+                                    type="button"
+                                    onClick={() => removeKeyword(k)}
+                                    disabled={busy}
+                                    aria-label={`Remove ${k}`}
+                                    title={`Remove ${k}`}
+                                    className="rounded-full hover:bg-stone-200 p-0.5 disabled:opacity-50"
+                                >
+                                    <X className="w-3 h-3 text-stone-500" />
+                                </button>
+                            </span>
+                        ))}
+                    </div>
+                ) : (
+                    <p className="text-sm text-stone-400">No keywords yet — add a few below.</p>
+                )}
+
+                <form
+                    onSubmit={(e) => { e.preventDefault(); addKeyword(input); }}
+                    className="mt-4 flex items-center gap-2"
+                >
+                    <div className="relative flex-1">
+                        <Tag className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
+                        <input
+                            type="text"
+                            value={input}
+                            onChange={(e) => setInput(e.target.value)}
+                            placeholder="e.g. janitorial services"
+                            className="w-full pl-9 pr-2 py-2 text-sm rounded-lg border border-stone-200 focus:outline-none focus:border-stone-400"
+                        />
+                    </div>
+                    <button
+                        type="submit"
+                        disabled={busy || !input.trim()}
+                        className="inline-flex items-center gap-1.5 bg-stone-900 hover:bg-black disabled:opacity-50 text-white font-bold px-3.5 py-2 rounded-lg text-sm"
+                    >
+                        {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} Add
+                    </button>
+                </form>
+
+                {error && <p className="mt-2 text-xs text-rose-600 inline-flex items-center gap-1.5"><AlertTriangle className="w-3.5 h-3.5" /> {error}</p>}
+            </Card>
+
+            {/* Pull keywords from the call notes/transcript. */}
+            <Card>
+                <SectionHeading icon={Sparkles} title="Pull keywords from your notes" />
+                <p className="text-sm text-stone-500 -mt-2 mb-3">
+                    Candidates pulled from the Notes + transcript on the Company tab. Click one to add it as a capability keyword.
+                </p>
+                {candidates.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                        {candidates.map((c) => (
+                            <button
+                                key={c}
+                                type="button"
+                                onClick={() => addKeyword(c)}
+                                disabled={busy}
+                                className="inline-flex items-center gap-1.5 text-sm font-medium bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 rounded-lg px-2.5 py-1 disabled:opacity-50"
+                            >
+                                <Plus className="w-3.5 h-3.5" /> {c}
+                            </button>
+                        ))}
+                    </div>
+                ) : (
+                    <p className="text-sm text-stone-400">
+                        Nothing to suggest yet. Jot call notes or paste a transcript on the Company tab and they&apos;ll show up here.
+                    </p>
+                )}
+            </Card>
         </div>
     );
 }
@@ -1609,6 +2021,10 @@ function AssetsTab({ lead, onRefresh }: { lead: Lead; onRefresh: () => void }) {
     const isContractor = lead.source === "contractors";
     return (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
+            {/* CapturePilot resource library — best-fit collateral to attach to outreach. */}
+            <div className="xl:col-span-2">
+                <AssetsLibraryCard lead={lead} />
+            </div>
             {isContractor && <WebsiteAction lead={lead} onRefresh={onRefresh} highlight={lead.has_website === false} />}
             {isContractor && <CapStatementCard lead={lead} />}
             {isContractor && <MaterializeCheckCard lead={lead} />}
@@ -1622,6 +2038,147 @@ function AssetsTab({ lead, onRefresh }: { lead: Lead; onRefresh: () => void }) {
                 </Card>
             )}
         </div>
+    );
+}
+
+// ── CapturePilot resource library (admin-curated assets) ─────────────────────────
+interface CockpitAsset {
+    id: string;
+    title: string;
+    url: string;
+    kind: string;
+    description: string | null;
+    tags: string[];
+    naics: string[];
+    is_active: boolean;
+    fit_score?: number;
+}
+
+const ASSET_KIND_LABEL: Record<string, string> = {
+    whitepaper: "Whitepaper",
+    lead_magnet: "Lead magnet",
+    guide: "Guide",
+    template: "Template",
+};
+
+/**
+ * Best-fit CapturePilot resources for this lead. Builds the targeting signal from
+ * the lead's NAICS (match NAICS + top-revenue NAICS) and keywords (gaps + certs),
+ * hits GET /api/admin/cockpit/assets, and lists the assets with a one-click copy
+ * of the share URL so the rep can drop it into the email composer.
+ */
+function AssetsLibraryCard({ lead }: { lead: Lead }) {
+    const [assets, setAssets] = useState<CockpitAsset[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [copiedId, setCopiedId] = useState<string | null>(null);
+
+    // Targeting signal — memoized so we don't refetch on unrelated re-renders.
+    const { naics, keywords } = useMemo(() => {
+        const naicsSet = new Set<string>();
+        for (const m of lead.top_matches) if (m.naics) naicsSet.add(String(m.naics));
+        for (const n of lead.past_awards?.top_naics ?? []) if (n.code) naicsSet.add(String(n.code));
+        if (lead.last_award?.naics) naicsSet.add(String(lead.last_award.naics));
+        const kw = new Set<string>();
+        for (const c of [...lead.sba_certifications, ...lead.certifications]) {
+            const t = c.toLowerCase();
+            if (/8\(a\)|\b8a\b/.test(t)) kw.add("8a");
+            if (/hubzone/.test(t)) kw.add("hubzone");
+            if (/wosb|women.?owned/.test(t)) kw.add("wosb");
+            if (/sdvosb|vosb|veteran|service.?disabled/.test(t)) kw.add("sdvosb");
+        }
+        for (const g of lead.gaps ?? []) {
+            const t = g.toLowerCase();
+            if (/cap.?statement|capability/.test(t)) kw.add("capability-statement");
+            if (/sam|registration/.test(t)) kw.add("sam");
+            if (/website|site/.test(t)) kw.add("website");
+        }
+        return { naics: Array.from(naicsSet), keywords: Array.from(kw) };
+    }, [lead.top_matches, lead.past_awards, lead.last_award, lead.sba_certifications, lead.certifications, lead.gaps]);
+
+    useEffect(() => {
+        let alive = true;
+        setLoading(true);
+        setError(null);
+        const params = new URLSearchParams();
+        if (keywords.length) params.set("keywords", keywords.join(","));
+        if (naics.length) params.set("naics", naics.join(","));
+        fetch(`/api/admin/cockpit/assets?${params}`)
+            .then(async (r) => {
+                const d = await r.json();
+                if (!r.ok) throw new Error(d?.error || `Failed (${r.status})`);
+                return d;
+            })
+            .then((d) => { if (alive) setAssets(Array.isArray(d.assets) ? d.assets : []); })
+            .catch((e) => { if (alive) setError(e instanceof Error ? e.message : "Could not load resources"); })
+            .finally(() => { if (alive) setLoading(false); });
+        return () => { alive = false; };
+    }, [keywords, naics]);
+
+    const copyUrl = async (a: CockpitAsset) => {
+        try {
+            await navigator.clipboard.writeText(a.url);
+            setCopiedId(a.id);
+            setTimeout(() => setCopiedId((id) => (id === a.id ? null : id)), 1800);
+        } catch { /* clipboard may be blocked */ }
+    };
+
+    return (
+        <Card>
+            <SectionHeading icon={Package} title="Resources to send them" />
+            <p className="text-sm text-stone-500 -mt-2 mb-3">
+                CapturePilot guides, templates and lead magnets — ranked by fit. Copy a link straight into your email.
+            </p>
+            {loading ? (
+                <div className="py-6 text-center text-stone-400">
+                    <Loader2 className="w-5 h-5 animate-spin mx-auto" />
+                </div>
+            ) : error ? (
+                <p className="text-sm text-rose-600 inline-flex items-center gap-1.5"><AlertTriangle className="w-4 h-4" /> {error}</p>
+            ) : assets.length === 0 ? (
+                <p className="text-sm text-stone-400">No resources in the library yet.</p>
+            ) : (
+                <ul className="space-y-2">
+                    {assets.map((a) => (
+                        <li key={a.id} className="border border-stone-200 rounded-xl p-3 flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="font-bold text-stone-800 text-sm">{a.title}</span>
+                                    <span className="text-[10px] font-bold uppercase tracking-wide bg-stone-100 text-stone-500 rounded px-1.5 py-0.5">
+                                        {ASSET_KIND_LABEL[a.kind] || a.kind}
+                                    </span>
+                                    {a.fit_score != null && a.fit_score > 0 && (
+                                        <span className="text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 rounded px-1.5 py-0.5 inline-flex items-center gap-1">
+                                            <Sparkles className="w-3 h-3" /> Best fit
+                                        </span>
+                                    )}
+                                </div>
+                                {a.description && <p className="text-xs text-stone-500 mt-1 leading-relaxed">{a.description}</p>}
+                            </div>
+                            <div className="shrink-0 flex items-center gap-1.5">
+                                <button
+                                    type="button"
+                                    onClick={() => copyUrl(a)}
+                                    title="Copy share link"
+                                    className="inline-flex items-center gap-1 border border-stone-200 hover:border-stone-300 hover:bg-stone-50 text-stone-600 font-medium px-2.5 py-1.5 rounded-lg text-xs"
+                                >
+                                    {copiedId === a.id ? <><Check className="w-3.5 h-3.5 text-emerald-600" /> Copied</> : <><Copy className="w-3.5 h-3.5" /> Copy</>}
+                                </button>
+                                <a
+                                    href={a.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    title="Open resource"
+                                    className="inline-flex items-center gap-1 border border-stone-200 hover:border-stone-300 hover:bg-stone-50 text-stone-600 font-medium px-2.5 py-1.5 rounded-lg text-xs"
+                                >
+                                    <ExternalLink className="w-3.5 h-3.5" />
+                                </a>
+                            </div>
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </Card>
     );
 }
 
@@ -2031,22 +2588,34 @@ function CheckPageCard({ url }: { url: string }) {
 // ───────────────────────── Outreach pieces (inline on Company) ─────────────────────────
 
 // ── AI message generator ──────────────────────────────────────────────────────
+type EmailTemplate = "intro" | "award_congrats" | "short_nudge" | "deadline";
+
+const TEMPLATE_OPTIONS: { value: EmailTemplate; label: string; help: string }[] = [
+    { value: "intro", label: "Intro", help: "First cold lead-in — leads with the best live match." },
+    { value: "award_congrats", label: "Award congrats", help: "Opens by congratulating a recent federal win." },
+    { value: "short_nudge", label: "Short nudge", help: "A 3-sentence follow-up. They've heard from us before." },
+    { value: "deadline", label: "Deadline", help: "Heads-up that one of their matches closes soon." },
+];
+
 function MessageGenerator({ lead, onUseInComposer }: { lead: Lead; onUseInComposer: (subject: string, body: string) => void }) {
     const [tone, setTone] = useState<Tone>("warm_intro");
+    const [template, setTemplate] = useState<EmailTemplate>("intro");
     const [generating, setGenerating] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [rateLimited, setRateLimited] = useState(false);
     const [subject, setSubject] = useState("");
     const [bodyText, setBodyText] = useState("");
     const [generated, setGenerated] = useState(false);
     const [copied, setCopied] = useState<"subject" | "body" | "both" | null>(null);
     const [used, setUsed] = useState(false);
 
-    const generate = async () => {
+    const generate = async (tpl: EmailTemplate = template) => {
         setGenerating(true);
         setError(null);
+        setRateLimited(false);
         setUsed(false);
         try {
-            const payload: Record<string, string> = { tone };
+            const payload: Record<string, string> = { tone, template: tpl };
             if (lead.source === "inbound") payload.analysis_id = lead.id;
             else payload.contractor_id = lead.id;
             const res = await fetch("/api/admin/cockpit/message", {
@@ -2054,8 +2623,15 @@ function MessageGenerator({ lead, onUseInComposer }: { lead: Lead; onUseInCompos
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
             });
-            const data = await res.json();
-            if (!res.ok || !data.ok) throw new Error(data?.error || `Request failed (${res.status})`);
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.ok) {
+                // Friendly retry message on the rate-limit code instead of a raw error.
+                if (data?.code === 429 || res.status === 429 || res.status === 502) {
+                    setRateLimited(true);
+                    throw new Error("Our writer is busy right now — give it a few seconds and try again.");
+                }
+                throw new Error(data?.error || `Request failed (${res.status})`);
+            }
             setSubject(data.subject || "");
             setBodyText(data.body || "");
             setGenerated(true);
@@ -2064,6 +2640,11 @@ function MessageGenerator({ lead, onUseInComposer }: { lead: Lead; onUseInCompos
         } finally {
             setGenerating(false);
         }
+    };
+
+    const pickTemplate = (tpl: EmailTemplate) => {
+        setTemplate(tpl);
+        generate(tpl);
     };
 
     const copy = async (which: "subject" | "body" | "both") => {
@@ -2078,7 +2659,30 @@ function MessageGenerator({ lead, onUseInComposer }: { lead: Lead; onUseInCompos
     return (
         <Card>
             <SectionHeading icon={Sparkles} title="Write a personalized email" />
+
+            {/* Template variants — each re-generates with that opener shape. */}
             <div>
+                <FieldLabel>Pick a template</FieldLabel>
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                    {TEMPLATE_OPTIONS.map(t => (
+                        <button
+                            key={t.value}
+                            type="button"
+                            onClick={() => pickTemplate(t.value)}
+                            disabled={generating}
+                            title={t.help}
+                            className={clsx(
+                                "rounded-lg border px-3 py-1.5 text-xs font-bold transition-colors disabled:opacity-50",
+                                template === t.value ? "border-orange-400 bg-orange-50 text-orange-700" : "border-stone-200 text-stone-600 hover:border-stone-300",
+                            )}
+                        >
+                            {generating && template === t.value ? <Loader2 className="w-3.5 h-3.5 animate-spin inline" /> : t.label}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            <div className="mt-3">
                 <FieldLabel>Pick the style</FieldLabel>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2">
                     {TONE_OPTIONS.map(t => (
@@ -2097,14 +2701,24 @@ function MessageGenerator({ lead, onUseInComposer }: { lead: Lead; onUseInCompos
 
             <button
                 type="button"
-                onClick={generate}
+                onClick={() => generate()}
                 disabled={generating}
                 className="mt-3 inline-flex items-center gap-2 bg-stone-900 hover:bg-black disabled:opacity-50 text-white font-bold px-4 py-2.5 rounded-lg text-sm"
             >
                 {generating ? <><Loader2 className="w-4 h-4 animate-spin" /> Writing…</> : <><Sparkles className="w-4 h-4" /> {generated ? "Rewrite message" : "Generate message"}</>}
             </button>
 
-            {error && <p className="mt-3 text-sm text-rose-600 inline-flex items-center gap-1.5"><AlertTriangle className="w-4 h-4" /> {error}</p>}
+            {error && (
+                <div className={clsx(
+                    "mt-3 rounded-xl p-3 text-sm flex items-start gap-2",
+                    rateLimited ? "bg-amber-50 border border-amber-200 text-amber-800" : "text-rose-600",
+                )}>
+                    {rateLimited ? <RefreshCw className="w-4 h-4 shrink-0 mt-0.5" /> : <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />}
+                    <span className="font-medium">{error}{rateLimited && (
+                        <> <button type="button" onClick={() => generate()} className="underline font-bold">Try again</button></>
+                    )}</span>
+                </div>
+            )}
 
             {generated && (
                 <div className="mt-4 space-y-3">
@@ -2402,7 +3016,7 @@ function HubspotButton({ lead, notes, transcript }: { lead: Lead; notes: string;
 
 // ───────────────────────── Call notes modal ─────────────────────────
 
-function CallNotesModal({ lead, onClose, onSaved }: { lead: Lead; onClose: () => void; onSaved: (log: SavedCallLog) => void }) {
+function CallNotesModal({ lead, autoStart, onClose, onSaved }: { lead: Lead; autoStart?: boolean; onClose: () => void; onSaved: (log: SavedCallLog) => void }) {
     // Close on Escape.
     useEffect(() => {
         const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -2430,6 +3044,7 @@ function CallNotesModal({ lead, onClose, onSaved }: { lead: Lead; onClose: () =>
                         contractorId={lead.source === "contractors" ? lead.id : undefined}
                         leadName={lead.contact.name || undefined}
                         leadPhone={lead.contact.phone || undefined}
+                        autoStart={autoStart}
                         onSaved={onSaved}
                     />
                     <p className="text-xs text-stone-500 mt-3">
@@ -2728,5 +3343,41 @@ function Pill({ icon: Icon, children }: { icon: React.ComponentType<{ className?
         <span className="inline-flex items-center gap-1.5 text-xs font-medium bg-stone-100 text-stone-700 rounded-lg px-2.5 py-1">
             <Icon className="w-3.5 h-3.5 text-stone-400" /> {children}
         </span>
+    );
+}
+
+/**
+ * Hover tooltip wrapper — wraps any child (a cert badge, the fit chip) and shows a
+ * styled popover with `blurb` on hover/focus. Uses native `title` too so the text is
+ * available without JS / on touch. Group-hover keeps it dependency-free.
+ */
+function CertTooltip({ blurb, children }: { blurb: string; children: React.ReactNode }) {
+    return (
+        <span className="relative inline-flex group" tabIndex={0} title={blurb}>
+            {children}
+            <span
+                role="tooltip"
+                className="pointer-events-none absolute left-0 top-full mt-1.5 z-30 hidden group-hover:block group-focus:block w-64 rounded-lg bg-stone-900 text-white text-[11px] leading-snug font-normal normal-case tracking-normal px-3 py-2 shadow-xl"
+            >
+                {blurb}
+            </span>
+        </span>
+    );
+}
+
+/**
+ * A certification badge with a hover tooltip explaining what the cert means
+ * (certInfo from the cert-glossary). Falls back to the raw code when unknown.
+ */
+function CertBadge({ code }: { code: string }) {
+    const info = certInfo(code);
+    const label = info?.label || code;
+    const blurb = info?.blurb || `Certification: ${code}`;
+    return (
+        <CertTooltip blurb={blurb}>
+            <span className="inline-flex items-center gap-1.5 text-xs font-medium bg-stone-100 text-stone-700 rounded-lg px-2.5 py-1 cursor-help">
+                <Award className="w-3.5 h-3.5 text-stone-400" /> {label}
+            </span>
+        </CertTooltip>
     );
 }

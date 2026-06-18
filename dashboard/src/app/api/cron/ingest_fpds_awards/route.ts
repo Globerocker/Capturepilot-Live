@@ -69,6 +69,21 @@ interface ParsedAward {
     signed_date: string | null;
     effective_date: string | null;
     ultimate_end_date: string | null;
+    // Competition signals (powers the single-offer pitch stat).
+    number_of_offers_received: number | null;
+    extent_competed: string | null;
+    // USAspending's canonical award id (`generated_internal_id`). We stash it
+    // in `source_url` so backfill_fpds_offers can hit /api/v2/awards/<id>/
+    // directly without a second search lookup. The search endpoint itself
+    // returns `Number of Offers Received` as NULL even when the award-detail
+    // endpoint has it, so the real population happens in the backfill route.
+    source_url: string | null;
+}
+
+function intOrNull(x: unknown): number | null {
+    if (x === null || x === undefined || x === "") return null;
+    const n = parseInt(String(x), 10);
+    return Number.isFinite(n) ? n : null;
 }
 
 function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)); }
@@ -107,6 +122,12 @@ async function fetchUsaspendingAwards(naics: string, page: number): Promise<Pars
             "Start Date",
             "End Date",
             "Type of Contract Pricing",
+            // Competition fields. NOTE: USAspending returns these as NULL in
+            // the search response for nearly all rows even when the award-detail
+            // endpoint has them populated — we still request them so they fill
+            // in for free if/when USAspending fixes the search projection.
+            "Number of Offers Received",
+            "extent competed",
         ],
         page,
         limit: PAGE_SIZE,
@@ -135,6 +156,7 @@ async function fetchUsaspendingAwards(naics: string, page: number): Promise<Pars
         const naicsCode = typeof naicsObj === "string" ? naicsObj : (naicsObj?.code || null);
         const pscCode = typeof pscObj === "string" ? pscObj : (pscObj?.code || null);
         const awardId = String(r["Award ID"] || r.generated_internal_id || "");
+        const generatedId = (r.generated_internal_id as string) || null;
         // USAspending doesn't expose UEI in the search response — only
         // recipient_id (their internal hash) + Recipient Name. We use the
         // recipient_id as a stand-in for upsert dedup. Real UEI gets backfilled
@@ -155,6 +177,9 @@ async function fetchUsaspendingAwards(naics: string, page: number): Promise<Pars
             signed_date: dateOrNull((r["Start Date"] as string) || null),
             effective_date: dateOrNull((r["Start Date"] as string) || null),
             ultimate_end_date: dateOrNull((r["End Date"] as string) || null),
+            number_of_offers_received: intOrNull(r["Number of Offers Received"]),
+            extent_competed: (r["extent competed"] as string) || null,
+            source_url: generatedId,
         };
     }).filter(a => a.piid);
 }
@@ -217,7 +242,17 @@ export async function GET(req: NextRequest) {
         // with "ON CONFLICT DO UPDATE command cannot affect row a second time".
         const deduped = Array.from(
             new Map(naicsAwards.map(a => [a.piid, a])).values()
-        );
+        ).map(a => {
+            // Don't let a re-ingest stomp a backfilled competition value with
+            // the search endpoint's NULL. Strip NULL competition fields from
+            // the upsert payload so an existing row keeps what
+            // backfill_fpds_offers already wrote.
+            const row: Record<string, unknown> = { ...a };
+            if (a.number_of_offers_received === null) delete row.number_of_offers_received;
+            if (a.extent_competed === null) delete row.extent_competed;
+            if (a.source_url === null) delete row.source_url;
+            return row;
+        });
         // onConflict='piid' uses the migration-101 unique constraint.
         // The old uq_fpds_natural expression index can't be referenced
         // via the Supabase JS client (it only takes column names, not

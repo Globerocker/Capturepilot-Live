@@ -30,6 +30,12 @@ export interface TopMatch {
     agency: string | null;
     pwin: number;     // 0-100, framed as an estimate in copy
     score: number;    // raw 0-1
+    // ── Richer per-match signal persisted for the cockpit detail card. All
+    //    come straight off the scorer / scored opp, so they're free to store.
+    matched_keywords?: string[];                 // canonical keywords that hit title/desc/reqs
+    score_breakdown?: Record<string, number>;    // per-factor 0-1 contributions
+    naics_code?: string | null;                  // the matched opp's NAICS (for "why it fits")
+    set_aside_code?: string | null;              // the matched opp's set-aside (for "why it fits")
 }
 
 export interface DataGap {
@@ -177,6 +183,13 @@ export function topMatchesFor(
             agency: (opp.agency ?? null) as string | null,
             pwin: Math.round(m.score * 100),
             score: m.score,
+            // Persist the scorer's explainability + the opp's own codes so the
+            // cockpit detail card can render "why it fits" bullets without
+            // re-scoring (matched_keywords/score_breakdown come from the model).
+            matched_keywords: m.matched_keywords,
+            score_breakdown: m.score_breakdown,
+            naics_code: (opp.naics_code ?? null) as string | null,
+            set_aside_code: (opp.set_aside_code ?? null) as string | null,
         });
     }
     scored.sort((a, b) => b.score - a.score);

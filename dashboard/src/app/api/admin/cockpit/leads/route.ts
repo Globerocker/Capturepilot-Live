@@ -1,7 +1,7 @@
 /**
  * GET /api/admin/cockpit/leads — the cockpit LEAD-QUEUE + single-lead detail.
  *
- * Two sources of leads:
+ * Sources of leads:
  *   • 'contractors' (default) — QC-enriched SAM.gov firms. The bread-and-butter
  *     of the outreach queue. ICP-fit is computed in JS from the contractor row
  *     (veteran / 8(a) / size / past-awards), so we fetch a bounded candidate
@@ -9,9 +9,14 @@
  *   • 'inbound' — company_analyses rows (people who ran the public Quick Checker
  *     and left an email). ICP-fit computed from inferred_profile. These are
  *     warm — they came to us — so they're surfaced alongside the cold list.
+ *   • 'saved' — ONLY the contractors the calling admin has starred (joined from
+ *     cockpit_saved_contractors). Same LeadRow shape as 'contractors'.
+ *
+ * Every contractor LeadRow carries `saved: boolean` (left-joined from
+ * cockpit_saved_contractors for the caller) so the UI can render the star.
  *
  * Filters (all optional):
- *   source           'contractors' | 'inbound' | 'all'   (default 'contractors')
+ *   source           'contractors' | 'inbound' | 'all' | 'saved'   (default 'contractors')
  *   q                company-name search (ilike)
  *   state            two-letter state
  *   min_icp          minimum ICP score 0-100 (default 0)
@@ -51,7 +56,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { assertAdmin } from "@/lib/auth-admin";
+import { assertAdminWithUser } from "@/lib/auth-admin";
 import { computeIcpFit, icpTier, type IcpBreakdownItem } from "@/lib/icp-fit";
 import { computeDataGaps } from "@/lib/outreach/match-drop";
 import { LOOM_BY_GAP } from "@/lib/outreach/loom-videos";
@@ -84,10 +89,16 @@ interface LeadTopMatch {
     pwin: number | null;     // 0-100 if present on the blob
     deadline: string | null;
     naics: string | null;
-    opp_id: string | null;
-    set_aside: string | null;          // set-aside type when present on the blob
-    value: number | string | null;     // estimated contract value when present
-    why: string | null;                // a short "why it fits" line when present
+    opp_id: string | null;             // the source notice_id (joins to opportunities.notice_id)
+    set_aside: string | null;          // set-aside type
+    value: number | string | null;     // estimated contract value (opportunities.award_amount)
+    // ── Enriched in the single-lead detail path via a join to `opportunities`
+    //    on opp_id (notice_id). Stay null/empty when no join row is found, the
+    //    link is flagged broken, or in the bulk LIST path (which never joins). ──
+    real_link: string | null;          // opportunities.link — the REAL canonical URL (404 fix); null when link_broken
+    description: string | null;        // opportunities.description, trimmed to ~400 chars
+    keywords: string[];                 // opportunities.extracted_keywords, top ~8
+    why: string[];                      // 1-3 "why it fits" bullets (NAICS/keyword/set-aside/agency)
 }
 
 /** Persisted output of the cockpit company-research agent (contractors only). */
@@ -138,6 +149,28 @@ interface LeadRow {
         top_agencies: Array<{ name: string; amount: number | null }>;
         top_naics: Array<{ code: string; label: string; amount: number | null }>;
     };
+    /**
+     * The single MOST-RECENT federal award from fpds_awards (joined by UEI in the
+     * single-lead DETAIL path only — null in the bulk list to avoid N joins).
+     * Feeds the email 'award_congrats' template + a UI link. `url` is a
+     * USASpending keyword-search link on the PIID when one exists (we have no
+     * generated_unique_award_id to build a deterministic /award/ link), else null.
+     */
+    last_award: {
+        date: string | null;
+        agency: string | null;
+        amount: number | null;
+        naics: string | null;
+        description: string | null;     // a short, human one-liner about the award
+        piid: string | null;
+        url: string | null;
+    } | null;
+    /** Count of fpds_awards rows we hold for this UEI (DETAIL path; null in list). */
+    awards_count: number | null;
+    // ── V4: surfaced COMPANY profile fields ──────────────────────────────────
+    company_address: string | null;         // address_line_1/2 + city/state/zip, one line
+    company_history: string | null;         // capability_summary_ai.long_description ?? track_record join
+    estimated_revenue: number | null;       // revenue ?? total_award_volume ?? capability_summary_ai.revenue_signal
     // ── V2: surfaced contractor stats + provenance ───────────────────────────
     total_federal_revenue: number | null;   // total_award_volume ?? revenue
     total_federal_awards: number | null;     // total_federal_awards ?? federal_awards_count
@@ -152,6 +185,10 @@ interface LeadRow {
     research?: LeadResearch | null;         // contractors only — persisted research-agent output
     website_url?: string | null;            // contractors only — /site/<slug> if a one-pager was built
     created_at?: string | null;
+    /** True when the calling admin has starred this contractor (left-joined from cockpit_saved_contractors). */
+    saved?: boolean;
+    /** Contractor capability keywords (text[], migration 183) — surfaced for the Keywords tab. */
+    capability_keywords: string[];
 }
 
 // ───────────────────────── normalizers ─────────────────────────
@@ -185,20 +222,178 @@ function normalizeTopMatch(m: any): LeadTopMatch {
         score_pct: scorePct,
         pwin,
         deadline: m?.deadline ?? null,
-        naics: m?.naics ?? null,
+        // naics/set_aside: prefer the opp codes persisted by the enrichment cron
+        // (naics_code/set_aside_code), tolerate the legacy/alt blob shapes.
+        naics: m?.naics ?? m?.naics_code ?? null,
         opp_id: m?.opp_id ?? m?.notice_id ?? null,
-        // Richer fields surfaced in the cockpit's expandable Matches card. All
-        // tolerate the multiple blob shapes seen in prod (and stay null when absent).
-        set_aside: m?.set_aside ?? m?.setAside ?? m?.set_aside_type ?? null,
+        set_aside: m?.set_aside ?? m?.set_aside_code ?? m?.setAside ?? m?.set_aside_type ?? null,
         value: m?.value ?? m?.award_value ?? m?.estimated_value ?? m?.amount ?? null,
-        why: (typeof m?.why === "string" && m.why.trim())
-            ? m.why.trim()
-            : (typeof m?.why_it_fits === "string" && m.why_it_fits.trim())
-                ? m.why_it_fits.trim()
-                : (typeof m?.reason === "string" && m.reason.trim())
-                    ? m.reason.trim()
-                    : null,
+        // Enriched-from-opportunities fields: empty by default; the single-lead
+        // detail path fills real_link/description/keywords/why via a batched join.
+        real_link: null,
+        description: null,
+        keywords: [],
+        why: [],
     };
+}
+
+/** First N words of free text, trimmed to a hard char cap (no mid-word cut at the end). */
+function trimText(s: unknown, max = 400): string | null {
+    const t = String(s ?? "").replace(/\s+/g, " ").trim();
+    if (!t) return null;
+    if (t.length <= max) return t;
+    const cut = t.slice(0, max);
+    const lastSpace = cut.lastIndexOf(" ");
+    return (lastSpace > max * 0.6 ? cut.slice(0, lastSpace) : cut).trim() + "…";
+}
+
+/** NAICS overlap classifier between a contractor's codes and an opp's NAICS. */
+function naicsFitNote(contractorNaics: string[], oppNaics: string | null): string | null {
+    if (!oppNaics || !contractorNaics.length) return null;
+    if (contractorNaics.includes(oppNaics)) {
+        return `Exact NAICS match (${oppNaics} ${getNaicsDescription(oppNaics)})`;
+    }
+    if (contractorNaics.some((n) => n.slice(0, 4) === oppNaics.slice(0, 4))) {
+        return `Same NAICS industry group (${oppNaics} ${getNaicsDescription(oppNaics)})`;
+    }
+    if (contractorNaics.some((n) => n.slice(0, 3) === oppNaics.slice(0, 3))) {
+        return `Adjacent NAICS sub-sector (${oppNaics} ${getNaicsDescription(oppNaics)})`;
+    }
+    return null;
+}
+
+/** True when the contractor's certs satisfy the opp's set-aside (so they can bid it). */
+function isSetAsideEligible(certs: string[], sba: string[], setAside: string | null): boolean {
+    if (!setAside) return false;
+    const sa = setAside.toLowerCase();
+    if (sa.includes("no set") || sa === "none" || sa.includes("unrestricted")) return false;
+    const all = [...certs, ...sba].map((c) => c.toLowerCase());
+    const has = (...needles: string[]) => needles.some((n) => all.some((c) => c.includes(n)));
+    if (sa.includes("8(a)") || sa.includes("8a")) return has("8(a)", "8a");
+    if (sa.includes("sdvosb") || sa.includes("service-disabled")) return has("sdvosb");
+    if (sa.includes("vosb") || sa.includes("veteran")) return has("vosb", "sdvosb");
+    if (sa.includes("hubzone")) return has("hubzone");
+    if (sa.includes("edwosb")) return has("edwosb");
+    if (sa.includes("wosb") || sa.includes("women")) return has("wosb", "edwosb");
+    if (sa.includes("small")) return true; // small-business set-aside — eligible by size posture
+    return false;
+}
+
+interface OppJoinRow {
+    notice_id: string | null;
+    link: string | null;
+    link_broken: boolean | null;
+    description: string | null;
+    extracted_keywords: string[] | null;
+    structured_requirements: unknown;
+    set_aside_code: string | null;
+    response_deadline: string | null;
+    award_amount: number | null;
+    naics_code: string | null;
+    psc_code: string | null;
+}
+
+/**
+ * Enrich a contractor's normalized top_matches (in place, returns a new array)
+ * by joining their opp_id (= opportunities.notice_id) back to `opportunities`
+ * in ONE batched query. Fills:
+ *   real_link    opportunities.link, the REAL canonical URL (the 404 fix) —
+ *                nulled when link_broken so the UI never ships a dead link.
+ *   description  trimmed ~400 chars.
+ *   keywords     extracted_keywords, top ~8.
+ *   set_aside / value / deadline / naics  backfilled from the opp when the
+ *                stored blob value was missing.
+ *   why[]        1-3 bullets: NAICS exact/family match, matched-keyword hits
+ *                (from the stored matched_keywords/score_breakdown), set-aside
+ *                eligibility, and agencies the contractor has already sold to.
+ *
+ * `rawMatches` is the un-normalized capability_summary_ai.top_matches array,
+ * read positionally for the scorer signals (matched_keywords/score_breakdown)
+ * that normalizeTopMatch doesn't carry.
+ */
+async function enrichTopMatchesFromOpportunities(
+    sb: ReturnType<typeof svc>,
+    matches: LeadTopMatch[],
+    rawMatches: any[],
+    contractor: any,
+): Promise<LeadTopMatch[]> {
+    if (!matches.length) return matches;
+
+    const noticeIds = Array.from(
+        new Set(matches.map((m) => m.opp_id).filter((x): x is string => !!x)),
+    );
+    const byNotice: Record<string, OppJoinRow> = {};
+    if (noticeIds.length) {
+        const { data: opps } = await sb
+            .from("opportunities")
+            .select(
+                "notice_id, link, link_broken, description, extracted_keywords, structured_requirements, set_aside_code, response_deadline, award_amount, naics_code, psc_code",
+            )
+            .in("notice_id", noticeIds);
+        for (const o of (opps || []) as OppJoinRow[]) {
+            if (o.notice_id) byNotice[o.notice_id] = o;
+        }
+    }
+
+    const contractorNaics: string[] = Array.isArray(contractor?.naics_codes)
+        ? contractor.naics_codes.filter(Boolean).map(String)
+        : [];
+    const certs = toStrArray(contractor?.certifications);
+    const sba = toStrArray(contractor?.sba_certifications);
+    // Agencies the contractor has already sold to (for the "warm agency" why bullet).
+    const soldAgencies = topAgencies(contractor?.agency_relationships, 20).map((a) =>
+        a.name.toLowerCase(),
+    );
+
+    return matches.map((m, i) => {
+        const opp = m.opp_id ? byNotice[m.opp_id] : undefined;
+        const raw = rawMatches[i] || {};
+        const matchedKeywords: string[] = Array.isArray(raw.matched_keywords)
+            ? raw.matched_keywords.filter(Boolean).map(String)
+            : [];
+        const breakdown: Record<string, number> =
+            raw.score_breakdown && typeof raw.score_breakdown === "object" ? raw.score_breakdown : {};
+
+        const oppNaics = opp?.naics_code ?? m.naics ?? null;
+        const setAside = opp?.set_aside_code ?? m.set_aside ?? null;
+        const agency = m.agency;
+
+        // ── why[] bullets, sharpest signal first, capped at 3 ──
+        const why: string[] = [];
+        const naicsNote = naicsFitNote(contractorNaics, oppNaics);
+        if (naicsNote) why.push(naicsNote);
+        if (matchedKeywords.length) {
+            const hits = matchedKeywords.slice(0, 4);
+            why.push(
+                `Matches your capabilities: ${hits.join(", ")}${matchedKeywords.length > 4 ? "…" : ""}`,
+            );
+        } else if (typeof breakdown.keywords === "number" && breakdown.keywords > 0) {
+            why.push("Keyword overlap with the solicitation text");
+        }
+        if (setAside && isSetAsideEligible(certs, sba, setAside)) {
+            why.push(`Set-aside eligible (${setAside})`);
+        }
+        if (agency && soldAgencies.some((a) => a && (agency.toLowerCase().includes(a) || a.includes(agency.toLowerCase())))) {
+            why.push(`You've already won work with ${agency}`);
+        }
+
+        const realLink = opp && opp.link && opp.link_broken !== true ? opp.link : null;
+        const keywords: string[] = Array.isArray(opp?.extracted_keywords)
+            ? opp!.extracted_keywords!.filter(Boolean).map(String).slice(0, 8)
+            : [];
+
+        return {
+            ...m,
+            real_link: realLink,
+            description: trimText(opp?.description, 400),
+            keywords,
+            naics: oppNaics,
+            set_aside: setAside,
+            value: m.value ?? (opp?.award_amount ?? null),
+            deadline: m.deadline ?? (opp?.response_deadline ?? null),
+            why: why.slice(0, 3),
+        };
+    });
 }
 
 /** Pull the first gap key the contractor matches → its Loom URL (if any). */
@@ -324,6 +519,101 @@ function topNaics(v: unknown, n = 5): Array<{ code: string; label: string; amoun
         .slice(0, n);
 }
 
+/** Compose a one-line company address from the discrete contractor columns. */
+function companyAddress(c: any): string | null {
+    const parts = [
+        c?.address_line_1,
+        c?.address_line_2,
+        c?.city,
+        c?.state,
+        c?.zip_code,
+    ]
+        .map((x) => (x == null ? "" : String(x).trim()))
+        .filter(Boolean);
+    return parts.length ? parts.join(", ") : null;
+}
+
+/**
+ * A human "company history" blurb: the AI long-description if present, else a
+ * joined track-record list, else null. Kept short for the cockpit Company tab.
+ */
+function companyHistory(blob: any): string | null {
+    const longDesc = typeof blob?.long_description === "string" ? blob.long_description.trim() : "";
+    if (longDesc) return longDesc;
+    const tr = toStrArray(blob?.track_record);
+    if (tr.length) return tr.slice(0, 5).join(" · ");
+    return null;
+}
+
+/** revenue ?? total_award_volume ?? capability_summary_ai.revenue_signal, coerced to a number. */
+function estimatedRevenue(c: any, blob: any): number | null {
+    return toNum(c?.revenue) ?? toNum(c?.total_award_volume) ?? toNum(blob?.revenue_signal);
+}
+
+/**
+ * Build a USASpending link for a single award. fpds_awards has no
+ * generated_unique_award_id, so we cannot construct the deterministic
+ * /award/<id> permalink. The reliable fallback is a USASpending keyword search
+ * on the PIID, which resolves to the award record. Returns null without a PIID.
+ */
+function usaSpendingAwardUrl(piid: string | null): string | null {
+    const p = (piid || "").trim();
+    if (!p) return null;
+    return `https://www.usaspending.gov/search/?hash=&keyword=${encodeURIComponent(p)}`;
+}
+
+/**
+ * Fetch the MOST-RECENT fpds_award for a UEI + a total count. Detail-path only.
+ * Builds a short human description from the structured fields (FPDS has no free
+ * "description" column) and a USASpending keyword-search URL on the PIID.
+ */
+async function fetchLastAward(
+    sb: ReturnType<typeof svc>,
+    uei: string | null,
+): Promise<{ last_award: LeadRow["last_award"]; awards_count: number | null }> {
+    if (!uei) return { last_award: null, awards_count: null };
+    try {
+        const { data, error, count } = await sb
+            .from("fpds_awards")
+            .select(
+                "piid, awarding_agency, awarding_sub_agency, naics_code, obligation_amount, base_and_all_options, signed_date, effective_date, contract_type, set_aside",
+                { count: "exact" },
+            )
+            .eq("contractor_uei", uei)
+            .order("signed_date", { ascending: false, nullsFirst: false })
+            .limit(1);
+        if (error) throw new Error(error.message);
+        const row: any = (data || [])[0];
+        if (!row) return { last_award: null, awards_count: count ?? 0 };
+
+        const amount = toNum(row.obligation_amount) ?? toNum(row.base_and_all_options);
+        const agency = (row.awarding_sub_agency || row.awarding_agency || null) as string | null;
+        const naics = row.naics_code ? String(row.naics_code) : null;
+        // FPDS has no free-text description — synthesize a short, human one-liner.
+        const descBits: string[] = [];
+        if (agency) descBits.push(`Award from ${agency}`);
+        if (naics) descBits.push(`NAICS ${naics} (${getNaicsDescription(naics)})`);
+        if (row.contract_type) descBits.push(String(row.contract_type));
+        const description = descBits.length ? descBits.join(" · ") : null;
+
+        return {
+            last_award: {
+                date: row.signed_date ?? row.effective_date ?? null,
+                agency,
+                amount,
+                naics,
+                description,
+                piid: row.piid ? String(row.piid) : null,
+                url: usaSpendingAwardUrl(row.piid ? String(row.piid) : null),
+            },
+            awards_count: count ?? null,
+        };
+    } catch {
+        // fpds_awards may be empty / unmigrated — non-fatal, just omit.
+        return { last_award: null, awards_count: null };
+    }
+}
+
 /** Build a full contractor lead row from a DB row. */
 function contractorToLead(c: any): LeadRow {
     const blob = (c.capability_summary_ai || {}) as any;
@@ -352,7 +642,9 @@ function contractorToLead(c: any): LeadRow {
     });
 
     const rawMatches = Array.isArray(blob.top_matches) ? blob.top_matches : [];
-    const top = rawMatches.slice(0, 3).map(normalizeTopMatch);
+    // Up to 6 matches now (the enrichment cron stores 6). The detail path joins
+    // these to `opportunities` to fill real_link/description/keywords/why.
+    const top = rawMatches.slice(0, 6).map(normalizeTopMatch);
     const best = top.length ? Math.max(...top.map((t: LeadTopMatch) => t.score_pct)) : null;
 
     // Gaps: prefer the blob's stored data_gaps; recompute hook + loom from the
@@ -403,6 +695,13 @@ function contractorToLead(c: any): LeadRow {
             top_agencies: topAgencies(c.agency_relationships),
             top_naics: topNaics(c.naics_awards),
         },
+        // last_award + awards_count come from fpds_awards — populated only in the
+        // single-lead DETAIL path (fetchLastAward), null in the bulk list.
+        last_award: null,
+        awards_count: null,
+        company_address: companyAddress(c),
+        company_history: companyHistory(blob),
+        estimated_revenue: estimatedRevenue(c, blob),
         total_federal_revenue: c.total_award_volume ?? c.revenue ?? null,
         total_federal_awards: c.total_federal_awards ?? c.federal_awards_count ?? null,
         sam_registered: samRegistered,
@@ -420,6 +719,13 @@ function contractorToLead(c: any): LeadRow {
         // contractor_websites); left null in the bulk list to avoid N extra reads.
         website_url: null,
         created_at: c.created_at ?? null,
+        // capability_keywords: merge the text[] column with the blob mirror so the
+        // Keywords tab sees the same union the keywords route writes to.
+        capability_keywords: Array.from(
+            new Set([...toStrArray(c.capability_keywords), ...toStrArray(blob.capability_keywords)]
+                .map((k) => k.toLowerCase().trim())
+                .filter(Boolean)),
+        ).sort(),
     };
 }
 
@@ -489,6 +795,12 @@ function analysisToLead(a: any): LeadRow {
             top_agencies: [],
             top_naics: [],
         },
+        // Inbound has no UEI-keyed FPDS history / discrete address columns.
+        last_award: null,
+        awards_count: null,
+        company_address: inferred.address ?? null,
+        company_history: typeof inferred.company_description === "string" ? inferred.company_description.trim() || null : null,
+        estimated_revenue: toNum(inferred.revenue),
         // Inbound (company_analyses) has no SAM/award columns — null them out.
         total_federal_revenue: null,
         total_federal_awards: inferred.federal_awards_count ?? null,
@@ -504,6 +816,13 @@ function analysisToLead(a: any): LeadRow {
         readiness_score: a.readiness_score ?? null,
         check_page_url: `/check/${a.id}`,
         created_at: a.created_at ?? null,
+        // Inbound: pull whatever keywords the inferred profile carries (read-only;
+        // the Keywords tab edit path is contractors-only).
+        capability_keywords: Array.from(
+            new Set([...toStrArray(inferred.capability_keywords), ...toStrArray(inferred.keywords)]
+                .map((k) => k.toLowerCase().trim())
+                .filter(Boolean)),
+        ).sort(),
     };
 }
 
@@ -531,7 +850,8 @@ function sortLeads(leads: LeadRow[], sort: string): LeadRow[] {
 const CONTRACTOR_COLS =
     "id, uei, company_name, website, email, primary_poc_name, primary_poc_email, primary_poc_title, " +
     "primary_poc_phone, direct_phone, main_phone, phone, " +
-    "naics_codes, certifications, sba_certifications, state, city, employee_count, years_in_business, " +
+    "naics_codes, capability_keywords, certifications, sba_certifications, state, city, address_line_1, address_line_2, zip_code, " +
+    "employee_count, years_in_business, " +
     "federal_awards_count, total_federal_awards, total_award_volume, revenue, " +
     "naics_awards, agency_relationships, last_award_date, " +
     "is_sam_registered, sam_registered, expiration_date, " +
@@ -649,16 +969,64 @@ async function fetchInboundLeads(
     return { leads, capped };
 }
 
+/** The contractor ids the given admin has starred (cockpit_saved_contractors). */
+async function fetchSavedContractorIds(
+    sb: ReturnType<typeof svc>,
+    adminId: string,
+): Promise<Set<string>> {
+    const { data, error } = await sb
+        .from("cockpit_saved_contractors")
+        .select("contractor_id")
+        .eq("saved_by", adminId);
+    if (error) throw new Error(error.message);
+    return new Set((data || []).map((r: any) => String(r.contractor_id)));
+}
+
+/**
+ * Build full LeadRows for ONLY the contractors the admin has saved. Reads the
+ * pins, then the matching contractor rows, then maps them (mirrors
+ * fetchContractorLeads' mapper). Applies the same q/state predicates.
+ */
+async function fetchSavedLeads(
+    sb: ReturnType<typeof svc>,
+    adminId: string,
+    opts: { q?: string; state?: string },
+): Promise<{ leads: LeadRow[]; capped: boolean }> {
+    const ids = Array.from(await fetchSavedContractorIds(sb, adminId));
+    if (ids.length === 0) return { leads: [], capped: false };
+
+    let query = sb
+        .from("contractors")
+        .select(CONTRACTOR_COLS)
+        .in("id", ids.slice(0, CANDIDATE_CAP));
+    if (opts.state) query = query.eq("state", opts.state);
+    if (opts.q) {
+        const safe = opts.q.replace(/[%,]/g, "");
+        query = query.ilike("company_name", `%${safe}%`);
+    }
+
+    const { data, error } = await query;
+    if (error) throw new Error(error.message);
+    const leads = (data || []).map(contractorToLead);
+    for (const l of leads) l.saved = true; // every row here is, by definition, saved
+    return { leads, capped: ids.length > CANDIDATE_CAP };
+}
+
 // ───────────────────────── handler ─────────────────────────
 
 export async function GET(req: NextRequest) {
-    const unauth = await assertAdmin();
-    if (unauth) return unauth;
+    const gate = await assertAdminWithUser();
+    if (!gate.ok) return gate.response;
+    const adminId = gate.userId;
 
     const sp = req.nextUrl.searchParams;
     const sourceRaw = (sp.get("source") || "contractors").toLowerCase();
-    const source: "contractors" | "inbound" | "all" =
-        sourceRaw === "inbound" ? "inbound" : sourceRaw === "all" ? "all" : "contractors";
+    // 'saved' is a contractors view restricted to the caller's pins (cockpit_saved_contractors).
+    const source: "contractors" | "inbound" | "all" | "saved" =
+        sourceRaw === "inbound" ? "inbound"
+        : sourceRaw === "all" ? "all"
+        : sourceRaw === "saved" ? "saved"
+        : "contractors";
 
     const id = sp.get("id");
     const sb = svc();
@@ -686,6 +1054,27 @@ export async function GET(req: NextRequest) {
             if (error) return NextResponse.json({ error: error.message }, { status: 500 });
             if (!data) return NextResponse.json({ error: "not found" }, { status: 404 });
             const lead = contractorToLead(data);
+            // Detail-only: join the (up to 6) stored matches back to opportunities
+            // to fill the REAL canonical link (the 404 fix), description, keywords,
+            // and "why it fits" bullets. Best-effort — never block the dossier.
+            try {
+                const blob = ((data as any).capability_summary_ai || {}) as any;
+                const rawMatches = Array.isArray(blob.top_matches) ? blob.top_matches.slice(0, 6) : [];
+                lead.top_matches = await enrichTopMatchesFromOpportunities(
+                    sb,
+                    lead.top_matches,
+                    rawMatches,
+                    data,
+                );
+            } catch { /* opportunities join failed — keep the un-enriched matches */ }
+            // Detail-only: join the UEI back to fpds_awards for the MOST-RECENT
+            // award (date/agency/amount/naics/description + USASpending link) and a
+            // total awards_count. Feeds the email 'award_congrats' template + UI link.
+            try {
+                const { last_award, awards_count } = await fetchLastAward(sb, lead.uei);
+                lead.last_award = last_award;
+                lead.awards_count = awards_count;
+            } catch { /* fpds_awards join failed — keep last_award null */ }
             // Surface an already-built one-pager (if any) so the UI can show its
             // shareable link on reload without re-building. Best-effort; ignore errors.
             try {
@@ -696,6 +1085,16 @@ export async function GET(req: NextRequest) {
                     .maybeSingle();
                 if (site?.slug) lead.website_url = `/site/${site.slug}`;
             } catch { /* table may be empty / not migrated yet — non-fatal */ }
+            // Reflect whether the calling admin has starred this contractor.
+            try {
+                const { data: pin } = await sb
+                    .from("cockpit_saved_contractors")
+                    .select("id")
+                    .eq("contractor_id", id)
+                    .eq("saved_by", adminId)
+                    .maybeSingle();
+                lead.saved = !!pin;
+            } catch { /* saved table not reachable — leave undefined */ }
             return NextResponse.json({ lead });
         } catch (e: any) {
             return NextResponse.json({ error: e?.message || "lookup failed" }, { status: 500 });
@@ -746,6 +1145,11 @@ export async function GET(req: NextRequest) {
         let pool: LeadRow[] = [];
         let capped = false;
 
+        if (source === "saved") {
+            const r = await fetchSavedLeads(sb, adminId, { q, state });
+            pool = pool.concat(r.leads);
+            capped = capped || r.capped;
+        }
         if (source === "contractors" || source === "all") {
             const r = await fetchContractorLeads(sb, contractorFilters);
             pool = pool.concat(r.leads);
@@ -755,6 +1159,18 @@ export async function GET(req: NextRequest) {
             const r = await fetchInboundLeads(sb, { q, state });
             pool = pool.concat(r.leads);
             capped = capped || r.capped;
+        }
+
+        // Left-join the caller's saved-pins onto every contractor lead so the UI
+        // can render the star state in the list (best-effort — leave undefined on error).
+        // (fetchSavedLeads already set saved=true on its rows; this fills the rest.)
+        if (source !== "inbound") {
+            try {
+                const savedIds = await fetchSavedContractorIds(sb, adminId);
+                for (const l of pool) {
+                    if (l.source === "contractors") l.saved = savedIds.has(l.id);
+                }
+            } catch { /* saved table not reachable — leave saved undefined */ }
         }
 
         // Post-ICP filters (computed in JS, so applied here).

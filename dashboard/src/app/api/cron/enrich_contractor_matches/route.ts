@@ -5,7 +5,10 @@
  *   1. Builds a scoring profile from the contractor + capability_summary_ai.
  *   2. Pulls live, future-deadline opportunities matching their NAICS.
  *   3. Scores them with scoreOpportunityLeadMagnet() — the same model behind
- *      the public Quick Checker — and keeps the top 3 biddable matches.
+ *      the public Quick Checker — and keeps the top 6 biddable matches, each
+ *      with notice_id/title/agency/score/pwin PLUS matched_keywords +
+ *      score_breakdown + the opp's naics_code/set_aside_code (the cockpit
+ *      detail card uses these to build "why it fits" bullets without rescoring).
  *   4. Computes the website data-gaps (the email hooks).
  *   5. Merges { top_matches, data_gaps, gap_hook, match_enriched_at } into
  *      capability_summary_ai.
@@ -78,7 +81,7 @@ export async function GET(req: NextRequest) {
             opps = (oppRows || []) as any[];
         }
 
-        const top = topMatchesFor(c, blob, opps, 3);
+        const top = topMatchesFor(c, blob, opps, 6);
         const { gaps, gap_hook } = computeDataGaps(blob, c);
         const findings_summary = buildFindingsSummary(gaps, top);
 
