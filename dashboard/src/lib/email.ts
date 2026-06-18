@@ -236,8 +236,11 @@ export async function sendCockpitEmail(params: {
     subject: string;
     html: string;
     replyTo?: string;
+    // Optional file attachments (e.g. a CapturePilot resource PDF). Resend takes
+    // base64 `content` + `filename`. Caller is responsible for size/type limits.
+    attachments?: Array<{ filename: string; content: string }>;
 }): Promise<{ ok: true; id: string | null } | { ok: false; error: string }> {
-    const { from, to, subject, html, replyTo } = params;
+    const { from, to, subject, html, replyTo, attachments } = params;
 
     // Suppression: never send to an opted-out / bounced / complained address.
     try {
@@ -272,6 +275,7 @@ export async function sendCockpitEmail(params: {
             subject,
             html,
             replyTo: replyTo || undefined,
+            ...(attachments && attachments.length ? { attachments } : {}),
         });
         if (res.error) {
             console.error("[cockpit] Resend rejected send:", res.error);

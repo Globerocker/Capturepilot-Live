@@ -85,6 +85,13 @@ export async function POST(req: NextRequest) {
     const subject = (typeof raw.subject === "string" ? raw.subject : "").trim();
     const body = typeof raw.body === "string" ? raw.body : "";
     const lead_company = typeof raw.lead_company === "string" ? raw.lead_company.trim() : "";
+    // Optional resource attachments — [{ url, title? }]. We fetch + base64 each
+    // (https only, size + count capped) and hand them to Resend.
+    const attachReq: Array<{ url: string; title?: string }> = Array.isArray(raw.attachments)
+        ? (raw.attachments as any[])
+            .map((a) => ({ url: typeof a?.url === "string" ? a.url.trim() : "", title: typeof a?.title === "string" ? a.title : undefined }))
+            .filter((a) => a.url)
+        : [];
 
     if (!to_email || !EMAIL_RE.test(to_email)) {
         return NextResponse.json({ ok: false, error: "A valid to_email is required." }, { status: 400 });
@@ -136,7 +143,13 @@ export async function POST(req: NextRequest) {
         toEmail: to_email,
     });
 
-    const result = await sendCockpitEmail({ from, to: to_email, subject, html, replyTo });
+    // ── Fetch + encode any resource attachments (best-effort, capped) ────────
+    const { attachments, skipped } = await fetchAttachments(attachReq);
+    if (skipped.length) {
+        console.warn("[cockpit/send-email] skipped attachments:", skipped.join("; "));
+    }
+
+    const result = await sendCockpitEmail({ from, to: to_email, subject, html, replyTo, attachments });
 
     // ── Best-effort send log (never block the response on logging) ───────────
     void logSend(sb, {
@@ -154,6 +167,70 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: false, error: result.error }, { status: 502 });
     }
     return NextResponse.json({ ok: true, id: result.id });
+}
+
+// ── Attachment fetcher (https only, size + count capped) ─────────────────────
+
+const MAX_ATTACHMENTS = 4;
+const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024; // 8MB each — Resend's practical ceiling
+
+/** Derive a safe, human filename from an explicit title or the URL path. */
+function filenameFor(url: string, title?: string): string {
+    let base = (title || "").trim();
+    if (!base) {
+        try {
+            const p = new URL(url).pathname;
+            base = decodeURIComponent(p.split("/").filter(Boolean).pop() || "resource");
+        } catch {
+            base = "resource";
+        }
+    }
+    base = base.replace(/[^\w.\-() ]+/g, "_").slice(0, 80).trim() || "resource";
+    // Ensure a .pdf extension when the URL looks like a PDF and the name lacks one.
+    if (!/\.[a-z0-9]{2,5}$/i.test(base) && /\.pdf(\?|$)/i.test(url)) base += ".pdf";
+    return base;
+}
+
+/**
+ * Fetch each requested attachment URL and return Resend-shaped { filename,
+ * content(base64) } entries. Enforces: https only, ≤MAX_ATTACHMENTS, ≤8MB each.
+ * Failures are collected in `skipped` (never throw — a bad asset must not block
+ * the whole send).
+ */
+async function fetchAttachments(
+    reqs: Array<{ url: string; title?: string }>,
+): Promise<{ attachments: Array<{ filename: string; content: string }>; skipped: string[] }> {
+    const attachments: Array<{ filename: string; content: string }> = [];
+    const skipped: string[] = [];
+    const slice = reqs.slice(0, MAX_ATTACHMENTS);
+    if (reqs.length > MAX_ATTACHMENTS) skipped.push(`>${MAX_ATTACHMENTS} attachments — extras dropped`);
+
+    for (const r of slice) {
+        if (!/^https:\/\//i.test(r.url)) {
+            skipped.push(`${r.url} (not https)`);
+            continue;
+        }
+        try {
+            const res = await fetch(r.url, { signal: AbortSignal.timeout(15000), redirect: "follow" });
+            if (!res.ok) {
+                skipped.push(`${r.url} (HTTP ${res.status})`);
+                continue;
+            }
+            const buf = Buffer.from(await res.arrayBuffer());
+            if (buf.byteLength === 0) {
+                skipped.push(`${r.url} (empty)`);
+                continue;
+            }
+            if (buf.byteLength > MAX_ATTACHMENT_BYTES) {
+                skipped.push(`${r.url} (${Math.round(buf.byteLength / 1e6)}MB > 8MB)`);
+                continue;
+            }
+            attachments.push({ filename: filenameFor(r.url, r.title), content: buf.toString("base64") });
+        } catch (e) {
+            skipped.push(`${r.url} (${e instanceof Error ? e.message : "fetch failed"})`);
+        }
+    }
+    return { attachments, skipped };
 }
 
 // ── HTML builder ───────────────────────────────────────────────────────────

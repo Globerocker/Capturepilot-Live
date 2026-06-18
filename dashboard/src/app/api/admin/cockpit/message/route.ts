@@ -47,8 +47,8 @@ type Tone = "warm_intro" | "short" | "call_heads_up";
 const VALID_TONES: Tone[] = ["warm_intro", "short", "call_heads_up"];
 
 // Templates shape both the AI intro AND which block leads the email.
-type Template = "intro" | "award_congrats" | "short_nudge" | "deadline";
-const VALID_TEMPLATES: Template[] = ["intro", "award_congrats", "short_nudge", "deadline"];
+type Template = "intro" | "award_congrats" | "short_nudge" | "deadline" | "helpful_resource";
+const VALID_TEMPLATES: Template[] = ["intro", "award_congrats", "short_nudge", "deadline", "helpful_resource"];
 
 // Channel reshapes length, format, output shape, and which deterministic blocks
 // get appended. email = full (subject + matches block + past-perf + CTA);
@@ -126,6 +126,8 @@ const TEMPLATE_GUIDE: Record<Template, string> = {
         "A 3-sentence follow-up nudge. They've heard from us before. Remind them a couple of live matches are still open, ask if they want them. No greeting fluff, no sign-off paragraph — just a name. Under 55 words.",
     deadline:
         "A heads-up that one of their matches closes soon (you'll be told which one + the date). Lead with the deadline, keep it useful not pushy, offer the rest of the list. 80-110 words.",
+    helpful_resource:
+        "Lead with sharing a genuinely useful CapturePilot resource (a short guide / checklist relevant to their work) — the rep will attach or link it. Open with one specific reason it's relevant to their shop, mention you also spotted a live opportunity or two in their lane, no hard ask. Warm and useful, like a peer passing along something handy. 70-110 words.",
 };
 
 // Map the legacy tone param onto a template when no explicit template is given,

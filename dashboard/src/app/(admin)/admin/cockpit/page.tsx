@@ -1308,6 +1308,22 @@ function LeadDetail({
     // the Company tab's outreach block survives a tab switch.
     const [emailSubject, setEmailSubject] = useState("");
     const [emailBody, setEmailBody] = useState("");
+    // Resource attachments selected from the Assets tab — flow into the email send.
+    const [emailAttachments, setEmailAttachments] = useState<{ title: string; url: string }[]>([]);
+
+    // Asset → draft actions (Assets tab acts on the live email draft, then jumps
+    // the rep back to the Company tab so they see the change).
+    const insertAssetLink = useCallback((title: string, url: string) => {
+        setEmailBody(prev => {
+            const line = `${title}: ${url}`;
+            return prev && prev.trim() ? `${prev}\n\n${line}` : line;
+        });
+        setTab("company");
+    }, [setTab]);
+    const attachAsset = useCallback((title: string, url: string) => {
+        setEmailAttachments(prev => (prev.some(a => a.url === url) ? prev : [...prev, { title, url }]));
+        setTab("company");
+    }, [setTab]);
 
     const onCallSaved = useCallback((log: SavedCallLog) => {
         if (log.notes) setNotes(prev => (prev ? `${prev}\n\n${log.notes}` : log.notes));
@@ -1414,13 +1430,15 @@ function LeadDetail({
                         setEmailSubject={setEmailSubject}
                         emailBody={emailBody}
                         setEmailBody={setEmailBody}
+                        attachments={emailAttachments}
+                        setAttachments={setEmailAttachments}
                     />
                 )}
                 {tab === "matches" && <MatchesTab lead={lead} />}
                 {tab === "keywords" && (
                     <KeywordsTab lead={lead} notes={notes} transcript={transcript} onPatchDetail={onPatchDetail} />
                 )}
-                {tab === "assets" && <AssetsTab lead={lead} onRefresh={onRefresh} />}
+                {tab === "assets" && <AssetsTab lead={lead} onRefresh={onRefresh} onInsertLink={insertAssetLink} onAttach={attachAsset} />}
             </div>
 
             {callOpen && (
@@ -1440,7 +1458,7 @@ function LeadDetail({
 function CompanyTab({
     lead, loading, senderConfigured, onOpenSender, onRefresh, onOpenCall, onStartCall,
     notes, setNotes, transcript, setTranscript,
-    emailSubject, setEmailSubject, emailBody, setEmailBody,
+    emailSubject, setEmailSubject, emailBody, setEmailBody, attachments, setAttachments,
 }: {
     lead: Lead;
     loading: boolean;
@@ -1457,6 +1475,8 @@ function CompanyTab({
     setEmailSubject: (v: string) => void;
     emailBody: string;
     setEmailBody: (v: string) => void;
+    attachments: { title: string; url: string }[];
+    setAttachments: React.Dispatch<React.SetStateAction<{ title: string; url: string }[]>>;
 }) {
     const isContractor = lead.source === "contractors";
     return (
@@ -1544,6 +1564,8 @@ function CompanyTab({
                         setSubject={setEmailSubject}
                         body={emailBody}
                         setBody={setEmailBody}
+                        attachments={attachments}
+                        setAttachments={setAttachments}
                     />
                     <NotesCard
                         lead={lead}
@@ -2523,13 +2545,18 @@ function KeywordsTab({ lead, notes, transcript, onPatchDetail }: {
 
 // ───────────────────────── TAB: Assets ─────────────────────────
 
-function AssetsTab({ lead, onRefresh }: { lead: Lead; onRefresh: () => void }) {
+function AssetsTab({ lead, onRefresh, onInsertLink, onAttach }: {
+    lead: Lead;
+    onRefresh: () => void;
+    onInsertLink: (title: string, url: string) => void;
+    onAttach: (title: string, url: string) => void;
+}) {
     const isContractor = lead.source === "contractors";
     return (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
             {/* CapturePilot resource library — best-fit collateral to attach to outreach. */}
             <div className="xl:col-span-2">
-                <AssetsLibraryCard lead={lead} />
+                <AssetsLibraryCard lead={lead} onInsertLink={onInsertLink} onAttach={onAttach} />
             </div>
             {isContractor && <WebsiteAction lead={lead} onRefresh={onRefresh} highlight={lead.has_website === false} />}
             {isContractor && <CapStatementCard lead={lead} />}
@@ -2573,11 +2600,17 @@ const ASSET_KIND_LABEL: Record<string, string> = {
  * hits GET /api/admin/cockpit/assets, and lists the assets with a one-click copy
  * of the share URL so the rep can drop it into the email composer.
  */
-function AssetsLibraryCard({ lead }: { lead: Lead }) {
+function AssetsLibraryCard({ lead, onInsertLink, onAttach }: {
+    lead: Lead;
+    onInsertLink: (title: string, url: string) => void;
+    onAttach: (title: string, url: string) => void;
+}) {
     const [assets, setAssets] = useState<CockpitAsset[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [copiedId, setCopiedId] = useState<string | null>(null);
+    const [actedId, setActedId] = useState<string | null>(null);
+    const flash = (id: string) => { setActedId(id); setTimeout(() => setActedId(p => (p === id ? null : p)), 1600); };
 
     // Targeting signal — memoized so we don't refetch on unrelated re-renders.
     const { naics, keywords } = useMemo(() => {
@@ -2633,7 +2666,7 @@ function AssetsLibraryCard({ lead }: { lead: Lead }) {
         <Card>
             <SectionHeading icon={Package} title="Resources to send them" />
             <p className="text-sm text-stone-500 -mt-2 mb-3">
-                CapturePilot guides, templates and lead magnets — ranked by fit. Copy a link straight into your email.
+                CapturePilot guides, templates and lead magnets — ranked by fit. Insert a link into your draft, attach the file to the email, or copy the URL.
             </p>
             {loading ? (
                 <div className="py-6 text-center text-stone-400">
@@ -2661,7 +2694,23 @@ function AssetsLibraryCard({ lead }: { lead: Lead }) {
                                 </div>
                                 {a.description && <p className="text-xs text-stone-500 mt-1 leading-relaxed">{a.description}</p>}
                             </div>
-                            <div className="shrink-0 flex items-center gap-1.5">
+                            <div className="shrink-0 flex flex-wrap items-center justify-end gap-1.5 max-w-[230px]">
+                                <button
+                                    type="button"
+                                    onClick={() => { onInsertLink(a.title, a.url); flash(a.id); }}
+                                    title="Insert this link into the email draft"
+                                    className="inline-flex items-center gap-1 bg-orange-600 hover:bg-orange-700 text-white font-bold px-2.5 py-1.5 rounded-lg text-xs"
+                                >
+                                    {actedId === a.id ? <><Check className="w-3.5 h-3.5" /> Added</> : <><Plus className="w-3.5 h-3.5" /> Insert link</>}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => { onAttach(a.title, a.url); flash(a.id); }}
+                                    title="Attach this file to the email"
+                                    className="inline-flex items-center gap-1 border border-stone-200 hover:border-stone-300 hover:bg-stone-50 text-stone-600 font-medium px-2.5 py-1.5 rounded-lg text-xs"
+                                >
+                                    <FileText className="w-3.5 h-3.5" /> Attach
+                                </button>
                                 <button
                                     type="button"
                                     onClick={() => copyUrl(a)}
@@ -3094,13 +3143,14 @@ function CheckPageCard({ url }: { url: string }) {
 // ───────────────────────── Outreach pieces (inline on Company) ─────────────────────────
 
 // ── AI message generator ──────────────────────────────────────────────────────
-type EmailTemplate = "intro" | "award_congrats" | "short_nudge" | "deadline";
+type EmailTemplate = "intro" | "award_congrats" | "short_nudge" | "deadline" | "helpful_resource";
 
 const TEMPLATE_OPTIONS: { value: EmailTemplate; label: string; help: string }[] = [
     { value: "intro", label: "Intro", help: "First cold lead-in — leads with the best live match." },
     { value: "award_congrats", label: "Award congrats", help: "Opens by congratulating a recent federal win." },
     { value: "short_nudge", label: "Short nudge", help: "A 3-sentence follow-up. They've heard from us before." },
     { value: "deadline", label: "Deadline", help: "Heads-up that one of their matches closes soon." },
+    { value: "helpful_resource", label: "Helpful resource", help: "Leads with sharing a useful guide — attach/insert it from the Assets tab." },
 ];
 
 type OutreachChannel = "email" | "linkedin" | "sms";
@@ -3421,7 +3471,7 @@ function MessageGenerator({ lead, onUseInComposer }: { lead: Lead; onUseInCompos
 
 // ── Email composer (sends as the configured cockpit sender) ─────────────────────
 function EmailComposer({
-    lead, senderConfigured, onOpenSender, subject, setSubject, body, setBody,
+    lead, senderConfigured, onOpenSender, subject, setSubject, body, setBody, attachments, setAttachments,
 }: {
     lead: Lead;
     senderConfigured: boolean | null;
@@ -3430,6 +3480,8 @@ function EmailComposer({
     setSubject: (v: string) => void;
     body: string;
     setBody: (v: string) => void;
+    attachments: { title: string; url: string }[];
+    setAttachments: React.Dispatch<React.SetStateAction<{ title: string; url: string }[]>>;
 }) {
     const [sending, setSending] = useState(false);
     const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
@@ -3450,6 +3502,7 @@ function EmailComposer({
                 body,
                 lead_company: lead.company_name || undefined,
             };
+            if (attachments.length) payload.attachments = attachments.map(a => ({ url: a.url, title: a.title }));
             if (lead.source === "inbound") payload.analysis_id = lead.id;
             else payload.contractor_id = lead.id;
 
@@ -3509,6 +3562,28 @@ function EmailComposer({
                         className="w-full mt-1 px-3 py-2 text-sm rounded-lg border border-stone-200 focus:outline-none focus:border-stone-400 leading-relaxed"
                     />
                 </div>
+                {attachments.length > 0 && (
+                    <div>
+                        <FieldLabel>Attachments</FieldLabel>
+                        <div className="flex flex-wrap gap-1.5 mt-1">
+                            {attachments.map((a) => (
+                                <span key={a.url} className="inline-flex items-center gap-1.5 bg-stone-100 border border-stone-200 rounded-lg pl-2.5 pr-1.5 py-1 text-xs text-stone-700">
+                                    <Package className="w-3.5 h-3.5 text-stone-400" />
+                                    <span className="max-w-[180px] truncate" title={a.title || a.url}>{a.title || a.url}</span>
+                                    <button
+                                        type="button"
+                                        onClick={() => setAttachments(prev => prev.filter(x => x.url !== a.url))}
+                                        className="text-stone-400 hover:text-rose-600"
+                                        aria-label={`Remove ${a.title || a.url}`}
+                                    >
+                                        <X className="w-3.5 h-3.5" />
+                                    </button>
+                                </span>
+                            ))}
+                        </div>
+                        <p className="text-[11px] text-stone-400 mt-1">Pulled from the Assets tab. The file is fetched and attached when you send.</p>
+                    </div>
+                )}
             </div>
 
             <div className="mt-3 flex flex-wrap items-center gap-3">
