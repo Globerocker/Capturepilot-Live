@@ -52,7 +52,7 @@ import {
     ChevronRight, MapPin, FileText, Wand2, RotateCcw, Download, X,
     Star, LayoutTemplate, Package, ArrowLeft, Settings,
     DollarSign, CalendarClock, BadgeCheck, Info, ChevronDown, SlidersHorizontal,
-    Tag, Plus, PhoneCall, MessageSquare, TrendingUp,
+    Tag, Plus, PhoneCall, MessageSquare, TrendingUp, PanelLeftClose, PanelLeftOpen,
 } from "lucide-react";
 import clsx from "clsx";
 import CallButton, { type SavedCallLog } from "@/components/CallButton";
@@ -453,6 +453,7 @@ type LeadSource = "contractors" | "inbound" | "saved";
 
 // Resizable left-rail bounds (lg+). Width persists to localStorage.
 const RAIL_STORAGE_KEY = "cp_cockpit_rail_w";
+const RAIL_COLLAPSE_KEY = "cp_cockpit_rail_collapsed";
 const RAIL_MIN_W = 300;
 const RAIL_MAX_W = 560;
 const RAIL_DEFAULT_W = 380;
@@ -488,6 +489,15 @@ export default function CockpitPage() {
     const [railWidth, setRailWidth] = useState(RAIL_DEFAULT_W);
     const [resizing, setResizing] = useState(false);
     const [isLg, setIsLg] = useState(false);
+    // Collapse the lead rail entirely → full-width detail (clean for Loom).
+    const [railCollapsed, setRailCollapsed] = useState(false);
+    const toggleRail = useCallback(() => {
+        setRailCollapsed(c => {
+            const next = !c;
+            try { localStorage.setItem(RAIL_COLLAPSE_KEY, next ? "1" : "0"); } catch { /* ignore */ }
+            return next;
+        });
+    }, []);
     useEffect(() => {
         try {
             const raw = localStorage.getItem(RAIL_STORAGE_KEY);
@@ -495,6 +505,7 @@ export default function CockpitPage() {
                 const n = Number(raw);
                 if (Number.isFinite(n)) setRailWidth(clampRailWidth(n));
             }
+            setRailCollapsed(localStorage.getItem(RAIL_COLLAPSE_KEY) === "1");
         } catch { /* localStorage unavailable */ }
         if (typeof window === "undefined" || !window.matchMedia) return;
         const mq = window.matchMedia("(min-width: 1024px)");
@@ -691,6 +702,14 @@ export default function CockpitPage() {
         }
     }, [source]);
 
+    // A/B/C breakdown of the loaded queue — so the count reads "3 A · 40 B · …"
+    // instead of a meaningless flat "1,000".
+    const tierCounts = useMemo(() => {
+        const c = { A: 0, B: 0, C: 0 };
+        for (const l of leads) if (l.icp_tier === "A" || l.icp_tier === "B" || l.icp_tier === "C") c[l.icp_tier]++;
+        return c;
+    }, [leads]);
+
     const activeFilterCount = useMemo(() => {
         let n = 0;
         if (filters.state) n++;
@@ -722,6 +741,15 @@ export default function CockpitPage() {
                         </h1>
                     </div>
                     <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={toggleRail}
+                            title={railCollapsed ? "Show the lead list" : "Hide the lead list (full-width detail, clean for Loom)"}
+                            className="hidden lg:inline-flex items-center gap-2 bg-white hover:bg-stone-100 border border-stone-200 text-stone-700 font-bold px-3 py-1.5 rounded-lg text-sm"
+                        >
+                            {railCollapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
+                            <span className="hidden xl:inline">{railCollapsed ? "Show list" : "Hide list"}</span>
+                        </button>
                         <button
                             type="button"
                             onClick={() => setSenderOpen(true)}
@@ -762,6 +790,9 @@ export default function CockpitPage() {
                         "w-full lg:shrink-0",
                         // On mobile, hide the list once a lead is selected.
                         detail ? "hidden lg:flex" : "flex",
+                        // Collapsed (lg only) → hide the rail entirely for a full-width
+                        // detail. `!` beats the lg:flex above regardless of source order.
+                        railCollapsed && "lg:!hidden",
                     )}
                 >
                     <QueueFilters
@@ -773,6 +804,7 @@ export default function CockpitPage() {
                         setFiltersOpen={setFiltersOpen}
                         activeFilterCount={activeFilterCount}
                         total={total}
+                        tierCounts={tierCounts}
                         onClear={clearFilters}
                     />
 
@@ -831,6 +863,7 @@ export default function CockpitPage() {
                     className={clsx(
                         "hidden lg:flex shrink-0 w-1.5 cursor-col-resize items-center justify-center group relative -ml-px z-10",
                         resizing ? "bg-orange-200" : "hover:bg-orange-100",
+                        railCollapsed && "lg:!hidden",
                     )}
                     title="Drag to resize"
                 >
@@ -880,7 +913,7 @@ export default function CockpitPage() {
 
 function QueueFilters({
     source, onSwitchSource, filters, setF, filtersOpen, setFiltersOpen,
-    activeFilterCount, total, onClear,
+    activeFilterCount, total, tierCounts, onClear,
 }: {
     source: LeadSource;
     onSwitchSource: (s: LeadSource) => void;
@@ -890,6 +923,7 @@ function QueueFilters({
     setFiltersOpen: (v: boolean) => void;
     activeFilterCount: number;
     total: number;
+    tierCounts: { A: number; B: number; C: number };
     onClear: () => void;
 }) {
     const isContractors = source === "contractors";
@@ -1045,8 +1079,15 @@ function QueueFilters({
             )}
 
             <div className="flex items-center justify-between text-xs text-stone-500 pt-0.5">
-                <span>
-                    <span className="font-bold text-stone-700">{total.toLocaleString()}</span> {total === 1 ? "lead" : "leads"}
+                <span className="inline-flex items-center gap-1.5 flex-wrap">
+                    <span><span className="font-bold text-stone-700">{total.toLocaleString()}</span> {total === 1 ? "lead" : "leads"}</span>
+                    {(tierCounts.A + tierCounts.B + tierCounts.C) > 0 && (
+                        <span className="text-stone-400">
+                            · <span className="font-bold text-emerald-700">{tierCounts.A}</span> A
+                            · <span className="font-bold text-amber-700">{tierCounts.B}</span> B
+                            · <span className="text-stone-500">{tierCounts.C}</span> C
+                        </span>
+                    )}
                 </span>
                 {(activeFilterCount > 0 || filters.q || filters.tier) && (
                     <button type="button" onClick={onClear} className="hover:text-black underline">
@@ -2274,7 +2315,9 @@ function MatchesTab({ lead }: { lead: Lead }) {
 }
 
 function MatchCard({ match }: { match: LeadTopMatch }) {
-    const [open, setOpen] = useState(false);
+    // Folded OUT by default — the match detail (why it fits, keywords, links) is
+    // the most demo-worthy part of the cockpit, so lead with it expanded.
+    const [open, setOpen] = useState(true);
     // Use the FIXED canonical link (opportunities.link, joined by notice_id) — never
     // a constructed sam.gov/opp/<id> URL (the 404 bug). Null → "link unavailable".
     const realLink = match.real_link ?? null;

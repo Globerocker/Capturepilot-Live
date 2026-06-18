@@ -187,12 +187,19 @@ async function GET_handler(req: NextRequest): Promise<NextResponse> {
                         // dedicated column empty, which is why deep_enrich and
                         // download_attachments had almost nothing to chew on.
                         const resourceLinks = Array.isArray(o.resourceLinks) ? o.resourceLinks : [];
+                        // SAM v2 frequently leaves department/subTier empty and only
+                        // populates fullParentPathName (dot-delimited org hierarchy,
+                        // e.g. "DEPT OF DEFENSE.DEPT OF THE ARMY.ACC-..."). That's why
+                        // ~97% of Combined Synopsis notices had a null agency. Parse it
+                        // as the fallback: segment 0 = department, segment 1 = sub-agency.
+                        const parentSegs = (typeof o.fullParentPathName === "string" ? o.fullParentPathName : "")
+                            .split(".").map((s) => s.trim()).filter(Boolean);
                         return {
                             notice_id: o.noticeId,
                             title: o.title || null,
                             description: o.description || null,
-                            agency: o.department || o.subTier || o.agency || null,
-                            sub_agency: o.subtierAgency || o.subtier || null,
+                            agency: o.department || o.subTier || o.agency || parentSegs[0] || null,
+                            sub_agency: o.subtierAgency || o.subtier || parentSegs[1] || null,
                             office: o.office || null,
                             organization_code: o.organizationCode || null,
                             naics_code: naics && validNaics.has(naics) ? naics : null,
