@@ -47,8 +47,13 @@ type Tone = "warm_intro" | "short" | "call_heads_up";
 const VALID_TONES: Tone[] = ["warm_intro", "short", "call_heads_up"];
 
 // Templates shape both the AI intro AND which block leads the email.
-type Template = "intro" | "award_congrats" | "short_nudge" | "deadline" | "helpful_resource";
-const VALID_TEMPLATES: Template[] = ["intro", "award_congrats", "short_nudge", "deadline", "helpful_resource"];
+type Template =
+    | "intro" | "award_congrats" | "short_nudge" | "deadline" | "helpful_resource"
+    | "recompete" | "set_aside_edge" | "low_competition" | "expiring_sam";
+const VALID_TEMPLATES: Template[] = [
+    "intro", "award_congrats", "short_nudge", "deadline", "helpful_resource",
+    "recompete", "set_aside_edge", "low_competition", "expiring_sam",
+];
 
 // Channel reshapes length, format, output shape, and which deterministic blocks
 // get appended. email = full (subject + matches block + past-perf + CTA);
@@ -121,13 +126,21 @@ const TEMPLATE_GUIDE: Record<Template, string> = {
     intro:
         "First-time cold lead-in. Open with the one live opportunity that fits them by name. Mention the single site gap we can fix in one clause. No hard ask. 80-120 words.",
     award_congrats:
-        "Open by congratulating them on a recent federal award (you'll be told which one — agency + rough size). One genuine line, then pivot: a few more live opportunities in their lane just opened. Keep it warm, not fawning. 80-120 words.",
+        "Open by congratulating them on a recent federal award (you'll be told which one, agency + rough size). One genuine line, then pivot: a few more live opportunities in their lane just opened. Keep it warm, not fawning. 80-120 words.",
     short_nudge:
         "A 3-sentence follow-up nudge. They've heard from us before. Remind them a couple of live matches are still open, ask if they want them. No greeting fluff, no sign-off paragraph — just a name. Under 55 words.",
     deadline:
         "A heads-up that one of their matches closes soon (you'll be told which one + the date). Lead with the deadline, keep it useful not pushy, offer the rest of the list. 80-110 words.",
     helpful_resource:
-        "Lead with sharing a genuinely useful CapturePilot resource (a short guide / checklist relevant to their work) — the rep will attach or link it. Open with one specific reason it's relevant to their shop, mention you also spotted a live opportunity or two in their lane, no hard ask. Warm and useful, like a peer passing along something handy. 70-110 words.",
+        "Lead with sharing a genuinely useful CapturePilot resource (a short guide or checklist relevant to their work); the rep will attach or link it. Open with one specific reason it's relevant to their shop, mention you also spotted a live opportunity or two in their lane, no hard ask. Warm and useful, like a peer passing along something handy. 70-110 words.",
+    recompete:
+        "A contract in their lane is coming up for recompete. The opener: incumbents lose more often than people think, and a firm that starts early has a real shot. Name the kind of work, note it's worth getting in front of now, no pressure. Practical and a little encouraging. 80-110 words.",
+    set_aside_edge:
+        "They hold a certification (8(a), SDVOSB, HUBZone, WOSB) that most of their competition doesn't. The opener: they're sitting on an advantage they aren't using, and there are set-aside opportunities only firms like them can bid. Make it feel like a nudge from someone who noticed they're leaving money on the table. 80-110 words.",
+    low_competition:
+        "Some opportunities in their lane are getting very few bidders right now (single-offer or near sole-source). The opener: these are the easy lanes most firms never see, and they're a good fit for a few of them. Plain and specific, like tipping off a friend. 80-110 words.",
+    expiring_sam:
+        "Their SAM.gov registration is close to expiring, which would make them ineligible to win federal work until it's renewed. The opener: a quick heads-up so they don't go dark, then note there's live work open in their lane worth staying active for. Helpful, not alarmist. 70-100 words.",
 };
 
 // Map the legacy tone param onto a template when no explicit template is given,
@@ -441,7 +454,7 @@ function buildPrompt(
     const matchSummaryForPrompt = topMatches.length
         ? topMatches
               .map((m, i) => {
-                  const agency = m.agency ? ` — ${m.agency}` : "";
+                  const agency = m.agency ? ` · ${m.agency}` : "";
                   const fit = typeof m.fit_pct === "number" ? ` (~${m.fit_pct}% fit)` : "";
                   const why = m.reasons.length ? `  [fits because: ${m.reasons.join("; ")}]` : "";
                   return `${i + 1}. ${m.title}${agency}${fit}${why}`;
@@ -495,6 +508,8 @@ Hard rules:
 - Do not invent opportunities, awards, certifications, or numbers not given to you.
 - Plain, direct, a little weary. It should read like a real person typed it.
 - No marketing fluff, no "I hope this finds you well", no links, no calendar links.
+- NEVER use an em-dash (—) or en-dash (–). They read as AI-written. Use a period, a comma, or just two sentences instead. This is non-negotiable.
+- Vary sentence length. A couple of short sentences, then a longer one. Avoid the uniform medium-length rhythm that gives AI away.
 - Always return JSON with keys "subject" and "body".`;
 
     const isEmail = channel === "email";
@@ -546,23 +561,23 @@ function buildSoftCta(
 ): string {
     const link = lead.result_url;
     const credit = matchCount
-        ? "We pulled these with our own gov-contract matching tool — it's what we do all day."
+        ? "We pulled these with our own gov-contract matching tool. It's what we do all day."
         : "Finding these is what our gov-contract matching tool does all day.";
 
     if (template === "short_nudge") {
-        // Lean — one line, no software credit paragraph.
+        // Lean: one line, no software credit paragraph.
         return link
-            ? `Want the full list? It's here: ${link} — or just reply.`
+            ? `Want the full list? It's here: ${link}. Or just reply.`
             : `Want the full list? Just reply and I'll send it over.`;
     }
 
     const callOffer = wantsCall || template === "deadline"
-        ? "If it's useful, I'll walk you through the list on a quick 10-minute call — no pitch, and nothing to sign."
-        : "Happy to walk you through it on a short call if that's easier — no pitch, nothing to sign.";
+        ? "If it's useful, I'll walk you through the list on a quick 10-minute call. No pitch, nothing to sign."
+        : "Happy to walk you through it on a short call if that's easier. No pitch, nothing to sign.";
 
     const lead2 = link
-        ? `The full breakdown — deadlines, fit notes, the rest of the list — is here: ${link}, or just reply and I'll send it over.`
-        : `Reply and I'll send the full breakdown — deadlines, fit notes, the rest of the list.`;
+        ? `The full breakdown (deadlines, fit notes, the rest of the list) is here: ${link}, or just reply and I'll send it over.`
+        : `Reply and I'll send the full breakdown: deadlines, fit notes, the rest of the list.`;
 
     return matchCount ? `${credit} ${lead2}\n\n${callOffer}` : `${credit} ${lead2}`;
 }
@@ -972,7 +987,7 @@ function buildMatchesBlock(matches: LeadMatch[]): string {
     if (!matches.length) return "";
     const lines: string[] = ["A few live ones that fit your shop:"];
     for (const m of matches) {
-        const agency = m.agency ? ` — ${m.agency}` : "";
+        const agency = m.agency ? ` · ${m.agency}` : "";
         const fit = typeof m.fit_pct === "number" ? ` · ${m.fit_pct}% fit` : "";
         lines.push("");
         lines.push(`${m.title}${agency}${fit}`);
@@ -989,23 +1004,23 @@ function buildMatchesBlock(matches: LeadMatch[]): string {
 function buildCompactMatchLine(matches: LeadMatch[]): string {
     if (!matches.length) return "";
     const m = matches[0];
-    const agency = m.agency ? ` — ${m.agency}` : "";
+    const agency = m.agency ? ` · ${m.agency}` : "";
     const fit = typeof m.fit_pct === "number" ? ` (${m.fit_pct}% fit)` : "";
     const link = m.link ? `\n${m.link}` : "";
     const more = matches.length > 1 ? ` Plus ${matches.length - 1} more in your lane.` : "";
     return `The strongest one open right now: ${m.title}${agency}${fit}.${more}${link}`;
 }
 
-/** A short, plain LinkedIn offer — no call push, no software pitch paragraph. */
+/** A short, plain LinkedIn offer. No call push, no software pitch paragraph. */
 function buildLinkedinCta(lead: LeadContext, matchCount: number): string {
     if (!matchCount) {
         return lead.result_url
             ? `Pulled this with our gov-contract matching tool. Full breakdown's here: ${lead.result_url}`
-            : `Happy to dig into what's open in your lane — want me to send a short list?`;
+            : `Happy to dig into what's open in your lane. Want me to send a short list?`;
     }
     return lead.result_url
-        ? `Want the full short-list (deadlines + fit notes)? It's here: ${lead.result_url} — or I can drop it in this chat.`
-        : `Want the full short-list — deadlines, fit notes, the rest? I can drop it here or email it over.`;
+        ? `Want the full short-list (deadlines + fit notes)? It's here: ${lead.result_url}, or I can drop it in this chat.`
+        : `Want the full short-list (deadlines, fit notes, the rest)? I can drop it here or email it over.`;
 }
 
 /**
@@ -1024,7 +1039,7 @@ function buildPastPerfLine(pp: LeadPastPerf): string {
     }
     if (vol) bits.push(`${vol} in obligated work`);
     let line = `Past performance: ${bits.join(", ")}`;
-    if (pp.top_agency) line += ` — top customer ${pp.top_agency}`;
+    if (pp.top_agency) line += `, top customer ${pp.top_agency}`;
     line += ".";
     return line;
 }

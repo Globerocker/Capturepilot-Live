@@ -198,6 +198,6 @@ export function topMatchesFor(
 
 /** Format one match for an email line: "Title — Agency (~NN% fit)". */
 export function formatMatchLine(m: TopMatch): string {
-    const agency = m.agency ? ` — ${m.agency}` : "";
+    const agency = m.agency ? ` · ${m.agency}` : "";
     return `${m.title}${agency} (~${m.pwin}% fit)`;
 }

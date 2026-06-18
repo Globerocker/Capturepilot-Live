@@ -3338,14 +3338,20 @@ function CheckPageCard({ url }: { url: string }) {
 // ───────────────────────── Outreach pieces (inline on Company) ─────────────────────────
 
 // ── AI message generator ──────────────────────────────────────────────────────
-type EmailTemplate = "intro" | "award_congrats" | "short_nudge" | "deadline" | "helpful_resource";
+type EmailTemplate =
+    | "intro" | "award_congrats" | "short_nudge" | "deadline" | "helpful_resource"
+    | "recompete" | "set_aside_edge" | "low_competition" | "expiring_sam";
 
 const TEMPLATE_OPTIONS: { value: EmailTemplate; label: string; help: string }[] = [
-    { value: "intro", label: "Intro", help: "First cold lead-in — leads with the best live match." },
+    { value: "intro", label: "Intro", help: "First cold lead-in. Leads with the best live match." },
     { value: "award_congrats", label: "Award congrats", help: "Opens by congratulating a recent federal win." },
     { value: "short_nudge", label: "Short nudge", help: "A 3-sentence follow-up. They've heard from us before." },
     { value: "deadline", label: "Deadline", help: "Heads-up that one of their matches closes soon." },
-    { value: "helpful_resource", label: "Helpful resource", help: "Leads with sharing a useful guide — attach/insert it from the Assets tab." },
+    { value: "helpful_resource", label: "Helpful resource", help: "Leads with sharing a useful guide. Attach/insert it from the Assets tab." },
+    { value: "recompete", label: "Recompete", help: "A contract in their lane is up for recompete. Incumbents are beatable." },
+    { value: "set_aside_edge", label: "Set-aside edge", help: "They hold a cert they're not leveraging. Point them at set-aside work." },
+    { value: "low_competition", label: "Low competition", help: "Opps with few bidders right now. The easy lanes most firms miss." },
+    { value: "expiring_sam", label: "Expiring SAM", help: "Their SAM registration is lapsing. Heads-up before they go dark." },
 ];
 
 type OutreachChannel = "email" | "linkedin" | "sms";
