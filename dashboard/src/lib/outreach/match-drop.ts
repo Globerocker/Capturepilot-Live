@@ -135,7 +135,13 @@ export function buildScoringProfile(contractor: any, blob: any): ProfileForScori
     const vetCert = certs.find(c => /sdvosb/i.test(c)) ? "SDVOSB"
         : certs.find(c => /vosb|veteran/i.test(c)) ? "VOSB" : null;
 
-    const kw = (blob?.capability_keywords || []) as unknown[];
+    // Keywords: prefer the GIN-indexed contractors.capability_keywords COLUMN
+    // (backfilled from NAICS + crawl), merged with the blob mirror. Reading only
+    // the blob (the old behavior) missed every keyword the backfill added, so
+    // matches never used them.
+    const colKw = Array.isArray(contractor?.capability_keywords) ? contractor.capability_keywords : [];
+    const blobKw = Array.isArray(blob?.capability_keywords) ? blob.capability_keywords : [];
+    const kw = Array.from(new Set([...colKw, ...blobKw].map(k => String(k).toLowerCase()).filter(Boolean))) as unknown[];
     const nail = (blob?.nail_down_keywords || []) as unknown[];
     const primary_keywords: KeywordEntry[] = kw.slice(0, 15)
         .map(k => ({ keyword: String(k).toLowerCase() })).filter(e => e.keyword.length > 2);

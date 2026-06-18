@@ -37,21 +37,31 @@ export async function GET(req: NextRequest) {
     if (denied) return denied;
 
     const params = new URL(req.url).searchParams;
-    const batch = Math.min(60, Math.max(1, parseInt(params.get("batch") || "20", 10)));
+    const batch = Math.min(120, Math.max(1, parseInt(params.get("batch") || "20", 10)));
+    // Drain modes for the keyword-aware rematch:
+    //   ?all=1   → match non-emailable contractors too (default keeps the email
+    //              filter so the campaign audience fills first).
+    //   ?force=1 → re-score already-matched contractors (default only touches
+    //              never-scored rows). With force we order by match_enriched_at
+    //              nulls-first so unmatched go first, then the stalest, with no
+    //              re-processing loop.
+    const all = params.get("all") === "1";
+    const force = params.get("force") === "1";
     const db = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_KEY!);
 
     const nowIso = new Date().toISOString();
 
-    // Not-yet-scored, QC-enriched contractors. Emailable first (only they can
-    // receive the campaign), then by past-award strength (best prospects).
-    const { data: rows, error } = await db
+    let q = db
         .from("contractors")
-        .select("id, company_name, email, naics_codes, certifications, state, federal_awards_count, employee_count, years_in_business, capability_summary_ai")
+        .select("id, company_name, email, naics_codes, certifications, state, federal_awards_count, employee_count, years_in_business, capability_keywords, capability_summary_ai")
         .eq("qc_enriched", true)
-        .not("email", "is", null)
-        .is("top_match_count", null)
-        .order("federal_awards_count", { ascending: false, nullsFirst: false })
         .limit(batch);
+    if (!all) q = q.not("email", "is", null);
+    if (!force) q = q.is("top_match_count", null);
+    q = force
+        ? q.order("match_enriched_at", { ascending: true, nullsFirst: true })
+        : q.order("federal_awards_count", { ascending: false, nullsFirst: false });
+    const { data: rows, error } = await q;
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     if (!rows?.length) return NextResponse.json({ ok: true, processed: 0, with_matches: 0 });
@@ -91,6 +101,8 @@ export async function GET(req: NextRequest) {
         const patch = {
             // top_match_count is the filterable "processed" marker (NULL → unscored).
             top_match_count: top.length,
+            // Real column (migration 191) so the rematch drain can order by it.
+            match_enriched_at: nowIso,
             capability_summary_ai: {
                 ...blob,
                 top_matches: top,
