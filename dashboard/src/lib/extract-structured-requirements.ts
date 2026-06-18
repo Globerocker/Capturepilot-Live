@@ -58,25 +58,39 @@ interface ChatMessage { role: "system" | "user" | "assistant"; content: string }
 async function callOpenAI(messages: ChatMessage[], timeoutMs = 20000): Promise<string | null> {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) return null;
-    try {
-        const res = await fetch("https://api.openai.com/v1/chat/completions", {
-            method: "POST",
-            headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-            body: JSON.stringify({
-                model: "gpt-4o-mini",
-                messages,
-                response_format: { type: "json_object" },
-                temperature: 0.2,
-                max_tokens: 600,
-            }),
-            signal: AbortSignal.timeout(timeoutMs),
-        });
-        if (!res.ok) return null;
-        const j = await res.json() as { choices?: { message?: { content?: string } }[] };
-        return j.choices?.[0]?.message?.content || null;
-    } catch {
-        return null;
+    // Retry on 429 (rate limit) / 503 (overload) with exponential backoff + jitter —
+    // batch callers fire many of these concurrently and a 429 used to silently null out.
+    const MAX_ATTEMPTS = 4;
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+        try {
+            const res = await fetch("https://api.openai.com/v1/chat/completions", {
+                method: "POST",
+                headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    model: "gpt-4o-mini",
+                    messages,
+                    response_format: { type: "json_object" },
+                    temperature: 0.2,
+                    max_tokens: 600,
+                }),
+                signal: AbortSignal.timeout(timeoutMs),
+            });
+            if ((res.status === 429 || res.status === 503) && attempt < MAX_ATTEMPTS - 1) {
+                await new Promise(r => setTimeout(r, Math.pow(2, attempt) * 700 + Math.random() * 300));
+                continue;
+            }
+            if (!res.ok) return null;
+            const j = await res.json() as { choices?: { message?: { content?: string } }[] };
+            return j.choices?.[0]?.message?.content || null;
+        } catch {
+            if (attempt < MAX_ATTEMPTS - 1) {
+                await new Promise(r => setTimeout(r, Math.pow(2, attempt) * 500));
+                continue;
+            }
+            return null;
+        }
     }
+    return null;
 }
 
 function stripHtml(s: string): string {

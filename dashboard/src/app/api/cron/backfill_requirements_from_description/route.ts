@@ -34,7 +34,7 @@ export const maxDuration = 300;
 
 const DEFAULT_LIMIT = 100;
 const MAX_LIMIT = 500;
-const CONCURRENCY = 6;
+const CONCURRENCY = 2; // low — gpt-4o-mini 429s under bursts; callOpenAI now retries w/ backoff
 
 function db() {
     return createClient(
