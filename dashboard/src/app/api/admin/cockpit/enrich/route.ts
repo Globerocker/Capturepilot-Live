@@ -65,6 +65,23 @@ import { assertSafePublicUrl } from "@/lib/ssrf-guard";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+// Known meeting-scheduler hosts. Many small firms list a "book a call" link
+// instead of a phone, so this is often the only reachable contact channel.
+const BOOKING_HOST_RE =
+    /(?:calendly\.com|cal\.com|meetings?\.hubspot\.com|app\.hubspot\.com\/meetings|acuityscheduling\.com|app\.acuityscheduling\.com|tidycal\.com|savvycal\.com|koalendar\.com|youcanbook\.me|calendar\.app\.google|book\.ms|outlook\.office365\.com\/book|squareup\.com\/appointments|setmore\.com|zcal\.co)/i;
+
+/** Return the first booking/scheduling URL from a link list, else null. */
+function detectBookingLink(links: string[]): string | null {
+    for (const raw of links) {
+        const u = String(raw || "").trim();
+        if (u && BOOKING_HOST_RE.test(u)) {
+            // Strip trailing punctuation the href regex can grab.
+            return u.replace(/[)\].,"';]+$/, "");
+        }
+    }
+    return null;
+}
+
 export const runtime = "nodejs";
 export const maxDuration = 180;
 
@@ -219,6 +236,7 @@ export async function POST(req: NextRequest) {
         emails?: string[];
         track_record?: string[];
         legal_name?: string;
+        booking_url?: string;
     } = {};
     const sources: Record<string, string> = {};
     const patch: Record<string, unknown> = {};
@@ -366,6 +384,26 @@ export async function POST(req: NextRequest) {
                 }
                 // Hold on-site personal profiles for the owner-LinkedIn match below.
                 onSitePersonalLinkedIn = [...new Set(socials.linkedin_people)];
+
+                // ── BOOKING / SCHEDULING LINK ──────────────────────────────────
+                // Many firms have no phone on the contact page, just a "book a
+                // meeting" link. Capture it so the rep has a way in (e.g. Titan
+                // Secure Tech → cal.com/titansecuretech). Stored in the blob.
+                if (!capBlob.booking_url) {
+                    const allLinks = [...linkPool];
+                    if (combinedHtml) {
+                        const hrefRe2 = /https?:\/\/[^\s"'<>)\]]+/gi;
+                        let bm: RegExpExecArray | null;
+                        while ((bm = hrefRe2.exec(combinedHtml)) !== null) allLinks.push(bm[0]);
+                    }
+                    const booking = detectBookingLink(allLinks);
+                    if (booking) {
+                        capBlob.booking_url = booking;
+                        capBlobDirty = true;
+                        updated.booking_url = booking;
+                        sources.booking_url = "website-crawl";
+                    }
+                }
             } catch (e) {
                 console.error("[cockpit/enrich] socials scan failed:", e instanceof Error ? e.message : String(e));
             }

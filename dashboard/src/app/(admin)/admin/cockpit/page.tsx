@@ -136,6 +136,7 @@ interface Lead {
     track_record?: string[];
     owner_linkedin: string | null;
     company_linkedin?: string | null;
+    booking_url?: string | null;
     sam_entity_url?: string | null;
     /** Past federal awards + USASpending revenue streams (contractors; empty-ish for inbound). */
     past_awards?: {
@@ -1779,6 +1780,16 @@ function ContactCard({ lead, onStartCall }: { lead: Lead; onStartCall: () => voi
                             title={`Call ${lead.contact.phone} — dials your phone and opens the notepad`}
                         >
                             <Phone className="w-3.5 h-3.5" /> {lead.contact.phone}
+                        </a>
+                    ) : lead.booking_url ? (
+                        <a
+                            href={lead.booking_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-violet-700 hover:underline inline-flex items-center gap-1.5 mt-0.5"
+                            title="No phone on file — they take meetings via this scheduler"
+                        >
+                            <CalendarClock className="w-3.5 h-3.5" /> Book a meeting <ExternalLink className="w-3 h-3" />
                         </a>
                     ) : (
                         <span className="text-stone-400 mt-0.5 block">No phone on file</span>

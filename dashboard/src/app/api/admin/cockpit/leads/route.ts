@@ -151,6 +151,7 @@ interface LeadRow {
     track_record: string[];            // capability_summary_ai.track_record (contractors; [] for inbound)
     owner_linkedin: string | null;     // the PERSON (never the company/social page)
     company_linkedin: string | null;   // the COMPANY (company_linkedin ?? social_linkedin)
+    booking_url: string | null;        // meeting-scheduler link (cal.com/calendly/…) when site had no phone
     sam_entity_url: string | null;     // sam.gov coreData page when a UEI is known
     has_website: boolean;
     /**
@@ -780,6 +781,7 @@ function contractorToLead(c: any): LeadRow {
         findings_summary: (blob.findings_summary as string) || null,
         owner_linkedin: linkedin,
         company_linkedin: companyLinkedin,
+        booking_url: typeof blob.booking_url === "string" && blob.booking_url.trim() ? blob.booking_url.trim() : null,
         // Search-by-UEI, NOT /entity/{uei}/coreData — the deep-link path wants
         // SAM's internal entity _id, so a UEI 404s cold. Search always resolves.
         sam_entity_url: c.uei ? `https://sam.gov/search/?q=${encodeURIComponent(c.uei)}&index=ei` : null,
@@ -894,6 +896,7 @@ function analysisToLead(a: any): LeadRow {
         track_record: [],
         owner_linkedin: linkedin,
         company_linkedin: inferred.company_linkedin ?? inferred.social_linkedin ?? null,
+        booking_url: typeof inferred.booking_url === "string" && inferred.booking_url.trim() ? inferred.booking_url.trim() : null,
         sam_entity_url: inferred.uei ? `https://sam.gov/search/?q=${encodeURIComponent(inferred.uei)}&index=ei` : null,
         has_website: !!web.url,
         derived_website: web.url,
