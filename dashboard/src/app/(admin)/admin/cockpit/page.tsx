@@ -52,7 +52,7 @@ import {
     ChevronRight, MapPin, FileText, Wand2, RotateCcw, Download, X,
     Star, LayoutTemplate, Package, ArrowLeft, Settings,
     DollarSign, CalendarClock, BadgeCheck, Info, ChevronDown, SlidersHorizontal,
-    Tag, Plus, PhoneCall, MessageSquare,
+    Tag, Plus, PhoneCall, MessageSquare, TrendingUp,
 } from "lucide-react";
 import clsx from "clsx";
 import CallButton, { type SavedCallLog } from "@/components/CallButton";
@@ -447,7 +447,7 @@ function whyLine(l: Lead): string {
 
 // ───────────────────────── page ─────────────────────────
 
-type TabKey = "company" | "matches" | "keywords" | "assets";
+type TabKey = "company" | "matches" | "growth" | "keywords" | "assets";
 type LeadSource = "contractors" | "inbound" | "saved";
 
 // Resizable left-rail bounds (lg+). Width persists to localStorage.
@@ -1336,6 +1336,7 @@ function LeadDetail({
     const TABS: { key: TabKey; label: string; Icon: React.ComponentType<{ className?: string }>; count?: number }[] = [
         { key: "company", label: "Company", Icon: User },
         { key: "matches", label: "Matches", Icon: Trophy, count: lead.top_matches.length || undefined },
+        ...(isContractor ? [{ key: "growth" as const, label: "Growth", Icon: TrendingUp }] : []),
         ...(isContractor ? [{ key: "keywords" as const, label: "Keywords", Icon: Tag, count: lead.capability_keywords?.length || undefined }] : []),
         { key: "assets", label: "Assets", Icon: Package },
     ];
@@ -1435,6 +1436,7 @@ function LeadDetail({
                     />
                 )}
                 {tab === "matches" && <MatchesTab lead={lead} />}
+                {tab === "growth" && <GrowthTab lead={lead} onInsertHook={(line) => { setEmailBody(prev => prev && prev.trim() ? `${prev}\n\n${line}` : line); setTab("company"); }} />}
                 {tab === "keywords" && (
                     <KeywordsTab lead={lead} notes={notes} transcript={transcript} onPatchDetail={onPatchDetail} />
                 )}
@@ -2537,6 +2539,199 @@ function KeywordsTab({ lead, notes, transcript, onPatchDetail }: {
                     <p className="text-sm text-stone-400">
                         Nothing to suggest yet. Jot call notes or paste a transcript on the Company tab and they&apos;ll show up here.
                     </p>
+                )}
+            </Card>
+        </div>
+    );
+}
+
+// ───────────────────────── TAB: Growth ─────────────────────────
+interface GrowthRoadmap {
+    data_gaps: { key: string; hook: string }[];
+    cert_unlock: { cert: string; cert_label: string; unlocked_count: number; estimated_value: number; difficulty: string; timeline: string }[];
+    adjacent_naics: { code: string; label: string; opp_count: number }[];
+    geo_expansion: { total_potential_opps: number; suggestions: { state: string; opp_count: number }[]; summary: string };
+    email_hook: string | null;
+    computed_at: string;
+}
+
+function fmtUsdCompact(n: number | null | undefined): string {
+    if (!n || !Number.isFinite(n)) return "";
+    if (n >= 1_000_000_000) return `$${(n / 1_000_000_000).toFixed(1)}B`;
+    if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
+    if (n >= 1_000) return `$${Math.round(n / 1_000)}K`;
+    return `$${Math.round(n)}`;
+}
+
+const DIFFICULTY_STYLE: Record<string, string> = {
+    easy: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    moderate: "bg-amber-50 text-amber-700 border-amber-200",
+    complex: "bg-rose-50 text-rose-700 border-rose-200",
+};
+
+/**
+ * Growth-gap roadmap for a contractor lead: data gaps we can fix + growth levers
+ * with live-opportunity counts (cert-unlock, adjacent NAICS, geo expansion) +
+ * a copyable email hook. Lazy-fetches /api/admin/cockpit/growth on open.
+ */
+function GrowthTab({ lead, onInsertHook }: { lead: Lead; onInsertHook: (line: string) => void }) {
+    const [roadmap, setRoadmap] = useState<GrowthRoadmap | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [refreshing, setRefreshing] = useState(false);
+    const [copied, setCopied] = useState(false);
+
+    const load = useCallback(async (refresh: boolean) => {
+        if (refresh) setRefreshing(true); else setLoading(true);
+        setError(null);
+        try {
+            const params = new URLSearchParams({ contractor_id: lead.id });
+            if (refresh) params.set("refresh", "1");
+            const res = await fetch(`/api/admin/cockpit/growth?${params}`);
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.ok) throw new Error(data?.error || `Failed (${res.status})`);
+            setRoadmap(data.roadmap as GrowthRoadmap);
+        } catch (e) {
+            setError(e instanceof Error ? e.message : "Could not build the roadmap");
+        } finally {
+            setLoading(false);
+            setRefreshing(false);
+        }
+    }, [lead.id]);
+
+    useEffect(() => { void load(false); }, [load]);
+
+    const copyHook = async () => {
+        if (!roadmap?.email_hook) return;
+        try {
+            await navigator.clipboard.writeText(roadmap.email_hook);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1600);
+        } catch { /* clipboard may be blocked */ }
+    };
+
+    if (loading) {
+        return (
+            <div className="py-16 text-center text-stone-400">
+                <Loader2 className="w-6 h-6 animate-spin mx-auto" />
+                <p className="text-sm mt-2">Building their growth roadmap…</p>
+            </div>
+        );
+    }
+    if (error) {
+        return (
+            <Card>
+                <p className="text-sm text-rose-600 inline-flex items-center gap-1.5"><AlertTriangle className="w-4 h-4" /> {error}</p>
+                <button type="button" onClick={() => load(false)} className="mt-2 text-xs underline text-stone-500 hover:text-black">Try again</button>
+            </Card>
+        );
+    }
+    if (!roadmap) return null;
+
+    const hasLevers = roadmap.cert_unlock.length > 0 || roadmap.adjacent_naics.length > 0 || roadmap.geo_expansion.total_potential_opps > 0;
+
+    return (
+        <div className="space-y-4">
+            {/* Email hook — the sharpest single line. */}
+            {roadmap.email_hook && (
+                <Card>
+                    <SectionHeading icon={Sparkles} title="The hook" />
+                    <p className="text-sm text-stone-700 leading-relaxed">{roadmap.email_hook}</p>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <button type="button" onClick={() => onInsertHook(roadmap.email_hook!)} className="inline-flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white font-bold px-3 py-2 rounded-lg text-sm">
+                            <Plus className="w-4 h-4" /> Insert into email
+                        </button>
+                        <button type="button" onClick={copyHook} className="inline-flex items-center gap-2 bg-white hover:bg-stone-100 border border-stone-200 text-stone-700 font-bold px-3 py-2 rounded-lg text-sm">
+                            {copied ? <><Check className="w-4 h-4 text-emerald-600" /> Copied</> : <><Copy className="w-4 h-4" /> Copy</>}
+                        </button>
+                    </div>
+                </Card>
+            )}
+
+            {/* Layer 2 — growth levers with live counts. */}
+            <Card>
+                <div className="flex items-center justify-between">
+                    <SectionHeading icon={TrendingUp} title="Growth levers" />
+                    <button type="button" onClick={() => load(true)} disabled={refreshing} className="text-xs text-stone-500 hover:text-black inline-flex items-center gap-1 disabled:opacity-50">
+                        {refreshing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />} Refresh
+                    </button>
+                </div>
+                <p className="text-[11px] text-stone-400 -mt-1 mb-3">Live-opportunity counts are approximate (a directional floor), not a quote.</p>
+
+                {!hasLevers ? (
+                    <p className="text-sm text-stone-400">No clear growth levers from the current opportunity set for their NAICS.</p>
+                ) : (
+                    <div className="space-y-4">
+                        {/* Cert-unlock */}
+                        {roadmap.cert_unlock.length > 0 && (
+                            <div>
+                                <FieldLabel>Certifications that would unlock more</FieldLabel>
+                                <ul className="mt-2 space-y-2">
+                                    {roadmap.cert_unlock.map((rec) => (
+                                        <li key={rec.cert} className="border border-stone-200 rounded-xl p-3">
+                                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                                                <span className="font-bold text-stone-800 text-sm">{rec.cert_label}</span>
+                                                <span className={clsx("text-[10px] font-bold uppercase tracking-wide border rounded px-1.5 py-0.5", DIFFICULTY_STYLE[rec.difficulty] || "bg-stone-100 text-stone-500 border-stone-200")}>
+                                                    {rec.difficulty} · {rec.timeline}
+                                                </span>
+                                            </div>
+                                            <p className="text-sm text-stone-600 mt-1">
+                                                ≈ <span className="font-bold text-stone-900">{rec.unlocked_count.toLocaleString()}</span> live set-aside opps in their lane
+                                                {rec.estimated_value > 0 && <> · ~{fmtUsdCompact(rec.estimated_value)} in value</>}
+                                            </p>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+
+                        {/* Adjacent NAICS */}
+                        {roadmap.adjacent_naics.length > 0 && (
+                            <div>
+                                <FieldLabel>Adjacent work they&apos;re not capturing</FieldLabel>
+                                <ul className="mt-2 space-y-1.5">
+                                    {roadmap.adjacent_naics.map((a) => (
+                                        <li key={a.code} className="flex items-center justify-between gap-2 text-sm border border-stone-200 rounded-lg px-3 py-2">
+                                            <span className="text-stone-700 min-w-0 truncate"><span className="font-mono text-xs text-stone-500">{a.code}</span> {a.label}</span>
+                                            <span className="text-stone-500 shrink-0">≈ {a.opp_count.toLocaleString()} opps</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+
+                        {/* Geo expansion */}
+                        {roadmap.geo_expansion.total_potential_opps > 0 && (
+                            <div>
+                                <FieldLabel>States worth expanding into</FieldLabel>
+                                {roadmap.geo_expansion.summary && <p className="text-xs text-stone-500 mt-1">{roadmap.geo_expansion.summary}</p>}
+                                <div className="flex flex-wrap gap-1.5 mt-2">
+                                    {roadmap.geo_expansion.suggestions.slice(0, 6).map((s) => (
+                                        <span key={s.state} className="inline-flex items-center gap-1 bg-stone-100 border border-stone-200 rounded-lg px-2 py-1 text-xs text-stone-700">
+                                            <MapPin className="w-3 h-3 text-stone-400" /> {s.state} · {s.opp_count.toLocaleString()}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+            </Card>
+
+            {/* Layer 1 — data gaps checklist. */}
+            <Card>
+                <SectionHeading icon={ClipboardList} title="Gaps we can fix" />
+                {roadmap.data_gaps.length === 0 ? (
+                    <p className="text-sm text-stone-400">No obvious data gaps — their profile is in decent shape.</p>
+                ) : (
+                    <ul className="space-y-2">
+                        {roadmap.data_gaps.map((g) => (
+                            <li key={g.key} className="flex items-start gap-2 text-sm text-stone-700">
+                                <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                                <span className="leading-snug">{g.hook}</span>
+                            </li>
+                        ))}
+                    </ul>
                 )}
             </Card>
         </div>
