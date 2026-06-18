@@ -50,6 +50,26 @@ const VALID_TONES: Tone[] = ["warm_intro", "short", "call_heads_up"];
 type Template = "intro" | "award_congrats" | "short_nudge" | "deadline";
 const VALID_TEMPLATES: Template[] = ["intro", "award_congrats", "short_nudge", "deadline"];
 
+// Channel reshapes length, format, output shape, and which deterministic blocks
+// get appended. email = full (subject + matches block + past-perf + CTA);
+// linkedin = no subject, one compact match line + short offer; sms = no subject,
+// the AI writes the whole short message, nothing appended (carriers split long
+// texts + links get filtered).
+type Channel = "email" | "linkedin" | "sms";
+const VALID_CHANNELS: Channel[] = ["email", "linkedin", "sms"];
+
+interface ChannelSpec {
+    needsSubject: boolean;
+    appendMatches: "full" | "compact" | "none";
+    appendPastPerf: boolean;
+    appendCta: "full" | "short" | "none";
+}
+const CHANNEL_SPEC: Record<Channel, ChannelSpec> = {
+    email: { needsSubject: true, appendMatches: "full", appendPastPerf: true, appendCta: "full" },
+    linkedin: { needsSubject: false, appendMatches: "compact", appendPastPerf: false, appendCta: "short" },
+    sms: { needsSubject: false, appendMatches: "none", appendPastPerf: false, appendCta: "none" },
+};
+
 interface LeadMatch {
     title: string;
     agency: string | null;
@@ -134,10 +154,15 @@ export async function POST(req: NextRequest) {
     const contractor_id = typeof body.contractor_id === "string" ? body.contractor_id : undefined;
     const analysis_id = typeof body.analysis_id === "string" ? body.analysis_id : undefined;
     const tone: Tone = VALID_TONES.includes(body.tone as Tone) ? (body.tone as Tone) : "warm_intro";
-    // Explicit template wins; otherwise derive from the legacy tone param.
+    const channel: Channel = VALID_CHANNELS.includes(body.channel as Channel)
+        ? (body.channel as Channel)
+        : "email";
+    // Explicit template wins; otherwise derive from the legacy tone param. SMS
+    // has no room for the intro shape — default it to the short follow-up nudge.
     const template: Template = VALID_TEMPLATES.includes(body.template as Template)
         ? (body.template as Template)
-        : toneToTemplate(tone);
+        : channel === "sms" ? "short_nudge" : toneToTemplate(tone);
+    const spec = CHANNEL_SPEC[channel];
     // Optional caller-supplied per-match reasons (keyed by notice_id or opp_id).
     const matchReasons = (body.match_reasons && typeof body.match_reasons === "object")
         ? (body.match_reasons as Record<string, any>)
@@ -190,8 +215,8 @@ export async function POST(req: NextRequest) {
     const matchesBlock = buildMatchesBlock(topMatches);
     const pastPerfLine = buildPastPerfLine(lead.past_perf);
 
-    // Per-template AI prompt + assembled body shape.
-    const { system, user } = buildPrompt(template, tone, lead, topMatches);
+    // Per-template + per-channel AI prompt + assembled body shape.
+    const { system, user } = buildPrompt(template, tone, channel, lead, topMatches);
 
     // ── Call OpenAI with retry/backoff on 429/503 ────────────────────────────
     const ai = await draftJson({
@@ -218,7 +243,8 @@ export async function POST(req: NextRequest) {
     }
 
     const parsed = ai.parsed;
-    if (!parsed.subject || !parsed.body) {
+    // Subject is only required for email; LinkedIn/SMS have none.
+    if (!parsed.body || (spec.needsSubject && !parsed.subject)) {
         console.error("[cockpit/message] missing subject/body in response:", parsed);
         return NextResponse.json(
             { ok: false, error: "AI returned incomplete message" },
@@ -226,26 +252,55 @@ export async function POST(req: NextRequest) {
         );
     }
 
-    // ── Assemble the ready-to-send email ─────────────────────────────────────
-    // AI intro → deterministic matches block (titles + REAL links + fit % +
-    // reasons) → one-line past-performance (intro/congrats only) → CapturePilot
-    // soft-CTA. The structured parts are built by code (never the model) so
-    // links, percentages and reasons are always exact.
+    // ── Assemble the ready-to-send message (channel-shaped) ──────────────────
+    // AI intro → deterministic blocks the model is NOT allowed to write (links,
+    // fit %, reasons are always exact). Which blocks get appended depends on the
+    // channel: email gets the full treatment; LinkedIn one compact match line +
+    // a short offer; SMS nothing (the AI wrote the entire short text).
     const intro = String(parsed.body).trim();
-    const sections: string[] = [intro];
 
-    // short_nudge stays lean — only the match block, no past-perf line.
-    if (matchesBlock) sections.push(matchesBlock);
-    if (pastPerfLine && template !== "short_nudge" && template !== "deadline") {
-        sections.push(pastPerfLine);
+    let finalBody: string;
+    if (channel === "sms") {
+        // SMS: the model wrote the whole thing. Just normalize whitespace + clamp
+        // to ~2 segments so it stays cheap and lands as one readable message.
+        finalBody = clampSms(intro);
+    } else {
+        const sections: string[] = [intro];
+        if (spec.appendMatches === "full") {
+            if (matchesBlock) sections.push(matchesBlock);
+        } else if (spec.appendMatches === "compact") {
+            const compact = buildCompactMatchLine(topMatches);
+            if (compact) sections.push(compact);
+        }
+        if (spec.appendPastPerf && pastPerfLine && template !== "short_nudge" && template !== "deadline") {
+            sections.push(pastPerfLine);
+        }
+        if (spec.appendCta !== "none") {
+            const cta = spec.appendCta === "short"
+                ? buildLinkedinCta(lead, topMatches.length)
+                : buildSoftCta(template, lead, topMatches.length, callerWantsCall);
+            if (cta) sections.push(cta);
+        }
+        finalBody = sections.join("\n\n");
     }
 
-    const cta = buildSoftCta(template, lead, topMatches.length, callerWantsCall);
-    if (cta) sections.push(cta);
+    return NextResponse.json({
+        ok: true,
+        subject: spec.needsSubject ? parsed.subject : null,
+        body: finalBody,
+        template,
+        channel,
+    });
+}
 
-    const finalBody = sections.join("\n\n");
-
-    return NextResponse.json({ ok: true, subject: parsed.subject, body: finalBody, template });
+/** Normalize + clamp an SMS to ~320 chars (2 segments) on a clean word break. */
+function clampSms(text: string): string {
+    const t = text.replace(/\s*\n\s*\n\s*/g, " ").replace(/[ \t]+/g, " ").trim();
+    const MAX = 320;
+    if (t.length <= MAX) return t;
+    const cut = t.slice(0, MAX);
+    const lastSpace = cut.lastIndexOf(" ");
+    return (lastSpace > 200 ? cut.slice(0, lastSpace) : cut).trim() + "…";
 }
 
 // ── OpenAI call with retry/backoff ──────────────────────────────────────────
@@ -364,9 +419,20 @@ function sleep(ms: number): Promise<void> {
 
 // ── Prompt builder (per-template) ───────────────────────────────────────────
 
+// Channel-specific writing instructions injected into the user prompt.
+const CHANNEL_GUIDE: Record<Channel, string> = {
+    email:
+        "CHANNEL: Email. Write the opener only — our system appends the match list (with links + fit %), a past-performance line, and a soft CTA. End right before the list.",
+    linkedin:
+        "CHANNEL: LinkedIn DM. No subject. Warm, conversational, like a real message — not a formal email. 2-4 short sentences, ~60-90 words. Reference the single strongest match by name. No greeting like 'Dear', no sign-off, no links (we append one compact match line + a one-line offer after you). It can open by noting you came across their company.",
+    sms:
+        "CHANNEL: SMS. No subject. This is the WHOLE text — nothing is appended. Keep it under ~300 characters (2 segments max). One or two sentences, casual, first-name only if given. Reference ONE concrete thing (the top match by a SHORT name, or the gap), then a light ask like 'ok if I send you the details?' or 'want me to text you the list?'. No links, no sign-off, no emojis. Good as a follow-up after a LinkedIn connect or a missed call.",
+};
+
 function buildPrompt(
     template: Template,
     tone: Tone,
+    channel: Channel,
     lead: LeadContext,
     topMatches: LeadMatch[],
 ): { system: string; user: string } {
@@ -410,12 +476,18 @@ ${lead.gap_hook || "No specific gap captured — keep the lead-in about the live
 ${lead.findings_summary ? `INTERNAL BRIEFING (context only, do not quote verbatim):\n${lead.findings_summary}` : ""}
 ${lead.result_url ? `\nFull results page we can point them to: ${lead.result_url}` : ""}`.trim();
 
-    const system = `You are the founder of CapturePilot, a federal-contracting platform built for small, often veteran-owned firms. You write the first email yourself — vet-owned IT-firm CEO talking to his cousin over coffee, not a marketer. Your job: a short, specific, non-salesy opener to ONE contractor that proves you actually looked at their business.
-
-IMPORTANT — you write ONLY the opening paragraph(s). Our system appends the formatted match list (with REAL links and fit %), a one-line past-performance note, and a soft call-to-action after your text. So:
+    const appendNote = channel === "sms"
+        ? `IMPORTANT — for SMS you write the COMPLETE message. Nothing is appended. Keep it tiny and self-contained: reference the single strongest item by a short name, then a light ask. No links, no list, no sign-off.`
+        : channel === "linkedin"
+            ? `IMPORTANT — you write the message body. Our system appends ONE compact match line + a one-line offer after your text. So reference the single strongest item by its real title to prove you looked; do NOT write the match list, links, or a closing CTA — those are appended.`
+            : `IMPORTANT — you write ONLY the opening paragraph(s). Our system appends the formatted match list (with REAL links and fit %), a one-line past-performance note, and a soft call-to-action after your text. So:
 - Write the opener for the chosen template (described below).
 - Reference the single strongest item by its real title to prove you looked. Do not list all the matches — the list is appended after you.
-- Do NOT write the match list yourself, do NOT write any links, do NOT write a closing CTA — those are appended.
+- Do NOT write the match list yourself, do NOT write any links, do NOT write a closing CTA — those are appended.`;
+
+    const system = `You are the founder of CapturePilot, a federal-contracting platform built for small, often veteran-owned firms. You write the first message yourself — vet-owned IT-firm CEO talking to his cousin over coffee, not a marketer. Your job: a short, specific, non-salesy note to ONE contractor that proves you actually looked at their business.
+
+${appendNote}
 
 Hard rules:
 - Do not invent opportunities, awards, certifications, or numbers not given to you.
@@ -423,7 +495,22 @@ Hard rules:
 - No marketing fluff, no "I hope this finds you well", no links, no calendar links.
 - Always return JSON with keys "subject" and "body".`;
 
-    const user = `Write the opener for an email to this contractor.
+    const isEmail = channel === "email";
+    const subjectReq = isEmail
+        ? `- Subject: short and specific (under ~7 words). Reference the match, the award, the deadline, or their company — not a generic hook. No clickbait, no emoji.${
+            template === "award_congrats" ? " For this template, the subject can nod to the award win." : ""
+        }${template === "deadline" ? " For this template, the subject should signal the closing date." : ""}`
+        : `- Subject: not used on this channel — return an empty string "".`;
+
+    const enderReq = isEmail
+        ? `- The opener should END right before the match list — do NOT add a sign-off, the list, or a CTA. We append all of that.`
+        : channel === "linkedin"
+            ? `- Do NOT add a sign-off or links — we append one compact match line + a one-line offer after you.`
+            : `- This is the COMPLETE message. No sign-off, no links. Nothing is appended.`;
+
+    const user = `Write ${isEmail ? "the opener for an email" : channel === "linkedin" ? "a LinkedIn message" : "an SMS"} to this contractor.
+
+${CHANNEL_GUIDE[channel]}
 
 TEMPLATE: ${template}
 STYLE: ${TEMPLATE_GUIDE[template]}
@@ -431,15 +518,13 @@ STYLE: ${TEMPLATE_GUIDE[template]}
 ${leadContext}
 
 Requirements:
-- Subject: short and specific (under ~7 words). Reference the match, the award, the deadline, or their company — not a generic hook. No clickbait, no emoji.${
-        template === "award_congrats" ? " For this template, the subject can nod to the award win." : ""
-    }${template === "deadline" ? " For this template, the subject should signal the closing date." : ""}
+${subjectReq}
 - Greeting uses the first name when one is given; otherwise a plain opener with no placeholder.${
         template === "short_nudge" ? " (short_nudge: skip a formal greeting — get straight to it.)" : ""
     }
 - Reference the lead item by its actual title (shorten naturally if long).
-- The opener should END right before the match list — do NOT add a sign-off, the list, or a CTA. We append all of that.
-- Output MUST be JSON: {"subject": "...", "body": "..."} — body is plain text with real newlines (\\n) and is JUST the opener.`;
+${enderReq}
+- Output MUST be JSON: {"subject": "...", "body": "..."} — body is plain text with real newlines (\\n).`;
 
     return { system, user };
 }
@@ -893,6 +978,32 @@ function buildMatchesBlock(matches: LeadMatch[]): string {
         if (m.link) lines.push(m.link);
     }
     return lines.join("\n");
+}
+
+/**
+ * A LinkedIn-sized match reference: the single strongest match on one line with
+ * its REAL link + fit %, plus a count of the rest. Keeps the DM short.
+ */
+function buildCompactMatchLine(matches: LeadMatch[]): string {
+    if (!matches.length) return "";
+    const m = matches[0];
+    const agency = m.agency ? ` — ${m.agency}` : "";
+    const fit = typeof m.fit_pct === "number" ? ` (${m.fit_pct}% fit)` : "";
+    const link = m.link ? `\n${m.link}` : "";
+    const more = matches.length > 1 ? ` Plus ${matches.length - 1} more in your lane.` : "";
+    return `The strongest one open right now: ${m.title}${agency}${fit}.${more}${link}`;
+}
+
+/** A short, plain LinkedIn offer — no call push, no software pitch paragraph. */
+function buildLinkedinCta(lead: LeadContext, matchCount: number): string {
+    if (!matchCount) {
+        return lead.result_url
+            ? `Pulled this with our gov-contract matching tool. Full breakdown's here: ${lead.result_url}`
+            : `Happy to dig into what's open in your lane — want me to send a short list?`;
+    }
+    return lead.result_url
+        ? `Want the full short-list (deadlines + fit notes)? It's here: ${lead.result_url} — or I can drop it in this chat.`
+        : `Want the full short-list — deadlines, fit notes, the rest? I can drop it here or email it over.`;
 }
 
 /**

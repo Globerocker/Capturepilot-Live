@@ -52,7 +52,7 @@ import {
     ChevronRight, MapPin, FileText, Wand2, RotateCcw, Download, X,
     Star, LayoutTemplate, Package, ArrowLeft, Settings,
     DollarSign, CalendarClock, BadgeCheck, Info, ChevronDown, SlidersHorizontal,
-    Tag, Plus, PhoneCall,
+    Tag, Plus, PhoneCall, MessageSquare,
 } from "lucide-react";
 import clsx from "clsx";
 import CallButton, { type SavedCallLog } from "@/components/CallButton";
@@ -3103,7 +3103,21 @@ const TEMPLATE_OPTIONS: { value: EmailTemplate; label: string; help: string }[] 
     { value: "deadline", label: "Deadline", help: "Heads-up that one of their matches closes soon." },
 ];
 
+type OutreachChannel = "email" | "linkedin" | "sms";
+const CHANNEL_OPTIONS: { value: OutreachChannel; label: string; icon: typeof Mail }[] = [
+    { value: "email", label: "Email", icon: Mail },
+    { value: "linkedin", label: "LinkedIn", icon: Linkedin },
+    { value: "sms", label: "SMS", icon: MessageSquare },
+];
+
+/** Rough GSM segment estimate (160 chars/seg, 153 when concatenated). */
+function smsSegments(len: number): number {
+    if (len <= 160) return len === 0 ? 0 : 1;
+    return Math.ceil(len / 153);
+}
+
 function MessageGenerator({ lead, onUseInComposer }: { lead: Lead; onUseInComposer: (subject: string, body: string) => void }) {
+    const [channel, setChannel] = useState<OutreachChannel>("email");
     const [tone, setTone] = useState<Tone>("warm_intro");
     const [template, setTemplate] = useState<EmailTemplate>("intro");
     const [generating, setGenerating] = useState(false);
@@ -3114,14 +3128,21 @@ function MessageGenerator({ lead, onUseInComposer }: { lead: Lead; onUseInCompos
     const [generated, setGenerated] = useState(false);
     const [copied, setCopied] = useState<"subject" | "body" | "both" | null>(null);
     const [used, setUsed] = useState(false);
+    // SMS send state
+    const [smsSending, setSmsSending] = useState(false);
+    const [smsResult, setSmsResult] = useState<{ ok: boolean; message: string } | null>(null);
 
-    const generate = async (tpl: EmailTemplate = template) => {
+    const linkedinUrl = lead.owner_linkedin || lead.company_linkedin || null;
+    const phone = lead.contact.phone || null;
+
+    const generate = async (tpl: EmailTemplate = template, ch: OutreachChannel = channel) => {
         setGenerating(true);
         setError(null);
         setRateLimited(false);
         setUsed(false);
+        setSmsResult(null);
         try {
-            const payload: Record<string, string> = { tone, template: tpl };
+            const payload: Record<string, string> = { tone, template: tpl, channel: ch };
             if (lead.source === "inbound") payload.analysis_id = lead.id;
             else payload.contractor_id = lead.id;
             const res = await fetch("/api/admin/cockpit/message", {
@@ -3131,7 +3152,6 @@ function MessageGenerator({ lead, onUseInComposer }: { lead: Lead; onUseInCompos
             });
             const data = await res.json().catch(() => ({}));
             if (!res.ok || !data.ok) {
-                // Friendly retry message on the rate-limit code instead of a raw error.
                 if (data?.code === 429 || res.status === 429 || res.status === 502) {
                     setRateLimited(true);
                     throw new Error("Our writer is busy right now — give it a few seconds and try again.");
@@ -3148,6 +3168,16 @@ function MessageGenerator({ lead, onUseInComposer }: { lead: Lead; onUseInCompos
         }
     };
 
+    const pickChannel = (ch: OutreachChannel) => {
+        if (ch === channel) return;
+        setChannel(ch);
+        setGenerated(false);
+        setError(null);
+        setSmsResult(null);
+        // SMS has no room for the full intro — default it to the short nudge.
+        if (ch === "sms" && template === "intro") setTemplate("short_nudge");
+    };
+
     const pickTemplate = (tpl: EmailTemplate) => {
         setTemplate(tpl);
         generate(tpl);
@@ -3162,12 +3192,69 @@ function MessageGenerator({ lead, onUseInComposer }: { lead: Lead; onUseInCompos
         } catch { /* clipboard may be blocked */ }
     };
 
+    const sendSms = async () => {
+        if (!phone) return;
+        setSmsSending(true);
+        setSmsResult(null);
+        try {
+            const payload: Record<string, string> = { to: phone, body: bodyText, lead_company: lead.company_name || "" };
+            if (lead.source === "inbound") payload.analysis_id = lead.id;
+            else payload.contractor_id = lead.id;
+            const res = await fetch("/api/admin/cockpit/send-sms", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.ok) throw new Error(data?.error || `Failed (${res.status})`);
+            setSmsResult({ ok: true, message: `Texted ${phone}.` });
+        } catch (e) {
+            setSmsResult({ ok: false, message: e instanceof Error ? e.message : "SMS send failed" });
+        } finally {
+            setSmsSending(false);
+        }
+    };
+
+    const isEmail = channel === "email";
+    const headings: Record<OutreachChannel, string> = {
+        email: "Write a personalized email",
+        linkedin: "Write a LinkedIn message",
+        sms: "Write a personalized SMS",
+    };
+
     return (
         <Card>
-            <SectionHeading icon={Sparkles} title="Write a personalized email" />
+            <SectionHeading icon={Sparkles} title={headings[channel]} />
+
+            {/* Channel selector — reshapes length, format, and how it's sent. */}
+            <div className="grid grid-cols-3 gap-1 bg-stone-100 rounded-xl p-1">
+                {CHANNEL_OPTIONS.map(c => {
+                    const Icon = c.icon;
+                    return (
+                        <button
+                            key={c.value}
+                            type="button"
+                            onClick={() => pickChannel(c.value)}
+                            className={clsx(
+                                "inline-flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-bold transition-colors",
+                                channel === c.value ? "bg-white text-stone-900 shadow-sm" : "text-stone-500 hover:text-stone-700",
+                            )}
+                        >
+                            <Icon className="w-3.5 h-3.5" /> {c.label}
+                        </button>
+                    );
+                })}
+            </div>
+
+            {/* Channel hint */}
+            <p className="text-[11px] text-stone-500 mt-2 leading-snug">
+                {isEmail && "Full email — subject line, the live match list with links, and a soft call offer."}
+                {channel === "linkedin" && "Short DM — no subject. References the top match; we add one compact line + a one-line offer. Copy it into LinkedIn."}
+                {channel === "sms" && "Tiny text — no subject, no links. Great as a follow-up after a connect or a missed call. Sends from your Twilio number."}
+            </p>
 
             {/* Template variants — each re-generates with that opener shape. */}
-            <div>
+            <div className="mt-3">
                 <FieldLabel>Pick a template</FieldLabel>
                 <div className="flex flex-wrap gap-1.5 mt-2">
                     {TEMPLATE_OPTIONS.map(t => (
@@ -3188,22 +3275,25 @@ function MessageGenerator({ lead, onUseInComposer }: { lead: Lead; onUseInCompos
                 </div>
             </div>
 
-            <div className="mt-3">
-                <FieldLabel>Pick the style</FieldLabel>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2">
-                    {TONE_OPTIONS.map(t => (
-                        <button
-                            key={t.value}
-                            type="button"
-                            onClick={() => setTone(t.value)}
-                            className={clsx("text-left rounded-xl border p-2.5 transition-colors", tone === t.value ? "border-orange-400 bg-orange-50" : "border-stone-200 hover:border-stone-300")}
-                        >
-                            <div className={clsx("text-sm font-bold", tone === t.value ? "text-orange-700" : "text-stone-700")}>{t.label}</div>
-                            <div className="text-[11px] text-stone-500 mt-0.5 leading-snug">{t.help}</div>
-                        </button>
-                    ))}
+            {/* Tone only matters for the longer email/LinkedIn forms. */}
+            {channel !== "sms" && (
+                <div className="mt-3">
+                    <FieldLabel>Pick the style</FieldLabel>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2">
+                        {TONE_OPTIONS.map(t => (
+                            <button
+                                key={t.value}
+                                type="button"
+                                onClick={() => setTone(t.value)}
+                                className={clsx("text-left rounded-xl border p-2.5 transition-colors", tone === t.value ? "border-orange-400 bg-orange-50" : "border-stone-200 hover:border-stone-300")}
+                            >
+                                <div className={clsx("text-sm font-bold", tone === t.value ? "text-orange-700" : "text-stone-700")}>{t.label}</div>
+                                <div className="text-[11px] text-stone-500 mt-0.5 leading-snug">{t.help}</div>
+                            </button>
+                        ))}
+                    </div>
                 </div>
-            </div>
+            )}
 
             <button
                 type="button"
@@ -3211,7 +3301,7 @@ function MessageGenerator({ lead, onUseInComposer }: { lead: Lead; onUseInCompos
                 disabled={generating}
                 className="mt-3 inline-flex items-center gap-2 bg-stone-900 hover:bg-black disabled:opacity-50 text-white font-bold px-4 py-2.5 rounded-lg text-sm"
             >
-                {generating ? <><Loader2 className="w-4 h-4 animate-spin" /> Writing…</> : <><Sparkles className="w-4 h-4" /> {generated ? "Rewrite message" : "Generate message"}</>}
+                {generating ? <><Loader2 className="w-4 h-4 animate-spin" /> Writing…</> : <><Sparkles className="w-4 h-4" /> {generated ? "Rewrite" : "Generate"}</>}
             </button>
 
             {error && (
@@ -3228,44 +3318,101 @@ function MessageGenerator({ lead, onUseInComposer }: { lead: Lead; onUseInCompos
 
             {generated && (
                 <div className="mt-4 space-y-3">
-                    <div>
-                        <div className="flex items-center justify-between">
-                            <FieldLabel>Subject</FieldLabel>
-                            <button type="button" onClick={() => copy("subject")} className="text-xs text-stone-500 hover:text-black inline-flex items-center gap-1">
-                                {copied === "subject" ? <><Check className="w-3 h-3 text-emerald-600" /> Copied</> : <><Copy className="w-3 h-3" /> Copy</>}
-                            </button>
+                    {isEmail && (
+                        <div>
+                            <div className="flex items-center justify-between">
+                                <FieldLabel>Subject</FieldLabel>
+                                <button type="button" onClick={() => copy("subject")} className="text-xs text-stone-500 hover:text-black inline-flex items-center gap-1">
+                                    {copied === "subject" ? <><Check className="w-3 h-3 text-emerald-600" /> Copied</> : <><Copy className="w-3 h-3" /> Copy</>}
+                                </button>
+                            </div>
+                            <input
+                                type="text" value={subject} onChange={e => setSubject(e.target.value)}
+                                aria-label="Generated subject" placeholder="Subject"
+                                className="w-full mt-1 px-3 py-2 text-sm rounded-lg border border-stone-200 focus:outline-none focus:border-stone-400 font-medium"
+                            />
                         </div>
-                        <input
-                            type="text" value={subject} onChange={e => setSubject(e.target.value)}
-                            aria-label="Generated subject" placeholder="Subject"
-                            className="w-full mt-1 px-3 py-2 text-sm rounded-lg border border-stone-200 focus:outline-none focus:border-stone-400 font-medium"
-                        />
-                    </div>
+                    )}
                     <div>
                         <div className="flex items-center justify-between">
-                            <FieldLabel>Message</FieldLabel>
+                            <FieldLabel>Message{channel === "sms" && (
+                                <span className={clsx("ml-2 font-normal", bodyText.length > 320 ? "text-rose-500" : "text-stone-400")}>
+                                    {bodyText.length} chars · {smsSegments(bodyText.length)} SMS
+                                </span>
+                            )}</FieldLabel>
                             <button type="button" onClick={() => copy("body")} className="text-xs text-stone-500 hover:text-black inline-flex items-center gap-1">
                                 {copied === "body" ? <><Check className="w-3 h-3 text-emerald-600" /> Copied</> : <><Copy className="w-3 h-3" /> Copy</>}
                             </button>
                         </div>
                         <textarea
-                            value={bodyText} onChange={e => setBodyText(e.target.value)} rows={9}
+                            value={bodyText} onChange={e => setBodyText(e.target.value)} rows={channel === "sms" ? 4 : channel === "linkedin" ? 6 : 9}
                             aria-label="Generated message body" placeholder="Message body"
                             className="w-full mt-1 px-3 py-2 text-sm rounded-lg border border-stone-200 focus:outline-none focus:border-stone-400 leading-relaxed"
                         />
                     </div>
+
+                    {/* Channel-specific actions */}
                     <div className="flex flex-wrap items-center gap-2">
-                        <button
-                            type="button"
-                            onClick={() => { onUseInComposer(subject, bodyText); setUsed(true); setTimeout(() => setUsed(false), 2000); }}
-                            className="inline-flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white font-bold px-3 py-2 rounded-lg text-sm"
-                        >
-                            {used ? <><Check className="w-4 h-4" /> Loaded into composer</> : <><ChevronDown className="w-4 h-4" /> Use in email composer</>}
-                        </button>
-                        <button type="button" onClick={() => copy("both")} className="inline-flex items-center gap-2 bg-white hover:bg-stone-100 border border-stone-200 text-stone-700 font-bold px-3 py-2 rounded-lg text-sm">
-                            {copied === "both" ? <><Check className="w-4 h-4 text-emerald-600" /> Copied subject + message</> : <><Copy className="w-4 h-4" /> Copy subject + message</>}
-                        </button>
+                        {isEmail && (
+                            <>
+                                <button
+                                    type="button"
+                                    onClick={() => { onUseInComposer(subject, bodyText); setUsed(true); setTimeout(() => setUsed(false), 2000); }}
+                                    className="inline-flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white font-bold px-3 py-2 rounded-lg text-sm"
+                                >
+                                    {used ? <><Check className="w-4 h-4" /> Loaded into composer</> : <><ChevronDown className="w-4 h-4" /> Use in email composer</>}
+                                </button>
+                                <button type="button" onClick={() => copy("both")} className="inline-flex items-center gap-2 bg-white hover:bg-stone-100 border border-stone-200 text-stone-700 font-bold px-3 py-2 rounded-lg text-sm">
+                                    {copied === "both" ? <><Check className="w-4 h-4 text-emerald-600" /> Copied subject + message</> : <><Copy className="w-4 h-4" /> Copy subject + message</>}
+                                </button>
+                            </>
+                        )}
+
+                        {channel === "linkedin" && (
+                            <>
+                                <button type="button" onClick={() => copy("body")} className="inline-flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white font-bold px-3 py-2 rounded-lg text-sm">
+                                    {copied === "body" ? <><Check className="w-4 h-4" /> Copied</> : <><Copy className="w-4 h-4" /> Copy message</>}
+                                </button>
+                                {linkedinUrl ? (
+                                    <a href={linkedinUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 bg-[#0a66c2] hover:bg-[#084d94] text-white font-bold px-3 py-2 rounded-lg text-sm">
+                                        <Linkedin className="w-4 h-4" /> Open LinkedIn
+                                    </a>
+                                ) : (
+                                    <span className="text-xs text-stone-400 inline-flex items-center gap-1"><AlertTriangle className="w-3.5 h-3.5" /> No LinkedIn on file — copy + search</span>
+                                )}
+                            </>
+                        )}
+
+                        {channel === "sms" && (
+                            <>
+                                <button type="button" onClick={() => copy("body")} className="inline-flex items-center gap-2 bg-white hover:bg-stone-100 border border-stone-200 text-stone-700 font-bold px-3 py-2 rounded-lg text-sm">
+                                    {copied === "body" ? <><Check className="w-4 h-4 text-emerald-600" /> Copied</> : <><Copy className="w-4 h-4" /> Copy</>}
+                                </button>
+                                {phone ? (
+                                    <button
+                                        type="button"
+                                        onClick={sendSms}
+                                        disabled={smsSending || !bodyText.trim()}
+                                        className="inline-flex items-center gap-2 bg-stone-900 hover:bg-black disabled:opacity-50 text-white font-bold px-3 py-2 rounded-lg text-sm"
+                                    >
+                                        {smsSending ? <><Loader2 className="w-4 h-4 animate-spin" /> Sending…</> : <><Send className="w-4 h-4" /> Send SMS to {phone}</>}
+                                    </button>
+                                ) : (
+                                    <span className="text-xs text-stone-400 inline-flex items-center gap-1"><AlertTriangle className="w-3.5 h-3.5" /> No phone on file</span>
+                                )}
+                            </>
+                        )}
                     </div>
+
+                    {smsResult && (
+                        <div className={clsx(
+                            "rounded-xl p-2.5 text-sm flex items-start gap-2",
+                            smsResult.ok ? "bg-emerald-50 border border-emerald-200 text-emerald-800" : "bg-rose-50 border border-rose-200 text-rose-700",
+                        )}>
+                            {smsResult.ok ? <Check className="w-4 h-4 shrink-0 mt-0.5" /> : <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />}
+                            <span className="font-medium">{smsResult.message}</span>
+                        </div>
+                    )}
                 </div>
             )}
         </Card>

@@ -141,6 +141,41 @@ export async function sendSmsPartnerAlert(text: string): Promise<MultiSmsResult>
 }
 
 /**
+ * Send an SMS to ONE arbitrary recipient (e.g. a LEAD's phone, not the partner
+ * alert list). Used by the Sales Cockpit's SMS channel. Resolves the same Twilio
+ * auth as sendSmsPartnerAlert (API key preferred, Auth Token fallback) but the
+ * `To` is passed in. Returns the per-recipient result so the UI can surface
+ * Twilio's specific error (e.g. 21608 = trial account, number not verified).
+ */
+export async function sendSmsToRecipient(to: string, text: string): Promise<SmsResult> {
+    const accountSid = process.env.TWILIO_ACCOUNT_SID;
+    const apiKeySid = process.env.TWILIO_API_KEY_SID;
+    const apiKeySecret = process.env.TWILIO_API_KEY_SECRET;
+    const authToken = process.env.TWILIO_AUTH_TOKEN;
+    const from = process.env.TWILIO_PHONE_NUMBER;
+
+    const useApiKey = !!(apiKeySid && apiKeySecret);
+    const authUser = useApiKey ? apiKeySid : accountSid;
+    const authPass = useApiKey ? apiKeySecret : authToken;
+
+    const dest = (to || "").trim();
+    if (!accountSid || !authUser || !authPass || !from) {
+        return {
+            sent: false,
+            error: `Missing Twilio env: ${[
+                !accountSid && "TWILIO_ACCOUNT_SID",
+                !authUser && "TWILIO_API_KEY_SID or TWILIO_AUTH_TOKEN",
+                !authPass && "TWILIO_API_KEY_SECRET or TWILIO_AUTH_TOKEN",
+                !from && "TWILIO_PHONE_NUMBER",
+            ].filter(Boolean).join(", ")}`,
+        };
+    }
+    if (!dest) return { sent: false, error: "No recipient phone number" };
+
+    return sendSmsToOne({ accountSid, authUser: authUser as string, authPass: authPass as string, from, to: dest, text });
+}
+
+/**
  * Maps the marketing_leads.magnet_key to a human-readable whitepaper name.
  * Keep this in sync with lib/lead-magnets.ts as new magnets are added.
  */
