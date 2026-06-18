@@ -6,6 +6,7 @@ import { createBrowserClient } from "@supabase/ssr";
 import {
     Briefcase, Search, Loader2, ExternalLink, Send, X,
     AlertTriangle, CheckCircle2, User, Calendar, Building2,
+    Users, ShieldCheck, Lock, MapPin,
 } from "lucide-react";
 import clsx from "clsx";
 
@@ -60,6 +61,8 @@ export default function AdminOpportunities() {
     // Push-to-client modal state. Folded in from the legacy
     // /admin/push-opportunity page so the action lives where the data is.
     const [pushTarget, setPushTarget] = useState<Opp | null>(null);
+    // Reverse-match modal: find the contractors eligible for this opportunity.
+    const [matchTarget, setMatchTarget] = useState<Opp | null>(null);
 
     const loadOpps = useCallback(async () => {
         setLoading(true);
@@ -212,6 +215,15 @@ export default function AdminOpportunities() {
                                                     <Send className="w-3 h-3" />
                                                     Send
                                                 </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setMatchTarget(o)}
+                                                    title="Find the contractors eligible for this opportunity"
+                                                    className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100"
+                                                >
+                                                    <Users className="w-3 h-3" />
+                                                    Vendors
+                                                </button>
                                                 <a href={`https://sam.gov/opp/${o.notice_id}/view`} target="_blank" rel="noopener noreferrer"
                                                     title="Open on SAM.gov"
                                                     className="text-blue-600 hover:text-blue-800 p-1"><ExternalLink className="w-3.5 h-3.5" /></a>
@@ -231,6 +243,140 @@ export default function AdminOpportunities() {
                     onClose={() => setPushTarget(null)}
                 />
             )}
+
+            {matchTarget && (
+                <ReverseMatchModal
+                    opp={matchTarget}
+                    onClose={() => setMatchTarget(null)}
+                />
+            )}
+        </div>
+    );
+}
+
+// ── Reverse match: contractors eligible for THIS opportunity ─────────────────
+interface ReverseLead {
+    contractor_id: string;
+    company_name: string | null;
+    uei: string | null;
+    state: string | null;
+    sba_certifications: string[];
+    total_federal_awards: number | null;
+    registration_status: string | null;
+    score: number;
+    classification: "HOT" | "WARM" | "COLD";
+    score_breakdown: Record<string, number>;
+}
+
+const TIER_BADGE: Record<string, string> = {
+    HOT: "bg-emerald-100 text-emerald-700",
+    WARM: "bg-amber-100 text-amber-700",
+    COLD: "bg-stone-100 text-stone-500",
+};
+
+function ReverseMatchModal({ opp, onClose }: { opp: Opp; onClose: () => void }) {
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [leads, setLeads] = useState<ReverseLead[]>([]);
+    const [requiredLabel, setRequiredLabel] = useState<string | null>(null);
+    const [gated, setGated] = useState(false);
+    const [gatedReason, setGatedReason] = useState<string | null>(null);
+    const [eligibleCount, setEligibleCount] = useState(0);
+
+    useEffect(() => {
+        let alive = true;
+        setLoading(true);
+        setError(null);
+        fetch(`/api/admin/reverse-match?opportunity_id=${encodeURIComponent(opp.notice_id)}&top_n=50`)
+            .then(async (r) => {
+                const d = await r.json();
+                if (!r.ok || !d.ok) throw new Error(d?.error || `Failed (${r.status})`);
+                return d;
+            })
+            .then((d) => {
+                if (!alive) return;
+                setLeads(Array.isArray(d.leads) ? d.leads : []);
+                setRequiredLabel(d.required_label ?? null);
+                setGated(!!d.gated);
+                setGatedReason(d.gated_reason ?? null);
+                setEligibleCount(d.eligible_count ?? 0);
+            })
+            .catch((e) => { if (alive) setError(e instanceof Error ? e.message : "Could not load vendors"); })
+            .finally(() => { if (alive) setLoading(false); });
+        return () => { alive = false; };
+    }, [opp.notice_id]);
+
+    return (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center p-4 overflow-y-auto" onClick={onClose}>
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl my-8" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-start justify-between p-5 border-b border-stone-200">
+                    <div className="min-w-0">
+                        <h3 className="font-bold text-stone-900 inline-flex items-center gap-2"><Users className="w-5 h-5 text-indigo-600" /> Eligible contractors</h3>
+                        <p className="text-xs text-stone-500 mt-0.5 truncate">{opp.title}</p>
+                        <p className="text-[11px] text-stone-400 mt-0.5">
+                            {opp.naics_code && <span className="font-mono">{opp.naics_code}</span>}
+                            {opp.set_aside_code && <span className="ml-2">· {opp.set_aside_code}</span>}
+                        </p>
+                    </div>
+                    <button type="button" aria-label="Close" onClick={onClose} className="text-stone-400 hover:text-black p-1"><X className="w-5 h-5" /></button>
+                </div>
+
+                {/* Eligibility banner — always honest about the gate. */}
+                <div className="px-5 pt-4">
+                    {requiredLabel ? (
+                        <div className="flex items-start gap-2 text-xs bg-indigo-50 border border-indigo-200 text-indigo-800 rounded-xl p-3">
+                            <ShieldCheck className="w-4 h-4 shrink-0 mt-0.5" />
+                            <span>Set-aside gate active: only firms whose <span className="font-bold">SAM.gov registration</span> shows <span className="font-bold">{requiredLabel}</span> are shown — the same source a contracting officer checks. Firms without it are excluded entirely. Confirm current certification status before you rely on it.</span>
+                        </div>
+                    ) : !gated ? (
+                        <div className="flex items-start gap-2 text-xs bg-stone-50 border border-stone-200 text-stone-600 rounded-xl p-3">
+                            <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-stone-400" />
+                            <span>Open competition (no certification set-aside) — ranked by fit.</span>
+                        </div>
+                    ) : null}
+                </div>
+
+                <div className="p-5">
+                    {loading ? (
+                        <div className="py-12 text-center text-stone-400"><Loader2 className="w-6 h-6 animate-spin mx-auto" /><p className="text-sm mt-2">Finding eligible contractors…</p></div>
+                    ) : error ? (
+                        <p className="text-sm text-rose-600 inline-flex items-center gap-1.5"><AlertTriangle className="w-4 h-4" /> {error}</p>
+                    ) : gated ? (
+                        <div className="flex items-start gap-2 text-sm bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-4">
+                            <Lock className="w-5 h-5 shrink-0 mt-0.5" />
+                            <span>{gatedReason}</span>
+                        </div>
+                    ) : leads.length === 0 ? (
+                        <p className="text-sm text-stone-400">No eligible contractors found in our database for this opportunity{requiredLabel ? ` with ${requiredLabel} certification` : ""}.</p>
+                    ) : (
+                        <>
+                            <p className="text-xs text-stone-500 mb-2">{eligibleCount} eligible · showing top {leads.length}</p>
+                            <ul className="space-y-2">
+                                {leads.map((l) => (
+                                    <li key={l.contractor_id} className="border border-stone-200 rounded-xl p-3 flex items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <span className="font-bold text-stone-800 text-sm truncate">{l.company_name || "Unnamed"}</span>
+                                                <span className={clsx("text-[9px] font-bold px-1.5 py-0.5 rounded uppercase", TIER_BADGE[l.classification])}>{l.classification} · {l.score}</span>
+                                            </div>
+                                            <div className="flex items-center gap-3 text-[11px] text-stone-500 mt-1 flex-wrap">
+                                                {l.state && <span className="inline-flex items-center gap-1"><MapPin className="w-3 h-3" /> {l.state}</span>}
+                                                {typeof l.total_federal_awards === "number" && l.total_federal_awards > 0 && <span>{l.total_federal_awards} fed awards</span>}
+                                                {l.registration_status && <span>SAM: {l.registration_status}</span>}
+                                                {l.sba_certifications.length > 0 && <span className="truncate">{l.sba_certifications.slice(0, 4).join(", ")}</span>}
+                                            </div>
+                                        </div>
+                                        {l.uei && (
+                                            <a href={`https://sam.gov/search/?q=${encodeURIComponent(l.uei)}&index=ei`} target="_blank" rel="noopener noreferrer"
+                                                title="Open on SAM.gov" className="text-blue-600 hover:text-blue-800 p-1 shrink-0"><ExternalLink className="w-4 h-4" /></a>
+                                        )}
+                                    </li>
+                                ))}
+                            </ul>
+                        </>
+                    )}
+                </div>
+            </div>
         </div>
     );
 }
