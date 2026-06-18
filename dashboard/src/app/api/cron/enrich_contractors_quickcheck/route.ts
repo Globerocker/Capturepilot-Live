@@ -175,6 +175,11 @@ export async function GET(req: NextRequest) {
                 scraped_at: r.scraped_at,
             };
             patch.capability_summary_refreshed_at = new Date().toISOString();
+            // Mirror the keyword list into the GIN-indexed text[] column (migration 183)
+            // so reverse-match (gov opportunity -> contractors) can pre-filter fast.
+            patch.capability_keywords = Array.isArray(ex.capability_keywords)
+                ? Array.from(new Set(ex.capability_keywords.map((k: any) => String(k).trim().toLowerCase()).filter(Boolean)))
+                : null;
 
             // Deterministic social + CMS extraction. The LLM can't see social
             // URLs (markdown strips <a href>), so scan the raw links/html here.
