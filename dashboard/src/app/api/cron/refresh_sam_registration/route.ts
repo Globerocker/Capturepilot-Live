@@ -43,6 +43,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { guardCron } from "@/lib/cron-auth";
 import { withCronTelemetry } from "@/lib/cron-telemetry";
+import { normalizeCertCodes } from "@/lib/set-aside-eligibility";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -346,6 +347,11 @@ async function GET_handler(req: NextRequest) {
                     const { merged, changed } = mergeCerts(c.sba_certifications || [], samCerts);
                     if (changed) {
                         update.sba_certifications = merged;
+                        // Keep the reverse-match pre-filter codes in sync with the
+                        // freshly-merged SAM certs (the canonical gate re-derives
+                        // from sba_certifications, but this keeps prefilter recall
+                        // from decaying as SAM data updates).
+                        update.sba_cert_codes = normalizeCertCodes(merged);
                         stats.certs_updated++;
                     }
 
