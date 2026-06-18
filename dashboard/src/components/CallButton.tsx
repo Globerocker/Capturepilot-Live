@@ -24,6 +24,8 @@ interface CallButtonProps {
     /** Optional explicit lead name/phone (cockpit). Falls back to contactName/contactPhone. */
     leadName?: string;
     leadPhone?: string;
+    /** When true, start recording/transcription immediately on mount (one-click "Call" flow). */
+    autoStart?: boolean;
     /** Fired after a successful save with the transcript+notes so a parent can pre-fill. */
     onSaved?: (log: SavedCallLog) => void;
 }
@@ -35,6 +37,7 @@ export default function CallButton({
     contractorId,
     leadName,
     leadPhone,
+    autoStart,
     onSaved,
 }: CallButtonProps) {
     const effectiveName = leadName ?? contactName;
@@ -119,6 +122,21 @@ export default function CallButton({
         setIsRecording(false);
         if (timerRef.current) clearInterval(timerRef.current);
     }, []);
+
+    // One-click "Call" flow: when autoStart is set and the browser supports speech,
+    // begin recording immediately on mount so the rep is recording + notepad-open
+    // after a single click. Guarded by `started` so it fires only once.
+    const autoStartedRef = useRef(false);
+    useEffect(() => {
+        if (autoStart && speechSupported && !autoStartedRef.current) {
+            autoStartedRef.current = true;
+            startRecording();
+        } else if (autoStart && !speechSupported && !autoStartedRef.current) {
+            // No speech API — at least open the notes panel so the rep can type.
+            autoStartedRef.current = true;
+            setShowPanel(true);
+        }
+    }, [autoStart, speechSupported, startRecording]);
 
     const saveCallLog = async () => {
         setSaving(true);
