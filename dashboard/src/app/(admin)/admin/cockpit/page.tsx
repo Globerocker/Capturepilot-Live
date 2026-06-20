@@ -1920,7 +1920,12 @@ function FirmographicsCard({ lead }: { lead: Lead }) {
                 <Stat icon={Building2} label="Years in business" value={lead.years_in_business != null && lead.years_in_business > 0 ? String(lead.years_in_business) : "Unknown"} />
                 <Stat icon={Trophy} label="Federal awards" value={lead.total_federal_awards != null ? String(lead.total_federal_awards) : (lead.federal_awards_count != null ? String(lead.federal_awards_count) : "Unknown")} />
                 {isContractor && <Stat icon={DollarSign} label="Federal revenue" value={revenue || "Unknown"} />}
-                {estRevenue && <Stat icon={DollarSign} label="Est. revenue" value={estRevenue} />}
+                {/* Only show Est. revenue when it's a DIFFERENT figure — both fields
+                    fall back to total award volume, so they were showing the same
+                    number twice. */}
+                {estRevenue && lead.estimated_revenue !== lead.total_federal_revenue && (
+                    <Stat icon={DollarSign} label="Est. revenue" value={estRevenue} />
+                )}
             </div>
         </Card>
     );

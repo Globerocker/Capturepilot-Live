@@ -118,6 +118,7 @@ interface LeadContext {
     gap_hook: string | null;
     findings_summary: string | null;
     result_url: string | null; // /check/[id] for inbound leads
+    sam_expiration: string | null; // contractors.expiration_date, for the expiring_sam template
 }
 
 // Per-template guidance for the AI intro. Each describes the OPENING only —
@@ -140,7 +141,7 @@ const TEMPLATE_GUIDE: Record<Template, string> = {
     low_competition:
         "Some opportunities in their lane are getting very few bidders right now (single-offer or near sole-source). The opener: these are the easy lanes most firms never see, and they're a good fit for a few of them. Plain and specific, like tipping off a friend. 80-110 words.",
     expiring_sam:
-        "Their SAM.gov registration is close to expiring, which would make them ineligible to win federal work until it's renewed. The opener: a quick heads-up so they don't go dark, then note there's live work open in their lane worth staying active for. Helpful, not alarmist. 70-100 words.",
+        "About their SAM.gov registration. You'll be given the exact status. If it is ALREADY EXPIRED, lead with that plainly ('your SAM registration expired on [date]') and that they can't win federal work until they renew, then note there's live work open in their lane worth getting active for. If it's expiring soon, it's a friendly heads-up so they don't go dark. Either way: helpful, specific with the date, not alarmist. 70-100 words.",
 };
 
 // Map the legacy tone param onto a template when no explicit template is given,
@@ -473,12 +474,25 @@ function buildPrompt(
             ? `CLOSING SOON (lead with this one — it closes ${formatDeadline(deadlineMatch.deadline)}):\n${deadlineMatch.title}`
             : "";
 
+    // SAM expiry context for the expiring_sam template — distinguishes ALREADY
+    // EXPIRED (they're ineligible NOW) from expiring-soon (a heads-up).
+    const samStatusLine = (() => {
+        if (template !== "expiring_sam" || !lead.sam_expiration) return "";
+        const exp = new Date(lead.sam_expiration);
+        if (Number.isNaN(exp.getTime())) return "";
+        const days = Math.round((exp.getTime() - Date.now()) / 86_400_000);
+        const dstr = formatDeadline(lead.sam_expiration);
+        return days < 0
+            ? `\nSAM REGISTRATION: ALREADY EXPIRED on ${dstr} (${Math.abs(days)} days ago). They are INELIGIBLE to win federal work until they renew. Say this plainly: "your SAM registration expired on ${dstr}".`
+            : `\nSAM REGISTRATION: expires ${dstr} (in ${days} days). A heads-up to renew before they go dark.`;
+    })();
+
     const leadContext = `
 LEAD:
 Company: ${lead.company_name}   (write the company name AND the person's name in normal Title Case exactly as given here — NEVER ALL-CAPS, even if source data was uppercase)
 First name (use in greeting if present): ${lead.first_name || "unknown — use a plain opener, no name"}
 State: ${lead.state || "unknown"}
-Certifications: ${lead.certifications.length ? lead.certifications.join(", ") : "none found"}
+Certifications: ${lead.certifications.length ? lead.certifications.join(", ") : "none found"}${samStatusLine}
 
 LIVE OPPORTUNITY MATCHES (the full list — with links and fit % — is appended after your text by our system, so DO NOT list them all yourself; reference the TOP one by name to prove you looked):
 ${matchSummaryForPrompt}
@@ -661,7 +675,7 @@ async function loadContractor(db: any, id: string): Promise<LeadContext> {
     const { data, error } = await db
         .from("contractors")
         .select(
-            "id, uei, company_name, primary_poc_name, state, naics_codes, certifications, sba_certifications, " +
+            "id, uei, company_name, primary_poc_name, state, naics_codes, certifications, sba_certifications, expiration_date, " +
             "federal_awards_count, total_federal_awards, total_award_volume, revenue, " +
             "agency_relationships, capability_keywords, capability_summary_ai",
         )
@@ -705,6 +719,7 @@ async function loadContractor(db: any, id: string): Promise<LeadContext> {
         gap_hook: blob.gap_hook || (Array.isArray(blob.data_gaps) ? blob.data_gaps[0]?.hook || blob.data_gaps[0] : null) || null,
         findings_summary: blob.findings_summary || null,
         result_url: null,
+        sam_expiration: data.expiration_date ?? null,
     };
 }
 
@@ -752,6 +767,7 @@ async function loadAnalysis(db: any, id: string): Promise<LeadContext> {
         gap_hook: typeof gapHook === "string" ? gapHook : null,
         findings_summary: breakdown.findings_summary || null,
         result_url: appBase ? `${appBase}/check/${data.id}` : `/check/${data.id}`,
+        sam_expiration: null,
     };
 }
 

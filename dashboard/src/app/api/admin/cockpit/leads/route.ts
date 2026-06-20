@@ -1015,15 +1015,33 @@ interface ContractorFilters {
 async function fetchContractorLeads(
     sb: ReturnType<typeof svc>,
     opts: ContractorFilters,
-): Promise<{ leads: LeadRow[]; capped: boolean }> {
-    let query = sb
-        .from("contractors")
-        .select(CONTRACTOR_COLS)
-        .eq("qc_enriched", true)
-        // Order so the truncation, if it happens, keeps the most-matched firms.
-        .order("top_match_count", { ascending: false, nullsFirst: false })
-        .limit(CANDIDATE_CAP + 1);
+): Promise<{ leads: LeadRow[]; capped: boolean; total: number }> {
+    // Build the data query (capped slice) AND a head-only exact count through the
+    // SAME filter chain, so the UI can show the TRUE total (e.g. "31,668 leads")
+    // even though we only render the first CANDIDATE_CAP for performance.
+    const dataQuery = applyContractorFilters(
+        sb.from("contractors").select(CONTRACTOR_COLS).eq("qc_enriched", true)
+            .order("top_match_count", { ascending: false, nullsFirst: false })
+            .limit(CANDIDATE_CAP + 1),
+        opts,
+    );
+    const countQuery = applyContractorFilters(
+        sb.from("contractors").select("id", { count: "exact", head: true }).eq("qc_enriched", true),
+        opts,
+    );
 
+    const [{ data, error }, { count }] = await Promise.all([dataQuery, countQuery]);
+    if (error) throw new Error(error.message);
+    const rows = data || [];
+    const capped = rows.length > CANDIDATE_CAP;
+    const leads = rows.slice(0, CANDIDATE_CAP).map(contractorToLead);
+    // True total when available; fall back to the loaded count.
+    const total = typeof count === "number" ? count : leads.length;
+    return { leads, capped, total };
+}
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+function applyContractorFilters(query: any, opts: any): any {
     if (opts.onlyWithMatches) query = query.gt("top_match_count", 0);
     if (opts.state) query = query.eq("state", opts.state);
     if (opts.q) {
@@ -1072,9 +1090,9 @@ async function fetchContractorLeads(
     if (opts.naics && opts.naics.length) {
         const codes = Array.from(
             new Set(
-                opts.naics
-                    .map((c) => c.replace(/[^0-9]/g, ""))
-                    .filter((c) => c.length >= 2 && c.length <= 6),
+                (opts.naics as string[])
+                    .map((c: string) => c.replace(/[^0-9]/g, ""))
+                    .filter((c: string) => c.length >= 2 && c.length <= 6),
             ),
         );
         if (codes.length) {
@@ -1101,12 +1119,7 @@ async function fetchContractorLeads(
         query = query.not("last_award_date", "is", null).gte("last_award_date", cutoff);
     }
 
-    const { data, error } = await query;
-    if (error) throw new Error(error.message);
-    const rows = data || [];
-    const capped = rows.length > CANDIDATE_CAP;
-    const leads = rows.slice(0, CANDIDATE_CAP).map(contractorToLead);
-    return { leads, capped };
+    return query;
 }
 
 async function fetchInboundLeads(
@@ -1323,21 +1336,25 @@ export async function GET(req: NextRequest) {
     try {
         let pool: LeadRow[] = [];
         let capped = false;
+        let trueTotal = 0; // exact DB count where available (contractors), else loaded
 
         if (source === "saved") {
             const r = await fetchSavedLeads(sb, adminId, { q, state });
             pool = pool.concat(r.leads);
             capped = capped || r.capped;
+            trueTotal += r.leads.length;
         }
         if (source === "contractors" || source === "all") {
             const r = await fetchContractorLeads(sb, contractorFilters);
             pool = pool.concat(r.leads);
             capped = capped || r.capped;
+            trueTotal += r.total;
         }
         if (source === "inbound" || source === "all") {
             const r = await fetchInboundLeads(sb, { q, state });
             pool = pool.concat(r.leads);
             capped = capped || r.capped;
+            trueTotal += r.leads.length;
         }
 
         // Left-join the caller's saved-pins onto every contractor lead so the UI
@@ -1359,7 +1376,11 @@ export async function GET(req: NextRequest) {
         }
 
         const sorted = sortLeads(pool, sort);
-        const total = sorted.length;
+        // Use the exact DB count (true total, e.g. 31,668) when no JS-only filter
+        // narrows the set; tier/min-ICP are computed in JS so they fall back to the
+        // loaded count.
+        const postJsFilter = minIcp > 0 || tierFilter === "A" || tierFilter === "B" || tierFilter === "C";
+        const total = postJsFilter ? sorted.length : trueTotal;
         const start = (page - 1) * pageSize;
         const leads = sorted.slice(start, start + pageSize);
 

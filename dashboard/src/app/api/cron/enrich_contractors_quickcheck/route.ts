@@ -177,8 +177,17 @@ export async function GET(req: NextRequest) {
             patch.capability_summary_refreshed_at = new Date().toISOString();
             // Mirror the keyword list into the GIN-indexed text[] column (migration 183)
             // so reverse-match (gov opportunity -> contractors) can pre-filter fast.
+            // capability_keywords from the extractor are {tier, keyword} OBJECTS.
+            // Mirror only the keyword STRING (not String(object) → "[object Object]"
+            // or a JSON blob), lowercased, and drop sentence-length junk so the
+            // GIN column stays clean for reverse-match + the Keywords tab.
             patch.capability_keywords = Array.isArray(ex.capability_keywords)
-                ? Array.from(new Set(ex.capability_keywords.map((k: any) => String(k).trim().toLowerCase()).filter(Boolean)))
+                ? Array.from(new Set(
+                    ex.capability_keywords
+                        .map((k: any) => (typeof k === "string" ? k : (k?.keyword ?? "")))
+                        .map((s: any) => String(s).trim().toLowerCase())
+                        .filter((s: string) => s.length > 1 && s.length <= 60),
+                ))
                 : null;
 
             // Deterministic social + CMS extraction. The LLM can't see social
