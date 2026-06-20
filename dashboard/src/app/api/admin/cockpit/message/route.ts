@@ -689,7 +689,11 @@ async function loadContractor(db: any, id: string): Promise<LeadContext> {
 
     const keywords = [
         ...toStrArray(data.capability_keywords),
-        ...toStrArray(blob.capability_keywords),
+        // blob.capability_keywords are {tier, keyword} OBJECTS — pull the keyword
+        // string, not String(object) → "[object Object]".
+        ...(Array.isArray(blob.capability_keywords)
+            ? blob.capability_keywords.map((k: any) => (typeof k === "string" ? k : k?.keyword)).filter((s: any) => typeof s === "string" && s)
+            : []),
     ]
         .map((k) => k.toLowerCase())
         .filter((k, i, arr) => k.length > 2 && arr.indexOf(k) === i)
