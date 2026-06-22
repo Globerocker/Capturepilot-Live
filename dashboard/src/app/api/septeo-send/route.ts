@@ -156,7 +156,7 @@ async function buildCounts(db: SbAny) {
     };
     const approved = await cnt((q) => q.eq("review_status", "freigegeben").or("sales_hold.is.null,sales_hold.eq.false"));
     const sales_held = await cnt((q) => q.eq("review_status", "freigegeben").eq("sales_hold", true));
-    const already_sent = await cnt((q) => q.eq("review_status", "gesendet"));
+    const already_sent = await cnt((q) => q.eq("review_status", "erledigt"));
 
     const by_category: Record<string, number> = { recipient_unknown: 0, policy_spam: 0, mailbox_full: 0, permanently_undeliverable: 0 };
     const { data: rows } = await db
@@ -229,7 +229,7 @@ export async function POST(req: NextRequest) {
     // approved + not sales-held firms
     let q = db
         .from("septeo_bounce_firms")
-        .select("domain, firma, marktsegment, bounce_reason_category, bounced_contacts, excluded_record_ids, freigegeben_email, email_empfohlen, review_status, sales_hold")
+        .select("domain, firma, marktsegment, bounce_reason_category, bounced_contacts, excluded_record_ids, freigegeben_email, email_empfohlen, alt_recipient_email, review_status, sales_hold")
         .eq("review_status", "freigegeben")
         .or("sales_hold.is.null,sales_hold.eq.false")
         .limit(limit);
@@ -252,7 +252,7 @@ export async function POST(req: NextRequest) {
         if (mode === "test") {
             to = test_email!;
         } else {
-            to = firm.freigegeben_email || firm.email_empfohlen || null;
+            to = firm.freigegeben_email || firm.alt_recipient_email || firm.email_empfohlen || null;
             if (!to) {
                 skipped++;
                 logRows.push({ domain: firm.domain, mode, to_email: null, subject: null, status: "error", provider_id: null, error: "no recipient address" });
@@ -295,7 +295,21 @@ export async function POST(req: NextRequest) {
             logRows.push({ domain: firm.domain, mode, to_email: to, subject, status: "sent", provider_id: providerId, error: null });
             if (log_sample.length < 10) log_sample.push({ domain: firm.domain, to_email: to, status: "sent", provider_id: providerId });
             if (mode === "live") {
-                await db.from("septeo_bounce_firms").update({ review_status: "gesendet" }).eq("domain", firm.domain);
+                await db.from("septeo_bounce_firms").update({ review_status: "erledigt" }).eq("domain", firm.domain);
+                // Auto-Nachfass-Task (telefonisch), Dzenita zugewiesen, fällig in 3 Tagen.
+                // unique(domain,type,status) verhindert Doppel-Tasks beim Re-Senden.
+                try {
+                    const due = new Date(Date.now() + 3 * 86400000).toISOString();
+                    await db.from("septeo_tasks").upsert({
+                        domain: firm.domain,
+                        firma: firm.firma || firm.domain,
+                        type: "call_followup",
+                        title: "Telefonisch nachfassen",
+                        status: "offen",
+                        assigned_to: "Dzenita",
+                        due_at: due,
+                    }, { onConflict: "domain,type,status", ignoreDuplicates: true });
+                } catch { /* septeo_tasks evtl. noch nicht angelegt — Versand nie blockieren */ }
             }
         } catch (e: any) {
             failed++;
