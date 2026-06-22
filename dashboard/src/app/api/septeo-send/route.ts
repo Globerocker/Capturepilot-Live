@@ -96,6 +96,68 @@ function hasPlaceholder(v: any): boolean {
     return typeof v === "string" && v.includes("[");
 }
 
+// ---- Microsoft Graph transport ----------------------------------------------
+// Sends AS Dzenita's real M365 mailbox so a copy lands in her Sent Items and
+// replies thread natively. Uses an Entra app (client-credentials, app permission
+// Mail.Send, ideally scoped to her mailbox via an Application Access Policy).
+type GraphCfg = { tenant: string; clientId: string; clientSecret: string };
+function graphConfig(): GraphCfg | null {
+    const tenant = process.env.SEPTEO_MS_TENANT_ID;
+    const clientId = process.env.SEPTEO_MS_CLIENT_ID;
+    const clientSecret = process.env.SEPTEO_MS_CLIENT_SECRET;
+    if (tenant && clientId && clientSecret) return { tenant, clientId, clientSecret };
+    return null;
+}
+async function getGraphToken(cfg: GraphCfg): Promise<string> {
+    const res = await fetch(`https://login.microsoftonline.com/${cfg.tenant}/oauth2/v2.0/token`, {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+            client_id: cfg.clientId,
+            client_secret: cfg.clientSecret,
+            scope: "https://graph.microsoft.com/.default",
+            grant_type: "client_credentials",
+        }),
+    });
+    const j: any = await res.json().catch(() => ({}));
+    if (!res.ok || !j.access_token) throw new Error(`graph token: ${j.error_description || j.error || res.status}`);
+    return j.access_token as string;
+}
+// Returns the Graph request-id on success (202). Retries once on 429/503 honoring Retry-After.
+async function sendViaGraph(
+    token: string,
+    fromMailbox: string,
+    msg: { to: string; subject: string; html: string; replyTo?: string },
+): Promise<string | null> {
+    const payload = {
+        message: {
+            subject: msg.subject,
+            body: { contentType: "HTML", content: msg.html },
+            toRecipients: [{ emailAddress: { address: msg.to } }],
+            ...(msg.replyTo ? { replyTo: [{ emailAddress: { address: msg.replyTo } }] } : {}),
+        },
+        saveToSentItems: true,
+    };
+    const doSend = () =>
+        fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(fromMailbox)}/sendMail`, {
+            method: "POST",
+            headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+            body: JSON.stringify(payload),
+        });
+    let res = await doSend();
+    if (res.status === 429 || res.status === 503) {
+        const wait = Math.min(30, Number(res.headers.get("retry-after")) || 10);
+        await delay(wait * 1000);
+        res = await doSend();
+    }
+    if (res.status !== 202) {
+        let detail = "";
+        try { const e: any = await res.json(); detail = e?.error?.message || JSON.stringify(e); } catch { detail = await res.text().catch(() => ""); }
+        throw new Error(`graph sendMail ${res.status}: ${detail}`.slice(0, 400));
+    }
+    return res.headers.get("request-id") || "graph:202";
+}
+
 // ---- bounce block ------------------------------------------------------------
 // Build a plain-text {{bounce_block}} (and parallel HTML <li> list) from the
 // firm's bounced_contacts MINUS its excluded_record_ids. Cap at 15 visible
@@ -222,7 +284,8 @@ export async function GET(req: NextRequest) {
     if (url.searchParams.get("count") === "1") {
         try {
             const counts = await buildCounts(sb());
-            return json({ ok: true, ...counts });
+            const transport = graphConfig() ? "graph" : (process.env.SEPTEO_RESEND_API_KEY ? "resend" : "none");
+            return json({ ok: true, transport, ...counts });
         } catch (e: any) {
             return json({ error: e?.message || String(e) }, 500);
         }
@@ -239,7 +302,13 @@ export async function POST(req: NextRequest) {
     const test_email: string | undefined = body?.test_email;
     const limit = Math.max(1, Math.min(2000, Number(body?.limit) || (mode === "test" ? 5 : 500)));
 
-    if (!process.env.SEPTEO_RESEND_API_KEY) return json({ error: "SEPTEO_RESEND_API_KEY not set" }, 400);
+    // Transport: Microsoft Graph (send as Dzenita's mailbox, copy in Sent) when the
+    // Entra app is configured; else Resend. body.transport can force one for testing.
+    const graphCfg = graphConfig();
+    const wantTransport: string | undefined = body?.transport;
+    const useGraph = wantTransport === "graph" ? true : wantTransport === "resend" ? false : !!graphCfg;
+    if (useGraph && !graphCfg) return json({ error: "Microsoft-Graph nicht konfiguriert (SEPTEO_MS_TENANT_ID / SEPTEO_MS_CLIENT_ID / SEPTEO_MS_CLIENT_SECRET fehlen)" }, 400);
+    if (!useGraph && !process.env.SEPTEO_RESEND_API_KEY) return json({ error: "SEPTEO_RESEND_API_KEY not set" }, 400);
     if (mode === "test" && !test_email) return json({ error: "test_email required for mode=test" }, 400);
 
     const db = sb();
@@ -275,7 +344,17 @@ export async function POST(req: NextRequest) {
     const { data: firms, error: firmsErr } = await q;
     if (firmsErr) return json({ error: firmsErr.message }, 500);
 
-    const resend: any = new Resend(process.env.SEPTEO_RESEND_API_KEY);
+    // Graph sends AS this mailbox; it must be Dzenita's real M365 address.
+    const fromMailbox: string = sender.from_email || process.env.SEPTEO_MS_SENDER || "";
+    if (useGraph && !fromMailbox) {
+        return json({ error: "Für den Graph-Versand muss Dzenitas Postfach als From-E-Mail in den Absender-Daten stehen" }, 400);
+    }
+    let graphToken = "";
+    if (useGraph) {
+        try { graphToken = await getGraphToken(graphCfg!); }
+        catch (e: any) { return json({ error: e?.message || String(e) }, 502); }
+    }
+    const resend: any = useGraph ? null : new Resend(process.env.SEPTEO_RESEND_API_KEY);
     const fromHeader = `${sender.from_name || "Septeo"} <${sender.from_email}>`;
     const replyTo = sender.reply_to || sender.from_email;
     const unsubLine = "Wenn Sie keine weiteren Nachrichten wünschen, antworten Sie bitte mit „abmelden“.";
@@ -318,16 +397,14 @@ export async function POST(req: NextRequest) {
 
         attempted++;
         try {
-            const resp = await resend.emails.send({
-                from: fromHeader,
-                to,
-                replyTo,
-                subject,
-                text: textBody,
-                html,
-            });
-            const providerId = resp?.data?.id || resp?.id || null;
-            if (resp?.error) throw new Error(resp.error?.message || JSON.stringify(resp.error));
+            let providerId: string | null;
+            if (useGraph) {
+                providerId = await sendViaGraph(graphToken, fromMailbox, { to, subject, html, replyTo });
+            } else {
+                const resp = await resend.emails.send({ from: fromHeader, to, replyTo, subject, text: textBody, html });
+                if (resp?.error) throw new Error(resp.error?.message || JSON.stringify(resp.error));
+                providerId = resp?.data?.id || resp?.id || null;
+            }
             sent++;
             logRows.push({ domain: firm.domain, mode, to_email: to, subject, status: "sent", provider_id: providerId, error: null });
             if (log_sample.length < 10) log_sample.push({ domain: firm.domain, to_email: to, status: "sent", provider_id: providerId });
@@ -362,5 +439,5 @@ export async function POST(req: NextRequest) {
         try { await db.from("septeo_send_log").insert(logRows); } catch { /* non-blocking */ }
     }
 
-    return json({ ok: true, mode, attempted, sent, failed, skipped, log_sample });
+    return json({ ok: true, mode, transport: useGraph ? "graph" : "resend", attempted, sent, failed, skipped, log_sample });
 }
