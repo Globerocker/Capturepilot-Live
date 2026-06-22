@@ -31,6 +31,40 @@ type ReasonCat = (typeof REASON_CATEGORIES)[number];
 
 type SbAny = SupabaseClient<any, any, any>;
 
+// ---- 70%-Regel: EINE Vorlage pro Firma, gespiegelt aus dem Review-Dashboard ----
+// Manueller Override (template_override) > 70%-Mehrheit der Kontakt-Gründe > generisch.
+function reasonCategoryFor(reasonText: any): ReasonCat {
+    const t = String(reasonText || "").toLowerCase();
+    if (/unbekannt|existiert nicht|unknown/.test(t)) return "recipient_unknown";
+    if (/voll|full|quota/.test(t)) return "mailbox_full";
+    if (/spam|policy|blockiert|blocked/.test(t)) return "policy_spam";
+    if (/dauerhaft|unzustellbar|permanently|fehlgeschlagen/.test(t)) return "permanently_undeliverable";
+    return "recipient_unknown";
+}
+function reasonDistribution(firm: any): { total: number; top: ReasonCat | null; topN: number } {
+    const excluded = new Set<string>((Array.isArray(firm?.excluded_record_ids) ? firm.excluded_record_ids : []).map((x: any) => String(x)));
+    const active: any[] = (Array.isArray(firm?.bounced_contacts) ? firm.bounced_contacts : []).filter(
+        (c: any) => !(c?.record_id != null && excluded.has(String(c.record_id))),
+    );
+    const dist: Record<string, number> = {};
+    let top: ReasonCat | null = null, topN = 0;
+    for (const c of active) {
+        const cat = reasonCategoryFor(c?.reason);
+        dist[cat] = (dist[cat] || 0) + 1;
+        if (dist[cat] > topN) { topN = dist[cat]; top = cat; }
+    }
+    return { total: active.length, top, topN };
+}
+function effectiveCategory(firm: any, tplByCat: Record<string, any>): ReasonCat {
+    const ov = firm?.template_override;
+    if (ov && (REASON_CATEGORIES as readonly string[]).includes(ov) && tplByCat[ov]) return ov as ReasonCat;
+    const { total, top, topN } = reasonDistribution(firm);
+    if (total > 0) return top && topN / total >= 0.7 ? top : "recipient_unknown";
+    return (REASON_CATEGORIES as readonly string[]).includes(firm?.bounce_reason_category)
+        ? (firm.bounce_reason_category as ReasonCat)
+        : "recipient_unknown";
+}
+
 function sb(): SbAny {
     return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_KEY!, { auth: { persistSession: false } });
 }
@@ -158,15 +192,20 @@ async function buildCounts(db: SbAny) {
     const sales_held = await cnt((q) => q.eq("review_status", "freigegeben").eq("sales_hold", true));
     const already_sent = await cnt((q) => q.eq("review_status", "erledigt"));
 
+    // Vorlagen-Kategorien laden, damit by_category dieselbe 70%-Regel + Override wie der Versand nutzt.
+    const { data: tplRows } = await db.from("septeo_reason_templates").select("category");
+    const tplByCat: Record<string, any> = {};
+    for (const t of (tplRows || []) as any[]) tplByCat[t.category] = true;
+
     const by_category: Record<string, number> = { recipient_unknown: 0, policy_spam: 0, mailbox_full: 0, permanently_undeliverable: 0 };
     const { data: rows } = await db
         .from("septeo_bounce_firms")
-        .select("bounce_reason_category, sales_hold")
+        .select("bounce_reason_category, template_override, bounced_contacts, excluded_record_ids, sales_hold")
         .eq("review_status", "freigegeben")
         .limit(100000);
     for (const r of (rows || []) as any[]) {
         if (r.sales_hold === true) continue;
-        const cat = REASON_CATEGORIES.includes(r.bounce_reason_category) ? r.bounce_reason_category : "recipient_unknown";
+        const cat = effectiveCategory(r, tplByCat);
         by_category[cat] = (by_category[cat] || 0) + 1;
     }
     return { approved, sales_held, already_sent, by_category };
@@ -229,7 +268,7 @@ export async function POST(req: NextRequest) {
     // approved + not sales-held firms
     let q = db
         .from("septeo_bounce_firms")
-        .select("domain, firma, marktsegment, bounce_reason_category, bounced_contacts, excluded_record_ids, freigegeben_email, email_empfohlen, alt_recipient_email, review_status, sales_hold")
+        .select("domain, firma, marktsegment, bounce_reason_category, template_override, bounced_contacts, excluded_record_ids, freigegeben_email, email_empfohlen, alt_recipient_email, review_status, sales_hold")
         .eq("review_status", "freigegeben")
         .or("sales_hold.is.null,sales_hold.eq.false")
         .limit(limit);
@@ -261,10 +300,8 @@ export async function POST(req: NextRequest) {
             }
         }
 
-        // template
-        const cat: ReasonCat = (REASON_CATEGORIES as readonly string[]).includes(firm.bounce_reason_category)
-            ? (firm.bounce_reason_category as ReasonCat)
-            : "recipient_unknown";
+        // template — 70%-Regel + manueller Override (identisch zur Dashboard-Vorschau)
+        const cat: ReasonCat = effectiveCategory(firm, tplByCat);
         const tpl = tplByCat[cat] || tplByCat["recipient_unknown"] || { subject: "", body_text: "" };
 
         // bounce block + multi
