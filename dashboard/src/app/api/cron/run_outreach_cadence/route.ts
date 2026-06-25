@@ -327,9 +327,17 @@ async function processContact(
         }
         const addr = campaign.physical_address?.trim();
         if (addr) body += `\n${addr}`;
+        // Replies route to a monitored mailbox (outreach_settings.reply_to),
+        // not the from-domain. Optional; a missing setting just omits Reply-To.
+        let replyTo: string | undefined;
+        try {
+            const { data: rt } = await sb.from("outreach_settings").select("value").eq("key", "reply_to").maybeSingle();
+            if (typeof rt?.value === "string" && rt.value.includes("@")) replyTo = rt.value;
+        } catch { /* reply-to is optional */ }
         result = await sendOutreachEmail({
             to: contact.email || "",
             from,
+            replyTo,
             subject: pick.subject,
             html: body,
             campaignContactId: cc.id,
