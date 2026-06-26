@@ -428,9 +428,34 @@ const EMPTY_FILTERS: Filters = {
 };
 
 /** One-line "why" a rep reads at a glance on each queue row. */
+/**
+ * Defaults every array-typed lead field to [] (and contact to an object) the
+ * moment a lead enters state. The render path spreads/maps these in many places
+ * (whyLine, topCertLabel, cert badges, matches tab, research sources); a single
+ * null from the API used to white-screen the whole cockpit. Normalize once here.
+ */
+/* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+function coerceLead(l: any): Lead {
+    if (!l || typeof l !== "object") return l;
+    /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+    const arr = (v: any) => (Array.isArray(v) ? v : []);
+    return {
+        ...l,
+        certifications: arr(l.certifications),
+        sba_certifications: arr(l.sba_certifications),
+        top_matches: arr(l.top_matches),
+        gaps: arr(l.gaps),
+        track_record: arr(l.track_record),
+        capability_keywords: arr(l.capability_keywords),
+        icp_breakdown: arr(l.icp_breakdown),
+        contact: l.contact ?? { name: null, email: null, title: null, phone: null },
+        research: l.research ? { ...l.research, sources: arr(l.research.sources) } : l.research,
+    } as Lead;
+}
+
 function whyLine(l: Lead): string {
     const bits: string[] = [];
-    const certHay = [...l.certifications, ...l.sba_certifications].join(" ").toLowerCase();
+    const certHay = [...(l.certifications ?? []), ...(l.sba_certifications ?? [])].join(" ").toLowerCase();
     if (/sdvosb|service.?disabled/.test(certHay)) bits.push("SDVOSB");
     else if (/\bvosb\b|veteran/.test(certHay)) bits.push("VOSB");
     if (/8\(a\)|\b8a\b/.test(certHay)) bits.push("8(a)");
@@ -580,7 +605,7 @@ export default function CockpitPage() {
             const res = await fetch(`/api/admin/cockpit/leads?${params}`);
             const data = await res.json();
             if (!res.ok) throw new Error(data?.error || `Request failed (${res.status})`);
-            setLeads(data.leads || []);
+            setLeads((data.leads || []).map(coerceLead));
             setTotal(data.total || 0);
             setCapped(!!data.capped);
         } catch (e) {
@@ -638,8 +663,9 @@ export default function CockpitPage() {
             const data = await res.json();
             if (!res.ok) throw new Error(data?.error || `Request failed (${res.status})`);
             if (data.lead) {
-                setDetail(data.lead);
-                patchLeadInQueue(data.lead);
+                const ld = coerceLead(data.lead);
+                setDetail(ld);
+                patchLeadInQueue(ld);
             }
         } catch (e) {
             setDetailError(e instanceof Error ? e.message : "Could not load full details");
@@ -650,7 +676,7 @@ export default function CockpitPage() {
 
     const selectLead = useCallback(async (lead: Lead) => {
         setSelectedId(lead.id);
-        setDetail(lead);
+        setDetail(coerceLead(lead));
         await fetchDetail(lead.id, lead.source);
     }, [fetchDetail]);
 
@@ -1891,9 +1917,9 @@ function ContactCard({ lead, onStartCall }: { lead: Lead; onStartCall: () => voi
             </div>
 
             {/* Certs + track-record chips */}
-            {(lead.sba_certifications.length > 0 || lead.certifications.length > 0 || trackRecord.length > 0) && (
+            {((lead.sba_certifications?.length ?? 0) > 0 || (lead.certifications?.length ?? 0) > 0 || trackRecord.length > 0) && (
                 <div className="flex flex-wrap gap-2 mt-4">
-                    {[...lead.sba_certifications, ...lead.certifications].slice(0, 6).map((c, i) => (
+                    {[...(lead.sba_certifications ?? []), ...(lead.certifications ?? [])].slice(0, 6).map((c, i) => (
                         <CertBadge key={`cert-${c}-${i}`} code={c} />
                     ))}
                     {trackRecord.slice(0, 4).map((t, i) => (
