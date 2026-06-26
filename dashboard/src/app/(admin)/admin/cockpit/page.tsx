@@ -1295,8 +1295,8 @@ function LeadRow({ lead, selected, onClick, onToggleSaved }: { lead: Lead; selec
 function PresenceDots({ lead }: { lead: Lead }) {
     const known = lead.known ?? {
         linkedin: !!(lead.owner_linkedin || lead.company_linkedin),
-        email: !!lead.contact.email,
-        phone: !!lead.contact.phone,
+        email: !!lead.contact?.email,
+        phone: !!lead.contact?.phone,
         website: !!lead.website,
     };
     const dots: { on: boolean; label: string; Icon: React.ComponentType<{ className?: string }> }[] = [
