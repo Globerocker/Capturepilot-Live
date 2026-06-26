@@ -52,6 +52,8 @@ Rules for your output:
 - Judge match_fit: do the matched federal contracts plausibly fit what this company sells (use company name, NAICS, domain)? "good" = clearly relevant, "partial" = loosely related, "mismatch" = wrong industry.
 - Do NOT flag "no federal experience / no certifications / no past performance visible on the website" as issues. That is normal for a cold prospect and the recipient never sees it. Only flag issues that make the EMAIL itself wrong or embarrassing to send: a garbled or clearly wrong name, a contract that does not fit the company (mismatch), a broken or nonsensical gap_line, or awkward/robotic phrasing. If there is nothing wrong with the email, return an empty issues array and verdict "pass".
 - verdict "block" only when match_fit is "mismatch" or a data error makes the email embarrassing; "warn" for a partial fit or a minor fixable nit; otherwise "pass".
+- Write the "icebreaker": the FIRST line of the email, one or two sentences, that sounds like a real person who actually looked at THIS company, texting a peer. It must name a CONCRETE, checkable thing about them: an actual product or service they sell, the city/state they operate in, a specific niche, how long they've been around. Pull it from findings_summary first; if findings_summary is "(none)", infer the concrete product category from the company name + NAICS + domain (e.g. "custom-cut beef", "janitorial and packaging supply", "CAD drafting"), never a vague label. Then land the opening in plain words: they're not bidding on government work, or have no federal footprint yet, or are leaving that money on the table.
+  Hard bans (this is the whole point): never start with "Hey", "Quick one", "Hope this finds you", "I came across", "I noticed". NEVER use the words leverage, expertise, specializes in, strong fit, solutions, passionate, robust, or any flattery like "I love what you do". Do not use the stock phrases "leaving money on the table", "missed opportunity", or "money on the table" (overused across the batch); vary how you point at the gap. No restating their NAICS code. Two sentences max, no em-dashes. Write it the way a sharp BD person types a real first line, not the way marketing writes one.
 - No em-dashes, no marketing fluff, no buzzwords. Plain and specific.
 Return ONLY JSON.`;
 
@@ -73,6 +75,7 @@ Return JSON with exactly these keys:
   "display_company": string,
   "display_first": string|null,
   "greeting": string,                // e.g. "Hi Mack," or "Hi there,"
+  "icebreaker": string,              // the specific "I know you" first line (see rules) — 1-2 sentences, no generic opener
   "match_fit": "good"|"partial"|"mismatch",
   "match_fit_reason": string,        // one short sentence
   "issues": [{"type": string, "severity": "warn"|"error", "reason": string}],
@@ -90,7 +93,7 @@ async function callModel(c) {
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: SYS }] },
         contents: [{ role: "user", parts: [{ text: buildUser(c) }] }],
-        generationConfig: { temperature: 0.2, responseMimeType: "application/json" },
+        generationConfig: { temperature: 0.45, responseMimeType: "application/json" },
       }),
     }
   );
@@ -126,6 +129,7 @@ async function callModel(c) {
 
     const tag = v.verdict === "pass" ? "PASS " : v.verdict === "warn" ? "WARN " : "BLOCK";
     console.log(`[${tag}] ${c.company_name}  ->  ${v.display_company}`);
+    console.log(`        ice: ${v.icebreaker}`);
     console.log(`        greeting: "${v.greeting}"   match_fit: ${v.match_fit} (${v.match_fit_reason})`);
     if (v.issues?.length) v.issues.forEach((i) => console.log(`        ! ${i.severity}: ${i.type} — ${i.reason}`));
 
@@ -140,7 +144,7 @@ async function callModel(c) {
           greeting: v.greeting, match_fit: v.match_fit, learnings: v.learnings || null,
         }),
       });
-      const cf = { ...(c.custom_fields || {}), display_company: v.display_company, display_first: v.display_first || "", display_greeting: v.greeting, qa_match_fit: v.match_fit, qa_verdict: v.verdict };
+      const cf = { ...(c.custom_fields || {}), display_company: v.display_company, display_first: v.display_first || "", display_greeting: v.greeting, icebreaker: v.icebreaker || "", qa_match_fit: v.match_fit, qa_verdict: v.verdict };
       await rest(`outreach_contacts?id=eq.${c.id}`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ custom_fields: cf }) });
     }
   }
