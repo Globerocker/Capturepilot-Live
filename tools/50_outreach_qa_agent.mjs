@@ -50,6 +50,7 @@ Rules for your output:
 - Names from SAM.gov arrive in ALL CAPS and as legal names. Convert to natural case and the real brand. Prefer the brand implied by the email domain over the legal name. Drop LLC / INC / CO / HOLDINGS when they make the name clunky. Example: company "ANDERSON BONELESS BEEF HOLDINGS LLC" + domain andersoncustommeats.com -> "Anderson Custom Meats".
 - first_name in ALL CAPS like "MACK" -> "Mack". If first_name is missing, looks like a company, or is junk, set display_first to null and greeting to "Hi there,".
 - Judge match_fit: do the matched federal contracts plausibly fit what this company sells (use company name, NAICS, domain)? "good" = clearly relevant, "partial" = loosely related, "mismatch" = wrong industry.
+- Vet EACH of the matched contracts SEPARATELY against what this company actually does, and be strict. A plumbing-supply company matched to "Data Center Network Infrastructure", or a dance company matched to "Transportation Services", is wrong and must be dropped. Build "matches_clean" = ONLY the contract lines that a buyer would agree genuinely fit, copied VERBATIM (keep the exact wording, the agency, the percentage, everything, one per line). Move the ones you drop into "matches_dropped" with a one-line reason. Also drop any line that says the solicitation is suspended, closed, expired, or cancelled. ALSO read the "(~NN% fit)" number and keep ONLY matches of 66% or higher; drop anything 65% or lower. (66, 70, 74 are kept; 65, 63, 62 are dropped.) If, after all of this, no contract both genuinely fits AND is above 65%, set matches_clean to "" and verdict to "block" — we do not email this company.
 - Do NOT flag "no federal experience / no certifications / no past performance visible on the website" as issues. That is normal for a cold prospect and the recipient never sees it. Only flag issues that make the EMAIL itself wrong or embarrassing to send: a garbled or clearly wrong name, a contract that does not fit the company (mismatch), a broken or nonsensical gap_line, or awkward/robotic phrasing. If there is nothing wrong with the email, return an empty issues array and verdict "pass".
 - verdict "block" only when match_fit is "mismatch" or a data error makes the email embarrassing; "warn" for a partial fit or a minor fixable nit; otherwise "pass".
 - Write the "icebreaker": the FIRST line of the email, one or two sentences, that sounds like a real person who actually looked at THIS company, texting a peer. It must name a CONCRETE, checkable thing about them: an actual product or service they sell, the city/state they operate in, a specific niche, how long they've been around. Pull it from findings_summary first; if findings_summary is "(none)", infer the concrete product category from the company name + NAICS + domain (e.g. "custom-cut beef", "janitorial and packaging supply", "CAD drafting"), never a vague label. Then land the opening in plain words: they're not bidding on government work, or have no federal footprint yet, or are leaving that money on the table.
@@ -78,6 +79,8 @@ Return JSON with exactly these keys:
   "icebreaker": string,              // the specific "I know you" first line (see rules) — 1-2 sentences, no generic opener
   "match_fit": "good"|"partial"|"mismatch",
   "match_fit_reason": string,        // one short sentence
+  "matches_clean": string,           // ONLY the contract lines that genuinely fit, verbatim, newline-separated ("" if none fit)
+  "matches_dropped": [{"line": string, "reason": string}],
   "issues": [{"type": string, "severity": "warn"|"error", "reason": string}],
   "verdict": "pass"|"warn"|"block",  // block if a mismatch or a real data error makes this email embarrassing to send
   "learnings": string                // one short sentence on any systemic data problem worth tracking, or "" if none
@@ -132,6 +135,7 @@ async function callModel(c) {
     console.log(`        ice: ${v.icebreaker}`);
     console.log(`        greeting: "${v.greeting}"   match_fit: ${v.match_fit} (${v.match_fit_reason})`);
     if (v.issues?.length) v.issues.forEach((i) => console.log(`        ! ${i.severity}: ${i.type} — ${i.reason}`));
+    if (v.matches_dropped?.length) v.matches_dropped.forEach((d) => console.log(`        dropped: ${String(d.line).slice(0, 64)} (${d.reason})`));
 
     if (APPLY) {
       await rest(`outreach_qa_log`, {
@@ -144,7 +148,7 @@ async function callModel(c) {
           greeting: v.greeting, match_fit: v.match_fit, learnings: v.learnings || null,
         }),
       });
-      const cf = { ...(c.custom_fields || {}), display_company: v.display_company, display_first: v.display_first || "", display_greeting: v.greeting, icebreaker: v.icebreaker || "", qa_match_fit: v.match_fit, qa_verdict: v.verdict };
+      const cf = { ...(c.custom_fields || {}), display_company: v.display_company, display_first: v.display_first || "", display_greeting: v.greeting, icebreaker: v.icebreaker || "", matches_clean: v.matches_clean || "", qa_match_fit: v.match_fit, qa_verdict: v.verdict };
       await rest(`outreach_contacts?id=eq.${c.id}`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ custom_fields: cf }) });
     }
   }
