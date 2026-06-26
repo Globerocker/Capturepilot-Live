@@ -72,6 +72,8 @@ const NAV: NavSection[] = [
         key: "outreach",
         items: [
             { href: "/admin/outreach", icon: Megaphone, label: "Outreach" },
+            { href: "/admin/outreach/review", icon: Mail, label: "Email Review" },
+            { href: "/admin/cockpit", icon: Target, label: "Sales Cockpit" },
         ],
     },
     {
@@ -226,38 +228,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             </div>
 
             <nav className="flex-1 p-2 overflow-y-auto">
-                {/* Sales Cockpit — pinned, prominent, visually apart from the
-                    automated Outreach section. Its own highlighted tile + divider. */}
-                {(() => {
-                    const isActive = pathname === COCKPIT_ITEM.href
-                        || pathname?.startsWith(COCKPIT_ITEM.href + "/");
-                    const Icon = COCKPIT_ITEM.icon;
-                    return (
-                        <Link
-                            href={COCKPIT_ITEM.href}
-                            onClick={() => setMobileOpen(false)}
-                            className={clsx(
-                                "flex items-center gap-2.5 px-3 py-2.5 rounded-xl border transition-colors",
-                                isActive
-                                    ? "bg-orange-500/15 border-orange-500/60 text-white"
-                                    : "bg-white/5 border-white/10 text-stone-200 hover:bg-orange-500/10 hover:border-orange-500/40 hover:text-white"
-                            )}
-                        >
-                            <span className={clsx(
-                                "w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0",
-                                isActive ? "bg-orange-500 text-white" : "bg-orange-500/20 text-orange-400"
-                            )}>
-                                <Icon className="w-4 h-4" />
-                            </span>
-                            <span className="flex-1 min-w-0">
-                                <span className="block font-bold text-sm leading-tight">{COCKPIT_ITEM.label}</span>
-                                <span className="block text-[10px] text-stone-400 leading-tight">{COCKPIT_ITEM.helper}</span>
-                            </span>
-                        </Link>
-                    );
-                })()}
-                <div className="my-3 border-t border-stone-800" />
-
                 {NAV.map((section, idx) => {
                     const isCollapsed = !!collapsed[section.key];
                     const hasActive = section.items.some(
