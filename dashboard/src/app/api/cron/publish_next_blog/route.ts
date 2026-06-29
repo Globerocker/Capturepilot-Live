@@ -84,10 +84,13 @@ async function gh(path: string, init: RequestInit & { token: string }) {
   });
 }
 
-/** Join the website prefix with a relative path, tolerating empty prefix. */
+/** Join the website prefix with a relative path. Never returns a leading slash
+ *  (GitHub's contents API rejects paths that start with "/"). Tolerates an
+ *  empty prefix, or a prefix that is just "/" or has stray slashes. */
 function repoPath(prefix: string, relative: string): string {
-  if (!prefix) return relative;
-  return `${prefix.replace(/\/+$/, "")}/${relative.replace(/^\/+/, "")}`;
+  const rel = relative.replace(/^\/+/, "");
+  const pre = (prefix || "").replace(/^\/+|\/+$/g, "");
+  return pre ? `${pre}/${rel}` : rel;
 }
 
 async function fetchBlogTopics(env: ReturnType<typeof getEnv> & { owner: string; repo: string; token: string; branch: string; prefix: string }): Promise<BlogTopic[]> {

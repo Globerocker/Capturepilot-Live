@@ -42,7 +42,7 @@ async function GET_handler(req: NextRequest): Promise<NextResponse> {
         // so cover both states to make this cron self-healing either way.
         const { data: opps, error } = await db
             .from("opportunities")
-            .select("id, notice_type, set_aside_code, sources_sought_flag, response_deadline, agency_name, estimated_value")
+            .select("id, notice_type, set_aside_code, sources_sought_flag, response_deadline, agency, estimated_value")
             .or("opportunity_score.is.null,opportunity_score.eq.0")
             .eq("is_archived", false)
             .order("response_deadline", { ascending: true, nullsFirst: false })
@@ -62,7 +62,7 @@ async function GET_handler(req: NextRequest): Promise<NextResponse> {
             set_aside_code: string | null;
             sources_sought_flag: boolean | null;
             response_deadline: string | null;
-            agency_name: string | null;
+            agency: string | null;
             estimated_value: number | null;
         }>) {
             // Stop short of maxDuration so the response can return cleanly.
@@ -74,7 +74,7 @@ async function GET_handler(req: NextRequest): Promise<NextResponse> {
                     sources_sought_flag: opp.sources_sought_flag,
                     notice_type: opp.notice_type,
                     deadline: opp.response_deadline,
-                    agency: opp.agency_name,
+                    agency: opp.agency,
                     estimated_value: opp.estimated_value,
                 });
                 const { error: upErr } = await db
