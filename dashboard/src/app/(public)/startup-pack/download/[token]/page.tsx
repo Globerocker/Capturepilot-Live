@@ -525,7 +525,17 @@ function AssetCard({ asset, token }: { asset: StartupPackAsset; token: string })
     const isLocal = !!asset.localPath;
     const isCalendly = asset.format === "Calendly";
     const isPdf = isLocal && /\.pdf$/i.test(asset.localPath || "");
+    const isOffice = isLocal && /\.(xlsx|docx|pptx)$/i.test(asset.localPath || "");
+    const canPreview = available && (isPdf || isOffice);
     const [showPreview, setShowPreview] = useState(false);
+
+    // PDFs render inline natively; XLSX/DOCX/PPTX go through the Microsoft Office
+    // Online viewer (it fetches the token-gated file URL server-side and embeds it).
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const fileAbs = previewUrl ? `${origin}${previewUrl}` : "";
+    const frameSrc = isPdf
+        ? previewUrl
+        : `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(fileAbs)}`;
 
     return (
         <div
@@ -557,7 +567,7 @@ function AssetCard({ asset, token }: { asset: StartupPackAsset; token: string })
             {available ? (
                 <>
                     <div className="mt-4 flex flex-wrap gap-2">
-                        {isPdf && (
+                        {canPreview && (
                             <button
                                 type="button"
                                 onClick={() => setShowPreview((v) => !v)}
@@ -587,9 +597,14 @@ function AssetCard({ asset, token }: { asset: StartupPackAsset; token: string })
                             </a>
                         )}
                     </div>
-                    {isPdf && showPreview && (
+                    {canPreview && showPreview && (
                         <div className="mt-3 rounded-xl overflow-hidden border border-stone-200 bg-stone-100 shadow-inner">
-                            <iframe src={previewUrl} title={asset.title} className="w-full h-[540px] bg-white" />
+                            <iframe src={frameSrc} title={asset.title} className="w-full h-[540px] bg-white" />
+                            {isOffice && (
+                                <p className="text-[10px] text-stone-400 px-2 py-1 bg-white border-t border-stone-100">
+                                    Rendered via Microsoft Office viewer. If it doesn&apos;t load, use Download.
+                                </p>
+                            )}
                         </div>
                     )}
                 </>
