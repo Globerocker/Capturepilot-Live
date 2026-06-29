@@ -177,6 +177,14 @@ export default function LaunchKitLandingPage() {
                             build a relationship with the contracting officer before the RFP drops.
                         </p>
 
+                        {/* Credibility line — the brand as a small mark, not a wordmark. */}
+                        <div className="flex items-center gap-2.5 mt-4">
+                            <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-stone-900 text-white text-xs font-black flex-shrink-0">A</span>
+                            <p className="text-sm text-stone-500 leading-snug">
+                                <span className="font-bold text-stone-700">Three years of federal capture at Americurial</span>, packaged into one kit.
+                            </p>
+                        </div>
+
                         {/* Format pills */}
                         <div className="flex flex-wrap gap-2 mt-5">
                             {FORMAT_BREAKDOWN.map((f) => (
