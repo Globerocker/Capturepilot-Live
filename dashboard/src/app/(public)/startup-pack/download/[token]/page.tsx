@@ -128,7 +128,6 @@ export default function StartupPackDownloadPage() {
     const totalAssets = STARTUP_PACK_ASSETS.filter(a => a.localPath || a.gdriveUrl).length;
     const localAssets = STARTUP_PACK_ASSETS.filter(a => !!a.localPath).length;
     const comingSoonCount = STARTUP_PACK_ASSETS.length - totalAssets;
-    const buyer = access.company_name?.trim() || access.email?.split("@")[0] || "there";
 
     return (
         <div className="min-h-screen bg-stone-50">
@@ -152,7 +151,7 @@ export default function StartupPackDownloadPage() {
                         <p className="text-[10px] font-bold uppercase tracking-widest text-amber-200">Order Confirmed</p>
                     </div>
                     <h1 className="font-black text-3xl sm:text-4xl leading-tight">
-                        Welcome to the {PRODUCT_NAME}, {buyer}.
+                        Welcome to the {PRODUCT_NAME}.
                     </h1>
                     <p className="text-white/85 text-base sm:text-lg mt-3 max-w-2xl leading-relaxed">
                         This is your permanent download library, so bookmark it. Every template, playbook, and worksheet below
