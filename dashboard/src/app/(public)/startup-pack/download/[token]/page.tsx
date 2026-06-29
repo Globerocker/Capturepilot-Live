@@ -1,33 +1,41 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import {
-    Loader2, FileText, Search, Scale, Award, Trophy, Mail, DollarSign, Video,
-    ExternalLink, Download, CheckCircle2, ArrowRight, AlertCircle, Sparkles,
-    ClipboardCheck, BookOpen, Building2, ChevronDown, Package, Eye, X,
+    Loader2, Mail, ExternalLink, Download, CheckCircle2, ArrowRight, AlertCircle,
+    Sparkles, Video, Package, Eye, X, BookOpen, ListChecks, FileText, MapPin,
 } from "lucide-react";
 import clsx from "clsx";
 import {
-    STARTUP_PACK_SECTIONS,
-    STARTUP_PACK_ASSETS,
+    LAUNCH_KIT_PHASES,
+    MASTER_GUIDE,
+    MASTER_LIST,
+    BONUS_ITEM,
     PRODUCT_NAME,
-    type StartupPackAsset,
-    type AssetSection,
-    resolveDriveLinks,
+    type LaunchKitFile,
+    type LaunchKitItem,
+    type LaunchKitPhase,
 } from "@/lib/startup-pack-assets";
 
-const ICON_MAP: Record<AssetSection["icon"], React.ComponentType<{ className?: string }>> = {
-    FileText, Search, Scale, Award, Trophy, Mail, DollarSign, Video, ClipboardCheck, BookOpen, Building2,
-};
+// Total distinct files presented (master docs + every guide + template + bonus).
+const KIT_FILE_COUNT = (() => {
+    const set = new Set<string>([MASTER_GUIDE.localPath, MASTER_LIST.localPath]);
+    for (const ph of LAUNCH_KIT_PHASES) for (const it of ph.items) { set.add(it.guide.localPath); it.templates.forEach(t => set.add(t.localPath)); }
+    set.add(BONUS_ITEM.guide.localPath); BONUS_ITEM.templates.forEach(t => set.add(t.localPath));
+    return set.size;
+})();
 
-/** Anchor id for a category section — used by the sticky nav + overview tiles. */
-const anchorIdFor = (cat: string) => `category-${cat}`;
+const phaseAnchor = (slug: string) => `phase-${slug}`;
+const itemAnchor = (id: string) => `kit-${id}`;
 
-/** Two-digit display index ("01", "02", … "10"). */
-const sectionNumber = (i: number) => String(i + 1).padStart(2, "0");
+/** Build token-gated file-route URLs for a kit file. */
+function fileUrls(file: LaunchKitFile, token: string) {
+    const base = `/api/startup-pack/file/${encodeURIComponent(token)}/${encodeURIComponent(file.id)}`;
+    return { previewUrl: base, downloadUrl: `${base}?dl=1` };
+}
 
 /** Scroll-reveal wrapper — fades + slides children up on first view (Loom-friendly). */
 function Reveal({ children, delay = 0, className = "" }: { children: React.ReactNode; delay?: number; className?: string }) {
@@ -37,7 +45,7 @@ function Reveal({ children, delay = 0, className = "" }: { children: React.React
         const el = ref.current;
         if (!el) return;
         if (typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) { setShown(true); return; }
-        const io = new IntersectionObserver((e) => { if (e[0]?.isIntersecting) { setShown(true); io.disconnect(); } }, { threshold: 0.12, rootMargin: "0px 0px -5% 0px" });
+        const io = new IntersectionObserver((e) => { if (e[0]?.isIntersecting) { setShown(true); io.disconnect(); } }, { threshold: 0.1, rootMargin: "0px 0px -4% 0px" });
         io.observe(el);
         return () => io.disconnect();
     }, []);
@@ -47,7 +55,7 @@ function Reveal({ children, delay = 0, className = "" }: { children: React.React
             className={className}
             style={{
                 opacity: shown ? 1 : 0,
-                transform: shown ? "none" : "translateY(26px)",
+                transform: shown ? "none" : "translateY(24px)",
                 transition: `opacity .6s ease-out ${delay}ms, transform .7s cubic-bezier(.16,.84,.44,1) ${delay}ms`,
                 willChange: "transform, opacity",
             }}
@@ -72,9 +80,17 @@ export default function StartupPackDownloadPage() {
     const [access, setAccess] = useState<AccessData | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
+    const [activeHash, setActiveHash] = useState("");
 
     useEffect(() => {
         if (!token) return;
+        // Drop a cookie so the /kit/<id> deep-links inside the guide PDFs can
+        // bounce a returning reader back to THIS tokenized page. Not httpOnly —
+        // it's only a convenience pointer; the token already lives in the URL.
+        try {
+            document.cookie = `sp_kit_token=${encodeURIComponent(token)}; path=/; max-age=${60 * 60 * 24 * 120}; samesite=lax`;
+        } catch { /* ignore */ }
+
         let cancelled = false;
         fetch(`/api/startup-pack/access/${token}`, { cache: "no-store" })
             .then(async (res) => {
@@ -95,6 +111,23 @@ export default function StartupPackDownloadPage() {
             });
         return () => { cancelled = true; };
     }, [token]);
+
+    // Track the URL hash so a deep-link (#kit-sam-registration) highlights the
+    // matching item once content has rendered.
+    useEffect(() => {
+        const read = () => setActiveHash(window.location.hash.replace(/^#/, ""));
+        read();
+        window.addEventListener("hashchange", read);
+        return () => window.removeEventListener("hashchange", read);
+    }, []);
+
+    // After content loads, scroll to the deep-linked item (content is async, so
+    // the browser's native anchor jump misses on first paint).
+    useEffect(() => {
+        if (!access || !activeHash) return;
+        const el = document.getElementById(activeHash);
+        if (el) requestAnimationFrame(() => el.scrollIntoView({ behavior: "smooth", block: "start" }));
+    }, [access, activeHash]);
 
     if (loading) {
         return (
@@ -125,10 +158,6 @@ export default function StartupPackDownloadPage() {
         );
     }
 
-    const totalAssets = STARTUP_PACK_ASSETS.filter(a => a.localPath || a.gdriveUrl).length;
-    const localAssets = STARTUP_PACK_ASSETS.filter(a => !!a.localPath).length;
-    const comingSoonCount = STARTUP_PACK_ASSETS.length - totalAssets;
-
     return (
         <div className="min-h-screen bg-stone-50">
             {/* Header */}
@@ -154,23 +183,52 @@ export default function StartupPackDownloadPage() {
                         Welcome to the {PRODUCT_NAME}.
                     </h1>
                     <p className="text-white/85 text-base sm:text-lg mt-3 max-w-2xl leading-relaxed">
-                        This is your permanent download library, so bookmark it. Every template, playbook, and worksheet below
-                        comes out of three years of running federal capture at Americurial, packaged so you can use it today.
+                        This is your permanent download library, so bookmark it. Everything below comes out of three years
+                        of running federal capture at Americurial, laid out in the order you'll actually use it: register,
+                        build your identity, find work, reach out, bid, and win.
                     </p>
                     <div className="mt-5 flex flex-wrap gap-2 text-xs">
-                        <span className="bg-white/15 border border-white/20 px-3 py-1.5 rounded-lg">{totalAssets} active assets</span>
-                        {comingSoonCount > 0 && (
-                            <span className="bg-white/15 border border-white/20 px-3 py-1.5 rounded-lg">+{comingSoonCount} more coming soon</span>
-                        )}
+                        <span className="bg-white/15 border border-white/20 px-3 py-1.5 rounded-lg">{KIT_FILE_COUNT} files</span>
+                        <span className="bg-white/15 border border-white/20 px-3 py-1.5 rounded-lg">6 phases · SAM to award</span>
                         <span className="bg-amber-300 text-amber-900 px-3 py-1.5 rounded-lg font-bold">7-day refund · No questions</span>
                     </div>
                 </section>
 
-                {/* HIGH-DOMINANCE BOOKING CTA — sits BEFORE the file download
-                    block. Goal: every buyer sees the founder-call invite the
-                    second they land here, before they get distracted poking at
-                    files. Capping the calls at ~6/wk so the scarcity line is
-                    honest, not theater. */}
+                {/* Three ways to use it */}
+                <Reveal>
+                    <section className="bg-white border border-stone-200 rounded-[28px] p-6 sm:p-7 shadow-sm">
+                        <h2 className="font-bold text-base text-stone-900 mb-4">Three ways to use this kit</h2>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            {[
+                                { icon: BookOpen, title: "Read the Master Guide first", body: "The whole path, start to finish. Best if federal contracting is new to you." },
+                                { icon: FileText, title: "Go phase by phase", body: "Each template has a one-page guide in front of it telling you what it is and how to use it." },
+                                { icon: ListChecks, title: "Skip to the templates", body: "Already know your way around? Jump to the Master Template List and grab what you need." },
+                            ].map((c, i) => (
+                                <div key={i} className="rounded-2xl border border-stone-200 bg-stone-50/60 p-4">
+                                    <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center mb-2.5">
+                                        <c.icon className="w-4.5 h-4.5" />
+                                    </div>
+                                    <p className="font-bold text-[13px] text-stone-900 leading-snug">{c.title}</p>
+                                    <p className="text-xs text-stone-500 mt-1 leading-relaxed">{c.body}</p>
+                                </div>
+                            ))}
+                        </div>
+                    </section>
+                </Reveal>
+
+                {/* Master Guide — the "Start Here" hero card */}
+                <Reveal>
+                    <MasterDocCard
+                        file={MASTER_GUIDE}
+                        token={token}
+                        eyebrow="Start here"
+                        title="Master Guide"
+                        body="The full path from SAM.gov registration to your first award, with a link to every template along the way. Read this first."
+                        accent="emerald"
+                    />
+                </Reveal>
+
+                {/* High-dominance booking CTA */}
                 <a
                     href={process.env.NEXT_PUBLIC_HUBSPOT_MEETINGS_URL || "https://meetings.hubspot.com/andre-schuler"}
                     target="_blank"
@@ -192,7 +250,7 @@ export default function StartupPackDownloadPage() {
                                 Skip the learning curve. Book your 30-min onboarding call.
                             </h2>
                             <p className="mt-2 text-stone-800 text-sm sm:text-base leading-relaxed max-w-2xl">
-                                Walk through your kit with the founder. We'll pick your first 3 opportunities to chase, set up your sam.gov saved searches, and answer anything the PDFs didn't. Free with your purchase. We cap these at ~6 a week to keep them useful — book before slots run out for the week.
+                                Walk through your kit with the founder. We'll pick your first 3 opportunities to chase, set up your sam.gov saved searches, and answer anything the PDFs didn't. Free with your purchase. We cap these at ~6 a week to keep them useful, so book before slots run out for the week.
                             </p>
                         </div>
                         <div className="flex items-center gap-2 self-center">
@@ -203,43 +261,60 @@ export default function StartupPackDownloadPage() {
                     </div>
                 </a>
 
-                {/* ZIP download banner — one-click to grab everything */}
-                <ZipDownloadBanner token={token} assetCount={localAssets} />
+                {/* ZIP download banner */}
+                <ZipDownloadBanner token={token} assetCount={KIT_FILE_COUNT} />
 
-                {/* Sticky category nav — 10 pills, jump to any kit. */}
-                <CategoryNav />
+                {/* Phase nav */}
+                <PhaseNav />
 
-                {/* "What's in this kit" — 10-tile overview grid replacing the old video placeholder. */}
-                <KitOverview />
-
-                {/* Asset sections — each with anchor id + collapsible body. */}
-                {STARTUP_PACK_SECTIONS.map((section, i) => (
-                    <Reveal key={section.category} delay={(i % 3) * 70}>
-                        <SectionBlock section={section} index={i} token={token} />
+                {/* The six phases */}
+                {LAUNCH_KIT_PHASES.map((phase, i) => (
+                    <Reveal key={phase.slug} delay={(i % 2) * 60}>
+                        <PhaseBlock phase={phase} token={token} activeHash={activeHash} />
                     </Reveal>
                 ))}
+
+                {/* Bonus */}
+                <Reveal>
+                    <section id={phaseAnchor("bonus")} className="scroll-mt-24">
+                        <PhaseHeader n="★" title="Bonus" blurb="Included free with your kit." />
+                        <ItemBlock item={BONUS_ITEM} token={token} active={activeHash === itemAnchor(BONUS_ITEM.id)} />
+                    </section>
+                </Reveal>
+
+                {/* Master Template List — the "skip to the end" card */}
+                <Reveal>
+                    <MasterDocCard
+                        file={MASTER_LIST}
+                        token={token}
+                        eyebrow="The whole index"
+                        title="Master Template List"
+                        body="Every template in the kit, in order, with nothing else. For when you know what you need and just want the file."
+                        accent="stone"
+                    />
+                </Reveal>
 
                 {/* Footer / next steps */}
                 <section className="bg-white border border-stone-200 rounded-[28px] p-6 sm:p-8 shadow-sm">
                     <div className="flex items-start gap-3 mb-4">
                         <Sparkles className="w-5 h-5 text-emerald-500" />
                         <div>
-                            <h2 className="font-bold text-lg">What to do next</h2>
+                            <h2 className="font-bold text-lg">What to do this week</h2>
                             <p className="text-sm text-stone-500">
-                                Most founders win their first response within 30 days if they follow this order.
+                                Most founders send their first real response within 30 days if they work it in this order.
                             </p>
                         </div>
                     </div>
                     <ol className="space-y-3 text-sm text-stone-700 list-decimal pl-6">
-                        <li>Customize the <strong>Capability Statement DOCX</strong> with your logo + 3 services.</li>
-                        <li>Read the <strong>Sources Sought Playbook</strong> — these are the highest-leverage notices in federal.</li>
-                        <li>Pick 2 Sources Sought from your CapturePilot matches and respond using the template.</li>
-                        <li>Use the <strong>CO Outreach Sequence</strong> to follow up with the contracting officer.</li>
-                        <li>Book your <strong>30-min Founder Onboarding Call</strong> — we&apos;ll review your first response live.</li>
+                        <li>Read the <strong>Master Guide</strong>, then finish your <strong>SAM.gov registration</strong> (Phase 1).</li>
+                        <li>Fill in the <strong>Capability Statement</strong> with your logo and three services (Phase 2).</li>
+                        <li>Find two <strong>Sources Sought</strong> from your CapturePilot matches and respond using the template (Phase 3).</li>
+                        <li>Use the <strong>Contracting Officer Outreach</strong> pack to follow up (Phase 4).</li>
+                        <li>Book your <strong>30-min Founder Onboarding Call</strong> and we'll review your first response live.</li>
                     </ol>
                     <div className="flex flex-col sm:flex-row gap-3 mt-6">
                         <a
-                            href="https://calendly.com/capturepilot/startup-pack-onboarding"
+                            href={BONUS_ITEM.calendly || "https://calendly.com/capturepilot/launch-kit-onboarding"}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="flex-1 bg-emerald-600 text-white rounded-2xl p-4 flex items-center justify-center gap-2 font-bold text-sm hover:bg-emerald-700 transition-all"
@@ -262,16 +337,250 @@ export default function StartupPackDownloadPage() {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// ZipDownloadBanner — prominent "download everything as one ZIP" panel that
-// lives at the top of the page, just below the hero section.
-//
-// State machine:
-//   idle → downloading (click) → done | error
-//
-// We use a plain <a href> approach with a programmatic click so the browser
-// handles the file-save dialog natively. The download can take 5-30 seconds
-// for large bundles; we show a spinner + "Preparing your ZIP…" label while
-// the request is in-flight. We detect completion via the blob URL being ready.
+// PhaseNav — sticky pill nav, one per phase + Master Guide + Template List.
+// ──────────────────────────────────────────────────────────────────────────────
+function PhaseNav() {
+    return (
+        <nav
+            aria-label="Kit phases"
+            className="sticky top-2 z-30 bg-white/85 backdrop-blur-md border border-stone-200 rounded-2xl px-3 py-2.5 shadow-sm"
+        >
+            <div className="flex items-center gap-2 overflow-x-auto scrollbar-thin">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-stone-400 px-2 flex-shrink-0">Jump to</span>
+                {LAUNCH_KIT_PHASES.map((phase) => (
+                    <a
+                        key={phase.slug}
+                        href={`#${phaseAnchor(phase.slug)}`}
+                        className="group inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-stone-50 hover:bg-emerald-50 border border-stone-200 hover:border-emerald-300 text-xs font-bold text-stone-700 hover:text-emerald-700 whitespace-nowrap transition-colors flex-shrink-0"
+                    >
+                        <span className="text-[10px] tabular-nums text-stone-400 group-hover:text-emerald-500">{phase.n}</span>
+                        <span>{phase.title}</span>
+                    </a>
+                ))}
+            </div>
+        </nav>
+    );
+}
+
+function PhaseHeader({ n, title, blurb }: { n: number | string; title: string; blurb: string }) {
+    return (
+        <div className="flex items-start gap-3 mb-4 px-1">
+            <div className="w-10 h-10 rounded-xl bg-stone-900 text-white flex items-center justify-center flex-shrink-0 font-black text-lg tabular-nums">
+                {n}
+            </div>
+            <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-600">Phase</span>
+                </div>
+                <h2 className="font-black text-xl text-stone-900 leading-tight">{title}</h2>
+                <p className="text-sm text-stone-500 leading-snug mt-0.5 max-w-2xl">{blurb}</p>
+            </div>
+        </div>
+    );
+}
+
+function PhaseBlock({ phase, token, activeHash }: { phase: LaunchKitPhase; token: string; activeHash: string }) {
+    return (
+        <section id={phaseAnchor(phase.slug)} className="scroll-mt-24">
+            <PhaseHeader n={phase.n} title={phase.title} blurb={phase.blurb} />
+            <div className="space-y-4">
+                {phase.items.map((item) => (
+                    <ItemBlock key={item.id} item={item} token={token} active={activeHash === itemAnchor(item.id)} />
+                ))}
+            </div>
+        </section>
+    );
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// ItemBlock — one deliverable folder: a "read first" guide + its templates.
+// Carries the #kit-<id> anchor that the guide PDFs deep-link to, and glows
+// briefly when it's the deep-link target.
+// ──────────────────────────────────────────────────────────────────────────────
+function ItemBlock({ item, token, active }: { item: LaunchKitItem; token: string; active: boolean }) {
+    return (
+        <div
+            id={itemAnchor(item.id)}
+            className={clsx(
+                "scroll-mt-24 rounded-[24px] border bg-white p-4 sm:p-5 transition-all duration-500",
+                active ? "border-emerald-400 ring-2 ring-emerald-300/60 shadow-lg" : "border-stone-200 shadow-sm",
+            )}
+        >
+            <div className="flex items-center justify-between gap-2 mb-3">
+                <h3 className="font-bold text-base text-stone-900">{item.title}</h3>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-stone-400">
+                    {item.templates.length + 1} {item.templates.length + 1 === 1 ? "file" : "files"}
+                </span>
+            </div>
+
+            {/* Guide — read first */}
+            <FileCard file={item.guide} token={token} tone="guide" />
+
+            {/* Calendly (bonus only) */}
+            {item.calendly && (
+                <a
+                    href={item.calendly}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-3 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800 hover:bg-emerald-100 transition-colors"
+                >
+                    <Video className="w-4 h-4" /> Book your onboarding call <ArrowRight className="w-3.5 h-3.5" />
+                </a>
+            )}
+
+            {/* Templates */}
+            {item.templates.length > 0 && (
+                <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {item.templates.map((t) => <FileCard key={t.id} file={t} token={token} tone="template" />)}
+                </div>
+            )}
+        </div>
+    );
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// FileCard — a single previewable / downloadable file.
+//   tone="guide"    emerald, "Read this first"
+//   tone="template" neutral
+// ──────────────────────────────────────────────────────────────────────────────
+function FileCard({ file, token, tone }: { file: LaunchKitFile; token: string; tone: "guide" | "template" }) {
+    const { previewUrl, downloadUrl } = fileUrls(file, token);
+    const isPdf = /\.pdf$/i.test(file.localPath);
+    const isOffice = /\.(xlsx|docx|pptx)$/i.test(file.localPath);
+    const canPreview = isPdf || isOffice;
+    const [showPreview, setShowPreview] = useState(false);
+
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const fileAbs = `${origin}${previewUrl}`;
+    const frameSrc = isPdf ? previewUrl : `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(fileAbs)}`;
+    const isGuide = tone === "guide";
+
+    return (
+        <div
+            className={clsx(
+                "rounded-2xl border p-4 transition-all duration-300 h-full",
+                isGuide
+                    ? "border-emerald-200 bg-emerald-50/50 hover:border-emerald-300 hover:shadow-md"
+                    : "border-stone-200 bg-white hover:border-emerald-300 hover:shadow-md hover:-translate-y-0.5",
+            )}
+        >
+            <div className="flex items-start justify-between gap-2 mb-1.5">
+                <span className={clsx(
+                    "text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded border",
+                    isGuide ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "bg-stone-100 text-stone-600 border-stone-200",
+                )}>
+                    {isGuide ? "Read first" : file.format}
+                </span>
+                {isGuide && <span className="text-[10px] text-emerald-600 font-semibold">1-page guide</span>}
+            </div>
+            <h4 className={clsx("font-bold leading-snug", isGuide ? "text-sm text-stone-900" : "text-[13px] text-stone-900")}>
+                {file.title}
+            </h4>
+
+            <div className="mt-3 flex flex-wrap gap-2">
+                {canPreview && (
+                    <button
+                        type="button"
+                        onClick={() => setShowPreview((v) => !v)}
+                        className={clsx(
+                            "inline-flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-lg transition-colors",
+                            showPreview ? "bg-stone-900 text-white hover:bg-black" : "bg-emerald-600 text-white hover:bg-emerald-700",
+                        )}
+                    >
+                        {showPreview ? <><X className="w-3.5 h-3.5" /> Close</> : <><Eye className="w-3.5 h-3.5" /> Preview</>}
+                    </button>
+                )}
+                <a
+                    href={previewUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 bg-white border border-stone-200 text-stone-700 text-xs font-bold px-3 py-2 rounded-lg hover:border-emerald-300 hover:text-emerald-700 transition-colors"
+                >
+                    <ExternalLink className="w-3.5 h-3.5" /> Open
+                </a>
+                <a
+                    href={downloadUrl}
+                    className="inline-flex items-center gap-1.5 bg-white border border-stone-200 text-stone-700 text-xs font-bold px-3 py-2 rounded-lg hover:border-stone-300 transition-colors"
+                >
+                    <Download className="w-3.5 h-3.5" /> Download
+                </a>
+            </div>
+
+            {canPreview && showPreview && (
+                <div className="mt-3 rounded-xl overflow-hidden border border-stone-200 bg-stone-100 shadow-inner">
+                    <iframe src={frameSrc} title={file.title} className={clsx("w-full bg-white", isGuide ? "h-[620px]" : "h-[540px]")} />
+                    {isOffice && (
+                        <p className="text-[10px] text-stone-400 px-2 py-1 bg-white border-t border-stone-100">
+                            Rendered via Microsoft Office viewer. If it doesn&apos;t load, use Download.
+                        </p>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// MasterDocCard — the prominent Master Guide / Master Template List card.
+// ──────────────────────────────────────────────────────────────────────────────
+function MasterDocCard({
+    file, token, eyebrow, title, body, accent,
+}: { file: LaunchKitFile; token: string; eyebrow: string; title: string; body: string; accent: "emerald" | "stone" }) {
+    const { previewUrl, downloadUrl } = fileUrls(file, token);
+    const [showPreview, setShowPreview] = useState(false);
+    const isEmerald = accent === "emerald";
+
+    return (
+        <section
+            id={isEmerald ? "master-guide" : "master-list"}
+            className={clsx(
+                "scroll-mt-24 rounded-[28px] border-2 p-6 sm:p-7 shadow-sm",
+                isEmerald ? "border-emerald-300 bg-gradient-to-br from-emerald-50 to-white" : "border-stone-300 bg-white",
+            )}
+        >
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                <div className={clsx(
+                    "w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0",
+                    isEmerald ? "bg-emerald-600 text-white" : "bg-stone-900 text-white",
+                )}>
+                    {isEmerald ? <MapPin className="w-6 h-6" /> : <ListChecks className="w-6 h-6" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                    <p className={clsx("text-[10px] font-bold uppercase tracking-widest", isEmerald ? "text-emerald-600" : "text-stone-400")}>{eyebrow}</p>
+                    <h2 className="font-black text-xl text-stone-900 leading-tight">{title}</h2>
+                    <p className="text-sm text-stone-600 leading-relaxed mt-1 max-w-2xl">{body}</p>
+                </div>
+                <div className="flex flex-wrap gap-2 sm:self-center">
+                    <button
+                        type="button"
+                        onClick={() => setShowPreview((v) => !v)}
+                        className={clsx(
+                            "inline-flex items-center gap-1.5 text-sm font-bold px-4 py-3 rounded-xl transition-colors",
+                            showPreview ? "bg-stone-900 text-white hover:bg-black"
+                                : isEmerald ? "bg-emerald-600 text-white hover:bg-emerald-700" : "bg-stone-900 text-white hover:bg-black",
+                        )}
+                    >
+                        {showPreview ? <><X className="w-4 h-4" /> Close</> : <><Eye className="w-4 h-4" /> Preview</>}
+                    </button>
+                    <a
+                        href={downloadUrl}
+                        className="inline-flex items-center gap-1.5 bg-white border border-stone-200 text-stone-700 text-sm font-bold px-4 py-3 rounded-xl hover:border-stone-300 transition-colors"
+                    >
+                        <Download className="w-4 h-4" /> Download
+                    </a>
+                </div>
+            </div>
+            {showPreview && (
+                <div className="mt-4 rounded-xl overflow-hidden border border-stone-200 bg-stone-100 shadow-inner">
+                    <iframe src={previewUrl} title={title} className="w-full h-[640px] bg-white" />
+                </div>
+            )}
+        </section>
+    );
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// ZipDownloadBanner — "download everything as one ZIP" panel.
 // ──────────────────────────────────────────────────────────────────────────────
 function ZipDownloadBanner({ token, assetCount }: { token: string; assetCount: number }) {
     const [status, setStatus] = useState<"idle" | "downloading" | "done" | "error">("idle");
@@ -312,11 +621,11 @@ function ZipDownloadBanner({ token, assetCount }: { token: string; assetCount: n
                 </div>
                 <div className="flex-1 min-w-0">
                     <h2 className="font-bold text-base text-stone-900">
-                        Download Everything as One ZIP
+                        Download everything as one ZIP
                     </h2>
                     <p className="text-sm text-stone-500 leading-snug mt-0.5">
-                        Get all {assetCount} files in a single download — PDFs, XLSX, DOCX, Navigation Guide, and Field Manual.
-                        No clicking 39 individual links.
+                        Get all {assetCount} files in a single download, organized into the same phase folders you see below.
+                        No clicking through every link.
                     </p>
                     {status === "error" && (
                         <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
@@ -345,281 +654,14 @@ function ZipDownloadBanner({ token, assetCount }: { token: string; assetCount: n
                     )}
                 >
                     {status === "downloading" ? (
-                        <>
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            Preparing ZIP…
-                        </>
+                        <><Loader2 className="w-4 h-4 animate-spin" /> Preparing ZIP…</>
                     ) : status === "done" ? (
-                        <>
-                            <CheckCircle2 className="w-4 h-4" />
-                            Download again
-                        </>
+                        <><CheckCircle2 className="w-4 h-4" /> Download again</>
                     ) : (
-                        <>
-                            <Download className="w-4 h-4" />
-                            Download All ({assetCount} files)
-                        </>
+                        <><Download className="w-4 h-4" /> Download All ({assetCount} files)</>
                     )}
                 </button>
             </div>
         </section>
-    );
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Sticky category nav — 10 pills that scroll to the matching section anchor.
-// Lives just below the hero, sticks at top with a soft backdrop blur. Uses
-// native anchor links (`href="#category-..."`) so it works without JS too.
-// ──────────────────────────────────────────────────────────────────────────────
-function CategoryNav() {
-    return (
-        <nav
-            aria-label="Kit categories"
-            className="sticky top-2 z-30 bg-white/85 backdrop-blur-md border border-stone-200 rounded-2xl px-3 py-2.5 shadow-sm"
-        >
-            <div className="flex items-center gap-2 overflow-x-auto scrollbar-thin">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-stone-400 px-2 flex-shrink-0">
-                    Jump to
-                </span>
-                {STARTUP_PACK_SECTIONS.map((section, i) => {
-                    const Icon = ICON_MAP[section.icon] || FileText;
-                    const count = STARTUP_PACK_ASSETS.filter(a => a.category === section.category).length;
-                    return (
-                        <a
-                            key={section.category}
-                            href={`#${anchorIdFor(section.category)}`}
-                            className="group inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-stone-50 hover:bg-emerald-50 border border-stone-200 hover:border-emerald-300 text-xs font-bold text-stone-700 hover:text-emerald-700 whitespace-nowrap transition-colors flex-shrink-0"
-                        >
-                            <span className="text-[10px] tabular-nums text-stone-400 group-hover:text-emerald-500">
-                                {sectionNumber(i)}
-                            </span>
-                            <Icon className="w-3.5 h-3.5" />
-                            <span className="hidden sm:inline">{section.label.replace(/ Kit$| Playbooks$| Library$| Toolkit$| Worksheets$| Templates$/i, "")}</span>
-                            <span className="text-[10px] font-semibold tabular-nums bg-stone-200 group-hover:bg-emerald-200 text-stone-600 group-hover:text-emerald-800 px-1.5 py-0.5 rounded">
-                                {count}
-                            </span>
-                        </a>
-                    );
-                })}
-            </div>
-        </nav>
-    );
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// "What's in this kit" — 10 clickable tiles, mirrors the brand aesthetic of
-// the rest of the page (emerald gradient, stone surfaces, rounded-[28px]).
-// Replaces the old "Coming this week" video placeholder.
-// ──────────────────────────────────────────────────────────────────────────────
-function KitOverview() {
-    return (
-        <section className="bg-white border border-stone-200 rounded-[28px] p-6 sm:p-8 shadow-sm">
-            <div className="flex items-start gap-3 mb-5">
-                <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center flex-shrink-0">
-                    <Sparkles className="w-5 h-5" />
-                </div>
-                <div>
-                    <h2 className="font-bold text-lg text-stone-900">What&apos;s in this kit</h2>
-                    <p className="text-sm text-stone-500 leading-snug">
-                        Ten kits, every template you need. Click any tile to jump straight to it.
-                    </p>
-                </div>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
-                {STARTUP_PACK_SECTIONS.map((section, i) => {
-                    const Icon = ICON_MAP[section.icon] || FileText;
-                    const count = STARTUP_PACK_ASSETS.filter(a => a.category === section.category).length;
-                    return (
-                        <a
-                            key={section.category}
-                            href={`#${anchorIdFor(section.category)}`}
-                            className="group relative bg-gradient-to-br from-stone-50 to-white hover:from-emerald-50 hover:to-white border border-stone-200 hover:border-emerald-300 rounded-2xl p-4 transition-all hover:shadow-md hover:-translate-y-0.5"
-                        >
-                            <div className="flex items-center justify-between mb-2.5">
-                                <span className="text-[10px] font-bold tabular-nums uppercase tracking-widest text-stone-400 group-hover:text-emerald-500">
-                                    {sectionNumber(i)}
-                                </span>
-                                <span className="text-[10px] font-bold tabular-nums bg-stone-100 group-hover:bg-emerald-100 text-stone-600 group-hover:text-emerald-700 px-1.5 py-0.5 rounded">
-                                    {count} {count === 1 ? "asset" : "assets"}
-                                </span>
-                            </div>
-                            <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center mb-2">
-                                <Icon className="w-4.5 h-4.5" />
-                            </div>
-                            <p className="font-bold text-[13px] text-stone-900 leading-snug">
-                                {section.label}
-                            </p>
-                        </a>
-                    );
-                })}
-            </div>
-        </section>
-    );
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// SectionBlock — one per category. Has #category-<cat> anchor, numbered label,
-// asset-count chip, and a collapse/expand toggle (default = expanded).
-// ──────────────────────────────────────────────────────────────────────────────
-function SectionBlock({ section, index, token }: { section: AssetSection; index: number; token: string }) {
-    const Icon = ICON_MAP[section.icon] || FileText;
-    const assets = useMemo(
-        () => STARTUP_PACK_ASSETS.filter(a => a.category === section.category),
-        [section.category],
-    );
-    const [open, setOpen] = useState(true);
-    if (assets.length === 0) return null;
-
-    return (
-        <section
-            id={anchorIdFor(section.category)}
-            // Scroll-margin so the sticky nav doesn't overlap the section header when jumping.
-            className="scroll-mt-24"
-        >
-            <button
-                type="button"
-                onClick={() => setOpen(o => !o)}
-                aria-expanded={open ? "true" : "false"}
-                aria-controls={`${anchorIdFor(section.category)}-body`}
-                className="w-full flex items-start gap-3 mb-4 px-1 text-left group"
-            >
-                <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center flex-shrink-0">
-                    <Icon className="w-5 h-5" />
-                </div>
-                <div className="flex-1 min-w-0">
-                    <div className="flex items-center flex-wrap gap-2">
-                        <span className="text-[10px] font-bold tabular-nums uppercase tracking-widest text-stone-400">
-                            {sectionNumber(index)} ·
-                        </span>
-                        <h2 className="font-bold text-lg text-stone-900 group-hover:text-emerald-700 transition-colors">
-                            {section.label}
-                        </h2>
-                        <span className="text-[10px] font-bold tabular-nums bg-stone-100 text-stone-600 border border-stone-200 px-2 py-0.5 rounded">
-                            {assets.length} {assets.length === 1 ? "asset" : "assets"}
-                        </span>
-                    </div>
-                    <p className="text-sm text-stone-500 leading-snug mt-0.5">{section.description}</p>
-                </div>
-                <ChevronDown
-                    className={clsx(
-                        "w-5 h-5 text-stone-400 group-hover:text-stone-600 flex-shrink-0 mt-2 transition-transform",
-                        open ? "rotate-180" : "rotate-0",
-                    )}
-                />
-            </button>
-            {open && (
-                <div
-                    id={`${anchorIdFor(section.category)}-body`}
-                    className="grid grid-cols-1 md:grid-cols-2 gap-3"
-                >
-                    {assets.map((asset) => <AssetCard key={asset.id} asset={asset} token={token} />)}
-                </div>
-            )}
-        </section>
-    );
-}
-
-function AssetCard({ asset, token }: { asset: StartupPackAsset; token: string }) {
-    const { previewUrl, downloadUrl } = resolveDriveLinks(asset, token);
-    const available = !!previewUrl;
-    const isLocal = !!asset.localPath;
-    const isCalendly = asset.format === "Calendly";
-    const isPdf = isLocal && /\.pdf$/i.test(asset.localPath || "");
-    const isOffice = isLocal && /\.(xlsx|docx|pptx)$/i.test(asset.localPath || "");
-    const canPreview = available && (isPdf || isOffice);
-    const [showPreview, setShowPreview] = useState(false);
-
-    // PDFs render inline natively; XLSX/DOCX/PPTX go through the Microsoft Office
-    // Online viewer (it fetches the token-gated file URL server-side and embeds it).
-    const origin = typeof window !== "undefined" ? window.location.origin : "";
-    const fileAbs = previewUrl ? `${origin}${previewUrl}` : "";
-    const frameSrc = isPdf
-        ? previewUrl
-        : `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(fileAbs)}`;
-
-    return (
-        <div
-            className={clsx(
-                "group bg-white border rounded-2xl p-5 transition-all duration-300 h-full",
-                available
-                    ? "border-stone-200 hover:border-emerald-300 hover:shadow-lg hover:-translate-y-0.5"
-                    : "border-dashed border-stone-300 bg-stone-50/70",
-            )}
-        >
-            <div className="flex items-start justify-between gap-2 mb-2">
-                <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-bold uppercase tracking-widest bg-stone-100 text-stone-600 border border-stone-200 px-2 py-0.5 rounded">
-                        {asset.format}
-                    </span>
-                    {asset.sizeHint && (
-                        <span className="text-[10px] text-stone-400">{asset.sizeHint}</span>
-                    )}
-                </div>
-                {asset.badge && (
-                    <span className="text-[10px] font-bold bg-amber-100 text-amber-700 border border-amber-200 px-2 py-0.5 rounded uppercase">
-                        {asset.badge}
-                    </span>
-                )}
-            </div>
-            <h3 className="font-bold text-sm text-stone-900 leading-snug">{asset.title}</h3>
-            <p className="text-xs text-stone-500 mt-1 leading-relaxed">{asset.description}</p>
-
-            {available ? (
-                <>
-                    <div className="mt-4 flex flex-wrap gap-2">
-                        {canPreview && (
-                            <button
-                                type="button"
-                                onClick={() => setShowPreview((v) => !v)}
-                                className={clsx(
-                                    "inline-flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-lg transition-colors",
-                                    showPreview ? "bg-stone-900 text-white hover:bg-black" : "bg-emerald-600 text-white hover:bg-emerald-700",
-                                )}
-                            >
-                                {showPreview ? <><X className="w-3.5 h-3.5" /> Close preview</> : <><Eye className="w-3.5 h-3.5" /> Preview</>}
-                            </button>
-                        )}
-                        <a
-                            href={previewUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 bg-white border border-stone-200 text-stone-700 text-xs font-bold px-3 py-2 rounded-lg hover:border-emerald-300 hover:text-emerald-700 transition-colors"
-                        >
-                            <ExternalLink className="w-3.5 h-3.5" /> {isCalendly ? "Open in Calendly" : "Open"}
-                        </a>
-                        {downloadUrl && !isCalendly && (
-                            <a
-                                href={downloadUrl}
-                                download={isLocal ? "" : undefined}
-                                className="inline-flex items-center gap-1.5 bg-white border border-stone-200 text-stone-700 text-xs font-bold px-3 py-2 rounded-lg hover:border-stone-300 transition-colors"
-                            >
-                                <Download className="w-3.5 h-3.5" /> Download
-                            </a>
-                        )}
-                    </div>
-                    {canPreview && showPreview && (
-                        <div className="mt-3 rounded-xl overflow-hidden border border-stone-200 bg-stone-100 shadow-inner">
-                            <iframe src={frameSrc} title={asset.title} className="w-full h-[540px] bg-white" />
-                            {isOffice && (
-                                <p className="text-[10px] text-stone-400 px-2 py-1 bg-white border-t border-stone-100">
-                                    Rendered via Microsoft Office viewer. If it doesn&apos;t load, use Download.
-                                </p>
-                            )}
-                        </div>
-                    )}
-                </>
-            ) : (
-                <div className="mt-4 flex items-center gap-2 flex-wrap">
-                    <span className="inline-flex items-center gap-1.5 text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200 px-3 py-1.5 rounded-lg">
-                        <span className="relative flex w-1.5 h-1.5">
-                            <span className="animate-ping absolute inline-flex w-1.5 h-1.5 rounded-full bg-amber-400 opacity-75" />
-                            <span className="relative inline-flex rounded-full w-1.5 h-1.5 bg-amber-500" />
-                        </span>
-                        Dropping soon
-                    </span>
-                    <span className="text-[11px] text-stone-400">we&apos;ll email you the link</span>
-                </div>
-            )}
-        </div>
     );
 }

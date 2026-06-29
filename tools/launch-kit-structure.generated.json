@@ -1,0 +1,474 @@
+{
+  "masterGuide": {
+    "id": "flk-master-guide",
+    "localPath": "/starter-pack/FLK_00_START_HERE_Master_Guide.pdf"
+  },
+  "masterList": {
+    "id": "flk-master-list",
+    "localPath": "/starter-pack/FLK_ZZ_Master_Template_List.pdf"
+  },
+  "phases": [
+    {
+      "key": "P1",
+      "n": 1,
+      "slug": "get-registered",
+      "title": "Get Registered & Certified",
+      "blurb": "You can't win a dollar of federal work until SAM.gov says you're active and your set-aside status is locked in. Start here.",
+      "items": [
+        {
+          "id": "sam-registration",
+          "title": "SAM.gov Registration",
+          "folder": "Phase 1 - Get Registered & Certified/1.1 SAM.gov Registration",
+          "kind": "bundle",
+          "guideId": "guide-sam-registration",
+          "guideLocalPath": "/starter-pack/01_SAM_Registration_Kit/FLK_01_GUIDE_SAM_Registration.pdf",
+          "templates": [
+            {
+              "title": "SAM.gov Registration Walkthrough",
+              "localPath": "/starter-pack/01_SAM_Registration_Kit/FLK_01_SAM_Registration_Walkthrough.pdf"
+            },
+            {
+              "title": "Pre-Registration Checklist",
+              "localPath": "/starter-pack/01_SAM_Registration_Kit/FLK_01_SAM_PreReg_Checklist.xlsx"
+            },
+            {
+              "title": "NAICS Code Picker",
+              "localPath": "/starter-pack/01_SAM_Registration_Kit/FLK_01_NAICS_Code_Picker.pdf"
+            },
+            {
+              "title": "Annual Renewal Kit",
+              "localPath": "/starter-pack/01_SAM_Registration_Kit/FLK_01_SAM_Renewal_Kit.pdf"
+            }
+          ]
+        },
+        {
+          "id": "certifications",
+          "title": "Certification Eligibility",
+          "folder": "Phase 1 - Get Registered & Certified/1.2 Certification Eligibility",
+          "kind": "worksheet",
+          "guideId": "guide-certifications",
+          "guideLocalPath": "/starter-pack/05_Certification_Eligibility_Worksheets/FLK_05_GUIDE_Certifications.pdf",
+          "templates": [
+            {
+              "title": "8(a) Self-Assessment",
+              "localPath": "/starter-pack/05_Certification_Eligibility_Worksheets/FLK_05_8a_Certification_Self_Assessment.xlsx"
+            },
+            {
+              "title": "HUBZone Worksheet",
+              "localPath": "/starter-pack/05_Certification_Eligibility_Worksheets/FLK_05_HUBZone_Eligibility_Worksheet.xlsx"
+            },
+            {
+              "title": "WOSB / EDWOSB Self-Cert",
+              "localPath": "/starter-pack/05_Certification_Eligibility_Worksheets/FLK_05_WOSB_EDWOSB_Self_Cert.xlsx"
+            },
+            {
+              "title": "Small Disadvantaged Business Self-Assessment",
+              "localPath": "/starter-pack/05_Certification_Eligibility_Worksheets/FLK_05_SDB_Self_Assessment.xlsx"
+            },
+            {
+              "title": "VOSB / SDVOSB Verification Guide",
+              "localPath": "/starter-pack/05_Certification_Eligibility_Worksheets/FLK_05_VOSB_SDVOSB_CVE_Guide.pdf"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "P2",
+      "n": 2,
+      "slug": "federal-identity",
+      "title": "Build Your Federal Identity",
+      "blurb": "Before you chase a single opportunity, you need the two documents every contracting officer asks for: a capability statement and past performance.",
+      "items": [
+        {
+          "id": "capability-statement",
+          "title": "Capability Statement",
+          "folder": "Phase 2 - Build Your Federal Identity/2.1 Capability Statement",
+          "kind": "template",
+          "guideId": "guide-capability-statement",
+          "guideLocalPath": "/starter-pack/02_Capability_Statement_Kit/FLK_02_GUIDE_Capability_Statement.pdf",
+          "templates": [
+            {
+              "title": "Editable Capability Statement (Word)",
+              "localPath": "/starter-pack/02_Capability_Statement_Kit/FLK_02_Capability_Statement_Template.docx"
+            },
+            {
+              "title": "Branded Design Variants",
+              "localPath": "/starter-pack/02_Capability_Statement_Kit/FLK_02_Capability_Statement_Canva_Kit.pdf"
+            },
+            {
+              "title": "How to Write One (full walkthrough)",
+              "localPath": "/starter-pack/02_Capability_Statement_Kit/FLK_02_How_to_Write_Capability_Statement.pdf"
+            }
+          ]
+        },
+        {
+          "id": "past-performance",
+          "title": "Past Performance",
+          "folder": "Phase 2 - Build Your Federal Identity/2.2 Past Performance",
+          "kind": "template",
+          "guideId": "guide-past-performance",
+          "guideLocalPath": "/starter-pack/06_Past_Performance_Reference_Templates/FLK_06_GUIDE_Past_Performance.pdf",
+          "templates": [
+            {
+              "title": "Past-Performance Reference (Word)",
+              "localPath": "/starter-pack/06_Past_Performance_Reference_Templates/FLK_06_Past_Performance_Reference_Template.docx"
+            },
+            {
+              "title": "Reference Request Letter (Word)",
+              "localPath": "/starter-pack/06_Past_Performance_Reference_Templates/FLK_06_Past_Performance_Reference_Request_Letter.docx"
+            },
+            {
+              "title": "Turning Commercial Work into Federal Past Performance",
+              "localPath": "/starter-pack/06_Past_Performance_Reference_Templates/FLK_06_Commercial_to_Federal_Past_Performance.pdf"
+            },
+            {
+              "title": "Sample: IT Services",
+              "localPath": "/starter-pack/06_Past_Performance_Reference_Templates/FLK_06_Sample_Past_Performance_IT_Services.docx"
+            },
+            {
+              "title": "Sample: Janitorial",
+              "localPath": "/starter-pack/06_Past_Performance_Reference_Templates/FLK_06_Sample_Past_Performance_Janitorial.docx"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "P3",
+      "n": 3,
+      "slug": "find-qualify",
+      "title": "Find & Qualify the Right Work",
+      "blurb": "Most first-timers waste months bidding the wrong things. This phase is about finding real opportunities early and killing the bad ones fast.",
+      "items": [
+        {
+          "id": "market-research",
+          "title": "Market Research",
+          "folder": "Phase 3 - Find & Qualify the Right Work/3.1 Market Research",
+          "kind": "playbook",
+          "guideId": "guide-market-research",
+          "guideLocalPath": "/starter-pack/03_Solicitation_Playbooks/FLK_03_GUIDE_Market_Research.pdf",
+          "templates": [
+            {
+              "title": "Federal Market Research Playbook",
+              "localPath": "/starter-pack/03_Solicitation_Playbooks/FLK_03_Market_Research_Playbook.pdf"
+            }
+          ]
+        },
+        {
+          "id": "sources-sought",
+          "title": "Sources Sought & RFI",
+          "folder": "Phase 3 - Find & Qualify the Right Work/3.2 Sources Sought & RFI",
+          "kind": "playbook",
+          "guideId": "guide-sources-sought",
+          "guideLocalPath": "/starter-pack/03_Solicitation_Playbooks/FLK_03_GUIDE_Sources_Sought.pdf",
+          "templates": [
+            {
+              "title": "Sources Sought / RFI Playbook",
+              "localPath": "/starter-pack/03_Solicitation_Playbooks/FLK_03_Sources_Sought_RFI_Playbook.pdf"
+            },
+            {
+              "title": "Sources Sought / RFI Response Template (Word)",
+              "localPath": "/starter-pack/03_Solicitation_Playbooks/FLK_03_Sources_Sought_RFI_Response_Template.docx"
+            }
+          ]
+        },
+        {
+          "id": "pre-solicitation",
+          "title": "Pre-Solicitation Window",
+          "folder": "Phase 3 - Find & Qualify the Right Work/3.3 Pre-Solicitation",
+          "kind": "playbook",
+          "guideId": "guide-pre-solicitation",
+          "guideLocalPath": "/starter-pack/03_Solicitation_Playbooks/FLK_03_GUIDE_Pre_Solicitation.pdf",
+          "templates": [
+            {
+              "title": "Pre-Solicitation Playbook",
+              "localPath": "/starter-pack/03_Solicitation_Playbooks/FLK_03_Pre_Solicitation_Playbook.pdf"
+            }
+          ]
+        },
+        {
+          "id": "bid-no-bid",
+          "title": "Bid / No-Bid Decision",
+          "folder": "Phase 3 - Find & Qualify the Right Work/3.4 Bid or No-Bid Decision",
+          "kind": "worksheet",
+          "guideId": "guide-bid-no-bid",
+          "guideLocalPath": "/starter-pack/04_Bid_No_Bid_Decision_Toolkit/FLK_04_GUIDE_Bid_No_Bid.pdf",
+          "templates": [
+            {
+              "title": "Bid / No-Bid Decision Matrix",
+              "localPath": "/starter-pack/04_Bid_No_Bid_Decision_Toolkit/FLK_04_Bid_No_Bid_Decision_Matrix.xlsx"
+            },
+            {
+              "title": "PWin Calculator",
+              "localPath": "/starter-pack/04_Bid_No_Bid_Decision_Toolkit/FLK_04_PWin_Calculator.xlsx"
+            },
+            {
+              "title": "PWin Worked Example",
+              "localPath": "/starter-pack/04_Bid_No_Bid_Decision_Toolkit/FLK_04_Sample_Filled_PWin_Worked_Example.xlsx"
+            },
+            {
+              "title": "Competitive Bid Analysis",
+              "localPath": "/starter-pack/04_Bid_No_Bid_Decision_Toolkit/FLK_04_Competitive_Bid_Analysis.xlsx"
+            },
+            {
+              "title": "Bid Decision Memo (Word)",
+              "localPath": "/starter-pack/04_Bid_No_Bid_Decision_Toolkit/FLK_04_Bid_Decision_Memo_Template.docx"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "P4",
+      "n": 4,
+      "slug": "reach-out",
+      "title": "Reach Out & Position",
+      "blurb": "Federal buyers award to firms they already know. This phase is about getting on the contracting officer's radar before the RFP drops.",
+      "items": [
+        {
+          "id": "co-outreach",
+          "title": "Contracting Officer Outreach",
+          "folder": "Phase 4 - Reach Out & Position/4.1 Contracting Officer Outreach",
+          "kind": "bundle",
+          "guideId": "guide-co-outreach",
+          "guideLocalPath": "/starter-pack/07_Contracting_Officer_Outreach_Library/FLK_07_GUIDE_CO_Outreach.pdf",
+          "templates": [
+            {
+              "title": "Contracting Officer Email Templates",
+              "localPath": "/starter-pack/07_Contracting_Officer_Outreach_Library/FLK_07_CO_Email_Templates.pdf"
+            },
+            {
+              "title": "COR / PM Conversation Scripts",
+              "localPath": "/starter-pack/07_Contracting_Officer_Outreach_Library/FLK_07_COR_PM_Conversation_Scripts.pdf"
+            },
+            {
+              "title": "LinkedIn Outreach Scripts",
+              "localPath": "/starter-pack/07_Contracting_Officer_Outreach_Library/FLK_07_LinkedIn_Outreach_Scripts.pdf"
+            },
+            {
+              "title": "LinkedIn Profile Audit",
+              "localPath": "/starter-pack/07_Contracting_Officer_Outreach_Library/FLK_07_LinkedIn_Profile_Audit.pdf"
+            },
+            {
+              "title": "Industry Day Playbook",
+              "localPath": "/starter-pack/07_Contracting_Officer_Outreach_Library/FLK_07_Industry_Day_Playbook.pdf"
+            },
+            {
+              "title": "Federal Events Calendar FY2026",
+              "localPath": "/starter-pack/07_Contracting_Officer_Outreach_Library/FLK_07_Federal_Events_Calendar_FY2026.pdf"
+            },
+            {
+              "title": "Editable Email & Letter Pack (Word)",
+              "localPath": "/starter-pack/07_Contracting_Officer_Outreach_Library/FLK_07_Editable_Email_and_Letter_Pack.docx"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "P5",
+      "n": 5,
+      "slug": "price-bid-win",
+      "title": "Price, Bid & Win",
+      "blurb": "The proposal itself. Price it so you win and still make money, respond to exactly what Section L and M ask for, and review it like the evaluators will.",
+      "items": [
+        {
+          "id": "price-to-win",
+          "title": "Price-to-Win",
+          "folder": "Phase 5 - Price, Bid & Win/5.1 Price-to-Win",
+          "kind": "worksheet",
+          "guideId": "guide-price-to-win",
+          "guideLocalPath": "/starter-pack/08_Price_to_Win_Toolkit/FLK_08_GUIDE_Price_to_Win.pdf",
+          "templates": [
+            {
+              "title": "Price-to-Win Worksheet",
+              "localPath": "/starter-pack/08_Price_to_Win_Toolkit/FLK_08_Price_to_Win_Worksheet.xlsx"
+            },
+            {
+              "title": "Indirect Rate Calculator",
+              "localPath": "/starter-pack/08_Price_to_Win_Toolkit/FLK_08_Indirect_Rate_Calculator.xlsx"
+            },
+            {
+              "title": "Indirect Rate Audit Checklist",
+              "localPath": "/starter-pack/08_Price_to_Win_Toolkit/FLK_08_Indirect_Rate_Audit_Checklist.pdf"
+            },
+            {
+              "title": "Federal Labor Categories Matrix",
+              "localPath": "/starter-pack/08_Price_to_Win_Toolkit/FLK_08_Federal_Labor_Categories_Matrix.xlsx"
+            },
+            {
+              "title": "Federal Labor Rate Benchmarks FY2026",
+              "localPath": "/starter-pack/08_Price_to_Win_Toolkit/FLK_08_Federal_Labor_Rate_Benchmarks_FY2026.pdf"
+            },
+            {
+              "title": "Sample Cost Proposal",
+              "localPath": "/starter-pack/08_Price_to_Win_Toolkit/FLK_08_Sample_Cost_Proposal.xlsx"
+            }
+          ]
+        },
+        {
+          "id": "rfp-response",
+          "title": "RFP / Solicitation Response",
+          "folder": "Phase 5 - Price, Bid & Win/5.2 RFP / Solicitation Response",
+          "kind": "playbook",
+          "guideId": "guide-rfp-response",
+          "guideLocalPath": "/starter-pack/03_Solicitation_Playbooks/FLK_03_GUIDE_RFP_Response.pdf",
+          "templates": [
+            {
+              "title": "RFP Response Playbook",
+              "localPath": "/starter-pack/03_Solicitation_Playbooks/FLK_03_RFP_Response_Playbook.pdf"
+            },
+            {
+              "title": "How to Read Section L & M",
+              "localPath": "/starter-pack/03_Solicitation_Playbooks/FLK_03_How_to_Read_Section_L_M.pdf"
+            },
+            {
+              "title": "Compliance Matrix",
+              "localPath": "/starter-pack/09_Internal_Best_Practice_Library/FLK_09_Compliance_Matrix_Template.xlsx"
+            },
+            {
+              "title": "Win Themes Workbook",
+              "localPath": "/starter-pack/03_Solicitation_Playbooks/FLK_03_Win_Themes_Workbook.xlsx"
+            },
+            {
+              "title": "Color-Team Review Templates",
+              "localPath": "/starter-pack/09_Internal_Best_Practice_Library/FLK_09_Color_Team_Review_Templates.pdf"
+            },
+            {
+              "title": "Proposal Outline & Compliance Shell (Word)",
+              "localPath": "/starter-pack/03_Solicitation_Playbooks/FLK_03_Proposal_Outline_Compliance_Shell.docx"
+            }
+          ]
+        },
+        {
+          "id": "rfq",
+          "title": "RFQ Quoting",
+          "folder": "Phase 5 - Price, Bid & Win/5.3 RFQ (Quotes)",
+          "kind": "playbook",
+          "guideId": "guide-rfq",
+          "guideLocalPath": "/starter-pack/03_Solicitation_Playbooks/FLK_03_GUIDE_RFQ.pdf",
+          "templates": [
+            {
+              "title": "RFQ Playbook",
+              "localPath": "/starter-pack/03_Solicitation_Playbooks/FLK_03_RFQ_Playbook.pdf"
+            }
+          ]
+        },
+        {
+          "id": "idiq",
+          "title": "IDIQ / GWAC Task Orders",
+          "folder": "Phase 5 - Price, Bid & Win/5.4 IDIQ & Task Orders",
+          "kind": "playbook",
+          "guideId": "guide-idiq",
+          "guideLocalPath": "/starter-pack/03_Solicitation_Playbooks/FLK_03_GUIDE_IDIQ.pdf",
+          "templates": [
+            {
+              "title": "IDIQ / GWAC Task-Order Playbook",
+              "localPath": "/starter-pack/03_Solicitation_Playbooks/FLK_03_IDIQ_GWAC_Task_Order_Playbook.pdf"
+            }
+          ]
+        },
+        {
+          "id": "teaming",
+          "title": "Teaming & Subcontracting",
+          "folder": "Phase 5 - Price, Bid & Win/5.5 Teaming & Subcontracting",
+          "kind": "template",
+          "guideId": "guide-teaming",
+          "guideLocalPath": "/starter-pack/09_Internal_Best_Practice_Library/FLK_09_GUIDE_Teaming.pdf",
+          "templates": [
+            {
+              "title": "Teaming Agreement (Word)",
+              "localPath": "/starter-pack/09_Internal_Best_Practice_Library/FLK_09_Teaming_Agreement_Template.docx"
+            },
+            {
+              "title": "Mutual NDA (Word)",
+              "localPath": "/starter-pack/09_Internal_Best_Practice_Library/FLK_09_NDA_Template.docx"
+            }
+          ]
+        },
+        {
+          "id": "capture-maturity",
+          "title": "Capture Maturity Self-Audit",
+          "folder": "Phase 5 - Price, Bid & Win/5.6 Capture Maturity Self-Audit",
+          "kind": "worksheet",
+          "guideId": "guide-capture-maturity",
+          "guideLocalPath": "/starter-pack/09_Internal_Best_Practice_Library/FLK_09_GUIDE_Capture_Maturity.pdf",
+          "templates": [
+            {
+              "title": "Capture Maturity Self-Audit",
+              "localPath": "/starter-pack/09_Internal_Best_Practice_Library/FLK_09_Capture_Maturity_Self_Audit.xlsx"
+            }
+          ]
+        },
+        {
+          "id": "far-decoder",
+          "title": "FAR Clause Decoder",
+          "folder": "Phase 5 - Price, Bid & Win/5.7 FAR Clause Decoder",
+          "kind": "playbook",
+          "guideId": "guide-far-decoder",
+          "guideLocalPath": "/starter-pack/09_Internal_Best_Practice_Library/FLK_09_GUIDE_FAR_Decoder.pdf",
+          "templates": [
+            {
+              "title": "FAR Clause Quick-Reference Decoder",
+              "localPath": "/starter-pack/09_Internal_Best_Practice_Library/FLK_09_FAR_Clause_Quick_Reference_Decoder.pdf"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "P6",
+      "n": 6,
+      "slug": "after-win",
+      "title": "After You Win",
+      "blurb": "Winning is the start. Staying compliant and getting a strong CPARS rating is what gets you the next contract.",
+      "items": [
+        {
+          "id": "post-award",
+          "title": "Post-Award Compliance",
+          "folder": "Phase 6 - After You Win/6.1 Post-Award Compliance",
+          "kind": "bundle",
+          "guideId": "guide-post-award",
+          "guideLocalPath": "/starter-pack/11_Post_Award_Compliance/FLK_11_GUIDE_Post_Award.pdf",
+          "templates": [
+            {
+              "title": "CPARS & Past-Performance Guide",
+              "localPath": "/starter-pack/11_Post_Award_Compliance/FLK_11_CPARS_Past_Performance_Guide.pdf"
+            },
+            {
+              "title": "DCAA Accounting Basics",
+              "localPath": "/starter-pack/11_Post_Award_Compliance/FLK_11_DCAA_Accounting_Basics.pdf"
+            },
+            {
+              "title": "Quality Assurance Plan (Word)",
+              "localPath": "/starter-pack/11_Post_Award_Compliance/FLK_11_Quality_Assurance_Plan_Template.docx"
+            },
+            {
+              "title": "Subcontracting Plan (Word)",
+              "localPath": "/starter-pack/11_Post_Award_Compliance/FLK_11_Subcontracting_Plan_Template.docx"
+            },
+            {
+              "title": "Contract Mod Request (Word)",
+              "localPath": "/starter-pack/11_Post_Award_Compliance/FLK_11_Contract_Mod_Request_Template.docx"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "bonus": {
+    "id": "founder-call",
+    "title": "Founder Onboarding Call",
+    "folder": "Bonus - Founder Onboarding Call",
+    "guideId": "guide-founder-call",
+    "guideLocalPath": "/starter-pack/10_Bonus_Founder_Onboarding_Call/FLK_10_GUIDE_Founder_Call.pdf",
+    "calendly": "https://calendly.com/capturepilot/launch-kit-onboarding",
+    "templates": [
+      {
+        "title": "Onboarding Call Prep Guide",
+        "localPath": "/starter-pack/10_Bonus_Founder_Onboarding_Call/FLK_10_Founder_Onboarding_Call.pdf"
+      }
+    ]
+  }
+}
