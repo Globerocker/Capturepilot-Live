@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import {
     CheckCircle2, Lock, Clock, FileText, Search, Scale, Award, Trophy, Mail,
     DollarSign, Video, ArrowRight, Loader2, Star, ShieldCheck, ClipboardCheck,
-    BookOpen, Building2,
+    BookOpen, Building2, Handshake, BadgeCheck, Volume2, VolumeX,
 } from "lucide-react";
 import {
     STARTUP_PACK_ASSETS,
@@ -36,13 +36,65 @@ const FOLDER_META: Record<string, { formats: string[]; highlight?: string }> = {
 };
 
 const FORMAT_BREAKDOWN = [
-    { label: "PDFs", count: 31, color: "bg-emerald-100 text-emerald-800" },
-    { label: "Spreadsheets", count: 15, color: "bg-blue-100 text-blue-800" },
-    { label: "Word templates", count: 12, color: "bg-amber-100 text-amber-800" },
-    { label: "Calendly / link", count: 2, color: "bg-stone-100 text-stone-700" },
+    { label: "Guides & playbooks", count: 51, color: "bg-emerald-100 text-emerald-800" },
+    { label: "Calculators & worksheets", count: 16, color: "bg-blue-100 text-blue-800" },
+    { label: "Editable Word templates", count: 15, color: "bg-amber-100 text-amber-800" },
 ];
 
-const TOTAL_FILES = 60;
+const TOTAL_FILES = 82;
+
+// Trust badges shown over the hero video.
+const TRUST_BADGES = [
+    { Icon: ShieldCheck, label: "Veteran-owned" },
+    { Icon: Handshake, label: "HubSpot partner" },
+    { Icon: Building2, label: "Built on SAM.gov data" },
+    { Icon: Lock, label: "Stripe-secured" },
+    { Icon: BadgeCheck, label: "7-day refund" },
+];
+
+/**
+ * HeroReel — the portrait (9:16) explainer video. Autoplays muted + looped as a
+ * silent preview; tap toggles real sound. Sits beside the headline; a blurred
+ * copy of its poster fills the hero behind the copy so the whole section reads
+ * as video-driven without cropping the vertical frame.
+ */
+function HeroReel() {
+    const ref = useRef<HTMLVideoElement>(null);
+    const [sound, setSound] = useState(false);
+    function toggleSound() {
+        const v = ref.current;
+        if (!v) return;
+        const next = !sound;
+        setSound(next);
+        v.muted = !next;
+        v.play().catch(() => {});
+    }
+    return (
+        <div className="relative mx-auto w-full max-w-[300px]">
+            <div className="absolute -inset-3 bg-emerald-400/20 blur-2xl rounded-[2rem]" aria-hidden />
+            <video
+                ref={ref}
+                className="relative w-full aspect-[9/16] object-cover rounded-[1.75rem] shadow-2xl ring-1 ring-white/15 bg-black"
+                autoPlay
+                muted
+                loop
+                playsInline
+                poster="/flk-hero-poster.jpg"
+                preload="metadata"
+            >
+                <source src="/flk-hero.mp4" type="video/mp4" />
+            </video>
+            <button
+                type="button"
+                onClick={toggleSound}
+                className="absolute bottom-3 right-3 inline-flex items-center gap-1.5 bg-black/60 backdrop-blur text-white text-xs font-bold px-3 py-1.5 rounded-full hover:bg-black/80 transition-colors"
+            >
+                {sound ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
+                {sound ? "Sound on" : "Tap for sound"}
+            </button>
+        </div>
+    );
+}
 
 const TESTIMONIALS = [
     {
@@ -157,36 +209,45 @@ export default function LaunchKitLandingPage() {
                 </Link>
             </header>
 
-            <main className="max-w-5xl mx-auto px-4 pb-24 space-y-16">
+            {/* ── HERO (full-bleed, headline over the explainer video) ────────── */}
+            <section className="relative overflow-hidden">
+                {/* Ambient blurred backdrop from the video's poster frame. */}
+                <div className="absolute inset-0" aria-hidden>
+                    <Image src="/flk-hero-poster.jpg" alt="" fill priority className="object-cover blur-2xl scale-110 opacity-40" />
+                    <div className="absolute inset-0 bg-gradient-to-br from-stone-950/92 via-stone-950/82 to-emerald-950/88" />
+                </div>
 
-                {/* ── HERO ──────────────────────────────────────────────────── */}
-                <section className="grid lg:grid-cols-2 gap-8 items-center pt-4">
-                    {/* Left: copy */}
+                <div className="relative max-w-6xl mx-auto px-4 sm:px-6 py-12 sm:py-16 lg:py-20 grid lg:grid-cols-[1.15fr_0.85fr] gap-10 lg:gap-12 items-center">
+                    {/* Copy */}
                     <div>
-                        <p className="text-[11px] font-bold uppercase tracking-widest text-emerald-600 mb-3">
-                            Federal Launch Kit
+                        <p className="text-[11px] font-bold uppercase tracking-widest text-emerald-300 mb-3 flex items-center gap-2">
+                            <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-white/15 text-white text-[10px] font-black">A</span>
+                            Federal Launch Kit · by Americurial
                         </p>
-                        <h1 className="font-black text-4xl sm:text-5xl lg:text-[3.2rem] leading-[1.06] text-stone-900">
-                            60 files.<br />
-                            11 categories.<br />
-                            <span className="text-emerald-600">Built by people<br />who&apos;ve done this.</span>
+                        <h1 className="font-black text-4xl sm:text-5xl lg:text-[3.4rem] leading-[1.05] text-white">
+                            Your first federal contract, <span className="text-emerald-300">demystified.</span>
                         </h1>
-                        <p className="text-stone-600 text-lg mt-5 leading-relaxed max-w-lg">
-                            Every template, playbook, checklist, and worksheet a small business
-                            needs to get registered, pick the right bids, price them correctly, and
-                            build a relationship with the contracting officer before the RFP drops.
+                        <p className="text-white/75 text-lg mt-5 leading-relaxed max-w-xl">
+                            {TOTAL_FILES} templates, guides and worksheets in one organized folder. Everything from
+                            SAM.gov registration to a winning bid, in the exact order you use it. The same playbook
+                            we run at Americurial.
                         </p>
 
-                        {/* Credibility line — the brand as a small mark, not a wordmark. */}
-                        <div className="flex items-center gap-2.5 mt-4">
-                            <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-stone-900 text-white text-xs font-black flex-shrink-0">A</span>
-                            <p className="text-sm text-stone-500 leading-snug">
-                                <span className="font-bold text-stone-700">Three years of federal capture at Americurial</span>, packaged into one kit.
-                            </p>
+                        {/* Trust badges */}
+                        <div className="flex flex-wrap gap-2 mt-6">
+                            {TRUST_BADGES.map(({ Icon, label }) => (
+                                <span
+                                    key={label}
+                                    className="inline-flex items-center gap-1.5 bg-white/10 border border-white/15 text-white/90 text-xs font-semibold px-3 py-1.5 rounded-full backdrop-blur"
+                                >
+                                    <Icon className="w-3.5 h-3.5 text-emerald-300" />
+                                    {label}
+                                </span>
+                            ))}
                         </div>
 
                         {/* Format pills */}
-                        <div className="flex flex-wrap gap-2 mt-5">
+                        <div className="flex flex-wrap gap-2 mt-4">
                             {FORMAT_BREAKDOWN.map((f) => (
                                 <span
                                     key={f.label}
@@ -199,14 +260,14 @@ export default function LaunchKitLandingPage() {
                         </div>
 
                         {/* Price + CTA */}
-                        <div className="flex flex-wrap items-baseline gap-3 mt-6">
-                            <span className="text-5xl font-black text-stone-900">
+                        <div className="flex flex-wrap items-baseline gap-3 mt-7">
+                            <span className="text-5xl font-black text-white">
                                 {fmtPrice(STARTUP_PACK_PRICE_CENTS)}
                             </span>
-                            <span className="text-xl text-stone-400 line-through">
+                            <span className="text-xl text-white/40 line-through">
                                 {fmtPrice(STARTUP_PACK_FULL_PRICE_CENTS)}
                             </span>
-                            <span className="text-xs font-bold bg-amber-300 text-amber-900 px-2 py-1 rounded-md uppercase tracking-wider">
+                            <span className="text-xs font-bold bg-amber-300 text-amber-950 px-2 py-1 rounded-md uppercase tracking-wider">
                                 Save {fmtPrice(savings)}
                             </span>
                         </div>
@@ -214,41 +275,34 @@ export default function LaunchKitLandingPage() {
                             type="button"
                             onClick={handleBuy}
                             disabled={loading || expired}
-                            className="mt-5 w-full sm:w-auto inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-7 py-4 rounded-2xl font-black text-base transition-all shadow-lg disabled:opacity-60"
+                            className="mt-5 w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-stone-950 px-7 py-4 rounded-2xl font-black text-base transition-all shadow-xl shadow-emerald-900/40 disabled:opacity-60"
                         >
                             {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Lock className="w-5 h-5" />}
                             Get the Kit — {fmtPrice(STARTUP_PACK_PRICE_CENTS)}
                         </button>
-                        <p className="text-[11px] text-stone-400 mt-2.5">
+                        <p className="text-[11px] text-white/50 mt-2.5">
                             Instant access · Lifetime use · 7-day refund · Stripe-secured
                         </p>
                         {error && (
-                            <p className="text-red-600 text-sm mt-3 bg-red-50 border border-red-200 px-3 py-2 rounded-lg max-w-md">
+                            <p className="text-red-200 text-sm mt-3 bg-red-900/40 border border-red-400/30 px-3 py-2 rounded-lg max-w-md">
                                 {error}
                             </p>
                         )}
                     </div>
 
-                    {/* Right: hero graphic */}
-                    <div className="relative">
-                        <div className="absolute -inset-4 bg-emerald-600/8 rounded-[40px] blur-2xl" />
-                        <Image
-                            src="/flk-hero-wingap.png"
-                            alt="The Government Contract Win Gap — timing diagram showing the 18-month Winners' Window before an RFP drops"
-                            width={600}
-                            height={600}
-                            priority
-                            className="relative rounded-3xl shadow-2xl w-full"
-                        />
-                    </div>
-                </section>
+                    {/* The explainer reel */}
+                    <HeroReel />
+                </div>
+            </section>
+
+            <main className="max-w-5xl mx-auto px-4 pb-24 space-y-16 pt-16">
 
                 {/* ── TRUST STRIP ───────────────────────────────────────────── */}
                 <div className="border-y border-stone-200 py-5">
                     <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-xs text-stone-500 text-center">
-                        <span className="font-semibold text-stone-700">60 files across 10 categories</span>
+                        <span className="font-semibold text-stone-700">{TOTAL_FILES} files across 6 phases</span>
                         <span>·</span>
-                        <span>Sources through to debrief</span>
+                        <span>SAM.gov registration through post-award</span>
                         <span>·</span>
                         <span>Instant download on purchase</span>
                         <span>·</span>
