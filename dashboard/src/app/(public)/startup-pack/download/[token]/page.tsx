@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import {
     Loader2, FileText, Search, Scale, Award, Trophy, Mail, DollarSign, Video,
     ExternalLink, Download, CheckCircle2, ArrowRight, AlertCircle, Sparkles,
-    ClipboardCheck, BookOpen, Building2, ChevronDown, Package,
+    ClipboardCheck, BookOpen, Building2, ChevronDown, Package, Eye, X,
 } from "lucide-react";
 import clsx from "clsx";
 import {
@@ -28,6 +28,34 @@ const anchorIdFor = (cat: string) => `category-${cat}`;
 
 /** Two-digit display index ("01", "02", … "10"). */
 const sectionNumber = (i: number) => String(i + 1).padStart(2, "0");
+
+/** Scroll-reveal wrapper — fades + slides children up on first view (Loom-friendly). */
+function Reveal({ children, delay = 0, className = "" }: { children: React.ReactNode; delay?: number; className?: string }) {
+    const ref = useRef<HTMLDivElement>(null);
+    const [shown, setShown] = useState(false);
+    useEffect(() => {
+        const el = ref.current;
+        if (!el) return;
+        if (typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) { setShown(true); return; }
+        const io = new IntersectionObserver((e) => { if (e[0]?.isIntersecting) { setShown(true); io.disconnect(); } }, { threshold: 0.12, rootMargin: "0px 0px -5% 0px" });
+        io.observe(el);
+        return () => io.disconnect();
+    }, []);
+    return (
+        <div
+            ref={ref}
+            className={className}
+            style={{
+                opacity: shown ? 1 : 0,
+                transform: shown ? "none" : "translateY(26px)",
+                transition: `opacity .6s ease-out ${delay}ms, transform .7s cubic-bezier(.16,.84,.44,1) ${delay}ms`,
+                willChange: "transform, opacity",
+            }}
+        >
+            {children}
+        </div>
+    );
+}
 
 interface AccessData {
     ok: boolean;
@@ -127,8 +155,8 @@ export default function StartupPackDownloadPage() {
                         Welcome to the {PRODUCT_NAME}, {buyer}.
                     </h1>
                     <p className="text-white/85 text-base sm:text-lg mt-3 max-w-2xl leading-relaxed">
-                        Bookmark this page — it&apos;s your permanent download library. Every template, playbook and worksheet you need to
-                        land your first federal contract is below.
+                        This is your permanent download library, so bookmark it. Every template, playbook, and worksheet below
+                        comes out of three years of running federal capture at Americurial, packaged so you can use it today.
                     </p>
                     <div className="mt-5 flex flex-wrap gap-2 text-xs">
                         <span className="bg-white/15 border border-white/20 px-3 py-1.5 rounded-lg">{totalAssets} active assets</span>
@@ -187,7 +215,9 @@ export default function StartupPackDownloadPage() {
 
                 {/* Asset sections — each with anchor id + collapsible body. */}
                 {STARTUP_PACK_SECTIONS.map((section, i) => (
-                    <SectionBlock key={section.category} section={section} index={i} />
+                    <Reveal key={section.category} delay={(i % 3) * 70}>
+                        <SectionBlock section={section} index={i} token={token} />
+                    </Reveal>
                 ))}
 
                 {/* Footer / next steps */}
@@ -432,7 +462,7 @@ function KitOverview() {
 // SectionBlock — one per category. Has #category-<cat> anchor, numbered label,
 // asset-count chip, and a collapse/expand toggle (default = expanded).
 // ──────────────────────────────────────────────────────────────────────────────
-function SectionBlock({ section, index }: { section: AssetSection; index: number }) {
+function SectionBlock({ section, index, token }: { section: AssetSection; index: number; token: string }) {
     const Icon = ICON_MAP[section.icon] || FileText;
     const assets = useMemo(
         () => STARTUP_PACK_ASSETS.filter(a => a.category === section.category),
@@ -483,31 +513,28 @@ function SectionBlock({ section, index }: { section: AssetSection; index: number
                     id={`${anchorIdFor(section.category)}-body`}
                     className="grid grid-cols-1 md:grid-cols-2 gap-3"
                 >
-                    {assets.map(asset => <AssetCard key={asset.id} asset={asset} />)}
+                    {assets.map((asset) => <AssetCard key={asset.id} asset={asset} token={token} />)}
                 </div>
             )}
         </section>
     );
 }
 
-function AssetCard({ asset }: { asset: StartupPackAsset }) {
-    const { previewUrl, downloadUrl } = resolveDriveLinks(asset);
+function AssetCard({ asset, token }: { asset: StartupPackAsset; token: string }) {
+    const { previewUrl, downloadUrl } = resolveDriveLinks(asset, token);
     const available = !!previewUrl;
     const isLocal = !!asset.localPath;
     const isCalendly = asset.format === "Calendly";
-
-    // Label the primary CTA based on where the file lives.
-    const openLabel = isCalendly
-        ? "Open in Calendly"
-        : isLocal
-            ? "View"
-            : "Open in Drive";
+    const isPdf = isLocal && /\.pdf$/i.test(asset.localPath || "");
+    const [showPreview, setShowPreview] = useState(false);
 
     return (
         <div
             className={clsx(
-                "bg-white border rounded-2xl p-5 transition-all",
-                available ? "border-stone-200 hover:border-emerald-300 hover:shadow-md" : "border-stone-200 opacity-70",
+                "group bg-white border rounded-2xl p-5 transition-all duration-300 h-full",
+                available
+                    ? "border-stone-200 hover:border-emerald-300 hover:shadow-lg hover:-translate-y-0.5"
+                    : "border-dashed border-stone-300 bg-stone-50/70",
             )}
         >
             <div className="flex items-start justify-between gap-2 mb-2">
@@ -528,17 +555,28 @@ function AssetCard({ asset }: { asset: StartupPackAsset }) {
             <h3 className="font-bold text-sm text-stone-900 leading-snug">{asset.title}</h3>
             <p className="text-xs text-stone-500 mt-1 leading-relaxed">{asset.description}</p>
 
-            <div className="mt-4 flex flex-wrap gap-2">
-                {available ? (
-                    <>
+            {available ? (
+                <>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                        {isPdf && (
+                            <button
+                                type="button"
+                                onClick={() => setShowPreview((v) => !v)}
+                                className={clsx(
+                                    "inline-flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-lg transition-colors",
+                                    showPreview ? "bg-stone-900 text-white hover:bg-black" : "bg-emerald-600 text-white hover:bg-emerald-700",
+                                )}
+                            >
+                                {showPreview ? <><X className="w-3.5 h-3.5" /> Close preview</> : <><Eye className="w-3.5 h-3.5" /> Preview</>}
+                            </button>
+                        )}
                         <a
                             href={previewUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 bg-emerald-600 text-white text-xs font-bold px-3 py-2 rounded-lg hover:bg-emerald-700 transition-colors"
+                            className="inline-flex items-center gap-1.5 bg-white border border-stone-200 text-stone-700 text-xs font-bold px-3 py-2 rounded-lg hover:border-emerald-300 hover:text-emerald-700 transition-colors"
                         >
-                            <ExternalLink className="w-3.5 h-3.5" />
-                            {openLabel}
+                            <ExternalLink className="w-3.5 h-3.5" /> {isCalendly ? "Open in Calendly" : "Open"}
                         </a>
                         {downloadUrl && !isCalendly && (
                             <a
@@ -549,11 +587,25 @@ function AssetCard({ asset }: { asset: StartupPackAsset }) {
                                 <Download className="w-3.5 h-3.5" /> Download
                             </a>
                         )}
-                    </>
-                ) : (
-                    <span className="text-[11px] text-stone-400 italic">Coming soon — we&apos;ll email you the link.</span>
-                )}
-            </div>
+                    </div>
+                    {isPdf && showPreview && (
+                        <div className="mt-3 rounded-xl overflow-hidden border border-stone-200 bg-stone-100 shadow-inner">
+                            <iframe src={previewUrl} title={asset.title} className="w-full h-[540px] bg-white" />
+                        </div>
+                    )}
+                </>
+            ) : (
+                <div className="mt-4 flex items-center gap-2 flex-wrap">
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200 px-3 py-1.5 rounded-lg">
+                        <span className="relative flex w-1.5 h-1.5">
+                            <span className="animate-ping absolute inline-flex w-1.5 h-1.5 rounded-full bg-amber-400 opacity-75" />
+                            <span className="relative inline-flex rounded-full w-1.5 h-1.5 bg-amber-500" />
+                        </span>
+                        Dropping soon
+                    </span>
+                    <span className="text-[11px] text-stone-400">we&apos;ll email you the link</span>
+                </div>
+            )}
         </div>
     );
 }
