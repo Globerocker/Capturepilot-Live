@@ -7,6 +7,7 @@ import Image from "next/image";
 import {
     Loader2, Mail, ExternalLink, Download, CheckCircle2, ArrowRight, AlertCircle,
     Sparkles, Video, Package, Eye, X, BookOpen, ListChecks, FileText, MapPin,
+    LayoutGrid, ChevronRight,
 } from "lucide-react";
 import clsx from "clsx";
 import {
@@ -194,6 +195,11 @@ export default function StartupPackDownloadPage() {
                     </div>
                 </section>
 
+                {/* Kit map — the whole kit on one screen, hover + jump marks */}
+                <Reveal>
+                    <KitMap />
+                </Reveal>
+
                 {/* Three ways to use it */}
                 <Reveal>
                     <section className="bg-white border border-stone-200 rounded-[28px] p-6 sm:p-7 shadow-sm">
@@ -333,6 +339,82 @@ export default function StartupPackDownloadPage() {
                 </section>
             </main>
         </div>
+    );
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// KitMap — the whole kit visualized on one screen. Six phase cards, each listing
+// its deliverables as chips that jump straight to the matching section below.
+// Hover-lifts the cards + highlights the chips. This is the "at a glance" view
+// so a buyer (or a Loom viewer) sees the full kit without scrolling.
+// ──────────────────────────────────────────────────────────────────────────────
+const PHASE_TINTS = [
+    "from-emerald-50", "from-blue-50", "from-violet-50",
+    "from-amber-50", "from-rose-50", "from-teal-50",
+];
+function KitMap() {
+    const toolCount = LAUNCH_KIT_PHASES.reduce((n, p) => n + p.items.length, 0) + 1; // +bonus
+    return (
+        <section className="bg-white border border-stone-200 rounded-[28px] p-6 sm:p-8 shadow-sm">
+            <div className="flex items-start gap-3 mb-5">
+                <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center flex-shrink-0">
+                    <LayoutGrid className="w-5 h-5" />
+                </div>
+                <div>
+                    <h2 className="font-bold text-lg text-stone-900">Your whole kit on one screen</h2>
+                    <p className="text-sm text-stone-500 leading-snug">
+                        Six phases, {toolCount} tools, SAM.gov to award. Click anything to jump straight to it.
+                    </p>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {LAUNCH_KIT_PHASES.map((phase, i) => (
+                    <div
+                        key={phase.slug}
+                        className={clsx(
+                            "group rounded-2xl border border-stone-200 bg-gradient-to-br to-white p-4 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-emerald-300",
+                            PHASE_TINTS[i % PHASE_TINTS.length],
+                        )}
+                    >
+                        <a href={`#${phaseAnchor(phase.slug)}`} className="flex items-center gap-2 mb-3">
+                            <span className="w-7 h-7 rounded-lg bg-stone-900 text-white flex items-center justify-center font-black text-sm tabular-nums flex-shrink-0">
+                                {phase.n}
+                            </span>
+                            <h3 className="font-bold text-[13px] text-stone-900 leading-tight group-hover:text-emerald-700 transition-colors flex-1">
+                                {phase.title}
+                            </h3>
+                            <ChevronRight className="w-4 h-4 text-stone-300 group-hover:text-emerald-500 group-hover:translate-x-0.5 transition-all" />
+                        </a>
+                        <div className="flex flex-wrap gap-1.5">
+                            {phase.items.map((item) => (
+                                <a
+                                    key={item.id}
+                                    href={`#${itemAnchor(item.id)}`}
+                                    className="inline-flex items-center text-[11px] font-semibold bg-white/80 border border-stone-200 text-stone-600 px-2 py-1 rounded-lg hover:bg-emerald-600 hover:border-emerald-600 hover:text-white transition-colors"
+                                >
+                                    {item.title}
+                                </a>
+                            ))}
+                        </div>
+                    </div>
+                ))}
+
+                {/* Bonus tile */}
+                <div className="group rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-white p-4 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-amber-300">
+                    <a href={`#${phaseAnchor("bonus")}`} className="flex items-center gap-2 mb-3">
+                        <span className="w-7 h-7 rounded-lg bg-amber-500 text-white flex items-center justify-center font-black text-sm flex-shrink-0">★</span>
+                        <h3 className="font-bold text-[13px] text-stone-900 leading-tight group-hover:text-amber-700 transition-colors flex-1">Bonus</h3>
+                        <ChevronRight className="w-4 h-4 text-amber-300 group-hover:text-amber-500 group-hover:translate-x-0.5 transition-all" />
+                    </a>
+                    <div className="flex flex-wrap gap-1.5">
+                        <a href={`#${itemAnchor(BONUS_ITEM.id)}`} className="inline-flex items-center text-[11px] font-semibold bg-white/80 border border-amber-200 text-amber-700 px-2 py-1 rounded-lg hover:bg-amber-500 hover:border-amber-500 hover:text-white transition-colors">
+                            {BONUS_ITEM.title}
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </section>
     );
 }
 
