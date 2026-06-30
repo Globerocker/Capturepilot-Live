@@ -123,18 +123,21 @@ async function GET_handler(req: NextRequest): Promise<NextResponse> {
     const wjTotal = wjDone + wjFailed;
     const failurePct = wjTotal > 0 ? Math.round((wjFailed / wjTotal) * 1000) / 10 : 0;
 
-    // Stale crons — any cron whose last_run < (now - 2× expected interval)
-    const { data: cronRows } = await sb
-        .from("cron_runs")
-        .select("route, started_at, status")
-        .order("started_at", { ascending: false })
-        .limit(200);
+    // Last run per route via RPC (distinct-on, all-time). NOT the latest-N
+    // rows: with ~12k runs/day, the old .limit(200) only spanned minutes, so it
+    // saw ~9 high-frequency routes and false-alarmed "silent platform". Stale =
+    // ran before but not in the last 26h, bounded to 14 days so long-retired
+    // routes don't inflate the count.
+    const HOUR = 60 * 60 * 1000;
+    const { data: lastRuns } = await sb.rpc("cron_route_last_runs");
     const lastByRoute = new Map<string, Date>();
-    for (const r of (cronRows || []) as Array<{ route: string; started_at: string }>) {
-        if (!lastByRoute.has(r.route)) lastByRoute.set(r.route, new Date(r.started_at));
+    for (const r of (lastRuns || []) as Array<{ route: string; last_run: string }>) {
+        lastByRoute.set(r.route, new Date(r.last_run));
     }
-    const staleCount = [...lastByRoute.entries()].filter(([, dt]) => {
-        return Date.now() - dt.getTime() > 26 * 60 * 60 * 1000;
+    const routesLogged24h = [...lastByRoute.values()].filter(dt => Date.now() - dt.getTime() < 26 * HOUR).length;
+    const staleCount = [...lastByRoute.values()].filter(dt => {
+        const age = Date.now() - dt.getTime();
+        return age > 26 * HOUR && age < 14 * 24 * HOUR;
     }).length;
 
     // ─── Auto-healer activity (last 24h) ────────────────────────────────────
@@ -180,9 +183,9 @@ async function GET_handler(req: NextRequest): Promise<NextResponse> {
     // vercel.json (35 in CRON.md). Halved → 17. Using a hard number avoids
     // a second DB roundtrip; if we drift far from 35 the override still
     // catches the egregious case (e.g. only 5 routes logged in 24h).
-    const EXPECTED_ROUTES = 35;
+    const EXPECTED_ROUTES = 40;
     const tooManyStale = staleCount > 5;
-    const tooFewRoutesLogged = lastByRoute.size < Math.floor(EXPECTED_ROUTES / 2);
+    const tooFewRoutesLogged = routesLogged24h < Math.floor(EXPECTED_ROUTES / 2);
     // Platform pulse: opportunities-inserted-in-24h is the canonical
     // "is anything happening" signal (covers all ingestion sources).
     const platformPulse = oppsToday;
@@ -207,7 +210,7 @@ async function GET_handler(req: NextRequest): Promise<NextResponse> {
     // overrides fire — gives the operator the names of the missing routes,
     // not just a count.
     const staleRoutes = [...lastByRoute.entries()]
-        .filter(([, dt]) => Date.now() - dt.getTime() > 26 * 60 * 60 * 1000)
+        .filter(([, dt]) => { const age = Date.now() - dt.getTime(); return age > 26 * HOUR && age < 14 * 24 * HOUR; })
         .map(([route, dt]) => ({ route, hoursAgo: Math.round((Date.now() - dt.getTime()) / 3_600_000) }))
         .sort((a, b) => b.hoursAgo - a.hoursAgo)
         .slice(0, 20);
@@ -216,7 +219,7 @@ async function GET_handler(req: NextRequest): Promise<NextResponse> {
     // The silent-platform subject is intentionally loud — a 0-opps day with
     // half the crons missing is the kind of thing that should jump the inbox.
     const subject = silentPlatform || tooManyStale || tooFewRoutesLogged
-        ? `[Silent platform] CapturePilot digest — 0 opps in 24h${tooManyStale ? `, ${staleCount} stale crons` : ""}${tooFewRoutesLogged ? `, only ${lastByRoute.size}/${EXPECTED_ROUTES} routes logged` : ""}`
+        ? `[Platform check] CapturePilot digest — +${oppsToday} opps${silentPlatform ? " · INGESTION SILENT" : ""}${tooManyStale ? `, ${staleCount} stale crons` : ""}${tooFewRoutesLogged ? `, only ${routesLogged24h}/${EXPECTED_ROUTES} routes logged` : ""}`
         : uniqueEscalations.length > 0
         ? `[Action needed] CapturePilot digest — ${uniqueEscalations.length} item${uniqueEscalations.length === 1 ? "" : "s"} for you · +${oppsToday} opps`
         : `CapturePilot daily digest — +${oppsToday} opps, +${contractorsToday} contractors`;
@@ -228,7 +231,7 @@ async function GET_handler(req: NextRequest): Promise<NextResponse> {
             <div style="margin-top:8px;padding:10px 12px;background:#fef2f2;border-left:3px solid #dc2626;border-radius:4px;font-size:13px;color:#7f1d1d;line-height:1.5;">
                 ${silentPlatform ? "<div><strong>Zero opportunities</strong> inserted in the last 24h — ingestion is silent.</div>" : ""}
                 ${tooManyStale ? `<div><strong>${staleCount} stale crons</strong> (no run in &gt;26h).</div>` : ""}
-                ${tooFewRoutesLogged ? `<div>Only <strong>${lastByRoute.size}/${EXPECTED_ROUTES}</strong> cron routes logged a run in the last 24h.</div>` : ""}
+                ${tooFewRoutesLogged ? `<div>Only <strong>${routesLogged24h}/${EXPECTED_ROUTES}</strong> cron routes logged a run in the last 24h.</div>` : ""}
             </div>
             ${staleRoutes.length === 0 ? "" : `
                 <div style="margin-top:10px;font-size:12px;color:${COLORS.stone600};">Stalest routes:</div>
@@ -334,7 +337,7 @@ async function GET_handler(req: NextRequest): Promise<NextResponse> {
     // so Slack pings match the email subject's urgency.
     if (process.env.SLACK_WEBHOOK_URL) {
         const alarmLine = forceSend
-            ? `:rotating_light: *Silent platform* — ${[silentPlatform ? "0 opps/24h" : null, tooManyStale ? `${staleCount} stale crons` : null, tooFewRoutesLogged ? `only ${lastByRoute.size}/${EXPECTED_ROUTES} routes logged` : null].filter(Boolean).join(" · ")}\n`
+            ? `:rotating_light: *Platform check* — ${[silentPlatform ? "INGESTION SILENT (0 opps/24h)" : null, tooManyStale ? `${staleCount} stale crons` : null, tooFewRoutesLogged ? `only ${routesLogged24h}/${EXPECTED_ROUTES} routes logged` : null].filter(Boolean).join(" · ")}\n`
             : "";
         const text = `${alarmLine}:bar_chart: *CapturePilot daily digest*\n`
             + `• Opps +${oppsToday} · Contractors +${contractorsToday} · Pages +${pagesToday}\n`
@@ -356,7 +359,7 @@ async function GET_handler(req: NextRequest): Promise<NextResponse> {
         silent_platform: silentPlatform,
         too_many_stale: tooManyStale,
         too_few_routes_logged: tooFewRoutesLogged,
-        routes_logged: lastByRoute.size,
+        routes_logged: routesLogged24h,
         expected_routes: EXPECTED_ROUTES,
         snapshot: { oppsToday, contractorsToday, pagesToday, attachmentsToday, wjDone, wjFailed, failurePct, alertsToday, staleCount },
     });

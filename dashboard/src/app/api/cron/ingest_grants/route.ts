@@ -255,7 +255,6 @@ async function GET_handler(req: NextRequest) {
                             solicitation_number: g.opportunity_number || null,
                             estimated_value: estimatedValue ? Number(estimatedValue) : null,
                             link: `https://www.grants.gov/search-results-detail/${g.opportunity_id}`,
-                            priority_flag: false,
                             is_archived: ["EXPIRED"].includes(grantStatus),
                             raw_json: g,
                             // Strategic fields
