@@ -128,10 +128,16 @@ export async function upsertHubSpotContact(params: {
   company?: string;
   jobtitle?: string;
   lifecyclestage?: string;
+  /**
+   * Property keys to set ONLY when the contact is first created. On update they
+   * are stripped, so a re-sync never pulls an existing record backward (e.g.
+   * lifecyclestage from "customer" back to "lead", or a sales-set hs_lead_status).
+   */
+  createOnly?: string[];
   // passthrough for any additional CapturePilot custom properties
   extra?: Omit<ContactProperties, 'email' | 'firstname' | 'lastname' | 'phone' | 'company' | 'jobtitle' | 'lifecyclestage'>;
 }): Promise<string | null> {
-  const { email, extra, ...base } = params;
+  const { email, extra, createOnly, ...base } = params;
   if (!email) return null;
   if (!HUBSPOT_TOKEN) {
     console.warn('[HubSpot] No token configured — skipping upsertHubSpotContact');
@@ -144,7 +150,11 @@ export async function upsertHubSpotContact(params: {
     // 1. Search by email
     const existingId = await getContactByEmail(email);
     if (existingId) {
-      const ok = await updateContactById(existingId, properties);
+      // On update, drop the create-only props so a re-sync can't overwrite a
+      // lifecycle stage / lead status that has since moved forward.
+      const updateProps: ContactProperties = { ...properties };
+      for (const k of createOnly || []) delete (updateProps as Record<string, unknown>)[k];
+      const ok = await updateContactById(existingId, updateProps);
       return ok ? existingId : null;
     }
     // 2. Create new

@@ -276,6 +276,7 @@ export async function POST(req: NextRequest) {
             company: apolloEnrichment?.organization_name || undefined,
             jobtitle: apolloEnrichment?.title || undefined,
             lifecyclestage: "lead",
+            createOnly: ["lifecyclestage", "hs_lead_status"],
             extra: {
                 lead_source_cp: ("lead_magnet" as never),
             },

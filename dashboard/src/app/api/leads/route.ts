@@ -232,6 +232,7 @@ export async function POST(req: NextRequest) {
       company: company || apolloEnrichment?.organization_name || undefined,
       jobtitle: apolloEnrichment?.title || undefined,
       lifecyclestage: "lead",
+      createOnly: ["lifecyclestage", "hs_lead_status"],
       extra: {
         // `lead_source_cp` is the LeadSource enum; existing string values are
         // ('quick_checker' | 'signup' | 'contact_form' | ...). We extend with

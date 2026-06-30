@@ -248,6 +248,7 @@ async function processLead({ leadgenId, formId, accessToken, db }: ProcessArgs):
         company: company || apolloEnrichment?.organization_name || undefined,
         jobtitle: apolloEnrichment?.title || undefined,
         lifecyclestage: "lead",
+        createOnly: ["lifecyclestage", "hs_lead_status"],
         extra: {
             lead_source_cp: ("meta_lead_ad" as never),
         },

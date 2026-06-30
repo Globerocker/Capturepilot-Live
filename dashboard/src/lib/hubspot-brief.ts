@@ -316,20 +316,23 @@ async function syncCompanyForContact(args: {
 
     // 1) Search for an existing company by domain
     let companyId: string | null = null;
+    let existingDescription = "";
     try {
         const sres = await fetch(`${BASE}/crm/v3/objects/companies/search`, {
             method: "POST",
             headers: { Authorization: `Bearer ${HUBSPOT_TOKEN}`, "Content-Type": "application/json" },
             body: JSON.stringify({
                 filterGroups: [{ filters: [{ propertyName: "domain", operator: "EQ", value: args.domain }] }],
-                properties: ["domain", "name"],
+                properties: ["domain", "name", "description"],
                 limit: 1,
             }),
             signal: AbortSignal.timeout(10_000),
         });
         if (sres.ok) {
-            const sjson = await sres.json() as { results?: Array<{ id?: string }> };
-            companyId = sjson.results?.[0]?.id || null;
+            const sjson = await sres.json() as { results?: Array<{ id?: string; properties?: { description?: string } }> };
+            const hit = sjson.results?.[0];
+            companyId = hit?.id || null;
+            existingDescription = hit?.properties?.description || "";
         }
     } catch (err) {
         console.warn("[HubSpot] company search failed:", err instanceof Error ? err.message : err);
@@ -341,6 +344,15 @@ async function syncCompanyForContact(args: {
         domain: args.domain,
         ...args.properties,
     };
+
+    // On update of an existing company, don't clobber sales-owned standard
+    // fields: lifecyclestage + hs_lead_status are create-only, and we only set
+    // our description when the company doesn't already have one.
+    if (companyId) {
+        delete properties.lifecyclestage;
+        delete properties.hs_lead_status;
+        if (existingDescription.trim()) delete properties.description;
+    }
 
     try {
         if (companyId) {
@@ -498,6 +510,9 @@ export async function pushQuickCheckerBriefToHubSpot(input: QuickCheckerBriefInp
         phone: input.contactPhone || undefined,
         company: input.companyName,
         lifecyclestage: "lead",
+        // Never let a Quick Checker re-sync drag an existing contact backward:
+        // lifecyclestage + hs_lead_status are written on create only.
+        createOnly: ["lifecyclestage", "hs_lead_status"],
         extra: {
             // ── Standard HubSpot CONTACT properties (Phase 22 audit) ──
             // Note: hs_analytics_source* are READ-ONLY on contacts (tracker-
