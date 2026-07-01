@@ -123,22 +123,26 @@ async function GET_handler(req: NextRequest): Promise<NextResponse> {
     const wjTotal = wjDone + wjFailed;
     const failurePct = wjTotal > 0 ? Math.round((wjFailed / wjTotal) * 1000) / 10 : 0;
 
-    // Last run per route via RPC (distinct-on, all-time). NOT the latest-N
-    // rows: with ~12k runs/day, the old .limit(200) only spanned minutes, so it
-    // saw ~9 high-frequency routes and false-alarmed "silent platform". Stale =
-    // ran before but not in the last 26h, bounded to 14 days so long-retired
-    // routes don't inflate the count.
+    // Cadence-aware cron health via RPC (last run + runs_30d per route). A flat
+    // 26h "stale" threshold wrongly flagged every weekly cron (db_cleanup,
+    // naics_stats_backfill, the VPS FPDS/subawards/GSA/CALC timers, market_watch
+    // — all run every 7-10 days). Instead we infer each route's OWN interval
+    // from its 30-day frequency and flag only when it's past ~2.5x that.
     const HOUR = 60 * 60 * 1000;
-    const { data: lastRuns } = await sb.rpc("cron_route_last_runs");
-    const lastByRoute = new Map<string, Date>();
-    for (const r of (lastRuns || []) as Array<{ route: string; last_run: string }>) {
-        lastByRoute.set(r.route, new Date(r.last_run));
-    }
-    const routesLogged24h = [...lastByRoute.values()].filter(dt => Date.now() - dt.getTime() < 26 * HOUR).length;
-    const staleCount = [...lastByRoute.values()].filter(dt => {
-        const age = Date.now() - dt.getTime();
-        return age > 26 * HOUR && age < 14 * 24 * HOUR;
-    }).length;
+    const { data: cadence } = await sb.rpc("cron_route_cadence");
+    const routeRows = ((cadence || []) as Array<{ route: string; last_run: string; runs_30d: number }>)
+        .map(r => ({ route: r.route, age: Date.now() - new Date(r.last_run).getTime(), runs30d: Number(r.runs_30d) || 0 }));
+    const routesLogged24h = routeRows.filter(r => r.age < 26 * HOUR).length;
+    // Stale = past 2.5x its own inferred cadence (floor 26h). Skip routes that
+    // run too rarely to judge (monthly/one-off, <3 runs in 30d) and ancient
+    // ones (>45d = retired, not a live regression).
+    const isStale = (r: { age: number; runs30d: number }) => {
+        if (r.age > 45 * 24 * HOUR || r.runs30d < 3) return false;
+        const interval = (30 * 24 * HOUR) / r.runs30d;
+        return r.age > Math.max(26 * HOUR, 2.5 * interval);
+    };
+    const staleRows = routeRows.filter(isStale);
+    const staleCount = staleRows.length;
 
     // ─── Auto-healer activity (last 24h) ────────────────────────────────────
     // Pulled from alert_autofixes (migration 098). Two buckets:
@@ -209,9 +213,8 @@ async function GET_handler(req: NextRequest): Promise<NextResponse> {
     // Build a stale-route detail block we inline when the silent-platform
     // overrides fire — gives the operator the names of the missing routes,
     // not just a count.
-    const staleRoutes = [...lastByRoute.entries()]
-        .filter(([, dt]) => { const age = Date.now() - dt.getTime(); return age > 26 * HOUR && age < 14 * 24 * HOUR; })
-        .map(([route, dt]) => ({ route, hoursAgo: Math.round((Date.now() - dt.getTime()) / 3_600_000) }))
+    const staleRoutes = staleRows
+        .map(r => ({ route: r.route, hoursAgo: Math.round(r.age / HOUR) }))
         .sort((a, b) => b.hoursAgo - a.hoursAgo)
         .slice(0, 20);
 
