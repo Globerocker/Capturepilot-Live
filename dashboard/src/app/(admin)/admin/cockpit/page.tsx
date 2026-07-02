@@ -3467,9 +3467,23 @@ function MessageGenerator({ lead, onUseInComposer }: { lead: Lead; onUseInCompos
     // SMS send state
     const [smsSending, setSmsSending] = useState(false);
     const [smsResult, setSmsResult] = useState<{ ok: boolean; message: string } | null>(null);
+    const [smsConsent, setSmsConsent] = useState<boolean | null>(null);
 
     const linkedinUrl = lead.owner_linkedin || lead.company_linkedin || null;
     const phone = lead.contact.phone || null;
+
+    // Proactively reflect SMS opt-in on the Send button. The real enforcement is
+    // the hard consent gate server-side in /api/admin/cockpit/send-sms.
+    useEffect(() => {
+        if (channel !== "sms" || !phone) { setSmsConsent(null); return; }
+        let cancelled = false;
+        setSmsConsent(null);
+        fetch(`/api/admin/cockpit/sms-consent?phone=${encodeURIComponent(phone)}`)
+            .then((r) => r.json())
+            .then((d) => { if (!cancelled) setSmsConsent(!!d.consented); })
+            .catch(() => { if (!cancelled) setSmsConsent(false); });
+        return () => { cancelled = true; };
+    }, [channel, phone]);
 
     const generate = async (tpl: EmailTemplate = template, ch: OutreachChannel = channel) => {
         setGenerating(true);
@@ -3725,14 +3739,22 @@ function MessageGenerator({ lead, onUseInComposer }: { lead: Lead; onUseInCompos
                                     {copied === "body" ? <><Check className="w-4 h-4 text-emerald-600" /> Copied</> : <><Copy className="w-4 h-4" /> Copy</>}
                                 </button>
                                 {phone ? (
-                                    <button
-                                        type="button"
-                                        onClick={sendSms}
-                                        disabled={smsSending || !bodyText.trim()}
-                                        className="inline-flex items-center gap-2 bg-stone-900 hover:bg-black disabled:opacity-50 text-white font-bold px-3 py-2 rounded-lg text-sm"
-                                    >
-                                        {smsSending ? <><Loader2 className="w-4 h-4 animate-spin" /> Sending…</> : <><Send className="w-4 h-4" /> Send SMS to {phone}</>}
-                                    </button>
+                                    smsConsent === false ? (
+                                        <span className="text-xs text-amber-600 inline-flex items-center gap-1.5" title="SMS only goes to leads who gave us their number and opted in. This number has no opt-in on file.">
+                                            <AlertTriangle className="w-3.5 h-3.5" /> No SMS opt-in on file for this number
+                                        </span>
+                                    ) : (
+                                        <button
+                                            type="button"
+                                            onClick={sendSms}
+                                            disabled={smsSending || !bodyText.trim() || smsConsent !== true}
+                                            className="inline-flex items-center gap-2 bg-stone-900 hover:bg-black disabled:opacity-50 text-white font-bold px-3 py-2 rounded-lg text-sm"
+                                        >
+                                            {smsSending ? <><Loader2 className="w-4 h-4 animate-spin" /> Sending…</>
+                                                : smsConsent === null ? <><Loader2 className="w-4 h-4 animate-spin" /> Checking opt-in…</>
+                                                : <><Send className="w-4 h-4" /> Send SMS to {phone}</>}
+                                        </button>
+                                    )
                                 ) : (
                                     <span className="text-xs text-stone-400 inline-flex items-center gap-1"><AlertTriangle className="w-3.5 h-3.5" /> No phone on file</span>
                                 )}

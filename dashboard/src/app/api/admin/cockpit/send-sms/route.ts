@@ -79,6 +79,26 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: false, error: "Message body is required." }, { status: 400 });
     }
 
+    // ── Consent gate (hard) ──────────────────────────────────────────────────
+    // No SMS to a number without a recorded, non-revoked opt-in. Scraped SAM /
+    // crawl numbers never opted in, so this blocks cold texting at the source
+    // (TCPA + carrier compliance), regardless of what the UI allows.
+    const { data: consent } = await db()
+        .from("sms_consents")
+        .select("consented, revoked_at")
+        .eq("phone", to)
+        .maybeSingle();
+    if (!consent || !consent.consented || consent.revoked_at) {
+        return NextResponse.json(
+            {
+                ok: false,
+                needsConsent: true,
+                error: "No SMS opt-in on file for this number. Texts only go to leads who gave us their number and consented (onboarding, signup, a booked call). Cold numbers scraped from SAM.gov are not textable.",
+            },
+            { status: 403 },
+        );
+    }
+
     const result = await sendSmsToRecipient(to, bodyText);
 
     // ── Best-effort send log (never block the response on logging) ───────────

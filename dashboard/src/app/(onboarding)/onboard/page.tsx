@@ -133,6 +133,7 @@ function OnboardPageContent() {
         contact_name: "",
         job_title: "",
         contact_phone: "",
+        sms_consent: false,
         company_name: "",
         company_website: "",
         uei: "",
@@ -500,6 +501,17 @@ function OnboardPageContent() {
             }).catch(() => {});
         }
 
+        // Fire-and-forget: record SMS opt-in if they checked the box. Written
+        // server-side (sms_consents is service-role only); enables the cockpit
+        // SMS send for this number.
+        if (form.sms_consent && form.contact_phone.trim()) {
+            fetch("/api/sms-consent", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ phone: form.contact_phone, source: "onboarding", company: form.company_name }),
+            }).catch(() => {});
+        }
+
         // Fire-and-forget: HubSpot sync with full firmographics
         if (user.email) {
             fetch("/api/hubspot/sync-contact", {
@@ -763,6 +775,12 @@ function OnboardPageContent() {
                                         className="w-full pl-9 pr-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm"
                                         placeholder="(555) 123-4567" />
                                 </div>
+                                <label className="mt-2 flex items-start gap-2 text-[11px] text-stone-500 leading-snug cursor-pointer">
+                                    <input type="checkbox" checked={form.sms_consent}
+                                        onChange={(e) => updateForm("sms_consent", e.target.checked)}
+                                        className="mt-0.5 accent-black" />
+                                    <span>Text me occasional updates about my federal matches at this number. Message and data rates may apply. Reply STOP to opt out.</span>
+                                </label>
                             </div>
                         </div>
 
