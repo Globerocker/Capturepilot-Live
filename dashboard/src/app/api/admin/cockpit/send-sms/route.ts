@@ -93,11 +93,21 @@ export async function POST(req: NextRequest) {
     });
 
     if (!result.sent) {
-        const friendly = result.needsVerification
-            ? "This number isn't verified on your Twilio trial. Verify it in the Twilio console, or upgrade the account to text any number."
-            : result.error || "SMS send failed.";
+        // 30032 = toll-free number not verified (US carriers block it); 30034 =
+        // A2P 10DLC not registered; 21610 = recipient replied STOP.
+        const code = result.code || 0;
+        const friendly =
+            code === 30032
+                ? "Your toll-free number isn't verified yet, so US carriers are blocking the text. Submit Toll-Free Verification in the Twilio console (free). Texts won't deliver until it's approved."
+                : code === 30034
+                    ? "This number needs A2P 10DLC registration before it can text US recipients. Register it in the Twilio console."
+                    : code === 21610
+                        ? "This person replied STOP and is unsubscribed on Twilio. You can't text them from this number."
+                        : result.needsVerification
+                            ? "This number isn't verified on your Twilio trial. Verify it in the Twilio console, or upgrade the account to text any number."
+                            : result.error || "SMS send failed.";
         return NextResponse.json(
-            { ok: false, error: friendly, needsVerification: !!result.needsVerification },
+            { ok: false, error: friendly, code, needsVerification: !!result.needsVerification || code === 30032 },
             { status: 502 },
         );
     }
