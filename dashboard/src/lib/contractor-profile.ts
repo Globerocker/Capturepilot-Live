@@ -311,7 +311,7 @@ async function summaryViaGemini(systemPrompt: string, userPrompt: string): Promi
     if (!apiKey) return null;
     try {
         const res = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${apiKey}`,
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
             {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -333,7 +333,7 @@ async function summaryViaGemini(systemPrompt: string, userPrompt: string): Promi
         };
         const content = json.candidates?.[0]?.content?.parts?.map((p) => p.text || "").join("").trim();
         if (!content) return null;
-        return { summary: content, model: "gemini-1.5-pro" };
+        return { summary: content, model: "gemini-2.5-flash" };
     } catch {
         return null;
     }
