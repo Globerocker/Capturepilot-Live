@@ -365,13 +365,21 @@ export async function POST(req: NextRequest) {
     const logRows: any[] = [];
 
     for (const firm of (firms || []) as any[]) {
-        // recipient
-        let to: string | null;
+        // recipient(s) — Dual-Send: Haupt-Sende-Adresse UND (falls vorhanden) die
+        // IT-/Alternativ-Adresse bekommen beide dieselbe Reaktivierungs-Mail. So
+        // erreichen wir sowohl den korrigierten Fachkontakt als auch die IT (die die
+        // Stammdaten aktualisieren kann). email_empfohlen ist nur Fallback, wenn weder
+        // freigegebene noch IT-Adresse existiert — es wird nicht ZUSÄTZLICH angeschrieben.
+        let recipients: string[];
         if (mode === "test") {
-            to = test_email!;
+            recipients = [test_email!];
         } else {
-            to = firm.freigegeben_email || firm.alt_recipient_email || firm.email_empfohlen || null;
-            if (!to) {
+            const primary = [firm.freigegeben_email, firm.alt_recipient_email]
+                .map((x: any) => String(x || "").trim()).filter(Boolean);
+            recipients = primary.length
+                ? [...new Set(primary)]
+                : (String(firm.email_empfohlen || "").trim() ? [String(firm.email_empfohlen).trim()] : []);
+            if (!recipients.length) {
                 skipped++;
                 logRows.push({ domain: firm.domain, mode, to_email: null, subject: null, status: "error", provider_id: null, error: "no recipient address" });
                 if (log_sample.length < 10) log_sample.push({ domain: firm.domain, status: "skipped", error: "no recipient address" });
@@ -395,44 +403,51 @@ export async function POST(req: NextRequest) {
         let html = textToHtml(textBody, block.text, block.htmlItems);
         html = `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#222">${html}<hr style="border:none;border-top:1px solid #ddd;margin:16px 0"><p style="margin:0;font-size:12px;color:#888">${esc(unsubLine)}${physical ? `<br>${esc(physical)}` : ""}</p></div>`;
 
-        attempted++;
-        try {
-            let providerId: string | null;
-            if (useGraph) {
-                providerId = await sendViaGraph(graphToken, fromMailbox, { to, subject, html, replyTo });
-            } else {
-                const resp = await resend.emails.send({ from: fromHeader, to, replyTo, subject, text: textBody, html });
-                if (resp?.error) throw new Error(resp.error?.message || JSON.stringify(resp.error));
-                providerId = resp?.data?.id || resp?.id || null;
+        // An ALLE Empfänger der Firma senden (Haupt + IT). Firma erst nach dem
+        // Versand an alle als "erledigt" markieren — sonst würde ein Fehler beim
+        // 2. Empfänger die Firma trotzdem abhaken.
+        let firmSentAny = false;
+        for (const to of recipients) {
+            attempted++;
+            try {
+                let providerId: string | null;
+                if (useGraph) {
+                    providerId = await sendViaGraph(graphToken, fromMailbox, { to, subject, html, replyTo });
+                } else {
+                    const resp = await resend.emails.send({ from: fromHeader, to, replyTo, subject, text: textBody, html });
+                    if (resp?.error) throw new Error(resp.error?.message || JSON.stringify(resp.error));
+                    providerId = resp?.data?.id || resp?.id || null;
+                }
+                sent++;
+                firmSentAny = true;
+                logRows.push({ domain: firm.domain, mode, to_email: to, subject, status: "sent", provider_id: providerId, error: null });
+                if (log_sample.length < 10) log_sample.push({ domain: firm.domain, to_email: to, status: "sent", provider_id: providerId });
+            } catch (e: any) {
+                failed++;
+                const msg = e?.message || String(e);
+                logRows.push({ domain: firm.domain, mode, to_email: to, subject, status: "error", provider_id: null, error: msg });
+                if (log_sample.length < 10) log_sample.push({ domain: firm.domain, to_email: to, status: "error", error: msg });
             }
-            sent++;
-            logRows.push({ domain: firm.domain, mode, to_email: to, subject, status: "sent", provider_id: providerId, error: null });
-            if (log_sample.length < 10) log_sample.push({ domain: firm.domain, to_email: to, status: "sent", provider_id: providerId });
-            if (mode === "live") {
-                await db.from("septeo_bounce_firms").update({ review_status: "erledigt" }).eq("domain", firm.domain);
-                // Auto-Nachfass-Task (telefonisch), Dzenita zugewiesen, fällig in 3 Tagen.
-                // unique(domain,type,status) verhindert Doppel-Tasks beim Re-Senden.
-                try {
-                    const due = new Date(Date.now() + 3 * 86400000).toISOString();
-                    await db.from("septeo_tasks").upsert({
-                        domain: firm.domain,
-                        firma: firm.firma || firm.domain,
-                        type: "call_followup",
-                        title: "Telefonisch nachfassen",
-                        status: "offen",
-                        assigned_to: "Dzenita",
-                        due_at: due,
-                    }, { onConflict: "domain,type,status", ignoreDuplicates: true });
-                } catch { /* septeo_tasks evtl. noch nicht angelegt — Versand nie blockieren */ }
-            }
-        } catch (e: any) {
-            failed++;
-            const msg = e?.message || String(e);
-            logRows.push({ domain: firm.domain, mode, to_email: to, subject, status: "error", provider_id: null, error: msg });
-            if (log_sample.length < 10) log_sample.push({ domain: firm.domain, to_email: to, status: "error", error: msg });
+            await delay(600);
         }
 
-        await delay(600);
+        if (mode === "live" && firmSentAny) {
+            await db.from("septeo_bounce_firms").update({ review_status: "erledigt" }).eq("domain", firm.domain);
+            // Auto-Nachfass-Task (telefonisch), Dzenita zugewiesen, fällig in 3 Tagen.
+            // unique(domain,type,status) verhindert Doppel-Tasks beim Re-Senden.
+            try {
+                const due = new Date(Date.now() + 3 * 86400000).toISOString();
+                await db.from("septeo_tasks").upsert({
+                    domain: firm.domain,
+                    firma: firm.firma || firm.domain,
+                    type: "call_followup",
+                    title: "Telefonisch nachfassen",
+                    status: "offen",
+                    assigned_to: "Dzenita",
+                    due_at: due,
+                }, { onConflict: "domain,type,status", ignoreDuplicates: true });
+            } catch { /* septeo_tasks evtl. noch nicht angelegt — Versand nie blockieren */ }
+        }
     }
 
     if (logRows.length) {
