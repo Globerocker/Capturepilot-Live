@@ -301,6 +301,8 @@ export async function POST(req: NextRequest) {
     const mode: "test" | "live" = body?.mode === "live" ? "live" : "test";
     const test_email: string | undefined = body?.test_email;
     const limit = Math.max(1, Math.min(2000, Number(body?.limit) || (mode === "test" ? 5 : 500)));
+    // Einzel-Versand: nur diese eine Firma (manueller „Jetzt senden"-Button im Dashboard).
+    const onlyDomain: string | undefined = typeof body?.domain === "string" && body.domain.trim() ? body.domain.trim() : undefined;
 
     // Transport: Microsoft Graph (send as Dzenita's mailbox, copy in Sent) when the
     // Entra app is configured; else Resend. body.transport can force one for testing.
@@ -339,8 +341,9 @@ export async function POST(req: NextRequest) {
         .from("septeo_bounce_firms")
         .select("domain, firma, marktsegment, bounce_reason_category, template_override, bounced_contacts, excluded_record_ids, freigegeben_email, email_empfohlen, alt_recipient_email, review_status, sales_hold")
         .eq("review_status", "freigegeben")
-        .or("sales_hold.is.null,sales_hold.eq.false")
-        .limit(limit);
+        .or("sales_hold.is.null,sales_hold.eq.false");
+    if (onlyDomain) q = q.eq("domain", onlyDomain);
+    q = q.limit(onlyDomain ? 1 : limit);
     const { data: firms, error: firmsErr } = await q;
     if (firmsErr) return json({ error: firmsErr.message }, 500);
 
