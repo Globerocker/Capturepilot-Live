@@ -115,6 +115,22 @@ export function buildContactVars(
             if (v !== undefined && v !== null) vars[k] = v;
         }
     }
+    // Defense-in-depth for the Match-Drop template: never render a broken sentence
+    // when a contact lacks full QA personalization.
+    //  - display_company falls back so "keeping {{display_company}} off the federal
+    //    radar" never reads "keeping  off the federal radar".
+    //  - matches_section folds the intro line INTO the matches, so an empty match
+    //    list can't leave a dangling "…that actually fit what you do:" colon.
+    if (!vars.display_company || !vars.display_company.trim()) {
+        vars.display_company = company || "your company";
+    }
+    if (!vars.display_greeting || !vars.display_greeting.trim()) {
+        vars.display_greeting = first ? `Hi ${first},` : "Hi there,";
+    }
+    const mc = (vars.matches_clean || "").trim();
+    vars.matches_section = mc
+        ? `So I went and pulled the live federal contracts that actually fit what you do:\n${mc}`
+        : "";
     return vars;
 }
 

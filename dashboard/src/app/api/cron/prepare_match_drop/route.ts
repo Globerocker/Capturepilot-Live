@@ -33,19 +33,22 @@ const MAX = 5000;
 
 const STEP1_SUBJECT = "{{company}} — 3 federal contracts you could actually win";
 const STEP1_SUBJECT_B = "found a few live contracts that fit {{company}}";
+// NOTE: uses the QA-agent fields (display_greeting/icebreaker/display_company) +
+// {{matches_section}}. matches_section folds the "here are the contracts" intro
+// INTO the match list (computed in buildContactVars) so a contact with no clean
+// matches renders no dangling colon. Only send QA'd contacts (matches_clean set).
 const STEP1_BODY =
-`Hi {{first_name}},
+`{{display_greeting}}
 
-Real quick, and this isn't a mass blast — we actually ran {{company}}'s site through our software before reaching out.
+{{icebreaker}}
 
-Two things stood out. First, {{gap_line}}
+{{matches_section}}
 
-Second, we pulled live federal contracts that line up with what you do:
-{{matches_block}}
+I recorded you a quick 2-minute video on the specific thing I think is keeping {{display_company}} off the federal radar, and how we'd fix it: {{loom_url}}
 
-Our offer is simple: we run the bids, you pay us nothing unless you win. No retainer, nothing upfront.
+If it's worth a talk, here's the deal: we run a 30-minute B2G audit, then hand you six contracts you could realistically win and exactly how we'd go after each one. Take that and run it yourself, no charge, no catch. Or we run it for you on a small base retainer and mostly commission, so we really only win when you do.
 
-Want the full list and the detail on these three? Just reply. If not, no hard feelings.
+Worth 30 minutes? Just reply.
 
 {{sender_name}}
 
